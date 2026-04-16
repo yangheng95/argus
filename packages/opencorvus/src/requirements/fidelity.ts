@@ -14,6 +14,7 @@
  */
 import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
+import { resolveAgentModel } from "@/agent/model"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { AcceptanceSpecSchema, renderSpecsAsText } from "@/acceptance/types"
@@ -85,8 +86,7 @@ export async function reviewFidelity(input: {
     return { verdict: "needs_correction", issues: [{ type: "uncovered", description: "No goals produced" }], corrections: [], missingGoals: [] }
   }
 
-  const { resolveAgentModel } = await import("@/agent/model")
-  const model = await resolveAgentModel("requirements").catch(() => undefined)
+  const model = await resolveAgentModel("requirements", { taskID: input.taskID }).catch(() => undefined)
   if (!model) {
     log.warn("no LLM available for fidelity review, skipping")
     return { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }

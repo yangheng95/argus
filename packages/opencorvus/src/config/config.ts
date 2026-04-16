@@ -692,6 +692,13 @@ export namespace Config {
         .optional()
         .describe("Maximum number of agentic iterations before forcing text-only response"),
       permission: Permission.optional(),
+      tools: z
+        .object({
+          include: z.array(z.string()).optional(),
+          exclude: z.array(z.string()).optional(),
+        })
+        .optional()
+        .describe("Tool adapter: whitelist (include) or blacklist (exclude) of tool IDs visible to this agent"),
     })
     .catchall(z.any())
     .transform((agent) => {
@@ -710,6 +717,7 @@ export namespace Config {
         "options",
         "permission",
         "disable",
+        "tools",
       ])
 
       // Extract unknown properties into options
@@ -722,6 +730,7 @@ export namespace Config {
         options?: Record<string, unknown>
         permission?: Permission
         steps?: number
+        tools?: { include?: string[]; exclude?: string[] }
       }
     })
     .meta({
@@ -1190,14 +1199,11 @@ export namespace Config {
             .describe("Planner agent configuration"),
           evaluator: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for evaluator agent (default: 25)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Evaluator agent timeout in milliseconds (default: 240000)"),
               tier: z.enum(["core", "standard", "full"]).optional().describe("Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'."),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for evaluator agent"),
               per_goal_enabled: z.boolean().optional().describe("When true, runs the deterministic per-goal evaluator inside the goal-pool loop after the executor returns — goal fails if acceptance_specs strict scorers reject. Default: false (debug gate, legacy 'executor OK → passed' path is used)."),
             })
             .optional()
-            .describe("Evaluator agent configuration. Model is configured via agent.evaluator.model."),
+            .describe("Deterministic evaluator runner config (build / test / lint / spec heuristics in delivery/checks/per-goal.ts). The evaluator LLM agent was collapsed into the delivery agent — these fields control only the deterministic pipeline."),
           delivery: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
@@ -1218,8 +1224,9 @@ export namespace Config {
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
           max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 3)"),
+          max_delivery_iterations: z.number().int().min(1).max(10).optional().describe("Maximum delivery reject → rework → re-deliver cycles before failing the task (default: 3)"),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 5)"),
-          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'standard', 'quick-fix', 'plan-only', or custom ID (default: 'standard')"),
+          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID (default: 'pipeline')"),
           workflows: z
             .array(
               z.object({
@@ -1229,11 +1236,11 @@ export namespace Config {
                 steps: z.array(
                   z.object({
                     id: z.string().describe("Step unique ID within workflow"),
-                    tool: z.string().describe("Task Agent tool name this step maps to"),
+                    tool: z.string().describe("Orchestrator tool name this step maps to"),
                     label: z.string().describe("UI display label"),
                     hint: z.string().optional().describe("Brief guidance injected into system prompt"),
                     scope: z.enum(["task", "goal"]).describe("task = once per task, goal = once per goal"),
-                    skippable: z.boolean().optional().describe("Whether Task Agent can skip this step"),
+                    skippable: z.boolean().optional().describe("Whether Orchestrator can skip this step"),
                     after: z.array(z.string()).optional().describe("Prerequisite step IDs"),
                   }),
                 ),

@@ -3,7 +3,7 @@
  *
  * NOT a pipeline. NOT a state machine. Just executes a goal and returns delivery.
  * All decisions (when to plan, when to eval, how to retry) are made by the
- * Task Agent (LLM), not by this code.
+ * Orchestrator (LLM), not by this code.
  *
  * What this module does:
  *   1. Stream executor events (for session projection)
@@ -13,14 +13,14 @@
  *
  * IMPORTANT: This is INFRASTRUCTURE. Per the architecture spec:
  *   - goal_run writer: Infrastructure (this file)
- *   - goal writer: Task Agent ONLY
- *   - Infrastructure NEVER writes goal.status — that's the Task Agent's decision.
+ *   - goal writer: Orchestrator ONLY
+ *   - Infrastructure NEVER writes goal.status — that's the Orchestrator's decision.
  */
 
 import { Log } from "@/util/log"
-import { Event } from "@/orchestrator/model"
-import { OrchestratorProtocol } from "@/orchestrator/protocol"
-import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/orchestrator/persist"
+import { Event } from "@/engine/model"
+import { EngineProtocol } from "@/engine/protocol"
+import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/engine/persist"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromSnapshot } from "@/goal/runner"
@@ -44,7 +44,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000
  * Execute a single goal: stream executor events, extract delivery.
  *
  * Returns an async generator of PipelineEvents.
- * Infrastructure only writes goal_run status. Goal status is the Task Agent's decision.
+ * Infrastructure only writes goal_run status. Goal status is the Orchestrator's decision.
  */
 export async function* runGoalPipeline(
   contract: GoalContract,
@@ -71,7 +71,7 @@ export async function* runGoalPipeline(
     }
 
     if (!result.delivery) {
-      // Only update goal_run — NOT goal.status (that's the Task Agent's job)
+      // Only update goal_run — NOT goal.status (that's the Orchestrator's job)
       updateGoalRun(goalRunID, {
         status: "failed",
         error: result.error,
@@ -94,7 +94,7 @@ export async function* runGoalPipeline(
       now: Date.now(),
     })
 
-    // Mark goal_run completed — NOT goal.status (Task Agent decides after eval)
+    // Mark goal_run completed — NOT goal.status (Orchestrator decides after eval)
     updateGoalRun(goalRunID, { status: "completed", time_completed: Date.now() })
     updateGoalRunExecutorSessionStatus(goalRunID, "completed")
 
@@ -217,7 +217,7 @@ async function* streamExecutorEvents(
     const now = Date.now()
     if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
       lastHeartbeat = now
-      OrchestratorProtocol.emit(Event.GoalProgress, {
+      EngineProtocol.emit(Event.GoalProgress, {
         taskID: task.id, goalRunID, summary: `Goal ${goalRunID.slice(-8)} executing`,
       }, { taskID: task.id, runID: run.id, goalRunID, source: "goal-executor" }).catch(() => {})
       yield { type: "heartbeat" }
@@ -317,7 +317,7 @@ async function extractDelivery(
 // ---------------------------------------------------------------------------
 
 async function findGoalRunByGoalAndRun(goalID: string, runID: string): Promise<string | undefined> {
-  const { listGoalRunsByCoordinator } = await import("@/orchestrator/store")
+  const { listGoalRunsByCoordinator } = await import("@/engine/store")
   const runs = listGoalRunsByCoordinator(runID) as Array<{ id: string; goal_id: string; status: string }>
   const active = runs.find((gr) => gr.goal_id === goalID && gr.status !== "completed" && gr.status !== "failed")
   return active?.id

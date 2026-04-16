@@ -5,7 +5,7 @@ import {
   formatPart,
   formatTranscript,
 } from "../../../src/cli/cmd/tui/util/transcript"
-import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk/v2"
+import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk"
 
 describe("transcript", () => {
   describe("formatAssistantHeader", () => {

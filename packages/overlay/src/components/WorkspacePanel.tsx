@@ -4,7 +4,7 @@
 // that cache/resource state is preserved when switching tabs.
 //
 // The former "Build" tab (a Copilot-style direct coding pane) was removed —
-// build is now a task-agent tool; its output renders as a card in the task
+// build is now a orchestrator tool; its output renders as a card in the task
 // conversation, not in a secondary panel.
 
 import { Show } from "solid-js";

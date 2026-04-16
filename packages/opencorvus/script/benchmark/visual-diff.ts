@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Visual-diff CLI — thin wrapper around `src/evaluator/visual.ts`.
+// Visual-diff CLI — thin wrapper around `src/delivery/checks/visual.ts`.
 //
 // Usage:
 //   --rendered <htmlPath | url>   page to evaluate (or use --rendered-dir)
@@ -17,7 +17,7 @@
 // evaluator can run the same gate without shelling out.
 
 import path from "node:path"
-import { findRenderedIndex, runVisualDiff, summarizeVisualReport } from "../../src/evaluator/visual"
+import { findRenderedIndex, runVisualDiff, summarizeVisualReport } from "../../src/delivery/checks/visual"
 
 function flag(name: string): string | undefined {
   const prefix = `${name}=`

@@ -4,14 +4,14 @@ import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
-  OrchestratorTaskTable,
-  OrchestratorPlanVersionTable,
-  OrchestratorGoalTable,
-  OrchestratorRunTable,
-  OrchestratorGoalRunTable,
-  OrchestratorEvaluationTable,
-  type OrchestratorGoalCheck,
-} from "../../src/orchestrator/orchestrator.sql"
+  EngineTaskTable,
+  EnginePlanVersionTable,
+  EngineGoalTable,
+  EngineRunTable,
+  EngineGoalRunTable,
+  EngineEvaluationTable,
+  type EngineGoalCheck,
+} from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { buildRetryFeedbackSection, buildGoalPrompt } from "../../src/goal/runner"
 import { resetDatabase } from "../fixture/db"
@@ -39,7 +39,7 @@ function seed() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorTaskTable).values({
+    db.insert(EngineTaskTable).values({
       id: taskID,
       project_id: projectID,
       source: "test",
@@ -52,7 +52,7 @@ function seed() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorPlanVersionTable).values({
+    db.insert(EnginePlanVersionTable).values({
       id: planID,
       task_id: taskID,
       version: 1,
@@ -64,7 +64,7 @@ function seed() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorGoalTable).values({
+    db.insert(EngineGoalTable).values({
       id: goalID,
       task_id: taskID,
       plan_version_id: planID,
@@ -87,7 +87,7 @@ function seed() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorRunTable).values({
+    db.insert(EngineRunTable).values({
       id: runID,
       task_id: taskID,
       plan_version_id: planID,
@@ -100,7 +100,7 @@ function seed() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorGoalRunTable).values({
+    db.insert(EngineGoalRunTable).values({
       id: goalRunID,
       task_id: taskID,
       goal_id: goalID,
@@ -114,11 +114,11 @@ function seed() {
   )
 }
 
-function insertRejectedEval(checks: OrchestratorGoalCheck[], summary: string) {
+function insertRejectedEval(checks: EngineGoalCheck[], summary: string) {
   const evalID = Identifier.ascending("evaluation")
   const now = Date.now()
   Database.use((db) =>
-    db.insert(OrchestratorEvaluationTable).values({
+    db.insert(EngineEvaluationTable).values({
       id: evalID,
       task_id: taskID,
       run_id: runID,
@@ -260,15 +260,15 @@ describe("buildRetryFeedbackSection", () => {
         )
 
         const goal = Database.use((db) =>
-          db.select().from(OrchestratorGoalTable).where(
+          db.select().from(EngineGoalTable).where(
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (OrchestratorGoalTable.id as any).inArray
+            (EngineGoalTable.id as any).inArray
               ? undefined
               : undefined,
           ).all(),
         ).find((g) => g.id === goalID)!
         const plan = Database.use((db) =>
-          db.select().from(OrchestratorPlanVersionTable).all(),
+          db.select().from(EnginePlanVersionTable).all(),
         ).find((p) => p.id === planID)!
 
         const prompt = buildGoalPrompt({
@@ -311,10 +311,10 @@ describe("buildRetryFeedbackSection", () => {
       directory: tmp.path,
       fn: async () => {
         const goal = Database.use((db) =>
-          db.select().from(OrchestratorGoalTable).all(),
+          db.select().from(EngineGoalTable).all(),
         ).find((g) => g.id === goalID)!
         const plan = Database.use((db) =>
-          db.select().from(OrchestratorPlanVersionTable).all(),
+          db.select().from(EnginePlanVersionTable).all(),
         ).find((p) => p.id === planID)!
 
         const prompt = buildGoalPrompt({
@@ -374,7 +374,7 @@ describe("buildRetryFeedbackSection", () => {
         const evalID = Identifier.ascending("evaluation")
         const now = Date.now()
         Database.use((db) =>
-          db.insert(OrchestratorEvaluationTable).values({
+          db.insert(EngineEvaluationTable).values({
             id: evalID,
             task_id: taskID,
             run_id: runID,

@@ -26,7 +26,7 @@ describe("session.prompt missing file", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         const missing = path.join(tmp.path, "does-not-exist.ts")
         const msg = await SessionPrompt.prompt({
@@ -71,7 +71,7 @@ describe("session.prompt missing file", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         const missing = path.join(tmp.path, "still-missing.ts")
         const msg = await SessionPrompt.prompt({
@@ -123,7 +123,7 @@ describe("session.prompt special characters", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const session = await Session.create({})
+          const session = await Session.create({ kind: "assistant" })
           const template = "Read @file#name.txt"
           const parts = await SessionPrompt.resolvePromptParts(template)
           const fileParts = parts.filter((part) => part.type === "file")
@@ -177,7 +177,7 @@ describe("session.prompt agent variant", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const session = await Session.create({})
+          const session = await Session.create({ kind: "assistant" })
 
           const other = await SessionPrompt.prompt({
             sessionID: session.id,
@@ -228,7 +228,7 @@ describe.skip("session.prompt plan mode reminders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "plan",
@@ -259,7 +259,7 @@ describe.skip("session.prompt plan mode reminders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         await Bun.write(Session.plan(session), "# plan\n")
         const seed: Message.User = {
           id: "msg_seed",

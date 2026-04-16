@@ -215,10 +215,10 @@ No changes needed:
 **Goal:** Allow dispatching multiple ready goals. No worktree isolation yet — only safe when goals are known to touch disjoint files.
 
 **Files changed:**
-- `src/orchestrator/helpers.ts` — Add `MAX_CONCURRENT_GOALS` constant
-- `src/orchestrator/model.ts` — Add `max_concurrent_goals` to `Budget` schema
-- `src/orchestrator/runtime.ts` — Modify `queueReadyGoalRuns()` to dispatch up to `maxConcurrentGoals` ready goals
-- `src/goal/scheduler.ts` — No changes needed (already returns all ready goals)
+- `src/engine/helpers.ts` — Add `MAX_CONCURRENT_GOALS` constant
+- `src/engine/model.ts` — Add `max_concurrent_goals` to `Budget` schema
+- `src/engine/runtime.ts` — Modify `queueReadyGoalRuns()` to dispatch up to `maxConcurrentGoals` ready goals
+- `src/goal/readiness.ts` — No changes needed (already returns all ready goals)
 
 **Changes in `runtime.ts:queueReadyGoalRuns()`:**
 
@@ -269,9 +269,9 @@ async function continueGoalPipeline(task, run, hooks) {
 **Goal:** Each dispatched goal executes in its own git worktree, preventing file system conflicts.
 
 **Files changed:**
-- `src/orchestrator/runtime.ts` — `queueGoalRun()` creates worktree and passes it as `workspace_dir`
+- `src/engine/runtime.ts` — `queueGoalRun()` creates worktree and passes it as `workspace_dir`
 - `src/goal/runner.ts` — `createGoalSession()` uses worktree directory; `cleanupGoalWorkspace()` removes worktree
-- `src/orchestrator/runtime.ts` — `_finalizeGoalRun()` extracts delivery from worktree, merges to main workspace
+- `src/engine/runtime.ts` — `_finalizeGoalRun()` extracts delivery from worktree, merges to main workspace
 
 **Changes in `queueGoalRun()`:**
 
@@ -332,9 +332,9 @@ if (outcome.status === "passed" || (goal.priority === "advisory" && delivered.di
 **Goal:** Robust conflict detection and correct retry/replan behavior when parallel goals fail.
 
 **Files changed:**
-- `src/orchestrator/runtime.ts` — Conflict detection upgrade from warn to hard fail
+- `src/engine/runtime.ts` — Conflict detection upgrade from warn to hard fail
 - `src/orchestrator/strategy.ts` — `buildRetryContext()` includes parallel context
-- `src/orchestrator/runtime.ts` — `continueGoalPipeline()` handles mixed pass/fail outcomes
+- `src/engine/runtime.ts` — `continueGoalPipeline()` handles mixed pass/fail outcomes
 
 **Key behaviors:**
 
@@ -360,8 +360,8 @@ if (outcome.status === "passed" || (goal.priority === "advisory" && delivered.di
 **Goal:** While one goal evaluates, continue executing the next ready goal. Currently evaluation blocks the pipeline.
 
 **Files changed:**
-- `src/orchestrator/runtime.ts` — `_finalizeGoalRun()` calls `continueGoalPipeline()` before evaluation completes
-- `src/orchestrator/runtime.ts` — `hasPendingGoalEvaluations()` allows new dispatch while evaluations are pending
+- `src/engine/runtime.ts` — `_finalizeGoalRun()` calls `continueGoalPipeline()` before evaluation completes
+- `src/engine/runtime.ts` — `hasPendingGoalEvaluations()` allows new dispatch while evaluations are pending
 
 **Current behavior:**
 ```
@@ -437,9 +437,9 @@ async function _finalizeGoalRun(task, run, goalRun, hooks) {
 
 | File | Phase | Change |
 |------|-------|--------|
-| `src/orchestrator/helpers.ts` | 1 | Add `MAX_CONCURRENT_GOALS` constant |
-| `src/orchestrator/model.ts` | 1 | Add `max_concurrent_goals` to Budget |
-| `src/orchestrator/runtime.ts` | 1-4 | Core parallel dispatch, worktree lifecycle, merge, pipeline |
+| `src/engine/helpers.ts` | 1 | Add `MAX_CONCURRENT_GOALS` constant |
+| `src/engine/model.ts` | 1 | Add `max_concurrent_goals` to Budget |
+| `src/engine/runtime.ts` | 1-4 | Core parallel dispatch, worktree lifecycle, merge, pipeline |
 | `src/goal/runner.ts` | 2 | Worktree-aware session creation, cleanup |
 | `src/orchestrator/strategy.ts` | 3 | Parallel-aware retry context |
 | `script/benchmark/parallel-goal-benchmark.ts` | 5 | New benchmark |
@@ -479,7 +479,7 @@ If work is interrupted, resume in this order:
 
 - Phase 1: Concurrency Configuration + Scheduler Unlocking
   - Added `MAX_CONCURRENT_GOALS` constant (default 1, env `OPENCORVUS_MAX_CONCURRENT_GOALS`)
-  - Added `maxConcurrentGoals` to Budget schema and OrchestratorBudget type
+  - Added `maxConcurrentGoals` to Budget schema and EngineBudget type
   - Added `goalDependencyLayers()` to scheduler for topological layer analysis
   - Updated `queueReadyGoalRuns()` to dispatch multiple ready goals up to `maxConcurrentGoals`
   - Updated `continueGoalPipeline()` to handle multiple active goals

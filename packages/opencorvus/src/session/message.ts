@@ -14,7 +14,7 @@ import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { textForModel } from "./part-visibility"
 import { isDecodableText } from "./text-mime"
-import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/task-agent/stateful-tool-names"
+import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
 import { normalizeToolInput } from "@/agent/runtime/protocol-norm"
 
 /** Coerce a persisted tool_use.input into a dict for outbound AI-SDK messages.
@@ -512,12 +512,12 @@ export namespace Message {
    * no delta value once superseded). Older calls' outputs are projected to a
    * short "superseded" note when a later call to the same tool exists in the
    * same session — this prevents tool results from piling up in the prompt
-   * as the task agent reads state every turn. DB rows are NOT modified;
+   * as the orchestrator reads state every turn. DB rows are NOT modified;
    * projection runs only at prompt-assembly time so UI / audit keeps full
    * fidelity.
    *
    * The source-of-truth for membership is `STATEFUL_SNAPSHOT_TOOL_NAMES` in
-   * `task-agent/tools.ts`, co-located with the tool definitions so adding
+   * `orchestrator/tools.ts`, co-located with the tool definitions so adding
    * or renaming a stateful tool forces the developer to look at this list.
    * We import it (rather than re-declaring) so the two cannot drift apart.
    */

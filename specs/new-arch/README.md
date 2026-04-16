@@ -34,7 +34,7 @@
 
 拆分完成后 `new-arch.svg` 只保留三张图：
 
-1. **Agent 家族调用链**（图 1）—— Gateway → Orchestrator → Task Agent → sub-agents
+1. **Agent 家族调用链**（图 1）—— Gateway → Orchestrator → Orchestrator → sub-agents
 2. **数据面**（图 2）—— orchestrator 18 表 + 横切 Trace/Bus
 3. **控制面 + 扩展入口**（图 3）—— channel/bus/control-plane + executor/plugin/mcp/acp
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
-import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Database, eq } from "../../src/storage/db"
@@ -23,13 +23,13 @@ describe("panel tool", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({ title: "bulk session" })
+        const session = await Session.create({ kind: "assistant", title: "bulk session" })
         const prefix = `bulk-${session.id}-`
         const now = Date.now()
 
         Database.use((db) =>
           db
-            .insert(OrchestratorTaskTable)
+            .insert(EngineTaskTable)
             .values(
               Array.from({ length: 101 }, (_, index) => ({
                 id: Identifier.ascending("task"),
@@ -69,11 +69,11 @@ describe("panel tool", () => {
         const tasks = Database.use((db) =>
           db
             .select({
-              title: OrchestratorTaskTable.title,
-              status: OrchestratorTaskTable.status,
-              session_id: OrchestratorTaskTable.session_id,
+              title: EngineTaskTable.title,
+              status: EngineTaskTable.status,
+              session_id: EngineTaskTable.session_id,
             })
-            .from(OrchestratorTaskTable)
+            .from(EngineTaskTable)
             .all(),
         )
         const current = tasks.filter((item) => item.title.startsWith(prefix))
@@ -99,7 +99,7 @@ describe("panel tool", () => {
 
         Database.use((db) =>
           db
-            .insert(OrchestratorTaskTable)
+            .insert(EngineTaskTable)
             .values({
               id: taskID,
               project_id: Instance.project.id,
@@ -160,10 +160,10 @@ describe("panel tool", () => {
         const row = Database.use((db) =>
           db
             .select({
-              metadata: OrchestratorTaskTable.metadata,
+              metadata: EngineTaskTable.metadata,
             })
-            .from(OrchestratorTaskTable)
-            .where(eq(OrchestratorTaskTable.id, taskID))
+            .from(EngineTaskTable)
+            .where(eq(EngineTaskTable.id, taskID))
             .get(),
         )
 

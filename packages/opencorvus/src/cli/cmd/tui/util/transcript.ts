@@ -1,4 +1,4 @@
-import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk/v2"
+import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk"
 import { Locale } from "@/util/locale"
 import { textForUI } from "@/session/part-visibility"
 

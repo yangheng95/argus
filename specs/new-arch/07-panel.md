@@ -9,7 +9,7 @@
 
 - 面板按 **Workflow 结构**组织，不是扁平罗列
 - Per-goal 进度可见（每个 goal 是可折叠的 `GoalWorkflowGroup`）
-- 配置面板按关注点分组，匹配 `OrchestratorConfig`
+- 配置面板按关注点分组，匹配 `EngineConfig`
 
 ## 右侧信息面板
 
@@ -114,7 +114,7 @@ goalWorkflows: Array<GoalWorkflowGroup>    // per-goal 工作流状态
 
 ## 配置面板重设计
 
-按关注点分组，匹配 `OrchestratorConfig`：
+按关注点分组，匹配 `EngineConfig`：
 
 ```
 ▼ Connection

@@ -21,7 +21,7 @@ describe("session.started event", () => {
           receivedInfo = event.properties.info as Session.Info
         })
 
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -53,7 +53,7 @@ describe("session.started event", () => {
           events.push("updated")
         })
 
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -75,7 +75,7 @@ describe("Session.fork", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const root = await Session.create({ title: "root-session" })
+        const root = await Session.create({ kind: "assistant", title: "root-session" })
         const child = await Session.fork({ sessionID: root.id })
 
         expect(child.parentID).toBe(root.id)
@@ -92,7 +92,7 @@ describe("Session.fork", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const root = await Session.create({ title: "root-session" })
+        const root = await Session.create({ kind: "assistant", title: "root-session" })
         const child = await Session.fork({ sessionID: root.id })
 
         await Session.remove(root.id)

@@ -1,87 +1,83 @@
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Instance } from "@/project/instance"
-import { OrchestratorProtocol } from "@/orchestrator/protocol"
+import { EngineProtocol } from "@/engine/protocol"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
 import { Log } from "@/util/log"
+import type { SessionKind } from "@/session/session.sql"
 import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParentID } from "./task-event"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let initialized = false
 
 // ── Overlay rendering metadata ──
-// The backend is the authority on message identity (role, channel).
-// We compute this once here so the frontend never has to infer it.
+//
+// `session.kind` is the authoritative source for "what is this session for".
+// The overlay renders a card per kind; this module's job is to stamp the kind
+// (and goalID / parentSessionID) onto every outgoing message event so the
+// frontend can route without re-deriving anything.
 
-/** Canonical display roles for the overlay UI. */
-type OverlayRole =
-  | "user" | "assistant" | "spec" | "architect" | "planner" | "goal"
-  | "executor" | "evaluator" | "delivery" | "build" | "system"
+/** Display channel — which card the overlay groups this message under.
+ *  "main" is the top-level conversation; the rest mirror SessionKind values
+ *  (minus "root", which is the task container, not a card). */
+export type OverlayChannel = "main" | Exclude<SessionKind, "root">
 
-/** Map raw agent name → canonical overlay role. Single source of truth. */
-export function resolveRole(agent: string): OverlayRole {
-  const a = (agent || "").trim().toLowerCase()
-  if (!a) return "assistant"
-  if (a === "user") return "user"
-  if (a === "orchestrator" || a === "task_agent") return "assistant"
-  if (a === "spec") return "spec"
-  if (a === "architect" || a === "architecture" || a === "coordination") return "architect"
-  if (a === "planner" || a === "plan" || a === "planning" || a === "replan") return "planner"
-  if (a === "goal" || a === "goal_gate") return "goal"
-  if (a === "build") return "build"
-  if (a === "executor" || a === "coding" || a === "general" || a === "explore" || a === "execute" || a === "opencode" || a === "codex" || a === "claude-code") return "executor"
-  if (a === "judge" || a === "evaluator" || a === "evaluation" || a === "scheduler" || a === "review" || a === "evaluate") return "evaluator"
-  if (a === "delivery" || a === "deliver" || a === "files" || a === "publish") return "delivery"
-  if (a === "system" || a === "compaction" || a === "title" || a === "summary") return "system"
-  return "assistant"
-}
+/** What the message is rendered as. "user" stays user-shaped regardless of
+ *  which sub-agent's card it lives in (orchestrator prompts dispatched into
+ *  a sub-agent are still user-authored from that sub-agent's perspective). */
+export type OverlayResolvedRole = "user" | OverlayChannel
 
 /**
  * Compute overlay metadata for a message event.
  *
- * Contract (session-tree driven):
- * - User messages on the root task session → channel "main". User bubbles are
- *   the only thing that lives outside an agent card.
- * - Every assistant message — root task-agent included — routes to an agent
- *   card keyed by its resolved role. The root task-agent gets its own
- *   top-level card; sub-agents nest under it (or under the Goal they belong
- *   to) via `parentSessionID` / `goalID` stamped in `enrichProperties`.
- * - Child-session user messages are orchestrator prompts dispatched by the
- *   task-agent into a sub-agent. They belong inside the sub-agent's card
- *   so the prompt is visible next to the reply.
+ * Contract (driven by `session.kind`):
+ * - User on root → resolvedRole="user", channel="main" (top-level user bubble)
+ * - User on sub-agent session → resolvedRole="user", channel=that session.kind
+ *   (orchestrator-dispatched prompt rendered inside the sub-agent's card)
+ * - Assistant on sub-agent session → resolvedRole=session.kind, channel=session.kind
+ * - Assistant on root → invalid: root sessions only hold user-authored content
+ *
+ * Bridge enrichment never mutates `info.agent` to override the inner engine's
+ * self-stamp — the engine's name is meaningless for routing; only session.kind
+ * matters.
  */
 export function overlayMeta(
   sessionID: string,
   rootSessionID: string,
-  info: { role?: string; agent?: string; sessionID?: string },
-) {
+  info: { role?: string },
+): { resolvedRole: OverlayResolvedRole; channel: OverlayChannel } {
   const role = String(info.role || "assistant")
-  const agent = String(info.agent || "")
   const isRoot = !!rootSessionID && sessionID === rootSessionID
 
-  if (role === "user") {
-    if (isRoot) return { resolvedRole: "user" as OverlayRole, channel: "main" }
-    // Child-session user messages MUST have a registered session role. The
-    // register-before-emit invariant is maintained by the dispatch call
-    // sites in `task-agent/tools.ts` (registerGoalRunSession runs before
-    // SessionPrompt.prompt publishes any message). If the invariant breaks,
-    // let it crash here — don't silently route to a wrong card.
-    const parentRole = sessionRole(sessionID)
-    if (!parentRole) {
+  if (isRoot) {
+    if (role !== "user") {
       throw new Error(
-        `overlayMeta: child session ${sessionID} has no registered role; ` +
-        `registerGoalRunSession must run before the session emits messages`,
+        `overlayMeta: ${role} message on root session ${sessionID}. Root ` +
+        `sessions only hold user-authored content; assistant output must be ` +
+        `written to a child session with a non-root kind.`,
       )
     }
-    return { resolvedRole: "user" as OverlayRole, channel: resolveRole(parentRole) }
+    return { resolvedRole: "user", channel: "main" }
   }
 
-  // Assistant messages — one contract regardless of whether the sender is
-  // root task-agent or a descendant sub-agent. The overlay's session-tree
-  // renderer sorts out nesting via parentSessionID.
-  const resolved = resolveRole(agent)
-  return { resolvedRole: resolved, channel: resolved }
+  const kind = sessionRole(sessionID)
+  if (!kind) {
+    throw new Error(
+      `overlayMeta: session ${sessionID} has no kind in the DB. Every session ` +
+      `must be created via Session.createNext({kind: ...}); a row missing kind ` +
+      `means a code path bypassed createNext or the row was inserted directly.`,
+    )
+  }
+  if (kind === "root") {
+    throw new Error(
+      `overlayMeta: child session ${sessionID} has kind="root" (only the ` +
+      `task's session_id should be a root). Probably a Session.createNext ` +
+      `call passed kind="root" with a parentID.`,
+    )
+  }
+  if (role === "user") return { resolvedRole: "user", channel: kind }
+  return { resolvedRole: kind, channel: kind }
 }
 
 function sessionFromProperties(properties: Record<string, unknown>) {
@@ -97,64 +93,48 @@ function sessionFromProperties(properties: Record<string, unknown>) {
   return ""
 }
 
-// Cache message-level info (role, agent) so part/delta events can resolve metadata
-// without DB queries. message.updated always arrives before/with part events.
-const messageInfoCache = new Map<string, { role: string; agent: string }>()
+// Cache message-level info (role) so part/delta events can resolve metadata
+// without re-reading the message row. message.updated always arrives before
+// or with part events for the same message.
+const messageRoleCache = new Map<string, string>()
 
 function cacheMessageInfo(properties: Record<string, unknown>) {
   const info = properties.info as any
   if (!info?.id) return
-  messageInfoCache.set(info.id, {
-    role: String(info.role || "assistant"),
-    agent: String(info.agent || ""),
-  })
-  // Keep cache bounded — evict oldest entries if too large
-  if (messageInfoCache.size > 500) {
-    const first = messageInfoCache.keys().next().value
-    if (first) messageInfoCache.delete(first)
+  messageRoleCache.set(info.id, String(info.role || "assistant"))
+  if (messageRoleCache.size > 500) {
+    const first = messageRoleCache.keys().next().value
+    if (first) messageRoleCache.delete(first)
   }
 }
 
-function infoForEvent(properties: Record<string, unknown>): { role: string; agent: string } {
-  // message.updated: info is directly in properties
+function roleForEvent(properties: Record<string, unknown>): string {
   const info = properties.info as any
   if (info && typeof info === "object" && info.role) {
-    return { role: String(info.role), agent: String(info.agent || "") }
+    return String(info.role)
   }
-  // message.part.updated / message.part.delta: look up by messageID
   const messageID =
     (properties.part as any)?.messageID ||
     (properties as any).messageID ||
     ""
-  if (messageID && messageInfoCache.has(messageID)) {
-    return messageInfoCache.get(messageID)!
+  if (messageID && messageRoleCache.has(messageID)) {
+    return messageRoleCache.get(messageID)!
   }
-  // Fallback: no info available (part arrived before message — rare)
-  return { role: "assistant", agent: "" }
+  return "assistant"
 }
 
 /**
- * Stamp resolvedRole and channel directly into info (message.updated)
- * or as top-level fields (part/delta events).
- * Every event that reaches the frontend MUST carry these fields.
+ * Stamp resolvedRole / channel / goalID / parentSessionID onto every event.
+ * Source of truth: session.kind, session.goal_id, session.parent_id.
  */
 function enrichProperties(properties: Record<string, unknown>, sessionID: string, taskID: string): Record<string, unknown> {
-  const info = infoForEvent(properties)
-  // Session registry is the orchestrator's authoritative role-for-sessionID
-  // mapping. It always wins over whatever the inner engine (opencode / codex /
-  // claude-code) self-stamped on the message — those engines use their own
-  // internal agent names ("build", "general", etc.) that don't match the
-  // orchestrator's stage taxonomy. Unregistered sessions (e.g. opencode's own
-  // sub-sessions for nested sub-agent calls) keep the engine's self-stamp.
-  const registeredRole = sessionRole(sessionID)
-  if (registeredRole) info.agent = registeredRole
+  const role = roleForEvent(properties)
   const rootSessionID = taskSession(taskID) || ""
-  const meta = overlayMeta(sessionID, rootSessionID, info)
+  const meta = overlayMeta(sessionID, rootSessionID, { role })
   const goalID = sessionGoalID(sessionID)
   const parentSessionID = sessionParentID(sessionID)
   const enriched = { ...properties }
 
-  // message.updated: stamp into info object directly
   if (enriched.info && typeof enriched.info === "object") {
     enriched.info = {
       ...(enriched.info as any),
@@ -164,7 +144,6 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
       ...(parentSessionID ? { parentSessionID } : {}),
     }
   }
-  // Always set at top level so part/delta events also carry the metadata
   enriched.resolvedRole = meta.resolvedRole
   enriched.channel = meta.channel
   if (goalID) enriched.goalID = goalID
@@ -181,26 +160,37 @@ async function bridgeEvent<Definition extends typeof Message.Event[keyof typeof 
   if (!sessionID) return
   const taskID = taskIDForSession(sessionID)
   if (!taskID) {
-    log.info("skipping message protocol bridge: task unresolved", {
+    // Standalone sessions (MCP / Debug / Coding / Panel / generic Session.create)
+    // legitimately don't belong to any task. They still emit message events
+    // to the general Bus for their own UIs; the task-scoped protocol_event
+    // store just doesn't persist them. This is by design — not a bug.
+    return
+  }
+  let enriched: Record<string, unknown>
+  try {
+    enriched = enrichProperties(properties, sessionID, taskID)
+  } catch (err) {
+    // overlayMeta's invariants (kind present, no assistant on root, etc.)
+    // guard the overlay's rendering contract. A violation is a data-model
+    // bug, but we must not crash the Bus subscriber — that would take down
+    // every other task's SSE with one broken row. Loud log + skip.
+    log.error("bridge: enrichment failed — dropping event", {
       type: def.type,
       sessionID,
+      taskID,
+      error: err instanceof Error ? err.message : String(err),
     })
     return
   }
-  const enriched = enrichProperties(properties, sessionID, taskID)
   log.info("bridge → protocol", {
     type: def.type,
     sessionID,
     taskID,
-    // Read from the enriched payload so the log reflects what SSE actually
-    // emits. Re-computing overlayMeta from raw `properties` here would miss
-    // the registry-based agent override applied inside enrichProperties and
-    // silently misreport the channel.
     resolvedRole: (enriched as Record<string, unknown>).resolvedRole,
     channel: (enriched as Record<string, unknown>).channel,
     msgID: (properties.info as any)?.id ?? (properties.part as any)?.messageID ?? "",
   })
-  await OrchestratorProtocol.emit(def as any, enriched as any, {
+  await EngineProtocol.emit(def as any, enriched as any, {
     taskID,
     sessionID,
     source: "session.bridge",
@@ -213,7 +203,17 @@ function bridgeDelta(properties: Record<string, unknown>) {
   if (!sessionID) return
   const taskID = taskIDForSession(sessionID)
   if (!taskID) return
-  const enriched = enrichProperties(properties, sessionID, taskID)
+  let enriched: Record<string, unknown>
+  try {
+    enriched = enrichProperties(properties, sessionID, taskID)
+  } catch (err) {
+    log.error("bridge: delta enrichment failed — dropping event", {
+      sessionID,
+      taskID,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return
+  }
   ProtocolStore.dispatchEphemeral({
     type: Message.Event.PartDelta.type,
     aggregate: "task",
@@ -229,7 +229,6 @@ export function ensureTaskMessageProtocolBridge() {
   initialized = true
   const hostDirectory = Instance.directory
 
-  // Persisted events — written to protocol_event, replayable on reconnect
   Bus.subscribe(Message.Event.Updated, (event) => {
     cacheMessageInfo(event.properties)
     return bridgeEvent(Message.Event.Updated, event.properties)
@@ -237,18 +236,12 @@ export function ensureTaskMessageProtocolBridge() {
   Bus.subscribe(Message.Event.PartUpdated, (event) => bridgeEvent(Message.Event.PartUpdated, event.properties))
   Bus.subscribe(Message.Event.Removed, (event) => bridgeEvent(Message.Event.Removed, event.properties))
   Bus.subscribe(Message.Event.PartRemoved, (event) => bridgeEvent(Message.Event.PartRemoved, event.properties))
-  // Ephemeral — dispatched to live SSE subscribers but NOT persisted.
-  // High frequency (every text token); on reconnect, client recovers full
-  // text from persisted message.part.updated or transcript snapshot.
   Bus.subscribe(Message.Event.PartDelta, (event) => bridgeDelta(event.properties))
 
-  // ── Cross-Instance bridge ──
-  // Executor sessions run in worktree Instances (different Instance.directory).
-  // Their Bus.publish() goes to the worktree's Instance-scoped Bus, which the
-  // subscriptions above never see. GlobalBus receives ALL events from ALL
-  // Instances, so we subscribe here to catch worktree-scoped message events.
-  // We skip events from our own Instance (already handled above) to avoid
-  // double-processing.
+  // Cross-Instance bridge: executor sessions run in worktree Instances whose
+  // Bus.publish() never reaches the main Instance's subscribers. GlobalBus
+  // sees all Instances; we re-execute inside the host Instance context so
+  // Database / ProtocolStore use the main DB, not the worktree's.
   const MESSAGE_TYPES = new Set([
     Message.Event.Updated.type,
     Message.Event.PartUpdated.type,
@@ -258,12 +251,9 @@ export function ensureTaskMessageProtocolBridge() {
   ])
   GlobalBus.on("event", (envelope) => {
     if (!envelope.payload || !MESSAGE_TYPES.has(envelope.payload.type)) return
-    // Skip events from the host Instance — already handled by Bus.subscribe above
     if (envelope.directory === hostDirectory) return
     const props = envelope.payload.properties
     if (!props) return
-    // Run the same bridge logic inside the host Instance context so that
-    // Database/ProtocolStore calls use the main project's DB, not the worktree's.
     Instance.provide({ directory: hostDirectory, fn: () => {
       const type = envelope.payload.type
       if (type === Message.Event.Updated.type) {

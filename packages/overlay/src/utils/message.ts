@@ -30,7 +30,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   const text = String(name || "").trim().toLowerCase();
   if (!text) return "assistant";
   if (text === "user") return "user";
-  if (text === "orchestrator" || text === "task_agent") return "assistant";
+  if (text === "orchestrator") return "assistant";
   if (text === "spec") return "spec";
   if (text === "architect" || text === "architecture" || text === "coordination") return "architect";
   if (text === "planner" || text === "plan" || text === "planning" || text === "replan") return "planner";

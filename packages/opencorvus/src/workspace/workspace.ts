@@ -1,0 +1,115 @@
+import z from "zod"
+import { Identifier } from "@/id/id"
+import { fn } from "@/util/fn"
+import { Database, eq } from "@/storage/db"
+import { Project } from "@/project/project"
+import { BusEvent } from "@/bus/bus-event"
+import { GlobalBus } from "@/bus/global"
+import { Worktree } from "@/worktree"
+import { WorkspaceTable } from "./workspace.sql"
+import { Config } from "./config"
+
+export namespace Workspace {
+  export const Event = {
+    Ready: BusEvent.define(
+      "workspace.ready",
+      z.object({
+        name: z.string(),
+      }),
+    ),
+    Failed: BusEvent.define(
+      "workspace.failed",
+      z.object({
+        message: z.string(),
+      }),
+    ),
+  }
+
+  export const Info = z
+    .object({
+      id: Identifier.schema("workspace"),
+      branch: z.string().nullable(),
+      projectID: z.string(),
+      config: Config,
+    })
+    .meta({
+      ref: "Workspace",
+    })
+  export type Info = z.infer<typeof Info>
+
+  function fromRow(row: typeof WorkspaceTable.$inferSelect): Info {
+    return {
+      id: row.id,
+      branch: row.branch,
+      projectID: row.project_id,
+      config: row.config,
+    }
+  }
+
+  export const create = fn(
+    z.object({
+      id: Identifier.schema("workspace").optional(),
+      projectID: Info.shape.projectID,
+      branch: Info.shape.branch,
+      config: Info.shape.config,
+    }),
+    async (input) => {
+      const id = Identifier.ascending("workspace", input.id)
+
+      const worktree = await Worktree.create(undefined)
+      const config = { type: "worktree" as const, directory: worktree.directory }
+
+      const info: Info = {
+        id,
+        projectID: input.projectID,
+        branch: input.branch,
+        config,
+      }
+
+      setTimeout(() => {
+        Database.use((db) => {
+          db.insert(WorkspaceTable)
+            .values({
+              id: info.id,
+              branch: info.branch,
+              project_id: info.projectID,
+              config: info.config,
+            })
+            .run()
+        })
+
+        GlobalBus.emit("event", {
+          directory: id,
+          payload: {
+            type: Event.Ready.type,
+            properties: {},
+          },
+        })
+      }, 0)
+
+      return info
+    },
+  )
+
+  export function list(project: Project.Info) {
+    const rows = Database.use((db) =>
+      db.select().from(WorkspaceTable).where(eq(WorkspaceTable.project_id, project.id)).all(),
+    )
+    return rows.map(fromRow).sort((a, b) => a.id.localeCompare(b.id))
+  }
+
+  export const get = fn(Identifier.schema("workspace"), async (id) => {
+    const row = Database.use((db) => db.select().from(WorkspaceTable).where(eq(WorkspaceTable.id, id)).get())
+    if (!row) return
+    return fromRow(row)
+  })
+
+  export const remove = fn(Identifier.schema("workspace"), async (id) => {
+    const row = Database.use((db) => db.select().from(WorkspaceTable).where(eq(WorkspaceTable.id, id)).get())
+    if (!row) return
+    const info = fromRow(row)
+    await Worktree.remove({ directory: info.config.directory })
+    Database.use((db) => db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, id)).run())
+    return info
+  })
+}

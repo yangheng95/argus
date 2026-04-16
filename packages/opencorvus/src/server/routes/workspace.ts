@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
-import { Workspace } from "../../control-plane/workspace"
+import { Workspace } from "../../workspace/workspace"
 import { Instance } from "../../project/instance"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"

@@ -112,7 +112,7 @@ function parseToolParams(input?: string) {
 }
 
 async function createToolContext(agent: Agent.Info) {
-  const session = await Session.create({ title: `Debug tool run (${agent.name})` })
+  const session = await Session.create({ kind: "assistant", title: `Debug tool run (${agent.name})` })
   const messageID = Identifier.ascending("message")
   const model = agent.model ?? (await Provider.defaultModel())
   const now = Date.now()

@@ -17,6 +17,7 @@ import {
   setTaskSequence,
 } from "../store/board";
 import { startSSE } from "./sse";
+import { loadConfigInfo } from "./init";
 
 // ── Helpers ──
 
@@ -345,7 +346,7 @@ export function routeSSEEvent(event: any): boolean {
 
   // ── Config changed → refresh appStore.config ──
   if (type === "config.changed") {
-    void import("./init").then(({ loadConfigInfo }) => loadConfigInfo()).catch(() => {});
+    void loadConfigInfo().catch(() => {});
     return true;
   }
 

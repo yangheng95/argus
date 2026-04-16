@@ -1,4 +1,4 @@
-import type { Part, ToolPart } from "@opencorvus-ai/sdk/v2"
+import type { Part, ToolPart } from "@opencorvus-ai/sdk"
 
 const MAX_LENGTH = 3000
 

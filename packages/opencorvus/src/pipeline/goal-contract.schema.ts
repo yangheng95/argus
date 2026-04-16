@@ -4,8 +4,8 @@
  * Single source of truth for the constraints on a goal contract. Three callers
  * must agree on these rules:
  *   1. requirements/output-tools.ts register_goal — LLM produces a brand-new goal
- *   2. task-agent/tools.ts add_goal             — Task Agent inserts at runtime
- *   3. task-agent/tools.ts modify_goal           — Task Agent updates a subset
+ *   2. orchestrator/tools.ts add_goal             — Orchestrator inserts at runtime
+ *   3. orchestrator/tools.ts modify_goal           — Orchestrator updates a subset
  *
  * Previously each call site re-declared its own schema (or none at all), which
  * meant add_goal could insert goals that violated the same min-length / enum

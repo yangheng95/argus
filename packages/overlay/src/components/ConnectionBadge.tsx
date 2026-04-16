@@ -7,6 +7,7 @@ import { createMemo } from "solid-js";
 import { messageStore } from "../store/messages";
 import { appStore, setConnectionStatus } from "../store/app";
 import { t } from "../utils/i18n";
+import { apiJson } from "../services/api";
 
 // ── Types ──
 
@@ -25,9 +26,6 @@ function statusLabel(status: ConnectionStatus): string {
  */
 async function handleRestart(): Promise<void> {
   setConnectionStatus("connecting");
-
- // Import apiJson lazily to avoid a circular dependency at module init time.
-  const { apiJson } = await import("../services/api");
 
   try {
     await apiJson("restart", {

@@ -15,7 +15,7 @@ test("updatePartDelta persists streamed text and tool raw fields into transcript
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const session = await Session.create({ title: "part-delta-persistence" })
+      const session = await Session.create({ kind: "assistant", title: "part-delta-persistence" })
       const messageID = Identifier.ascending("message")
       const textPartID = Identifier.ascending("part")
       const toolPartID = Identifier.ascending("part")

@@ -3,7 +3,7 @@ import type { ChannelAdapter, IncomingMessage } from "../src/adapter"
 import { sdkMock } from "./sdk-mock"
 
 mock.module("@opencorvus-ai/sdk", () => sdkMock)
-mock.module("@opencorvus-ai/sdk/v2", () => sdkMock)
+mock.module("@opencorvus-ai/sdk", () => sdkMock)
 
 const { ChannelRuntime } = await import("../src/core")
 let oldFetch: typeof globalThis.fetch
@@ -161,7 +161,9 @@ describe("channel runtime channel protocol", () => {
 
     await core.handleMessage(incoming("discord", "run evaluation"))
     await core.handleEvent({
-      type: "orchestrator.evaluation.completed",
+      // SDK Event uses the unprefixed "evaluation.completed" — the SSE route
+      // strips "engine." before sending. The test must match the SDK shape.
+      type: "evaluation.completed",
       properties: {
         taskID: "task_2",
         runID: "run_1",

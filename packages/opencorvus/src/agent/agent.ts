@@ -12,6 +12,10 @@ import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_BUILD from "./prompt/build.txt"
 import SPEC_CORE from "@/prompt/core/spec-core.txt"
 import PLAN_CORE from "@/prompt/core/plan-core.txt"
+import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
+import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
+import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
+import PLANNER_CORE from "@/prompt/core/planner-core.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
@@ -35,7 +39,13 @@ export namespace Agent {
       topP: z.number().optional(),
       temperature: z.number().optional(),
       color: z.string().optional(),
-      permission: PermissionNext.Ruleset,
+      // Permission ruleset — consumed only by SessionProcessor / SessionPrompt
+      // flow (build / spec / plan / general / explore / compaction / title).
+      // Stage agents dispatched through AgentRuntime (orchestrator / requirements /
+      // architect / planner / design-analyst / delivery / summary) do NOT consult
+      // permission; they may omit this field. Code that iterates Agent.Info
+      // permission must therefore handle `undefined`.
+      permission: PermissionNext.Ruleset.optional(),
       model: z
         .object({
           modelID: z.string(),
@@ -46,6 +56,12 @@ export namespace Agent {
       prompt: z.string().optional(),
       options: z.record(z.string(), z.any()),
       steps: z.number().int().positive().optional(),
+      tools: z
+        .object({
+          include: z.array(z.string()).optional(),
+          exclude: z.array(z.string()).optional(),
+        })
+        .optional(),
     })
     .meta({
       ref: "Agent",
@@ -54,11 +70,9 @@ export namespace Agent {
 
   const state = Instance.state(async () => {
     const cfg = await Config.get()
-    // Lazy-load orchestrator-only agent prompts to avoid pulling in large modules at startup
-    const [{ EVALUATOR_DEFAULT_SYSTEM }, { DELIVERY_AGENT_SYSTEM }] = await Promise.all([
-      import("@/evaluator/types"),
-      import("@/delivery/agent"),
-    ])
+    // Lazy-load the delivery agent system prompt to avoid pulling the large
+    // delivery module at startup.
+    const { DELIVERY_AGENT_SYSTEM } = await import("@/delivery/agent")
 
     const skillDirs = await Skill.dirs()
     const whitelistedDirs = [Truncate.GLOB, ...skillDirs.map((dir) => path.join(dir, "*"))]
@@ -107,6 +121,7 @@ export namespace Agent {
       build: {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
+        tools: { exclude: ["planner", "panel", "tui", "task_report", "analytics"] },
         options: {},
         prompt: PROMPT_BUILD,
         permission: PermissionNext.merge(
@@ -124,6 +139,7 @@ export namespace Agent {
       spec: {
         name: "spec",
         description: "Read-only specification agent. Explores codebase, asks questions, and writes the specification file before planning.",
+        tools: { include: ["read", "glob", "grep", "codesearch", "lsp", "question", "spec_exit", "task", "memory", "webfetch", "websearch"] },
         options: {},
         prompt: SPEC_CORE,
         permission: PermissionNext.merge(
@@ -147,6 +163,7 @@ export namespace Agent {
       plan: {
         name: "plan",
         description: "Read-only planning agent. Explores, asks questions, and writes the implementation plan file.",
+        tools: { include: ["read", "glob", "grep", "codesearch", "lsp", "question", "plan_exit", "task", "memory", "webfetch", "websearch"] },
         options: {},
         prompt: PLAN_CORE,
         permission: PermissionNext.merge(
@@ -170,6 +187,7 @@ export namespace Agent {
       general: {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
+        tools: { exclude: ["planner", "panel", "tui", "task_report", "analytics", "plan_enter", "plan_exit", "spec_enter", "spec_exit"] },
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -205,6 +223,7 @@ export namespace Agent {
           user,
         ),
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
+        tools: { include: ["read", "glob", "grep", "bash", "codesearch", "lsp", "webfetch", "memory"] },
         prompt: PROMPT_EXPLORE,
         options: {},
         mode: "subagent",
@@ -212,6 +231,7 @@ export namespace Agent {
       },
       compaction: {
         name: "compaction",
+        tools: { include: [] as string[] },
         mode: "primary",
         native: true,
         hidden: true,
@@ -227,6 +247,7 @@ export namespace Agent {
       },
       title: {
         name: "title",
+        tools: { include: [] as string[] },
         mode: "primary",
         options: {},
         native: true,
@@ -241,58 +262,39 @@ export namespace Agent {
         ),
         prompt: PROMPT_TITLE,
       },
+      // ── Stage agents (dispatched through AgentRuntime, not SessionPrompt) ─
+      // These do NOT consume `permission` — AgentRuntime never consults the
+      // ruleset and tool execution inside stage agents bypasses the
+      // SessionProcessor / tool-resolver permission gates. The field is
+      // omitted to stop misleading users into thinking
+      // `agent.<stage>.permission` in opencorvus.jsonc has any effect.
+      // ───────────────────────────────────────────────────────────────────
       summary: {
         name: "summary",
+        tools: { include: [] as string[] },
         mode: "primary",
         options: {},
         native: true,
         hidden: true,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            "*": "deny",
-          }),
-          user,
-        ),
         prompt: PROMPT_SUMMARY,
-      },
-      evaluator: {
-        name: "evaluator",
-        description: "Evaluator agent. Investigates goal completion and makes acceptance or replan decisions.",
-        options: {},
-        prompt: EVALUATOR_DEFAULT_SYSTEM,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-          }),
-          user,
-        ),
-        mode: "primary",
-        native: true,
-        hidden: true,
       },
       delivery: {
         name: "delivery",
         description: "Delivery verification agent. Verifies runtime behavior, fixes bugs, and makes final acceptance decisions.",
+        tools: { exclude: ["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "analytics"] },
         options: {},
         prompt: DELIVERY_AGENT_SYSTEM,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-          }),
-          user,
-        ),
         mode: "primary",
         native: true,
         hidden: true,
       },
-      task: {
-        name: "task",
-        description: "Task orchestrator agent. Drives the end-to-end task lifecycle (requirements → architect → planner → executor → evaluator → delivery).",
+      orchestrator: {
+        name: "orchestrator",
+        description: "Orchestrator (master) agent. Drives the end-to-end task lifecycle through one of the two built-in workflows (direct or pipeline).",
+        // Prompt is constructed dynamically per-trigger in src/orchestrator/agent.ts
+        // (see buildSystemParts + describeTrigger). No static core prompt — the
+        // orchestrator's context depends on live task/goal/run state.
         options: {},
-        permission: PermissionNext.merge(defaults, user),
         mode: "primary",
         native: true,
         hidden: true,
@@ -300,8 +302,11 @@ export namespace Agent {
       requirements: {
         name: "requirements",
         description: "Requirements agent. Analyzes user input and decomposes it into typed GoalContracts with acceptance specs.",
+        prompt: REQUIREMENTS_CORE,
+        // Shared tools — structured-output tools from createRequirementsOutputTools()
+        // bypass this filter (they are the agent's contract with the orchestrator).
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
         options: {},
-        permission: PermissionNext.merge(defaults, user),
         mode: "primary",
         native: true,
         hidden: true,
@@ -309,8 +314,9 @@ export namespace Agent {
       architect: {
         name: "architect",
         description: "Architect agent. Resolves cross-goal interfaces, file layout, and shared types into binding Decision Log entries.",
+        prompt: ARCHITECT_CORE,
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
         options: {},
-        permission: PermissionNext.merge(defaults, user),
         mode: "primary",
         native: true,
         hidden: true,
@@ -318,8 +324,9 @@ export namespace Agent {
       planner: {
         name: "planner",
         description: "Planner agent. Produces per-goal implementation plans from GoalContracts + Architect decisions.",
+        prompt: PLANNER_CORE,
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
         options: {},
-        permission: PermissionNext.merge(defaults, user),
         mode: "primary",
         native: true,
         hidden: true,
@@ -327,8 +334,11 @@ export namespace Agent {
       "design-analyst": {
         name: "design-analyst",
         description: "Design analyst agent. Analyzes visual references (images, URLs) to produce structured design specifications.",
+        prompt: DESIGN_ANALYST_CORE,
+        // design-analyst also uses a dedicated webfetch tool in its factory; shared planner
+        // tools listed here, webfetch + output tools bypass the filter.
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
         options: {},
-        permission: PermissionNext.merge(defaults, user),
         mode: "primary",
         native: true,
         hidden: true,
@@ -360,13 +370,24 @@ export namespace Agent {
       item.hidden = value.hidden ?? item.hidden
       item.name = value.name ?? item.name
       item.steps = value.steps ?? item.steps
+      item.tools = value.tools ?? item.tools
       item.options = mergeDeep(item.options, value.options ?? {})
-      item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
+      // Stage agents (no built-in permission) ignore user-supplied permission
+      // overrides — the field has no consumer for them. Adding it would mislead
+      // users into thinking the override does something.
+      if (item.permission) {
+        item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
+      }
     }
 
-    // Ensure Truncate.GLOB is allowed unless explicitly configured
+    // Ensure Truncate.GLOB is allowed unless explicitly configured.
+    // Only applies to agents with a permission ruleset (i.e. SessionPrompt-
+    // dispatched agents). Stage agents (delivery / requirements / architect /
+    // planner / design-analyst / orchestrator / summary) omit permission and
+    // bypass this loop — they don't go through the tool-resolver gate.
     for (const name in result) {
       const agent = result[name]
+      if (!agent.permission) continue
       const explicit = agent.permission.some((r) => {
         if (r.permission !== "external_directory") return false
         if (r.action !== "deny") return false
@@ -375,7 +396,7 @@ export namespace Agent {
       if (explicit) continue
 
       result[name].permission = PermissionNext.merge(
-        result[name].permission,
+        agent.permission,
         PermissionNext.fromConfig({ external_directory: { [Truncate.GLOB]: "allow" } }),
       )
     }

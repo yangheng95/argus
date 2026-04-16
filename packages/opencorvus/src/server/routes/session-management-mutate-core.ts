@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
-import { OrchestratorService } from "@/orchestrator/service"
+import { EngineService } from "@/task-api"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -26,10 +26,9 @@ export const SessionManagementMutateCoreRoutes = lazy(() =>
           },
         },
       }),
-      validator("json", Session.create.schema.optional()),
+      validator("json", Session.create.schema),
       async (c) => {
-        const body = c.req.valid("json") ?? {}
-        const session = await Session.create(body)
+        const session = await Session.create(c.req.valid("json"))
         return c.json(session)
       },
     )
@@ -65,7 +64,7 @@ export const SessionManagementMutateCoreRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await OrchestratorService.deleteSession(sessionID, {
+        await EngineService.deleteSession(sessionID, {
           deleteTasks: c.req.valid("query").deleteTasks === true,
         })
         return c.json(true)

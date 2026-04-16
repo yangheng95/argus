@@ -28,14 +28,13 @@ import { McpRoutes } from "./mcp"
 import { SkillRoutes } from "./skill"
 import { TuiRoutes } from "./tui"
 import { ExportRoutes } from "./export"
-import { OrchestratorRoutes } from "./orchestrator"
+import { EngineRoutes } from "./orchestrator"
 import { PanelRoutes } from "./panel"
 import { PanelKnowledgeRoutes } from "./panel-knowledge"
 import { ControlRoutes } from "./control"
 import { CodingRoutes } from "./coding"
 import { AttachmentRoutes } from "./attachment"
 import { TraceRoutes } from "./trace"
-import { GatewayRoutes } from "./gateway"
 
 const log = Log.create({ service: "server" })
 
@@ -72,12 +71,11 @@ export function AppRoutes(root: Hono) {
     .route("/panel/knowledge", PanelKnowledgeRoutes())
     .route("/control", ControlRoutes())
     .route("/coding", CodingRoutes())
-    .route("/", OrchestratorRoutes())
+    .route("/", EngineRoutes())
     .route("/export", ExportRoutes())
     .route("/", FileRoutes())
     .route("/attachment", AttachmentRoutes())
     .route("/trace", TraceRoutes())
-    .route("/gateway", GatewayRoutes())
     .route("/mcp", McpRoutes())
     .route("/tui", TuiRoutes())
     .post(
@@ -98,7 +96,7 @@ export function AppRoutes(root: Hono) {
         },
       }),
       async (c) => {
-        const { hasActiveSessions } = await import("@/orchestrator/runtime")
+        const { hasActiveSessions } = await import("@/engine/runtime")
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, skipping dispose" }, 409)
         }

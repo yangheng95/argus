@@ -1310,6 +1310,3 @@ void (async () => {
     (window as any).__overlayInitSettled = true;
   }
 })();
-
-// Gateway sidebar tail + composer wiring 已临时收起 (2026-04-13)；
-// GatewayPanel / GatewaySidebarTail / services/gateway.ts 仍保留在仓库里以便后续恢复。

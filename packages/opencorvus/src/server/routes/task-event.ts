@@ -1,146 +1,157 @@
-import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
-import { SessionTable } from "@/session/session.sql"
+import { EngineTaskTable } from "@/engine/engine.sql"
+import { SessionTable, type SessionKind } from "@/session/session.sql"
 import { Database, eq } from "@/storage/db"
 
-// In-memory registry of goal run session IDs → { taskID, role, goalID? }.
-// Maintained by the orchestrator runtime when goal runs are created/finalized.
-// O(1) lookup with no DB queries at event-dispatch time.
-const goalRunSessionRegistry = new Map<string, { taskID: string; role: string; goalID?: string }>()
-
-function cacheTaskSessions(taskID: string, role: string, goalID: string | undefined, ...sessionIDs: Array<string | undefined>) {
-  for (const sessionID of sessionIDs) {
-    if (!sessionID) continue
-    goalRunSessionRegistry.set(sessionID, { taskID, role, goalID })
-  }
-}
-
-export function registerGoalRunSession(sessionID: string, taskID: string, role = "executor", goalID?: string) {
-  cacheTaskSessions(taskID, role, goalID, sessionID)
-}
-
 /**
- * Ensure `sessionID` is registered under `taskID` WITHOUT clobbering an
- * already-recorded role or goalID. Use this from bulk reseed paths (e.g.
- * the task SSE endpoint walking Session.children()) that only know the
- * taskID — otherwise they would overwrite the goalID that goal-pool.ts
- * set at dispatch time, which is what enrichProperties stamps onto every
- * outgoing message.
- */
-export function ensureTaskSession(sessionID: string, taskID: string): void {
-  if (!sessionID) return
-  const existing = goalRunSessionRegistry.get(sessionID)
-  if (existing) {
-    if (existing.taskID !== taskID) {
-      goalRunSessionRegistry.set(sessionID, { ...existing, taskID })
-    }
-    return
-  }
-  goalRunSessionRegistry.set(sessionID, { taskID, role: "assistant", goalID: undefined })
-}
-
-/** Look up the registered role for a session (e.g. "executor", "assistant"). */
-export function sessionRole(sessionID: string): string | undefined {
-  return goalRunSessionRegistry.get(sessionID)?.role
-}
-
-/** Look up the goalID associated with a session (if any). */
-export function sessionGoalID(sessionID: string): string | undefined {
-  return goalRunSessionRegistry.get(sessionID)?.goalID
-}
-
-/**
- * Look up the parent session id. Root task-agent sessions have no parent
- * (returns undefined). Drives overlay card nesting: a card's position in
- * the tree is literally its parent session's position + 1 level of nesting.
+ * Session metadata lookups for the SSE bridge.
  *
- * Reads from SessionTable (the authoritative child→parent edge), with a
- * process-local cache so we don't hit sqlite on every SSE event.
+ * The DB is the authoritative source for "what is this session" — every
+ * answer comes from columns we wrote at session-creation time
+ * (`session.kind`, `session.parent_id`, `session.goal_id`) or from
+ * `engine_task.session_id`. Process-local caches sit on top of these
+ * lookups for the SSE hot path; they hold values that never change after
+ * a session is created (kind / goal_id / parent / owning task), so an LRU
+ * with a generous cap is enough — no invalidation is needed.
+ *
+ * No write APIs (no `register*`, no `ensure*`, no `clear*`): callers cannot
+ * change a session's identity from outside its `Session.createNext` call.
  */
-const sessionParentCache = new Map<string, string | null>()
 
-export function sessionParentID(sessionID: string): string | undefined {
-  if (!sessionID) return undefined
-  const cached = sessionParentCache.get(sessionID)
-  if (cached !== undefined) return cached === null ? undefined : cached
-  const row = Database.use((db) =>
+// Per-process caches for the SSE hot path. Sessions are immutable in the
+// dimensions we read here (kind / goal_id / parent / owning task), so we
+// cache forever and rely on the LRU cap to bound memory.
+const LRU_LIMIT = 4096
+
+class LRU<K, V> {
+  private map = new Map<K, V>()
+  constructor(private limit: number) {}
+  get(key: K): V | undefined {
+    const v = this.map.get(key)
+    if (v === undefined) return undefined
+    // Refresh recency by re-inserting at the tail.
+    this.map.delete(key)
+    this.map.set(key, v)
+    return v
+  }
+  set(key: K, value: V): void {
+    if (this.map.has(key)) this.map.delete(key)
+    else if (this.map.size >= this.limit) {
+      const oldest = this.map.keys().next().value
+      if (oldest !== undefined) this.map.delete(oldest)
+    }
+    this.map.set(key, value)
+  }
+}
+
+const kindCache = new LRU<string, SessionKind>(LRU_LIMIT)
+const goalIDCache = new LRU<string, string | null>(LRU_LIMIT)
+const parentCache = new LRU<string, string | null>(LRU_LIMIT)
+const taskIDCache = new LRU<string, string>(LRU_LIMIT)
+
+function readSessionRow(sessionID: string) {
+  return Database.use((db) =>
     db
-      .select({ parentID: SessionTable.parent_id })
+      .select({
+        kind: SessionTable.kind,
+        goal_id: SessionTable.goal_id,
+        parent_id: SessionTable.parent_id,
+      })
       .from(SessionTable)
       .where(eq(SessionTable.id, sessionID))
       .get(),
   )
-  const parentID = typeof row?.parentID === "string" && row.parentID ? row.parentID : null
-  sessionParentCache.set(sessionID, parentID)
-  return parentID ?? undefined
 }
 
-export function invalidateSessionParent(sessionID: string): void {
-  sessionParentCache.delete(sessionID)
+function loadAndCache(sessionID: string) {
+  const row = readSessionRow(sessionID)
+  if (!row) return undefined
+  kindCache.set(sessionID, row.kind as SessionKind)
+  goalIDCache.set(sessionID, row.goal_id ?? null)
+  parentCache.set(sessionID, row.parent_id ?? null)
+  return row
 }
 
-export function unregisterGoalRunSession(sessionID: string) {
-  goalRunSessionRegistry.delete(sessionID)
+/** The session's role/purpose — fixed at creation in `Session.createNext`. */
+export function sessionRole(sessionID: string): SessionKind | undefined {
+  if (!sessionID) return undefined
+  const cached = kindCache.get(sessionID)
+  if (cached !== undefined) return cached
+  const row = loadAndCache(sessionID)
+  return row?.kind as SessionKind | undefined
+}
+
+/** The goal this session belongs to (planner / executor / build sessions). */
+export function sessionGoalID(sessionID: string): string | undefined {
+  if (!sessionID) return undefined
+  const cached = goalIDCache.get(sessionID)
+  if (cached !== undefined) return cached === null ? undefined : cached
+  const row = loadAndCache(sessionID)
+  return row?.goal_id ?? undefined
+}
+
+/** Parent session id; undefined for root sessions. */
+export function sessionParentID(sessionID: string): string | undefined {
+  if (!sessionID) return undefined
+  const cached = parentCache.get(sessionID)
+  if (cached !== undefined) return cached === null ? undefined : cached
+  const row = loadAndCache(sessionID)
+  return row?.parent_id ?? undefined
 }
 
 /**
- * Drop every session previously registered for `taskID`. Called from the
- * task-agent terminal path so the registry doesn't grow unboundedly across
- * benchmark runs — each task spawns ~10+ sub-sessions (planner, executor,
- * requirements, design, architect, delivery, refine, build, assistant) and
- * none of the register call sites pair with an unregister.
+ * The owning task's session_id. A pure DB read of
+ * `engine_task.session_id` for `taskID`.
  */
-export function clearTaskSessions(taskID: string) {
-  for (const [sessionID, entry] of goalRunSessionRegistry) {
-    if (entry.taskID === taskID) goalRunSessionRegistry.delete(sessionID)
-  }
-}
-
-export function taskSession(taskID: string) {
+export function taskSession(taskID: string): string | undefined {
   const row = Database.use((db) =>
     db
-      .select({ sessionID: OrchestratorTaskTable.session_id })
-      .from(OrchestratorTaskTable)
-      .where(eq(OrchestratorTaskTable.id, taskID))
+      .select({ sessionID: EngineTaskTable.session_id })
+      .from(EngineTaskTable)
+      .where(eq(EngineTaskTable.id, taskID))
       .get(),
   )
-  const sessionID = row?.sessionID ?? undefined
-  cacheTaskSessions(taskID, "assistant", undefined, sessionID)
-  return sessionID
+  return row?.sessionID ?? undefined
 }
 
-export function taskIDForSession(sessionID: string) {
+/**
+ * Walk `session.parent_id` to the root, then look up
+ * `engine_task.session_id` to find the owning task. Returns undefined
+ * only when the session is genuinely orphaned (no parent chain reaches a
+ * task root) — callers should treat that as a bug, not a fallback.
+ */
+export function taskIDForSession(sessionID: string): string | undefined {
   const initial = typeof sessionID === "string" ? sessionID.trim() : ""
   if (!initial) return undefined
+
+  const cachedTask = taskIDCache.get(initial)
+  if (cachedTask !== undefined) return cachedTask
+
   const visited: string[] = []
-  let current = initial
+  let current: string | undefined = initial
   while (current && !visited.includes(current)) {
     visited.push(current)
-    const cached = goalRunSessionRegistry.get(current)
-    if (cached) {
-      cacheTaskSessions(cached.taskID, cached.role, cached.goalID, ...visited)
-      return cached.taskID
-    }
+
+    // Direct hit: `current` is the root session of a task.
     const task = Database.use((db) =>
       db
-        .select({ id: OrchestratorTaskTable.id })
-        .from(OrchestratorTaskTable)
-        .where(eq(OrchestratorTaskTable.session_id, current))
+        .select({ id: EngineTaskTable.id })
+        .from(EngineTaskTable)
+        .where(eq(EngineTaskTable.session_id, current!))
         .get(),
     )
     if (task?.id) {
-      cacheTaskSessions(task.id, "assistant", undefined, ...visited)
+      for (const sid of visited) taskIDCache.set(sid, task.id)
       return task.id
     }
-    const parent = Database.use((db) =>
-      db
-        .select({ parentID: SessionTable.parent_id })
-        .from(SessionTable)
-        .where(eq(SessionTable.id, current))
-        .get(),
-    )
-    current = typeof parent?.parentID === "string" ? parent.parentID : ""
+
+    // Walk one level up the session tree.
+    current = sessionParentID(current)
   }
   return undefined
+}
+
+export function invalidateSessionParent(sessionID: string): void {
+  parentCache.set(sessionID, null) // overwrite next read; LRU eviction is cheap
 }
 
 export function matchesTaskEvent(
@@ -152,8 +163,7 @@ export function matchesTaskEvent(
   const evtSession = eventSession(event.properties)
   if (!evtSession) return false
   if (evtSession === sessionID) return true
-  // Also match events from goal run sessions belonging to this task.
-  return goalRunSessionRegistry.get(evtSession)?.taskID === taskID
+  return taskIDForSession(evtSession) === taskID
 }
 
 function eventSession(properties: Record<string, unknown>) {

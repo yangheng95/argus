@@ -1,27 +1,28 @@
 import z from "zod"
 import { createDecisionLog } from "@/decision-log"
-import { findSpecSnapshot, viewSpecSnapshot } from "@/orchestrator/store"
+import { findSpecSnapshot, viewSpecSnapshot } from "@/engine/store"
 import {
-  OrchestratorArtifactTable,
-  OrchestratorChannelBindingTable,
-  OrchestratorDeliveryTable,
-  OrchestratorExecutorSessionTable,
-  OrchestratorEvaluationTable,
-  OrchestratorGoalRunTable,
-  OrchestratorGoalTable,
-  OrchestratorInteractionRequestTable,
-  OrchestratorPlanNodeTable,
-  OrchestratorPlanVersionTable,
-  OrchestratorProgressSnapshotTable,
-  OrchestratorRequirementTable,
-  OrchestratorRunTable,
-  OrchestratorTaskTable,
-} from "@/orchestrator/orchestrator.sql"
-import { EvaluationCheck } from "@/orchestrator/model"
+  EngineArtifactTable,
+  EngineChannelBindingTable,
+  EngineDeliveryTable,
+  EngineExecutorSessionTable,
+  EngineEvaluationTable,
+  EngineGoalRunTable,
+  EngineGoalTable,
+  EngineInteractionRequestTable,
+  EnginePlanNodeTable,
+  EnginePlanVersionTable,
+  EngineProgressSnapshotTable,
+  EngineRequirementTable,
+  EngineRunTable,
+  EngineTaskTable,
+} from "@/engine/engine.sql"
+import { EvaluationCheck } from "@/engine/model"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
-import { WorkflowRegistry, type WorkflowState } from "@/orchestrator/workflow"
-import { Database, desc, eq, sql } from "@/storage/db"
+import { SessionTable } from "@/session/session.sql"
+import { WorkflowRegistry, type WorkflowState } from "@/engine/workflow"
+import { Database, and, desc, eq, inArray, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 
@@ -32,7 +33,7 @@ const BOARD_SUMMARY_LIMIT = 4000
 const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
 
 export function compileBoard(input: { taskID: string }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
+  const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   const tag = boardTagForTask(task)
   const cached = boardCache.get(task.id)
@@ -43,17 +44,17 @@ export function compileBoard(input: { taskID: string }) {
 }
 
 export function boardTag(input: { taskID: string }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
+  const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
   return boardTagForTask(task)
 }
 
-function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
+function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
   const run = task.active_run_id
-    ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
+    ? Database.use((db) => db.select().from(EngineRunTable).where(eq(EngineRunTable.id, task.active_run_id!)).get())
     : undefined
   const plan = task.active_plan_version_id
-    ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
+    ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
   // Query goals by plan if available, otherwise fall back to task_id so that
   // goals created during decomposition are visible before create_run sets
@@ -62,25 +63,25 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
     ? Database.use((db) =>
         db
           .select()
-          .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.plan_version_id, plan.id))
-          .orderBy(OrchestratorGoalTable.order_index)
+          .from(EngineGoalTable)
+          .where(eq(EngineGoalTable.plan_version_id, plan.id))
+          .orderBy(EngineGoalTable.order_index)
           .all(),
       )
     : Database.use((db) =>
         db
           .select()
-          .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.task_id, task.id))
-          .orderBy(OrchestratorGoalTable.order_index)
+          .from(EngineGoalTable)
+          .where(eq(EngineGoalTable.task_id, task.id))
+          .orderBy(EngineGoalTable.order_index)
           .all(),
       )
   const goalRunRows = run
     ? Database.use((db) =>
         db
           .select()
-          .from(OrchestratorGoalRunTable)
-          .where(eq(OrchestratorGoalRunTable.coordinator_run_id, run.id))
+          .from(EngineGoalRunTable)
+          .where(eq(EngineGoalRunTable.coordinator_run_id, run.id))
           .all(),
       )
     : []
@@ -88,8 +89,8 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
     ? Database.use((db) =>
         db
           .select()
-          .from(OrchestratorExecutorSessionTable)
-          .where(eq(OrchestratorExecutorSessionTable.run_id, run.id))
+          .from(EngineExecutorSessionTable)
+          .where(eq(EngineExecutorSessionTable.run_id, run.id))
           .all(),
       )
     : []
@@ -100,12 +101,28 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
       row.goal_run_id ? [[row.goal_run_id, row.id] as const] : [],
     ),
   )
+  // Per-goal planner session: a session row with kind='planner' and
+  // goal_id=<goal>. Authoritative source — no longer reads from
+  // goal_run.metadata.plannerSessionID.
+  const goalIDsForLookup = goals.map((g) => g.id)
+  const plannerSessionRows = goalIDsForLookup.length
+    ? Database.use((db) =>
+        db
+          .select({ id: SessionTable.id, goal_id: SessionTable.goal_id })
+          .from(SessionTable)
+          .where(and(eq(SessionTable.kind, "planner"), inArray(SessionTable.goal_id, goalIDsForLookup)))
+          .all(),
+      )
+    : []
+  const plannerSessionByGoalID = new Map(
+    plannerSessionRows.flatMap((r) => (r.goal_id ? [[r.goal_id, r.id] as const] : [])),
+  )
   const interactions = Database.use((db) =>
     db
       .select()
-      .from(OrchestratorInteractionRequestTable)
-      .where(eq(OrchestratorInteractionRequestTable.task_id, task.id))
-      .orderBy(OrchestratorInteractionRequestTable.time_created)
+      .from(EngineInteractionRequestTable)
+      .where(eq(EngineInteractionRequestTable.task_id, task.id))
+      .orderBy(EngineInteractionRequestTable.time_created)
       .all(),
   )
   const notes = Database.use((db) =>
@@ -131,9 +148,9 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const allDeliveries = Database.use((db) =>
     db
       .select()
-      .from(OrchestratorDeliveryTable)
-      .where(eq(OrchestratorDeliveryTable.task_id, task.id))
-      .orderBy(OrchestratorDeliveryTable.time_created)
+      .from(EngineDeliveryTable)
+      .where(eq(EngineDeliveryTable.task_id, task.id))
+      .orderBy(EngineDeliveryTable.time_created)
       .all(),
   )
   const delivery = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
@@ -141,9 +158,9 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const allEvaluations = Database.use((db) =>
     db
       .select()
-      .from(OrchestratorEvaluationTable)
-      .where(eq(OrchestratorEvaluationTable.task_id, task.id))
-      .orderBy(OrchestratorEvaluationTable.time_created)
+      .from(EngineEvaluationTable)
+      .where(eq(EngineEvaluationTable.task_id, task.id))
+      .orderBy(EngineEvaluationTable.time_created)
       .all(),
   )
   const evaluation = run ? allEvaluations.filter((item) => item.run_id === run.id).at(-1) : undefined
@@ -157,18 +174,18 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const bindings = Database.use((db) =>
     db
       .select()
-      .from(OrchestratorChannelBindingTable)
-      .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
-      .orderBy(OrchestratorChannelBindingTable.time_created)
+      .from(EngineChannelBindingTable)
+      .where(eq(EngineChannelBindingTable.task_id, task.id))
+      .orderBy(EngineChannelBindingTable.time_created)
       .all(),
   )
   const artifacts = run
     ? Database.use((db) =>
         db
           .select()
-          .from(OrchestratorArtifactTable)
-          .where(eq(OrchestratorArtifactTable.run_id, run.id))
-          .orderBy(OrchestratorArtifactTable.time_created)
+          .from(EngineArtifactTable)
+          .where(eq(EngineArtifactTable.run_id, run.id))
+          .orderBy(EngineArtifactTable.time_created)
           .all(),
       )
     : []
@@ -179,9 +196,9 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
         ? Database.use((db) =>
             db
               .select()
-              .from(OrchestratorArtifactTable)
-              .where(eq(OrchestratorArtifactTable.delivery_id, latestDelivery.id))
-              .orderBy(OrchestratorArtifactTable.time_created)
+              .from(EngineArtifactTable)
+              .where(eq(EngineArtifactTable.delivery_id, latestDelivery.id))
+              .orderBy(EngineArtifactTable.time_created)
               .all(),
           )
         : []
@@ -270,15 +287,13 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
           }
         : undefined,
       goalRuns: goalRunRows.map((gr) => {
-        const meta = gr.metadata as Record<string, unknown> | null | undefined
-        const plannerSessionID = meta && typeof meta.plannerSessionID === "string" ? meta.plannerSessionID : undefined
         return {
           id: gr.id,
           goalID: gr.goal_id,
           status: gr.status,
           sessionID: gr.session_id ?? undefined,
           executorSessionID: goalRunExecutorSessionMap.get(gr.id) ?? undefined,
-          plannerSessionID,
+          plannerSessionID: plannerSessionByGoalID.get(gr.goal_id),
           workspaceDir: gr.workspace_dir ?? undefined,
           error: gr.error ?? undefined,
           time: {
@@ -372,8 +387,8 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
       // Task-level criteria rollup. Sourced from `task.metadata.criteria_results`,
       // populated by:
       //   - delivery agent verdict (deferred_checks + rejection_details + overall),
-      //     sunk via task-agent/tools.ts → sinkDeliveryVerdictToCriteria()
-      //   - in-process visual-diff gate (task-agent/tools.ts, when task carries
+      //     sunk via orchestrator/tools.ts → sinkDeliveryVerdictToCriteria()
+      //   - in-process visual-diff gate (orchestrator/tools.ts, when task carries
       //     image attachments and a rendered index.html exists)
       // Hidden in the overlay for kind=build tasks (build self-verifies; this
       // panel only applies to workflow tasks running through delivery).
@@ -381,21 +396,21 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   }
 }
 
-function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
+function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
   const run = task.active_run_id
-    ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
+    ? Database.use((db) => db.select().from(EngineRunTable).where(eq(EngineRunTable.id, task.active_run_id!)).get())
     : undefined
   const plan = task.active_plan_version_id
-    ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
+    ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
   const goals = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorGoalTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineGoalTable.time_updated}), 0)`,
       })
-      .from(OrchestratorGoalTable)
-      .where(eq(OrchestratorGoalTable.task_id, task.id))
+      .from(EngineGoalTable)
+      .where(eq(EngineGoalTable.task_id, task.id))
       .get(),
   )
   // goalRuns: include goal_run status transitions in the tag. Goal-scoped state
@@ -406,80 +421,80 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorGoalRunTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineGoalRunTable.time_updated}), 0)`,
       })
-      .from(OrchestratorGoalRunTable)
-      .where(eq(OrchestratorGoalRunTable.task_id, task.id))
+      .from(EngineGoalRunTable)
+      .where(eq(EngineGoalRunTable.task_id, task.id))
       .get(),
   )
   const executorSessions = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorExecutorSessionTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineExecutorSessionTable.time_updated}), 0)`,
       })
-      .from(OrchestratorExecutorSessionTable)
-      .where(eq(OrchestratorExecutorSessionTable.task_id, task.id))
+      .from(EngineExecutorSessionTable)
+      .where(eq(EngineExecutorSessionTable.task_id, task.id))
       .get(),
   )
   const interactions = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorInteractionRequestTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineInteractionRequestTable.time_updated}), 0)`,
       })
-      .from(OrchestratorInteractionRequestTable)
-      .where(eq(OrchestratorInteractionRequestTable.task_id, task.id))
+      .from(EngineInteractionRequestTable)
+      .where(eq(EngineInteractionRequestTable.task_id, task.id))
       .get(),
   )
   const deliveries = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorDeliveryTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineDeliveryTable.time_updated}), 0)`,
       })
-      .from(OrchestratorDeliveryTable)
-      .where(eq(OrchestratorDeliveryTable.task_id, task.id))
+      .from(EngineDeliveryTable)
+      .where(eq(EngineDeliveryTable.task_id, task.id))
       .get(),
   )
   const evaluations = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorEvaluationTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineEvaluationTable.time_updated}), 0)`,
       })
-      .from(OrchestratorEvaluationTable)
-      .where(eq(OrchestratorEvaluationTable.task_id, task.id))
+      .from(EngineEvaluationTable)
+      .where(eq(EngineEvaluationTable.task_id, task.id))
       .get(),
   )
   const artifacts = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorArtifactTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineArtifactTable.time_updated}), 0)`,
       })
-      .from(OrchestratorArtifactTable)
-      .where(eq(OrchestratorArtifactTable.task_id, task.id))
+      .from(EngineArtifactTable)
+      .where(eq(EngineArtifactTable.task_id, task.id))
       .get(),
   )
   const bindings = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorChannelBindingTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineChannelBindingTable.time_updated}), 0)`,
       })
-      .from(OrchestratorChannelBindingTable)
-      .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
+      .from(EngineChannelBindingTable)
+      .where(eq(EngineChannelBindingTable.task_id, task.id))
       .get(),
   )
   const snapshots = Database.use((db) =>
     db
       .select({
         count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${OrchestratorProgressSnapshotTable.time_updated}), 0)`,
+        updated: sql<number>`coalesce(max(${EngineProgressSnapshotTable.time_updated}), 0)`,
       })
-      .from(OrchestratorProgressSnapshotTable)
-      .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
+      .from(EngineProgressSnapshotTable)
+      .where(eq(EngineProgressSnapshotTable.task_id, task.id))
       .get(),
   )
   const noteStats = Database.use((db) =>
@@ -560,7 +575,7 @@ function boardChecks(input: unknown) {
 
 function viewBoardDelivery(
   row:
-    | (typeof OrchestratorDeliveryTable.$inferSelect)
+    | (typeof EngineDeliveryTable.$inferSelect)
     | undefined,
 ) {
   if (!row) return undefined
@@ -599,7 +614,7 @@ function viewBoardDelivery(
 
 function viewBoardEvaluation(
   row:
-    | (typeof OrchestratorEvaluationTable.$inferSelect)
+    | (typeof EngineEvaluationTable.$inferSelect)
     | undefined,
 ) {
   if (!row) return undefined
@@ -621,10 +636,10 @@ function viewBoardEvaluation(
 }
 
 function boardFailure(input: {
-  task: typeof OrchestratorTaskTable.$inferSelect
-  run: (typeof OrchestratorRunTable.$inferSelect) | undefined
-  interactions: Array<typeof OrchestratorInteractionRequestTable.$inferSelect>
-  evaluation: (typeof OrchestratorEvaluationTable.$inferSelect) | undefined
+  task: typeof EngineTaskTable.$inferSelect
+  run: (typeof EngineRunTable.$inferSelect) | undefined
+  interactions: Array<typeof EngineInteractionRequestTable.$inferSelect>
+  evaluation: (typeof EngineEvaluationTable.$inferSelect) | undefined
 }) {
   const interaction = input.interactions[0]
   if (interaction) {
@@ -673,12 +688,12 @@ function boardFailure(input: {
 }
 
 function boardOverview(input: {
-  task: typeof OrchestratorTaskTable.$inferSelect
-  run: (typeof OrchestratorRunTable.$inferSelect) | undefined
-  pendingInteractions: Array<typeof OrchestratorInteractionRequestTable.$inferSelect>
-  candidateDelivery: (typeof OrchestratorDeliveryTable.$inferSelect) | undefined
-  acceptedDelivery: (typeof OrchestratorDeliveryTable.$inferSelect) | undefined
-  evaluation: (typeof OrchestratorEvaluationTable.$inferSelect) | undefined
+  task: typeof EngineTaskTable.$inferSelect
+  run: (typeof EngineRunTable.$inferSelect) | undefined
+  pendingInteractions: Array<typeof EngineInteractionRequestTable.$inferSelect>
+  candidateDelivery: (typeof EngineDeliveryTable.$inferSelect) | undefined
+  acceptedDelivery: (typeof EngineDeliveryTable.$inferSelect) | undefined
+  evaluation: (typeof EngineEvaluationTable.$inferSelect) | undefined
   currentFailure:
     | {
         source: "task" | "run" | "interaction" | "evaluation"
@@ -772,20 +787,20 @@ function boardOverview(input: {
 // ═══════════════════════════════════════════════════════════════════
 
 function buildWorkflowFields(
-  task: typeof OrchestratorTaskTable.$inferSelect,
-  goals: Array<typeof OrchestratorGoalTable.$inferSelect>,
+  task: typeof EngineTaskTable.$inferSelect,
+  goals: Array<typeof EngineGoalTable.$inferSelect>,
 ) {
   const ws = (task.metadata as any)?._workflow as WorkflowState | undefined
   const workflow = ws
     ? WorkflowRegistry.resolveSync(ws.workflowID)
-    : WorkflowRegistry.resolveSync("standard")
+    : WorkflowRegistry.resolveSync("pipeline")
 
-  // Final safety net: if even the standard workflow can't be resolved (which
+  // Final safety net: if even the pipeline workflow can't be resolved (which
   // would be a serious config bug), still return an explicit empty shape
   // rather than {} so the frontend gets a stable contract.
   if (!workflow) {
     return {
-      workflow: { id: "standard", name: "Standard", steps: [], goalLoopStepIDs: [] },
+      workflow: { id: "pipeline", name: "Pipeline", steps: [], goalLoopStepIDs: [] },
       goalWorkflows: [] as Array<unknown>,
       requirements: [] as Array<unknown>,
       architect: { contracts: [] as Array<unknown>, summary: "" },
@@ -873,8 +888,8 @@ function deriveGoalScopeStatus(ws: WorkflowState, stepID: string): string {
 /** Build structured requirements array from DB */
 function buildRequirements(taskID: string) {
   const rows = Database.use((db) =>
-    db.select().from(OrchestratorRequirementTable)
-      .where(eq(OrchestratorRequirementTable.task_id, taskID))
+    db.select().from(EngineRequirementTable)
+      .where(eq(EngineRequirementTable.task_id, taskID))
       .all(),
   )
   if (rows.length === 0) return undefined
@@ -890,9 +905,9 @@ function buildRequirements(taskID: string) {
 /** Latest goal_run for a goal, ordered by time_created desc. */
 function latestGoalRun(goalID: string) {
   return Database.use((db) =>
-    db.select().from(OrchestratorGoalRunTable)
-      .where(eq(OrchestratorGoalRunTable.goal_id, goalID))
-      .orderBy(desc(OrchestratorGoalRunTable.time_created))
+    db.select().from(EngineGoalRunTable)
+      .where(eq(EngineGoalRunTable.goal_id, goalID))
+      .orderBy(desc(EngineGoalRunTable.time_created))
       .limit(1).get(),
   )
 }
@@ -900,45 +915,58 @@ function latestGoalRun(goalID: string) {
 /** Latest evaluation row for a goal_run, ordered by time_created desc. */
 function latestEvaluationForGoalRun(goalRunID: string) {
   return Database.use((db) =>
-    db.select().from(OrchestratorEvaluationTable)
-      .where(eq(OrchestratorEvaluationTable.goal_run_id, goalRunID))
-      .orderBy(desc(OrchestratorEvaluationTable.time_created))
+    db.select().from(EngineEvaluationTable)
+      .where(eq(EngineEvaluationTable.goal_run_id, goalRunID))
+      .orderBy(desc(EngineEvaluationTable.time_created))
       .limit(1).get(),
   )
 }
 
-/** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks") */
+/** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks").
+ *  The new pipeline workflow has ONE goal-scope step: `build` (plan + execute
+ *  + eval are sub-phases inside it). Legacy step IDs (plan/execute/eval) stay
+ *  for backward compatibility with task data created on the previous schema. */
 function buildStepSummary(goalID: string, stepID: string, status?: string): string | undefined {
   if (!status || status === "pending") return undefined
+
+  if (stepID === "build" || stepID === "execute") {
+    const goalRun = latestGoalRun(goalID)
+    if (goalRun) {
+      const delivery = Database.use((db) =>
+        db.select().from(EngineDeliveryTable)
+          .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
+          .orderBy(desc(EngineDeliveryTable.time_created))
+          .limit(1).get(),
+      )
+      if (delivery) {
+        const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
+        const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
+        if (fileCount > 0) return `${fileCount} files`
+      }
+    }
+    if (status === "running") return "running…"
+    if (stepID === "build") {
+      // Pre-execution: surface plan-step count if planning has produced nodes.
+      const nodes = Database.use((db) =>
+        db.select().from(EnginePlanNodeTable)
+          .where(eq(EnginePlanNodeTable.goal_id, goalID))
+          .all(),
+      )
+      if (nodes.length) return `${nodes.length} planned steps`
+    }
+    return undefined
+  }
+
   if (stepID === "plan") {
     const nodes = Database.use((db) =>
-      db.select().from(OrchestratorPlanNodeTable)
-        .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
+      db.select().from(EnginePlanNodeTable)
+        .where(eq(EnginePlanNodeTable.goal_id, goalID))
         .all(),
     )
     if (nodes.length) return `${nodes.length} steps`
     return undefined
   }
-  if (stepID === "execute") {
-    const goalRun = latestGoalRun(goalID)
-    if (!goalRun) return undefined
-    const delivery = Database.use((db) =>
-      db.select().from(OrchestratorDeliveryTable)
-        .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRun.id))
-        .orderBy(desc(OrchestratorDeliveryTable.time_created))
-        .limit(1).get(),
-    )
-    if (delivery) {
-      const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
-      const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
-      if (fileCount > 0) return `${fileCount} files`
-    }
-    // Executor is running (or crashed without delivering): surface the session
-    // presence instead of an empty subtitle, so the operator can tell the
-    // difference between "not started" and "in flight".
-    if (status === "running") return "running…"
-    return undefined
-  }
+
   if (stepID === "eval") {
     const goalRun = latestGoalRun(goalID)
     if (!goalRun) return undefined
@@ -977,10 +1005,75 @@ export interface GoalStepPayload {
 
 function buildStepPayload(goalID: string, stepID: string, status?: string): GoalStepPayload | undefined {
   if (!status || status === "pending") return undefined
+
+  // The `build` step folds plan + execute + eval into one payload (the new
+  // pipeline workflow has only this single goal-scope step). Legacy step IDs
+  // (plan / execute / eval) keep their own narrower payloads so historical
+  // task data still renders the same way it always did.
+  if (stepID === "build") {
+    const goalRun = latestGoalRun(goalID)
+    const nodes = Database.use((db) =>
+      db.select().from(EnginePlanNodeTable)
+        .where(eq(EnginePlanNodeTable.goal_id, goalID))
+        .all(),
+    )
+    const planNodes = nodes.length > 0
+      ? nodes
+          .map((n) => ({ id: n.id, title: n.title, brief: n.brief, orderIndex: n.order_index }))
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+      : undefined
+
+    let executorSessionID: string | undefined
+    let changedFiles: string[] | undefined
+    let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
+    if (goalRun) {
+      executorSessionID = goalRun.session_id ?? undefined
+      const delivery = Database.use((db) =>
+        db.select().from(EngineDeliveryTable)
+          .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
+          .orderBy(desc(EngineDeliveryTable.time_created))
+          .limit(1).get(),
+      )
+      const result = delivery?.result as { changed_files?: string[]; diffs?: { file?: string }[]; stats?: { additions?: number; deletions?: number } } | null
+      changedFiles = result?.changed_files
+        ?? (Array.isArray(result?.diffs)
+          ? result.diffs.map((d) => d.file).filter((f): f is string => typeof f === "string")
+          : undefined)
+      diffStats = {
+        files: changedFiles?.length,
+        additions: result?.stats?.additions,
+        deletions: result?.stats?.deletions,
+      }
+    }
+
+    let checks: GoalStepPayload["checks"] | undefined
+    let evalSummary: string | undefined
+    let verdict: string | undefined
+    if (goalRun) {
+      const evaluation = latestEvaluationForGoalRun(goalRun.id)
+      if (evaluation) {
+        const list = Array.isArray(evaluation.checks) ? evaluation.checks : []
+        checks = list.map((c) => ({ name: c.name, status: c.status, evidence: c.evidence, family: c.family }))
+        evalSummary = evaluation.summary
+        verdict = evaluation.verdict
+      }
+    }
+
+    if (
+      planNodes === undefined &&
+      executorSessionID === undefined &&
+      changedFiles === undefined &&
+      checks === undefined
+    ) {
+      return undefined
+    }
+    return { planNodes, executorSessionID, changedFiles, diffStats, checks, evalSummary, verdict }
+  }
+
   if (stepID === "plan") {
     const nodes = Database.use((db) =>
-      db.select().from(OrchestratorPlanNodeTable)
-        .where(eq(OrchestratorPlanNodeTable.goal_id, goalID))
+      db.select().from(EnginePlanNodeTable)
+        .where(eq(EnginePlanNodeTable.goal_id, goalID))
         .all(),
     )
     if (nodes.length === 0) return undefined
@@ -999,9 +1092,9 @@ function buildStepPayload(goalID: string, stepID: string, status?: string): Goal
     const goalRun = latestGoalRun(goalID)
     if (!goalRun) return undefined
     const delivery = Database.use((db) =>
-      db.select().from(OrchestratorDeliveryTable)
-        .where(eq(OrchestratorDeliveryTable.goal_run_id, goalRun.id))
-        .orderBy(desc(OrchestratorDeliveryTable.time_created))
+      db.select().from(EngineDeliveryTable)
+        .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
+        .orderBy(desc(EngineDeliveryTable.time_created))
         .limit(1).get(),
     )
     const result = delivery?.result as { changed_files?: string[]; diffs?: { file?: string }[]; stats?: { additions?: number; deletions?: number } } | null

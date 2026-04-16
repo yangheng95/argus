@@ -20,6 +20,9 @@ import { t } from "../utils/i18n";
 import { apiJson, configure as configureApi } from "./api";
 import { nativeMessage } from "./app-dialog";
 import { nativeOpen, nativePrompt } from "../utils/native";
+import { checkConnection } from "./connection";
+import { reloadProjectScope } from "./config";
+import { initGitCurrent } from "../utils/git";
 
 // ── Types ──
 
@@ -529,14 +532,11 @@ export async function applyDirectory(
   const epoch = settingsStore.directoryEpoch;
 
  // Connection check + reload via .
-  const { checkConnection } = await import("./connection");
-  if (typeof checkConnection === "function") {
-    console.log("[applyDir] checking connection");
-    const ok = await checkConnection();
-    if (!ok) {
-      console.warn("[applyDir] connection failed, aborting");
-      return;
-    }
+  console.log("[applyDir] checking connection");
+  const ok = await checkConnection();
+  if (!ok) {
+    console.warn("[applyDir] connection failed, aborting");
+    return;
   }
 
   if (epoch !== settingsStore.directoryEpoch) {
@@ -544,7 +544,6 @@ export async function applyDirectory(
     return;
   }
 
-  const { reloadProjectScope } = await import("./config");
   console.log("[applyDir] reloading project scope");
   await reloadProjectScope(options);
 
@@ -612,7 +611,6 @@ export async function createDirectory(): Promise<void> {
     if (!created) throw new Error(t("cwd.create_unavailable"));
     await setDirectory(target);
     if (settingsStore.initGit) {
-      const { initGitCurrent } = await import("../utils/git");
       await initGitCurrent({ notify: false });
     }
   } catch (e) {

@@ -142,21 +142,24 @@ export namespace LLMTrace {
     let stepCount = 0
     let done = false
 
-    // Resolve which task owns this session. If resolution fails the LLM call
-    // is orphaned — no registry entry, no DB row, no parent chain. Silently
-    // attributing the trace to the sessionID (old behaviour) routed events to
-    // a ses_*.jsonl file the overlay never subscribes to, so the Trace tab
-    // looked empty while the work ran. We now refuse to emit and log the
-    // call site loudly so the missing registerGoalRunSession() gets fixed at
-    // the source.
+    // Trace is per-task. Not every session is task-owned: MCP servers,
+    // Debug-tool runs, direct Coding API, Panel control sessions, and
+    // generic Session.create HTTP callers all produce sessions that
+    // legitimately sit outside the orchestrator task tree. For those we
+    // emit nothing to the per-task JSONL — it's not a bug, just not part
+    // of the task trace surface.
+    //
+    // Task-owned sessions always reach a taskID via parent_id → root →
+    // engine_task.session_id (this lookup is pure DB now, no
+    // in-memory registry). If a session that *should* be task-owned
+    // can't be resolved, that is a real bug — but LLMTrace can't tell
+    // the two cases apart from here. `log.debug` keeps the evidence
+    // without crashing the LLM call or flooding ERROR logs.
     const taskID = Trace.taskIDForSession(input.sessionID)
     if (!taskID) {
-      log.error("llm-trace: sessionID could not be resolved to a taskID — skipping trace emission", {
+      log.debug("standalone session (no owning task) — skipping per-task trace", {
         sessionID: input.sessionID,
         agent: input.agent.name,
-        callID: input.callID,
-        providerID: input.model.providerID,
-        modelID: input.model.modelID,
       })
       return {
         step() {},

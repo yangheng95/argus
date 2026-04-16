@@ -36,7 +36,7 @@ export function InteractionPermissionPart(
     setBusy(true);
     setError("");
     try {
-      await replyInteraction(props.interaction.id, action);
+      await replyInteraction(props.interaction.id, action, false);
       await loadBoard();
     } catch (err: any) {
       setError(err?.message || String(err));
@@ -50,7 +50,7 @@ export function InteractionPermissionPart(
     setBusy(true);
     setError("");
     try {
-      await rejectInteraction(props.interaction.id);
+      await rejectInteraction(props.interaction.id, false);
       await loadBoard();
     } catch (err: any) {
       setError(err?.message || String(err));

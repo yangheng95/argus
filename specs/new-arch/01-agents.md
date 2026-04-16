@@ -1,22 +1,22 @@
 # 01 — Agent 家族
 
-> 对应代码：`src/gateway/` · `src/task-agent/` · `src/agent/` · `src/decompose/` · `src/requirements/` ·
-> `src/architect/` · `src/planner/` · `src/evaluator/` · `src/delivery/` · `src/design-analyst/` ·
+> 对应代码：`src/gateway/` · `src/orchestrator/` · `src/agent/` · `src/decompose/` · `src/requirements/` ·
+> `src/architect/` · `src/planner/` · `src/delivery/checks/` · `src/delivery/` · `src/design-analyst/` ·
 > `src/executor/` · `src/pipeline/` · `src/orchestrator/`
 
 ## 核心原则
 
 - **Agent 是 agent, Infrastructure 是 infrastructure**。LLM 推理和机械调度必须分层。
-- Task Agent 是**唯一决策者**，看完整上下文，推理下一步动作。
+- Orchestrator 是**唯一决策者**，看完整上下文，推理下一步动作。
 - 没有固定 pipeline、没有机械 retry、没有自动 dispatch、没有 fallback。
-- 每个 sub-agent 自带 LLM + tools，独立推理，被 Task Agent 调用。
+- 每个 sub-agent 自带 LLM + tools，独立推理，被 Orchestrator 调用。
 
 ## 入站与任务创建
 
 ```
 外部渠道 → ChannelIngress.message()          channel/ingress.ts
 (Slack/    入站路由 · 绑定 task_id
- HTTP)     → OrchestratorService / ControlMessage
+ HTTP)     → EngineService / ControlMessage
 
 本地用户 → Gateway Agent (LLM)               gateway/agent.ts
           per-channel 单例 session          session.channel_key 唯一索引
@@ -35,15 +35,15 @@
 ## 两种 task kind
 
 ```
-OrchestratorService.createTask({ kind })   orchestrator/service.ts
+EngineService.createTask({ kind })   orchestrator/service.ts
 
    kind="workflow" ──→ Task Control Loop      orchestrator/task-loop.ts
                        (Decision → Pool → repeat)
 
-   kind="build"    ──→ build-dispatch         task-agent/build-dispatch.ts
+   kind="build"    ──→ build-dispatch         orchestrator/build-dispatch.ts
                        绕过 decompose/plan/eval
                        直接跑 build agent on task.request
-                       仍用 orchestrator_task 行 + trace
+                       仍用 engine_task 行 + trace
 ```
 
 **为什么分叉**：
@@ -56,13 +56,13 @@ OrchestratorService.createTask({ kind })   orchestrator/service.ts
 ```
 task-loop.ts
 ┌─────────────────────────────────────────────┐
-│  Decision Point (Task Agent LLM)           │
+│  Decision Point (Orchestrator LLM)           │
 │    触发 kind: created / batch_complete /    │
 │              retry                          │
 │    读 orchestrator_* 全量 + decision-log    │
 │    推理: 调 sub-agent? 重试? 加 goal? 交付? │
 └─────────────────┬───────────────────────────┘
-                  │ 通过 tools (task-agent/tools.ts)
+                  │ 通过 tools (orchestrator/tools.ts)
                   ▼
         ┌─────────────────────────┐
         │  GoalPool (goal-pool.ts)│
@@ -111,7 +111,7 @@ task-loop.ts
 | Evaluator | `evaluator/` | 确定性命令 runner（无 LLM） | delivery agent 调用 |
 | Delivery | `delivery/` | diff 验收 + 回修 bug | 执行后 |
 
-**所有 sub-agent 都通过 Task Agent 的 tools 调用**（`task-agent/tools.ts`），
+**所有 sub-agent 都通过 Orchestrator 的 tools 调用**（`orchestrator/tools.ts`），
 不是固定顺序的 pipeline。
 
 ## Decision Log
@@ -135,6 +135,6 @@ Executor 是**外部**进程，不属于 Agent Team：
 
 ## 相关文档
 
-- [02-data.md](02-data.md) — orchestrator_task / goal / run 等 18 张表的行为
+- [02-data.md](02-data.md) — engine_task / goal / run 等 18 张表的行为
 - [03-control.md](03-control.md) — Gateway 前面的 channel / bus / trace
 - [04-extensions.md](04-extensions.md) — Executor 与 plugin/mcp/acp 的边界

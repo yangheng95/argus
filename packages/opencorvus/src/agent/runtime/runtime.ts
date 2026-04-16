@@ -1,6 +1,6 @@
 /**
  * AgentRuntime — single entry point that every agent (requirements, architect,
- * design-analyst, planner/per-goal, delivery, task-agent) runs through.
+ * design-analyst, planner/per-goal, delivery, orchestrator) runs through.
  *
  * Responsibilities, previously duplicated across 7 files:
  *
@@ -32,7 +32,7 @@ import type { StreamFailureSnapshot } from "./stream-failures"
 export namespace AgentRuntime {
   /** How the runtime responds to accumulated stream failures after the run.
    *  "throw" is the default and matches CLAUDE.md rule #1: failures must
-   *  never be silently swallowed. "collect" is reserved for the task-agent
+   *  never be silently swallowed. "collect" is reserved for the orchestrator
    *  root orchestrator, which has its own policy for handling child failures. */
   export type FailurePolicy = "throw" | "collect"
 
@@ -67,7 +67,7 @@ export namespace AgentRuntime {
      *  from AI SDK. */
     onStepFinish?: (step: unknown) => void | Promise<void>
     /** Pipe stream chunks up to a parent agent (nested streams, e.g.
-     *  task-agent observing a design-analyst run). */
+     *  orchestrator observing a design-analyst run). */
     forwardChunk?: (arg: { chunk: any }) => void | Promise<void>
     /** Optional override for the session hooks — advanced callers (tests
      *  or gateway/sub-agent bridges) may supply their own to inject a shared
@@ -163,7 +163,7 @@ export namespace AgentRuntime {
       // the SDK has ALREADY fed the validation error back to the model as
       // the tool's result, so the model sees it on the next step and can
       // self-correct. We record it with `tool-input-validation` kind so
-      // downstream policy (task-agent critical filter) keeps the task
+      // downstream policy (orchestrator critical filter) keeps the task
       // running; step-cap bounds unrecoverable loops, so this is NOT a
       // silent fallback.
       for (const step of steps) {

@@ -82,8 +82,11 @@ export namespace PermissionNext {
     return ruleset
   }
 
-  export function merge(...rulesets: Ruleset[]): Ruleset {
-    return rulesets.flat()
+  /** Merge any number of rulesets. Undefined entries are silently skipped so
+   *  callers can pass `agent.permission` (now optional on Agent.Info — stage
+   *  agents omit it entirely) without `?? []` boilerplate at every site. */
+  export function merge(...rulesets: (Ruleset | undefined)[]): Ruleset {
+    return rulesets.flatMap((r) => r ?? [])
   }
 
   export const Request = z
@@ -123,6 +126,7 @@ export namespace PermissionNext {
         sessionID: z.string(),
         requestID: z.string(),
         reply: Reply,
+        autoReply: z.boolean(),
       }),
     ),
   }
@@ -194,6 +198,7 @@ export namespace PermissionNext {
                     sessionID: request.sessionID,
                     requestID: id,
                     reply: "once",
+                    autoReply: true,
                   })
                   resolve()
                 }
@@ -210,6 +215,7 @@ export namespace PermissionNext {
     z.object({
       requestID: Identifier.schema("permission"),
       reply: Reply,
+      autoReply: z.boolean(),
       message: z.string().optional(),
     }),
     async (input) => {
@@ -221,6 +227,7 @@ export namespace PermissionNext {
         sessionID: existing.info.sessionID,
         requestID: existing.info.id,
         reply: input.reply,
+        autoReply: input.autoReply,
       })
       if (input.reply === "reject") {
         existing.reject(input.message ? new CorrectedError(input.message) : new RejectedError())
@@ -233,6 +240,7 @@ export namespace PermissionNext {
               sessionID: pending.info.sessionID,
               requestID: pending.info.id,
               reply: "reject",
+              autoReply: true,
             })
             pending.reject(new RejectedError())
           }
@@ -266,6 +274,7 @@ export namespace PermissionNext {
             sessionID: pending.info.sessionID,
             requestID: pending.info.id,
             reply: "always",
+            autoReply: true,
           })
           pending.resolve()
         }
@@ -285,7 +294,7 @@ export namespace PermissionNext {
     },
   )
 
-  export function evaluate(permission: string, pattern: string, ...rulesets: Ruleset[]): Rule {
+  export function evaluate(permission: string, pattern: string, ...rulesets: (Ruleset | undefined)[]): Rule {
     const merged = merge(...rulesets)
     log.info("evaluate", { permission, pattern, ruleset: merged })
     const match = merged.findLast(
@@ -296,8 +305,12 @@ export namespace PermissionNext {
 
   const EDIT_TOOLS = ["edit", "write", "patch", "multiedit"]
 
-  export function disabled(tools: string[], ruleset: Ruleset): Set<string> {
+  /** Returns the set of tools that the ruleset explicitly bans (`pattern: "*",
+   *  action: "deny"`). Undefined ruleset means "no rules" → empty set
+   *  (consistent with stage agents that have no permission config). */
+  export function disabled(tools: string[], ruleset: Ruleset | undefined): Set<string> {
     const result = new Set<string>()
+    if (!ruleset) return result
     for (const tool of tools) {
       const permission = EDIT_TOOLS.includes(tool) ? "edit" : tool
 

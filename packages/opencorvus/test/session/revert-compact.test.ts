@@ -16,7 +16,7 @@ describe("revert + compact workflow", () => {
       directory: tmp.path,
       fn: async () => {
         // Create a session
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const sessionID = session.id
 
         // Create a user message
@@ -192,7 +192,7 @@ describe("revert + compact workflow", () => {
       directory: tmp.path,
       fn: async () => {
         // Create a session
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
         const sessionID = session.id
 
         // Create initial messages

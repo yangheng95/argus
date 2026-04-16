@@ -54,7 +54,7 @@ test("plan_enter creates a plan-mode user message and ensures plan directory exi
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const session = await Session.create({ title: "plan enter" })
+      const session = await Session.create({ kind: "assistant", title: "plan enter" })
       await seed(session.id)
       const tool = await PlanEnterTool.init()
       const run = tool.execute({}, ctx({
@@ -93,7 +93,7 @@ test("plan_exit creates a build-mode user message after approval", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const session = await Session.create({ title: "plan exit" })
+      const session = await Session.create({ kind: "assistant", title: "plan exit" })
       await seed(session.id)
       await Bun.write(Session.plan(session), "# plan\n")
       const tool = await PlanExitTool.init()

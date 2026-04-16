@@ -14,7 +14,7 @@ describe("tui.selectSession endpoint", () => {
       directory: projectRoot,
       fn: async () => {
         // #given
-        const session = await Session.create({})
+        const session = await Session.create({ kind: "assistant" })
 
         // #when
         const app = Server.App()

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import type * as z from "zod"
-import { ArtifactAudit, RunMetrics } from "../../src/orchestrator/model"
+import { ArtifactAudit, RunMetrics } from "../../src/engine/model"
 
 type ArtifactAuditType = z.infer<typeof ArtifactAudit>
 type RunMetricsType = z.infer<typeof RunMetrics>

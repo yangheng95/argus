@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Memory } from "../../src/memory"
-import { OrchestratorMemoryBridge } from "../../src/orchestrator/memory-bridge"
+import { EngineMemoryBridge } from "../../src/engine/memory-bridge"
 import { MemoryInjection } from "../../src/memory/injection"
 import { tmpdir } from "../fixture/fixture"
 
@@ -179,7 +179,7 @@ describe("memory multi-stage lifecycle", () => {
       fn: async () => {
         const projectId = Instance.project.id
 
-        await OrchestratorMemoryBridge.flushTaskLearnings({
+        await EngineMemoryBridge.flushTaskLearnings({
           task: {
             id: "task_test_success",
             title: "Add user authentication",

@@ -1,5 +1,5 @@
 import type { McpServer } from "@agentclientprotocol/sdk"
-import type { OpencodeClient } from "@opencorvus-ai/sdk/v2"
+import type { OpencodeClient } from "@opencorvus-ai/sdk"
 
 export interface ACPSessionState {
   id: string

@@ -127,7 +127,7 @@ Agent.run()                                     agent 发起 LLM 调用
 
 **格式**：`{providerID}/{modelID}` → 运行时通过 `Provider.getModel()` 解析为 `Provider.Model`。
 
-不同 agent 可用不同 provider — Task Agent 用 Claude，Eval 用 GPT，零耦合。
+不同 agent 可用不同 provider — Orchestrator 用 Claude，Eval 用 GPT，零耦合。
 **Executor**（外部 agent）有自己的 LLM，不受此层管理。
 
 ## 核心文件
@@ -177,7 +177,7 @@ CUSTOM_LOADERS["new-provider"] = {
 
 1. **Agent 调用 `ProviderLLM.stream()`** — 不直接 import `streamText`，不接触 provider 差异
 2. **session/llm.ts 复用 `ProviderLLM.wrapModel()` + `baseHeaders()`** — session 特有逻辑留在 session 层
-3. **每个 Agent 通过 config 独立选模型** — Task Agent 可用 Claude，Eval 可用 GPT
+3. **每个 Agent 通过 config 独立选模型** — Orchestrator 可用 Claude，Eval 可用 GPT
 4. **新增 provider 只改 `provider/`** — agent 代码零变更
 
 ## 相关文档

@@ -143,6 +143,7 @@ export namespace MCPServe {
       directory: input.cwd,
       fn: async () => {
         const session = await Session.createNext({
+          kind: "assistant",
           title: `MCP ${input.toolset}`,
           directory: input.cwd,
         })

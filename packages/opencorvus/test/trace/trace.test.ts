@@ -26,7 +26,11 @@ describe("Trace.event", () => {
         const events = await Trace.read(taskID)
 
         expect(events.length).toBe(4)
-        expect(events.map((e) => e.seq)).toEqual([1, 2, 3, 4])
+        // seq is a per-process monotonic tiebreaker; absolute values reset
+        // across processes, but within a single process events for the same
+        // task must be strictly increasing.
+        const seqs = events.map((e) => e.seq)
+        for (let i = 1; i < seqs.length; i++) expect(seqs[i]).toBeGreaterThan(seqs[i - 1])
         expect(events.map((e) => e.category)).toEqual([
           "task.start",
           "agent.start",

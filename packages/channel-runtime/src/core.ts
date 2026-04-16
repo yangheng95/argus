@@ -1,5 +1,5 @@
 import path from "node:path"
-import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk/v2"
+import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk"
 import { mkdir } from "node:fs/promises"
 import type { ChannelAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
@@ -90,7 +90,7 @@ type EventSessionError = Extract<Event, { type: "session.error" }>
 type EventSessionStatus = Extract<Event, { type: "session.status" }>
 type EventMessageUpdated = Extract<Event, { type: "message.updated" }>
 type EventMessagePartUpdated = Extract<Event, { type: "message.part.updated" }>
-type EventOrchestratorEvaluationCompleted = Extract<Event, { type: "orchestrator.evaluation.completed" }>
+type EventEvaluationCompleted = Extract<Event, { type: "evaluation.completed" }>
 const MIRROR_PREFIX = "[opencorvus-mirror]"
 type PendingTask = {
   taskId: string
@@ -1130,8 +1130,14 @@ export class ChannelRuntime {
   }
 
   private async handleEvent(event: Event): Promise<void> {
-    if (event.type === "orchestrator.evaluation.completed") {
-      const info = (event as EventOrchestratorEvaluationCompleted).properties
+    // Engine emits evaluation.completed when delivery's adversarial verification
+    // finishes. Push the verdict back to every channel thread bound to the task
+    // so chat operators see acceptance/rejection without polling.
+    // (Earlier code checked "engine.evaluation.completed" — that prefix is
+    //  stripped by the orchestrator route before SSE, so the SDK type is the
+    //  bare "evaluation.completed".)
+    if (event.type === "evaluation.completed") {
+      const info = (event as EventEvaluationCompleted).properties
       const sessions = this.findTaskBindings(info.taskID)
       if (sessions.length === 0) return
       const msg = `Evaluation ${info.verdict}: ${info.summary}`

@@ -576,7 +576,7 @@ function mergeAgentReasoningDeltas(events: any[]): any[] {
 //
 // Nesting still follows session.parentID (bridge-stamped via parentSessionID
 // on info). Cards carrying a goalID route into the matching Goal container;
-// everything else forms a tree under the root task-agent card.
+// everything else forms a tree under the root orchestrator card.
 
 type SessionBucket = {
   sessionID: string;
@@ -725,7 +725,11 @@ export function computeAgentCards(): { cards: Record<string, AgentCardData>; ord
   const allAgentCards: AgentCardData[] = [];
   for (const sid of Object.keys(store.messagesBySession)) {
     const card = getSessionBucketCardMemo(sid)();
-    if (card) allAgentCards.push(card);
+    // Shallow-copy with a fresh children array. nestWithinBucket() mutates
+    // children via push — without the copy, repeated calls to
+    // computeAgentCards() (from conversationMessages + Board memos) would
+    // accumulate duplicates in the memo-cached object's children array.
+    if (card) allAgentCards.push({ ...card, children: [] });
   }
 
   // 2. Live agent-event-only stages — keeps overlay responsive during the
@@ -796,7 +800,7 @@ export function computeAgentCards(): { cards: Record<string, AgentCardData>; ord
   /** Nest agent cards within a bucket according to session parent links.
    *  A card whose parentSessionID is another card in the same bucket
    *  becomes that card's child. Cards whose parent is not in the bucket
-   *  (e.g. executor whose parent is task-agent at root) surface as bucket
+   *  (e.g. executor whose parent is orchestrator at root) surface as bucket
    *  roots. Sorts chronologically at every level. */
   function nestWithinBucket(cards: AgentCardData[]): AgentCardData[] {
     const byID = new Map<string, AgentCardData>();
@@ -868,11 +872,21 @@ export function computeAgentCards(): { cards: Record<string, AgentCardData>; ord
     nextOrder.push(c.id);
   }
 
-  // Final root ordering: root task-agent card first, then goal cards in
+  // Final root ordering: root orchestrator card first, then goal cards in
   // board order, then other root agent cards chronologically.
+  //
+  // Only the orchestrator session emits messages with `stage: "assistant"`
+  // (all other stages are "architect" / "planner" / "delivery" / "executor"
+  // / "build" / etc.). Sub-stage `stage: "assistant"` cards (e.g. the refine
+  // session) are children of the orchestrator card after nestWithinBucket, so
+  // they never reach this priority sort — only the root orchestrator does.
+  // The previous `!parentSessionID` guard was a left-over from when bridge
+  // hadn't started stamping parentSessionID; once enrichProperties stamped
+  // every message with the parent session, the orchestrator card always had a
+  // parent (task.session_id) and never matched, dropping it to priority 2.
   const priority = (c: AgentCardData | undefined): number => {
     if (!c) return 3;
-    if (c.kind === "agent" && c.stage === "assistant" && !c.parentSessionID) return 0;
+    if (c.kind === "agent" && c.stage === "assistant") return 0;
     if (c.kind === "goal") return 1;
     return 2;
   };
@@ -1084,25 +1098,19 @@ export function applyMessageEvent(event: any): boolean {
       setStore("messages", idx, "parts", partIdx, part);
       if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, part);
     } else {
-      setStore(
-        "messages",
-        idx,
-        "parts",
-        produce((parts: Part[]) => {
-          parts.push(part);
-        }),
-      );
-      if (sIdx >= 0) {
-        setStore(
-          "messagesBySession",
-          sid,
-          sIdx,
-          "parts",
-          produce((parts: Part[]) => {
-            parts.push(part);
-          }),
-        );
-      }
+      // CRITICAL: messages[idx] and messagesBySession[sid][sIdx] share the same
+      // Message reference — so `.parts` is a single JS array. Using `produce`
+      // with push() twice would push the new part ONCE into that shared array
+      // (via the first setStore), then push it AGAIN on the second setStore
+      // (because produce reads the now-modified array). That is how users saw
+      // every tool card appearing in duplicate.
+      //
+      // Compute the new array ONCE and assign it as a value to both reactive
+      // paths. Value assignment is idempotent — the second setStore sees the
+      // same target and re-emits the same reference without mutating.
+      const nextParts = [...message.parts, part];
+      setStore("messages", idx, "parts", nextParts);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", nextParts);
     }
     return true;
   }
@@ -1129,15 +1137,24 @@ export function applyMessageEvent(event: any): boolean {
       if (partIdx < 0) return false;
       const part = message.parts[partIdx];
       if (part.type !== "tool" || !part.state) return false;
-      const append = (prev: string) => (prev || "") + properties.delta;
-      setStore("messages", msgIdx, "parts", partIdx, "state", "raw", append);
-      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "state", "raw", append);
+      // CRITICAL: messages and messagesBySession hold the SAME Message object
+      // refs. If we used a functional updater `(prev) => prev + delta` and ran
+      // it twice (once per mirrored setStore), the second call would read the
+      // already-appended value and double the delta — producing "aa bb cc" for
+      // each streamed token. Resolve the new value ONCE, then write it as a
+      // plain value to both reactive paths.
+      const nextRaw = ((part.state as any).raw || "") + properties.delta;
+      setStore("messages", msgIdx, "parts", partIdx, "state", "raw", nextRaw);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "state", "raw", nextRaw);
       return true;
     }
 
     // text delta
     if (partIdx < 0) {
-      // Create placeholder part on both views.
+      // Create placeholder part on both views. Same shared-array gotcha as in
+      // message.part.updated's push branch — assign a freshly-built array to
+      // both reactive paths instead of running `produce(push)` twice, which
+      // would otherwise duplicate the placeholder in the shared parts array.
       const newPart: Part = {
         id: properties.partID,
         type: "text",
@@ -1145,31 +1162,20 @@ export function applyMessageEvent(event: any): boolean {
         sessionID: properties.sessionID,
         messageID: properties.messageID,
       };
-      setStore(
-        "messages",
-        msgIdx,
-        "parts",
-        produce((parts: Part[]) => {
-          parts.push(newPart);
-        }),
-      );
-      if (sIdx >= 0) {
-        setStore(
-          "messagesBySession",
-          sid,
-          sIdx,
-          "parts",
-          produce((parts: Part[]) => {
-            parts.push(newPart);
-          }),
-        );
-      }
+      const nextParts = [...message.parts, newPart];
+      setStore("messages", msgIdx, "parts", nextParts);
+      if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", nextParts);
       return true;
     }
 
-    const append = (prev: string) => (prev || "") + properties.delta;
-    setStore("messages", msgIdx, "parts", partIdx, "text", append);
-    if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "text", append);
+    // CRITICAL: compute next text ONCE — see the raw-field branch above for
+    // the full explanation. Using a functional updater twice across mirrored
+    // setStore calls reads the already-appended value on the second pass and
+    // doubles every delta.
+    const existingText = (message.parts[partIdx] as any).text || "";
+    const nextText = existingText + properties.delta;
+    setStore("messages", msgIdx, "parts", partIdx, "text", nextText);
+    if (sIdx >= 0) setStore("messagesBySession", sid, sIdx, "parts", partIdx, "text", nextText);
     return true;
   }
 

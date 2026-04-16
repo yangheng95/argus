@@ -50,7 +50,7 @@ export function PermissionAutoResolver() {
     inflightId = interaction.id;
     queueMicrotask(async () => {
       try {
-        await replyInteraction(interaction.id, "always");
+        await replyInteraction(interaction.id, "always", true);
       } catch (error) {
         console.error("[PermissionAutoResolver] auto-reply failed", error);
         failedAt.set(interaction.id, Date.now());

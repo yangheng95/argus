@@ -16,6 +16,7 @@
 import { boardStore } from "../store/board";
 import { selectTask } from "../services/task";
 import { settingsStore } from "../store/settings";
+import { hasWorkspaceSelection } from "../services/workspace";
 import { t } from "./i18n";
 import { escapeHtml } from "./markdown";
 
@@ -160,7 +161,6 @@ export function sizeChat(textarea?: HTMLTextAreaElement): void {
  * returned. Returns `false` if there are no tasks available.
  */
 export async function ensureTaskSelection(): Promise<boolean> {
-  const { hasWorkspaceSelection } = await import("../services/workspace");
   if (hasWorkspaceSelection()) {
     return false;
   }

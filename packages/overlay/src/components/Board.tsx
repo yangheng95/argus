@@ -397,10 +397,15 @@ export function Board(props: BoardProps) {
   // Map the workflow's current (running) step to a right-pane section id so
   // the section gets `data-phase-state="active"` highlighting. Falls back to
   // the most recently completed/failed step when nothing is running.
+  // Step ID → right-pane section. Pipeline workflow has exactly ONE goal-scope
+  // step now: `build` (plan + execute + eval are sub-phases inside build).
+  // Older step IDs (plan / execute / eval) are kept for backward compatibility
+  // with tasks created on the previous workflow schema.
   const STEP_TO_SECTION: Record<string, string> = {
     design_analysis: "requirements",
     requirements: "requirements",
     architect: "architect",
+    build: "goalWorkflows",
     plan: "goalWorkflows",
     execute: "goalWorkflows",
     eval: "goalWorkflows",
@@ -455,13 +460,15 @@ export function Board(props: BoardProps) {
   });
 
   // Bridge: map agent card messages to workflow goal steps.
-  // Agent stages → workflow step IDs:
-  //   planner → plan, executor → execute, evaluator → eval
+  // Pipeline workflow now has ONE goal-scope step (`build`) — planner /
+  // executor / build / evaluator stages are all sub-phases that surface in
+  // the same `build` bucket. The build card UI displays them as nested
+  // sessions under the build step.
   const STAGE_TO_STEP: Record<string, string> = {
-    planner: "plan",
-    executor: "execute",
-    build: "execute",
-    evaluator: "eval",
+    planner: "build",
+    executor: "build",
+    build: "build",
+    evaluator: "build",
   };
 
   const goalStepMessages = createMemo(() => {
@@ -505,7 +512,7 @@ export function Board(props: BoardProps) {
 
       {/* ── Data-driven unified layout ── */}
       {/* Sections appear based on their data availability, not a mode flag. */}
-      {/* Matches Task Agent's adaptive pipeline (per specs/new-arch.svg). */}
+      {/* Matches Orchestrator's adaptive pipeline (per specs/new-arch.svg). */}
 
       <WorkflowProgressBar workflow={workflow()} />
 

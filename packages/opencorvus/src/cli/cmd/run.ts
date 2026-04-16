@@ -7,7 +7,7 @@ import { Flag } from "../../flag/flag"
 import { bootstrap } from "../bootstrap"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
-import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencorvus-ai/sdk/v2"
+import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencorvus-ai/sdk"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
 import { PermissionNext } from "../../permission/next"
@@ -563,6 +563,7 @@ export const RunCommand = cmd({
             await sdk.permission.reply({
               requestID: permission.id,
               reply: autoReply,
+              autoReply: true,
             })
           }
         }

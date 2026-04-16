@@ -1,12 +1,12 @@
 # 08 — Agent Tool Adapter
 
 > 对应代码：`src/agent/agent.ts` · `src/tool/registry.ts` · `src/session/loop.ts` ·
-> `src/task-agent/tools.ts` · `src/config/config.ts`
+> `src/orchestrator/tools.ts` · `src/config/config.ts`
 
 ## 问题
 
 所有 agent 共享同一个全局 `ToolRegistry.tools()` — 不区分调用者。
-build agent 在 task-agent 快速通道里拿到 `task` 工具后无限套娃调 sub-agent。
+build agent 在 orchestrator 快速通道里拿到 `task` 工具后无限套娃调 sub-agent。
 spec/plan agent 靠 permission deny 拦工具，但 LLM 仍能看到被 deny 的工具定义（浪费 token、诱导误调）。
 `SessionPrompt.prompt({ tools })` 语义矛盾：session 层是 denylist，message 层是 allowlist。
 
@@ -66,17 +66,17 @@ export async function tools(model, agent?) {
 | summary | include | `[]` | 无工具 |
 | evaluator | include | `["read", "glob", "grep", "bash", "codesearch", "question"]` | 只读 + 验证命令 |
 | delivery | exclude | `["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "analytics"]` | 完整编码能力，无 orchestration |
-| requirements | — | 不走 ToolRegistry（task-agent/tools.ts 自建） | |
-| architect | — | 不走 ToolRegistry（task-agent/tools.ts 自建） | |
-| planner | — | 不走 ToolRegistry（task-agent/tools.ts 自建） | |
-| task | — | 不走 ToolRegistry（task-agent/tools.ts 自建） | |
+| requirements | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
+| architect | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
+| planner | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
+| task | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
 
-### Build 快速通道（task-agent build tool）
+### Build 快速通道（orchestrator build tool）
 
-task-agent 的 `build` tool 创建 session 时注入 session 级 deny，覆盖 build agent 的默认声明：
+orchestrator 的 `build` tool 创建 session 时注入 session 级 deny，覆盖 build agent 的默认声明：
 
 ```typescript
-// task-agent/tools.ts — build tool
+// orchestrator/tools.ts — build tool
 const buildSession = await Session.createNext({
   parentID: input.agentSessionID,
   title: `Build: ${task.title}`,
@@ -143,18 +143,18 @@ tools: z.union([
 | `tool/registry.ts` | `tools()` 加 agent adapter 过滤 |
 | `session/loop.ts` | `resolveTools` 用 session.permission deny 代替 `lastUser.tools` allowlist |
 | `session/tool-resolver.ts` | 同上（如果此文件的 resolveTools 有调用方） |
-| `task-agent/tools.ts` | build tool 创建 session 时注入 deny 规则 |
+| `orchestrator/tools.ts` | build tool 创建 session 时注入 deny 规则 |
 
 ## 不动的
 
-- `task-agent/tools.ts` 的 orchestrator 工具（requirements / architect / planner 等）—— 它们不走 ToolRegistry，已经是独立构建的
+- `orchestrator/tools.ts` 的 orchestrator 工具（requirements / architect / planner 等）—— 它们不走 ToolRegistry，已经是独立构建的
 - `PermissionNext` 基础设施 —— 复用现有 deny/allow/ask 语义
 - agent prompt 内容 —— 工具不可见后，prompt 中 "use the Task tool" 之类的指示自然失效，无需改 prompt
 
 ## 验证
 
 1. build 交互模式：`task` 工具可见、可调用
-2. build 快速通道（task-agent）：`task` 工具不可见、LLM 不会尝试调用
+2. build 快速通道（orchestrator）：`task` 工具不可见、LLM 不会尝试调用
 3. spec agent：只有 include 列表中的工具可见
 4. 自定义 agent（config）：`tools` 声明生效
 5. 无 `tools` 声明的自定义 agent：全量工具（向后兼容）

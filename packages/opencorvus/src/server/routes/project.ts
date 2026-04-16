@@ -74,7 +74,7 @@ export const ProjectRoutes = lazy(() =>
       async (c) => {
         const result = await Project.initGit(Instance.directory)
         if (result.created) {
-          const { hasActiveSessions } = await import("@/orchestrator/runtime")
+          const { hasActiveSessions } = await import("@/engine/runtime")
           if (hasActiveSessions()) {
             // Active sessions prevent a full dispose.  Refresh the cached
             // project in-place so Instance.project.vcs reflects "git", then

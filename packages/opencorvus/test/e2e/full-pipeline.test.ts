@@ -15,7 +15,7 @@ import * as fs from "fs/promises"
 import path from "path"
 import { SlackGateway } from "../../src/channel/slack"
 import { ExecutorBootstrap } from "../../src/executor/bootstrap"
-import { OrchestratorService } from "../../src/orchestrator/service"
+import { EngineService } from "@/task-api"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Log } from "../../src/util/log"
@@ -223,24 +223,26 @@ function answers(payload: Record<string, unknown> | undefined) {
   return items.length > 0 ? items : [[AUTO_REPLY]]
 }
 
-async function settle(taskID: string, progress: Awaited<ReturnType<typeof OrchestratorService.getProgress>>) {
+async function settle(taskID: string, progress: Awaited<ReturnType<typeof EngineService.getProgress>>) {
   const pending = progress.pendingInteractions.filter((item) => item.status === "pending")
   if (pending.length === 0) return progress
   for (const item of pending) {
     console.log(`[E2E] 自动处理交互: type=${item.type} id=${item.id} title=${item.title ?? "(无标题)"}`)
     if (item.type === "permission") {
-      await OrchestratorService.replyInteraction(item.id, {
+      await EngineService.replyInteraction(item.id, {
         reply: "always",
+        autoReply: true,
         message: "Live E2E auto-approved",
       })
       continue
     }
-    await OrchestratorService.replyInteraction(item.id, {
+    await EngineService.replyInteraction(item.id, {
+      autoReply: true,
       answers: answers(item.payload),
       message: AUTO_REPLY,
     })
   }
-  return OrchestratorService.getProgress(taskID)
+  return EngineService.getProgress(taskID)
 }
 
 async function waitForFinal(taskID: string, maxWaitMs: number) {
@@ -248,12 +250,12 @@ async function waitForFinal(taskID: string, maxWaitMs: number) {
   let lastStatus = ""
   let lastLogAt = 0
   while (Date.now() < deadline) {
-    let progress = await OrchestratorService.getProgress(taskID)
+    let progress = await EngineService.getProgress(taskID)
     progress = await settle(taskID, progress)
     if (FINAL.has(progress.task.status)) return progress
     if (lastLogAt === 0 || Date.now() - lastLogAt >= STATUS_LOG_INTERVAL_MS || progress.task.status !== lastStatus) {
       const elapsed = Math.round((Date.now() - (deadline - maxWaitMs)) / 1000)
-      const runs = await OrchestratorService.listRuns(taskID).catch(() => [])
+      const runs = await EngineService.listRuns(taskID).catch(() => [])
       const runInfo = runs.map((r) => `${r.id.slice(-6)}:${r.status}`).join(",") || "none"
       console.log(`[E2E] ${elapsed}s  status=${progress.task.status}  runs=[${runInfo}]`)
       lastStatus = progress.task.status
@@ -299,7 +301,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
           Env.set("OPENCORVUS_PLANNER_AGENT_MAX_STEPS", "10")
           await ExecutorBootstrap.autoRegister(true)
           // 启动 orchestrator 轮询调度
-          OrchestratorService.init()
+          EngineService.init()
 
           if (!HAS_SLACK_CREDS) {
             console.log("[E2E] Slack 未配置，跳过 channel 绑定与网关联动")
@@ -344,7 +346,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
 
           // ── 提交任务 ────────────────────────────────────────────────────
           console.log("\n[E2E] ─── 提交任务 ───")
-          taskID = await OrchestratorService.createTask({
+          taskID = await EngineService.createTask({
             executor: EXECUTOR,
             title: TASK_TITLE,
             request: TASK_REQUEST,
@@ -377,12 +379,12 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
           console.log(`[E2E] 最终状态: ${progress.task.status}`)
           if (progress.task.error) console.log(`[E2E] 错误信息: ${progress.task.error}`)
 
-          const runs = await OrchestratorService.listRuns(taskID)
-          const interactions = await OrchestratorService.listTaskInteractions(taskID)
+          const runs = await EngineService.listRuns(taskID)
+          const interactions = await EngineService.listTaskInteractions(taskID)
           console.log(`[E2E] 执行轮次: ${runs.length}`)
           for (const r of runs) {
             console.log(`[E2E]   run=${r.id}  status=${r.status}  retry=${r.retryCount}  executor=${r.executor}`)
-            const events = await OrchestratorService.listExecutorEvents(r.id).catch(() => [])
+            const events = await EngineService.listExecutorEvents(r.id).catch(() => [])
             console.log(`[E2E]     executor_events=${events.length}`)
             for (const event of events.slice(-12)) {
               console.log(`[E2E]       #${event.sequence} ${event.kind}: ${event.summary ?? "(无摘要)"}`)
@@ -496,7 +498,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
         if (taskID) {
           await Instance.provide({
             directory: tmp.path,
-            fn: () => OrchestratorService.cancelTask(taskID!),
+            fn: () => EngineService.cancelTask(taskID!),
           }).catch((err) => {
             console.log(`[E2E] cancelTask 失败（可能已完成）: ${err}`)
           })

@@ -1,7 +1,7 @@
 /**
  * Design Analyst Agent — layout and style analysis from visual references.
  *
- * Position: Before Requirements, after Clarify. Task Agent invokes when:
+ * Position: Before Requirements, after Clarify. Orchestrator invokes when:
  * ① Image attachments are present AND the request is frontend/design-related
  * ② A URL is provided for a design reference or existing page to replicate
  * ③ The request explicitly mentions layout analysis, design replication, or UI specs
@@ -28,12 +28,14 @@ import TurndownService from "turndown"
 import type { TextHooks } from "@/llm/api"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools } from "@/planner/tools"
+import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
-import { OrchestratorConfig } from "@/orchestrator/config"
-import { loadStageSkills } from "@/orchestrator/skill-inject"
+import { resolveAgentModel } from "@/agent/model"
+import { EngineConfig } from "@/engine/config"
+import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import type { DesignAnalysis } from "./types"
 import { createDesignOutputTools, collectorToAnalysis } from "./output-tools"
@@ -211,18 +213,19 @@ async function run(input: {
 }): Promise<DesignAnalysis> {
   if (input.signal?.aborted) throw new Error("design analyst aborted before start")
 
-  const orchCfg = await OrchestratorConfig.get()
+  const orchCfg = await EngineConfig.get()
   const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.design_analyst
 
-  // Resolve model — per-agent model from Agent.Info (config: agent."design-analyst".model)
-  const { resolveAgentModel } = await import("@/agent/model")
-  const model = await resolveAgentModel("design-analyst").catch(() => undefined)
+  // Resolve model — per-agent model from Agent.Info (config: agent."design-analyst".model),
+  // falling back to the user's most recent in-session model pick when no per-agent
+  // override is configured.
+  const model = await resolveAgentModel("design-analyst", { taskID: input.taskID }).catch(() => undefined)
   if (!model) throw new Error("no LLM model available for design analyst agent")
 
   if (input.signal?.aborted) throw new Error("design analyst aborted after model resolution")
 
   // Merge planner tools (codebase exploration) + webfetch + design output tools
-  const plannerTools = createPlannerTools()
+  const plannerTools = await filterAgentTools(createPlannerTools(), "design-analyst")
   const outputToolKit = createDesignOutputTools()
   const guard = toolGuard({ ...plannerTools, ...createWebfetchTool(), ...outputToolKit.tools })
 
@@ -350,7 +353,7 @@ async function designAnalystSystem(): Promise<string> {
   if (typeof systemOverride?.design_analyst_system === "string") return systemOverride.design_analyst_system
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.design_analyst?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : DESIGN_ANALYST_CORE
-  const orchCfg = await OrchestratorConfig.get()
+  const orchCfg = await EngineConfig.get()
   const skills = await loadStageSkills(orchCfg.design_analyst.skills, "design-analyst")
   return core + skills
 }

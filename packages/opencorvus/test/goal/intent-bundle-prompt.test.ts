@@ -4,11 +4,11 @@ import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import {
-  OrchestratorTaskTable,
-  OrchestratorPlanVersionTable,
-  OrchestratorGoalTable,
-  OrchestratorInteractionRequestTable,
-} from "@/orchestrator/orchestrator.sql"
+  EngineTaskTable,
+  EnginePlanVersionTable,
+  EngineGoalTable,
+  EngineInteractionRequestTable,
+} from "@/engine/engine.sql"
 import { WorkbenchTaskNoteTable } from "@/workbench/workbench.sql"
 import { buildGoalPrompt } from "@/goal/runner"
 import { resetDatabase } from "../fixture/db"
@@ -34,7 +34,7 @@ function seedBase() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorTaskTable).values({
+    db.insert(EngineTaskTable).values({
       id: taskID,
       project_id: projectID,
       source: "test",
@@ -47,7 +47,7 @@ function seedBase() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorPlanVersionTable).values({
+    db.insert(EnginePlanVersionTable).values({
       id: planID,
       task_id: taskID,
       version: 1,
@@ -59,7 +59,7 @@ function seedBase() {
     }).run(),
   )
   Database.use((db) =>
-    db.insert(OrchestratorGoalTable).values({
+    db.insert(EngineGoalTable).values({
       id: goalID,
       task_id: taskID,
       plan_version_id: planID,
@@ -86,7 +86,7 @@ function seedClarificationAndNote() {
   // Answered clarification
   const interactionID = Identifier.ascending("interaction")
   Database.use((db) =>
-    db.insert(OrchestratorInteractionRequestTable).values({
+    db.insert(EngineInteractionRequestTable).values({
       id: interactionID,
       task_id: taskID,
       external_id: interactionID,
@@ -117,10 +117,10 @@ function seedClarificationAndNote() {
 
 function loadSeeded() {
   const goal = Database.use((db) =>
-    db.select().from(OrchestratorGoalTable).all(),
+    db.select().from(EngineGoalTable).all(),
   ).find((g) => g.id === goalID)!
   const plan = Database.use((db) =>
-    db.select().from(OrchestratorPlanVersionTable).all(),
+    db.select().from(EnginePlanVersionTable).all(),
   ).find((p) => p.id === planID)!
   return { goal, plan }
 }

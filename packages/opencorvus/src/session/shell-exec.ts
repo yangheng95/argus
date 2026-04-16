@@ -12,7 +12,7 @@ import { SessionRevert } from "./revert"
 import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
-import { SessionPromptState } from "./prompt-state"
+import { SessionPromptState } from "./prompt/state"
 
 export namespace SessionShell {
   const { log, state, start, cancel, lastModel } = SessionPromptState

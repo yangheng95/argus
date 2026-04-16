@@ -11,7 +11,7 @@
 ```
              ┌─────────────────────────────────┐
   外部渠道 →  │  ChannelIngress.message()      │  channel/ingress.ts
-  (Slack/    │  入站路由 · 绑定 task_id         │  → OrchestratorService / ControlMessage
+  (Slack/    │  入站路由 · 绑定 task_id         │  → EngineService / ControlMessage
    HTTP/…)   └──────────────┬──────────────────┘
                             │
                             ▼
@@ -26,20 +26,20 @@
                             │ createTask(kind)
                             ▼
              ┌─────────────────────────────────┐
-             │  OrchestratorService            │  orchestrator/service.ts
-             │  → orchestrator_task 行         │
+             │  EngineService            │  orchestrator/service.ts
+             │  → engine_task 行         │
              └──────┬─────────────────┬────────┘
                     │                 │
           kind="workflow"      kind="build"
                     │                 │
                     ▼                 ▼
           ┌──────────────────┐   ┌──────────────────────┐
-          │ Task Control     │   │ build-dispatch       │  task-agent/build-dispatch.ts
+          │ Task Control     │   │ build-dispatch       │  orchestrator/build-dispatch.ts
           │ Loop             │   │ (快通道)             │  绕过 decompose/plan/eval
           │ task-loop.ts     │   │ 直接跑 build agent   │  仍走 task 表 + trace
           └──────┬───────────┘   └──────────────────────┘
                  │
-                 │ Decision Point (Task Agent LLM)
+                 │ Decision Point (Orchestrator LLM)
                  │   触发: kind ∈ {created, batch_complete, retry}
                  │
                  ├──→ Requirements Agent   decompose/  (re-export: requirements/)
@@ -72,16 +72,16 @@
 ```
 
 **要点（SVG 里没有或过时的）：**
-- **Gateway Agent** 是对话层唯一入口，替代了原 "用户直连 Task Agent" 的假设。
+- **Gateway Agent** 是对话层唯一入口，替代了原 "用户直连 Orchestrator" 的假设。
   channel_key = `platform:channel:user` 或 `local:userID`，DB 有 partial unique
   index `session_gateway_singleton_idx` 保证单例。
-- **build-dispatch** 是 `kind:"build"` 的快通道（`task-agent/build-dispatch.ts`）。
-  仍在 orchestrator_task 表里，统一 cancel/list/audit，但跳过 decompose→plan→eval。
+- **build-dispatch** 是 `kind:"build"` 的快通道（`orchestrator/build-dispatch.ts`）。
+  仍在 engine_task 表里，统一 cancel/list/audit，但跳过 decompose→plan→eval。
   Gateway 在创建 task 时决定 kind（workflow vs build）。
 - **Design Analyst** 是新 sub-agent（Figma 分析），SVG Section A 未列。
 - **requirements/** 只是 `decompose/` 的对外命名 re-export，图里可只保留 "Requirements"。
 - Task Control Loop 的三种触发：`created` / `batch_complete` / `retry`——
-  SVG Section C 的 "Task Agent 动作" 需对齐这三个入口。
+  SVG Section C 的 "Orchestrator 动作" 需对齐这三个入口。
 
 ---
 
@@ -91,30 +91,30 @@
 
 | 表 | 作用 |
 |---|---|
-| `orchestrator_task` | 顶层 task (queued/active/completed/failed/cancelled) |
-| `orchestrator_spec_snapshot` | 规格快照 |
-| `orchestrator_spec_item` | 规格明细项 |
-| `orchestrator_plan_version` | 计划版本（active/superseded） |
-| `orchestrator_milestone` | 里程碑 |
-| `orchestrator_goal` | Goal 节点 (pending/running/passed/failed) |
-| `orchestrator_requirement` | 需求追溯 |
-| `orchestrator_goal_snapshot` | Goal 快照 |
-| `orchestrator_plan_node` | 计划内步骤 |
-| `orchestrator_run` | Run 执行实例 (queued→running→completed/failed/aborted) |
-| `orchestrator_goal_run` | Goal × Run 关联 |
-| `orchestrator_interaction_request` | 权限/问询交互 |
-| `orchestrator_delivery` | 交付记录 |
-| `orchestrator_artifact` | 产物 |
-| `orchestrator_evaluation` | 评估结果 |
+| `engine_task` | 顶层 task (queued/active/completed/failed/cancelled) |
+| `engine_spec_snapshot` | 规格快照 |
+| `engine_spec_item` | 规格明细项 |
+| `engine_plan_version` | 计划版本（active/superseded） |
+| `engine_milestone` | 里程碑 |
+| `engine_goal` | Goal 节点 (pending/running/passed/failed) |
+| `engine_requirement` | 需求追溯 |
+| `engine_goal_snapshot` | Goal 快照 |
+| `engine_plan_node` | 计划内步骤 |
+| `engine_run` | Run 执行实例 (queued→running→completed/failed/aborted) |
+| `engine_goal_run` | Goal × Run 关联 |
+| `engine_interaction_request` | 权限/问询交互 |
+| `engine_delivery` | 交付记录 |
+| `engine_artifact` | 产物 |
+| `engine_evaluation` | 评估结果 |
 | `orchestrator_progress_snapshot` | 进度快照 |
-| `orchestrator_executor_session` | 执行器会话绑定 |
-| `orchestrator_channel_binding` | channel ↔ task 绑定（ChannelIngress 使用） |
+| `engine_executor_session` | 执行器会话绑定 |
+| `engine_channel_binding` | channel ↔ task 绑定（ChannelIngress 使用） |
 
 ### session 域（5 表）
 `session` (含 `kind` + `channel_key`) · `message` · `part` · `todo` · `permission`
 
 ### 控制 / 工作区域
-- `workspace` (control-plane/workspace.sql.ts) — 多工作区代理
+- `workspace` (workspace/workspace.sql.ts) — 多工作区代理
 - `control_account` · `control_message` (control/control.sql.ts) — 外部控制账号
 - `project` (project/project.sql.ts) — 项目
 
@@ -154,7 +154,7 @@
   ├─ message-schema.ts (入站 schema)
   └─ timeline.ts
 
- control-plane/      多工作区代理层（和 control/ 不同）
+ workspace/      多工作区代理层（和 control/ 不同）
   ├─ workspace (DB 表) + workspace-server/
   ├─ adaptors/ (worktree 适配)
   └─ session-proxy-middleware.ts (SSE 转发)
@@ -205,11 +205,11 @@
 |---|---|---|
 | Gateway agent | `gateway/` | A + L |
 | channel_key 单例 | `session/channel-key.ts` + session_gateway_singleton_idx | A + L + C |
-| build-dispatch 快通道 | `task-agent/build-dispatch.ts` | A |
+| build-dispatch 快通道 | `orchestrator/build-dispatch.ts` | A |
 | Design Analyst agent | `design-analyst/` | A |
 | Trace 统一埋点 | `trace/` | **新 Section** |
 | 内置 PRD skill | `skill/builtin/prd-spec.md` | I (MiniWorkflow) |
-| workspace 多工作区 | `control-plane/workspace*` | 新节 or Section C |
+| workspace 多工作区 | `workspace/workspace*` | 新节 or Section C |
 | quick_note / memory_* 等辅助表 | 对应模块 `*.sql.ts` | Section C DB 清单 |
 
 ---

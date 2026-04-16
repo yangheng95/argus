@@ -36,7 +36,7 @@
 
 **调用链**：
 ```
-Task Agent tool → pipeline/executor.ts → ExecutorRegistry
+Orchestrator tool → pipeline/executor.ts → ExecutorRegistry
                 → worktree 隔离 → Executor 进程 → diff / delivery
 ```
 
@@ -58,7 +58,7 @@ plugin/index.ts       注册表
 **代码**：`src/mcp/`
 
 - argus 作为 MCP client / host，接入外部 MCP server
-- 工具暴露给 agent，由 Task Agent 或 sub-agent 决定调用
+- 工具暴露给 agent，由 Orchestrator 或 sub-agent 决定调用
 
 ## ACP —— Agent Client Protocol
 
@@ -75,10 +75,10 @@ plugin/index.ts       注册表
 2. **"MCP 能不能替代 plugin？"** — 理论上可以，实际上 plugin 更紧耦合（in-process 调用，
    类型共享），MCP 是远程协议（有序列化开销）。
 3. **"Executor 多态怎么选 CLI / agent / app-server？"** — 由 `executor` 字段决定
-   （见 `orchestrator_task.executor`），用户/gateway 在创建 task 时指定。
+   （见 `engine_task.executor`），用户/gateway 在创建 task 时指定。
 
 ## 相关文档
 
-- [01-agents.md](01-agents.md) — Task Agent 如何通过 tools 调 executor/plugin
+- [01-agents.md](01-agents.md) — Orchestrator 如何通过 tools 调 executor/plugin
 - [03-control.md](03-control.md) — ACP 作为入站入口与 channel/gateway 的关系
 - [06-provider.md](06-provider.md) — LLM Provider（另一条独立扩展轴，不与上述 4 条混淆）
