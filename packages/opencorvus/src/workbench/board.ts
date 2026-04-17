@@ -923,59 +923,34 @@ function latestEvaluationForGoalRun(goalRunID: string) {
 }
 
 /** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks").
- *  The new pipeline workflow has ONE goal-scope step: `build` (plan + execute
- *  + eval are sub-phases inside it). Legacy step IDs (plan/execute/eval) stay
- *  for backward compatibility with task data created on the previous schema. */
+ *  The pipeline workflow has ONE goal-scope step: `build` (plan + execute +
+ *  eval are sub-phases inside it). */
 function buildStepSummary(goalID: string, stepID: string, status?: string): string | undefined {
   if (!status || status === "pending") return undefined
+  if (stepID !== "build") return undefined
 
-  if (stepID === "build" || stepID === "execute") {
-    const goalRun = latestGoalRun(goalID)
-    if (goalRun) {
-      const delivery = Database.use((db) =>
-        db.select().from(EngineDeliveryTable)
-          .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
-          .orderBy(desc(EngineDeliveryTable.time_created))
-          .limit(1).get(),
-      )
-      if (delivery) {
-        const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
-        const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
-        if (fileCount > 0) return `${fileCount} files`
-      }
-    }
-    if (status === "running") return "running…"
-    if (stepID === "build") {
-      // Pre-execution: surface plan-step count if planning has produced nodes.
-      const nodes = Database.use((db) =>
-        db.select().from(EnginePlanNodeTable)
-          .where(eq(EnginePlanNodeTable.goal_id, goalID))
-          .all(),
-      )
-      if (nodes.length) return `${nodes.length} planned steps`
-    }
-    return undefined
-  }
-
-  if (stepID === "plan") {
-    const nodes = Database.use((db) =>
-      db.select().from(EnginePlanNodeTable)
-        .where(eq(EnginePlanNodeTable.goal_id, goalID))
-        .all(),
+  const goalRun = latestGoalRun(goalID)
+  if (goalRun) {
+    const delivery = Database.use((db) =>
+      db.select().from(EngineDeliveryTable)
+        .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
+        .orderBy(desc(EngineDeliveryTable.time_created))
+        .limit(1).get(),
     )
-    if (nodes.length) return `${nodes.length} steps`
-    return undefined
+    if (delivery) {
+      const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
+      const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
+      if (fileCount > 0) return `${fileCount} files`
+    }
   }
-
-  if (stepID === "eval") {
-    const goalRun = latestGoalRun(goalID)
-    if (!goalRun) return undefined
-    const evaluation = latestEvaluationForGoalRun(goalRun.id)
-    if (!evaluation) return undefined
-    const checks = Array.isArray(evaluation.checks) ? evaluation.checks : []
-    const passed = checks.filter((c) => c.status === "passed").length
-    return `${passed}/${checks.length} checks`
-  }
+  if (status === "running") return "running…"
+  // Pre-execution: surface plan-step count if planning has produced nodes.
+  const nodes = Database.use((db) =>
+    db.select().from(EnginePlanNodeTable)
+      .where(eq(EnginePlanNodeTable.goal_id, goalID))
+      .all(),
+  )
+  if (nodes.length) return `${nodes.length} planned steps`
   return undefined
 }
 
@@ -1005,92 +980,26 @@ export interface GoalStepPayload {
 
 function buildStepPayload(goalID: string, stepID: string, status?: string): GoalStepPayload | undefined {
   if (!status || status === "pending") return undefined
+  // The `build` step folds plan + execute + eval into one payload.
+  if (stepID !== "build") return undefined
 
-  // The `build` step folds plan + execute + eval into one payload (the new
-  // pipeline workflow has only this single goal-scope step). Legacy step IDs
-  // (plan / execute / eval) keep their own narrower payloads so historical
-  // task data still renders the same way it always did.
-  if (stepID === "build") {
-    const goalRun = latestGoalRun(goalID)
-    const nodes = Database.use((db) =>
-      db.select().from(EnginePlanNodeTable)
-        .where(eq(EnginePlanNodeTable.goal_id, goalID))
-        .all(),
-    )
-    const planNodes = nodes.length > 0
-      ? nodes
-          .map((n) => ({ id: n.id, title: n.title, brief: n.brief, orderIndex: n.order_index }))
-          .sort((a, b) => a.orderIndex - b.orderIndex)
-      : undefined
+  const goalRun = latestGoalRun(goalID)
+  const nodes = Database.use((db) =>
+    db.select().from(EnginePlanNodeTable)
+      .where(eq(EnginePlanNodeTable.goal_id, goalID))
+      .all(),
+  )
+  const planNodes = nodes.length > 0
+    ? nodes
+        .map((n) => ({ id: n.id, title: n.title, brief: n.brief, orderIndex: n.order_index }))
+        .sort((a, b) => a.orderIndex - b.orderIndex)
+    : undefined
 
-    let executorSessionID: string | undefined
-    let changedFiles: string[] | undefined
-    let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
-    if (goalRun) {
-      executorSessionID = goalRun.session_id ?? undefined
-      const delivery = Database.use((db) =>
-        db.select().from(EngineDeliveryTable)
-          .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
-          .orderBy(desc(EngineDeliveryTable.time_created))
-          .limit(1).get(),
-      )
-      const result = delivery?.result as { changed_files?: string[]; diffs?: { file?: string }[]; stats?: { additions?: number; deletions?: number } } | null
-      changedFiles = result?.changed_files
-        ?? (Array.isArray(result?.diffs)
-          ? result.diffs.map((d) => d.file).filter((f): f is string => typeof f === "string")
-          : undefined)
-      diffStats = {
-        files: changedFiles?.length,
-        additions: result?.stats?.additions,
-        deletions: result?.stats?.deletions,
-      }
-    }
-
-    let checks: GoalStepPayload["checks"] | undefined
-    let evalSummary: string | undefined
-    let verdict: string | undefined
-    if (goalRun) {
-      const evaluation = latestEvaluationForGoalRun(goalRun.id)
-      if (evaluation) {
-        const list = Array.isArray(evaluation.checks) ? evaluation.checks : []
-        checks = list.map((c) => ({ name: c.name, status: c.status, evidence: c.evidence, family: c.family }))
-        evalSummary = evaluation.summary
-        verdict = evaluation.verdict
-      }
-    }
-
-    if (
-      planNodes === undefined &&
-      executorSessionID === undefined &&
-      changedFiles === undefined &&
-      checks === undefined
-    ) {
-      return undefined
-    }
-    return { planNodes, executorSessionID, changedFiles, diffStats, checks, evalSummary, verdict }
-  }
-
-  if (stepID === "plan") {
-    const nodes = Database.use((db) =>
-      db.select().from(EnginePlanNodeTable)
-        .where(eq(EnginePlanNodeTable.goal_id, goalID))
-        .all(),
-    )
-    if (nodes.length === 0) return undefined
-    return {
-      planNodes: nodes
-        .map((n) => ({
-          id: n.id,
-          title: n.title,
-          brief: n.brief,
-          orderIndex: n.order_index,
-        }))
-        .sort((a, b) => a.orderIndex - b.orderIndex),
-    }
-  }
-  if (stepID === "execute") {
-    const goalRun = latestGoalRun(goalID)
-    if (!goalRun) return undefined
+  let executorSessionID: string | undefined
+  let changedFiles: string[] | undefined
+  let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
+  if (goalRun) {
+    executorSessionID = goalRun.session_id ?? undefined
     const delivery = Database.use((db) =>
       db.select().from(EngineDeliveryTable)
         .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
@@ -1098,38 +1007,39 @@ function buildStepPayload(goalID: string, stepID: string, status?: string): Goal
         .limit(1).get(),
     )
     const result = delivery?.result as { changed_files?: string[]; diffs?: { file?: string }[]; stats?: { additions?: number; deletions?: number } } | null
-    const changedFiles = result?.changed_files
+    changedFiles = result?.changed_files
       ?? (Array.isArray(result?.diffs)
         ? result.diffs.map((d) => d.file).filter((f): f is string => typeof f === "string")
         : undefined)
-    return {
-      executorSessionID: goalRun.session_id ?? undefined,
-      changedFiles,
-      diffStats: {
-        files: changedFiles?.length,
-        additions: result?.stats?.additions,
-        deletions: result?.stats?.deletions,
-      },
+    diffStats = {
+      files: changedFiles?.length,
+      additions: result?.stats?.additions,
+      deletions: result?.stats?.deletions,
     }
   }
-  if (stepID === "eval") {
-    const goalRun = latestGoalRun(goalID)
-    if (!goalRun) return undefined
+
+  let checks: GoalStepPayload["checks"] | undefined
+  let evalSummary: string | undefined
+  let verdict: string | undefined
+  if (goalRun) {
     const evaluation = latestEvaluationForGoalRun(goalRun.id)
-    if (!evaluation) return undefined
-    const checks = Array.isArray(evaluation.checks) ? evaluation.checks : []
-    return {
-      checks: checks.map((c) => ({
-        name: c.name,
-        status: c.status,
-        evidence: c.evidence,
-        family: c.family,
-      })),
-      evalSummary: evaluation.summary,
-      verdict: evaluation.verdict,
+    if (evaluation) {
+      const list = Array.isArray(evaluation.checks) ? evaluation.checks : []
+      checks = list.map((c) => ({ name: c.name, status: c.status, evidence: c.evidence, family: c.family }))
+      evalSummary = evaluation.summary
+      verdict = evaluation.verdict
     }
   }
-  return undefined
+
+  if (
+    planNodes === undefined &&
+    executorSessionID === undefined &&
+    changedFiles === undefined &&
+    checks === undefined
+  ) {
+    return undefined
+  }
+  return { planNodes, executorSessionID, changedFiles, diffStats, checks, evalSummary, verdict }
 }
 
 /** Read all architect decision entries for per-goal distribution */

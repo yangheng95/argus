@@ -146,6 +146,8 @@ export namespace Session {
       kind: z.enum([
         "root",
         "assistant",
+        "requirements",
+        "design-analyst",
         "planner",
         "goal",
         "architect",

@@ -22,7 +22,8 @@ beforeEach(() => {
 })
 
 test("computeAgentCards() does not accumulate duplicates across repeated calls", () => {
-  // Seed a task with a goal and sub-agent sessions.
+  // Seed a task with a goal whose per-goal dispatch created a kind="build"
+  // container plus planner + executor child sessions.
   setBoardData({
     task: { id: "task-1", title: "t", request: "r", time: { created: 1 } },
     goalWorkflows: [
@@ -31,14 +32,17 @@ test("computeAgentCards() does not accumulate duplicates across repeated calls",
         goalTitle: "Goal 1",
         goalStatus: "running",
         steps: [
-          { stepID: "plan", label: "Plan", status: "completed" },
-          { stepID: "execute", label: "Execute", status: "running" },
+          { stepID: "build", label: "Build", status: "running" },
         ],
       } as any,
     ],
     goalRuns: [
-      { goalID: "goal-1", sessionID: "plan-sess", plannerSessionID: "plan-sess" } as any,
-      { goalID: "goal-1", sessionID: "exec-sess", executorSessionID: "exec-sess" } as any,
+      {
+        goalID: "goal-1",
+        sessionID: "exec-sess",
+        plannerSessionID: "plan-sess",
+        executorSessionID: "exec-sess",
+      } as any,
     ],
     interactions: [],
   } as any)
@@ -55,28 +59,43 @@ test("computeAgentCards() does not accumulate duplicates across repeated calls",
       },
       parts: [{ id: "p0", type: "text", text: "root text", sessionID: "root-sess", messageID: "root-msg" }],
     } as any,
-    // Planner session (stage="planner")
+    // Build container session (parent = root)
+    {
+      info: {
+        id: "build-msg",
+        sessionID: "build-sess",
+        role: "assistant",
+        channel: "build",
+        resolvedRole: "build",
+        parentSessionID: "root-sess",
+        goalID: "goal-1",
+        time: { created: 5 },
+      },
+      parts: [{ id: "p0b", type: "text", text: "dispatch", sessionID: "build-sess", messageID: "build-msg" }],
+    } as any,
+    // Planner session (parent = build)
     {
       info: {
         id: "plan-msg",
         sessionID: "plan-sess",
         role: "assistant",
-        channel: "agent",
+        channel: "planner",
         resolvedRole: "planner",
+        parentSessionID: "build-sess",
         goalID: "goal-1",
         time: { created: 10 },
       },
       parts: [{ id: "p1", type: "text", text: "planning", sessionID: "plan-sess", messageID: "plan-msg" }],
     } as any,
-    // Executor session (stage="executor")
+    // Executor session (parent = build)
     {
       info: {
         id: "exec-msg",
         sessionID: "exec-sess",
         role: "assistant",
-        channel: "agent",
+        channel: "executor",
         resolvedRole: "executor",
-        parentSessionID: "plan-sess",
+        parentSessionID: "build-sess",
         goalID: "goal-1",
         time: { created: 20 },
       },
@@ -120,7 +139,7 @@ test("conversationMessages() returns no duplicate IDs across repeated calls", ()
         goalID: "goal-1",
         goalTitle: "Goal 1",
         goalStatus: "running",
-        steps: [{ stepID: "plan", label: "Plan", status: "running" }],
+        steps: [{ stepID: "build", label: "Build", status: "running" }],
       } as any,
     ],
     goalRuns: [
@@ -161,65 +180,65 @@ test("conversationMessages() returns no duplicate IDs across repeated calls", ()
 })
 
 test("computeAgentCards() with parent-child sessions does not duplicate children", () => {
-  // Parent session + child session in same goal — this is the case where
-  // nestWithinBucket's mutation bug manifests.
+  // Session IDs are deliberately scoped to this test (t3-*) so prior tests'
+  // session buckets don't collide with ours — Solid store merge semantics
+  // leave previous keys in messagesBySession even after setMessages([]).
   setBoardData({
-    task: { id: "task-1", title: "t", request: "r", time: { created: 1 } },
+    task: { id: "t3-task", title: "t", request: "r", time: { created: 1 } },
     goalWorkflows: [
       {
-        goalID: "goal-1",
+        goalID: "t3-goal",
         goalTitle: "Goal 1",
         goalStatus: "running",
-        steps: [{ stepID: "execute", label: "Execute", status: "running" }],
+        steps: [{ stepID: "build", label: "Build", status: "running" }],
       } as any,
     ],
     goalRuns: [
-      { goalID: "goal-1", sessionID: "parent-sess", executorSessionID: "parent-sess" } as any,
+      { goalID: "t3-goal", sessionID: "t3-exec-sess", executorSessionID: "t3-exec-sess" } as any,
     ],
     interactions: [],
   } as any)
 
   setMessages([
-    // Parent (executor)
+    // Build container (parent = root orchestrator)
     {
       info: {
-        id: "parent-msg",
-        sessionID: "parent-sess",
+        id: "t3-build-msg",
+        sessionID: "t3-build-sess",
         role: "assistant",
-        channel: "agent",
-        resolvedRole: "executor",
-        goalID: "goal-1",
-        time: { created: 10 },
-      },
-      parts: [{ id: "p1", type: "text", text: "parent", sessionID: "parent-sess", messageID: "parent-msg" }],
-    } as any,
-    // Child (build, parent is parent-sess)
-    {
-      info: {
-        id: "child-msg",
-        sessionID: "child-sess",
-        role: "assistant",
-        channel: "agent",
+        channel: "build",
         resolvedRole: "build",
-        parentSessionID: "parent-sess",
-        goalID: "goal-1",
+        parentSessionID: "t3-root-sess",
+        goalID: "t3-goal",
+        time: { created: 5 },
+      },
+      parts: [{ id: "t3-p0", type: "text", text: "dispatch", sessionID: "t3-build-sess", messageID: "t3-build-msg" }],
+    } as any,
+    // Executor child (parent = build)
+    {
+      info: {
+        id: "t3-exec-msg",
+        sessionID: "t3-exec-sess",
+        role: "assistant",
+        channel: "executor",
+        resolvedRole: "executor",
+        parentSessionID: "t3-build-sess",
+        goalID: "t3-goal",
         time: { created: 20 },
       },
-      parts: [{ id: "p2", type: "text", text: "child", sessionID: "child-sess", messageID: "child-msg" }],
+      parts: [{ id: "t3-p2", type: "text", text: "executing", sessionID: "t3-exec-sess", messageID: "t3-exec-msg" }],
     } as any,
   ])
 
   // Run multiple times to stress-test mutation.
   for (let i = 0; i < 5; i++) {
     const res = computeAgentCards()
-    for (const id of res.order) {
-      const c = res.cards[id] as any
-      if (Array.isArray(c?.internalCards)) {
-        // Each internalCard shouldn't have accumulated children across runs.
-        for (const ic of c.internalCards) {
-          // A parent executor card has at most 1 child (build).
-          expect(ic.children.length).toBeLessThanOrEqual(1)
-        }
+    const goalGroupID = "goal-group:t3-goal"
+    const c = res.cards[goalGroupID] as any
+    if (c && Array.isArray(c.internalCards)) {
+      for (const ic of c.internalCards) {
+        // A build container has at most 1 child (executor) in this setup.
+        expect(ic.children.length).toBeLessThanOrEqual(1)
       }
     }
   }

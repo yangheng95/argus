@@ -1910,6 +1910,8 @@ export class Session2 extends HeyApiClient {
       kind?:
         | "root"
         | "assistant"
+        | "requirements"
+        | "design-analyst"
         | "planner"
         | "goal"
         | "architect"

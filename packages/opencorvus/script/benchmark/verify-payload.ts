@@ -46,22 +46,18 @@ await Instance.provide({
       for (const step of gw.steps) {
         const label = `goal[${gwID}].step[${step.stepID}]`
         if (step.status !== "completed" && step.status !== "passed") continue
-        if (step.stepID === "plan") {
-          const n = step.payload?.planNodes?.length ?? 0
-          push(`${label}.payload.planNodes nonempty`, n > 0, `count=${n}`)
-        }
-        if (step.stepID === "execute") {
-          const n = step.payload?.changedFiles?.length ?? 0
-          push(`${label}.payload.changedFiles nonempty`, n > 0, `count=${n}`)
+        if (step.stepID === "build") {
+          const planN = step.payload?.planNodes?.length ?? 0
+          push(`${label}.payload.planNodes nonempty`, planN > 0, `count=${planN}`)
+          const fileN = step.payload?.changedFiles?.length ?? 0
+          push(`${label}.payload.changedFiles nonempty`, fileN > 0, `count=${fileN}`)
           push(
             `${label}.payload.executorSessionID`,
             !!step.payload?.executorSessionID,
             String(step.payload?.executorSessionID ?? "null"),
           )
-        }
-        if (step.stepID === "eval") {
-          const n = step.payload?.checks?.length ?? 0
-          push(`${label}.payload.checks nonempty`, n > 0, `count=${n}`)
+          const checkN = step.payload?.checks?.length ?? 0
+          push(`${label}.payload.checks nonempty`, checkN > 0, `count=${checkN}`)
           push(
             `${label}.payload.verdict`,
             typeof step.payload?.verdict === "string" && step.payload.verdict.length > 0,

@@ -31,8 +31,9 @@ function collectNodeIDs(nodes: CardNode[], out: string[] = []): string[] {
 }
 
 test("full register_goal scenario: no duplicate card nodes in final tree", () => {
-  // Scenario: orchestrator registered a goal; planner + executor ran; executor
-  // spawned a build sub-agent. This mirrors what the user's screenshot shows.
+  // Scenario: orchestrator registered a goal; per-goal dispatch created a
+  // kind="build" container session and spawned planner + executor as children
+  // of build. This matches the single-`build` step pipeline workflow.
   setBoardData({
     task: { id: "task-1", title: "Build trading app", request: "Build it", time: { created: 1 } },
     goalWorkflows: [
@@ -41,16 +42,14 @@ test("full register_goal scenario: no duplicate card nodes in final tree", () =>
         goalTitle: "Implement NoteStore",
         goalStatus: "running",
         steps: [
-          { stepID: "plan", label: "Plan", status: "completed" },
-          { stepID: "execute", label: "Execute", status: "running" },
-          { stepID: "eval", label: "Evaluate", status: "pending" },
+          { stepID: "build", label: "Build", status: "running" },
         ],
       } as any,
     ],
     goalRuns: [
       {
         goalID: "goal-1",
-        sessionID: "plan-sess",
+        sessionID: "exec-sess",
         plannerSessionID: "plan-sess",
         executorSessionID: "exec-sess",
       } as any,
@@ -71,28 +70,43 @@ test("full register_goal scenario: no duplicate card nodes in final tree", () =>
       },
       parts: [{ id: "rp1", type: "text", text: "I'll analyze PRD and proceed.", sessionID: "root-sess", messageID: "root-msg-1" }],
     } as any,
-    // Planner session messages
+    // Build container session (parent = root orchestrator)
+    {
+      info: {
+        id: "build-msg",
+        sessionID: "build-sess",
+        role: "assistant",
+        channel: "build",
+        resolvedRole: "build",
+        parentSessionID: "root-sess",
+        goalID: "goal-1",
+        time: { created: 5 },
+      },
+      parts: [{ id: "p0", type: "text", text: "Dispatching plan + exec for goal", sessionID: "build-sess", messageID: "build-msg" }],
+    } as any,
+    // Planner session messages (parent = build)
     {
       info: {
         id: "plan-msg",
         sessionID: "plan-sess",
         role: "assistant",
-        channel: "agent",
+        channel: "planner",
         resolvedRole: "planner",
+        parentSessionID: "build-sess",
         goalID: "goal-1",
         time: { created: 10 },
       },
       parts: [{ id: "p1", type: "text", text: "Planning steps...", sessionID: "plan-sess", messageID: "plan-msg" }],
     } as any,
-    // Executor session messages (parent = planner)
+    // Executor session messages (parent = build)
     {
       info: {
         id: "exec-msg",
         sessionID: "exec-sess",
         role: "assistant",
-        channel: "agent",
+        channel: "executor",
         resolvedRole: "executor",
-        parentSessionID: "plan-sess",
+        parentSessionID: "build-sess",
         goalID: "goal-1",
         time: { created: 20 },
       },
@@ -100,20 +114,6 @@ test("full register_goal scenario: no duplicate card nodes in final tree", () =>
         { id: "p2a", type: "text", text: "Executing plan...", sessionID: "exec-sess", messageID: "exec-msg" },
         { id: "p2b", type: "tool", tool: "memory_search", sessionID: "exec-sess", messageID: "exec-msg", state: { status: "completed" } },
       ],
-    } as any,
-    // Build sub-session (parent = executor)
-    {
-      info: {
-        id: "build-msg",
-        sessionID: "build-sess",
-        role: "assistant",
-        channel: "agent",
-        resolvedRole: "build",
-        parentSessionID: "exec-sess",
-        goalID: "goal-1",
-        time: { created: 30 },
-      },
-      parts: [{ id: "p3", type: "text", text: "Building...", sessionID: "build-sess", messageID: "build-msg" }],
     } as any,
   ])
 
@@ -148,7 +148,7 @@ test("messages in main channel are not also inside agent cards", () => {
         goalID: "goal-1",
         goalTitle: "G",
         goalStatus: "running",
-        steps: [{ stepID: "plan", label: "Plan", status: "running" }],
+        steps: [{ stepID: "build", label: "Build", status: "running" }],
       } as any,
     ],
     goalRuns: [

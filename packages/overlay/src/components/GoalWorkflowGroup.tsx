@@ -162,11 +162,10 @@ function StepRow(props: {
   const hasEvalBody = () =>
     hasChecks() || !!props.step.payload?.evalSummary || !!props.step.payload?.verdict;
   const hasMessages = () => !!props.messages && props.messages.length > 0;
-  // The new pipeline workflow uses `build` as the goal-scope step; legacy
-  // tasks may still emit `execute`. Either should surface the executor session
-  // link when payload has one.
+  // The pipeline workflow uses `build` as the single goal-scope step —
+  // surface its executor session link when the payload carries one.
   const hasOpenSession = () =>
-    (props.step.stepID === "build" || props.step.stepID === "execute") &&
+    props.step.stepID === "build" &&
     !!props.step.payload?.executorSessionID;
   const hasContent = createMemo(() =>
     hasPlanNodes() || hasChangedFiles() || hasEvalBody() || hasMessages() || hasOpenSession(),

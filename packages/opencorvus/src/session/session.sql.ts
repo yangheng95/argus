@@ -13,24 +13,31 @@ import { Timestamps } from "@/storage/schema.sql"
  * prefixes, or in-memory registries: that's how we got the transcript-reseed
  * bug that silently turned assistant sessions into executor sessions.
  *
- *   root        root session of an engine_task; holds the user's request
- *   assistant   generic assistant dialog — orchestrator's own reasoning session,
- *               refine sub-agent, AND externally-driven sessions (MCP, Debug,
- *               Coding, Panel, scheduled wakes). Standalone callers are
- *               filtered out at the bridge by `taskIDForSession` failing
- *               naturally; no separate "standalone" kind is needed.
- *   planner     per-goal planning session
- *   goal        requirements / design analysis sub-agents
- *   architect   architect sub-agent
- *   delivery    delivery sub-agent
- *   executor    goal executor session (runs in worktree)
- *   build       build sub-agent
- *   evaluator   LLM judge / evaluator sessions
- *   system      internal maintenance (compaction, summary, title generation)
+ *   root           root session of an engine_task; holds the user's request
+ *   assistant      generic assistant dialog — orchestrator's own reasoning session,
+ *                  refine sub-agent, AND externally-driven sessions (MCP, Debug,
+ *                  Coding, Panel, scheduled wakes). Standalone callers are
+ *                  filtered out at the bridge by `taskIDForSession` failing
+ *                  naturally; no separate "standalone" kind is needed.
+ *   requirements   requirements sub-agent (goal decomposition)
+ *   design-analyst design-analyst sub-agent (vision → layout/style/component spec)
+ *   planner        per-goal planning session
+ *   goal           legacy catch-all for sub-agents that predate the dedicated
+ *                  `requirements` / `design-analyst` kinds — still accepted so
+ *                  historical task rows render, but new code must use the
+ *                  specific kind above.
+ *   architect      architect sub-agent
+ *   delivery       delivery sub-agent
+ *   executor       goal executor session (runs in worktree)
+ *   build          build sub-agent
+ *   evaluator      LLM judge / evaluator sessions
+ *   system         internal maintenance (compaction, summary, title generation)
  */
 export type SessionKind =
   | "root"
   | "assistant"
+  | "requirements"
+  | "design-analyst"
   | "planner"
   | "goal"
   | "architect"
@@ -59,7 +66,7 @@ export const SessionTable = sqliteTable(
     kind: text().notNull().$type<SessionKind>(),
     /** Optional goal this session belongs to (kind="planner"|"executor"|"build").
      *  Used by overlay to nest the session's messages under the goal card.
-     *  Null for root/assistant/goal/architect/delivery/evaluator/system sessions. */
+     *  Null for root/assistant/requirements/design-analyst/goal/architect/delivery/evaluator/system sessions. */
     goal_id: text(),
     share_url: text(),
     summary_additions: integer(),

@@ -23,27 +23,42 @@ import { escapeHtml } from "./markdown";
 // ── Auto-scroll ──
 
 /**
- * Set up auto-scroll-to-bottom on a scrollable container.
+ * Set up user-controlled follow-to-bottom on a scrollable container.
  *
  * Behavior:
- * - Automatically scrolls to the bottom when new content appears.
- * - As soon as the user scrolls up (even by a few pixels), auto-follow pauses.
- * - Auto-follow only resumes when the user drags the scrollbar all the way
- *   back to the bottom. A small sub-pixel tolerance is allowed so that
- *   rounded scroll positions still count as "at bottom".
+ * - Tracking state is owned by the caller (accessor `isTracking`). When true,
+ *   new content triggers an rAF scroll-to-bottom; when false the container
+ *   is left alone so the user can read without the viewport jumping.
+ * - When tracking is ON and the user manually scrolls away from the bottom,
+ *   `onUserScrollUp` is invoked so the caller can flip tracking off.
+ * - On initial mount the container snaps to the bottom once, regardless of
+ *   tracking state, so the user lands on the latest content.
+ * - `scrollToBottom` on the returned controller jumps to the bottom without
+ *   being mis-classified as a user scroll (used when the caller turns
+ *   tracking on again).
  *
  * Program-initiated scrolls (our own scrollTop writes) are distinguished
  * from user scrolls by tracking the last landing position we set. Scroll
  * events that land within `PROGRAM_TOLERANCE` px of that position are
- * treated as program-echo and never flip tracking off — otherwise a
- * sub-pixel mismatch after el.scrollTop = el.scrollHeight could mark the
- * container as "not at bottom" and silently disable auto-follow.
+ * treated as program-echo and never fire `onUserScrollUp`.
  */
 const BOTTOM_TOLERANCE = 8;
 const PROGRAM_TOLERANCE = 2;
 
-export function setupAutoScroll(el: HTMLElement): () => void {
-  let tracking = true;
+export interface AutoScrollOptions {
+  isTracking: () => boolean;
+  onUserScrollUp: () => void;
+}
+
+export interface AutoScrollController {
+  cleanup: () => void;
+  scrollToBottom: () => void;
+}
+
+export function setupAutoScroll(
+  el: HTMLElement,
+  opts: AutoScrollOptions,
+): AutoScrollController {
   let rafPending = false;
   let expectedTop = el.scrollTop;
 
@@ -53,21 +68,21 @@ export function setupAutoScroll(el: HTMLElement): () => void {
 
   function onScroll() {
     if (Math.abs(el.scrollTop - expectedTop) <= PROGRAM_TOLERANCE) {
-      // Program-echo: our own scrollTop write landed here. Do not let
-      // rounding flip tracking off.
       expectedTop = el.scrollTop;
       return;
     }
-    tracking = distanceFromBottom() <= BOTTOM_TOLERANCE;
     expectedTop = el.scrollTop;
+    if (opts.isTracking() && distanceFromBottom() > BOTTOM_TOLERANCE) {
+      opts.onUserScrollUp();
+    }
   }
 
   function scrollDown() {
-    if (!tracking || rafPending) return;
+    if (!opts.isTracking() || rafPending) return;
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
-      if (!tracking) return;
+      if (!opts.isTracking()) return;
       el.scrollTop = el.scrollHeight;
       expectedTop = el.scrollTop;
     });
@@ -75,22 +90,23 @@ export function setupAutoScroll(el: HTMLElement): () => void {
 
   el.addEventListener("scroll", onScroll, { passive: true });
 
-  // characterData is needed: Solid updates text nodes in-place via node.data,
-  // which is a characterData mutation (not childList). The rafPending guard
-  // above coalesces rapid mutations into a single scroll per animation frame,
-  // avoiding the layout thrashing the old code suffered from.
   const observer = new MutationObserver(scrollDown);
   observer.observe(el, { childList: true, subtree: true, characterData: true });
 
-  // Initial snap-to-bottom.
   requestAnimationFrame(() => {
     el.scrollTop = el.scrollHeight;
     expectedTop = el.scrollTop;
   });
 
-  return () => {
-    el.removeEventListener("scroll", onScroll);
-    observer.disconnect();
+  return {
+    cleanup: () => {
+      el.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+    },
+    scrollToBottom: () => {
+      el.scrollTop = el.scrollHeight;
+      expectedTop = el.scrollTop;
+    },
   };
 }
 

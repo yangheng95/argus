@@ -531,13 +531,6 @@ const eventFile = reportFile.endsWith(".json")
 const eventLogFile = reportFile.endsWith(".json")
   ? reportFile.slice(0, -".json".length) + ".events.ndjson"
   : `${reportFile}.events.ndjson`
-const agentTraceDir = reportFile.endsWith(".json")
-  ? reportFile.slice(0, -".json".length) + ".agent-trace"
-  : `${reportFile}.agent-trace`
-// Enable agent-level IO tracing — captures each agent's full system prompt,
-// user messages, and complete output text to agentTraceDir/<seq>-<agent>.md
-process.env.OPENCORVUS_AGENT_TRACE_DIR = agentTraceDir
-console.log(`[overlay-benchmark] agent_trace_dir=${agentTraceDir}`)
 const events: Array<Record<string, unknown>> = []
 let flushed = Promise.resolve()
 let lastEventAt = Date.now()
@@ -996,7 +989,6 @@ try {
   logLine(`report: ${reportFile}`)
   logLine(`events: ${eventFile}`)
   logLine(`events_ndjson: ${eventLogFile}`)
-  logLine(`agent_trace: ${agentTraceDir}`)
 
   const pass = out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
@@ -1020,7 +1012,6 @@ try {
   errorLine(`report: ${reportFile}`)
   errorLine(`events: ${eventFile}`)
   errorLine(`events_ndjson: ${eventLogFile}`)
-  errorLine(`agent_trace: ${agentTraceDir}`)
   process.exitCode = 1
 } finally {
   await cleanup("events.stop", () => eventStream.stop())

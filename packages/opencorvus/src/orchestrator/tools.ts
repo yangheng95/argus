@@ -287,6 +287,32 @@ export function createOrchestratorTools(input: {
         if (existingGoals.length > 0) return `${existingGoals.length} goals already defined. Skipping. Proceed to architect (for multi-goal) or create_run + submit_execution.`
         if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Proceed to architect or create_run + submit_execution.`
 
+        // Design-analysis gate: if the task has image attachments, block
+        // requirements until design_analysis has produced a spec. This is a
+        // deterministic precondition, not an LLM hint — the orchestrator prompt
+        // already tells the model to call design_analysis first when vision
+        // input exists, but reasoning models skip it under load. Gating here
+        // keeps the autonomous loop closed: vision→design→requirements, not
+        // "LLM decides". Same idea for a Figma URL in task.metadata.
+        {
+          const attachments = Array.isArray(task.attachments)
+            ? task.attachments as Array<{ mime?: string }>
+            : []
+          const hasVisualAttachment = attachments.some(
+            (a) => typeof a?.mime === "string" && a.mime.startsWith("image/"),
+          )
+          const taskMeta = (task.metadata as Record<string, unknown> | null) ?? {}
+          const hasFigmaUrl = typeof taskMeta.figma_url === "string" && taskMeta.figma_url.trim().length > 0
+          const hasDesignSpec = typeof taskMeta.design_spec === "string" && taskMeta.design_spec.trim().length > 0
+          if ((hasVisualAttachment || hasFigmaUrl) && !hasDesignSpec) {
+            const reason = hasVisualAttachment
+              ? `${attachments.filter((a) => typeof a.mime === "string" && a.mime.startsWith("image/")).length} image attachment(s)`
+              : `figma URL`
+            log.info("requirements blocked — design_analysis required first", { taskID, reason })
+            return `Task has ${reason} but design_analysis has not produced a spec yet. Call \`design_analysis\` BEFORE \`requirements\` to extract layout / style / component spec from the visual input. Once design_analysis finishes, call \`requirements\` again.`
+          }
+        }
+
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
         // The RequirementsService runs inside AgentRuntime which owns its own
@@ -295,12 +321,12 @@ export function createOrchestratorTools(input: {
         // hazard we just eliminated.
         try {
           const requirementsSession = await Session.createNext({
-            kind: "goal",
+            kind: "requirements",
             parentID: input.agentSessionID,
             title: `Requirements: ${task.title}`,
             directory: Instance.directory,
           })
-          const hooks = sessionStreamHooks({ sessionID: requirementsSession.id, taskID, stage: "goal" })
+          const hooks = sessionStreamHooks({ sessionID: requirementsSession.id, taskID, stage: "requirements" })
 
 
           const { RequirementsService } = await import("@/requirements")
@@ -576,12 +602,12 @@ export function createOrchestratorTools(input: {
         const enrichedHasAttachments = Array.isArray(enrichedTask.attachments) && enrichedTask.attachments.length > 0
 
         const designSession = await Session.createNext({
-          kind: "goal",
+          kind: "design-analyst",
           parentID: input.agentSessionID,
           title: `Design Analysis: ${task.title}`,
           directory: Instance.directory,
         })
-        const hooks = sessionStreamHooks({ sessionID: designSession.id, taskID, stage: "goal" })
+        const hooks = sessionStreamHooks({ sessionID: designSession.id, taskID, stage: "design-analyst" })
 
         // DesignAnalystAgent runs inside AgentRuntime which owns its own
         // alive/progress/absolute timers. No caller inactivity guard.
