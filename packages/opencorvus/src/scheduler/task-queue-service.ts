@@ -1,5 +1,5 @@
 import z from "zod"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionPrompt } from "@/session/prompt"
@@ -42,7 +42,7 @@ export namespace TaskQueueService {
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
 
-  const state = Instance.state(() => ({
+  const state = lazyInstanceState(() => ({
     running: false,
   }))
 

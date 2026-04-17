@@ -1,6 +1,6 @@
 import { integer, index, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { Identifier } from "@/id/id"
-import { EngineGoalRunTable, EngineInteractionRequestTable, EngineRunTable, EngineTaskTable } from "@/engine/engine.sql"
+import { EngineGoalRunTable, EngineInteractionRequestTable, EngineRunTable, EngineTaskTable } from "@/engine"
 import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
 import type { ProtocolAggregate, ProtocolInboxStatus, ProtocolKind, ProtocolStreamKind } from "./schema"

@@ -1,7 +1,8 @@
 # 08 — Agent Tool Adapter
 
-> 对应代码：`src/agent/agent.ts` · `src/tool/registry.ts` · `src/session/loop.ts` ·
-> `src/orchestrator/tools.ts` · `src/config/config.ts`
+> 对应代码：`src/agent/agent.ts` · `src/agent/filter-tools.ts` · `src/tool/registry.ts` ·
+> `src/session/loop.ts` · `src/session/tool-resolver.ts` · `src/orchestrator/tools.ts` ·
+> `src/config/config.ts`
 
 ## 问题
 

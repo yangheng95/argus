@@ -57,9 +57,9 @@ import {
   ORCHESTRATOR_POLL_INTERVAL_MS,
   budgetRow,
   deriveTitle,
-  orchestratorState,
   progressStatus,
 } from "@/engine/helpers"
+import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"

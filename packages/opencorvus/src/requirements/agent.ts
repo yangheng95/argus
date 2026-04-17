@@ -19,11 +19,10 @@ import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { EngineConfig } from "@/engine/config"
+import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
-import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import type { RequirementsOutput, ParsedGoalContract, RequirementsDecision, ParsedRequirement, TraceabilityEntry } from "./types"
@@ -206,7 +205,7 @@ async function runInternal(input: {
       taskID: input.taskID,
       stage: "requirements",
       signal: AbortSignal.any(abortSignals),
-      onStepFinish: guard.onStepFinish as any,
+      onStepFinish: guard.onStepFinish,
       hooks: passthroughHooks,
       policies: {
         progressTimeoutMs: TIMEOUT_MS,

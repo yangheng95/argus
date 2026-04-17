@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import z from "zod"
 import { lazy } from "../../util/lazy"
-import { SessionStatus } from "@/session/status"
+import { SessionStatus } from "@/session"
 import { TuiRuntime } from "@/tui/runtime"
 import { TuiCommand } from "@/tui/command"
 

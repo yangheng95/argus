@@ -1,12 +1,12 @@
 import { inferFamily } from "@/check/policy"
 import { Instance } from "@/project/instance"
-import { CheckConfig, NamedCheckConfig, NamedCheckFamily } from "@/engine/model"
+import { CheckConfig, NamedCheckConfig, NamedCheckFamily } from "@/engine"
 import { Filesystem } from "@/util/filesystem"
 import { which } from "@/util/which"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
-import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "@/delivery/checks/types"
+import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "./types"
 
 export async function resolveConfig(metadata?: Record<string, unknown>) {
   const configured = CheckConfig.safeParse(metadata?.checks)

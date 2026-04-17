@@ -1,7 +1,7 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import z from "zod"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Log } from "../util/log"
 import { FileIgnore } from "./ignore"
 import { Config } from "../config/config"
@@ -70,7 +70,7 @@ export namespace FileWatcher {
     }
   }
 
-  const state = Instance.state(
+  const state = lazyInstanceState(
     async () => {
       log.info("init")
       const cfg = await Config.get()

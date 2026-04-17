@@ -50,9 +50,9 @@ export namespace ProviderLLM {
     maxRetries?: number
 
     // ── Callbacks ──
-    onChunk?: (chunk: any) => void
+    onChunk?: (event: { chunk: { type: string; [key: string]: unknown } }) => void | Promise<void>
     onError?: (error: { error: unknown }) => void
-    onStepFinish?: (step: any) => void
+    onStepFinish?: (step: unknown) => void
 
     // ── Overrides (rare — let the layer compute by default) ──
     /** Override auto-computed maxOutputTokens */

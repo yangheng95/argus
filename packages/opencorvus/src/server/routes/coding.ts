@@ -6,8 +6,7 @@ import { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
-import { SessionStatus } from "@/session/status"
-import { Message } from "@/session/message"
+import { SessionStatus, Message } from "@/session"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "coding" })

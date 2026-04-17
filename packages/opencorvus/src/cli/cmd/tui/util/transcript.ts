@@ -1,6 +1,6 @@
 import type { AssistantMessage, Part, UserMessage } from "@opencorvus-ai/sdk"
 import { Locale } from "@/util/locale"
-import { textForUI } from "@/session/part-visibility"
+import { textForUI } from "@/session"
 
 export type TranscriptOptions = {
   thinking: boolean

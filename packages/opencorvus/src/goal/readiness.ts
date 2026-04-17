@@ -1,5 +1,4 @@
-import { type GoalRow, type GoalRunRow, type PlanNodeRow } from "@/engine/store"
-import type { EngineGoalRunStatus } from "@/engine/engine.sql"
+import type { GoalRow, GoalRunRow, PlanNodeRow, EngineGoalRunStatus } from "@/engine"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "goal-scheduler" })

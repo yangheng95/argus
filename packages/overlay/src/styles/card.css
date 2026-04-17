@@ -468,3 +468,129 @@ body[data-theme="light"] .card__round {
   color: var(--text-soft);
   font-style: italic;
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Interaction Card
+   Self-contained system-prompt card for pending permission /
+   question interactions. Rendered inline in the conversation
+   timeline (CardParts) and in the workflow sidebar (Board);
+   identical visual treatment in both surfaces, sharing the same
+   --card-* design vars as the agent / goal cards above so the
+   whole conversation reads as one design system.
+   ───────────────────────────────────────────────────────────── */
+
+.interaction-card {
+  display: block;
+  border-radius: var(--card-radius);
+  background: var(--card-bg-0);
+  border: 1px solid var(--card-border);
+  border-left: 3px solid var(--card-stage, var(--card-border-strong));
+  padding: var(--card-pad-y) var(--card-pad-x);
+  margin: var(--card-gap) 0;
+  font-size: var(--card-title-size);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.interaction-card[data-kind="interaction-permission"] {
+  --card-stage: var(--accent);
+}
+.interaction-card[data-kind="interaction-question"] {
+  --card-stage: var(--warn);
+}
+
+.interaction-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--card-title-size);
+  font-weight: 600;
+  color: var(--card-stage, var(--text-strong));
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+.interaction-card__icon {
+  font-size: var(--card-title-size);
+  line-height: 1;
+}
+
+.interaction-card__body {
+  font-size: var(--card-sub-size);
+  color: var(--text);
+  margin-bottom: 8px;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.interaction-card__error {
+  font-size: var(--card-sub-size);
+  color: var(--bad, #f87171);
+  margin-bottom: 6px;
+}
+
+.interaction-card__questions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.interaction-card__question {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.interaction-card__question-text {
+  font-size: var(--card-sub-size);
+  font-weight: 600;
+  color: var(--text);
+}
+.interaction-card__options {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 0;
+}
+.interaction-card__option {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--card-sub-size);
+  color: var(--text);
+  cursor: pointer;
+}
+.interaction-card__option input { cursor: pointer; }
+.interaction-card__option-label { font-weight: 500; }
+.interaction-card__option-desc {
+  color: var(--text-muted);
+  font-size: var(--card-meta-size);
+}
+.interaction-card__custom-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--card-sub-size);
+  padding: 4px 6px;
+  border-radius: var(--card-radius);
+  border: 1px solid var(--card-border);
+  background: var(--input-bg, rgba(0, 0, 0, 0.2));
+  color: var(--text);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.interaction-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.interaction-card__actions .btn {
+  padding: 3px 10px;
+  font-size: var(--card-sub-size);
+}
+
+/* Sidebar list wrapper used by Board's "interactions" section. */
+.interaction-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+}

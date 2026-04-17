@@ -18,21 +18,11 @@ import { Log } from "@/util/log"
 import { GoalPool, type PoolHooks } from "@/engine/goal-pool"
 import type { RuntimeHooks } from "@/engine/runtime-hooks"
 import { Orchestrator } from "@/orchestrator/agent"
-import { effectiveMaxExecutorGroups } from "@/engine/helpers"
+import { effectiveMaxExecutorGroups, findTask, findRun, findPlan, listGoalsByPlan, listPlanNodesByPlan, findNextQueuedTaskForProject } from "@/engine"
+import type { TaskRow, RunRow, PlanRow } from "@/engine"
 import { mergeGoalDelivery } from "@/engine/runtime"
 import { Database, eq } from "@/storage/db"
 import { blockedGoalDiagnostics } from "@/goal/readiness"
-import {
-  findTask,
-  findRun,
-  findPlan,
-  listGoalsByPlan,
-  listPlanNodesByPlan,
-  findNextQueuedTaskForProject,
-  type TaskRow,
-  type RunRow,
-} from "@/engine/store"
-import type { PlanRow } from "@/engine/store"
 
 const log = Log.create({ service: "orchestrator-loop" })
 

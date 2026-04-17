@@ -87,12 +87,10 @@ export function createStallDetector(opts: {
   const ctrl = new AbortController()
   let barren = 0
 
-  function onStepFinish(step: {
-    text?: string
-    toolResults?: Array<{ isError?: boolean }>
-  }) {
-    const hasText = typeof step.text === "string" && step.text.trim().length > 0
-    const results = Array.isArray(step.toolResults) ? step.toolResults : []
+  function onStepFinish(step: unknown) {
+    const s = step as { text?: string; toolResults?: Array<{ isError?: boolean }> }
+    const hasText = typeof s.text === "string" && s.text.trim().length > 0
+    const results = Array.isArray(s.toolResults) ? s.toolResults : []
     const hasTools = results.length > 0
     const allErrored = hasTools && results.every((r) => r.isError === true)
 

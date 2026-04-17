@@ -1,9 +1,11 @@
 # 07 — Panel 架构
 
-> 对应代码：`src/panel/api.ts` · `src/panel/capability.ts` · `src/workbench/` ·
-> `overlay/src/` (前端)
+> 对应代码：`src/panel/capability.ts` · `src/control/message.ts` · `src/workbench/` ·
+> `src/server/routes/panel.ts` · `packages/overlay/src/`（前端）
 >
-> 注：`panel/settings.ts` 已按 [05-config.md](05-config.md) 删除。
+> 注：`panel/api.ts` 和 `panel/settings.ts` 已删除。Panel 的 HTTP 入口现在是
+> `server/routes/panel.ts` → `ControlMessage.handle`；对话层白名单 action 定义在
+> `panel/capability.ts`。
 
 ## 设计原则
 
@@ -173,10 +175,13 @@ Panel → PATCH /config {partial} → mergeDeep → 写文件
 
 ## 后端对接
 
-- `src/workbench/` — Workbench 服务（board · brief · intent · note-store）
+- `src/workbench/board.ts` — `compileBoard` 构造 TaskBoard 视图
+- `src/workbench/brief.ts` — 简报编译
+- `src/workbench/note-store.ts` — per-task 备注
 - `src/workbench/workbench.sql.ts` — `workbench_task_note` · `workbench_brief_snapshot`
-- `src/panel/api.ts` — 面板 HTTP API
-- `src/panel/capability.ts` — 面板能力声明
+- `src/server/routes/panel.ts` — 面板 HTTP 入口 → `ControlMessage.handle / handleStream`
+- `src/panel/capability.ts` — 面板 capability 白名单（对话层 LLM 可产出的 action）
+- `src/task-api/index.ts` — Capability action 最终路由到的 `EngineService` API
 
 ## 相关文档
 

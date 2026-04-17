@@ -45,7 +45,7 @@ export namespace EngineMemoryBridge {
   }) {
     const { task, run, delivery, evaluation, plan } = input
     try {
-      const changedFiles = (delivery.result?.changed_files as string[]) ?? []
+      const changedFiles = delivery.result?.changed_files ?? []
       const checks = (evaluation?.checks as Array<{ name: string; status: string; evidence?: string }>) ?? []
 
       const sections: string[] = [

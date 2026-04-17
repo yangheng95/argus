@@ -2,9 +2,9 @@ import { Database, and, eq, sql } from "@/storage/db"
 import { CronJobTable } from "./cron.sql"
 import { Cron } from "./cron"
 import { Scheduler } from "./index"
-import { SessionWake } from "@/session/wake"
+import { SessionWake } from "@/session"
 import { Log } from "@/util/log"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 
 /**
  * CronService polls due cron jobs and executes them with lease-based claims.
@@ -26,7 +26,7 @@ export namespace CronService {
   const CONCURRENCY_DEFAULT = 4
   const CONCURRENCY_MAX = 32
 
-  const state = Instance.state(() => ({
+  const state = lazyInstanceState(() => ({
     running: false,
   }))
 

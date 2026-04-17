@@ -17,13 +17,15 @@ import z from "zod"
 import {
   findTask,
   findLatestFailedEvalForGoal,
-  type TaskRow,
-  type GoalRow,
-  type PlanRow,
-  type GoalRunRow,
-  type PlanNodeRow,
-} from "@/engine/store"
-import { updateGoalRun } from "@/engine/persist"
+  updateGoalRun,
+} from "@/engine"
+import type {
+  TaskRow,
+  GoalRow,
+  PlanRow,
+  GoalRunRow,
+  PlanNodeRow,
+} from "@/engine"
 
 const log = Log.create({ service: "goal-runner" })
 const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000

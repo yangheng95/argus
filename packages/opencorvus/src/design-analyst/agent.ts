@@ -34,7 +34,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
-import { EngineConfig } from "@/engine/config"
+import { EngineConfig } from "@/engine"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import type { DesignAnalysis } from "./types"
@@ -265,7 +265,7 @@ async function run(input: {
     taskID: input.taskID,
     stage: "design-analyst",
     signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish as any,
+    onStepFinish: guard.onStepFinish,
     hooks: passthroughHooks,
     policies: {
       progressTimeoutMs: TIMEOUT_MS,

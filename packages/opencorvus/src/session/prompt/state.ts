@@ -1,4 +1,4 @@
-import { Instance } from "../../project/instance"
+import { Instance, lazyInstanceState } from "../../project/instance"
 import { Log } from "../../util/log"
 import { Message } from "../message"
 import { SessionStatus } from "../status"
@@ -10,7 +10,7 @@ export namespace SessionPromptState {
   // Phase 5: Sessions manage their own lifecycle via explicit cancel(sessionID).
   // Instance.dispose() no longer aborts running sessions — this prevents
   // Config.update / overlay reconnect / verifyResume from killing active executor sessions.
-  export const state = Instance.state(
+  export const state = lazyInstanceState(
     () => {
       const data: Record<
         string,

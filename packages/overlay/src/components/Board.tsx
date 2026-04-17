@@ -15,16 +15,7 @@ import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
 import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
-
-// ── Types ──
-
-interface Interaction {
-  id: string;
-  type: "permission" | "question" | string;
-  status: string;
-  title: string;
-  body: string;
-}
+import { InteractionCardList, type InteractionData } from "./InteractionCard";
 
 // ── Status utilities ──
 
@@ -165,121 +156,18 @@ export function TaskActionsPanel(props: TaskActionsPanelProps) {
   );
 }
 
-// ── InteractionsList ──
-// Shows pending interactions as alert cards.
-
-interface InteractionAlertProps {
-  interaction: Interaction;
-  onResolve?: (id: string, action: string) => void;
-  onReject?: (id: string) => void;
-}
-
-function InteractionAlert(props: InteractionAlertProps) {
-  const iconGlyph = () => props.interaction.type === "permission" ? "\uD83D\uDD12" : "\u2753";
-  const iconLabel = () => props.interaction.type === "permission"
-    ? t("interaction.icon.permission")
-    : t("interaction.icon.question");
-
-  return (
-    <div class="interaction-alert" data-id={props.interaction.id}>
-      <div class="interaction-title">
-        <span role="img" aria-label={iconLabel()}>{iconGlyph()}</span> {props.interaction.title}
-      </div>
-      <div
-        class="interaction-body md-content"
-        innerHTML={renderMarkdown(props.interaction.body || "")}
-      />
-      <div class="interaction-actions">
-        <Show
-          when={props.interaction.type === "permission"}
-          fallback={
-            <>
-              <button
-                class="btn btn-primary"
-                data-action="answer"
-                title={t("interaction.answer_title")}
-                aria-label={t("interaction.answer_title")}
-                onClick={() => props.onResolve?.(props.interaction.id, "answer")}
-              >
-                {t("interaction.answer")}
-              </button>
-              <button
-                class="btn btn-ghost"
-                data-action="reject"
-                title={t("interaction.skip_title")}
-                aria-label={t("interaction.skip_title")}
-                onClick={() => props.onReject?.(props.interaction.id)}
-              >
-                {t("interaction.skip")}
-              </button>
-            </>
-          }
-        >
-          <button
-            class="btn btn-primary"
-            data-action="always"
-            title={t("interaction.always_allow_title")}
-            aria-label={t("interaction.always_allow_title")}
-            onClick={() => props.onResolve?.(props.interaction.id, "always")}
-          >
-            {t("interaction.always_allow")}
-          </button>
-          <button
-            class="btn btn-ghost"
-            data-action="once"
-            title={t("interaction.allow_once_title")}
-            aria-label={t("interaction.allow_once_title")}
-            onClick={() => props.onResolve?.(props.interaction.id, "once")}
-          >
-            {t("interaction.allow_once")}
-          </button>
-          <button
-            class="btn btn-ghost"
-            data-action="reject"
-            title={t("interaction.reject_title")}
-            aria-label={t("interaction.reject_title")}
-            onClick={() => props.onReject?.(props.interaction.id)}
-          >
-            {t("interaction.reject")}
-          </button>
-        </Show>
-      </div>
-    </div>
-  );
-}
-
-interface InteractionsListProps {
-  interactions: Interaction[];
-  onResolve?: (id: string, action: string) => void;
-  onReject?: (id: string) => void;
-}
-
-export function InteractionsList(props: InteractionsListProps) {
-  const pending = createMemo(() =>
-    (props.interactions || []).filter((item) => item.status === "pending"),
-  );
-
-  return (
-    <Show when={pending().length > 0}>
-      <div class="interactions-list">
-        <For each={pending()}>
-          {(interaction) => (
-            <InteractionAlert
-              interaction={interaction}
-              onResolve={props.onResolve}
-              onReject={props.onReject}
-            />
-          )}
-        </For>
-      </div>
-    </Show>
-  );
-}
+// Pending-interaction rendering is delegated to the shared <InteractionCard>
+// component, which is also used inline in the conversation timeline. The
+// component owns its own busy / error state and dispatches replies through
+// the per-id-mutex'd interaction-reply service — Board no longer needs to
+// pipe callbacks down for this surface.
 
 // ── Board (top-level) ──
 // Main board panel that orchestrates all sub-panels.
 // Reads from boardStore; action callbacks are passed via props so that
 // the parent (or ) can wire up the actual API calls.
+// Interaction reply/reject is self-contained inside <InteractionCard> and
+// no longer takes parent-supplied callbacks.
 
 interface BoardProps {
   onRetry?: () => void;
@@ -287,8 +175,6 @@ interface BoardProps {
   onCancel?: () => void;
   onEditGoal?: (id: string, title: string, detail: string) => void;
   onDeleteGoal?: (id: string) => void;
-  onResolveInteraction?: (id: string, action: string) => void;
-  onRejectInteraction?: (id: string) => void;
 }
 
 interface SectionFrameProps {
@@ -685,10 +571,8 @@ export function Board(props: BoardProps) {
         })()}
         badgeTone="warn"
       >
-        <InteractionsList
-          interactions={interactions()}
-          onResolve={props.onResolveInteraction}
-          onReject={props.onRejectInteraction}
+        <InteractionCardList
+          interactions={interactions() as InteractionData[]}
         />
       </SectionFrame>
     </>

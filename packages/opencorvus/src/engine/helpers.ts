@@ -1,5 +1,4 @@
 import z from "zod"
-import { Instance } from "@/project/instance"
 import { Database, and, eq, desc } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "@/workbench/workbench.sql"
 import { Budget } from "./model"
@@ -20,10 +19,9 @@ export const DEFAULT_MAX_RUNS = syncDefaults.max_runs
 export const DEFAULT_MAX_FIX_RUNS = syncDefaults.max_fix_runs
 export const MAX_EXECUTOR_GROUPS = syncDefaults.max_executor_groups
 
-export const orchestratorState = Instance.state(() => ({
-  booted: false,
-  syncing: false,
-}))
+// orchestratorState moved to ./orchestrator-state — see that file's header
+// for the cycle rationale. Helpers must not run `Instance.state(...)` at
+// module-init because helpers is re-exported through the engine barrel.
 
 export function deriveTitle(request: string) {
   const line = request

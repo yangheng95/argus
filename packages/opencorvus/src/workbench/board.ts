@@ -1,7 +1,8 @@
 import z from "zod"
 import { createDecisionLog } from "@/decision-log"
-import { findSpecSnapshot, viewSpecSnapshot } from "@/engine/store"
 import {
+  findSpecSnapshot,
+  viewSpecSnapshot,
   EngineArtifactTable,
   EngineChannelBindingTable,
   EngineDeliveryTable,
@@ -16,12 +17,13 @@ import {
   EngineRequirementTable,
   EngineRunTable,
   EngineTaskTable,
-} from "@/engine/engine.sql"
-import { EvaluationCheck } from "@/engine/model"
+  EvaluationCheck,
+  WorkflowRegistry,
+} from "@/engine"
+import type { WorkflowState } from "@/engine"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { SessionTable } from "@/session/session.sql"
-import { WorkflowRegistry, type WorkflowState } from "@/engine/workflow"
 import { Database, and, desc, eq, inArray, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"

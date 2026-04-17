@@ -19889,6 +19889,1180 @@
           "properties"
         ]
       },
+      "Event.agent.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "agent.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string"
+              },
+              "runID": {
+                "type": "string"
+              },
+              "stage": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "toolName": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "stage",
+              "kind",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "active",
+                  "completed",
+                  "failed",
+                  "cancelled"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.spec.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "spec.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.spec.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "spec.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "status": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.spec.approved": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "spec.approved"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.plan.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "plan.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "planID": {
+                "type": "string",
+                "pattern": "^pln.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "planID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.plan.activated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "plan.activated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "planID": {
+                "type": "string",
+                "pattern": "^pln.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "planID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalRunID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalRunID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.passed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.passed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.milestone.activated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "milestone.activated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "milestoneID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "milestoneID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.milestone.passed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "milestone.passed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "milestoneID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "milestoneID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.milestone.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "milestone.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "milestoneID": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "milestoneID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "accepted",
+                  "running",
+                  "blocked",
+                  "completed",
+                  "failed",
+                  "aborted"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "accepted",
+                  "running",
+                  "blocked",
+                  "completed",
+                  "failed",
+                  "aborted"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.interaction.requested": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "interaction.requested"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "interactionID": {
+                "type": "string",
+                "pattern": "^int.*"
+              },
+              "requestType": {
+                "type": "string",
+                "enum": [
+                  "permission",
+                  "question"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "interactionID",
+              "requestType",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.interaction.resolved": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "interaction.resolved"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "interactionID": {
+                "type": "string",
+                "pattern": "^int.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "answered",
+                  "rejected",
+                  "expired"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "interactionID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.delivery.ready": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.ready"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "deliveryID": {
+                "type": "string",
+                "pattern": "^dlv.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "deliveryID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.evaluation.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "evaluation.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "evaluationID": {
+                "type": "string",
+                "pattern": "^evl.*"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "passed",
+                  "failed",
+                  "inconclusive"
+                ]
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "accepted",
+                  "rejected",
+                  "inconclusive"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "evaluationID",
+              "status",
+              "verdict",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.message": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.message"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "goal",
+                  "plan",
+                  "note"
+                ]
+              },
+              "source": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "kind",
+              "source",
+              "text",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "type": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "type",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.run.output": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "run.output"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "type": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "type",
+              "text"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.message.injected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "message.injected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "text": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "text",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.selected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.selected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "workflowID": {
+                "type": "string"
+              },
+              "workflowName": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "workflowID",
+              "workflowName",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workflow.step.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workflow.step.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "stepID": {
+                "type": "string"
+              },
+              "goalID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "running",
+                  "completed",
+                  "skipped",
+                  "failed"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "stepID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.goal.workflow.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.workflow.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "completedSteps": {
+                "type": "number"
+              },
+              "totalSteps": {
+                "type": "number"
+              },
+              "currentStep": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalID",
+              "completedSteps",
+              "totalSteps",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.requirements.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "requirements.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "requirementCount": {
+                "type": "number"
+              },
+              "goalCount": {
+                "type": "number"
+              },
+              "decisionCount": {
+                "type": "number"
+              },
+              "traceabilityCount": {
+                "type": "number"
+              },
+              "fidelityScore": {
+                "type": "number"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "requirementCount",
+              "goalCount",
+              "decisionCount",
+              "traceabilityCount",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.architect.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "architect.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "contractCount": {
+                "type": "number"
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blueprintSummary": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "contractCount",
+              "categories",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Project": {
         "type": "object",
         "properties": {
@@ -22569,1180 +23743,6 @@
           "properties"
         ]
       },
-      "Event.agent.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "agent.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "stage": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string"
-              },
-              "id": {
-                "type": "string"
-              },
-              "toolName": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "stage",
-              "kind",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "active",
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "active",
-                  "completed",
-                  "failed",
-                  "cancelled"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.spec.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "spec.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "specID": {
-                "type": "string",
-                "pattern": "^spc.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "specID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.spec.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "spec.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "specID": {
-                "type": "string",
-                "pattern": "^spc.*"
-              },
-              "status": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "specID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.spec.approved": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "spec.approved"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "specID": {
-                "type": "string",
-                "pattern": "^spc.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "specID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.plan.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "plan.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "planID": {
-                "type": "string",
-                "pattern": "^pln.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "planID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.plan.activated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "plan.activated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "planID": {
-                "type": "string",
-                "pattern": "^pln.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "planID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.progress": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.progress"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalRunID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalRunID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.passed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.passed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.milestone.activated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "milestone.activated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "milestoneID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "milestoneID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.milestone.passed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "milestone.passed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "milestoneID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "milestoneID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.milestone.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "milestone.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "milestoneID": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "milestoneID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "accepted",
-                  "running",
-                  "blocked",
-                  "completed",
-                  "failed",
-                  "aborted"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "queued",
-                  "accepted",
-                  "running",
-                  "blocked",
-                  "completed",
-                  "failed",
-                  "aborted"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.interaction.requested": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "interaction.requested"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "interactionID": {
-                "type": "string",
-                "pattern": "^int.*"
-              },
-              "requestType": {
-                "type": "string",
-                "enum": [
-                  "permission",
-                  "question"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "interactionID",
-              "requestType",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.interaction.resolved": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "interaction.resolved"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "interactionID": {
-                "type": "string",
-                "pattern": "^int.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "answered",
-                  "rejected",
-                  "expired"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "interactionID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.delivery.ready": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "delivery.ready"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "deliveryID": {
-                "type": "string",
-                "pattern": "^dlv.*"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "deliveryID",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.evaluation.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "evaluation.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "evaluationID": {
-                "type": "string",
-                "pattern": "^evl.*"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "passed",
-                  "failed",
-                  "inconclusive"
-                ]
-              },
-              "verdict": {
-                "type": "string",
-                "enum": [
-                  "accepted",
-                  "rejected",
-                  "inconclusive"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "evaluationID",
-              "status",
-              "verdict",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.message": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.message"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "goal",
-                  "plan",
-                  "note"
-                ]
-              },
-              "source": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "kind",
-              "source",
-              "text",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.progress": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.progress"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "type": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              },
-              "payload": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {}
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "type",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.run.output": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "run.output"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "type": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "type",
-              "text"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.message.injected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "message.injected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "runID": {
-                "type": "string",
-                "pattern": "^run.*"
-              },
-              "text": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "runID",
-              "text",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.selected": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.selected"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "workflowID": {
-                "type": "string"
-              },
-              "workflowName": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "workflowID",
-              "workflowName",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workflow.step.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workflow.step.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "stepID": {
-                "type": "string"
-              },
-              "goalID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "pending",
-                  "running",
-                  "completed",
-                  "skipped",
-                  "failed"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "stepID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.workflow.progress": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.workflow.progress"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
-              },
-              "completedSteps": {
-                "type": "number"
-              },
-              "totalSteps": {
-                "type": "number"
-              },
-              "currentStep": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "goalID",
-              "completedSteps",
-              "totalSteps",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.requirements.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "requirements.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "requirementCount": {
-                "type": "number"
-              },
-              "goalCount": {
-                "type": "number"
-              },
-              "decisionCount": {
-                "type": "number"
-              },
-              "traceabilityCount": {
-                "type": "number"
-              },
-              "fidelityScore": {
-                "type": "number"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "requirementCount",
-              "goalCount",
-              "decisionCount",
-              "traceabilityCount",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.architect.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "architect.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "contractCount": {
-                "type": "number"
-              },
-              "categories": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "blueprintSummary": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "contractCount",
-              "categories",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.task-queue.completed": {
         "type": "object",
         "properties": {
@@ -24465,6 +24465,93 @@
             "$ref": "#/components/schemas/Event.installation.update-available"
           },
           {
+            "$ref": "#/components/schemas/Event.agent.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.spec.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.spec.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.spec.approved"
+          },
+          {
+            "$ref": "#/components/schemas/Event.plan.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.plan.activated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.goal.progress"
+          },
+          {
+            "$ref": "#/components/schemas/Event.goal.passed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.goal.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.milestone.activated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.milestone.passed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.milestone.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.run.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.run.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.interaction.requested"
+          },
+          {
+            "$ref": "#/components/schemas/Event.interaction.resolved"
+          },
+          {
+            "$ref": "#/components/schemas/Event.delivery.ready"
+          },
+          {
+            "$ref": "#/components/schemas/Event.evaluation.completed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.message"
+          },
+          {
+            "$ref": "#/components/schemas/Event.run.progress"
+          },
+          {
+            "$ref": "#/components/schemas/Event.run.output"
+          },
+          {
+            "$ref": "#/components/schemas/Event.message.injected"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.selected"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workflow.step.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.goal.workflow.progress"
+          },
+          {
+            "$ref": "#/components/schemas/Event.requirements.completed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.architect.completed"
+          },
+          {
             "$ref": "#/components/schemas/Event.project.updated"
           },
           {
@@ -24559,93 +24646,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.task_plan.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.agent.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.spec.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.spec.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.spec.approved"
-          },
-          {
-            "$ref": "#/components/schemas/Event.plan.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.plan.activated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.goal.progress"
-          },
-          {
-            "$ref": "#/components/schemas/Event.goal.passed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.goal.failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.milestone.activated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.milestone.passed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.milestone.failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.run.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.run.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.interaction.requested"
-          },
-          {
-            "$ref": "#/components/schemas/Event.interaction.resolved"
-          },
-          {
-            "$ref": "#/components/schemas/Event.delivery.ready"
-          },
-          {
-            "$ref": "#/components/schemas/Event.evaluation.completed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.message"
-          },
-          {
-            "$ref": "#/components/schemas/Event.run.progress"
-          },
-          {
-            "$ref": "#/components/schemas/Event.run.output"
-          },
-          {
-            "$ref": "#/components/schemas/Event.message.injected"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.selected"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workflow.step.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.goal.workflow.progress"
-          },
-          {
-            "$ref": "#/components/schemas/Event.requirements.completed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.architect.completed"
           },
           {
             "$ref": "#/components/schemas/Event.task-queue.completed"

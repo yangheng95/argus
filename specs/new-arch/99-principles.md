@@ -49,7 +49,7 @@
 ### 执行与调度层
 
 - ✗ **Fire-and-forget 触发**
-  - `Orchestrator.processTask().catch()` 已删除，用 Task Control Loop 替代
+  - `Orchestrator.processTask().catch()` 已删除，用 Task Control Loop（`orchestrator/loop.ts`）替代
   - 任何 `.catch(() => {})` 吞错误、脱离主循环的代码都是这个反模式
 - ✗ **硬超时 / 绝对超时**
   - 所有超时必须是 **inactivity-based**，从不从进程启动计时

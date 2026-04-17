@@ -727,7 +727,7 @@ export function computeAgentCards(): { cards: Record<string, AgentCardData>; ord
     const card = getSessionBucketCardMemo(sid)();
     // Shallow-copy with a fresh children array. nestWithinBucket() mutates
     // children via push — without the copy, repeated calls to
-    // computeAgentCards() (from conversationMessages + Board memos) would
+    // computeAgentCards() (from agentCardItems + Board memos) would
     // accumulate duplicates in the memo-cached object's children array.
     if (card) allAgentCards.push({ ...card, children: [] });
   }

@@ -6,7 +6,7 @@ import { ExecutorRegistry } from "@/executor/registry"
 
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
-import { Message } from "@/session/message"
+import { Message } from "@/session"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import {
@@ -18,10 +18,8 @@ import {
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { ProtocolStore } from "@/protocol/store"
-import {
-  buildOperatorPrompt,
-  orchestratorState,
-} from "./helpers"
+import { buildOperatorPrompt } from "./helpers"
+import { orchestratorState } from "./orchestrator-state"
 import {
   persistFailedRunEvaluation,
   updateExecutorSessionStatus,

@@ -507,7 +507,6 @@
   "task.none": "暂无任务",
   "task.project.unknown": "未指定项目",
   "task.status.active": "进行中",
-  "task.status.blocked": "阻塞",
   "task.status.cancelled": "已取消",
   "task.status.completed": "已完成",
   "task.status.delivering": "交付中",

@@ -3,7 +3,7 @@
  * agent + service, and orchestrator persist + docs.
  */
 import z from "zod"
-import { CheckConfig, EvaluationCheck, NamedCheckFamily } from "@/engine/model"
+import { CheckConfig, EvaluationCheck, NamedCheckFamily } from "@/engine"
 import { Snapshot } from "@/snapshot"
 
 // ---------------------------------------------------------------------------

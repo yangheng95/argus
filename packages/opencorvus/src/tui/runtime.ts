@@ -1,9 +1,9 @@
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
-import { SessionStatus } from "@/session/status"
+import { SessionStatus } from "@/session"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { TaskQueueTable } from "@/scheduler/task-queue.sql"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Tui } from "@/tui"
 import { Bus } from "@/bus"
 import { Database, eq } from "@/storage/db"
@@ -11,7 +11,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 
 type Mode = "none" | "spawned" | "connected"
 
-const state = Instance.state(() => ({
+const state = lazyInstanceState(() => ({
   handle: null as Tui.Handle | null,
   mode: "none" as Mode,
   sessionID: null as string | null,

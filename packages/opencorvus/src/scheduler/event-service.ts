@@ -1,8 +1,8 @@
 import { Bus } from "@/bus"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Database, and, eq } from "@/storage/db"
 import { Log } from "@/util/log"
-import { SessionWake } from "@/session/wake"
+import { SessionWake } from "@/session"
 import { Wildcard } from "@/util/wildcard"
 import { EventJobTable } from "./event.sql"
 
@@ -11,7 +11,7 @@ type Match = Record<string, string | number | boolean>
 export namespace EventService {
   const log = Log.create({ service: "event-service" })
 
-  const state = Instance.state(
+  const state = lazyInstanceState(
     () => ({
       unsub: undefined as undefined | (() => void),
       running: new Set<string>(),

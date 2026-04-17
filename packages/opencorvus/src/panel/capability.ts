@@ -1,5 +1,5 @@
 import z from "zod"
-import { CheckConfig, StageRouting } from "@/engine/model"
+import { CheckConfig, StageRouting } from "@/engine"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
 
 export const PanelSurface = SharedChannelSurface

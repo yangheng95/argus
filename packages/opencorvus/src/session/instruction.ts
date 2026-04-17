@@ -3,7 +3,7 @@ import os from "os"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Config } from "../config/config"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "../util/log"
 import { Glob } from "../util/glob"
@@ -39,7 +39,7 @@ async function resolveRelative(instruction: string): Promise<string[]> {
 }
 
 export namespace InstructionPrompt {
-  const state = Instance.state(() => {
+  const state = lazyInstanceState(() => {
     return {
       claims: new Map<string, Set<string>>(),
     }

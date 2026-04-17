@@ -18,9 +18,7 @@
  */
 
 import { Log } from "@/util/log"
-import { Event } from "@/engine/model"
-import { EngineProtocol } from "@/engine/protocol"
-import { updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/engine/persist"
+import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/engine"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromSnapshot } from "@/goal/runner"

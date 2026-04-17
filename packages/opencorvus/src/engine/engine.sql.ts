@@ -12,6 +12,12 @@ export type EngineBudget = {
 
 export type EngineMetadata = Record<string, unknown>
 
+export type DeliveryResult = {
+  diffs?: Array<{ file: string; status?: string; after?: string; diff?: string }>
+  changed_files?: string[]
+  [key: string]: unknown
+}
+
 export type EngineTaskStatus =
   | "queued"
   | "active"
@@ -431,7 +437,7 @@ export const EngineDeliveryTable = sqliteTable(
     goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
     status: text().notNull().$type<EngineDeliveryStatus>().default("candidate"),
     summary: text().notNull(),
-    result: text({ mode: "json" }).$type<EngineMetadata>(),
+    result: text({ mode: "json" }).$type<DeliveryResult>(),
     ...Timestamps,
   },
   (table) => [

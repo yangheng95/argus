@@ -2,10 +2,12 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Log } from "@/util/log"
 import z from "zod"
 import { values as objectValues } from "@/util/object"
+import { Answer as _Answer } from "./types"
+import type { Answer as _AnswerType } from "./types"
 
 export namespace Question {
   const log = Log.create({ service: "question" })
@@ -50,10 +52,11 @@ export namespace Question {
     })
   export type Request = z.infer<typeof Request>
 
-  export const Answer = z.array(z.string()).meta({
-    ref: "QuestionAnswer",
-  })
-  export type Answer = z.infer<typeof Answer>
+  // Re-exported from ./types so schema-only consumers (engine/model) can
+  // import directly without pulling in Bus/Instance. External callers using
+  // the `Question.Answer` namespace form keep working unchanged.
+  export const Answer = _Answer
+  export type Answer = _AnswerType
 
   export const Reply = z.object({
     answers: z
@@ -81,7 +84,7 @@ export namespace Question {
     ),
   }
 
-  const state = Instance.state(
+  const state = lazyInstanceState(
     async () => {
       const pending: Record<
         string,

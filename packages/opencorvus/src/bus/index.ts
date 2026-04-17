@@ -1,6 +1,6 @@
 import z from "zod"
 import { Log } from "../util/log"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
 import { isBusTraceEnabled, traceBus } from "../util/debug-trace"
@@ -61,7 +61,7 @@ export namespace Bus {
     return Promise.allSettled(pending)
   }
 
-  const state = Instance.state(
+  const state = lazyInstanceState(
     () => {
       const subscriptions = new Map<any, Subscription[]>()
 

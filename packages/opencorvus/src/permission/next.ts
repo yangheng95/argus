@@ -2,7 +2,7 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Database, eq } from "@/storage/db"
 import { PermissionTable } from "@/session/session.sql"
 import { fn } from "@/util/fn"
@@ -11,6 +11,8 @@ import { Wildcard } from "@/util/wildcard"
 import os from "os"
 import z from "zod"
 import { entries, values as objectValues } from "@/util/object"
+import { Reply as _Reply } from "./types"
+import type { Reply as _ReplyType } from "./types"
 
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
@@ -110,8 +112,11 @@ export namespace PermissionNext {
 
   export type Request = z.infer<typeof Request>
 
-  export const Reply = z.enum(["once", "always", "reject"])
-  export type Reply = z.infer<typeof Reply>
+  // Re-exported from ./types so schema-only consumers (engine/model) can
+  // import directly without pulling in Bus/Instance. External callers using
+  // the `PermissionNext.Reply` namespace form keep working unchanged.
+  export const Reply = _Reply
+  export type Reply = _ReplyType
 
   export const Approval = z.object({
     projectID: z.string(),
@@ -131,7 +136,7 @@ export namespace PermissionNext {
     ),
   }
 
-  const state = Instance.state(() => {
+  const state = lazyInstanceState(() => {
     const projectID = Instance.project.id
     const row = Database.use((db) =>
       db.select().from(PermissionTable).where(eq(PermissionTable.project_id, projectID)).get(),

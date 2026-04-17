@@ -4,7 +4,7 @@ import { $ } from "bun"
 import z from "zod"
 import path from "path"
 import { Log } from "@/util/log"
-import { Instance } from "./instance"
+import { Instance, lazyInstanceState } from "./instance"
 import { Filesystem } from "@/util/filesystem"
 import { FileWatcher } from "@/file/watcher"
 
@@ -116,7 +116,7 @@ export namespace Vcs {
       .catch(() => undefined)
   }
 
-  const state = Instance.state(
+  const state = lazyInstanceState(
     async () => {
       if (Instance.project.vcs !== "git") {
         return { branch: async () => undefined, unsubscribe: undefined }
