@@ -1,6 +1,6 @@
 import { Memory } from "./index"
 import { Session } from "@/session"
-import { Message } from "@/session/message"
+import { Message } from "@/session"
 import { Instance } from "@/project/instance"
 import { Config } from "@/config/config"
 import { Log } from "@/util/log"

@@ -6,7 +6,7 @@
  * The orchestrator only sees PipelineEvent — it never reaches into pipeline internals.
  */
 
-import type { GoalRunRow, PlanRow, RunRow, TaskRow, PlanNodeRow } from "@/engine/store"
+import type { GoalRunRow, PlanRow, RunRow, TaskRow, PlanNodeRow } from "@/engine"
 import type { ExecutorAdapter } from "@/executor/contract"
 import type { DecisionLog } from "@/decision-log"
 import type { AcceptanceSpec } from "@/acceptance/types"

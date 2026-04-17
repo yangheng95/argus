@@ -41,14 +41,15 @@ function conversationTime(item: any): number {
 
 // ── Internal: build user request + interaction messages ──
 //
-// Note: this function is called from conversationMessages() which is itself
-// reactive — it re-runs whenever board state changes. Several timestamp
-// fallbacks below were previously paired with devWarn() calls, but those
-// fired on every recompute (SSE-driven, hundreds of times per minute) and
-// crushed the dev-error overlay during long tasks. The fallbacks remain;
-// the warnings were removed. Real timestamp validation should happen at
-// mutation time in setBoard / appendInteraction, not here in the derived
-// view layer.
+// Reactive: re-runs from `userContextMessages` whenever `boardStore.board.task`
+// or `boardStore.board.interactions` changes (and only those — `applyBoardDelta`
+// in store/board.ts ensures unrelated fields don't invalidate this slice).
+//
+// All timestamp invariants (task.time.created > 0, interaction.time.created > 0,
+// resolved/rejected interactions have valid resolved|updated) are enforced at
+// the boundary in `assertBoardInvariants` (store/board.ts). This function
+// trusts those invariants and reads timestamps directly — any malformed
+// timestamp here would already have failed the boundary check.
 
 function buildUserContextMessages(): any[] {
   const board = boardStore.board;
@@ -61,8 +62,7 @@ function buildUserContextMessages(): any[] {
   // the user's input. Render both into a single synthetic bubble — never
   // duplicate by also writing a session message on the backend.
   if (task?.request) {
-    const rawCreated = task.time?.created;
-    const taskCreated = (Number.isFinite(rawCreated) && rawCreated) ? Number(rawCreated) : 0;
+    const taskCreated = Number(task.time.created);
     const parts: any[] = [{ type: "text", text: task.request }];
     const attachments = Array.isArray((task as any).attachments) ? (task as any).attachments : [];
     for (const a of attachments) {
@@ -90,15 +90,12 @@ function buildUserContextMessages(): any[] {
 
     const interactionRole = "system";
 
-    const rawRequestTime = interaction.time?.created;
-    const requestTime = (Number.isFinite(rawRequestTime) && rawRequestTime)
-      ? Number(rawRequestTime)
-      : Date.now();
+    const requestTime = Number(interaction.time.created);
 
-    // Pending interactions render inline as interactive system messages:
-    //   - question   → InteractionQuestionPart
-    //   - permission → InteractionPermissionPart
-    // Answered/rejected fall through to the text-based transcript path below.
+    // Pending interactions render inline as interactive system messages
+    // via the unified InteractionCard component (CardParts dispatches on
+    // part.type). Answered/rejected fall through to the text-based
+    // transcript path below.
     if (interaction.status === "pending") {
       const partType =
         interaction.type === "question"
@@ -129,10 +126,9 @@ function buildUserContextMessages(): any[] {
     );
     if (request) msgs.push(request);
     if (interaction.status === "answered" || interaction.status === "rejected") {
-      const rawResolvedTime = interaction.time?.resolved ?? interaction.time?.updated;
-      const resolvedTime = (Number.isFinite(rawResolvedTime) && rawResolvedTime)
-        ? Number(rawResolvedTime)
-        : Date.now();
+      const resolvedTime = Number(
+        interaction.time.resolved ?? interaction.time.updated,
+      );
       const response = syntheticTextMessage(
         "system",
         resolvedTime,
@@ -145,93 +141,139 @@ function buildUserContextMessages(): any[] {
   return msgs;
 }
 
-// ── Public: conversationMessages ──
+// ── Public: split conversation slices ──
+//
+// The conversation view is the merge of three independent data sources:
+//   1. mainMessages()        — message stream (messageStore + board.task.sessionID)
+//   2. userContextMessages() — synthetic user/system bubbles from board state
+//   3. agentCardItems()      — agent / goal cards built by computeAgentCards
+//
+// Splitting them lets each one drive its own createMemo in <Conversation>,
+// so a board-only delta (e.g. goalWorkflows status flip) doesn't force the
+// message stream to be re-filtered, and a new chat message doesn't force
+// agent cards to be re-resolved. Combined with the per-field `applyBoardDelta`
+// in store/board.ts, this restores SolidJS fine-grained reactivity end-to-end:
+// each slice only fires when the data it actually reads has changed.
 
-export function conversationMessages(): any[] {
-  const _t0 = performance.now();
+/** Slice 1 — message-stream filter.
+ *  Reads `messageStore.messages` + `messageStore.showTranscriptDetails` plus
+ *  `boardStore.board.task.sessionID` (via rootTaskSessionID). Independent of
+ *  goalWorkflows, interactions, etc. */
+export function mainMessages(): any[] {
   const allMessages = messageStore.messages || [];
   const rootSID = rootTaskSessionID();
   const showTranscriptDetails = messageStore.showTranscriptDetails;
 
-  // Main conversation messages (non-card channels).
-  const mainMessages: any[] = [];
-
+  const mains: any[] = [];
   for (const msg of allMessages) {
     const channel = msg.info?.channel || classifyMessage(msg, rootSID);
-    if (channel === "main") {
-      mainMessages.push(msg);
-    }
+    if (channel === "main") mains.push(msg);
   }
 
-  // Filter assistant boilerplate when not in transcript detail mode
-  let filteredMain = mainMessages;
-  if (!showTranscriptDetails && filteredMain.length > 0) {
-    filteredMain = filteredMain.filter((message: any) => {
+  if (!showTranscriptDetails && mains.length > 0) {
+    return mains.filter((message: any) => {
       // Backend already filters child session user messages via channel="filtered",
-      // but for messages without _overlay (e.g. synthetic), apply legacy filters
-      const text = (message.parts || []).map((part: any) => part.text || "").join("");
+      // but for messages without _overlay (e.g. synthetic), apply legacy filters.
+      const text = (message.parts || [])
+        .map((part: any) => part.text || "")
+        .join("");
       if (
         text.includes("<assistant-brief>") ||
         text.includes("You are executing a headless coding task")
-      ) return false;
+      )
+        return false;
       return true;
     });
   }
+  return mains;
+}
 
-  // User request + interaction messages from board state
-  const contextMsgs = buildUserContextMessages();
+/** Slice 2 — user request + interaction synthetic bubbles.
+ *  Reads `boardStore.board.task` and `boardStore.board.interactions` only.
+ *  Independent of messageStore and goalWorkflows. */
+export function userContextMessages(): any[] {
+  return buildUserContextMessages();
+}
 
-  // Agent card tree — walk recursively so nested sub-agent cards (e.g. build
-  // under executor) get the same live-proxy resolution and chronological sort
-  // as top-level cards. Messages come directly from the reactive store;
-  // resolveMessage() is a no-op for anything already in messageIndex and only
-  // matters for synthetic live-event messages.
-  const resolveCardTree = (card: any): any => {
-    if (!card) return card;
-    if (card.kind === "goal" && Array.isArray(card.internalCards)) {
-      const children = card.internalCards.map((c: any) => resolveCardTree(c));
-      return { ...card, internalCards: children };
-    }
-    if (card.kind === "agent") {
-      const msgs = Array.isArray(card.messages) ? card.messages.map((m: any) => resolveMessage(m)) : [];
-      msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
-      const children = Array.isArray(card.children) ? card.children.map((c: any) => resolveCardTree(c)) : [];
-      return { ...card, messages: msgs, children };
-    }
-    return card;
-  };
+// Agent card tree — walk recursively so nested sub-agent cards (e.g. build
+// under executor) get the same live-proxy resolution and chronological sort
+// as top-level cards. Messages come directly from the reactive store;
+// resolveMessage() is a no-op for anything already in messageIndex and only
+// matters for synthetic live-event messages.
+function resolveCardTree(card: any): any {
+  if (!card) return card;
+  if (card.kind === "goal" && Array.isArray(card.internalCards)) {
+    const children = card.internalCards.map((c: any) => resolveCardTree(c));
+    return { ...card, internalCards: children };
+  }
+  if (card.kind === "agent") {
+    const msgs = Array.isArray(card.messages)
+      ? card.messages.map((m: any) => resolveMessage(m))
+      : [];
+    msgs.sort((a: any, b: any) => conversationTime(a) - conversationTime(b));
+    const children = Array.isArray(card.children)
+      ? card.children.map((c: any) => resolveCardTree(c))
+      : [];
+    return { ...card, messages: msgs, children };
+  }
+  return card;
+}
 
-  const agentCardMsgs: any[] = [];
+/** Slice 3 — agent / goal cards.
+ *  Reads `messageStore.messagesBySession` + `messageStore.agentEvents` (via
+ *  computeAgentCards) and `boardStore.board.goalWorkflows`. Independent of
+ *  the message stream and interactions. */
+export function agentCardItems(): any[] {
+  const items: any[] = [];
   const computed = computeAgentCards();
-  const currentOrder = computed.order;
-  const currentCards = computed.cards;
-  for (const id of currentOrder) {
-    const card = currentCards[id];
+  for (const id of computed.order) {
+    const card = computed.cards[id];
     if (!card) continue;
     if (card.kind === "agent") {
-      const hasMessages = Array.isArray(card.messages) && card.messages.length > 0;
-      const hasChildren = Array.isArray((card as any).children) && (card as any).children.length > 0;
+      const hasMessages =
+        Array.isArray(card.messages) && card.messages.length > 0;
+      const hasChildren =
+        Array.isArray((card as any).children) &&
+        (card as any).children.length > 0;
       if (!hasMessages && !hasChildren) continue;
     }
-    agentCardMsgs.push(resolveCardTree(card));
+    items.push(resolveCardTree(card));
   }
+  return items;
+}
 
-  const result = [...filteredMain, ...contextMsgs, ...agentCardMsgs].sort(
+/** Pure merger — combines pre-computed slices into the final ordered list.
+ *  Called from <Conversation>'s top-level memo; cheap because all expensive
+ *  work happened in the per-slice memos. */
+export function combineConversation(
+  main: any[],
+  ctx: any[],
+  cards: any[],
+): any[] {
+  const _t0 = performance.now();
+  const result = [...main, ...ctx, ...cards].sort(
     (a: any, b: any) => conversationTime(a) - conversationTime(b),
   );
 
-  // Runtime invariant: IDs must be unique. If this ever fires, something upstream
-  // is emitting the same item twice and <For> will render it twice.
+  // Runtime invariant: IDs must be unique. If this ever fires, something
+  // upstream is emitting the same item twice and <For> will render it twice.
   const _ids = result.map((r: any) => r.info?.id || r.id || "?");
-  const _dupes = _ids.filter((id: string, i: number) => _ids.indexOf(id) !== i);
+  const _dupes = _ids.filter(
+    (id: string, i: number) => _ids.indexOf(id) !== i,
+  );
   if (_dupes.length > 0) {
-    console.error("[overlay] duplicate items in conversationMessages:", _dupes);
+    console.error(
+      "[overlay] duplicate items in combineConversation:",
+      _dupes,
+    );
   }
 
   const _dt = performance.now() - _t0;
   if (_dt > 5) {
-    console.warn(`[perf] conversationMessages: ${_dt.toFixed(1)}ms, ${allMessages.length} msgs`);
+    console.warn(
+      `[perf] combineConversation: ${_dt.toFixed(1)}ms, ${result.length} items`,
+    );
   }
-
   return result;
 }
+

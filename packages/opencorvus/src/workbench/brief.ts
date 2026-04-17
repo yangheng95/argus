@@ -2,11 +2,7 @@ import { Identifier } from "@/id/id"
 import { Memory } from "@/memory"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { Database, desc, eq } from "@/storage/db"
-import {
-  EngineGoalTable,
-  EnginePlanVersionTable,
-  EngineTaskTable,
-} from "@/engine/engine.sql"
+import { EngineGoalTable, EnginePlanVersionTable, EngineTaskTable } from "@/engine"
 import { WorkbenchBriefSnapshotTable, WorkbenchTaskNoteTable } from "./workbench.sql"
 
 const BRIEF_VERSION = "brief-v2"

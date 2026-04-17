@@ -2329,15 +2329,6 @@ body[data-theme="light"] .section-badge {
   font-size: var(--ui-font-control);
 }
 
-.task-failure-alert {
-  background: var(--bad-dim);
-  border-color: rgba(248, 113, 113, 0.15);
-}
-
-.task-failure-alert .interaction-title {
-  color: var(--bad);
-}
-
 .plan-version {
   font-size: var(--ui-font-control);
   color: var(--text-muted);
@@ -5439,211 +5430,10 @@ select.field-input option {
   color: var(--text-muted);
 }
 
-/* ── Interaction alert ── */
-.interaction-alert {
-  margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  background: var(--warn-dim);
-  border: 1px solid rgba(251, 191, 36, 0.15);
-}
-
-
-.interaction-title {
-  font-size: var(--ui-font-title);
-  font-weight: 600;
-  color: var(--warn);
-  margin-bottom: 4px;
-}
-
-
-.interaction-body {
-  font-size: var(--ui-font-body);
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin-bottom: 6px;
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: text;
-}
-
-.interaction-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.interaction-actions .btn {
-  padding: 3px 10px;
-  font-size: var(--ui-font-body);
-}
-
-/* Permission card in conversation: tint toward the info accent to set it
-   apart from question cards (which keep the warn-amber scheme). */
-.interaction-alert-permission {
-  background: var(--accent-dim);
-  border-color: rgba(84, 138, 247, 0.22);
-}
-
-.interaction-alert-permission .interaction-title {
-  color: var(--accent);
-}
-
-.interaction-questions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.interaction-question {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.interaction-question-text {
-  font-size: var(--ui-font-body);
-  font-weight: 600;
-  color: var(--text);
-}
-
-.interaction-options {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 4px 0;
-}
-
-.interaction-option {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: var(--ui-font-body);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.interaction-option input {
-  cursor: pointer;
-}
-
-.interaction-option-label {
-  font-weight: 500;
-}
-
-.interaction-option-desc {
-  color: var(--text-muted);
-  font-size: var(--ui-font-small, 0.85em);
-}
-
-.interaction-custom-input {
-  width: 100%;
-  font-family: inherit;
-  font-size: var(--ui-font-body);
-  padding: 4px 6px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-  background: var(--input-bg, rgba(0, 0, 0, 0.2));
-  color: var(--text);
-  resize: vertical;
-}
-
-/* -- Auto-replied interaction (dimmed) -- */
-.interaction-auto-replied {
-  opacity: 0.65;
-  background: var(--subtle-2);
-  border-color: var(--border);
-}
-
-.interaction-auto-replied .interaction-title {
-  color: var(--text-muted);
-}
-
-.interaction-auto-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: var(--ui-font-control);
-  font-weight: 600;
-  background: var(--accent-dim);
-  color: var(--accent);
-  vertical-align: middle;
-}
-
-.interaction-auto-answer {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  margin-top: 4px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* -- Interaction modal popup -- */
-.interaction-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 9999;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: interactionFadeIn 0.15s ease-out;
-  pointer-events: none;
-}
-
-.interaction-modal {
-  background: var(--dialog-bg);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  padding: 16px 20px;
-  min-width: 320px;
-  max-width: 480px;
-  max-height: 70vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-md);
-  pointer-events: auto;
-}
-
-.interaction-modal-title {
-  font-size: var(--ui-font-heading);
-  font-weight: 700;
-  color: var(--warn);
-  margin-bottom: 8px;
-}
-
-.interaction-modal-body {
-  font-size: var(--ui-font-title);
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin-bottom: 12px;
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: text;
-  max-height: 40vh;
-  overflow-y: auto;
-}
-
-.interaction-modal-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.interaction-modal-actions .btn {
-  padding: 6px 16px;
-  font-size: var(--ui-font-title);
-}
-
-@keyframes interactionFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* Interaction cards (permission / question) live in styles/card.css under
+   `.interaction-card`. Their old `.interaction-alert*` selectors and the
+   never-rendered `.interaction-modal-*`, `.interaction-auto-*` blocks were
+   removed during the unified card-system migration. */
 
 /* ── Delivery summary ── */
 .delivery-card {
@@ -8666,7 +8456,6 @@ body[data-theme="light"] {
 .criteria-group,
 .eval-error,
 .delivery-card,
-.interaction-alert,
 .dialog-form,
 .config-area,
 .config-section,
@@ -8682,7 +8471,6 @@ body[data-theme="light"] {
 .criteria-group,
 .eval-error,
 .delivery-card,
-.interaction-alert,
 .config-section,
 .config-subsection,
 .channel-doc-card,
@@ -8753,7 +8541,6 @@ body[data-theme="light"] {
 .criteria-group,
 .eval-error,
 .delivery-card,
-.interaction-alert,
 .extension-row,
 .channel-doc-card,
 .detail-card,
@@ -8764,7 +8551,6 @@ body[data-theme="light"] {
 .goal-desc,
 .goal-criteria,
 .change-path,
-.interaction-body,
 .eval-summary,
 .eval-error-detail,
 .delivery-summary,
@@ -8784,7 +8570,6 @@ body[data-theme="light"] {
 .sections .goal-desc,
 .sections .goal-criteria,
 .sections .change-path,
-.sections .interaction-body,
 .sections .eval-summary,
 .sections .eval-error-detail,
 .sections .delivery-summary,
@@ -9355,7 +9140,6 @@ body[data-theme="light"] .tech-sweep {
 .criteria-group,
 .eval-error,
 .delivery-card,
-.interaction-alert,
 .extension-row,
 .channel-doc-card,
 .detail-card,
@@ -9630,6 +9414,8 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   align-items: flex-start;
   gap: 0;
   flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
   padding: calc(2px * var(--ui-scale)) 0 0;
 }
 .wf-step {
@@ -9642,13 +9428,17 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   font-weight: 500;
   background: transparent;
   border-radius: 0;
-  white-space: nowrap;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   transition: color 0.2s;
 }
 .wf-step-label {
   line-height: 1;
   color: var(--text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: color 0.2s, font-weight 0.2s;
 }
 .wf-step-dot {

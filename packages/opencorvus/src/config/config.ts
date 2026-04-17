@@ -19,7 +19,7 @@ import {
   parse as parseJsonc,
   printParseErrorCode,
 } from "jsonc-parser"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
 import { Installation } from "@/installation"
@@ -86,7 +86,7 @@ export namespace Config {
     return merged
   }
 
-  export const state = Instance.state(async () => {
+  export const state = lazyInstanceState(async () => {
     const auth = await Auth.all()
 
     // Config loading order (low -> high precedence): https://opencorvus.ai/docs/config#precedence-order

@@ -8,6 +8,8 @@ import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { Scheduler } from "../scheduler"
+import { FileDiff as _FileDiff, Patch as _Patch } from "./types"
+import type { FileDiff as _FileDiffType, Patch as _PatchType } from "./types"
 
 export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
@@ -95,11 +97,12 @@ export namespace Snapshot {
     }
   }
 
-  export const Patch = z.object({
-    hash: z.string(),
-    files: z.string().array(),
-  })
-  export type Patch = z.infer<typeof Patch>
+  // Re-exported from ./types so schema-only consumers (engine/store, engine/model)
+  // can import directly from "@/snapshot/types" without pulling in the runtime
+  // surface (Scheduler, Instance, file I/O). External callers using the
+  // `Snapshot.Patch` namespace form keep working unchanged.
+  export const Patch = _Patch
+  export type Patch = _PatchType
 
   export async function patch(hash: string): Promise<Patch> {
     const git = gitdir()
@@ -220,19 +223,9 @@ export namespace Snapshot {
     }
   }
 
-  export const FileDiff = z
-    .object({
-      file: z.string(),
-      before: z.string(),
-      after: z.string(),
-      additions: z.number(),
-      deletions: z.number(),
-      status: z.enum(["added", "deleted", "modified"]).optional(),
-    })
-    .meta({
-      ref: "FileDiff",
-    })
-  export type FileDiff = z.infer<typeof FileDiff>
+  // Re-exported from ./types — see Patch above for rationale.
+  export const FileDiff = _FileDiff
+  export type FileDiff = _FileDiffType
   export async function diffFull(from: string, to: string): Promise<FileDiff[]> {
     const git = gitdir()
     const result: FileDiff[] = []

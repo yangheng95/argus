@@ -1,8 +1,12 @@
 # new-arch.svg 同步工作文档
 
-> 目的：把当前 `packages/opencorvus/src/` 的真实架构折叠成三张 mental model，
-> 作为后续改 `new-arch.svg`（或拆分 Markdown）的基线。
-> 阶段 1 产出（概念对齐），尚未动 SVG。
+> ⚠️ **历史笔记** — 本文档是 2026-04-10 左右拆分 MD 方案前的概念对齐草稿，
+> 其中的"Gateway Agent / channel_key / build-dispatch.ts / orchestrator.sql.ts"等
+> 已在后续重构中替换或删除。请以 [01-agents.md](01-agents.md) · [02-data.md](02-data.md) ·
+> [03-control.md](03-control.md) 为准。保留此文件仅作为演进记录。
+>
+> 目的（历史）：把当时 `packages/opencorvus/src/` 的真实架构折叠成三张 mental model，
+> 作为后续改 `new-arch.svg`（或拆分 Markdown）的基线。阶段 1 产出（概念对齐），尚未动 SVG。
 
 ---
 

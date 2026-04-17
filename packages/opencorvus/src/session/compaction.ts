@@ -15,6 +15,7 @@ import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { ProviderTransform } from "@/provider/transform"
 import { MemoryFlush } from "@/memory/flush"
+import { resolveModelRef } from "@/agent/model"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -108,9 +109,8 @@ export namespace SessionCompaction {
   }) {
     const userMessage = input.messages.findLast((m) => m.info.id === input.parentID)!.info as Message.User
     const agent = await Agent.get("compaction")
-    const model = agent.model
-      ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
-      : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
+    const userModel = await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
+    const model = await resolveModelRef(agent.model, userModel)
     const msg = (await Session.updateMessage({
       id: Identifier.ascending("message"),
       role: "assistant",

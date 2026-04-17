@@ -23,12 +23,11 @@ import { toolGuard } from "@/util/tool-guard"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
-import { EngineConfig } from "@/engine/config"
-import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
+import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
 import { AttachmentStore } from "@/storage/attachment-store"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks/types"
+import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks"
 
 const log = Log.create({ service: "delivery-agent" })
 
@@ -158,7 +157,7 @@ export namespace DeliveryAgent {
           taskID: input.task.id,
           stage: "delivery",
           signal: AbortSignal.any(abortSignals),
-          onStepFinish: guard.onStepFinish as any,
+          onStepFinish: guard.onStepFinish,
           hooks: passthroughHooks,
           policies: {
             progressTimeoutMs: deliveryCfg.timeout_ms,

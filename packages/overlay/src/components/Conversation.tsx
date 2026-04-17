@@ -3,7 +3,12 @@ import { Card } from "./Card";
 import { toCardTree } from "../utils/card-tree";
 import type { CardNode } from "../utils/card-tree";
 import { t } from "../utils/i18n";
-import { conversationMessages } from "../utils/conversation";
+import {
+  mainMessages,
+  userContextMessages,
+  agentCardItems,
+  combineConversation,
+} from "../utils/conversation";
 import { setupAutoScroll } from "../utils/dom-utils";
 
 // ── Conversation Component ──
@@ -30,7 +35,17 @@ function collectAllIDs(nodes: CardNode[], out: string[] = []): string[] {
 export function Conversation(props: { container: HTMLElement }) {
   const el = props.container;
 
-  const items = createMemo(() => conversationMessages());
+  // Three independent slices, each backed by its own createMemo so that
+  // - a chat-message arrival only re-runs `main` (not the agent-card path);
+  // - a board.interactions delta only re-runs `ctx`;
+  // - a goalWorkflows status flip only re-runs `cards`.
+  // The combine memo is cheap (merge + sort by time) and reuses element
+  // references from upstream when those slices haven't changed, so the
+  // downstream toCardTree memo also sees stable inputs in the no-change case.
+  const main = createMemo(() => mainMessages());
+  const ctx = createMemo(() => userContextMessages());
+  const cards = createMemo(() => agentCardItems());
+  const items = createMemo(() => combineConversation(main(), ctx(), cards()));
   const tree = createMemo(() => toCardTree(items()));
 
   // ── Runtime duplicate detector ──

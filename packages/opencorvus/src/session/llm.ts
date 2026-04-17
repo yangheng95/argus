@@ -42,7 +42,12 @@ export namespace LLM {
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
 
-  export async function stream(input: StreamInput) {
+  export type StreamResult = StreamTextResult<ToolSet, unknown> & {
+    pauseInactivityTimer: (() => void) | undefined
+    resumeInactivityTimer: (() => void) | undefined
+  }
+
+  export async function stream(input: StreamInput): Promise<StreamResult> {
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -283,11 +288,11 @@ export namespace LLM {
         },
       },
     })
-    // Expose inactivity timer control so the processor can pause the timer
-    // during tool execution (tools like bash/bun test can run for minutes).
-    ;(result as any).pauseInactivityTimer = clearInactivityTimer
-    ;(result as any).resumeInactivityTimer = resetInactivityTimer
-    return result
+    const streamResult: StreamResult = Object.assign(result, {
+      pauseInactivityTimer: clearInactivityTimer,
+      resumeInactivityTimer: resetInactivityTimer,
+    })
+    return streamResult
   }
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {

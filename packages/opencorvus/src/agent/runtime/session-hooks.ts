@@ -14,7 +14,7 @@
  */
 import type { TextHooks } from "@/llm/api"
 import { Session } from "@/session"
-import { Message } from "@/session/message"
+import { Message } from "@/session"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { normalizeToolInput, normalizeToolOutput } from "./protocol-norm"

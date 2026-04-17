@@ -1,7 +1,9 @@
 # 05 — Unified Config
 
-> 对应代码：`src/config/config.ts` · `src/engine/config.ts` · `overlay/src/stores/app.ts` ·
-> `src/panel/` (注：`panel/settings.ts` 已按本文档删除)
+> 对应代码：`src/config/config.ts` · `src/engine/config.ts` ·
+> `packages/overlay/src/store/` · `src/panel/capability.ts`
+> （注：旧 `src/panel/settings.ts` 和 `src/panel/api.ts` 均已删除；`src/panel/` 当前只剩
+> `capability.ts` — 见 [03-control.md](03-control.md) 对话层 action 白名单）
 
 ## 统一设计 — 三层分离
 
@@ -57,13 +59,14 @@ experimental: unattended · auto_permission · auto_question · batch_tool
 
 ## 已删除的内容（本方案执行后）
 
-| 项 | 代码路径 | 原因 |
+| 项 | 代码路径 | 状态 |
 |---|---|---|
-| `PanelSettings` namespace | `panel/settings.ts`（整体删除） | 第三套存储，字段与 Config/Overlay 重叠 |
-| `syncUnattendedConfig()` | `overlay/src/services/config.ts` | 不再需要双向同步 |
-| localStorage keys | `oc_unattended` · `oc_auto_permission` · `oc_auto_question` | 改读 server config |
-| Overlay `updateConfig()` 全量替换 | 改为 partial diff | 避免 GET→clone→mutate→PATCH 模式 |
-| 死字段 | `spec{}` · `max_replans` · `same_plan_retry_limit` · `stage_max_retries` | schema 废弃 |
+| `PanelSettings` namespace | ~~`panel/settings.ts`~~ | 已删除 |
+| `panel/api.ts` | ~~`panel/api.ts`~~ | 已删除（路由由 `server/routes/panel.ts` 承担） |
+| `syncUnattendedConfig()` | `overlay/src/services/config.ts` | 已移除双向同步 |
+| localStorage keys `oc_unattended` · `oc_auto_permission` · `oc_auto_question` | overlay | 改读 server config |
+| Overlay `updateConfig()` 全量替换 | overlay | 改为 partial diff |
+| 死字段 `spec{}` · `max_replans` · `same_plan_retry_limit` · `stage_max_retries` | config schema | 已废弃 |
 
 ## 数据流（重设计后）
 

@@ -1,7 +1,7 @@
 import z from "zod"
 import { Tool } from "./tool"
 import { TuiRuntime } from "@/tui/runtime"
-import { SessionStatus } from "@/session/status"
+import { SessionStatus } from "@/session"
 import { TuiCommand } from "@/tui/command"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import { Bus } from "@/bus"

@@ -20,7 +20,7 @@ import {
   type WorkspaceView,
 } from "./components/WorkspacePanel";
 import { initApp } from "./services/init";
-import { loadTasks, boardStore, loadBoard, setBoardStore } from "./store/board";
+import { loadTasks, boardStore, loadBoard, setBoardStore, setBoardData } from "./store/board";
 import {
   messageStore,
   setAgentEvents,
@@ -91,7 +91,12 @@ import { installInlineLlmConfig, refreshInlineLlmConfig } from "./services/llm-i
 import { loadConversation } from "./store/messages";
 import { executorSelectable, executorCurrentModel, setExecutorModel } from "./services/executor";
 import { syncExecutorWidth } from "./services/window";
-import { conversationMessages } from "./utils/conversation";
+import {
+  mainMessages,
+  userContextMessages,
+  agentCardItems,
+  combineConversation,
+} from "./utils/conversation";
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -217,7 +222,7 @@ function installGlobalBridges(): void {
       return true;
     }
     if (prop === "board") {
-      setBoardStore("board", value as any);
+      setBoardData(value as any);
       return true;
     }
     if (prop === "tasks") {
@@ -297,7 +302,8 @@ function installGlobalBridges(): void {
       };
     },
   });
-  (window as any).renderConversation = () => conversationMessages();
+  (window as any).renderConversation = () =>
+    combineConversation(mainMessages(), userContextMessages(), agentCardItems());
   (window as any).applyDirectory = applyDirectory;
   (window as any).loadTasks = loadTasks;
   (window as any).selectTask = selectTask;
@@ -469,34 +475,6 @@ if (boardEl) {
             await loadBoard({ sync: true });
           } catch (e) {
             console.error("Failed to delete goal", e);
-          }
-        }}
-        onResolveInteraction={async (id, action) => {
-          try {
-            await apiJson(`interaction/${id}/reply`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reply: action }),
-              signal: AbortSignal.timeout(30_000),
-            });
-          } catch (err) {
-            console.error("[main] resolveInteraction failed", err);
-          } finally {
-            await loadBoard();
-          }
-        }}
-        onRejectInteraction={async (id) => {
-          try {
-            await apiJson(`interaction/${id}/reject`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({}),
-              signal: AbortSignal.timeout(30_000),
-            });
-          } catch (err) {
-            console.error("[main] rejectInteraction failed", err);
-          } finally {
-            await loadBoard();
           }
         }}
       />
@@ -712,9 +690,9 @@ if (providersConfigBody) {
 // which hangs the WebView when Basic auth is configured.
 
 // ── Mount: PermissionAutoResolver (headless) ──
-// Permission cards render inline in the conversation via
-// InteractionPermissionPart. This mount only drives auto-approval when
-// experimental.auto_permission is enabled — it renders nothing.
+// Permission cards render inline in the conversation via InteractionCard.
+// This mount only drives auto-approval when experimental.auto_permission
+// is enabled — it renders nothing.
 
 const interactionMountEl = document.getElementById("solidInteractionMount");
 if (interactionMountEl) {
@@ -1129,9 +1107,9 @@ disposers.push(createRoot((dispose) => {
   }, 1000);
   onCleanup(() => clearInterval(elapsedInterval));
 
- // interactionBridge.renderInteractions removed — inline conversation
- // cards (InteractionQuestionPart / InteractionPermissionPart) render the
- // UI and PermissionAutoResolver handles auto-approval.
+ // interactionBridge.renderInteractions removed — the unified InteractionCard
+ // renders the UI in both inline conversation and sidebar surfaces, and
+ // PermissionAutoResolver handles auto-approval.
 
   createEffect(() => {
     settingsStore.locale;

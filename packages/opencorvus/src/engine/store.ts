@@ -3,7 +3,7 @@ import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Database, NotFoundError, and, asc, desc, eq, inArray, isNull, like, lt, sql } from "@/storage/db"
 import type { SQL } from "@/storage/db"
-import { Snapshot } from "@/snapshot"
+import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { EvaluationCheck } from "./model"
 import {
   EngineArtifactTable,
@@ -974,7 +974,7 @@ function arrayOfStrings(input: unknown) {
 function arrayOfDiffs(input: unknown) {
   if (!Array.isArray(input)) return []
   return input.flatMap((item) => {
-    const parsed = Snapshot.FileDiff.safeParse(item)
+    const parsed = SnapshotFileDiff.safeParse(item)
     return parsed.success ? [parsed.data] : []
   })
 }

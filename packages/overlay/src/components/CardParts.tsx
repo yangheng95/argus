@@ -2,8 +2,7 @@ import { For, Switch, Match, Show } from "solid-js";
 import { TextPart } from "./TextPart";
 import { ReasoningPart, isEmptyReasoning } from "./ReasoningPart";
 import { InlineToolPart } from "./InlineToolPart";
-import { InteractionQuestionPart } from "./InteractionQuestionPart";
-import { InteractionPermissionPart } from "./InteractionPermissionPart";
+import { InteractionCard } from "./InteractionCard";
 import { Card } from "./Card";
 import { shouldPromoteTool, type CardNode } from "../utils/card-tree";
 import { stamp } from "../utils/time";
@@ -96,11 +95,14 @@ export function CardParts(props: { parts: any[]; depth: number }) {
           <Match when={part.type === "file"}>
             <div innerHTML={renderFilePart(part)} />
           </Match>
-          <Match when={part.type === "interaction-question" && part.interaction}>
-            <InteractionQuestionPart interaction={part.interaction} />
-          </Match>
-          <Match when={part.type === "interaction-permission" && part.interaction}>
-            <InteractionPermissionPart interaction={part.interaction} />
+          <Match
+            when={
+              (part.type === "interaction-question" ||
+                part.type === "interaction-permission") &&
+              part.interaction
+            }
+          >
+            <InteractionCard interaction={part.interaction} />
           </Match>
           <Match when={part.type === "subtask"}>
             <div class="msg-tool">

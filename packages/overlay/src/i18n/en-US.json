@@ -507,7 +507,6 @@
   "task.none": "No tasks yet",
   "task.project.unknown": "Unassigned project",
   "task.status.active": "Active",
-  "task.status.blocked": "Blocked",
   "task.status.cancelled": "Cancelled",
   "task.status.completed": "Completed",
   "task.status.delivering": "Delivering",

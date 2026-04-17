@@ -75,6 +75,100 @@ function boardSnapshot(board: any): string {
   return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
 }
 
+// ── Fine-grained board update ──
+//
+// The server returns the entire board object on every refresh; replacing
+// `boardStore.board` wholesale (`setBoardStore("board", data)`) bypasses
+// SolidJS's fine-grained reactivity contract — every memo that reads any
+// `boardStore.board.*` field gets invalidated, even when only one field
+// (e.g. `goalWorkflows[i].steps[j].status`) actually changed.
+//
+// `applyBoardDelta` performs a per-field shallow JSON diff and only writes
+// back the keys whose serialised value differs. Downstream memos that read
+// only unchanged fields (interactions, task, etc.) stop firing on dense
+// `workflow.*` SSE bursts that mutate just one corner of the tree.
+//
+// JSON.stringify is acceptable because typical board fields are small (KB
+// scale) and the diff cost is amortised against the recompute work it
+// avoids — `computeAgentCards` and the conversation-slice memos are tens of
+// ms vs sub-ms per-field stringify.
+
+function fieldChanged(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return false;
+  if (a === undefined || b === undefined) return true;
+  return JSON.stringify(a) !== JSON.stringify(b);
+}
+
+// ── Boundary invariants ──
+//
+// The board snapshot from the server must satisfy a small set of structural
+// invariants so that downstream view code (`buildUserContextMessages`,
+// `computeAgentCards`, the conversation slices) can trust its inputs without
+// defensive `?? Date.now()` / `?? 0` fallbacks. Any violation is a real bug
+// (server payload corruption or schema drift) that must surface, not be
+// papered over here. We throw — `loadBoard`'s catch will retry with backoff
+// and console.error makes the corruption visible.
+function assertBoardInvariants(data: any): void {
+  if (data == null) return;
+  if (typeof data !== "object") {
+    throw new Error(`board payload must be object, got ${typeof data}`);
+  }
+  const task = (data as any).task;
+  if (task) {
+    const created = task?.time?.created;
+    if (!Number.isFinite(created) || created <= 0) {
+      throw new Error(
+        `board.task.time.created invalid: ${JSON.stringify(task?.time)}`,
+      );
+    }
+  }
+  const interactions = (data as any).interactions;
+  if (Array.isArray(interactions)) {
+    for (const it of interactions) {
+      const created = it?.time?.created;
+      if (!Number.isFinite(created) || created <= 0) {
+        throw new Error(
+          `board.interactions[id=${it?.id}].time.created invalid: ${JSON.stringify(it?.time)}`,
+        );
+      }
+      if (it?.status === "answered" || it?.status === "rejected") {
+        const resolved = it?.time?.resolved ?? it?.time?.updated;
+        if (!Number.isFinite(resolved) || resolved <= 0) {
+          throw new Error(
+            `board.interactions[id=${it?.id}] resolved/rejected without valid time.resolved|updated: ${JSON.stringify(it?.time)}`,
+          );
+        }
+      }
+    }
+  }
+}
+
+function applyBoardDelta(data: any): void {
+  if (data == null || typeof data !== "object") {
+    if (boardStore.board !== null) setBoardStore("board", null);
+    return;
+  }
+  const old = boardStore.board;
+  if (!old || typeof old !== "object") {
+    setBoardStore("board", data);
+    return;
+  }
+  // Update keys present in the new payload, only when their content changed.
+  const seenKeys = new Set<string>();
+  for (const key of Object.keys(data)) {
+    seenKeys.add(key);
+    if (fieldChanged((old as any)[key], data[key])) {
+      setBoardStore("board", key as any, data[key]);
+    }
+  }
+  // Drop keys the server no longer reports — set to undefined so reactive
+  // readers see the field disappear instead of holding a stale value.
+  for (const key of Object.keys(old)) {
+    if (seenKeys.has(key)) continue;
+    setBoardStore("board", key as any, undefined);
+  }
+}
+
 function clearBoardRetry(): void {
   if (_boardRetryTimer) {
     clearTimeout(_boardRetryTimer);
@@ -141,7 +235,8 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
         clearBoardRetry();
         return;
       }
-      setBoardStore("board", data ?? null);
+      assertBoardInvariants(data);
+      applyBoardDelta(data);
       setSnapshotVersion(boardSnapshot(data));
       if (Number.isFinite(lastSequence) && lastSequence > 0) {
         setTaskSequence(lastSequence);
@@ -230,7 +325,8 @@ export function clearBoard(): void {
 // ── Direct setters (used by / SSE handlers) ──
 
 export function setBoardData(data: any): void {
-  setBoardStore("board", data ?? null);
+  assertBoardInvariants(data);
+  applyBoardDelta(data);
 }
 
 export function setTasksData(tasks: any[]): void {

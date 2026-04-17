@@ -15,9 +15,9 @@
 ### 详细文档（MD）
 | 文件 | 主题 | 对应旧 SVG Section |
 |---|---|---|
-| [01-agents.md](01-agents.md) | Agent 家族、调用链、Gateway / build-dispatch 分叉 | A · C · H · I |
-| [02-data.md](02-data.md) | DB 表清单、Trace 横切、Decision Log | C · D · K |
-| [03-control.md](03-control.md) | Channel / Gateway 路由、Bus、control-plane | L + 新 |
+| [01-agents.md](01-agents.md) | Agent 家族、Task Control Loop、MiniWorkflow（direct/pipeline）、task kind | A · C · H · I |
+| [02-data.md](02-data.md) | `engine_*` 18 表、session 域、Trace/Bus 横切、Decision Log | C · D · K |
+| [03-control.md](03-control.md) | ChannelIngress · ControlMessage · Panel Capability 路由 | L + 新 |
 | [04-extensions.md](04-extensions.md) | Executor / Plugin / MCP / ACP 四条扩展入口 | G（扩展） |
 | [05-config.md](05-config.md) | Unified Config 三层分离 + PATCH 流程 | F |
 | [06-provider.md](06-provider.md) | LLM Provider 六层适配 | G |
@@ -34,9 +34,11 @@
 
 拆分完成后 `new-arch.svg` 只保留三张图：
 
-1. **Agent 家族调用链**（图 1）—— Gateway → Orchestrator → Orchestrator → sub-agents
-2. **数据面**（图 2）—— orchestrator 18 表 + 横切 Trace/Bus
-3. **控制面 + 扩展入口**（图 3）—— channel/bus/control-plane + executor/plugin/mcp/acp
+1. **Agent 家族调用链**（图 1）—— ChannelIngress / ControlMessage → EngineService → Orchestrator → sub-agents
+2. **数据面**（图 2）—— `engine_*` 18 表 + 横切 Trace/Bus
+3. **控制面 + 扩展入口**（图 3）—— channel/control/panel-capability + executor/plugin/mcp/acp
+
+> SVG 框图（01/02/03-*.svg）尚未根据本轮重构更新；以 MD 为准。
 
 详细文字全部迁到上表的 MD。SVG 不再承载大段描述。
 
@@ -67,3 +69,9 @@
 - [x] 工作笔记归入 `00-sync-notes.md`
 - [x] 05-config.md · 06-provider.md · 07-panel.md · 99-principles.md 全部填充
 - [x] `src/calculator/` 已删除（零消费者，git rm）
+- [x] 2026-04-17 同步：`orchestrator/` → `engine/` · `task-agent/` → `orchestrator/` ·
+      `orchestrator/service.ts` → `task-api/index.ts` · `evaluator/` → `delivery/checks/` ·
+      `control-plane/` 拆并入 `workspace/` + `util/sse.ts` · `gateway/` 整删 ·
+      `session.channel_key` + `session_gateway_singleton_idx` 移除 ·
+      `panel/api.ts` + `panel/settings.ts` 移除
+- [ ] 新 SVG 三张总览图按最新 MD 重绘（暂未做）

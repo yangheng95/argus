@@ -4,7 +4,7 @@ import { mergeDeep, unique } from "remeda"
 import { Config } from "./config"
 import { ConfigPaths } from "./paths"
 import { TuiInfo } from "./tui-schema"
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { Global } from "@/global"
@@ -24,7 +24,7 @@ export namespace TuiConfig {
     return Flag.OPENCORVUS_TUI_CONFIG
   }
 
-  const state = Instance.state(async () => {
+  const state = lazyInstanceState(async () => {
     const projectFiles = Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
       ? []
       : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)

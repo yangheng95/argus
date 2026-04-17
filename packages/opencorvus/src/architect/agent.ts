@@ -22,7 +22,7 @@ import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
-import { EngineConfig } from "@/engine/config"
+import { EngineConfig } from "@/engine"
 import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
@@ -122,7 +122,7 @@ async function run(input: {
     taskID: input.taskID,
     stage: "architect",
     signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish as any,
+    onStepFinish: guard.onStepFinish,
     hooks: passthroughHooks,
     policies: {
       progressTimeoutMs: TIMEOUT_MS,

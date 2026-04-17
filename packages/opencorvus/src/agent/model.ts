@@ -24,8 +24,8 @@
 import { Agent } from "./agent"
 import { Config } from "@/config/config"
 import { Provider } from "@/provider/provider"
-import { Message } from "@/session/message"
-import { findTask } from "@/engine/store"
+import { Message } from "@/session"
+import { findTask } from "@/engine"
 
 type ModelRef = {
   providerID: string
@@ -115,4 +115,17 @@ export async function resolveConfiguredModelRef(): Promise<ModelRef> {
   const configured = await configuredModel()
   if (configured) return configured
   return Provider.defaultModel()
+}
+
+/**
+ * Resolve a Provider.Model from an optional explicit ref, falling back to the
+ * supplied default. Centralizes the "task.model ? getModel(...) : fallback"
+ * pattern used in subtask dispatch and compaction.
+ */
+export async function resolveModelRef(
+  ref: { providerID: string; modelID: string } | undefined | null,
+  fallback: Provider.Model,
+): Promise<Provider.Model> {
+  if (!ref) return fallback
+  return Provider.getModel(ref.providerID, ref.modelID)
 }

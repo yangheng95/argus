@@ -3,9 +3,9 @@ import { BusEvent } from "@/bus/bus-event"
 import { ExecutorName } from "@/executor/contract"
 import { ProtocolCapabilities, ProtocolRefs, ProtocolSettings } from "@/executor/protocol"
 import { Identifier } from "@/id/id"
-import { PermissionNext } from "@/permission/next"
-import { Question } from "@/question"
-import { Snapshot } from "@/snapshot"
+import { Reply as PermissionReply } from "@/permission/types"
+import { Answer as QuestionAnswer } from "@/question/types"
+import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 
 /** Task statuses that indicate a terminal or notable state change worth mirroring to channels. */
 export const TASK_TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const
@@ -432,7 +432,7 @@ export const Delivery = z.object({
   result: z.object({
     summary: z.string(),
     changedFiles: z.string().array(),
-    diffs: Snapshot.FileDiff.array(),
+    diffs: SnapshotFileDiff.array(),
     artifacts: z
       .array(
         z.object({
@@ -499,10 +499,10 @@ export const Progress = z.object({
 })
 
 export const ReplyInteractionInput = z.object({
-  reply: PermissionNext.Reply.optional(),
+  reply: PermissionReply.optional(),
   autoReply: z.boolean(),
   message: z.string().optional(),
-  answers: z.array(Question.Answer).optional(),
+  answers: z.array(QuestionAnswer).optional(),
 })
 
 export const RejectInteractionInput = z.object({

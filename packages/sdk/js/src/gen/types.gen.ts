@@ -18,6 +18,303 @@ export type EventInstallationUpdateAvailable = {
   }
 }
 
+export type EventAgentUpdated = {
+  type: "agent.updated"
+  properties: {
+    taskID: string
+    runID?: string
+    stage: string
+    kind: string
+    id?: string
+    toolName?: string
+    text?: string
+    summary: string
+  }
+}
+
+export type EventTaskCreated = {
+  type: "task.created"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventTaskUpdated = {
+  type: "task.updated"
+  properties: {
+    taskID: string
+    status: "queued" | "active" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventSpecCreated = {
+  type: "spec.created"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventSpecUpdated = {
+  type: "spec.updated"
+  properties: {
+    taskID: string
+    specID: string
+    status: string
+    summary: string
+  }
+}
+
+export type EventSpecApproved = {
+  type: "spec.approved"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventPlanCreated = {
+  type: "plan.created"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventPlanActivated = {
+  type: "plan.activated"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventGoalProgress = {
+  type: "goal.progress"
+  properties: {
+    taskID: string
+    goalRunID: string
+    summary: string
+  }
+}
+
+export type EventGoalPassed = {
+  type: "goal.passed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventGoalFailed = {
+  type: "goal.failed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventMilestoneActivated = {
+  type: "milestone.activated"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestonePassed = {
+  type: "milestone.passed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventMilestoneFailed = {
+  type: "milestone.failed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventRunCreated = {
+  type: "run.created"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventRunUpdated = {
+  type: "run.updated"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventInteractionRequested = {
+  type: "interaction.requested"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    requestType: "permission" | "question"
+    summary: string
+  }
+}
+
+export type EventInteractionResolved = {
+  type: "interaction.resolved"
+  properties: {
+    taskID: string
+    runID?: string
+    interactionID: string
+    status: "pending" | "answered" | "rejected" | "expired"
+    summary: string
+  }
+}
+
+export type EventDeliveryReady = {
+  type: "delivery.ready"
+  properties: {
+    taskID: string
+    runID: string
+    deliveryID: string
+    summary: string
+  }
+}
+
+export type EventEvaluationCompleted = {
+  type: "evaluation.completed"
+  properties: {
+    taskID: string
+    runID: string
+    evaluationID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  }
+}
+
+export type EventTaskMessage = {
+  type: "task.message"
+  properties: {
+    taskID: string
+    kind: "goal" | "plan" | "note"
+    source: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventRunProgress = {
+  type: "run.progress"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    summary: string
+    payload?: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type EventRunOutput = {
+  type: "run.output"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    text: string
+  }
+}
+
+export type EventMessageInjected = {
+  type: "message.injected"
+  properties: {
+    taskID: string
+    runID: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventWorkflowSelected = {
+  type: "workflow.selected"
+  properties: {
+    taskID: string
+    workflowID: string
+    workflowName: string
+    summary: string
+  }
+}
+
+export type EventWorkflowStepUpdated = {
+  type: "workflow.step.updated"
+  properties: {
+    taskID: string
+    stepID: string
+    goalID?: string
+    status: "pending" | "running" | "completed" | "skipped" | "failed"
+    summary: string
+  }
+}
+
+export type EventGoalWorkflowProgress = {
+  type: "goal.workflow.progress"
+  properties: {
+    taskID: string
+    goalID: string
+    completedSteps: number
+    totalSteps: number
+    currentStep?: string
+    summary: string
+  }
+}
+
+export type EventRequirementsCompleted = {
+  type: "requirements.completed"
+  properties: {
+    taskID: string
+    requirementCount: number
+    goalCount: number
+    decisionCount: number
+    traceabilityCount: number
+    fidelityScore?: number
+    summary: string
+  }
+}
+
+export type EventArchitectCompleted = {
+  type: "architect.completed"
+  properties: {
+    taskID: string
+    contractCount: number
+    categories: Array<string>
+    blueprintSummary?: string
+    summary: string
+  }
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -833,303 +1130,6 @@ export type EventTaskPlanUpdated = {
   }
 }
 
-export type EventAgentUpdated = {
-  type: "agent.updated"
-  properties: {
-    taskID: string
-    runID?: string
-    stage: string
-    kind: string
-    id?: string
-    toolName?: string
-    text?: string
-    summary: string
-  }
-}
-
-export type EventTaskCreated = {
-  type: "task.created"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventTaskUpdated = {
-  type: "task.updated"
-  properties: {
-    taskID: string
-    status: "queued" | "active" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventSpecCreated = {
-  type: "spec.created"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventSpecUpdated = {
-  type: "spec.updated"
-  properties: {
-    taskID: string
-    specID: string
-    status: string
-    summary: string
-  }
-}
-
-export type EventSpecApproved = {
-  type: "spec.approved"
-  properties: {
-    taskID: string
-    specID: string
-    summary: string
-  }
-}
-
-export type EventPlanCreated = {
-  type: "plan.created"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventPlanActivated = {
-  type: "plan.activated"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventGoalProgress = {
-  type: "goal.progress"
-  properties: {
-    taskID: string
-    goalRunID: string
-    summary: string
-  }
-}
-
-export type EventGoalPassed = {
-  type: "goal.passed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventGoalFailed = {
-  type: "goal.failed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventMilestoneActivated = {
-  type: "milestone.activated"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestonePassed = {
-  type: "milestone.passed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventMilestoneFailed = {
-  type: "milestone.failed"
-  properties: {
-    taskID: string
-    milestoneID: string
-    summary: string
-  }
-}
-
-export type EventRunCreated = {
-  type: "run.created"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventRunUpdated = {
-  type: "run.updated"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventInteractionRequested = {
-  type: "interaction.requested"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    requestType: "permission" | "question"
-    summary: string
-  }
-}
-
-export type EventInteractionResolved = {
-  type: "interaction.resolved"
-  properties: {
-    taskID: string
-    runID?: string
-    interactionID: string
-    status: "pending" | "answered" | "rejected" | "expired"
-    summary: string
-  }
-}
-
-export type EventDeliveryReady = {
-  type: "delivery.ready"
-  properties: {
-    taskID: string
-    runID: string
-    deliveryID: string
-    summary: string
-  }
-}
-
-export type EventEvaluationCompleted = {
-  type: "evaluation.completed"
-  properties: {
-    taskID: string
-    runID: string
-    evaluationID: string
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  }
-}
-
-export type EventTaskMessage = {
-  type: "task.message"
-  properties: {
-    taskID: string
-    kind: "goal" | "plan" | "note"
-    source: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventRunProgress = {
-  type: "run.progress"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    summary: string
-    payload?: {
-      [key: string]: unknown
-    }
-  }
-}
-
-export type EventRunOutput = {
-  type: "run.output"
-  properties: {
-    taskID: string
-    runID: string
-    type: string
-    text: string
-  }
-}
-
-export type EventMessageInjected = {
-  type: "message.injected"
-  properties: {
-    taskID: string
-    runID: string
-    text: string
-    summary: string
-  }
-}
-
-export type EventWorkflowSelected = {
-  type: "workflow.selected"
-  properties: {
-    taskID: string
-    workflowID: string
-    workflowName: string
-    summary: string
-  }
-}
-
-export type EventWorkflowStepUpdated = {
-  type: "workflow.step.updated"
-  properties: {
-    taskID: string
-    stepID: string
-    goalID?: string
-    status: "pending" | "running" | "completed" | "skipped" | "failed"
-    summary: string
-  }
-}
-
-export type EventGoalWorkflowProgress = {
-  type: "goal.workflow.progress"
-  properties: {
-    taskID: string
-    goalID: string
-    completedSteps: number
-    totalSteps: number
-    currentStep?: string
-    summary: string
-  }
-}
-
-export type EventRequirementsCompleted = {
-  type: "requirements.completed"
-  properties: {
-    taskID: string
-    requirementCount: number
-    goalCount: number
-    decisionCount: number
-    traceabilityCount: number
-    fidelityScore?: number
-    summary: string
-  }
-}
-
-export type EventArchitectCompleted = {
-  type: "architect.completed"
-  properties: {
-    taskID: string
-    contractCount: number
-    categories: Array<string>
-    blueprintSummary?: string
-    summary: string
-  }
-}
-
 export type EventTaskQueueCompleted = {
   type: "task-queue.completed"
   properties: {
@@ -1342,6 +1342,35 @@ export type EventWorkspaceFailed = {
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
+  | EventAgentUpdated
+  | EventTaskCreated
+  | EventTaskUpdated
+  | EventSpecCreated
+  | EventSpecUpdated
+  | EventSpecApproved
+  | EventPlanCreated
+  | EventPlanActivated
+  | EventGoalProgress
+  | EventGoalPassed
+  | EventGoalFailed
+  | EventMilestoneActivated
+  | EventMilestonePassed
+  | EventMilestoneFailed
+  | EventRunCreated
+  | EventRunUpdated
+  | EventInteractionRequested
+  | EventInteractionResolved
+  | EventDeliveryReady
+  | EventEvaluationCompleted
+  | EventTaskMessage
+  | EventRunProgress
+  | EventRunOutput
+  | EventMessageInjected
+  | EventWorkflowSelected
+  | EventWorkflowStepUpdated
+  | EventGoalWorkflowProgress
+  | EventRequirementsCompleted
+  | EventArchitectCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
   | EventServerConnected
@@ -1374,35 +1403,6 @@ export type Event =
   | EventFileWatcherUpdated
   | EventTodoUpdated
   | EventTaskPlanUpdated
-  | EventAgentUpdated
-  | EventTaskCreated
-  | EventTaskUpdated
-  | EventSpecCreated
-  | EventSpecUpdated
-  | EventSpecApproved
-  | EventPlanCreated
-  | EventPlanActivated
-  | EventGoalProgress
-  | EventGoalPassed
-  | EventGoalFailed
-  | EventMilestoneActivated
-  | EventMilestonePassed
-  | EventMilestoneFailed
-  | EventRunCreated
-  | EventRunUpdated
-  | EventInteractionRequested
-  | EventInteractionResolved
-  | EventDeliveryReady
-  | EventEvaluationCompleted
-  | EventTaskMessage
-  | EventRunProgress
-  | EventRunOutput
-  | EventMessageInjected
-  | EventWorkflowSelected
-  | EventWorkflowStepUpdated
-  | EventGoalWorkflowProgress
-  | EventRequirementsCompleted
-  | EventArchitectCompleted
   | EventTaskQueueCompleted
   | EventVcsBranchUpdated
   | EventWorktreeReady

@@ -10,7 +10,12 @@
 // the per-card hint. Hidden when the conversation is empty.
 
 import { createMemo, Show } from "solid-js";
-import { conversationMessages } from "../utils/conversation";
+import {
+  mainMessages,
+  userContextMessages,
+  agentCardItems,
+  combineConversation,
+} from "../utils/conversation";
 import { toCardTree, type CardNode } from "../utils/card-tree";
 import { t } from "../utils/i18n";
 
@@ -38,7 +43,12 @@ function walk(node: CardNode, acc: { peak?: Peak }): void {
 
 export function SessionTokenBadge() {
   const peak = createMemo<Peak | undefined>(() => {
-    const tree = toCardTree(conversationMessages());
+    const items = combineConversation(
+      mainMessages(),
+      userContextMessages(),
+      agentCardItems(),
+    );
+    const tree = toCardTree(items);
     const acc: { peak?: Peak } = {};
     for (const node of tree) walk(node, acc);
     return acc.peak;

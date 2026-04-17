@@ -13,7 +13,7 @@ import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Config } from "../config/config"
 import path from "path"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencorvus-ai/plugin"
@@ -42,7 +42,7 @@ import { pathToFileURL } from "url"
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
 
-  export const state = Instance.state(async () => {
+  export const state = lazyInstanceState(async () => {
     const custom = [] as Tool.Info[]
 
     const matches = await Config.directories().then((dirs) =>

@@ -14,7 +14,7 @@
 
 export { runGoalPipeline } from "./executor"
 export { planGoal, type PlanSteps } from "@/planner/agent"
-export { evaluateGoal } from "@/delivery/checks/per-goal"
+export { evaluateGoal } from "@/delivery/checks"
 export type {
   GoalContract,
   GoalContractFields,

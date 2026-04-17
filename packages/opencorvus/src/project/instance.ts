@@ -153,3 +153,37 @@ export const Instance: InstanceApi = {
     return disposal.all
   },
 }
+
+/**
+ * Defer the underlying `Instance.state(...)` call until the returned getter
+ * is first invoked.
+ *
+ * Why a top-level `function` declaration (instead of a method on `Instance`):
+ * function declarations are hoisted to the top of the module body, so their
+ * binding is available to consumers from the very start of module evaluation —
+ * unlike `Instance` itself, which is `export const` and therefore in TDZ
+ * until its assignment line runs.
+ *
+ * When a module needs to declare instance-scoped state at top level
+ * (`const state = lazyInstanceState(initFn, disposeFn)`) but is loaded
+ * BEFORE Instance's own module body has finished — typically via cycles
+ * introduced by barrel re-exports such as engine/index.ts's
+ * `export * from "./helpers"` — the original `Instance.state(...)` form
+ * throws TDZ on the `Instance` binding at the call site. Wrapping via
+ * `lazyInstanceState` defers that access until first runtime call, by
+ * which point all module bodies have settled.
+ */
+export function lazyInstanceState<S>(
+  init: () => S,
+  dispose?: (state: Awaited<S>) => Promise<void>,
+): (() => S) & { reset(): void } {
+  let cached: ((() => S) & { reset(): void }) | undefined
+  const get = ((): S => {
+    if (!cached) cached = Instance.state(init, dispose)
+    return cached()
+  }) as (() => S) & { reset(): void }
+  get.reset = () => {
+    cached?.reset()
+  }
+  return get
+}

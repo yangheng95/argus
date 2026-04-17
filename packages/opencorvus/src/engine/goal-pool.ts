@@ -21,7 +21,7 @@ import { Database, eq } from "@/storage/db"
 import { Worktree } from "@/worktree"
 import { ExecutorRegistry } from "@/executor/registry"
 import { runGoalPipeline } from "@/pipeline"
-import { evaluateGoal } from "@/delivery/checks/per-goal"
+import { evaluateGoal } from "@/delivery/checks"
 import { EngineConfig } from "./config"
 import { upsertTaskCriteria } from "./state"
 import { createDecisionLog } from "@/decision-log"
@@ -284,13 +284,13 @@ export class GoalPool {
       // idempotent overwrite; merge-strategy files use the merger.
       const prevDelivery = findLatestDeliveryForGoal(entry.goal.id)
       if (prevDelivery) {
-        const result = prevDelivery.result as { diffs?: Array<{ file: string; status?: string; after?: string }> } | null
+        const result = prevDelivery.result
         if (result?.diffs && result.diffs.length > 0) {
           const { applyGoalDelivery } = await import("@/goal/runner")
           try {
             await applyGoalDelivery({
               directory: worktreeDir,
-              delivery: { diffs: result.diffs as any },
+              delivery: { diffs: result.diffs },
               ownedPaths: entry.goal.owned_paths ?? [],
             })
             log.info("retry: restored previous delivery into worktree", {

@@ -5,7 +5,7 @@ import { Log } from "../util/log"
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 import { Server } from "../server/server"
 import { BunProc } from "../bun"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { Session } from "../session"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -22,7 +22,7 @@ export namespace Plugin {
   // OpencodeClient type is a strict subset of the current one — safe to cast.
   const INTERNAL_PLUGINS: PluginInstance[] = [GitlabAuthPlugin as unknown as PluginInstance]
 
-  const state = Instance.state(async () => {
+  const state = lazyInstanceState(async () => {
     const client = createOpenCorvusClient({
       baseUrl: IN_PROCESS_BASE_URL,
       directory: Instance.directory,

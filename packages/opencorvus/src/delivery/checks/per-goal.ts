@@ -21,7 +21,7 @@ import type { TextHooks } from "@/llm/api"
 import type { GoalContract, PipelineDelivery, EvalVerdict, EvalCheckResult } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { translateSpecs, type TranslatedHeuristic, type TranslatedRubric } from "@/acceptance/translator"
-import { runRubric } from "@/delivery/checks/llm-judge-runner"
+import { runRubric } from "./llm-judge-runner"
 
 const log = Log.create({ service: "pipeline-evaluator" })
 

@@ -3,7 +3,7 @@ import z from "zod"
 import { Provider } from "../provider/provider"
 import { generateObject, streamObject, type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Truncate } from "../tool/truncation"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
@@ -68,7 +68,7 @@ export namespace Agent {
     })
   export type Info = z.infer<typeof Info>
 
-  const state = Instance.state(async () => {
+  const state = lazyInstanceState(async () => {
     const cfg = await Config.get()
     // Lazy-load the delivery agent system prompt to avoid pulling the large
     // delivery module at startup.

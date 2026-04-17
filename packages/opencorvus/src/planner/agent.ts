@@ -22,8 +22,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { Log } from "@/util/log"
 import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
-import { EngineConfig } from "@/engine/config"
-import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
+import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { extractTag } from "@/util/parse-section-tags"
 import type { TextHooks } from "@/llm/api"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -120,7 +119,7 @@ export async function planGoal(input: {
     taskID: task.id,
     stage: "planner",
     signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish as any,
+    onStepFinish: guard.onStepFinish,
     hooks: passthroughHooks,
     policies: {
       progressTimeoutMs: TIMEOUT_MS,

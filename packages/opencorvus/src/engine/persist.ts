@@ -1,7 +1,7 @@
 import { selectorList, selectorsSatisfied } from "@/check/policy"
 import { Identifier } from "@/id/id"
 import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
-import { type GoalJudgmentType, type EvaluationOutput } from "@/delivery/checks/types"
+import { type GoalJudgmentType, type EvaluationOutput } from "@/delivery/checks"
 
 /** Input shape for persisting a requirement extracted by the Requirements agent into
  *  engine_requirement. Mirrors the table columns plus an optional

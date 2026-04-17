@@ -13,7 +13,7 @@
  * AgentRuntime.
  */
 import { DeliveryAgent, type DeliveryVerdictType } from "./agent"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks/types"
+import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "./checks"
 import { Log } from "@/util/log"
 import { type TextHooks } from "@/llm/api"
 

@@ -28,8 +28,9 @@ import { sessionStreamHooks } from "@/agent/runtime"
 import { createOrchestratorTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { AttachmentStore } from "@/storage/attachment-store"
-import { clarificationTranscriptSection, operatorNotesSection } from "@/engine/helpers"
 import {
+  clarificationTranscriptSection,
+  operatorNotesSection,
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
@@ -40,19 +41,16 @@ import {
   listActiveGoalRunsByCoordinator,
   listGoals,
   requireTask,
-  type TaskRow,
-} from "@/engine/store"
-import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "@/engine/helpers"
-import { updateTask } from "@/engine/state"
-import {
+  DEFAULT_MAX_RUNS,
+  DEFAULT_MAX_FIX_RUNS,
+  updateTask,
   WorkflowRegistry,
   createWorkflowState,
   renderWorkflowPrompt,
-  type WorkflowState,
-  type MiniWorkflow,
-} from "@/engine/workflow"
-import { EngineProtocol } from "@/engine/protocol"
-import { Event as EngineEvent } from "@/engine/model"
+  EngineProtocol,
+  Event as EngineEvent,
+} from "@/engine"
+import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 
 const log = Log.create({ service: "orchestrator" })
 const MAX_STEPS = 20
@@ -257,7 +255,7 @@ export namespace Orchestrator {
         taskID,
         stage: "assistant",
         signal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
-        onStepFinish: guard.onStepFinish as any,
+        onStepFinish: guard.onStepFinish,
         hooks: contentHooks,
         policies: {
           // Orchestrator is the root coordinator: it sits in `tool.execute`
@@ -755,7 +753,7 @@ function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?
     const fields: Array<[string, string | string[]]> = []
     if (delivery) {
       fields.push(["delivery_summary", delivery.summary])
-      const changedFiles = delivery.result?.changed_files as string[] | undefined
+      const changedFiles = delivery.result?.changed_files
       if (changedFiles?.length) fields.push(["changed_files", changedFiles])
     }
     if (evaluation) {

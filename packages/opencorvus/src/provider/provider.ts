@@ -9,7 +9,7 @@ import { ModelsDev } from "./models"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "../auth"
 import { Env } from "../env"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { Global } from "../global"
@@ -297,7 +297,7 @@ export namespace Provider {
     }
   }
 
-  const state = Instance.state(async () => {
+  const state = lazyInstanceState(async () => {
     using _ = log.time("state")
     const config = await Config.get()
     const modelsDev = await ModelsDev.get()

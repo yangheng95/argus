@@ -54,8 +54,8 @@ export namespace SessionProcessor {
             let currentText: Message.TextPart | undefined
             let reasoningMap: Record<string, Message.ReasoningPart> = {}
             const stream = await LLM.stream(streamInput)
-            const pauseInactivity = (stream as any).pauseInactivityTimer as (() => void) | undefined
-            const resumeInactivity = (stream as any).resumeInactivityTimer as (() => void) | undefined
+            const pauseInactivity = stream.pauseInactivityTimer
+            const resumeInactivity = stream.resumeInactivityTimer
 
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()

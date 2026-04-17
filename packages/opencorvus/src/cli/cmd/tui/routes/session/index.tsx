@@ -77,7 +77,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatMessage, formatTranscript } from "../../util/transcript"
-import { textForBoth, textForUI } from "@/session/part-visibility"
+import { textForBoth, textForUI } from "@/session"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 

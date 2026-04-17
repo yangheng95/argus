@@ -1,6 +1,6 @@
 // ── Card Tree ──
 // 统一的卡片数据模型，覆盖 goal 组、agent stage 卡、普通消息三类输入。
-// 纯函数：把 conversationMessages() 的输出转为递归 CardNode 树，
+// 纯函数：把 combineConversation(...) 的合并结果转为递归 CardNode 树，
 // 供 <Card> 原语递归渲染。
 
 import { orderedMessageParts, effectiveRole, roleLabel, agentStageLabel } from "./message";
@@ -479,7 +479,7 @@ function messageToNode(item: any): CardNode {
 }
 
 /** Build the full card tree from conversation items (the output of
- *  conversationMessages()). The order of `items` is preserved.
+ *  combineConversation()). The order of `items` is preserved.
  *  Items are either AgentCardData (kind="agent"|"goal") or raw Message. */
 export function toCardTree(items: any[]): CardNode[] {
   const _t0 = performance.now();

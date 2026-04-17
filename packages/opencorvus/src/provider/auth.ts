@@ -1,4 +1,4 @@
-import { Instance } from "@/project/instance"
+import { Instance, lazyInstanceState } from "@/project/instance"
 import { Plugin } from "../plugin"
 import { map, filter, pipe, fromEntries, mapValues } from "remeda"
 import z from "zod"
@@ -8,7 +8,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "@/auth"
 
 export namespace ProviderAuth {
-  const state = Instance.state(async () => {
+  const state = lazyInstanceState(async () => {
     const methods = pipe(
       await Plugin.list(),
       filter((x) => x.auth?.provider !== undefined),

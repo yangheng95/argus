@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
-import type { GoalJudgmentType } from "@/delivery/checks/types"
+import type { GoalJudgmentType } from "@/delivery/checks"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { renderSpecsAsText } from "@/acceptance/types"

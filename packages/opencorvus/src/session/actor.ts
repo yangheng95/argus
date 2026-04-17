@@ -1,4 +1,4 @@
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { Log } from "../util/log"
 import { Message } from "./message"
 import { SessionStatus } from "./status"
@@ -25,7 +25,7 @@ export namespace SessionActor {
     closing?: Error
   }
 
-  const actors = Instance.state(
+  const actors = lazyInstanceState(
     () => {
       const data: Record<string, Info> = {}
       return data

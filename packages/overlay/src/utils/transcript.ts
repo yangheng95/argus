@@ -18,7 +18,12 @@ import { t, tc, localeTag } from "./i18n";
 import { joinBullet, stripAssistantBrief } from "./string";
 import { roleLabel } from "./message";
 import { displayToolDetail, toolStatusLabel } from "./tool";
-import { conversationMessages } from "./conversation";
+import {
+  mainMessages,
+  userContextMessages,
+  agentCardItems,
+  combineConversation,
+} from "./conversation";
 import { AppLog } from "./log";
 import { nativeMessage } from "../services/app-dialog";
 
@@ -547,7 +552,13 @@ export function interactionResponseText(interaction: any): string {
  */
 export async function copyChatConversation(): Promise<void> {
   try {
-    const transcript = formatConversationTranscript(conversationMessages());
+    const transcript = formatConversationTranscript(
+      combineConversation(
+        mainMessages(),
+        userContextMessages(),
+        agentCardItems(),
+      ),
+    );
     if (!transcript) return;
     const ok = await copyText(transcript);
     if (!ok) throw new Error(t("chat.copy_failed"));

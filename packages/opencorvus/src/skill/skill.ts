@@ -3,7 +3,7 @@ import path from "path"
 import os from "os"
 import matter from "gray-matter"
 import { Config } from "../config/config"
-import { Instance } from "../project/instance"
+import { Instance, lazyInstanceState } from "../project/instance"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { ConfigMarkdown } from "../config/markdown"
 import { Log } from "../util/log"
@@ -85,7 +85,7 @@ export namespace Skill {
     return path.join(dir, "SKILL.md")
   }
 
-  export const state = Instance.state(async () => {
+  export const state = lazyInstanceState(async () => {
     const skills: Record<string, Info> = {}
     const dirs = new Set<string>()
 

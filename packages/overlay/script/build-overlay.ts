@@ -8,8 +8,9 @@
  *   2. check:i18n — verify locale files match panel revision
  *   3. build:vite — bundle main.tsx + CSS + HTML → dist-vite/
  *   4. Remove stale opencorvus binary — force rebuild on every overlay build
- *   5. tauri build --no-bundle — compile Rust → overlay binary
- *   6. Copy binary to dist/<platform>/
+ *   5. Rebuild SDK — regenerate src/gen/ + src/defaults.ts from live opencorvus spec
+ *   6. Build opencorvus + tauri build --no-bundle — compile Rust → overlay binary
+ *   7. Copy binary to dist/<platform>/
  *
  * Usage:
  *   bun run build:overlay              # full pipeline
@@ -25,6 +26,7 @@ import { fileURLToPath } from "url"
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
+const sdk = path.resolve(repo, "packages/sdk/js")
 const tauri = path.resolve(dir, "src-tauri")
 const target = path.join(tauri, "target")
 const release = path.join(target, "release")
@@ -147,7 +149,16 @@ const serverDistDir = path.join(opencorvus, "dist", serverDistName)
 await fs.rm(serverDistDir, { recursive: true, force: true })
 console.log(`removed ${serverDistDir}`)
 
-// ── Step 6: Tauri build ──
+// ── Step 6: Rebuild SDK ──
+//
+// SDK regenerates src/gen/ from opencorvus's live OpenAPI spec and src/defaults.ts
+// from server-defaults.json. opencorvus imports @opencorvus-ai/sdk, so a stale gen/
+// would compile against an out-of-sync API surface — silent type drift, runtime 404s,
+// or wrong default host/port. Rebuild SDK before the opencorvus build below.
+step("Rebuild SDK")
+await $`bun run build`.cwd(sdk)
+
+// ── Step 7: Tauri build ──
 step("Tauri build → overlay binary")
 
 console.log("Building opencorvus first...")
@@ -186,7 +197,7 @@ if (!(await exists(builtOverlay))) {
   throw new Error(`Overlay binary not found at ${builtOverlay}`)
 }
 
-// ── Step 7: Copy to dist/ ──
+// ── Step 8: Copy to dist/ ──
 step("Copy binary to dist/")
 await fs.mkdir(distRoot, { recursive: true })
 await fs.copyFile(builtOverlay, packagedOverlay)
