@@ -4,7 +4,6 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Provider } from "@/provider/provider"
 import { SessionPrompt } from "./prompt"
-import { Message } from "./message"
 import { Agent } from "@/agent/agent"
 
 /**
@@ -28,7 +27,7 @@ export namespace SessionWake {
     prompt: string
     /** Agent name (default: "default"). */
     agent?: string
-    /** Model override. If omitted, uses the session's last model or default. */
+    /** Model override. If omitted, uses the configured default model. */
     model?: { providerID: string; modelID: string }
   }
 
@@ -52,7 +51,7 @@ export namespace SessionWake {
       log.info("created new session for wake", { sessionID })
     }
 
-    // Resolve model: use override, or fetch last model from session, or default
+    // Resolve model: use override, or the configured default model
     let model = input.model
     if (!model) {
       model = await resolveModel(sessionID)
@@ -102,15 +101,8 @@ export namespace SessionWake {
     return sessionID
   }
 
-  /** Resolve model from the session's last user message, or fall back to default. */
-  async function resolveModel(sessionID: string): Promise<{ providerID: string; modelID: string }> {
-    // Check last user message in this session for model info
-    for await (const item of Message.stream(sessionID)) {
-      if (item.info.role === "user" && item.info.model) {
-        return item.info.model
-      }
-    }
-    // Fall back to config default
+  /** Resolve the configured default model. Session history must not influence runtime model selection. */
+  async function resolveModel(_sessionID: string): Promise<{ providerID: string; modelID: string }> {
     return Provider.defaultModel()
   }
 }

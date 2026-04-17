@@ -74,6 +74,12 @@ export interface DesignAnalystConfig {
   skills: string[]
 }
 
+export interface IntentAnalysisConfig {
+  max_steps: number
+  timeout_ms: number
+  skills: string[]
+}
+
 export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
@@ -81,6 +87,7 @@ export interface EngineConfigType {
   evaluator: EvaluatorConfig
   delivery: DeliveryConfig
   design_analyst: DesignAnalystConfig
+  intent_analysis: IntentAnalysisConfig
   max_runs: number
   max_fix_runs: number
   /** Max retries per individual goal. Goal permanently fails after this many retries. */
@@ -141,6 +148,14 @@ const DEFAULTS: EngineConfigType = {
   design_analyst: {
     max_steps: 80,         // was 50
     timeout_ms: 480_000,   // 8 min (was 5)
+    skills: [],
+  },
+  intent_analysis: {
+    // Short-lived front-of-pipeline agent: few slots + optional grounding
+    // lookups. Budgets are intentionally tight — if it needs deeper
+    // exploration, that is the job of downstream agents, not this one.
+    max_steps: 20,
+    timeout_ms: 120_000,   // 2 min
     skills: [],
   },
   max_runs: 15,            // was 10
@@ -216,6 +231,11 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,
       timeout_ms: user?.design_analyst?.timeout_ms ?? DEFAULTS.design_analyst.timeout_ms,
       skills: user?.design_analyst?.skills ?? DEFAULTS.design_analyst.skills,
+    },
+    intent_analysis: {
+      max_steps: user?.intent_analysis?.max_steps ?? DEFAULTS.intent_analysis.max_steps,
+      timeout_ms: user?.intent_analysis?.timeout_ms ?? DEFAULTS.intent_analysis.timeout_ms,
+      skills: user?.intent_analysis?.skills ?? DEFAULTS.intent_analysis.skills,
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,

@@ -1221,6 +1221,14 @@ export namespace Config {
             })
             .optional()
             .describe("Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent.\"design-analyst\".model."),
+          intent_analysis: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for intent-analysis agent (default: 20)"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Intent-analysis agent timeout in milliseconds (default: 120000)"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for intent-analysis agent"),
+            })
+            .optional()
+            .describe("Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model."),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
           max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 3)"),
@@ -1265,20 +1273,20 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-          unattended: z
-            .boolean()
-            .optional()
-            .describe("Enable unattended mode — auto-approve permissions and auto-reject stale interactions"),
           auto_permission: z
             .boolean()
             .optional()
             .default(true)
-            .describe("Auto-approve permission requests in unattended mode (default: true)"),
+            .describe(
+              "Auto-approve PermissionNext requests (default: true). Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
+            ),
           auto_question: z
             .boolean()
             .optional()
             .default(true)
-            .describe("Auto-reject unanswered questions after the stale timeout (default: true). When false, questions wait indefinitely for a user reply."),
+            .describe(
+              "Auto-reject unanswered question interactions after the stale timeout (default: true). Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
+            ),
           mcp_timeout: z
             .number()
             .int()

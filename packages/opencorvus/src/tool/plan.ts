@@ -9,10 +9,7 @@ import { Identifier } from "../id/id"
 import { Provider } from "../provider/provider"
 import { Instance } from "../project/instance"
 
-async function lastModel(sessionID: string) {
-  const msgs = await Session.messages({ sessionID, limit: 50 })
-  const user = msgs.findLast((msg) => msg.info.role === "user")?.info
-  if (user?.role === "user") return user.model
+async function lastModel(_sessionID: string) {
   return Provider.defaultModel()
 }
 

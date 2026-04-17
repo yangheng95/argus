@@ -534,10 +534,10 @@ function provisionalID() {
   return `codex-app-server-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function toolCallID(value: unknown, fallback: unknown) {
+function toolCallID(value: unknown, generated: unknown) {
   const callID = typeof value === "string" ? value.trim() : ""
   if (callID) return callID
-  return String(fallback)
+  return String(generated)
 }
 
 function approvalPolicy() {

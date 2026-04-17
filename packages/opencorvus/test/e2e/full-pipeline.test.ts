@@ -180,7 +180,12 @@ const PROJECT_CONFIG = JSON.stringify(
     $schema: "https://opencorvus.ai/config.json",
     model: MODEL,
     experimental: {
-      unattended: true,
+      // auto_permission + auto_question together replicate what the old
+      // `unattended: true` umbrella flag used to mean for e2e headless
+      // runs: approve every permission request, auto-reject stale
+      // questions so the pipeline never parks waiting for a human.
+      auto_permission: true,
+      auto_question: true,
     },
     provider: {
       [MODEL_PROVIDER_ID]: {

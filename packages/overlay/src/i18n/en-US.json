@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "d98bb0b0a7f14fdd"
+    "panel_revision": "ab804dcf9c78898e"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -457,7 +457,6 @@
   "settings.theme.system": "System",
   "settings.theme.vscode_dark": "VS Code Dark",
   "settings.title": "Server Settings",
-  "settings.unattended": "Unattended mode",
   "settings.username": "Username",
   "sidebar.close": "Collapse sidebar",
   "sidebar.open": "Open sidebar",
@@ -542,8 +541,6 @@
   "titlebar.pin.unpin": "Unpin",
   "titlebar.restore": "Restore window",
   "titlebar.server_config": "Server Config",
-  "titlebar.unattended": "Unattended mode",
-  "titlebar.unattended_hint": "Use default assumptions to keep tasks moving without manual confirmation.",
   "transcript.compaction": "[Compaction]",
   "card.context_tokens_tooltip": "~{value} prompt tokens at this turn (provider-reported; actual billing may differ)",
   "card.context_tokens_tooltip_estimated": "~{value} prompt tokens at this turn (local chars/token approximation — provider figure not yet available)",

@@ -515,18 +515,17 @@ export namespace SessionLoop {
     // Override via env for benchmarks. `lastFinished.summary === true` means
     // the previous turn was already a compaction summary — skip the predictive
     // trigger so we don't loop forever compacting an already-compact session.
-    // When neither model.limit.input nor model.limit.context is reported
-    // (provider/model registry incomplete), fall back to a conservative
-    // 100 K-token assumption rather than disabling predictive compaction
-    // entirely. 100 K is the smallest published context across major modern
-    // models, so the trigger is correct-on-the-safe-side until the model
-    // catalog is updated.
-    const PREDICTIVE_FALLBACK_BUDGET = 100_000
-    const usableBudget =
-      input.model.limit.input
-      || input.model.limit.context
-      || PREDICTIVE_FALLBACK_BUDGET
-    if (input.lastFinished?.summary !== true) {
+    // If neither model.limit.input nor model.limit.context is reported, skip
+    // predictive compaction entirely — reactive post-turn compaction still
+    // runs, and guessing a budget only hides an incomplete model catalog.
+    const usableBudget = input.model.limit.input || input.model.limit.context
+    if (!usableBudget) {
+      log.warn("predictive-compaction-skipped-no-budget", {
+        step: input.step,
+        providerID: input.model.providerID,
+        modelID: input.model.id,
+      })
+    } else if (input.lastFinished?.summary !== true) {
       const envThreshold = Number(Env.get("OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD") ?? "")
       const threshold = Number.isFinite(envThreshold) && envThreshold > 0 && envThreshold <= 1 ? envThreshold : 0.9
       const limit = Math.floor(usableBudget * threshold)

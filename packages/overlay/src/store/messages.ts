@@ -8,6 +8,10 @@ import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { syncSectionPhases } from "../utils/section";
+import {
+  interactionToSyntheticMessages,
+  partitionInteractions,
+} from "../utils/interaction";
 
 // ── Types ──
 
@@ -766,6 +770,45 @@ export function computeAgentCards(): { cards: Record<string, AgentCardData>; ord
       messages: msgs,
       children: [],
     });
+  }
+
+  // 4. Claim interactions into their originating session's card. An
+  //    interaction without a session-id (or whose session is unknown) falls
+  //    through to the task-level userContextMessages slice — this keeps
+  //    everything visible while preventing the old "floating interaction
+  //    bubble" that appeared at the top level regardless of which agent
+  //    actually raised it.
+  //
+  //    Mutation safety: `allAgentCards[i]` was shallow-copied above, but its
+  //    `.messages` array still references the memo-cached bucket. We must
+  //    therefore REPLACE the messages array (new reference) rather than push
+  //    onto it, or we'd poison the per-session memo cache and the change
+  //    would persist across selectTask / reload cycles.
+  {
+    const knownSessionIDs = new Set<string>();
+    for (const c of allAgentCards) {
+      if (c.kind === "agent" && c.sessionID) knownSessionIDs.add(c.sessionID);
+    }
+    const { bySession } = partitionInteractions(
+      boardStore.board?.interactions,
+      knownSessionIDs,
+    );
+    if (bySession.size > 0) {
+      for (let i = 0; i < allAgentCards.length; i++) {
+        const card = allAgentCards[i];
+        if (card.kind !== "agent") continue;
+        const claimed = bySession.get(card.sessionID);
+        if (!claimed || claimed.length === 0) continue;
+        const injected: Message[] = [];
+        for (const it of claimed) {
+          for (const m of interactionToSyntheticMessages(it)) injected.push(m);
+        }
+        if (injected.length === 0) continue;
+        const merged = card.messages.concat(injected);
+        merged.sort((l, r) => messageOrderTime(l) - messageOrderTime(r));
+        card.messages = merged;
+      }
+    }
   }
 
   // 5. Goal cards — one per board.goalWorkflows entry.

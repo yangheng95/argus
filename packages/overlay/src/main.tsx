@@ -20,7 +20,7 @@ import {
   type WorkspaceView,
 } from "./components/WorkspacePanel";
 import { initApp } from "./services/init";
-import { loadTasks, boardStore, loadBoard, setBoardStore, setBoardData } from "./store/board";
+import { applyTasks, loadTasks, boardStore, loadBoard, setBoardStore, setBoardData } from "./store/board";
 import {
   messageStore,
   setAgentEvents,
@@ -226,7 +226,7 @@ function installGlobalBridges(): void {
       return true;
     }
     if (prop === "tasks") {
-      setBoardStore("tasks", Array.isArray(value) ? (value as any[]) : []);
+      applyTasks(Array.isArray(value) ? (value as any[]) : []);
       return true;
     }
     if (prop === "pendingTasks") {
@@ -1039,6 +1039,48 @@ disposers.push(createRoot((dispose) => {
     if (chatCount) chatCount.textContent = count > 0 ? String(count) : "";
     if (copyBtn) copyBtn.disabled = count === 0;
   });
+
+  // ── Task ID badge ──
+  // Click to copy the full task id; hover shows it in the title. Lets operators
+  // paste the id straight into DB queries (`WHERE task_id = '...'`) without
+  // digging through the sidebar tooltip. Shown only when a task is selected.
+  {
+    const badge = document.getElementById("taskIDBadge") as HTMLButtonElement | null;
+    if (badge) {
+      badge.addEventListener("click", async () => {
+        const full = badge.dataset.taskId ?? "";
+        if (!full) return;
+        try {
+          await navigator.clipboard.writeText(full);
+          const prev = badge.textContent ?? "";
+          badge.textContent = "copied";
+          badge.dataset.copied = "true";
+          setTimeout(() => {
+            badge.textContent = prev;
+            delete badge.dataset.copied;
+          }, 1200);
+        } catch (err) {
+          console.error("[taskIDBadge] clipboard write failed", err);
+        }
+      });
+    }
+    createEffect(() => {
+      const id = boardStore.selectedTaskID;
+      const el = document.getElementById("taskIDBadge") as HTMLButtonElement | null;
+      if (!el) return;
+      if (!id) {
+        el.hidden = true;
+        el.dataset.taskId = "";
+        el.textContent = "";
+        el.title = "";
+        return;
+      }
+      el.hidden = false;
+      el.dataset.taskId = id;
+      el.textContent = id.length > 10 ? `${id.slice(0, 4)}…${id.slice(-6)}` : id;
+      el.title = id;
+    });
+  }
 
   // ── Task-switch progress bar (non-blocking) ──
   // Reflects boardStore.taskSwitching (set synchronously at selectTask entry,

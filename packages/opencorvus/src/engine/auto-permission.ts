@@ -1,10 +1,14 @@
 /**
- * Unattended auto-approval of permission requests.
+ * Auto-approval of permission requests.
  *
- * In unattended projects, agents that hit a `PermissionNext.Event.Asked`
- * (e.g. a write-tool needing user authorisation) would otherwise stall
- * waiting for input that will never come. This subscriber detects those
- * events and replies "once" so the agent proceeds.
+ * Fine-grained switch: when `experimental.auto_permission === true` in
+ * opencorvus.jsonc, an agent that raises `PermissionNext.Event.Asked` is
+ * auto-replied with "once" so the run proceeds without blocking on operator
+ * input. Replaces the older `experimental.unattended` blanket flag — that
+ * flag also suppressed clarification questions and forced all prompts into
+ * "assumed" text, which was too coarse. The split lets operators keep
+ * permission-prompt auto-approval while still receiving genuine
+ * clarification questions in the overlay.
  *
  * The `autoReply: true` flag propagates through PermissionNext.Event.Replied
  * → EngineInteraction.resolvePermission → interaction response metadata,
@@ -13,13 +17,14 @@
 import { Bus } from "@/bus"
 import { PermissionNext } from "@/permission/next"
 import { Log } from "@/util/log"
-import { unattendedProject } from "./unattended"
+import { Config } from "@/config/config"
 import { activeRunBySession } from "./store"
 
 const log = Log.create({ service: "engine.auto-permission" })
 
 async function handlePermissionAsked(request: PermissionNext.Request) {
-  if (!(await unattendedProject())) return
+  const cfg = await Config.get()
+  if (cfg.experimental?.auto_permission !== true) return
   const run = activeRunBySession(request.sessionID)
   if (!run) return // not an orchestrator session
 

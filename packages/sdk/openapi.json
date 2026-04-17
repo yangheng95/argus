@@ -26338,6 +26338,31 @@
                   }
                 }
               },
+              "intent_analysis": {
+                "description": "Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model.",
+                "type": "object",
+                "properties": {
+                  "max_steps": {
+                    "description": "Maximum agentic steps for intent-analysis agent (default: 20)",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "timeout_ms": {
+                    "description": "Intent-analysis agent timeout in milliseconds (default: 120000)",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
+                  },
+                  "skills": {
+                    "description": "Additional skill paths for intent-analysis agent",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
               "max_runs": {
                 "description": "Maximum total task runs (default: 10)",
                 "type": "integer",

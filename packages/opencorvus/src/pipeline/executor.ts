@@ -175,7 +175,9 @@ async function* streamExecutorEvents(
           streamAbort.abort("executor completed (poller)")
           break
         }
-      } catch { /* ignore status check errors */ }
+      } catch (err) {
+        log.warn("status poller error", { goalRunID, error: err instanceof Error ? err.message : String(err) })
+      }
       // Idle-grace detector: session signalled idle → LLM turn done.
       // If queue task doesn't complete within IDLE_GRACE_MS, the callback chain
       // is stuck — trust the session.idle signal and break out.

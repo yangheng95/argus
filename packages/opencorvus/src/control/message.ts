@@ -217,7 +217,13 @@ async function resolveModel() {
   const agent = await Agent.get(agentName)
   const target = agent?.model
   if (target) return target
-  return Provider.defaultModel().catch(() => undefined)
+  // No .catch here — Provider.defaultModel() now reads only cfg.model and
+  // throws MissingModelConfigError if unset. The control plane relies on
+  // that contract: when the operator hasn't declared a model in
+  // opencorvus.jsonc there is no safe "default" to pick, and silently
+  // returning undefined would push the missing-config into downstream
+  // prompts where it surfaces as a confusing "no agent found" error.
+  return Provider.defaultModel()
 }
 
 async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {

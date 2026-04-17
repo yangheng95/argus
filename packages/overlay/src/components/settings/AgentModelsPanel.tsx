@@ -1,14 +1,25 @@
 // ── AgentModelsPanel ──
-// Per-agent LLM model configuration. Each registered agent gets its own
-// provider+model selector, persisted to opencorvus.jsonc under agent.<name>.model.
+// LLM model configuration panel — a read/write mirror of opencorvus.jsonc.
 //
-// Groups agents into three tiers (Core / Lightweight / Internal) for readability.
-// All tiers inherit the project-wide default (top-level `model` in config)
-// when no explicit override is set.
+// Two sections:
+//   1. Project default — the top-level `model` field. Every agent resolves
+//      to this when it has no explicit override. Missing this field is a
+//      hard error: `resolveAgentModel` throws `MissingModelConfigError` and
+//      the backend refuses to dispatch any agent work. The panel shows a
+//      prominent warning in that state.
+//   2. Per-agent overrides — `agent.<name>.model`. Optional; empty means
+//      "inherit the project default".
+//
+// Strict contract: the panel IS the source of truth for what the backend
+// will use. No hidden fallbacks (env vars, `~/.local/state/argus/model.json`
+// recent list, session user-message propagation) exist anymore — those were
+// removed because they silently switched provider/model between goal retries
+// and collapsed prompt cache.
 
-import { createSignal, createResource, For, Show } from "solid-js";
+import { createSignal, createMemo, createResource, For, Show } from "solid-js";
 import { apiJson } from "../../services/api";
-import { updateConfig } from "../../services/config";
+import { patchConfig, updateConfig } from "../../services/config";
+import { appStore } from "../../store/app";
 
 interface AgentInfo {
   name: string;
@@ -62,8 +73,16 @@ export default function AgentModelsPanel() {
   const [refreshing, setRefreshing] = createSignal(false);
   const [refreshMsg, setRefreshMsg] = createSignal<string>("");
   const [savingAgent, setSavingAgent] = createSignal<string>("");
+  const [savingDefault, setSavingDefault] = createSignal(false);
 
-  // Load agents + providers. Refetched on refreshToken change.
+  // Agents + providers change rarely and are fetched via createResource with a
+  // refreshToken knob. The project default `model` is deliberately NOT fetched
+  // here — it is read directly from `appStore.config`, which the SSE
+  // `config.changed` event keeps current. Keeping two independent sources of
+  // truth for the same field (local createResource + global appStore.config)
+  // was the original bug: after a save we set one and not the other, the UI
+  // briefly flashed the new value, then the SSE-driven appStore refresh (or a
+  // subsequent re-render reading stale createResource data) snapped it back.
   const [refreshToken, setRefreshToken] = createSignal(0);
 
   const [data] = createResource(refreshToken, async () => {
@@ -71,8 +90,35 @@ export default function AgentModelsPanel() {
       apiJson("agent") as Promise<AgentInfo[]>,
       apiJson("config/providers") as Promise<ProvidersPayload>,
     ]);
-    return { agents: agents ?? [], providers: providers ?? { providers: [], default: {} } };
+    return {
+      agents: agents ?? [],
+      providers: providers ?? { providers: [], default: {} },
+    };
   });
+
+  // Single source of truth for the currently-persisted project default model.
+  // Reads directly from appStore.config.model — the same value SSE
+  // `config.changed` refreshes via loadConfigInfo(). Any write path below must
+  // update appStore.config so this memo reflects reality without a re-fetch.
+  const projectModel = createMemo<string>(() => {
+    const m = (appStore.config as { model?: unknown } | null | undefined)?.model;
+    return typeof m === "string" ? m : "";
+  });
+
+  async function onSelectProjectDefault(value: string) {
+    setSavingDefault(true);
+    try {
+      // patchConfig sends only the diff (RFC 7396) and writes the returned
+      // config to appStore.config. projectModel() is a memo over
+      // appStore.config.model, so the UI reflects the new value the moment
+      // the PATCH returns — no re-fetch window, no two-source drift.
+      await patchConfig({ model: value ? value : null });
+    } catch (e) {
+      console.error("[project-default-model] save failed", e);
+    } finally {
+      setSavingDefault(false);
+    }
+  }
 
   function modelKey(m: { providerID: string; modelID: string } | undefined): string {
     return m ? `${m.providerID}/${m.modelID}` : "";
@@ -218,57 +264,110 @@ export default function AgentModelsPanel() {
             const groups = providerGroups(payload.providers);
             const available = allModelValues(groups);
             const grouped = groupedAgents(payload.agents);
+            // projectModel() is a memo over appStore.config.model — re-reads
+            // each render, so UI stays in sync with the canonical store.
+            const currentModel = projectModel();
+            const projectModelMissing = !currentModel;
+            const projectModelUnavailable =
+              !!currentModel && !available.has(currentModel);
             return (
-              <div class="agent-model-table">
-                <For each={TIER_ORDER}>
-                  {(tier) => (
-                    <Show when={grouped[tier].length > 0}>
-                      <div class="agent-model-tier-label">{TIER_LABEL[tier]}</div>
-                      <For each={grouped[tier]}>
-                        {(agent) => {
-                          const current = modelKey(agent.model);
-                          const missing = current !== "" && !available.has(current);
-                          return (
-                            <div class="agent-model-row" title={agent.description || ""}>
-                              <span class="agent-model-name">{agent.name}</span>
-                              <select
-                                class="field-input agent-model-select"
-                                value={current}
-                                disabled={savingAgent() === agent.name}
-                                onChange={(e) =>
-                                  onSelect(
-                                    agent.name,
-                                    (e.currentTarget as HTMLSelectElement).value,
-                                  )
-                                }
-                              >
-                                <option value="">— system default —</option>
-                                <Show when={missing}>
-                                  <option value={current}>{current} (unavailable)</option>
-                                </Show>
-                                <For each={groups}>
-                                  {(g) => (
-                                    <optgroup label={g.name}>
-                                      <For each={g.models}>
-                                        {(opt) => (
-                                          <option value={opt.value}>{opt.label}</option>
-                                        )}
-                                      </For>
-                                    </optgroup>
-                                  )}
-                                </For>
-                              </select>
-                              <span class="agent-model-status">
-                                <Show when={savingAgent() === agent.name}>saving…</Show>
-                              </span>
-                            </div>
-                          );
-                        }}
+              <>
+                <div class="agent-model-project-default">
+                  <div class="agent-model-row" title="Top-level `model` in opencorvus.jsonc">
+                    <span class="agent-model-name">Project default</span>
+                    <select
+                      class="field-input agent-model-select"
+                      value={currentModel}
+                      disabled={savingDefault()}
+                      onChange={(e) =>
+                        onSelectProjectDefault(
+                          (e.currentTarget as HTMLSelectElement).value,
+                        )
+                      }
+                    >
+                      <option value="">— not set —</option>
+                      <Show when={projectModelUnavailable}>
+                        <option value={currentModel}>{currentModel} (unavailable)</option>
+                      </Show>
+                      <For each={groups}>
+                        {(g) => (
+                          <optgroup label={g.name}>
+                            <For each={g.models}>
+                              {(opt) => (
+                                <option value={opt.value}>{opt.label}</option>
+                              )}
+                            </For>
+                          </optgroup>
+                        )}
                       </For>
-                    </Show>
-                  )}
-                </For>
-              </div>
+                    </select>
+                    <span class="agent-model-status">
+                      <Show when={savingDefault()}>saving…</Show>
+                    </span>
+                  </div>
+                  <Show when={projectModelMissing}>
+                    <div
+                      class="config-panel-card"
+                      style="margin-top: 8px; padding: 6px 10px; font-size: var(--ui-font-meta); border-left: 3px solid var(--color-danger, #e55); color: var(--color-danger, #e55);"
+                    >
+                      No project default model set. Every agent will fail with
+                      <code> MissingModelConfigError </code>
+                      on dispatch until a model is chosen here (or each agent is
+                      individually overridden below).
+                    </div>
+                  </Show>
+                </div>
+                <div class="agent-model-table">
+                  <For each={TIER_ORDER}>
+                    {(tier) => (
+                      <Show when={grouped[tier].length > 0}>
+                        <div class="agent-model-tier-label">{TIER_LABEL[tier]}</div>
+                        <For each={grouped[tier]}>
+                          {(agent) => {
+                            const current = modelKey(agent.model);
+                            const missing = current !== "" && !available.has(current);
+                            return (
+                              <div class="agent-model-row" title={agent.description || ""}>
+                                <span class="agent-model-name">{agent.name}</span>
+                                <select
+                                  class="field-input agent-model-select"
+                                  value={current}
+                                  disabled={savingAgent() === agent.name}
+                                  onChange={(e) =>
+                                    onSelect(
+                                      agent.name,
+                                      (e.currentTarget as HTMLSelectElement).value,
+                                    )
+                                  }
+                                >
+                                  <option value="">— inherit project default —</option>
+                                  <Show when={missing}>
+                                    <option value={current}>{current} (unavailable)</option>
+                                  </Show>
+                                  <For each={groups}>
+                                    {(g) => (
+                                      <optgroup label={g.name}>
+                                        <For each={g.models}>
+                                          {(opt) => (
+                                            <option value={opt.value}>{opt.label}</option>
+                                          )}
+                                        </For>
+                                      </optgroup>
+                                    )}
+                                  </For>
+                                </select>
+                                <span class="agent-model-status">
+                                  <Show when={savingAgent() === agent.name}>saving…</Show>
+                                </span>
+                              </div>
+                            );
+                          }}
+                        </For>
+                      </Show>
+                    )}
+                  </For>
+                </div>
+              </>
             );
           })()}
         </Show>

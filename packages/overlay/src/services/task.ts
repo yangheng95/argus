@@ -24,6 +24,7 @@ import {
   clearBoard,
   boardStore,
   setBoardStore,
+  setOrphanedSelectionHandler,
   taskByID,
 } from "../store/board";
 import { settingsStore } from "../store/settings";
@@ -506,4 +507,15 @@ export async function interruptTask(taskID: string): Promise<boolean> {
     return false;
   }
 }
+
+// ── Orphan-selection reconciliation ──
+// board.ts's applyTasks() is the single choke point for tasks-list writes.
+// When it detects that `selectedTaskID` points to a task no longer present in
+// the list (and not in pendingTasks), it calls this handler to fully reset
+// the selection — driving the same cleanup path (clearBoard / clearMessages /
+// clearAgentEvents / stopSSE) that every intentional deselect uses. Registered
+// at module load so it's in place before any tasks fetch completes.
+setOrphanedSelectionHandler(() => {
+  void selectTask("");
+});
 

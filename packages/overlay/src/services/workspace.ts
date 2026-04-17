@@ -12,7 +12,7 @@
 // delegates timers / loading to callers via callbacks.
 
 import { settingsStore, setSettingsStore } from "../store/settings";
-import { boardStore, setBoardStore } from "../store/board";
+import { applyTasks, boardStore, setBoardStore } from "../store/board";
 import { clearMessages } from "../store/messages";
 import { setAppStore } from "../store/app";
 import { AppLog } from "../utils/log";
@@ -228,7 +228,7 @@ export function clearWorkspaceRuntime(
  * fields are owned by for now.
  */
 export function clearProjectScopeData(): void {
-  setBoardStore("tasks", []);
+  applyTasks([]);
  // path, vcs, memoryFiles, memorySearchMode remain
  // state and are not yet migrated to a Solid store.
 }

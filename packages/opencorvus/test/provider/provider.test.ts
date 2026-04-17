@@ -481,21 +481,9 @@ test("parseModel handles model IDs with slashes", () => {
 // providers list no longer surfaces a fallback first-entry: needs a recent.json hit
 // or explicit cfg.model. Pending product decision on what "first available" means.
 test.skip("defaultModel returns first available model when no config set", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "opencorvus.json"),
-        JSON.stringify({
-          $schema: "https://opencorvus.ai/config.json",
-        }),
-      )
-    },
-  })
+  await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
-    init: async () => {
-      Env.set("ANTHROPIC_API_KEY", "test-api-key")
-    },
     fn: async () => {
       const model = await Provider.defaultModel()
       expect(model.providerID).toBeDefined()

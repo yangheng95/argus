@@ -12,13 +12,14 @@
 // btnSettings click (lines 9938-9941)
 // btnLog click (lines 11119-11122)
 // btnPin click (lines 10392-10410)
-// chkUnattended change (lines 9972-9979)
+// (legacy reference deleted — the unattended umbrella flag was removed in
+// favor of fine-grained experimental.auto_permission / auto_question switches)
 // chkAutoPermission change (lines 9964-9970)
 // chkAutoQuestion change (lines 9981-9987)
 // chkShowTranscript change (lines 9989-9995)
 // opacityRange input/change (lines 9997-10007)
 // Import contract:
-// settingsStore — reactive settings (theme, alwaysOnTop, unattended, …)
+// settingsStore — reactive settings (theme, alwaysOnTop, …)
 // applySettings — validate + write partial settings into store
 // saveSettings — persist store to localStorage
 // appStore — runtime UI state (used by callers; exposed via props)
@@ -192,14 +193,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
       setSettingsStore("alwaysOnTop", next);
     }
     saveSettings();
-    closeMenu();
-  }
-
- // Unattended toggle — PATCH server config (behavior setting)
-  async function handleUnattendedChange(checked: boolean) {
-    try {
-      await patchConfig({ experimental: { unattended: checked } });
-    } catch (e) { console.error("[titlebar] failed to update unattended", e); }
     closeMenu();
   }
 
@@ -509,29 +502,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
 
         {/* ── Divider ── */}
         <div class="titlebar-menu-divider" aria-hidden="true" />
-
-        {/* ── Unattended mode toggle ── */}
-        <label class="titlebar-menu-toggle" for="chkUnattended">
-          <span class="titlebar-menu-copy">
-            <span class="titlebar-menu-title">
-              {t("titlebar.unattended")}
-            </span>
-            <span class="titlebar-menu-meta">
-              {t("titlebar.unattended_hint")}
-            </span>
-          </span>
-          <input
-            class="titlebar-menu-check"
-            id="chkUnattended"
-            type="checkbox"
-            checked={appStore.config?.experimental?.unattended === true}
-            onChange={(e) =>
-              void handleUnattendedChange(
-                (e.target as HTMLInputElement).checked,
-              )
-            }
-          />
-        </label>
 
         {/* ── Auto-approve permissions toggle ── */}
         <label class="titlebar-menu-toggle" for="chkAutoPermission">

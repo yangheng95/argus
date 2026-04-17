@@ -339,9 +339,86 @@ export namespace Worktree {
     return insensitive
   }
 
+  /** Remove a leftover worktree directory and its branch ref so the same
+   *  `name` can be reused. Called only when the caller explicitly passed a
+   *  `base` name — i.e. asked for a deterministic path (goal retries). Any
+   *  failure throws; we do NOT silently fall back to a randomized suffix
+   *  because that rotation is exactly what silently breaks prompt-cache
+   *  continuity across retries (new path → new system-prompt bytes → new
+   *  1h system cache). Surfacing a hard error here is the contract: the
+   *  operator sees that reclaim failed and can intervene. */
+  async function reclaimBase(root: string, base: string): Promise<Info> {
+    const name = base
+    const branch = `opencorvus/${name}`
+    const directory = path.join(root, name)
+    const ref = `refs/heads/${branch}`
+
+    const dirExists = await exists(directory)
+    const branchCheck = await $`git show-ref --verify --quiet ${ref}`
+      .quiet()
+      .nothrow()
+      .cwd(Instance.worktree)
+    const branchExists = branchCheck.exitCode === 0
+
+    if (dirExists || branchExists) {
+      log.info("worktree reclaim: stale artifacts present, cleaning before reuse", {
+        name,
+        directory,
+        dirExists,
+        branchExists,
+      })
+      // Delegate directory teardown to remove() — it unregisters the git
+      // worktree, stops fsmonitor, rm -rf's the directory, AND deletes the
+      // associated branch if the worktree is still registered. If it throws,
+      // let it propagate: the caller must see the reclaim failure, not get
+      // a silently renamed workspace.
+      if (dirExists) {
+        await remove({ directory })
+      }
+      // Branch may still be there if: (a) dir didn't exist but a dangling
+      // branch ref was left over from a prior crash, or (b) the worktree was
+      // never registered against this branch (so remove() didn't touch it).
+      // Re-probe and clean up independently.
+      const stillExists = await $`git show-ref --verify --quiet ${ref}`
+        .quiet()
+        .nothrow()
+        .cwd(Instance.worktree)
+      if (stillExists.exitCode === 0) {
+        const del = await $`git branch -D ${branch}`
+          .quiet()
+          .nothrow()
+          .cwd(Instance.worktree)
+        if (del.exitCode !== 0) {
+          throw new CreateFailedError({
+            message:
+              `worktree reclaim: failed to delete stale branch ${branch}: ` +
+              (errorText(del) || "unknown error"),
+          })
+        }
+      }
+      // Sanity check — if anything is still there after reclaim, fail loud.
+      if (await exists(directory)) {
+        throw new CreateFailedError({
+          message: `worktree reclaim: directory still present after remove: ${directory}`,
+        })
+      }
+    }
+
+    return Info.parse({ name, branch, directory })
+  }
+
   async function candidate(root: string, base?: string) {
-    for (const attempt of Array.from({ length: 26 }, (_, i) => i)) {
-      const name = base ? (attempt === 0 ? base : `${base}-${randomName()}`) : randomName()
+    // Deterministic path: caller asked for a specific base name (goal retries
+    // do this — worktree name is derived from goalID). Reclaim any stale
+    // artifacts under that name and reuse the path. No randomized fallback.
+    if (base) return reclaimBase(root, base)
+
+    // Non-deterministic path: caller didn't name the workspace. Try a random
+    // name; retry on conflict (collisions here are rare and non-deterministic,
+    // so iterating is a genuine retry, not a fallback that masks a lifecycle
+    // bug the way the old base-name-plus-suffix branch did).
+    for (let attempt = 0; attempt < 26; attempt++) {
+      const name = randomName()
       const branch = `opencorvus/${name}`
       const directory = path.join(root, name)
 

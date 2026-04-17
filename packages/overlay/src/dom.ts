@@ -26,7 +26,6 @@ export interface DomRefs {
   btnPinValue: HTMLElement | null;
 
  // Settings checkboxes / controls
-  chkUnattended: HTMLInputElement | null;
   chkAutoPermission: HTMLInputElement | null;
   chkAutoQuestion: HTMLInputElement | null;
   chkShowTranscriptDetails: HTMLInputElement | null;
@@ -302,7 +301,6 @@ export function getDomRefs(): DomRefs {
     btnPinValue: $<HTMLElement>("#btnPinValue"),
 
  // Settings checkboxes / controls
-    chkUnattended: $<HTMLInputElement>("#chkUnattended"),
     chkAutoPermission: $<HTMLInputElement>("#chkAutoPermission"),
     chkAutoQuestion: $<HTMLInputElement>("#chkAutoQuestion"),
     chkShowTranscriptDetails: $<HTMLInputElement>("#chkShowTranscriptDetails"),
