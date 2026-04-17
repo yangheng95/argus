@@ -1655,6 +1655,10 @@ export function createOrchestratorTools(input: {
         // overlay panel reflects what was actually verified deterministically.
         const evaluatorCheckResults: Array<{ name: string; status: "passed" | "failed" | "skipped"; evidence?: string }> = []
         const evaluatorCriteriaSink: Array<{ name: string; status: "passed" | "failed" | "skipped"; family: string; evidence?: string; label?: string }> = []
+        // Track strict-mode failures from per-goal evaluator. If any strict
+        // check failed, the delivery agent's verdict MUST be rejected — the
+        // LLM is not allowed to override deterministic strict gates.
+        const strictFailedChecks: Array<{ name: string; evidence?: string }> = []
         {
           const { evaluateGoal } = await import("@/delivery/checks/per-goal")
           const evaluatorTier = (await EngineConfig.get()).evaluator.tier ?? "standard"
@@ -1686,6 +1690,9 @@ export function createOrchestratorTools(input: {
                   evidence: check.output,
                   label: `${goal.title} · ${check.name}`,
                 })
+                if (!check.passed && check.mode === "strict") {
+                  strictFailedChecks.push({ name: namespaced, evidence: check.output })
+                }
               }
               if (verdict.checks.length === 0) {
                 // Goal had no scorers AND no project-discovery fallback. Per the
@@ -1765,6 +1772,31 @@ export function createOrchestratorTools(input: {
           })
           await hooks.flush()
 
+          // Hard gate: if the per-goal evaluator flagged any strict-mode
+          // check as failed, the delivery verdict MUST be rejected regardless
+          // of what the LLM decided. Strict checks (visual_diff, build, test)
+          // are deterministic — the LLM cannot override them.
+          // Applied BEFORE persisting the verdict artifact so all downstream
+          // consumers (criteria panel, evaluation record) see the true verdict.
+          if (verdict.verdict === "accepted" && strictFailedChecks.length > 0) {
+            const names = strictFailedChecks.map(c => c.name).join(", ")
+            log.warn("deliver: overriding LLM verdict to rejected — strict evaluator checks failed", {
+              taskID, strictFailedCount: strictFailedChecks.length, checks: names,
+            })
+            verdict.verdict = "rejected"
+            verdict.issues_found.push(
+              ...strictFailedChecks.map(c => `Strict evaluator check failed: ${c.name}${c.evidence ? ` — ${c.evidence.slice(0, 500)}` : ""}`),
+            )
+            const rejections = strictFailedChecks.map(c => ({
+              category: "quality" as const,
+              file: undefined,
+              error: `Strict evaluator check ${c.name} failed. The delivery agent accepted but this check is non-overridable.${c.evidence ? ` Evidence: ${c.evidence.slice(0, 500)}` : ""}`,
+              suggestion: c.name.includes("visual_diff")
+                ? "Read .opencorvus/visual-diff/rendered.png and the reference image to identify specific visual differences (layout, colors, spacing, typography). Fix each difference in the source HTML/CSS."
+                : undefined,
+            }))
+            verdict.rejection_details = [...(verdict.rejection_details ?? []), ...rejections]
+          }
 
           // Persist verdict as artifact
           const { EngineArtifactTable } = await import("@/engine/engine.sql")

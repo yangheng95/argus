@@ -13,9 +13,10 @@
  *   7. Copy binary to dist/<platform>/
  *
  * Usage:
- *   bun run build:overlay              # full pipeline
- *   bun run build:overlay --skip-tauri  # UI only (steps 1-3)
- *   bun run build:overlay --skip-kill   # skip process kill
+ *   bun run build:overlay              # full pipeline (release profile, smallest binary)
+ *   bun run build:overlay --fast       # no LTO, codegen-units=16, separate target/fast/ cache → 3-5x faster compile, larger binary
+ *   bun run build:overlay --skip-tauri # UI only (steps 1-3)
+ *   bun run build:overlay --skip-kill  # skip process kill
  */
 
 import { $ } from "bun"
@@ -28,8 +29,6 @@ const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
 const sdk = path.resolve(repo, "packages/sdk/js")
 const tauri = path.resolve(dir, "src-tauri")
-const target = path.join(tauri, "target")
-const release = path.join(target, "release")
 
 const isWindows = process.platform === "win32"
 const overlayFile = isWindows ? "opencorvus-overlay.exe" : "opencorvus-overlay"
@@ -55,6 +54,25 @@ const packagedOverlay = path.join(distRoot, overlayFile)
 const args = new Set(process.argv.slice(2))
 const skipTauri = args.has("--skip-tauri")
 const skipKill = args.has("--skip-kill")
+const fast = args.has("--fast")
+
+// Use a nested target/fast/ dir for --fast so the two profiles don't invalidate
+// each other's cache. Tauri 2's CLI has no native --profile flag, so we override
+// the `release` profile via CARGO_PROFILE_RELEASE_* env vars instead of defining
+// a new profile. The separate target dir keeps each mode's build cache isolated.
+// Nested under target/ so the existing gitignore entry still covers it.
+const target = path.join(tauri, fast ? "target/fast" : "target")
+const release = path.join(target, "release")
+
+const fastProfileEnv: Record<string, string> = fast
+  ? {
+      CARGO_PROFILE_RELEASE_LTO: "false",
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16",
+      CARGO_PROFILE_RELEASE_OPT_LEVEL: "2",
+      CARGO_PROFILE_RELEASE_STRIP: "false",
+      CARGO_PROFILE_RELEASE_INCREMENTAL: "true",
+    }
+  : {}
 
 function step(label: string) {
   console.log(`\n── ${label} ──`)
@@ -191,6 +209,7 @@ await $`tauri build --no-bundle ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
   OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
+  ...fastProfileEnv,
 })
 
 if (!(await exists(builtOverlay))) {
@@ -202,5 +221,20 @@ step("Copy binary to dist/")
 await fs.mkdir(distRoot, { recursive: true })
 await fs.copyFile(builtOverlay, packagedOverlay)
 console.log(`→ ${packagedOverlay}`)
+
+// WebView2Loader.dll — required sibling of the exe on Windows.
+// With `[profile.release] lto = true` + `opt-level = "s"`, rustc/linker appears to
+// resolve the WebView2 loader via delayload or a path that doesn't need the DLL
+// next to the exe; with `--fast` (lto off), the exe ends up with a hard import
+// on WebView2Loader.dll and won't start without the DLL co-located.
+// Copy it unconditionally — it's tiny and makes the dist dir self-contained.
+if (isWindows) {
+  const dllSrc = path.join(release, "WebView2Loader.dll")
+  if (await exists(dllSrc)) {
+    const dllDst = path.join(distRoot, "WebView2Loader.dll")
+    await fs.copyFile(dllSrc, dllDst)
+    console.log(`→ ${dllDst}`)
+  }
+}
 
 console.log("\n✓ Full overlay build complete.")
