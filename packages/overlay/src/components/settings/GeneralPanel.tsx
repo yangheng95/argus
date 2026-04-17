@@ -70,7 +70,7 @@ export default function GeneralPanel() {
 
   const experimental = () => (appStore.config as any)?.experimental ?? {};
 
-  function handleExperimentalToggle(key: "unattended" | "auto_permission", e: Event) {
+  function handleExperimentalToggle(key: "auto_permission", e: Event) {
     void patchConfig({ experimental: { [key]: (e.currentTarget as HTMLInputElement).checked } });
   }
 
@@ -191,15 +191,6 @@ export default function GeneralPanel() {
                 type="checkbox"
                 checked={settingsStore.showTranscriptDetails}
                 onChange={(e) => handleToggle("showTranscriptDetails", e)}
-              />
-            </label>
-
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">{t("settings.unattended")}</span>
-              <input
-                type="checkbox"
-                checked={!!experimental().unattended}
-                onChange={(e) => handleExperimentalToggle("unattended", e)}
               />
             </label>
 

@@ -143,36 +143,90 @@ export async function cleanupGoalWorkspace(directory?: string) {
   const isGoalWorkspace = Filesystem.contains(goalWorkspaceRoot, directory)
   const isWorktree = directory.includes(".opencorvus-worktrees")
   if (!isGoalWorkspace && !isWorktree) return
+
+  // [observability/phase-0] Per-step timing + outcome breakdown. Until we have
+  // this, a "retry reused new worktree path" incident gives no signal about
+  // WHICH step of cleanup failed (Instance.dispose / Worktree.remove / fs.rm /
+  // removeSandbox). The summary log at the end lets ops correlate a cleanup
+  // failure with the subsequent Worktree.create candidate() fallback (random
+  // suffix) that breaks prompt-cache continuity.
+  const started = Date.now()
+  type StepOutcome = { step: string; ok: boolean; ms: number; error?: string }
+  const steps: StepOutcome[] = []
+  const timed = async <T>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
+    const t0 = Date.now()
+    try {
+      const result = await fn()
+      steps.push({ step: name, ok: true, ms: Date.now() - t0 })
+      return result
+    } catch (err) {
+      const code =
+        typeof (err as { code?: unknown })?.code === "string"
+          ? ((err as { code?: string }).code as string)
+          : undefined
+      steps.push({
+        step: name,
+        ok: false,
+        ms: Date.now() - t0,
+        error: code ? `${code}: ${String(err)}` : String(err),
+      })
+      log.warn(`cleanupGoalWorkspace.${name} failed`, { directory, error: String(err), code })
+      return undefined
+    }
+  }
+
   const projectID = Instance.project.id
-  if (!(await Filesystem.exists(directory))) {
-    await Project.removeSandbox(projectID, directory).catch((err) => {
-      log.warn("removeSandbox failed for missing directory", { directory, error: String(err) })
+  const exists = await Filesystem.exists(directory)
+  if (!exists) {
+    await timed("removeSandbox", () => Project.removeSandbox(projectID, directory))
+    log.info("cleanupGoalWorkspace done (missing directory)", {
+      directory,
+      existed: false,
+      totalMs: Date.now() - started,
+      steps,
     })
     return
   }
+
   const drop = () =>
-    fs.rm(directory, {
-      recursive: true,
-      force: true,
-      maxRetries: 50,
-      retryDelay: 100,
-    }).catch((err) => {
-      log.warn("force rm failed during goal workspace cleanup", { directory, error: String(err) })
-    })
-  await Instance.provide({
-    directory,
-    fn: () => Instance.dispose(),
-  }).catch((err) => {
-    log.warn("Instance.dispose failed during goal workspace cleanup", { directory, error: String(err) })
-  })
+    timed("fs.rm", () =>
+      fs.rm(directory, {
+        recursive: true,
+        force: true,
+        maxRetries: 50,
+        retryDelay: 100,
+      }),
+    )
+
+  await timed("Instance.dispose", () =>
+    Instance.provide({
+      directory,
+      fn: () => Instance.dispose(),
+    }),
+  )
+
   if (Instance.project.vcs !== "git") {
     await drop()
   } else {
-    await Worktree.remove({ directory }).catch(drop)
+    const removed = await timed("Worktree.remove", () => Worktree.remove({ directory }))
+    if (removed === undefined) {
+      // Worktree.remove threw → fall through to the brute-force fs.rm. `timed`
+      // already recorded the remove failure; we still want the drop attempt's
+      // own ok/fail to land in the summary.
+      await drop()
+    }
   }
-  await Project.removeSandbox(projectID, directory).catch((err) => {
-    log.warn("removeSandbox failed during goal workspace cleanup", { directory, error: String(err) })
-  })
+  await timed("removeSandbox", () => Project.removeSandbox(projectID, directory))
+
+  const allOk = steps.every((s) => s.ok)
+  const summary = {
+    directory,
+    existed: true,
+    totalMs: Date.now() - started,
+    steps,
+  }
+  if (allOk) log.info("cleanupGoalWorkspace done", summary)
+  else log.warn("cleanupGoalWorkspace completed with failures", summary)
 }
 
 export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string, parentSessionID?: string) {
@@ -183,13 +237,14 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
     title: `${task.title}: ${goal.title}`,
     directory: directory ?? (await import("@/project/instance")).Instance.directory,
   })
-  // Goal sessions run unattended in worktrees — no interactive UI subscriber.
-  // Parent session's "ask" rules would block tool calls forever (permission
-  // prompt goes to a void). Unconditionally allow all permissions.
-  await Session.setPermission({
-    sessionID: session.id,
-    permission: [{ permission: "*", pattern: "*", action: "allow" as const }],
-  })
+  // Permissions for goal sessions are now governed by the project config
+  // (`experimental.auto_permission` = global auto-approve switch, plus the
+  // user's explicit `permission` rules). The old blanket "allow *,*" on
+  // every goal session silently disabled every permission prompt — that
+  // was the reason the overlay's question/permission UX never surfaced
+  // anything to the operator. Leaving it off lets PermissionNext do its
+  // normal resolution: config rules → ask → (optionally) auto-approved by
+  // the AutoPermission subscriber when auto_permission is set.
   return session
 }
 
@@ -218,10 +273,9 @@ export async function createBuildSession(
     title: `Build: ${goal.title}`,
     directory: worktreeDir,
   })
-  await Session.setPermission({
-    sessionID: session.id,
-    permission: [{ permission: "*", pattern: "*", action: "allow" as const }],
-  })
+  // Build container session inherits the same permission contract as
+  // createGoalSession: fall through to PermissionNext + AutoPermission,
+  // don't hardcode allow-all. See createGoalSession for rationale.
 
   const specsText = renderSpecsAsText(goal.acceptance_specs ?? [])
   const ownedPaths = Array.isArray(goal.owned_paths) ? goal.owned_paths : []

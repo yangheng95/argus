@@ -16,6 +16,7 @@ import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 import PLANNER_CORE from "@/prompt/core/planner-core.txt"
+import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
@@ -343,6 +344,16 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
+      "intent-analysis": {
+        name: "intent-analysis",
+        description: "Intent-analysis agent. Front-of-pipeline intent disambiguation — turns a short user request into a structured IntentAnalysisResult (class, complexity, slots, missing info, clarifications).",
+        prompt: INTENT_ANALYSIS_CORE,
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        options: {},
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
     }
 
     for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
@@ -422,6 +433,7 @@ export namespace Agent {
     planner: PLANNER_CORE,
     requirements: REQUIREMENTS_CORE,
     "design-analyst": DESIGN_ANALYST_CORE,
+    "intent-analysis": INTENT_ANALYSIS_CORE,
   }
 
   /** Returns the built-in default prompt for a native agent (before config overrides).

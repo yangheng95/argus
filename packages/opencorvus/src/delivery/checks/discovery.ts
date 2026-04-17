@@ -287,10 +287,10 @@ function pythonLauncher() {
   return ["python", "python3", "py"].find((item) => which(item))
 }
 
-function pythonToolCommand(module: string, fallback: string) {
+function pythonToolCommand(module: string, binary: string) {
   const python = pythonLauncher()
   if (python) return `${python} -m ${module}`
-  if (which(fallback)) return fallback
+  if (which(binary)) return binary
 }
 
 function checkLabel(key: string) {

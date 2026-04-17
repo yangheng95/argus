@@ -253,28 +253,13 @@ async function appendTaskSessionMessage(
   await Session.touch(task.session_id)
 }
 
-async function messageContext(sessionID: string) {
-  const rows = await Session.messages({ sessionID, limit: 20 }).catch(() => [])
-  const user = rows.findLast((item) => item.info.role === "user")
-  if (user?.info.role === "user") {
-    return {
-      agent: user.info.agent,
-      model: user.info.model,
-    }
-  }
-  const assistant = rows.findLast((item) => item.info.role === "assistant")
-  if (assistant?.info.role === "assistant") {
-    return {
-      agent: assistant.info.agent,
-      model: {
-        providerID: assistant.info.providerID,
-        modelID: assistant.info.modelID,
-      },
-    }
-  }
+async function messageContext(_sessionID: string) {
   const name = await Agent.defaultAgent().catch(() => undefined)
   const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
-  const model = agent?.model ?? await Provider.defaultModel().catch(() => undefined)
+  // Provider.defaultModel() is strict now (reads only cfg.model, throws if
+  // unset). No .catch — a missing model config is a hard project-setup error
+  // and must surface to the caller, not be papered over with `undefined`.
+  const model = agent?.model ?? (await Provider.defaultModel())
   if (!agent || !model) return
   return {
     agent: agent.name,

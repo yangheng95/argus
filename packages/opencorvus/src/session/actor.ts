@@ -37,8 +37,8 @@ export namespace SessionActor {
     },
   )
 
-  function error(input: unknown, fallback: string) {
-    return input instanceof Error ? input : new Error(fallback)
+  function error(input: unknown, message: string) {
+    return input instanceof Error ? input : new Error(message)
   }
 
   function busy(sessionID: string) {
@@ -160,10 +160,7 @@ export namespace SessionActor {
     return actors()[sessionID]?.abort.signal === signal
   }
 
-  export async function lastModel(sessionID: string) {
-    for await (const item of Message.stream(sessionID)) {
-      if (item.info.role === "user" && item.info.model) return item.info.model
-    }
+  export async function lastModel(_sessionID: string) {
     const { Provider } = await import("../provider/provider")
     return Provider.defaultModel()
   }

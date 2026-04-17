@@ -31,6 +31,11 @@ import { iife } from "@/util/iife"
 export namespace Session {
   const log = Log.create({ service: "session" })
 
+  // [observability/phase-0] Dedupe set for the cache_write extraction-miss log
+  // in getUsage(). Keyed by `${providerID}/${modelID}` so we emit one structured
+  // sample per distinct provider+model combination per process lifetime.
+  const cacheWriteMissLogged = new Set<string>()
+
   const parentTitlePrefix = "New session - "
   const childTitlePrefix = "Child session - "
 
@@ -798,42 +803,6 @@ export namespace Session {
 
   const TOOL_STATUS_RANK: Record<string, number> = { pending: 0, running: 1, completed: 2, error: 2 }
 
-  function applyPartDelta(
-    part: Omit<Message.Part, "id" | "sessionID" | "messageID">,
-    input: {
-      field: string
-      delta: string
-    },
-  ) {
-    if (input.field === "text") {
-      if (!("text" in part) || typeof part.text !== "string") {
-        throw new Error(`Part ${part.type} does not support text deltas`)
-      }
-      return {
-        ...part,
-        text: part.text + input.delta,
-      }
-    }
-
-    if (input.field === "raw") {
-      if (part.type !== "tool") {
-        throw new Error(`Part ${part.type} does not support raw deltas`)
-      }
-      // Tool parts have a .state field; the Omit<union> type doesn't narrow
-      // via the type === "tool" discriminant so we access state via cast.
-      const toolState = (part as { state?: { raw?: unknown } }).state
-      return {
-        ...part,
-        state: {
-          ...toolState,
-          raw: String(toolState?.raw ?? "") + input.delta,
-        },
-      } as typeof part
-    }
-
-    throw new Error(`Unsupported part delta field: ${input.field}`)
-  }
-
   export const updatePart = fn(UpdatePartInput, async (part) => {
     const { id, messageID, sessionID, ...data } = part
     const time = Date.now()
@@ -869,6 +838,17 @@ export namespace Session {
     return part
   })
 
+  // updatePartDelta is a pure Bus publish. Deltas are ephemeral by contract —
+  // the protocol bridge (task-message-protocol-bridge.ts:bridgeDelta) routes
+  // them through ProtocolStore.dispatchEphemeral with no sequence and no
+  // replay, and every streaming caller (session-hooks, engine/runtime,
+  // session/processor) already maintains an in-memory accumulator and
+  // persists the complete Part via updatePart at each natural boundary
+  // (tool-call, reasoning-end, session.idle). Writing deltas to PartTable
+  // would therefore produce state that is overwritten at the next boundary
+  // and never observed — pure write amplification. Under parallel goal
+  // execution this amplification used to starve the SQLite write lock and
+  // stall the main event loop, which read as "overlay freezing".
   export const updatePartDelta = fn(
     z.object({
       sessionID: z.string(),
@@ -878,39 +858,7 @@ export namespace Session {
       delta: z.string(),
     }),
     async (input) => {
-      const time = Date.now()
-      Database.use((db) => {
-        const row = db
-          .select({ data: PartTable.data })
-          .from(PartTable)
-          .where(
-            and(
-              eq(PartTable.id, input.partID),
-              eq(PartTable.message_id, input.messageID),
-              eq(PartTable.session_id, input.sessionID),
-            ),
-          )
-          .get()
-        if (!row?.data) {
-          throw new NotFoundError({ message: `Part not found: ${input.partID}` })
-        }
-        db.update(PartTable)
-          .set({
-            data: applyPartDelta(row.data as Omit<Message.Part, "id" | "sessionID" | "messageID">, input),
-            time_updated: time,
-          })
-          .where(
-            and(
-              eq(PartTable.id, input.partID),
-              eq(PartTable.message_id, input.messageID),
-              eq(PartTable.session_id, input.sessionID),
-            ),
-          )
-          .run()
-        Database.effect(() =>
-          Bus.publish(Message.Event.PartDelta, input),
-        )
-      })
+      Bus.publish(Message.Event.PartDelta, input)
     },
   )
 
@@ -936,6 +884,37 @@ export namespace Session {
           (input.metadata?.["venice"] as any)?.["usage"]?.["cacheCreationInputTokens"] ??
           0) as number,
       )
+
+      // [observability/phase-0] When a provider reports cache hits (read>0) but we
+      // extract 0 write tokens, the provider either (a) genuinely doesn't expose
+      // a "creation" field (OpenAI-style servers manage cache server-side and only
+      // surface read), or (b) nests the field under a provider key we haven't
+      // added above. Log the metadata shape once per (provider, model) combo so
+      // the fix (or documented "this provider has no write signal") is
+      // evidence-based — not spammed per request.
+      if (cacheReadInputTokens > 0 && cacheWriteInputTokens === 0 && input.metadata) {
+        const dedupeKey = `${input.model.providerID}/${input.model.id}`
+        if (!cacheWriteMissLogged.has(dedupeKey)) {
+          cacheWriteMissLogged.add(dedupeKey)
+          const providerKeys = Object.keys(input.metadata)
+          const snapshot = providerKeys.reduce<Record<string, unknown>>((acc, key) => {
+            const value = (input.metadata as Record<string, unknown>)[key]
+            acc[key] = value && typeof value === "object"
+              ? { keys: Object.keys(value as object) }
+              : typeof value
+            return acc
+          }, {})
+          log.info("cache_write extraction miss", {
+            providerID: input.model.providerID,
+            modelID: input.model.id,
+            npm: input.model.api.npm,
+            cacheReadInputTokens,
+            metadataProviderKeys: providerKeys,
+            metadataShape: snapshot,
+            usageKeys: Object.keys(input.usage as object),
+          })
+        }
+      }
 
       // OpenRouter provides inputTokens as the total count of input tokens (including cached).
       // AFAIK other providers (OpenRouter/OpenAI/Gemini etc.) do it the same way e.g. vercel/ai#8794 (comment)

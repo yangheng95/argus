@@ -3015,6 +3015,28 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   justify-self: end;
 }
 
+.task-id-badge {
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--subtle-1);
+  color: var(--text-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.task-id-badge:hover {
+  background: var(--card-fill);
+  color: var(--text);
+}
+.task-id-badge[data-copied="true"] {
+  background: var(--card-fill);
+  color: var(--text);
+  border-color: var(--text-soft);
+}
+
 /* ── Goals Strip (compact inline goal status above chat) ── */
 .chat-goals-strip {
   display: flex;

@@ -116,7 +116,7 @@ export namespace Question {
   const QUESTION_MIN_TIMEOUT_MS = 1000
   // 30 minutes — covers human-in-the-loop clarifications raised by Orchestrator
   // during long-running workflows. Callers that need shorter/longer windows
-  // pass `timeoutMs` explicitly (e.g. unattended auto-reply paths).
+  // pass `timeoutMs` explicitly (e.g. auto_question auto-reply paths).
   const QUESTION_AUTO_REJECT_MS = Math.max(
     parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "600000", 10),
     QUESTION_MIN_TIMEOUT_MS,

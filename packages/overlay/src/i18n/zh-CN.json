@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "d98bb0b0a7f14fdd"
+    "panel_revision": "ab804dcf9c78898e"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -457,7 +457,6 @@
   "settings.theme.system": "跟随系统",
   "settings.theme.vscode_dark": "VS Code 深色",
   "settings.title": "服务配置",
-  "settings.unattended": "无人值守模式",
   "settings.username": "用户名",
   "sidebar.close": "收起侧栏",
   "sidebar.open": "展开侧栏",
@@ -542,8 +541,6 @@
   "titlebar.pin.unpin": "取消固定",
   "titlebar.restore": "还原窗口",
   "titlebar.server_config": "服务配置",
-  "titlebar.unattended": "无人值守",
-  "titlebar.unattended_hint": "自动采用默认假设推进任务，跳过人工确认。",
   "transcript.compaction": "[上下文压缩]",
   "card.context_tokens_tooltip": "本轮约 {value} 个提示词 token（服务商上报，实际计费可能略有偏差）",
   "card.context_tokens_tooltip_estimated": "本轮约 {value} 个提示词 token（本地按字符数估算，服务商尚未返回精确值）",

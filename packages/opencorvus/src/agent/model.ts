@@ -1,126 +1,96 @@
 /**
- * Per-agent model resolution.
+ * Per-agent model resolution — strict, no fallbacks.
  *
- * Single source of truth for "which model does agent X use?". Resolution order:
+ * Resolution rule (exactly two levels, in order):
  *
- *   1. Explicit `agent.<name>.model` from user config (Agent.Info.model)
- *      — user's deliberate per-agent override always wins.
- *   2. Most recent user-message-level model pick on the user's task session.
- *      The lookup uses `opts.sessionID` if supplied, otherwise resolves it
- *      from `opts.taskID` (most callers already hold a taskID, so they can
- *      pass that without fetching the task themselves). This is how a user's
- *      in-task model selection ("use claude-sonnet for THIS task") propagates
- *      to every sub-agent the orchestrator dispatches.
- *   3. `OPENCORVUS_BENCHMARK_MODEL` / `OPENCORVUS_E2E_MODEL` env override
- *      (used by benchmarks to pin a model without touching user config).
- *   4. Top-level `model` field in opencorvus.jsonc.
- *   5. Provider.defaultModel().
+ *   1. Explicit `agent.<name>.model` in opencorvus.jsonc — per-agent override.
+ *   2. Top-level `model` in opencorvus.jsonc — project default.
  *
- * Sub-agents (architect, planner, requirements, design-analyst, delivery,
- * orchestrator) all call this with the originating task's ID so the user's
- * choice is honored consistently across the pipeline. Without taskID/sessionID
- * the function still works — the session step is simply skipped.
+ * If neither is set, this function throws `MissingModelConfigError`. We do not
+ * fall back to any implicit source (session user-message selection, env vars,
+ * provider registry order, recent-model state file). The previous
+ * "Provider.defaultModel() reads model.json.recent[0]" chain was a mutable
+ * global whose value changed when the operator clicked a model in the overlay
+ * UI — that directly caused goal retries to silently switch provider/model
+ * between runs (hexin/claude-sonnet-4-6 → alibaba-coding-plan-cn/glm-5),
+ * collapsing prompt cache across retries because Anthropic/GLM caches are
+ * physically isolated.
+ *
+ * opencorvus.jsonc is the single source of truth. If the operator wants to
+ * change the model, they edit the config file (which the overlay settings
+ * panel surfaces read-only). Everything else — env variables, recent-model
+ * state, session user-message propagation — is a fallback and forbidden.
  */
 import { Agent } from "./agent"
 import { Config } from "@/config/config"
 import { Provider } from "@/provider/provider"
-import { Message } from "@/session"
-import { findTask } from "@/engine"
+import { NamedError } from "@opencorvus-ai/util/error"
+import z from "zod"
 
 type ModelRef = {
   providerID: string
   modelID: string
 }
 
-/**
- * Walk the session newest-to-oldest and return the most recent user-chosen
- * model. Returns undefined if no user message in the session ever carried a
- * model selection. Iterator stops at the first hit, so the common case
- * (user's most recent message has a model) is O(1).
- */
-async function sessionModel(sessionID: string): Promise<ModelRef | undefined> {
-  for await (const item of Message.stream(sessionID)) {
-    if (item.info.role === "user" && item.info.model) {
-      return {
-        providerID: item.info.model.providerID,
-        modelID: item.info.model.modelID,
-      }
-    }
-  }
-  return undefined
-}
-
-function envModel(): ModelRef | undefined {
-  for (const key of ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]) {
-    const value = process.env[key]?.trim()
-    if (value && value.includes("/")) return Provider.parseModel(value)
-  }
-  return undefined
-}
-
-async function configuredModel(): Promise<ModelRef | undefined> {
-  const env = envModel()
-  if (env) return env
-  const cfg = await Config.get()
-  if (cfg.model) return Provider.parseModel(cfg.model)
-  return undefined
-}
+export const MissingModelConfigError = NamedError.create(
+  "MissingModelConfigError",
+  z.object({
+    agent: z.string().optional(),
+    message: z.string(),
+  }),
+)
 
 /**
- * Resolve the Provider.Model for a given agent by name. See file header for
- * the full priority order.
+ * Resolve the Provider.Model for a given agent by name.
  *
- * `opts.sessionID` takes precedence over `opts.taskID` for the session lookup;
- * pass sessionID directly when the caller already holds it (e.g. delivery has
- * `task.sessionID` in scope), pass taskID when the caller only holds an ID
- * (e.g. architect / planner / requirements receive `taskID`).
- *
- * A failure to load an explicitly-configured model is NOT silently swallowed:
- * if the user pointed `agent.<name>.model` at a missing provider/model, the
- * call fails so the misconfiguration surfaces instead of being papered over
- * with the default.
+ * Throws `MissingModelConfigError` when neither `agent.<name>.model` nor
+ * top-level `model` is configured. Callers must not catch-and-default this
+ * error; the expected remediation is for the operator to set `model` in
+ * opencorvus.jsonc (or a per-agent override).
  */
 export async function resolveAgentModel(
   name: string,
-  opts?: { taskID?: string; sessionID?: string },
+  _opts?: { taskID?: string; sessionID?: string },
 ): Promise<Provider.Model> {
   const agent = await Agent.get(name)
   if (agent?.model) {
     return Provider.getModel(agent.model.providerID, agent.model.modelID)
   }
-  const sessionID =
-    opts?.sessionID ??
-    (opts?.taskID ? findTask(opts.taskID)?.session_id ?? undefined : undefined)
-  if (sessionID) {
-    const session = await sessionModel(sessionID)
-    if (session) {
-      return Provider.getModel(session.providerID, session.modelID)
-    }
+  const cfg = await Config.get()
+  if (cfg.model) {
+    const ref = Provider.parseModel(cfg.model)
+    return Provider.getModel(ref.providerID, ref.modelID)
   }
-  const configured = await configuredModel()
-  if (configured) {
-    return Provider.getModel(configured.providerID, configured.modelID)
-  }
-  const def = await Provider.defaultModel()
-  return Provider.getModel(def.providerID, def.modelID)
+  throw new MissingModelConfigError({
+    agent: name,
+    message:
+      `No model configured for agent "${name}". ` +
+      `Set \`agent.${name}.model\` or top-level \`model\` in opencorvus.jsonc.`,
+  })
 }
 
 /**
- * Resolve a model ref from the env/config layers only — used by tests and by
- * the benchmark path to inspect the configured default without engaging the
- * agent or session layers. Mirrors the env → config → Provider.defaultModel
- * tail of resolveAgentModel.
+ * Resolve a model ref from config only — used by paths that need the project
+ * default without going through an agent (e.g. the overlay settings panel
+ * asking "what's the configured default?"). Throws when `model` is missing.
  */
 export async function resolveConfiguredModelRef(): Promise<ModelRef> {
-  const configured = await configuredModel()
-  if (configured) return configured
-  return Provider.defaultModel()
+  const cfg = await Config.get()
+  if (cfg.model) return Provider.parseModel(cfg.model)
+  throw new MissingModelConfigError({
+    message:
+      "No top-level `model` configured in opencorvus.jsonc. " +
+      "The project must declare a default model — fallbacks are not allowed.",
+  })
 }
 
 /**
  * Resolve a Provider.Model from an optional explicit ref, falling back to the
- * supplied default. Centralizes the "task.model ? getModel(...) : fallback"
- * pattern used in subtask dispatch and compaction.
+ * supplied `fallback` argument (which the caller has already resolved through
+ * the strict path above). This helper exists only to deduplicate the
+ * "ref ? getModel(ref) : alreadyResolvedDefault" shape at subtask dispatch /
+ * compaction sites. It is NOT a config fallback — the caller owns the
+ * `fallback` argument and is responsible for it being valid.
  */
 export async function resolveModelRef(
   ref: { providerID: string; modelID: string } | undefined | null,

@@ -264,7 +264,7 @@ export namespace Shell {
 
   const BLACKLIST = new Set(["fish", "nu"])
 
-  function fallback() {
+  function platformDefault() {
     if (process.platform === "win32") {
       const bash = firstExisting([Flag.OPENCORVUS_GIT_BASH_PATH, ...gitBashCandidates()])
       if (bash) return bash
@@ -294,12 +294,12 @@ export namespace Shell {
   export const preferred = lazy(() => {
     const s = process.env.SHELL
     if (s) return s
-    return fallback()
+    return platformDefault()
   })
 
   export const acceptable = lazy(() => {
     const s = process.env.SHELL
     if (s && !BLACKLIST.has(process.platform === "win32" ? path.win32.basename(s) : path.basename(s))) return s
-    return fallback()
+    return platformDefault()
   })
 }

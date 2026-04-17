@@ -7,7 +7,7 @@ import { Session } from "../../src/session"
 import { Identifier } from "../../src/id/id"
 import { Message } from "../../src/session/message"
 import { Question } from "../../src/question"
-import { PlanEnterTool, PlanExitTool } from "../../src/tool/plan"
+import { SpecEnterTool, SpecExitTool } from "../../src/tool/spec"
 
 function ctx(input: { sessionID: string; messageID: string }) {
   return {
@@ -49,7 +49,7 @@ async function nextQuestion() {
   throw new Error("expected pending question")
 }
 
-test("plan_enter creates a plan-mode user message and ensures plan directory exists", async () => {
+test("spec_enter creates a spec-mode user message and ensures spec directory exists", async () => {
   await using tmp = await tmpdir({
     git: true,
     config: {
@@ -59,13 +59,65 @@ test("plan_enter creates a plan-mode user message and ensures plan directory exi
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const session = await Session.create({ kind: "assistant", title: "plan enter" })
+      const session = await Session.create({ kind: "assistant", title: "spec enter" })
       await seed(session.id)
-      const tool = await PlanEnterTool.init()
+      const tool = await SpecEnterTool.init()
       const run = tool.execute({}, ctx({
         sessionID: session.id,
         messageID: Identifier.ascending("message"),
       }))
+      const req = await nextQuestion()
+      expect(req.questions[0]?.header).toBe("Spec Mode")
+      await Question.reply({
+        requestID: req.id,
+        answers: [["Yes"]],
+      })
+      const result = await run
+      expect(result.title).toBe("Switching to spec mode")
+      expect(result.metadata.spec).toContain(".opencorvus")
+
+      const spec = Session.spec(session)
+      const stat = await fs.stat(path.dirname(spec))
+      expect(stat.isDirectory()).toBe(true)
+
+      const msgs = await Session.messages({ sessionID: session.id })
+      const last = msgs.at(-1)
+      expect(last?.info.role).toBe("user")
+      if (last?.info.role !== "user") throw new Error("expected user message")
+      expect(last.info.agent).toBe("spec")
+      expect(last.info.model).toEqual({
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-20250514",
+      })
+      const text = last.parts.find((part) => part.type === "text")
+      expect(text?.type).toBe("text")
+      if (text?.type !== "text") throw new Error("expected text part")
+      expect(text.text).toContain("read-only specification")
+    },
+  })
+})
+
+test("spec_exit creates a plan-mode user message after approval", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      model: "anthropic/claude-sonnet-4-20250514",
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ kind: "assistant", title: "spec exit" })
+      await seed(session.id)
+      await Bun.write(Session.spec(session), "# spec\n")
+      const tool = await SpecExitTool.init()
+      const run = tool.execute({}, {
+        ...ctx({
+          sessionID: session.id,
+          messageID: Identifier.ascending("message"),
+        }),
+        agent: "spec",
+      })
       const req = await nextQuestion()
       expect(req.questions[0]?.header).toBe("Plan Mode")
       await Question.reply({
@@ -74,64 +126,12 @@ test("plan_enter creates a plan-mode user message and ensures plan directory exi
       })
       const result = await run
       expect(result.title).toBe("Switching to plan mode")
-      expect(result.metadata.plan).toContain(".opencorvus")
-
-      const plan = Session.plan(session)
-      const stat = await fs.stat(path.dirname(plan))
-      expect(stat.isDirectory()).toBe(true)
 
       const msgs = await Session.messages({ sessionID: session.id })
       const last = msgs.at(-1)
       expect(last?.info.role).toBe("user")
       if (last?.info.role !== "user") throw new Error("expected user message")
       expect(last.info.agent).toBe("plan")
-      expect(last.info.model).toEqual({
-        providerID: "anthropic",
-        modelID: "claude-sonnet-4-20250514",
-      })
-      const text = last.parts.find((part) => part.type === "text")
-      expect(text?.type).toBe("text")
-      if (text?.type !== "text") throw new Error("expected text part")
-      expect(text.text).toContain("read-only planning")
-    },
-  })
-})
-
-test("plan_exit creates a build-mode user message after approval", async () => {
-  await using tmp = await tmpdir({
-    git: true,
-    config: {
-      model: "anthropic/claude-sonnet-4-20250514",
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const session = await Session.create({ kind: "assistant", title: "plan exit" })
-      await seed(session.id)
-      await Bun.write(Session.plan(session), "# plan\n")
-      const tool = await PlanExitTool.init()
-      const run = tool.execute({}, {
-        ...ctx({
-          sessionID: session.id,
-          messageID: Identifier.ascending("message"),
-        }),
-        agent: "plan",
-      })
-      const req = await nextQuestion()
-      expect(req.questions[0]?.header).toBe("Build Mode")
-      await Question.reply({
-        requestID: req.id,
-        answers: [["Yes"]],
-      })
-      const result = await run
-      expect(result.title).toBe("Switching to build mode")
-
-      const msgs = await Session.messages({ sessionID: session.id })
-      const last = msgs.at(-1)
-      expect(last?.info.role).toBe("user")
-      if (last?.info.role !== "user") throw new Error("expected user message")
-      expect(last.info.agent).toBe("build")
       expect(last.info.model).toEqual({
         providerID: "anthropic",
         modelID: "claude-sonnet-4-20250514",

@@ -21,11 +21,9 @@ function resolveMessage(m: any): any {
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { classifyMessage } from "./message";
 import {
-  syntheticTextMessage,
-  interactionRequestText,
-  interactionResponseText,
-  isAutoReplied,
-} from "./transcript";
+  interactionToSyntheticMessages,
+  partitionInteractions,
+} from "./interaction";
 
 const UNTIMED_CONVERSATION_ORDER = Number.MAX_SAFE_INTEGER;
 
@@ -46,7 +44,7 @@ function conversationTime(item: any): number {
 // in store/board.ts ensures unrelated fields don't invalidate this slice).
 //
 // All timestamp invariants (task.time.created > 0, interaction.time.created > 0,
-// resolved/rejected interactions have valid resolved|updated) are enforced at
+// resolved/rejected interactions have valid time.resolved) are enforced at
 // the boundary in `assertBoardInvariants` (store/board.ts). This function
 // trusts those invariants and reads timestamps directly — any malformed
 // timestamp here would already have failed the boundary check.
@@ -80,62 +78,17 @@ function buildUserContextMessages(): any[] {
     });
   }
 
-  // 2. Interactions (permissions, questions, clarifications)
-  for (const interaction of Array.isArray(board.interactions) ? board.interactions : []) {
-    const isAutoPermission =
-      interaction.type === "permission" &&
-      (interaction.status === "answered" || interaction.status === "rejected") &&
-      isAutoReplied(interaction);
-    if (isAutoPermission) continue;
-
-    const interactionRole = "system";
-
-    const requestTime = Number(interaction.time.created);
-
-    // Pending interactions render inline as interactive system messages
-    // via the unified InteractionCard component (CardParts dispatches on
-    // part.type). Answered/rejected fall through to the text-based
-    // transcript path below.
-    if (interaction.status === "pending") {
-      const partType =
-        interaction.type === "question"
-          ? "interaction-question"
-          : interaction.type === "permission"
-            ? "interaction-permission"
-            : null;
-      if (partType) {
-        msgs.push({
-          _synthetic: true,
-          info: {
-            id: `ctx:interaction:${interaction.id}`,
-            role: interactionRole,
-            resolvedRole: interactionRole,
-            channel: "main",
-            time: { created: requestTime },
-          },
-          parts: [{ type: partType, interaction }],
-        });
-        continue;
-      }
-    }
-
-    const request = syntheticTextMessage(
-      interactionRole,
-      requestTime,
-      interactionRequestText(interaction),
-    );
-    if (request) msgs.push(request);
-    if (interaction.status === "answered" || interaction.status === "rejected") {
-      const resolvedTime = Number(
-        interaction.time.resolved ?? interaction.time.updated,
-      );
-      const response = syntheticTextMessage(
-        "system",
-        resolvedTime,
-        interactionResponseText(interaction),
-      );
-      if (response) msgs.push(response);
-    }
+  // 2. Orphan interactions (permissions, questions, clarifications).
+  //
+  // Interactions whose `sessionID` points to a known agent card are claimed
+  // by that card in computeAgentCards() and surface INSIDE that card's
+  // timeline. Only the remaining ones — no sessionID, or a sessionID the
+  // overlay hasn't materialised into a card — fall through here as
+  // top-level synthetic bubbles, so nothing is ever silently dropped.
+  const knownSessionIDs = new Set(Object.keys(messageStore.messagesBySession));
+  const { orphan } = partitionInteractions(board.interactions, knownSessionIDs);
+  for (const interaction of orphan) {
+    for (const m of interactionToSyntheticMessages(interaction)) msgs.push(m);
   }
 
   return msgs;

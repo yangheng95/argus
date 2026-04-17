@@ -64,6 +64,15 @@ let llmSavedValue = "";
 let llmSaveTimer: ReturnType<typeof setTimeout> | undefined;
 let llmSyncSerial = 0;
 let llmNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+// Last `appStore.config.model` value this control rendered against. When a
+// refresh sees the value has changed to something other than what we last
+// applied (i.e. the change came from an external writer — most commonly the
+// settings panel's "Project default" select), drop the local editing buffer
+// and re-sync from config. Without this the inline control's sticky
+// `llmFormDirty` flag silently masks external writes: the settings panel
+// shows sonnet, the inline control keeps showing opus, and the operator
+// can't tell which is authoritative.
+let lastAppliedCfgModel: string | undefined;
 
 async function waitForDialogTurn(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -442,6 +451,17 @@ async function copyApiKey(): Promise<void> {
 export function refreshInlineLlmConfig(syncSaved = !llmFormDirty): void {
   bindElements();
   if (!elements.provider || !elements.model || !elements.apiKey) return;
+  // Detect an external write to cfg.model (e.g. settings panel's Project
+  // default). In that case the inline control's local editing buffer is
+  // stale — drop it so the control re-renders against the new truth.
+  const currentCfgModel =
+    typeof appStore.config?.model === "string" ? appStore.config.model : "";
+  if (lastAppliedCfgModel !== undefined && currentCfgModel !== lastAppliedCfgModel) {
+    llmFormDirty = false;
+    llmSavedValue = "";
+    syncSaved = true;
+  }
+  lastAppliedCfgModel = currentCfgModel;
   populateProviderSelect(syncSaved);
   renderAvailableProviders();
   renderInlineProviderStatus(elements.provider.value, appStore.config);

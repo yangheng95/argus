@@ -15,7 +15,7 @@ import { iife } from "@/util/iife"
 import { Global } from "../global"
 import path from "path"
 import { Filesystem } from "../util/filesystem"
-import { entries, values as objectValues } from "@/util/object"
+import { entries } from "@/util/object"
 
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
@@ -934,42 +934,32 @@ export namespace Provider {
     )
   }
 
-  export async function defaultModel() {
+  /**
+   * Project default model, strict. Reads only `cfg.model` from opencorvus.jsonc.
+   *
+   * Previous versions walked a mutable fallback chain — `model.json`'s
+   * `recent` list (updated every time the operator clicked a model in the
+   * overlay), then the first model of the first registered provider. That
+   * chain caused goal retries to silently switch provider/model between runs
+   * whenever the operator changed the selected model in between, collapsing
+   * prompt cache across retries (Anthropic/GLM caches are physically
+   * isolated, so cross-provider continuity is impossible regardless of byte
+   * equality).
+   *
+   * Throws `ModelNotFoundError` if `cfg.model` is absent. Callers must not
+   * catch-and-default this — the expected remediation is for the operator to
+   * set `model` in opencorvus.jsonc.
+   */
+  export async function defaultModel(): Promise<{ providerID: string; modelID: string }> {
     const cfg = await Config.get()
     if (cfg.model) return parseModel(cfg.model)
-
-    const providers = await list()
-    const recent = (await Filesystem.readJson<{ recent?: { providerID: string; modelID: string }[] }>(
-      path.join(Global.Path.state, "model.json"),
-    )
-      .then((x) => (Array.isArray(x.recent) ? x.recent : []))
-      .catch(() => [])) as { providerID: string; modelID: string }[]
-    for (const entry of recent) {
-      const provider = providers[entry.providerID]
-      if (!provider) continue
-      if (!provider.models[entry.modelID]) continue
-      return { providerID: entry.providerID, modelID: entry.modelID }
-    }
-
-    const configured = cfg.provider && Object.keys(cfg.provider).length > 0 ? Object.keys(cfg.provider) : null
-    const provider = objectValues(providers).find((p) => !configured || configured.includes(p.id))
-    if (!provider)
-      throw new ModelNotFoundError({
-        providerID: "",
-        modelID: "",
-        suggestions: Object.keys(providers),
-      })
-    const [model] = sort(objectValues(provider.models))
-    if (!model)
-      throw new ModelNotFoundError({
-        providerID: provider.id,
-        modelID: "",
-        suggestions: [],
-      })
-    return {
-      providerID: provider.id,
-      modelID: model.id,
-    }
+    throw new ModelNotFoundError({
+      providerID: "",
+      modelID: "",
+      suggestions: [
+        "Set `model` in opencorvus.jsonc, e.g. \"model\": \"anthropic/claude-sonnet-4-6\"",
+      ],
+    })
   }
 
   export function parseModel(model: string) {

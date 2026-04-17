@@ -47,7 +47,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
       numResults: z.number().optional().describe("Number of search results to return (default: 8)"),
       livecrawl: z
         .enum(["fallback", "preferred"])
-        .optional()
+        .default("fallback")
         .describe(
           "Live crawl mode - 'fallback': use live crawling as backup if cached content unavailable, 'preferred': prioritize live crawling (default: 'fallback')",
         ),
@@ -86,7 +86,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
             query: params.query,
             type: params.type || "auto",
             numResults: params.numResults || API_CONFIG.DEFAULT_NUM_RESULTS,
-            livecrawl: params.livecrawl || "fallback",
+            livecrawl: params.livecrawl,
             contextMaxCharacters: params.contextMaxCharacters,
           },
         },

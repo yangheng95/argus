@@ -2360,6 +2360,23 @@ export type Config = {
       skills?: Array<string>
     }
     /**
+     * Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent."intent-analysis".model.
+     */
+    intent_analysis?: {
+      /**
+       * Maximum agentic steps for intent-analysis agent (default: 20)
+       */
+      max_steps?: number
+      /**
+       * Intent-analysis agent timeout in milliseconds (default: 120000)
+       */
+      timeout_ms?: number
+      /**
+       * Additional skill paths for intent-analysis agent
+       */
+      skills?: Array<string>
+    }
+    /**
      * Maximum total task runs (default: 10)
      */
     max_runs?: number

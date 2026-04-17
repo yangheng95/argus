@@ -71,6 +71,38 @@ let _boardRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let _boardLoading: Promise<void> | null = null;
 let _boardQueued = false;
 
+// Invariant handler: fires when the current `selectedTaskID` no longer refers
+// to any task in the merged (tasks + pendingTasks) list. Registered by
+// services/task.ts so that board.ts doesn't need to import selectTask (which
+// would create a cycle). If not registered, the invariant silently degrades —
+// that's a setup bug the app owner is expected to catch in init.
+let _orphanedSelectionHandler: (() => void) | null = null;
+
+export function setOrphanedSelectionHandler(
+  handler: (() => void) | null,
+): void {
+  _orphanedSelectionHandler = handler;
+}
+
+function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
+  const id = boardStore.selectedTaskID;
+  if (!id) return false;
+  // Stable-state guard: orphan detection only runs once the current selection
+  // has a loaded board snapshot. During selectTask()'s async phase we have
+  // `taskSwitching === true` and `board === null`; a concurrent loadTasks()
+  // response from SSE may not yet include the freshly-created task, and
+  // firing the handler then would incorrectly reset a selection that is in
+  // the process of being loaded.
+  if (boardStore.taskSwitching) return false;
+  if (!boardStore.board) return false;
+  const inTasks = Array.isArray(tasks)
+    && tasks.some((item: any) => item?.task?.id === id);
+  if (inTasks) return false;
+  const inPending = Array.isArray(pending)
+    && pending.some((item: any) => item?.task?.id === id || item?.id === id);
+  return !inPending;
+}
+
 function boardSnapshot(board: any): string {
   return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
 }
@@ -132,10 +164,10 @@ function assertBoardInvariants(data: any): void {
         );
       }
       if (it?.status === "answered" || it?.status === "rejected") {
-        const resolved = it?.time?.resolved ?? it?.time?.updated;
+        const resolved = it?.time?.resolved;
         if (!Number.isFinite(resolved) || resolved <= 0) {
           throw new Error(
-            `board.interactions[id=${it?.id}] resolved/rejected without valid time.resolved|updated: ${JSON.stringify(it?.time)}`,
+            `board.interactions[id=${it?.id}] resolved/rejected without valid time.resolved: ${JSON.stringify(it?.time)}`,
           );
         }
       }
@@ -267,6 +299,33 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
   return loading;
 }
 
+/**
+ * Canonical writer for `boardStore.tasks`. All paths that replace the task
+ * list MUST go through here so that the "`selectedTaskID` always refers to an
+ * existing task" invariant is enforced. After the list is applied, if the
+ * current selection no longer exists (in tasks or pendingTasks), the
+ * registered orphan handler is invoked to reset the selection — this is the
+ * single choke point that keeps the conversation panel consistent with the
+ * task list (e.g. after a task is deleted by another client or the last task
+ * is removed locally).
+ *
+ * `nextPending` lets callers that already know the new pending list pass it
+ * in atomically — the orphan check then considers the post-update state.
+ * Omit to keep the current `pendingTasks`.
+ */
+export function applyTasks(
+  tasks: any[],
+  nextPending?: any[],
+): void {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const pending = Array.isArray(nextPending) ? nextPending : boardStore.pendingTasks;
+  setBoardStore("tasks", list);
+  if (Array.isArray(nextPending)) setBoardStore("pendingTasks", pending);
+  if (selectionIsOrphaned(list, pending) && _orphanedSelectionHandler) {
+    _orphanedSelectionHandler();
+  }
+}
+
 export async function loadTasks(): Promise<void> {
   // Let-it-crash: any fetch/parse error lands in boardStore.tasksError so the
   // UI surfaces the failure explicitly. The previous silent catch left the UI
@@ -279,13 +338,11 @@ export async function loadTasks(): Promise<void> {
         .map((item: any) => item?.task?.requestID)
         .filter(Boolean),
     );
-    setBoardStore({
-      tasks,
-      pendingTasks: boardStore.pendingTasks.filter(
-        (item: any) => !seen.has(item?.requestID),
-      ),
-      tasksError: "",
-    });
+    const nextPending = boardStore.pendingTasks.filter(
+      (item: any) => !seen.has(item?.requestID),
+    );
+    applyTasks(tasks, nextPending);
+    setBoardStore("tasksError", "");
   } catch (e) {
     setBoardStore("tasksError", e instanceof Error ? e.message : String(e));
     throw e;
@@ -330,7 +387,7 @@ export function setBoardData(data: any): void {
 }
 
 export function setTasksData(tasks: any[]): void {
-  setBoardStore("tasks", Array.isArray(tasks) ? tasks : []);
+  applyTasks(tasks);
 }
 
 // ── Scheduled board reload ──

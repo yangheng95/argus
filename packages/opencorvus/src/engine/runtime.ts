@@ -71,7 +71,10 @@ async function serializedMerge(runID: string, fn: () => Promise<void>) {
 }
 
 
-// Unattended-mode safeguards
+// Stale-interaction thresholds. Per-interaction-type auto-rejection is gated
+// by `experimental.auto_permission` / `experimental.auto_question` — this
+// constant is just the "how long before an unanswered interaction is
+// considered stale" timer. Both auto_* switches can be flipped independently.
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
 const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
 
