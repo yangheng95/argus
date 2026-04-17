@@ -1,0 +1,38 @@
+Reproduce the Claude "Settings → Usage" page shown in the attached reference image (usage.png) as a static web page.
+
+## Scope
+
+Only create or modify these files:
+- public/index.html
+- public/styles.css
+
+The project scaffold already provides package.json / tsconfig.json. Do NOT add a framework (no React, Vue, Solid). Plain HTML + CSS only. No JS logic is required — progress bars, toggle, and buttons are static.
+
+## Layout requirements
+
+Match the reference image:
+- Left vertical icon rail (dark thin sidebar, ~60px wide) with ~7 icon placeholders and a user avatar "HY" at the bottom
+- Main content area with:
+  - "Settings" heading (serif, large)
+  - Two-column body: left secondary nav (General / Account / Privacy / Billing / Usage / Capabilities / Connectors / Claude Code / Claude in Chrome Beta) with "Usage" highlighted
+  - Right panel with three stacked sections separated by thin horizontal dividers:
+    1. "Plan usage limits" — right-aligned "Max (20x)" badge; one row "Current session" with subtext "Resets in 3 hr 48 min", a thin progress bar ~14% blue fill, right-aligned "14% used" label
+    2. "Weekly limits" — "Learn more about usage limits" link; two rows "All models" (63% used, "Resets in 19 hr 48 min") and "Sonnet only" (15% used, "Resets Wed 4:00 PM"); "Last updated: 3 minutes ago" with refresh icon
+    3. "Extra usage" — toggle switch (on) on the right; "$0.00 spent / Resets May 1" with 0% progress bar; "$20 Monthly spend limit" with "Adjust limit" button; "$200.00 Current balance · Auto-reload off" with "Buy extra usage  Up to 30% off" button
+
+## Style requirements
+
+- Background: off-white #FAF9F7 (Claude cream tone)
+- Sidebar: dark slate (#2B2B2D) with grey icons
+- Headings: serif like the image (use Georgia or a similar serif fallback)
+- Body text: sans-serif (system UI)
+- Progress bar: 6px tall, rounded, blue fill (#2869C5) on light grey track (#E6E6E6)
+- Toggle switch: blue when on, pill shape
+- Buttons: rounded, light border, subtle hover
+
+## Acceptance
+
+- Opening public/index.html in a browser must visually match the reference image layout (sidebar + settings nav + three right-panel sections) with no runtime JS errors
+- The visual-diff script will run SSIM on a 1600x1200 render; target mean ≥ 0.85, worst-5% ≥ 0.55
+
+Do not add README files, docs, or any other files unless strictly required.

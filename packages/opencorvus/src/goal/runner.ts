@@ -173,11 +173,11 @@ export async function cleanupGoalWorkspace(directory?: string) {
   })
 }
 
-export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string) {
+export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string, parentSessionID?: string) {
   const session = await Session.createNext({
     kind: "executor",
     goalID: goal.id,
-    parentID: task.session_id ?? undefined,
+    parentID: parentSessionID ?? task.session_id ?? undefined,
     title: `${task.title}: ${goal.title}`,
     directory: directory ?? (await import("@/project/instance")).Instance.directory,
   })
@@ -188,6 +188,90 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
     sessionID: session.id,
     permission: [{ permission: "*", pattern: "*", action: "allow" as const }],
   })
+  return session
+}
+
+/**
+ * Create the per-goal `build` container session and seed it with one
+ * assistant-role header message describing the dispatch. The container has
+ * no LLM of its own — its purpose is to carry the goal-scope step in the
+ * overlay, with planner + executor child sessions nesting beneath it.
+ *
+ * The header message is authentic content: it records what the build step
+ * dispatched, the worktree branch, and the acceptance specs summary. Without
+ * this seed message, `buildSessionBucketCard` drops empty sessions from
+ * `messagesBySession` and the container vanishes from the overlay.
+ */
+export async function createBuildSession(
+  task: TaskRow,
+  goal: GoalRow,
+  worktreeDir: string,
+  worktreeBranch: string,
+  parentSessionID: string,
+) {
+  const session = await Session.createNext({
+    kind: "build",
+    goalID: goal.id,
+    parentID: parentSessionID,
+    title: `Build: ${goal.title}`,
+    directory: worktreeDir,
+  })
+  await Session.setPermission({
+    sessionID: session.id,
+    permission: [{ permission: "*", pattern: "*", action: "allow" as const }],
+  })
+
+  const specsText = renderSpecsAsText(goal.acceptance_specs ?? [])
+  const ownedPaths = Array.isArray(goal.owned_paths) ? goal.owned_paths : []
+  const headerLines = [
+    `# Build goal: ${goal.title}`,
+    "",
+    goal.objective?.trim() || "(no objective)",
+    "",
+    "## Dispatch",
+    `- worktree: ${worktreeDir}`,
+    `- branch: ${worktreeBranch}`,
+    ownedPaths.length > 0 ? `- owned paths: ${ownedPaths.join(", ")}` : "",
+    "",
+    "## Acceptance",
+    specsText.trim() || "(no acceptance specs)",
+  ].filter((line) => line !== "").join("\n")
+
+  const messageID = Identifier.ascending("message")
+  const now = Date.now()
+  const info = {
+    id: messageID,
+    sessionID: session.id,
+    role: "assistant" as const,
+    parentID: `${task.id}:${goal.id}:build-dispatch`,
+    modelID: "build-dispatch",
+    providerID: "build-dispatch",
+    agent: "build",
+    path: {
+      cwd: worktreeDir,
+      root: worktreeDir,
+    },
+    time: {
+      created: now,
+      completed: now,
+    },
+    cost: 0,
+    tokens: {
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    },
+  }
+  await Session.saveMessage(info as any)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    messageID,
+    sessionID: session.id,
+    type: "text",
+    text: headerLines,
+  } as any)
+  await Session.updateMessage(info as any)
   return session
 }
 

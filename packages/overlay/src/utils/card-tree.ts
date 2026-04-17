@@ -207,21 +207,16 @@ function flattenMessages(messages: any[], opts: { dropUser?: boolean } = {}): an
 // ── Goal steps ──
 
 // Stage order used when a goal has internal cards but no explicit
-// goalSteps metadata. "build" slots between executor and evaluator —
-// when a goal's executor spawns a build sub-session it happens right
-// after (or as part of) execution, before evaluation runs.
-const STEP_ORDER = ["planner", "executor", "build", "evaluator"];
+// goalSteps metadata. Reflects the per-goal session tree: build is the
+// container, planner + executor are its children. evaluator is a separate
+// sibling when the legacy judge path runs.
+const STEP_ORDER = ["build", "planner", "executor", "evaluator"];
 
 function stepIDToStage(stepID: string): string {
-  // Pipeline workflow now has ONE goal-scope step: `build`. The build card
-  // hosts planner + executor + evaluator nested sub-sessions. The `build`
-  // step itself maps to the `build` stage (where session.kind="build" lives);
-  // legacy step IDs (plan/execute/eval) are kept so historical task data still
-  // renders correctly.
-  if (stepID === "build") return "build";
-  if (stepID === "plan") return "planner";
-  if (stepID === "execute") return "executor";
-  if (stepID === "eval") return "evaluator";
+  // Pipeline workflow has ONE goal-scope step: `build`. The build step maps
+  // to the `build` stage (session.kind="build") which hosts planner + executor
+  // as nested sub-sessions. Any other stepID passes through unchanged — the
+  // workflow registry is the source of truth for legal IDs.
   return stepID;
 }
 
@@ -233,41 +228,28 @@ function stepTitle(stage: string, step?: { label?: string }): string {
 /** Fall-back subtitle when the backend hasn't emitted `step.summary` yet —
  *  which happens during the entire runtime of a step because summaries are
  *  derived from committed DB rows (plan nodes / delivery / evaluation) that
- *  only land once the step finishes. Without this, long-running Execute rows
+ *  only land once the step finishes. Without this, long-running Build rows
  *  render completely empty. */
 function deriveStepSubtitle(
   stepID: string,
   status: CardStatus,
   payload: StepPayload | undefined,
 ): string | undefined {
-  // The `build` step is the new umbrella for plan + execute + eval. It can
-  // surface any of those fields. Legacy `plan` / `execute` / `eval` IDs are
-  // kept so historical tasks render correctly.
-  if (stepID === "build" || stepID === "execute") {
-    if (payload?.diffStats?.files !== undefined && payload.diffStats.files > 0) {
-      return `${payload.diffStats.files} files`;
-    }
-    if (payload?.changedFiles?.length) {
-      return `${payload.changedFiles.length} files`;
-    }
-    if (payload?.checks?.length) {
-      const passed = payload.checks.filter((c) => c.status === "passed").length;
-      return `${passed}/${payload.checks.length} checks`;
-    }
-    if (payload?.verdict) return payload.verdict;
-    if (payload?.planNodes?.length) return `${payload.planNodes.length} steps`;
-    if (payload?.executorSessionID && status === "running") return "running…";
+  // The `build` step folds plan + execute + eval into one payload.
+  if (stepID !== "build") return undefined;
+  if (payload?.diffStats?.files !== undefined && payload.diffStats.files > 0) {
+    return `${payload.diffStats.files} files`;
   }
-  if (stepID === "eval") {
-    if (payload?.checks?.length) {
-      const passed = payload.checks.filter((c) => c.status === "passed").length;
-      return `${passed}/${payload.checks.length} checks`;
-    }
-    if (payload?.verdict) return payload.verdict;
+  if (payload?.changedFiles?.length) {
+    return `${payload.changedFiles.length} files`;
   }
-  if (stepID === "plan") {
-    if (payload?.planNodes?.length) return `${payload.planNodes.length} steps`;
+  if (payload?.checks?.length) {
+    const passed = payload.checks.filter((c) => c.status === "passed").length;
+    return `${passed}/${payload.checks.length} checks`;
   }
+  if (payload?.verdict) return payload.verdict;
+  if (payload?.planNodes?.length) return `${payload.planNodes.length} steps`;
+  if (payload?.executorSessionID && status === "running") return "running…";
   return undefined;
 }
 

@@ -59,10 +59,6 @@ function promptGroupLabel(group: string): string {
 function promptDescription(entry: PromptEntry): string {
   if (entry.key === "core_header") return t("prompt.desc.core_header");
   if (entry.key === "agent_generate") return t("prompt.desc.agent_generate");
-  if (entry.key === "planner_system") return t("prompt.desc.planner_system");
-  if (entry.key === "spec_system") return t("prompt.desc.spec_system");
-  if (entry.key === "evaluator_system") return t("prompt.desc.evaluator_system");
-  if (entry.key === "delivery_system") return t("prompt.desc.delivery_system");
   return entry.description || "";
 }
 

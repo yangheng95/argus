@@ -7,6 +7,8 @@
 const KNOWN_STAGES = new Set([
   "assistant",
   "spec",
+  "requirements",
+  "design-analyst",
   "architect",
   "planner",
   "goal",

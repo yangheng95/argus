@@ -404,8 +404,12 @@ export namespace Agent {
     return result
   })
 
-  /** Map of native agent name → built-in default prompt (before config overrides). */
-  const NATIVE_DEFAULTS: Record<string, string | undefined> = {
+  /** Map of native agent name → built-in default prompt (before config overrides).
+   *  Every native agent that appears in state() must map to its own distinct
+   *  core prompt here — otherwise the prompt-catalog panel renders it as an
+   *  empty / "inherits core_header" placeholder and multiple agents collapse
+   *  into visually identical cards. */
+  const NATIVE_DEFAULTS: Record<string, string> = {
     build: PROMPT_BUILD,
     spec: SPEC_CORE,
     plan: PLAN_CORE,
@@ -414,15 +418,18 @@ export namespace Agent {
     compaction: PROMPT_COMPACTION,
     title: PROMPT_TITLE,
     summary: PROMPT_SUMMARY,
+    architect: ARCHITECT_CORE,
+    planner: PLANNER_CORE,
+    requirements: REQUIREMENTS_CORE,
+    "design-analyst": DESIGN_ANALYST_CORE,
   }
 
   /** Returns the built-in default prompt for a native agent (before config overrides).
-   *  For dynamically loaded agents (evaluator, delivery), falls back to the agent's prompt field. */
+   *  `delivery` is resolved lazily inside state() (async import) so its prompt
+   *  is stamped directly on the Agent.Info row and read by the catalog via
+   *  `agent.prompt` rather than this helper. */
   export function nativeDefaultPrompt(name: string): string | undefined {
-    const static_ = NATIVE_DEFAULTS[name]
-    if (static_ !== undefined) return static_
-    // For agents loaded dynamically (evaluator, delivery), the prompt is populated in state()
-    return undefined
+    return NATIVE_DEFAULTS[name]
   }
 
   /** Invalidate the memoized Agent.state(). Call after config changes so the

@@ -3353,6 +3353,7 @@ code .file-link:hover {
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
+  overflow-anchor: none;
   padding: calc(10px * var(--ui-scale)) var(--ui-panel-padding-x);
   display: flex;
   flex-direction: column;
@@ -3385,6 +3386,55 @@ code .file-link:hover {
   font-size: var(--ui-font-heading);
   text-align: center;
   line-height: 1.5;
+}
+
+/* Follow-to-bottom toggle — sticky at bottom-right of the scroll container.
+   Default (is-active off) means auto-scroll is disabled and the user can
+   read freely; clicking it re-engages follow and jumps to the bottom. */
+.chat-follow-toggle {
+  position: sticky;
+  bottom: 8px;
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  background: var(--panel, rgba(20, 22, 28, 0.85));
+  backdrop-filter: blur(8px);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  user-select: none;
+  z-index: 5;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.chat-follow-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent, #4a9eff);
+}
+
+.chat-follow-toggle.is-active {
+  color: var(--accent, #4a9eff);
+  border-color: var(--accent, #4a9eff);
+  background: color-mix(in srgb, var(--accent, #4a9eff) 14%, transparent);
+}
+
+.chat-follow-toggle svg {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.chat-follow-toggle.is-active svg {
+  transform: translateY(1px);
+}
+
+.chat-follow-label {
+  white-space: nowrap;
 }
 
 /* Text parts — prominent */

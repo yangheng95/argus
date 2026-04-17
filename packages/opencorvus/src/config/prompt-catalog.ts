@@ -18,7 +18,11 @@ export namespace PromptCatalog {
     description?: string
   }
 
-  /** Static metadata for system-scope prompt slots. */
+  /** Static metadata for system-scope prompt slots.
+   *  Only two truly system-wide slots remain — they apply to every LLM call
+   *  regardless of which agent is running. Per-agent prompts live on
+   *  `config.agent.{name}.prompt` and surface as agent-scope entries with
+   *  their own distinct defaults from `Agent.nativeDefaultPrompt`. */
   const SYSTEM_PROMPT_META: Array<{
     key: string
     label: string
@@ -37,73 +41,18 @@ export namespace PromptCatalog {
       group: "generator",
       description: "Prompt used when generating new agent configurations",
     },
-    {
-      key: "spec_system",
-      label: "Spec Agent",
-      group: "assistant",
-      description: "System prompt used by the spec agent when it extracts requirements and constraints",
-    },
-    {
-      key: "goal_system",
-      label: "Goal Agent",
-      group: "assistant",
-      description: "System prompt used by the goal agent when it decomposes spec requirements into executable implementation goals",
-    },
-    {
-      key: "planner_system",
-      label: "Planner Agent",
-      group: "assistant",
-      description: "System prompt used by the planner when it builds execution plans",
-    },
-    {
-      key: "delivery_system",
-      label: "Delivery Agent",
-      group: "assistant",
-      description: "System prompt used by the delivery agent when it verifies startup, fixes bugs, and makes the final acceptance decision",
-    },
   ]
 
-  /**
-   * Resolve the built-in default prompt for a system-scope slot.
-   * Uses dynamic imports for orchestrator prompts to avoid circular dependency
-   * (agent modules import Config, and prompt-catalog lives next to Config).
-   */
-  async function defaultPromptForKey(key: string): Promise<string> {
+  /** Resolve the built-in default prompt for a system-scope slot. */
+  function defaultPromptForKey(key: string): string {
     switch (key) {
       case "core_header":
         return PROMPT_SYSTEM
       case "agent_generate":
         return PROMPT_GENERATE
-      case "spec_system":
-      case "goal_system":
-      case "requirements_system": {
-        const { REQUIREMENTS_SYSTEM } = await import("@/requirements")
-        return REQUIREMENTS_SYSTEM
-      }
-      case "planner_system": {
-        const PLAN_CORE = (await import("@/prompt/core/plan-core.txt")).default
-        return PLAN_CORE
-      }
-      case "delivery_system": {
-        const { DELIVERY_AGENT_SYSTEM } = await import("@/delivery/agent")
-        return DELIVERY_AGENT_SYSTEM
-      }
       default:
         return ""
     }
-  }
-
-  /**
-   * Map from system-scope key to the agent name it covers.
-   * Agents with a system-scope entry are excluded from the agent-scope list
-   * so the catalog shows exactly one entry per logical agent.
-   */
-  const SYSTEM_COVERS_AGENT: Record<string, string> = {
-    spec_system: "spec",
-    goal_system: "goal",
-    planner_system: "plan",
-    evaluator_system: "evaluator",
-    delivery_system: "delivery",
   }
 
   function agentGroup(agent: Agent.Info): string {
@@ -125,7 +74,7 @@ export namespace PromptCatalog {
     // System-scope prompts
     for (const slot of SYSTEM_PROMPT_META) {
       const configured = configPrompts[slot.key] ?? null
-      const defaultPrompt = await defaultPromptForKey(slot.key)
+      const defaultPrompt = defaultPromptForKey(slot.key)
       entries.push({
         scope: "system",
         key: slot.key,
@@ -139,18 +88,19 @@ export namespace PromptCatalog {
       })
     }
 
-    // Agent names already covered by a system-scope entry — skip to avoid duplicates
-    const coveredAgents = new Set(Object.values(SYSTEM_COVERS_AGENT))
-
-    // Agent-scope prompts (skip agents with a system-scope counterpart)
+    // Agent-scope prompts — every native agent surfaces with its own default.
+    //
+    // The previous implementation used a SYSTEM_COVERS_AGENT mask to hide
+    // agents whose system-scope slot existed (spec/goal/plan/evaluator/delivery).
+    // That mask was removed together with those legacy slots, so every native
+    // agent now renders as one distinct card. `Agent.nativeDefaultPrompt` is
+    // the single source of truth for the default prompt; dynamically-loaded
+    // agents (e.g. delivery) fall back to `agent.prompt` populated in state().
     for (const agent of agents) {
-      if (coveredAgents.has(agent.name)) continue
       const agentCfg = (cfg.agent ?? {})[agent.name]
       const configuredPrompt = agentCfg?.prompt ?? null
-      // Use native default (before config override) for built-in agents
       const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined
-      const defaultPrompt = nativeDefault ?? ""
-      // An agent inherits core if it has no own prompt, or if its default IS the core prompt
+      const defaultPrompt = nativeDefault ?? agent.prompt ?? ""
       const inheritsCore = !configuredPrompt && (!defaultPrompt || defaultPrompt === PROMPT_SYSTEM)
       entries.push({
         scope: "agent",

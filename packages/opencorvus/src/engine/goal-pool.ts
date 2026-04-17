@@ -47,7 +47,7 @@ import {
 } from "./persist"
 import { EngineGoalTable, EnginePlanNodeTable } from "./engine.sql"
 import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
-import { buildGoalPrompt, createGoalSession } from "@/goal/runner"
+import { buildGoalPrompt, createBuildSession, createGoalSession } from "@/goal/runner"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -331,13 +331,19 @@ export class GoalPool {
       // (not all 24 goals in parallel before any execution starts).
       // Planning is NOT optional — failure propagates and the goal run fails.
       let planNodeBrief: string
-      // Per-goal step identity (NEW): the only goal-scope step in the
-      // pipeline workflow is `build`. Plan + execute are sub-phases that
-      // happen INSIDE build — they don't have their own workflow step.
-      // Marking the build step running here covers the planning sub-phase;
-      // execution sub-phase below is idempotent (re-marking running is a no-op
-      // in the workflow state machine).
+      // Per-goal step identity: the only goal-scope step in the pipeline
+      // workflow is `build`. We create a kind="build" container session up
+      // front and nest planner + executor as its children — this matches
+      // the overlay's goalToNode lookup (step "build" → stage "build") and
+      // surfaces the plan/execute sub-phases beneath a single build card.
       await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "running").catch(() => undefined)
+      const buildSession = await createBuildSession(
+        task as any,
+        entry.goal as any,
+        worktreeDir!,
+        worktreeInfo.branch,
+        sessionID,
+      )
       {
         const allGoalsForPlan = listGoalsByPlan(plan.id)
         const goalContract = goalRowToContract(entry.goal)
@@ -351,12 +357,12 @@ export class GoalPool {
             : [],
         }
         // Per-goal planner session: persisted via session.kind='planner' +
-        // session.goal_id. board.ts joins SessionTable by (kind, goal_id) to
-        // surface this in the per-goal panel. No metadata key needed.
+        // session.goal_id with parentID=buildSession.id so it nests under
+        // the build container in the overlay.
         const planSession = await Session.createNext({
           kind: "planner",
           goalID: entry.goal.id,
-          parentID: sessionID,
+          parentID: buildSession.id,
           title: `Plan: ${entry.goal.title}`,
           directory: Instance.directory,
         })
@@ -408,8 +414,9 @@ export class GoalPool {
       // ── 3. Create goal session ──
       // createGoalSession persists the session row with kind="executor" and
       // goalID=entry.goal.id, so sessionRole/sessionGoalID resolve correctly
-      // before opencode emits its first message. No registry write needed.
-      const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir)
+      // before opencode emits its first message. parentSessionID=buildSession.id
+      // nests the executor card under the build container in the overlay.
+      const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir, buildSession.id)
 
       // ── 4. Create GoalRun record ──
       const goalRun = createGoalRun({

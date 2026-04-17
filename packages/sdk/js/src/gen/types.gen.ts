@@ -1213,6 +1213,8 @@ export type Session = {
   kind:
     | "root"
     | "assistant"
+    | "requirements"
+    | "design-analyst"
     | "planner"
     | "goal"
     | "architect"
@@ -2307,25 +2309,13 @@ export type Config = {
       skills?: Array<string>
     }
     /**
-     * Evaluator agent configuration. Model is configured via agent.evaluator.model.
+     * Deterministic evaluator runner config (build / test / lint / spec heuristics in delivery/checks/per-goal.ts). The evaluator LLM agent was collapsed into the delivery agent — these fields control only the deterministic pipeline.
      */
     evaluator?: {
-      /**
-       * Maximum agentic steps for evaluator agent (default: 25)
-       */
-      max_steps?: number
-      /**
-       * Evaluator agent timeout in milliseconds (default: 240000)
-       */
-      timeout_ms?: number
       /**
        * Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'.
        */
       tier?: "core" | "standard" | "full"
-      /**
-       * Additional skill paths for evaluator agent
-       */
-      skills?: Array<string>
       /**
        * When true, runs the deterministic per-goal evaluator inside the goal-pool loop after the executor returns — goal fails if acceptance_specs strict scorers reject. Default: false (debug gate, legacy 'executor OK → passed' path is used).
        */
@@ -2390,7 +2380,7 @@ export type Config = {
      */
     max_executor_groups?: number
     /**
-     * Default workflow for new tasks: 'standard', 'quick-fix', 'plan-only', or custom ID (default: 'standard')
+     * Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID (default: 'pipeline')
      */
     default_workflow?: string
     /**
@@ -2697,6 +2687,8 @@ export type GlobalSession = {
   kind:
     | "root"
     | "assistant"
+    | "requirements"
+    | "design-analyst"
     | "planner"
     | "goal"
     | "architect"
@@ -2928,7 +2920,7 @@ export type Agent = {
   topP?: number
   temperature?: number
   color?: string
-  permission: PermissionRuleset
+  permission?: PermissionRuleset
   model?: {
     modelID: string
     providerID: string
@@ -4375,6 +4367,8 @@ export type SessionCreateData = {
     kind:
       | "root"
       | "assistant"
+      | "requirements"
+      | "design-analyst"
       | "planner"
       | "goal"
       | "architect"

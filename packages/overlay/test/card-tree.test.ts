@@ -168,44 +168,56 @@ describe("toCardTree — agent card", () => {
 // ── toCardTree: goal group ──
 
 describe("toCardTree — goal group", () => {
-  test("goal group with explicit workflow steps creates step children in order", () => {
+  test("goal group with explicit workflow step surfaces the build step and nests planner+executor beneath it", () => {
     const goal = {
       kind: "goal" as const,
       id: "goal-group:goal-1",
-      stage: "executor" as const,
+      stage: "build" as const,
       status: "running",
       round: 1,
-      sessionID: "exec-1",
+      sessionID: "build-1",
       time: 2000,
       goalID: "goal-1",
       goalTitle: "Implement auth",
       goalStatus: "running",
       goalDescription: "",
       goalSteps: [
-        { stepID: "plan", label: "Plan", status: "completed" },
-        { stepID: "execute", label: "Execute", status: "running" },
-        { stepID: "eval", label: "Eval", status: "pending" },
+        { stepID: "build", label: "Build", status: "running" },
       ],
       internalCards: [
         {
           kind: "agent" as const,
-          id: "plan-card",
-          stage: "planner",
-          status: "completed",
-          round: 0,
-          sessionID: "plan-1",
-          time: 1000,
-          messages: [assistantMsg({ id: "p1", agent: "planner", text: "planned" })],
-        },
-        {
-          kind: "agent" as const,
-          id: "exec-card",
-          stage: "executor",
+          id: "build-card",
+          stage: "build",
           status: "running",
           round: 0,
-          sessionID: "exec-1",
-          time: 1500,
-          messages: [assistantMsg({ id: "e1", agent: "executor", text: "running" })],
+          sessionID: "build-1",
+          time: 900,
+          messages: [assistantMsg({ id: "b1", agent: "build", text: "dispatching plan+exec" })],
+          children: [
+            {
+              kind: "agent" as const,
+              id: "plan-card",
+              stage: "planner",
+              status: "completed",
+              round: 0,
+              sessionID: "plan-1",
+              parentSessionID: "build-1",
+              time: 1000,
+              messages: [assistantMsg({ id: "p1", agent: "planner", text: "planned" })],
+            },
+            {
+              kind: "agent" as const,
+              id: "exec-card",
+              stage: "executor",
+              status: "running",
+              round: 0,
+              sessionID: "exec-1",
+              parentSessionID: "build-1",
+              time: 1500,
+              messages: [assistantMsg({ id: "e1", agent: "executor", text: "running" })],
+            },
+          ],
         },
       ],
     };
@@ -216,15 +228,19 @@ describe("toCardTree — goal group", () => {
     expect(n.status).toBe("running");
     expect(n.title).toBe("Implement auth");
     expect(n.round).toBe(1);
-    expect(n.children).toHaveLength(3); // 3 steps, eval has no internal card
-    expect(n.children[0].stage).toBe("planner");
-    expect(n.children[0].status).toBe("completed");
-    expect(n.children[1].stage).toBe("executor");
-    expect(n.children[1].status).toBe("running");
-    expect(n.children[2].stage).toBe("evaluator");
-    expect(n.children[2].status).toBe("pending");
-    // executor step carries its flattened parts (1 boundary + 1 text)
-    expect(n.children[1].parts.length).toBeGreaterThan(0);
+    expect(n.children).toHaveLength(1); // single goal-scope step "build"
+    const buildStep = n.children[0];
+    expect(buildStep.kind).toBe("step");
+    expect(buildStep.stage).toBe("build");
+    expect(buildStep.status).toBe("running");
+    // build session's own messages land as parts (boundary + text)
+    expect(buildStep.parts.length).toBeGreaterThan(0);
+    // planner + executor nest as children of the build step
+    expect(buildStep.children).toHaveLength(2);
+    expect(buildStep.children[0].stage).toBe("planner");
+    expect(buildStep.children[0].status).toBe("completed");
+    expect(buildStep.children[1].stage).toBe("executor");
+    expect(buildStep.children[1].status).toBe("running");
   });
 
   test("goal group without workflow steps falls back to internal card order", () => {
