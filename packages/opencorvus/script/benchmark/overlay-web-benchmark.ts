@@ -1089,7 +1089,7 @@ async function scaffoldProject(dir: string, model: string) {
       $schema: "https://opencorvus.ai/config.json",
       model,
       experimental: {
-        unattended: true,
+        unattended: false,
       },
       lsp: {
         biome: {

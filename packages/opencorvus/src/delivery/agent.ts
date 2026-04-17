@@ -466,10 +466,23 @@ function buildUserPrompt(
     const list = images.map((a) => `- ${a.filename ?? a.sha} (${a.mime})`).join("\n")
     sections.push(
       `# Visual Reference\n\n` +
-      `The target design is attached to this message as image content (not as a project file). ` +
-      `Compare the rendered output against it using your vision, NOT read_file — ` +
-      `read_file on a binary returns garbage. The full-pixel SSIM result is already ` +
-      `available via query_criteria.\n\nAttached images:\n${list}`,
+      `The target design is attached to this message as image content (not as a project file).\n\n` +
+      `**You MUST perform visual comparison yourself.** Follow these steps:\n` +
+      `1. The reference image is attached above — study it carefully (layout, colors, spacing, typography, component structure).\n` +
+      `2. Use \`read_file\` on \`.opencorvus/visual-diff/rendered.png\` to see the actual rendered screenshot. ` +
+      `The read tool handles images correctly and returns them as visual content — do NOT skip this step.\n` +
+      `3. Compare the two images visually. Identify EVERY concrete difference:\n` +
+      `   - Layout mismatches (element positions, alignment, proportions)\n` +
+      `   - Color differences (background, text, progress bars, borders)\n` +
+      `   - Typography issues (font size, weight, family, line-height)\n` +
+      `   - Spacing/padding errors (margins between sections, inner padding)\n` +
+      `   - Missing or extra elements\n` +
+      `   - Interaction elements (buttons, toggles, links) that look wrong\n` +
+      `4. If visual_diff failed in query_criteria, you MUST reject with specific visual feedback — ` +
+      `listing each difference so the executor knows exactly what to fix. ` +
+      `A generic "visual diff failed" is NOT acceptable feedback.\n` +
+      `5. The SSIM score from query_criteria is a supporting metric, not a substitute for your visual judgment.\n\n` +
+      `Attached reference images:\n${list}`,
     )
   }
 
@@ -669,6 +682,7 @@ The Evaluator already ran the deterministic part. Look at the "Core Check Result
 1. For each FAILED check — open the cited evidence, decide whether you can fix it (small targeted patch) or whether it needs a full executor re-run (call submit_next_task with priority="critical" + failed_criteria)
 2. For PASSED checks — accept them, do NOT re-run the same commands
 3. If a check you believe should exist is missing entirely (e.g. project has tests but no test entry), run it once with run_command and record it under deferred_checks (the evaluator did not detect it; this is gap coverage, not duplication)
+4. **visual_diff failed** — this is a STRICT check. You MUST read_file on \`.opencorvus/visual-diff/rendered.png\` to see the rendered output, visually compare it against the attached reference image, and list every concrete difference in your rejection. Do NOT accept when visual_diff is failed.
 
 ### Phase 2: PER-GOAL CRITERIA VERIFICATION (rubric / semantic)
 For EACH goal in the goals list below, evaluator covered the heuristic-shaped (executable command) part of its acceptance_specs. You handle the rest:
