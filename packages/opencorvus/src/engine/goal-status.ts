@@ -1,18 +1,23 @@
 /**
- * Derive `engine_goal.status` from the goal's supersede-chain tip goal_run.
+ * Derive `engine_goal.status` from (cascade_state, goal_run chain tip).
  *
- * engine_goal.status is not an authored field — it's a projection of the
- * goal's most recent dispatched attempt. Every call site that previously
- * wrote engine_goal.status directly (goal-pool, retry, restart) now writes
- * engine_goal_run instead and calls syncGoalStatus() to refresh the
- * projection. This eliminates the divergence class we hit at 006/007 where
- * goal_run=completed but goal.status=pending after retry_failed_goals
- * rewrote the goal without being able to rewrite the immutable goal_run.
+ * engine_goal.status is NOT an authored field — it's a cached projection of
+ * two inputs:
+ *   1. `engine_goal.cascade_state` — non-null only when the goal's deps
+ *      are permanently failed and no goal_run will ever dispatch. Written
+ *      only by `persist.ts::updateGoalCascadeFailed`.
+ *   2. `engine_goal_run` chain — the supersede-tip goal_run row.
  *
- * The only exception is "cascade-failed" goals (deps permanently failed,
- * so no dispatch ever happens). Those still need an explicit write because
- * there's no goal_run to derive from — persistence.ts::updateGoalCascadeFailed
- * is the only call site that sets engine_goal.status directly.
+ * There are exactly two legal writers for `engine_goal.status`:
+ *   - `syncGoalStatus()`           — derives from the two inputs above
+ *   - `updateGoalCascadeFailed()`  — writes cascade_state, then calls
+ *                                    syncGoalStatus
+ *
+ * All other direct writes to engine_goal.status are a bug. They produce
+ * divergence that the dispatch gate / readiness logic cannot reconcile,
+ * which historically caused the "completed goal_run but pending goal"
+ * stall (iter-6 / iter-7) and the "failed status silently re-derived"
+ * stall (chgZ 2026-04-18).
  */
 
 import { Database, eq } from "@/storage/db"
@@ -55,12 +60,18 @@ function mapRunStatus(runStatus: EngineGoalRunStatus): EngineGoalStatus {
 }
 
 /**
- * Pure function: compute what engine_goal.status should be based on the
- * goal's goal_run history. Returns undefined when there are no goal_runs at
- * all — the caller decides whether the default "pending" is authoritative
- * or whether an explicit cascade-failed write takes priority.
+ * Pure function: compute what engine_goal.status should be from
+ * (cascade_state, goal_run chain tip). Returns undefined only when neither
+ * input is set — caller keeps the default "pending".
+ *
+ * Precedence: cascade_state=failed dominates any goal_run chain. This is
+ * deliberate — cascade means deps permanently failed, so even a completed
+ * goal_run (from a prior contract) must project as failed now.
  */
 export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
+  const goal = findGoal(goalID)
+  if (goal?.cascade_state === "failed") return "failed"
+  if (goal?.cascade_state === "passed") return "passed"
   const rows = listGoalRunsByGoal(goalID)
   if (rows.length === 0) return undefined
   const supersededIDs = new Set(

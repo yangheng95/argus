@@ -68,11 +68,7 @@ async function runLlmJudge(
   scorer: LlmJudgeScorer,
   input: RubricEvaluationInput,
 ): Promise<RubricEvaluationResult> {
-  const model = await resolveAgentModel("delivery", { taskID: input.taskID }).catch(() => undefined)
-  if (!model) {
-    log.warn("no default model — rubric skipped", { name })
-    return { name, status: "skipped", evidence: "no LLM available for rubric evaluation" }
-  }
+  const model = await resolveAgentModel("delivery", { taskID: input.taskID })
   const language = await Provider.getLanguage(model)
 
   const system = buildJudgeSystemPrompt(scorer)

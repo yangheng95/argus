@@ -6,6 +6,7 @@ import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { iife } from "@/util/iife"
 import { Flag } from "@/flag/flag"
+import { normalizeVendorMessages } from "./vendor-messages"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -42,127 +43,13 @@ export namespace ProviderTransform {
     return undefined
   }
 
+  /**
+   * Apply vendor-specific message normalization. Implementation lives in
+   * provider/vendor-messages.ts — see that file for the per-vendor rules
+   * and the pre-vs-terminal staging model.
+   */
   function normalizeMessages(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
-    // Anthropic rejects messages with empty content - filter out empty string messages
-    // and remove empty text/reasoning parts from array content
-    if (model.api.npm === "@ai-sdk/anthropic") {
-      msgs = msgs
-        .map((msg) => {
-          if (typeof msg.content === "string") {
-            if (msg.content === "") return undefined
-            return msg
-          }
-          if (!Array.isArray(msg.content)) return msg
-          const filtered = msg.content.filter((part) => {
-            if (part.type === "text" || part.type === "reasoning") {
-              return part.text !== ""
-            }
-            return true
-          })
-          if (filtered.length === 0) return undefined
-          return { ...msg, content: filtered }
-        })
-        .filter((msg): msg is ModelMessage => msg !== undefined && msg.content !== "")
-    }
-
-    if (model.api.id.includes("claude")) {
-      return msgs.map((msg) => {
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              return {
-                ...part,
-                toolCallId: part.toolCallId.replace(/[^a-zA-Z0-9_-]/g, "_"),
-              }
-            }
-            return part
-          })
-        }
-        return msg
-      })
-    }
-    if (
-      model.providerID === "mistral" ||
-      model.api.id.toLowerCase().includes("mistral") ||
-      model.api.id.toLocaleLowerCase().includes("devstral")
-    ) {
-      const result: ModelMessage[] = []
-      for (let i = 0; i < msgs.length; i++) {
-        const msg = msgs[i]
-        const nextMsg = msgs[i + 1]
-
-        if ((msg.role === "assistant" || msg.role === "tool") && Array.isArray(msg.content)) {
-          msg.content = msg.content.map((part) => {
-            if ((part.type === "tool-call" || part.type === "tool-result") && "toolCallId" in part) {
-              // Mistral requires alphanumeric tool call IDs with exactly 9 characters
-              const normalizedId = part.toolCallId
-                .replace(/[^a-zA-Z0-9]/g, "") // Remove non-alphanumeric characters
-                .substring(0, 9) // Take first 9 characters
-                .padEnd(9, "0") // Pad with zeros if less than 9 characters
-
-              return {
-                ...part,
-                toolCallId: normalizedId,
-              }
-            }
-            return part
-          })
-        }
-
-        result.push(msg)
-
-        // Fix message sequence: tool messages cannot be followed by user messages
-        if (msg.role === "tool" && nextMsg?.role === "user") {
-          result.push({
-            role: "assistant",
-            content: [
-              {
-                type: "text",
-                text: "Done.",
-              },
-            ],
-          })
-        }
-      }
-      return result
-    }
-
-    if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
-      const field = model.capabilities.interleaved.field
-      return msgs.map((msg) => {
-        if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
-          const reasoningText = reasoningParts.map((part: any) => part.text).join("")
-
-          // Filter out reasoning parts from content
-          const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
-
-          // Include reasoning_content | reasoning_details directly on the message for all assistant messages
-          if (reasoningText) {
-            return {
-              ...msg,
-              content: filteredContent,
-              providerOptions: {
-                ...msg.providerOptions,
-                openaiCompatible: {
-                  ...(msg.providerOptions as any)?.openaiCompatible,
-                  [field]: reasoningText,
-                },
-              },
-            }
-          }
-
-          return {
-            ...msg,
-            content: filteredContent,
-          }
-        }
-
-        return msg
-      })
-    }
-
-    return msgs
+    return normalizeVendorMessages(msgs, model)
   }
 
   function applyCaching(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {

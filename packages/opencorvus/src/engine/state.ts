@@ -195,6 +195,18 @@ export async function updateRun(
       ),
     )
   })
+  // Terminal transition: release in-process PerRunState (merge locks,
+  // agent-notification set). This is the single authoritative point for
+  // run-lifecycle cleanup — every writer path (runtime.syncRun,
+  // runtime.failRun, writer.abortRuns, orchestrator tools, recovery)
+  // funnels through updateRun, so no path can leak in-memory state.
+  if (
+    statusChanged &&
+    (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted")
+  ) {
+    const { PerRunState } = await import("./per-run-state")
+    PerRunState.finalize(row.id)
+  }
   return updated ?? requireRun(row.id)
 }
 

@@ -465,6 +465,13 @@ CREATE TABLE IF NOT EXISTS engine_goal (
   priority         text NOT NULL DEFAULT 'blocking',
   source           text NOT NULL DEFAULT 'spec',
   status           text NOT NULL DEFAULT 'pending',
+  -- cascade_state: explicit terminal outcome for goals that bypass the
+  -- goal_run dispatch chain (deps permanently failed, OR verification goals
+  -- whose evaluation is computed at delivery time without an executor).
+  -- Values: "failed" | "passed" | NULL. Written ONLY by
+  -- updateGoalCascadeFailed / updateGoalVerificationOutcome.
+  -- deriveGoalStatus() reads this before walking the goal_run chain.
+  cascade_state    text,
   retry_count      integer NOT NULL DEFAULT 0,
   order_index      integer NOT NULL DEFAULT 0,
   metadata         text,
@@ -567,7 +574,6 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   plan_node_id        text,
   coordinator_run_id  text NOT NULL,
   session_id          text,
-  executor            text NOT NULL DEFAULT 'opencode',
   status              text NOT NULL DEFAULT 'queued',
   retry_count         integer NOT NULL DEFAULT 0,
   blocking_reason     text,

@@ -35,7 +35,7 @@ import {
 } from "./engine.sql"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findGoalRun, findPlan, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { findGoalRun, findLatestTipGoalRun, findPlan, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
 import { syncGoalStatus } from "./goal-status"
 import { assertGoalRunTransition, type GoalRunStatus } from "./goal-run-state-machine"
 import { StaleRowError } from "./state"
@@ -161,7 +161,6 @@ export function createGoalRun(input: {
   planNodeID?: string
   coordinatorRunID: string
   sessionID?: string
-  executor: RunRow["executor"]
   retryCount?: number
   blockingReason?: string | null
   error?: string | null
@@ -225,7 +224,6 @@ export function createGoalRun(input: {
         plan_node_id: input.planNodeID,
         coordinator_run_id: input.coordinatorRunID,
         session_id: input.sessionID,
-        executor: input.executor,
         status: "queued",
         retry_count: input.retryCount ?? 0,
         blocking_reason: input.blockingReason ?? null,
@@ -266,6 +264,112 @@ export function createGoalRun(input: {
  * which know the old run id can keep the intent explicit; the actual
  * supersede link is set by createGoalRun via supersedeOf.
  */
+/**
+ * Explicit cascade-failed marker for a goal.
+ *
+ * Sets `engine_goal.cascade_state = "failed"` and then calls syncGoalStatus
+ * so the status projection picks up the new marker. Use when the goal's
+ * deps are permanently failed (no goal_run will ever be dispatched) or the
+ * goal is a verification-only goal that failed its checks.
+ *
+ * This is one of two canonical writers for engine_goal.status:
+ *   - syncGoalStatus()         — derives from goal_run chain tip
+ *   - updateGoalCascadeFailed  — sets cascade_state, then syncGoalStatus
+ * All other direct writes to engine_goal.status are a bug.
+ */
+function writeCascadeState(input: {
+  goalID: string
+  outcome: "failed" | "passed"
+  reason: string
+  writer: string
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const goal = Database.use((db) =>
+    db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, input.goalID)).get(),
+  )
+  if (!goal) {
+    throw new Error(`${input.writer}: goal ${input.goalID} not found`)
+  }
+  if (goal.cascade_state === input.outcome) return
+  Database.use((db) =>
+    db.update(EngineGoalTable)
+      .set({ cascade_state: input.outcome, time_updated: now })
+      .where(eq(EngineGoalTable.id, input.goalID))
+      .run(),
+  )
+  log.info("goal cascade_state set", {
+    goalID: input.goalID, outcome: input.outcome, reason: input.reason, writer: input.writer,
+  })
+  syncGoalStatus(input.goalID, `${input.writer}: ${input.reason}`)
+}
+
+/** Cascade: goal's deps are permanently failed, no goal_run will ever dispatch. */
+export function updateGoalCascadeFailed(input: {
+  goalID: string
+  reason: string
+  now?: number
+}) {
+  writeCascadeState({ ...input, outcome: "failed", writer: "updateGoalCascadeFailed" })
+}
+
+/** Verification goals (isDispatchableGoal === false): evaluation outcome recorded at delivery time. */
+export function updateGoalVerificationOutcome(input: {
+  goalID: string
+  outcome: "failed" | "passed"
+  reason: string
+  now?: number
+}) {
+  writeCascadeState({ ...input, writer: "updateGoalVerificationOutcome" })
+}
+
+/**
+ * Batch reset every goal in a task back to the "pending" projection by:
+ *  1. clearing any explicit cascade_state marker
+ *  2. supersede-annotating any failed goal_run tip so deriveGoalStatus
+ *     projects `pending` via the retry marker
+ *  3. calling syncGoalStatus on each goal
+ *
+ * Caller (restart_from_stage) is responsible for having aborted live
+ * goal_runs first via abortLiveExecutionForTask — this function only
+ * handles the terminal-state remnants.
+ */
+export function resetTaskGoalsToPending(input: {
+  taskID: string
+  reason: string
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const goals = listGoals(input.taskID)
+  let clearedCascade = 0
+  let supersededTips = 0
+  for (const goal of goals) {
+    if (goal.cascade_state !== null && goal.cascade_state !== undefined) {
+      Database.use((db) =>
+        db.update(EngineGoalTable)
+          .set({ cascade_state: null, time_updated: now })
+          .where(eq(EngineGoalTable.id, goal.id))
+          .run(),
+      )
+      clearedCascade++
+    }
+    const tip = findLatestTipGoalRun(goal.id)
+    if (tip && tip.status === "failed") {
+      const existingMeta = (tip.metadata ?? {}) as Record<string, unknown>
+      if (typeof existingMeta.superseded_reason !== "string" || !existingMeta.superseded_reason) {
+        supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now })
+        supersededTips++
+      }
+    }
+    syncGoalStatus(goal.id, `resetTaskGoalsToPending: ${input.reason}`)
+  }
+  log.info("reset task goals to pending", {
+    taskID: input.taskID, reason: input.reason,
+    total: goals.length, clearedCascade, supersededTips,
+  })
+  return { total: goals.length, clearedCascade, supersededTips }
+}
+
 export function supersedeGoalRun(input: {
   oldGoalRunID: string
   reason: string

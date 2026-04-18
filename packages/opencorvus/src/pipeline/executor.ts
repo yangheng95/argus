@@ -285,13 +285,21 @@ async function* streamExecutorEvents(
       lastHeartbeat = now
       EngineProtocol.emit(Event.GoalProgress, {
         taskID: task.id, goalRunID, summary: `Goal ${goalRunID.slice(-8)} executing`,
-      }, { taskID: task.id, runID: run.id, goalRunID, source: "goal-executor" }).catch(() => {})
+      }, { taskID: task.id, runID: run.id, goalRunID, source: "goal-executor" })
+        .catch(err => log.warn("GoalProgress heartbeat emit failed", { goalRunID, error: String(err) }))
       yield { type: "heartbeat" }
     }
   }
   streamDone = true
   streamAbort.abort("stream ended")
-  await poller.catch(() => {})
+  // Poller races the stream; after streamAbort it rejects with AbortError.
+  // We join it so the handle doesn't leak, but a genuine poller bug would
+  // also land here, so we log non-abort rejections instead of swallowing.
+  await poller.catch(err => {
+    if (!streamAbort.signal.aborted) {
+      log.warn("poller rejected unexpectedly", { goalRunID, error: String(err) })
+    }
+  })
 
   if (signal.aborted) return { error: "Execution aborted" }
 

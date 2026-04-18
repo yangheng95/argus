@@ -17,13 +17,13 @@ export function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
   if (task?.activeSpecVersionID) {
     return { spec_check: { enabled: true, mode: "strict" } }
   }
-  try {
-    const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
-    const specFiles = require("fs").readdirSync(specsDir) as string[]
-    if (specFiles.some((f: string) => f.endsWith(".md"))) {
-      return { spec_check: { enabled: true, mode: "strict" } }
-    }
-  } catch {}
+  const fsSync = require("fs") as typeof import("fs")
+  const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
+  if (!fsSync.existsSync(specsDir)) return {}
+  const specFiles = fsSync.readdirSync(specsDir) as string[]
+  if (specFiles.some((f: string) => f.endsWith(".md"))) {
+    return { spec_check: { enabled: true, mode: "strict" } }
+  }
   return {}
 }
 
@@ -84,8 +84,11 @@ export function resolvedChecks(
 
 export async function discoverChecks(changedFiles?: unknown) {
   const cwd = await discoverPackageRoot(changedFiles)
-  const file = Bun.file(path.join(cwd, "package.json"))
-  const json = await file.json().catch(() => undefined) as { scripts?: Record<string, string> } | undefined
+  const pkgPath = path.join(cwd, "package.json")
+  const file = Bun.file(pkgPath)
+  const json = (await file.exists())
+    ? (await file.json()) as { scripts?: Record<string, string> }
+    : undefined
   const scripts = json?.scripts ?? {}
   const run = (name: string): EvaluatorCommand[] => [{ command: `bun run ${name}`, cwd }]
   const files = Array.isArray(changedFiles)
@@ -228,7 +231,8 @@ async function discoverPythonChecks(cwd: string, files: string[]) {
     exists(path.join(cwd, "ruff.toml")),
     exists(path.join(cwd, ".ruff.toml")),
   ])
-  const pyproject = await Bun.file(path.join(cwd, "pyproject.toml")).text().catch(() => "")
+  const pyprojectFile = Bun.file(path.join(cwd, "pyproject.toml"))
+  const pyproject = (await pyprojectFile.exists()) ? await pyprojectFile.text() : ""
   const hasPythonFiles = files.some((item) => item.endsWith(".py")) || (await hasPythonTopLevel(cwd))
   const isPythonProject = hasPythonFiles || markers.some(Boolean)
   if (!isPythonProject) return {}
@@ -279,7 +283,8 @@ async function exists(filepath: string) {
 }
 
 async function hasPythonTopLevel(cwd: string) {
-  const entries = await fs.readdir(cwd).catch(() => [])
+  if (!(await Filesystem.exists(cwd))) return false
+  const entries = await fs.readdir(cwd)
   return entries.some((item) => item.endsWith(".py"))
 }
 
@@ -314,10 +319,11 @@ function checkLabel(key: string) {
 
 async function classifyTests(files: string[], cwd: string) {
   const items = await Promise.all(
-    files.map(async (file) => ({
-      file,
-      text: await Bun.file(path.join(cwd, file)).text().catch(() => ""),
-    })),
+    files.map(async (file) => {
+      const bunFile = Bun.file(path.join(cwd, file))
+      const text = (await bunFile.exists()) ? await bunFile.text() : ""
+      return { file, text }
+    }),
   )
   return {
     bun: items

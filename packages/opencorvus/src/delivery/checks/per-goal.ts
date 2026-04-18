@@ -439,5 +439,10 @@ async function fileExists(filepath: string): Promise<boolean> {
 }
 
 async function readJson<T>(filepath: string): Promise<T | undefined> {
-  return Bun.file(filepath).json().catch(() => undefined) as Promise<T | undefined>
+  const file = Bun.file(filepath)
+  if (!(await file.exists())) return undefined
+  // File exists — let malformed JSON propagate. Silently swallowing would
+  // let the evaluator treat a corrupted metadata file the same as a missing
+  // one, which masks real bugs.
+  return (await file.json()) as T
 }

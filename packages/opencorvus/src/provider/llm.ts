@@ -28,7 +28,7 @@ import {
 import { mergeDeep } from "remeda"
 import { Provider } from "./provider"
 import { ProviderTransform } from "./transform"
-import { Installation } from "@/installation"
+import { applyVendorHeaders } from "./vendor-headers"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 
@@ -90,10 +90,20 @@ export namespace ProviderLLM {
     const language = await Provider.getLanguage(model)
 
     // 2. Compute base options (provider-specific: reasoning, caching, store, etc.)
+    // Reaching this point implies the provider is already loaded (model was
+    // resolved upstream); a missing entry is a real bug we want to surface.
+    const providerInfo = await Provider.getProvider(model.providerID)
+    if (!providerInfo) {
+      throw new Error(
+        `ProviderLLM.stream: provider ${model.providerID} is not loaded — ` +
+        `model resolution succeeded but provider registry lookup returned undefined. ` +
+        `This is a provider/state initialization bug.`,
+      )
+    }
     const baseOptions = ProviderTransform.options({
       model,
       sessionID: input.cacheKey || "",
-      providerOptions: (await Provider.getProvider(model.providerID).catch(() => ({ options: {} }))).options,
+      providerOptions: providerInfo.options,
     })
 
     // Merge overrides (model-level options, caller overrides)
@@ -219,20 +229,8 @@ export namespace ProviderLLM {
    *   sessionID for session calls, taskID for agent calls.
    */
   export function baseHeaders(model: Provider.Model, stickyKey?: string): Record<string, string> {
-    const headers: Record<string, string> = {
-      ...(model.providerID !== "anthropic"
-        ? { "User-Agent": `opencorvus/${Installation.VERSION}` }
-        : undefined),
-      ...model.headers,
-    }
-    // hexin LiteLLM gateway hashes `x-user` for sticky upstream-key routing.
-    // Without it, round-robin lands each request on a cold Anthropic cache,
-    // paying cache-creation (~1.25× input) every time. Empirically took
-    // claude-sonnet-4-6 hit ratio from ~60% to 100%. Scoped to hexin only so
-    // other openai-compatible providers aren't affected.
-    if (model.providerID === "hexin" && stickyKey) {
-      headers["x-user"] = stickyKey
-    }
+    const headers: Record<string, string> = { ...model.headers }
+    applyVendorHeaders(headers, model, stickyKey)
     return headers
   }
 }

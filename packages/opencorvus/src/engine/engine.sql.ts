@@ -245,7 +245,25 @@ export const EngineGoalTable = sqliteTable(
     // --- Orchestrator-managed fields ---
     priority: text().notNull().$type<EngineGoalPriority>().default("blocking"),
     source: text().notNull().default("spec"),
+    /**
+     * Cached projection of (cascade_state ?? goal_run chain tip).
+     * Authored by exactly two writers:
+     *  - `syncGoalStatus()` — derives from the latest goal_run tip
+     *  - `updateGoalCascadeFailed()` — sets cascade_state and then
+     *    projects via syncGoalStatus
+     * All other writes are a bug (they produce divergence).
+     */
     status: text().notNull().$type<EngineGoalStatus>().default("pending"),
+    /**
+     * Explicit terminal outcome for goals that bypass the goal_run dispatch
+     * chain:
+     *   - "failed"  — deps permanently failed (cascade), OR verification goal
+     *                  evaluation rejected.
+     *   - "passed"  — verification goal evaluation accepted.
+     *   - NULL      — status projects from the goal_run chain (normal path).
+     * Written only by updateGoalCascadeFailed / updateGoalVerificationOutcome.
+     */
+    cascade_state: text().$type<"failed" | "passed">(),
     /** Per-goal retry counter. Incremented each time retry_failed_goals resets this goal. */
     retry_count: integer().notNull().default(0),
     order_index: integer().notNull().default(0),
@@ -378,7 +396,6 @@ export const EngineGoalRunTable = sqliteTable(
       .notNull()
       .references(() => EngineRunTable.id, { onDelete: "cascade" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    executor: text().notNull().$type<EngineExecutor>().default("opencode"),
     status: text().notNull().$type<EngineGoalRunStatus>().default("queued"),
     retry_count: integer().notNull().default(0),
     blocking_reason: text(),

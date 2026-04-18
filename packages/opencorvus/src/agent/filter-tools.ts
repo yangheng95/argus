@@ -20,7 +20,10 @@ export async function filterAgentTools<T extends Record<string, unknown>>(
   tools: T,
   agentName: string,
 ): Promise<T> {
-  const agent = await Agent.get(agentName).catch(() => undefined)
+  // Agent.get returns undefined for unconfigured agents; any thrown error
+  // (config parse, store failure) propagates so the filter doesn't silently
+  // run with a permissive tool set.
+  const agent = await Agent.get(agentName)
   const filter = agent?.tools
   if (!filter) return tools
   const include = filter.include
