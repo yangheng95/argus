@@ -9,18 +9,15 @@ import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
 
 import PROMPT_GENERATE from "./generate.txt"
-import PROMPT_BUILD from "./prompt/build.txt"
-import SPEC_CORE from "@/prompt/core/spec-core.txt"
-import PLAN_CORE from "@/prompt/core/plan-core.txt"
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 import PLANNER_CORE from "@/prompt/core/planner-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
+import PROMPT_BUILD from "./prompt/build.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_GENERAL from "./prompt/general.txt"
-import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
@@ -104,10 +101,6 @@ export namespace Agent {
         ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
       },
       question: "deny",
-      plan_enter: "deny",
-      plan_exit: "deny",
-      spec_enter: "deny",
-      spec_exit: "deny",
       // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
       read: {
         "*": "allow",
@@ -129,56 +122,6 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
-            plan_enter: "allow",
-            spec_enter: "allow",
-          }),
-          user,
-        ),
-        mode: "primary",
-        native: true,
-      },
-      spec: {
-        name: "spec",
-        description: "Read-only specification agent. Explores codebase, asks questions, and writes the specification file before planning.",
-        tools: { include: ["read", "glob", "grep", "codesearch", "lsp", "question", "spec_exit", "task", "memory", "webfetch", "websearch"] },
-        options: {},
-        prompt: SPEC_CORE,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-            spec_exit: "allow",
-            bash: "deny",
-            schedule: "deny",
-            apply_patch: "deny",
-            edit: {
-              "*": "deny",
-              ".opencorvus/specs/*.md": "allow",
-            },
-          }),
-          user,
-        ),
-        mode: "primary",
-        native: true,
-      },
-      plan: {
-        name: "plan",
-        description: "Read-only planning agent. Explores, asks questions, and writes the implementation plan file.",
-        tools: { include: ["read", "glob", "grep", "codesearch", "lsp", "question", "plan_exit", "task", "memory", "webfetch", "websearch"] },
-        options: {},
-        prompt: PLAN_CORE,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-            plan_exit: "allow",
-            bash: "deny",
-            schedule: "deny",
-            apply_patch: "deny",
-            edit: {
-              "*": "deny",
-              ".opencorvus/plans/*.md": "allow",
-            },
           }),
           user,
         ),
@@ -188,7 +131,7 @@ export namespace Agent {
       general: {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
-        tools: { exclude: ["planner", "panel", "tui", "task_report", "analytics", "plan_enter", "plan_exit", "spec_enter", "spec_exit"] },
+        tools: { exclude: ["planner", "panel", "tui", "task_report", "analytics"] },
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -270,6 +213,10 @@ export namespace Agent {
       // omitted to stop misleading users into thinking
       // `agent.<stage>.permission` in opencorvus.jsonc has any effect.
       // ───────────────────────────────────────────────────────────────────
+      // `summary` is kept only as a model-routing key — `resolveAgentModel`
+      // looks it up from `agent.summary.model` in config. It has no static
+      // prompt: the only consumer (`task-api/index.ts::generateFollowup`)
+      // constructs its own prompt inline.
       summary: {
         name: "summary",
         tools: { include: [] as string[] },
@@ -277,12 +224,11 @@ export namespace Agent {
         options: {},
         native: true,
         hidden: true,
-        prompt: PROMPT_SUMMARY,
       },
       delivery: {
         name: "delivery",
         description: "Delivery verification agent. Verifies runtime behavior, fixes bugs, and makes final acceptance decisions.",
-        tools: { exclude: ["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "goal_report", "analytics"] },
+        tools: { exclude: ["task", "planner", "panel", "tui", "task_report", "goal_report", "analytics"] },
         options: {},
         prompt: DELIVERY_AGENT_SYSTEM,
         mode: "primary",
@@ -422,13 +368,10 @@ export namespace Agent {
    *  into visually identical cards. */
   const NATIVE_DEFAULTS: Record<string, string> = {
     build: PROMPT_BUILD,
-    spec: SPEC_CORE,
-    plan: PLAN_CORE,
     general: PROMPT_GENERAL,
     explore: PROMPT_EXPLORE,
     compaction: PROMPT_COMPACTION,
     title: PROMPT_TITLE,
-    summary: PROMPT_SUMMARY,
     architect: ARCHITECT_CORE,
     planner: PLANNER_CORE,
     requirements: REQUIREMENTS_CORE,

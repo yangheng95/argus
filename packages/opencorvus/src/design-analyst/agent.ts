@@ -372,7 +372,10 @@ async function designAnalystSystem(): Promise<string> {
   const config = await Config.get()
   const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
   if (typeof systemOverride?.design_analyst_system === "string") return systemOverride.design_analyst_system
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.design_analyst?.prompt
+  // Key is the canonical agent name (hyphenated). The prompt-catalog UI saves
+  // overrides under `config.agent["design-analyst"].prompt` — reading the
+  // underscore variant used to silently drop every user edit.
+  const agentPrompt = (config.agent as Record<string, any> | undefined)?.["design-analyst"]?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : DESIGN_ANALYST_CORE
   const orchCfg = await EngineConfig.get()
   const skills = await loadStageSkills(orchCfg.design_analyst.skills, "design-analyst")

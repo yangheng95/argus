@@ -32,7 +32,7 @@ opencorvus serve [flags]
 | flag | 默认 | 说明 |
 |---|---|---|
 | `--hostname` | `127.0.0.1` | 监听地址（启用 `--mdns` 时改为 `0.0.0.0`） |
-| `--port` | `0`（自动） | 监听端口；**惯例上用 7878**，但 flag 默认是 `0`（自动分配空闲端口） |
+| `--port` | `7878` | 监听端口 |
 | `--project-dir` | `cwd()` | 工作仓库路径 |
 | `--mdns` | off | 启用 mDNS 服务发现 |
 | `--mdns-domain` | `opencorvus.local` | mDNS 域名 |

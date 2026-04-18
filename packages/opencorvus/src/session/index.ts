@@ -370,14 +370,6 @@ export namespace Session {
     return result
   }
 
-  export function plan(input: { slug: string; time: { created: number } }) {
-    return path.join(Instance.worktree, ".opencorvus", "plans", [input.time.created, input.slug].join("-") + ".md")
-  }
-
-  export function spec(input: { slug: string; time: { created: number } }) {
-    return path.join(Instance.worktree, ".opencorvus", "specs", [input.time.created, input.slug].join("-") + ".md")
-  }
-
   export const get = fn(Identifier.schema("session"), async (id) => {
     const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id)).get())
     if (!row) throw new NotFoundError({ message: `Session not found: ${id}` })

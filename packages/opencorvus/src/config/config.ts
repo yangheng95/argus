@@ -626,10 +626,6 @@ export namespace Config {
           todowrite: PermissionAction.optional(),
           todoread: PermissionAction.optional(),
           question: PermissionAction.optional(),
-          plan_enter: PermissionAction.optional(),
-          plan_exit: PermissionAction.optional(),
-          spec_enter: PermissionAction.optional(),
-          spec_exit: PermissionAction.optional(),
           webfetch: PermissionAction.optional(),
           websearch: PermissionAction.optional(),
           codesearch: PermissionAction.optional(),
@@ -1057,7 +1053,6 @@ export namespace Config {
       agent: z
         .object({
           // primary
-          plan: Agent.optional(),
           build: Agent.optional(),
           // subagent
           general: Agent.optional(),

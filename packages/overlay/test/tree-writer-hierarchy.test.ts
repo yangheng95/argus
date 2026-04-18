@@ -204,6 +204,404 @@ test("tree-writer projects interactions into session children and top-level card
   expect(cardTreeStore.cards[orphanCardID]?.parts?.[0]?.type).toBe("interaction-question");
 });
 
+test("root assistant session with parentSessionID pointing to task-virtual root surfaces at top level", () => {
+  // Mirrors real backend shape (task-message-protocol-bridge.ts stamps
+  // task.sessionID onto every event; the root assistant session therefore
+  // has parentSessionID = task.sessionID even though task.sessionID never
+  // emits any message.updated). Regression guard for the Step 2 rewrite
+  // that initially hid the root assistant behind a pending-parent check
+  // and left the overlay completely blank.
+  const TASK_VIRTUAL_SID = "ses_task_virtual_root";
+  const ROOT_ASSISTANT_SID = "ses_real_assistant";
+
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "virtual root",
+      sessionID: TASK_VIRTUAL_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_root",
+        sessionID: ROOT_ASSISTANT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        parentSessionID: TASK_VIRTUAL_SID,
+        time: { created: 1_776_000_000_500 },
+      },
+    },
+  });
+
+  const rootCardID = `assistant:session:${ROOT_ASSISTANT_SID}`;
+  expect(cardTreeStore.cards[rootCardID]).toBeDefined();
+  expect(cardTreeStore.order).toContain(rootCardID);
+});
+
+test("pending:session:* placeholder does not escape to top-level order", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "trace pending sessions",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  // A message.part.updated arrives before any message.updated for this
+  // session (high-cadence streaming race). ensureSessionCard creates a
+  // pending:session:<sid> placeholder; it MUST NOT show up at top level.
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: {
+        id: "prt_stream",
+        messageID: "msg_race",
+        sessionID: "ses_race",
+        type: "text",
+        text: "partial stream",
+      },
+    },
+  });
+
+  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeDefined();
+  expect(cardTreeStore.order).not.toContain("pending:session:ses_race");
+
+  // Once message.updated arrives with a real stage, the card renames and
+  // claims its place under its parent (assistant root).
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_race",
+        sessionID: "ses_race",
+        role: "assistant",
+        resolvedRole: "planner",
+        agent: "planner",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_001_000 },
+      },
+    },
+  });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_root",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_500 },
+      },
+    },
+  });
+
+  const rootCardID = `assistant:session:${ROOT_SID}`;
+  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined();
+  expect(cardTreeStore.cards["planner:session:ses_race"]).toBeDefined();
+  expect(cardTreeStore.order).toContain(rootCardID);
+  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).toContain(
+    "planner:session:ses_race",
+  );
+});
+
+test("non-assistant orphan sub-agent session throws (no silent top-level escape)", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "trace orphans",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  // A sub-agent session with NO parentSessionID and NO goalID is a backend
+  // linkage bug. The writer must loud-fail instead of dropping the session
+  // into rebuildTopLevelOrder's old "others" bucket.
+  expect(() =>
+    applyEvent({
+      type: "message.updated",
+      properties: {
+        taskID: TASK_ID,
+        info: {
+          id: "msg_orphan",
+          sessionID: "ses_orphan",
+          role: "assistant",
+          resolvedRole: "planner",
+          agent: "planner",
+          time: { created: 1_776_000_001_000 },
+        },
+      },
+    }),
+  ).toThrow(/non-assistant sub-agent session escaped to top level/);
+});
+
+test("fidelity card attaches under requirements session when session is known", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "fidelity ordering",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_root",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_500 },
+      },
+    },
+  });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_req",
+        sessionID: REQUIREMENTS_SID,
+        role: "assistant",
+        resolvedRole: "requirements",
+        agent: "requirements",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_001_000 },
+      },
+    },
+  });
+  applyEvent({
+    type: "fidelity.review.completed",
+    properties: {
+      taskID: TASK_ID,
+      sessionID: REQUIREMENTS_SID,
+      verdict: "needs_correction",
+      issues: [{ type: "uncovered", description: "missing goal X" }],
+      corrections: [],
+      missingGoals: [],
+      attempts: 1,
+    },
+  });
+
+  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}`;
+  const fidelityCardID = `fidelity:${TASK_ID}`;
+  expect(cardTreeStore.cards[fidelityCardID]).toBeDefined();
+  expect(cardTreeStore.order).not.toContain(fidelityCardID);
+  expect(
+    cardTreeStore.cards[requirementsCardID]?.childIDs || [],
+  ).toContain(fidelityCardID);
+});
+
+test("fidelity event with unknown session holds payload out-of-band (no unreachable store entry)", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "fidelity race",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  // Fidelity event arrives before the requirements session's first
+  // message.updated. Card must NOT be in cardTreeStore.cards (would be
+  // unreachable), and NOT in order (would escape).
+  applyEvent({
+    type: "fidelity.review.completed",
+    properties: {
+      taskID: TASK_ID,
+      sessionID: REQUIREMENTS_SID,
+      verdict: "faithful",
+      issues: [],
+      corrections: [],
+      missingGoals: [],
+      attempts: 1,
+    },
+  });
+
+  const fidelityCardID = `fidelity:${TASK_ID}`;
+  expect(cardTreeStore.cards[fidelityCardID]).toBeUndefined();
+  expect(cardTreeStore.order).not.toContain(fidelityCardID);
+
+  // When the session arrives, the held payload materializes and attaches.
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_root",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_500 },
+      },
+    },
+  });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_req",
+        sessionID: REQUIREMENTS_SID,
+        role: "assistant",
+        resolvedRole: "requirements",
+        agent: "requirements",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_001_000 },
+      },
+    },
+  });
+
+  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}`;
+  expect(cardTreeStore.cards[fidelityCardID]).toBeDefined();
+  expect(cardTreeStore.order).not.toContain(fidelityCardID);
+  expect(
+    cardTreeStore.cards[requirementsCardID]?.childIDs || [],
+  ).toContain(fidelityCardID);
+});
+
+test("fidelity event missing sessionID throws (schema became required)", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "fidelity schema",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  expect(() =>
+    applyEvent({
+      type: "fidelity.review.completed",
+      properties: {
+        taskID: TASK_ID,
+        verdict: "faithful",
+        issues: [],
+        corrections: [],
+        missingGoals: [],
+        attempts: 0,
+      },
+    }),
+  ).toThrow(/missing sessionID/);
+});
+
+test("resetWriter clears pendingFidelity so a later session does not resurrect a stale payload", () => {
+  resetWriter();
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "fidelity reset",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+
+  applyEvent({
+    type: "fidelity.review.completed",
+    properties: {
+      taskID: TASK_ID,
+      sessionID: REQUIREMENTS_SID,
+      verdict: "faithful",
+      issues: [],
+      corrections: [],
+      missingGoals: [],
+      attempts: 1,
+    },
+  });
+
+  resetWriter();
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_root",
+        sessionID: ROOT_SID,
+        role: "assistant",
+        resolvedRole: "assistant",
+        agent: "assistant",
+        time: { created: 1_776_000_000_500 },
+      },
+    },
+  });
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: {
+        id: "msg_req",
+        sessionID: REQUIREMENTS_SID,
+        role: "assistant",
+        resolvedRole: "requirements",
+        agent: "requirements",
+        parentSessionID: ROOT_SID,
+        time: { created: 1_776_000_001_000 },
+      },
+    },
+  });
+
+  const fidelityCardID = `fidelity:${TASK_ID}`;
+  expect(cardTreeStore.cards[fidelityCardID]).toBeUndefined();
+});
+
 test("tree-writer explicitly accepts non-projected protocol events", () => {
   resetWriter();
   setBoardStore("board", {

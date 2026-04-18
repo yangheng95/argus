@@ -884,4 +884,41 @@ export const Event = {
       summary: z.string(),
     }),
   ),
+  /** Fidelity review verdict with the full structured result. Emitted once
+   *  per reviewFidelity() call after the LLM's JSON output has been parsed
+   *  and validated. Carries the same shape as FidelityResult so the overlay
+   *  can render a native verdict card (badge + issues + corrections) instead
+   *  of the raw JSON that used to appear in the reasoning stream. */
+  FidelityReviewCompleted: BusEvent.define(
+    "fidelity.review.completed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      /** Requirements agent session that owns this fidelity review. The
+       *  overlay uses this to attach the verdict card under the requirements
+       *  session card — without it the card would escape to the top level,
+       *  which the overlay explicitly forbids (see tree-writer card hierarchy
+       *  rules). Required: every real fidelity pass runs inside an agent
+       *  session; emitting without sessionID is a backend bug that must be
+       *  caught at the source (see fidelity.ts emitFidelityEvent assertion). */
+      sessionID: z.string(),
+      verdict: z.enum(["faithful", "needs_correction"]),
+      issues: z.array(z.object({
+        type: z.enum(["uncovered", "partial", "distorted", "merged_incorrectly"]),
+        description: z.string(),
+      })),
+      corrections: z.array(z.object({
+        action: z.enum(["modify", "split", "remove"]),
+        goalID: z.string(),
+        reason: z.string(),
+        updatesTitle: z.string().optional(),
+        updatesObjective: z.string().optional(),
+      })),
+      missingGoals: z.array(z.object({
+        title: z.string(),
+        objective: z.string(),
+        reason: z.string().optional(),
+      })),
+      attempts: z.number(),
+    }),
+  ),
 }

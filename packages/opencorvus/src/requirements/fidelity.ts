@@ -15,6 +15,8 @@
 import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
 import { resolveAgentModel } from "@/agent/model"
+import { EngineProtocol } from "@/engine/protocol"
+import { Event as EngineEvent } from "@/engine/model"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { AcceptanceSpecSchema, renderSpecsAsText } from "@/acceptance/types"
@@ -73,23 +75,34 @@ export async function reviewFidelity(input: {
   goals: GoalContractFields[]
   signal?: AbortSignal
   /** Task ID for cache stickiness — same key requirements used keeps hexin
-   *  on the same upstream pool, so prompt cache hits across stages. */
+   *  on the same upstream pool, so prompt cache hits across stages. Also
+   *  used as the aggregate for the FidelityReviewCompleted event so the
+   *  overlay can render a native verdict card. */
   taskID?: string
-  /** Stream hooks so the fidelity LLM's tokens flow into the same agent
-   *  card the user is watching. Without this, fidelity runs invisibly and
-   *  the operator only sees the verdict line in logs. */
-  stream?: import("@/llm/api").TextHooks
+  /** Requirements agent session ID — forwarded into FidelityReviewCompleted
+   *  so the overlay can nest the verdict card under the requirements session
+   *  card instead of surfacing it as a top-level escapee. */
+  sessionID?: string
 }): Promise<FidelityResult> {
   const { goals, signal } = input
 
   if (goals.length === 0) {
-    return { verdict: "needs_correction", issues: [{ type: "uncovered", description: "No goals produced" }], corrections: [], missingGoals: [] }
+    const result: FidelityResult = {
+      verdict: "needs_correction",
+      issues: [{ type: "uncovered", description: "No goals produced" }],
+      corrections: [],
+      missingGoals: [],
+    }
+    emitFidelityEvent(input.taskID, input.sessionID, result, 0)
+    return result
   }
 
   const model = await resolveAgentModel("requirements", { taskID: input.taskID }).catch(() => undefined)
   if (!model) {
     log.warn("no LLM available for fidelity review, skipping")
-    return { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
+    const result: FidelityResult = { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
+    emitFidelityEvent(input.taskID, input.sessionID, result, 0)
+    return result
   }
 
   const systemPrompt = buildFidelitySystem()
@@ -106,7 +119,6 @@ export async function reviewFidelity(input: {
   let attempts = 0
   const MAX_ATTEMPTS = 3
   let lastParseError: unknown = undefined
-  let lastValidationFeedback: string[] = []
   let lastResult: FidelityResult | undefined
 
   while (attempts < MAX_ATTEMPTS) {
@@ -119,8 +131,14 @@ export async function reviewFidelity(input: {
       // providerOptions, maxOutputTokens normalization, and tracing. That
       // bypass produced a recurring HTTP 401 here when fidelity reviewed
       // hexin-routed sonnet-4-6 because the gateway's per-key sticky
-      // routing rejected requests without `x-user`. Stream hooks forward
-      // the LLM's chunks into the visible agent card.
+      // routing rejected requests without `x-user`.
+      //
+      // Intentionally no onChunk/onError hooks — the fidelity LLM's raw
+      // output is a JSON contract (verdict + issues + corrections). Piping
+      // those tokens into the requirements agent card surfaced the JSON
+      // source as a reasoning block to the operator. Replaced by the
+      // FidelityReviewCompleted event emitted after parse, which the
+      // overlay renders as a structured verdict card.
       const llmResult = await ProviderLLM.stream({
         model,
         system: systemPrompt,
@@ -128,8 +146,6 @@ export async function reviewFidelity(input: {
         maxOutputTokens: 8192,
         abortSignal: signal,
         cacheKey: input.taskID,
-        onChunk: input.stream?.onChunk,
-        onError: input.stream?.onError,
       })
       const text = (await llmResult.text)?.trim() || ""
       const { result: parsed, validationFeedback } = parseFidelityOutput(text)
@@ -148,7 +164,6 @@ export async function reviewFidelity(input: {
       parsed.corrections = parsed.corrections.filter(c => goalIDs.has(c.goalID))
 
       lastResult = parsed
-      lastValidationFeedback = validationFeedback
 
       log.info("fidelity review attempt completed", {
         verdict: parsed.verdict,
@@ -163,6 +178,7 @@ export async function reviewFidelity(input: {
       // assistant turn + a structured user follow-up that names every
       // dropped entry so the next attempt can repair the malformed specs.
       if (validationFeedback.length === 0) {
+        emitFidelityEvent(input.taskID, input.sessionID, parsed, attempts)
         return parsed
       }
 
@@ -175,7 +191,9 @@ export async function reviewFidelity(input: {
         // Loud return: keep validated entries, but verdict reflects that the
         // reviewer could not produce a fully-valid correction set. Operator
         // sees "needs_correction" + log lists exactly what failed.
-        return { ...parsed, verdict: "needs_correction" }
+        const coerced: FidelityResult = { ...parsed, verdict: "needs_correction" }
+        emitFidelityEvent(input.taskID, input.sessionID, coerced, attempts)
+        return coerced
       }
 
       messages.push({ role: "assistant", content: text })
@@ -212,8 +230,56 @@ export async function reviewFidelity(input: {
 
   // Loop exited without returning — should be unreachable because every
   // branch above either returns or throws. Guard anyway.
-  if (lastResult) return lastResult
+  if (lastResult) {
+    emitFidelityEvent(input.taskID, input.sessionID, lastResult, attempts)
+    return lastResult
+  }
   throw new Error(`fidelity review exhausted retries: ${String(lastParseError ?? "unknown error")}`)
+}
+
+/** Broadcast the parsed fidelity verdict so the overlay can render a native
+ *  verdict card (badge + issues list + corrections diff). Taking the place
+ *  of the previous raw-JSON stream that piped the LLM's JSON tokens into a
+ *  reasoning block on the requirements agent card. Silently skips when the
+ *  caller did not provide a taskID (e.g. CLI dry-runs) — EngineProtocol.emit
+ *  requires a taskID to persist to protocol_event. */
+function emitFidelityEvent(
+  taskID: string | undefined,
+  sessionID: string | undefined,
+  result: FidelityResult,
+  attempts: number,
+): void {
+  if (!taskID) return
+  if (!sessionID) {
+    // sessionID is required for the overlay to attach the verdict card under
+    // the requirements session. A missing value would otherwise force the
+    // overlay to either escape the card to the top level or silently drop
+    // it — both violate project rule 1. Loud-fail here at the source.
+    throw new Error(
+      `fidelity.review.completed: sessionID required but missing (taskID=${taskID}). ` +
+        `Requirements agent must thread its sessionID through RequirementsService.run → reviewFidelity.`,
+    )
+  }
+  const payload = {
+    taskID,
+    sessionID,
+    verdict: result.verdict,
+    issues: result.issues.map((i) => ({ type: i.type, description: i.description })),
+    corrections: result.corrections.map((c) => ({
+      action: c.action,
+      goalID: c.goalID,
+      reason: c.reason,
+      updatesTitle: c.updates?.title,
+      updatesObjective: c.updates?.objective,
+    })),
+    missingGoals: result.missingGoals.map((g) => ({
+      title: g.title,
+      objective: g.objective,
+      reason: g.reason,
+    })),
+    attempts,
+  }
+  void EngineProtocol.emit(EngineEvent.FidelityReviewCompleted, payload, { source: "requirements.fidelity" })
 }
 
 // ---------------------------------------------------------------------------

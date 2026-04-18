@@ -35,8 +35,6 @@ import { PanelTool } from "./panel"
 import { TuiTool } from "./tui"
 import { TaskReportTool } from "./task-report"
 import { GoalReportTool } from "./goal-report"
-import { PlanEnterTool, PlanExitTool } from "./plan"
-import { SpecEnterTool, SpecExitTool } from "./spec"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -123,10 +121,6 @@ export namespace ToolRegistry {
       EditTool,
       WriteTool,
       TaskTool,
-      PlanEnterTool,
-      PlanExitTool,
-      SpecEnterTool,
-      SpecExitTool,
       WebFetchTool,
       TodoWriteTool,
       TodoReadTool,

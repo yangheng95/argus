@@ -2775,8 +2775,6 @@ export function createOrchestratorTools(input: {
           // via the task tool.
           permission: [
             { permission: "task", pattern: "*", action: "deny" as const },
-            { permission: "plan_enter", pattern: "*", action: "deny" as const },
-            { permission: "spec_enter", pattern: "*", action: "deny" as const },
           ],
         })
 

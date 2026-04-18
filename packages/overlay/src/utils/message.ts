@@ -19,6 +19,7 @@ export type AgentRole =
   | "evaluator"
   | "delivery"
   | "build"
+  | "fidelity"
   | "system";
 
 /** Stages that get their own collapsible agent card in the conversation view. */
@@ -58,6 +59,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   if (text === "judge" || text === "evaluator" || text === "evaluation" || text === "eval" ||
       text === "scheduler" || text === "review" || text === "evaluate") return "evaluator";
   if (text === "delivery" || text === "deliver" || text === "files" || text === "publish") return "delivery";
+  if (text === "fidelity") return "fidelity";
   if (text === "system" || text === "compaction" || text === "title" || text === "summary") return "system";
   return "assistant";
 }
@@ -123,6 +125,7 @@ export function roleLabel(role: string): string {
   if (role === "goal" || role === "goal_gate") return t("chat.role.goal");
   if (role === "executor") return t("chat.role.executor");
   if (role === "build") return t("chat.role.build");
+  if (role === "fidelity") return t("chat.role.fidelity");
   return t("chat.role.assistant");
 }
 
@@ -179,6 +182,7 @@ export function agentStageLabel(stage: string): string {
   if (role === "delivery") return t("chat.role.delivery");
   if (role === "executor") return t("chat.role.executor");
   if (role === "build") return t("chat.role.build");
+  if (role === "fidelity") return t("chat.role.fidelity");
   return t("chat.role.assistant");
 }
 

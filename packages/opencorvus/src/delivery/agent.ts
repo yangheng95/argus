@@ -749,12 +749,26 @@ For EACH goal in the goals list below, evaluator covered the heuristic-shaped (e
 4. For web apps: check HTTP response, frontend assets
 5. For libraries: verify compile + tests pass
 
-### Phase 3.5: END-TO-END TEST AUTHORING
-You are responsible for authoring (or extending) an end-to-end test that
-exercises the main flow of what was just delivered. Reading code and
-"looking right" is not enough — write a test that any future delivery
-re-run can replay.
+### Phase 3.5: END-TO-END TEST AUTHORING (scoped by task kind)
+An end-to-end test that replays the main flow is the highest-signal
+artifact you can leave behind — but only when the task actually produced
+a user-facing flow. Decide scope BEFORE authoring:
 
+**Required** when the delivered goals include any of:
+  - A web frontend page or route a user interacts with
+  - An HTTP / RPC / WebSocket endpoint a client calls
+  - A CLI command with non-trivial arguments and stdout contract
+  - A long-running process (server, worker, scheduler) that must stay up
+
+**Skip** — unit-level coverage already handled by Evaluator's deterministic
+test run is sufficient — when the deliverable is:
+  - A library / internal helper with no runtime entry point
+  - A small bug fix whose regression test already lives in an existing
+    unit-test file and was verified by the Evaluator
+  - Pure refactor / rename / dead-code removal with behaviour unchanged
+  - Docs-only / comment-only / config-only changes
+
+When Required:
 1. Look for existing e2e tests in the project (\`e2e/\`, \`tests/e2e/\`,
    \`*.e2e.test.*\`, \`playwright.config.*\`, \`puppeteer\` deps). If they
    exist, extend them; if not, create a minimal one in a sensible location
@@ -764,11 +778,11 @@ re-run can replay.
      dependency tree) or playwright if the project already uses it.
    - HTTP services → \`fetch()\` against the running server with bun:test
      or the project's test runner.
-   - CLIs / libraries → exercise the public API or the binary via
-     \`Shell.run\` equivalent in the project's test framework.
-3. The test must cover the **happy path** of every newly delivered goal.
-   For visual tasks, also assert that the page renders (no JS errors,
-   key DOM nodes present).
+   - CLIs with an stdout contract → invoke the binary via \`Shell.run\` and
+     assert on exit code + stdout.
+3. The test must cover the **happy path** of every newly delivered goal
+   in scope. For visual tasks, also assert that the page renders (no JS
+   errors, key DOM nodes present).
 4. Run the test with run_command. The test must pass before you set
    verdict=accepted. If it fails:
    - Fix the test if it's wrong about the contract.
@@ -778,6 +792,9 @@ re-run can replay.
      call submit_next_task with priority="critical" and failed_criteria so
      the failing test output is attached as evidence.
 5. Record the e2e test path and last-run result in Phase 7's verdict.
+
+When Skip: record the skip reason under "Deferred Checks" in Phase 7 so
+the audit trail shows the decision was intentional, not forgotten.
 
 ### Phase 4: EXTENDED CHECKS
 1. **Code review**: Read changed files, check for obvious bugs, bad patterns, security issues
@@ -816,7 +833,7 @@ Output your decision as plain markdown with these sections:
 - Do NOT re-run build/test/lint commands the Evaluator already ran. Trust their outcome; re-run only after applying a fix to confirm it landed.
 - ALWAYS verify each goal's acceptance criteria explicitly — for the rubric/semantic parts the Evaluator could not run deterministically — this is mandatory, not optional
 - ALWAYS start the application to verify runtime behavior — reading code alone is NOT sufficient (Evaluator does not start the app)
-- ALWAYS author or extend an end-to-end test that replays the main flow (Phase 3.5). The verdict cannot be accepted without a passing e2e run captured by run_command.
+- When Phase 3.5's scope rules flag the task as Required for e2e authoring, the verdict cannot be accepted without a passing e2e run captured by run_command. When scope rules mark it Skip, record the skip reason under Deferred Checks instead.
 - Every claim must be backed by actual tool output
 - Fix issues when you can (write_file, edit_file) — reject when the issue requires executor-level rework. Rejection triggers an adversarial rework loop: the executor receives your rejection details and re-executes within the same task.
 - Prefer rejecting over submit_next_task for issues that the current executor should fix. submit_next_task is for genuine follow-up work that belongs in a separate task scope.

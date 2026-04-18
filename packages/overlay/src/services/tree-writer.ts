@@ -70,6 +70,37 @@ const messages = new Map<string, MessageInfo>();
  *  not by `goal.created` events — we just remember existence here so session
  *  bucket claiming is deterministic. */
 const knownGoalIDs = new Set<string>();
+/** Fidelity cards that have been materialized into cardTreeStore → owning
+ *  requirements session id. `rebuildCardHierarchy` reads this to attach the
+ *  verdict card under the session card's childIDs. Entries are ONLY added
+ *  from `materializeFidelity` (after the owning session is confirmed to
+ *  exist), so every entry here has a reachable parent — eliminating the
+ *  "written-to-store-but-unreachable" silent-drop path. */
+const fidelityCardOwners = new Map<string, string>();
+
+/** Fidelity events that arrived before their owning session's first
+ *  message.updated. Keyed by sessionID so ensureSessionCard can drain a
+ *  single pending payload per session. Holding the raw payload here (NOT in
+ *  cardTreeStore.cards) preserves the invariant "every entry in
+ *  cardTreeStore.cards is reachable via order or some parent's childIDs" —
+ *  a fidelity event that never finds its session stays in this map until
+ *  resetWriter() clears it, never materializing into an unreachable ghost. */
+interface PendingFidelityPayload {
+  taskID: string;
+  emittedAt: number;
+  verdict: "faithful" | "needs_correction";
+  issues: Array<{ type: string; description: string }>;
+  corrections: Array<{
+    action: "modify" | "split" | "remove";
+    goalID: string;
+    reason: string;
+    updatesTitle?: string;
+    updatesObjective?: string;
+  }>;
+  missingGoals: Array<{ title: string; objective: string; reason?: string }>;
+  attempts: number;
+}
+const pendingFidelity = new Map<string, PendingFidelityPayload>();
 
 // ── Entry point ──
 
@@ -78,6 +109,8 @@ export function resetWriter(): void {
   sessions.clear();
   messages.clear();
   knownGoalIDs.clear();
+  fidelityCardOwners.clear();
+  pendingFidelity.clear();
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
   setCardTreeStore("order", []);
@@ -184,6 +217,15 @@ export function applyEvent(event: any): void {
   // ── Interactions ──
   if (type === "interaction.created" || type === "interaction.resolved") {
     return handleInteraction(event);
+  }
+
+  // ── Fidelity review verdict ──
+  // The fidelity LLM produces a JSON contract (verdict/issues/corrections/
+  // missing_goals). Rendering raw JSON tokens in a reasoning block was the
+  // old behaviour — this branch turns the parsed result into a structured
+  // card so the operator sees a verdict badge + diff list instead.
+  if (type === "fidelity.review.completed") {
+    return handleFidelityCompleted(event);
   }
 
   // ── No-op events (control plane / telemetry). Listed explicitly so the
@@ -349,6 +391,115 @@ function handleInteraction(event: any): void {
   rebuildBoardDerivedCards();
 }
 
+// ── Fidelity review ──
+
+function fidelityCardID(taskID: string): string {
+  // Stable per-task id — fidelity runs once per requirements cycle; re-emits
+  // (parse retries, reconnect replays) must upsert the same card, not stack
+  // new ones. The previous `fidelity:<taskID>:<emittedAt>` scheme produced
+  // duplicates whenever event.emittedAt was absent and we fell back to
+  // Date.now(), which happened on every SSE redelivery.
+  return `fidelity:${taskID}`;
+}
+
+function handleFidelityCompleted(event: any): void {
+  const props = propsOf(event);
+  const taskID = String(props.taskID || "");
+  const sessionID = String(props.sessionID || "");
+  if (!taskID) throw new Error("fidelity.review.completed missing taskID");
+  if (!sessionID) {
+    // sessionID became required (engine/model.ts) — loud-fail rather than
+    // allowing the card to escape or silently drop. The matching assertion
+    // in opencorvus/requirements/fidelity.ts emitFidelityEvent keeps the
+    // backend honest.
+    throw new Error(
+      `fidelity.review.completed missing sessionID (taskID=${taskID})`,
+    );
+  }
+
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  const issues = Array.isArray(props.issues) ? props.issues : [];
+  const corrections = Array.isArray(props.corrections) ? props.corrections : [];
+  const missingGoals = Array.isArray(props.missingGoals) ? props.missingGoals : [];
+  const attempts = Number(props.attempts || 0);
+  const verdict: "faithful" | "needs_correction" =
+    props.verdict === "faithful" ? "faithful" : "needs_correction";
+
+  const payload: PendingFidelityPayload = {
+    taskID,
+    emittedAt,
+    verdict,
+    issues: issues.map((i: any) => ({
+      type: String(i?.type || "uncovered"),
+      description: String(i?.description || ""),
+    })),
+    corrections: corrections.map((c: any) => ({
+      action: (c?.action === "split" || c?.action === "remove") ? c.action : "modify",
+      goalID: String(c?.goalID || ""),
+      reason: String(c?.reason || ""),
+      updatesTitle: typeof c?.updatesTitle === "string" ? c.updatesTitle : undefined,
+      updatesObjective: typeof c?.updatesObjective === "string" ? c.updatesObjective : undefined,
+    })),
+    missingGoals: missingGoals.map((g: any) => ({
+      title: String(g?.title || ""),
+      objective: String(g?.objective || ""),
+      reason: typeof g?.reason === "string" ? g.reason : undefined,
+    })),
+    attempts,
+  };
+
+  const session = sessions.get(sessionID);
+  if (!session || !cardTreeStore.cards[session.cardID]) {
+    // Session hasn't materialized yet — hold the payload out-of-band. This
+    // keeps cardTreeStore.cards free of unreachable entries. Drained by
+    // ensureSessionCard once the session arrives (see drainPendingFidelity).
+    pendingFidelity.set(sessionID, payload);
+    return;
+  }
+
+  materializeFidelity(session, payload);
+}
+
+/** Atomically write the fidelity card into cardTreeStore and register its
+ *  owning session. Only called when the owning session card already exists
+ *  — callers MUST NOT skip the session guard. `rebuildCardHierarchy()` is
+ *  invoked so the new card becomes a child of its session in the same tick. */
+function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): void {
+  const cardID = fidelityCardID(p.taskID);
+  const status: CardStatus = p.verdict === "faithful" ? "completed" : "error";
+  setCardTreeStore("cards", cardID, {
+    id: cardID,
+    kind: "fidelity",
+    stage: "fidelity",
+    status,
+    title: roleTitleKey("fidelity"),
+    parts: [],
+    childIDs: [],
+    time: p.emittedAt > 0 ? p.emittedAt : undefined,
+    fidelity: {
+      verdict: p.verdict,
+      issues: p.issues,
+      corrections: p.corrections,
+      missingGoals: p.missingGoals,
+      attempts: p.attempts,
+    },
+  });
+  fidelityCardOwners.set(cardID, session.sessionID);
+  rebuildCardHierarchy();
+}
+
+/** Drain any fidelity payload waiting for this session and materialize it.
+ *  Called from ensureSessionCard immediately after the session is committed
+ *  so a fidelity event that arrived first is flushed in the same batch. */
+function drainPendingFidelity(sessionID: string): void {
+  const payload = pendingFidelity.get(sessionID);
+  if (!payload) return;
+  const session = sessions.get(sessionID);
+  if (!session || !cardTreeStore.cards[session.cardID]) return;
+  pendingFidelity.delete(sessionID);
+  materializeFidelity(session, payload);
+}
+
 // ── Session & part bookkeeping ──
 
 function deriveSessionStage(info: any, resolvedRole: string, agent: string, role: string): string {
@@ -405,6 +556,10 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
       existing.goalID = opts.goalID;
     }
     rebuildCardHierarchy();
+    // A fidelity event may have arrived before this session's first
+    // message.updated (reconnect replay, SSE interleaving). Drain any held
+    // payload now that the session card exists under its real stage id.
+    drainPendingFidelity(sessionID);
     return existing;
   }
 
@@ -439,6 +594,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
   sessions.set(sessionID, info);
 
   rebuildCardHierarchy();
+  drainPendingFidelity(sessionID);
   return info;
 }
 
@@ -774,6 +930,20 @@ function rebuildCardHierarchy(): void {
     nextChildIDs.set(childID, nextChildIDs.get(childID) || []);
   }
 
+  // Fidelity verdict cards attach under their owning requirements session.
+  // If the session hasn't arrived yet (unordered replay, or CLI dry-run with
+  // no session), the card stays pending — it will NOT fall through to the
+  // top level (card escape is forbidden).
+  for (const [cardID, ownerSessionID] of fidelityCardOwners.entries()) {
+    if (!cardTreeStore.cards[cardID]) continue;
+    const owner = sessions.get(ownerSessionID);
+    if (!owner || !cardTreeStore.cards[owner.cardID]) continue;
+    const bucket = nextChildIDs.get(owner.cardID) || [];
+    pushUniqueChild(bucket, cardID);
+    nextChildIDs.set(owner.cardID, bucket);
+    nextChildIDs.set(cardID, nextChildIDs.get(cardID) || []);
+  }
+
   setCardTreeStore(
     "cards",
     produce((cards: Record<string, CardNode>) => {
@@ -808,9 +978,18 @@ function normalizeGoalStatus(raw: any): CardStatus {
 
 // ── Top-level ordering ──
 //
-// Priority (matching old computeAgentCards): root orchestrator (stage=assistant)
-// first, then goal groups (by round), then other root agent cards chronologically.
-// ctx:user-request sorts before assistant by its synthetic negative time.
+// Authorized top-level kinds (anything else is an escape — throw):
+//   • ctx:user-request                   — the task request bubble
+//   • the single assistant root session  — orchestrator entry point
+//   • goal-group:<gid>                   — goal container
+//   • orphan interaction-card:*          — interactions with no live session
+//   • synthetic:*                        — chat.ts pending / optimistic bubbles
+//
+// Any non-assistant agent session that lands here without a parent session or
+// goal-step container represents a backend linkage bug (missing
+// parentSessionID / goalID stamp in task-message-protocol-bridge.ts). We
+// surface it loudly per CLAUDE.md rule 1 — silent fallback to top level
+// would mask the bug and produce UI "escape" cards like the fidelity one.
 
 function rebuildTopLevelOrder(): void {
   const order: string[] = [];
@@ -819,11 +998,36 @@ function rebuildTopLevelOrder(): void {
     for (const childID of node.childIDs || []) claimedChildIDs.add(childID);
   }
 
-  // Collect root session cards (not claimed by a parent session or goal card).
+  // Classify each session into one of four buckets:
+  //
+  //   (a) stage === ""                      → skip (pending placeholder)
+  //   (b) has resolved container (parent session in sessions, or matching
+  //       goal-step card exists)            → skip (will be claimed by
+  //                                            rebuildCardHierarchy)
+  //   (c) stage === "assistant"             → authorized top-level root.
+  //       Its parentSessionID typically points at task.sessionID, the
+  //       task-level registration session that never emits message.updated
+  //       (see opencorvus task-message-protocol-bridge.ts). That parent
+  //       will never be in `sessions`, so resolveSessionContainerCardID
+  //       correctly returns null and we surface the assistant here.
+  //   (d) stage !== "assistant", parentSessionID OR goalID stamped, but
+  //       container not yet materialized → skip silently (waiting for
+  //       parent session's message.updated / goal-step construction to
+  //       arrive in this event batch; next rebuild will claim it).
+  //   (e) stage !== "assistant", no parentSessionID AND no goalID
+  //                                         → genuine backend linkage bug;
+  //                                           loud-fail below.
   const rootSessions: string[] = [];
   for (const info of sessions.values()) {
+    if (info.stage === "") continue;
     if (resolveSessionContainerCardID(info)) continue;
-    if (cardTreeStore.cards[info.cardID]) rootSessions.push(info.cardID);
+    if (!cardTreeStore.cards[info.cardID]) continue;
+    if (info.stage === "assistant") {
+      rootSessions.push(info.cardID);
+      continue;
+    }
+    if (info.parentSessionID || info.goalID) continue; // waiting (d)
+    rootSessions.push(info.cardID); // escape candidate (e) — orphan check throws
   }
   // Goal groups in board order.
   const goalCards: string[] = [];
@@ -863,14 +1067,33 @@ function rebuildTopLevelOrder(): void {
   // Goal groups.
   for (const id of goalCards) order.push(id);
 
-  // Other root sessions chronologically.
-  const others = rootSessions
-    .filter((id) => cardTreeStore.cards[id]?.stage !== "assistant")
-    .sort((a, b) => (cardTreeStore.cards[a]?.time || 0) - (cardTreeStore.cards[b]?.time || 0));
-  for (const id of others) order.push(id);
+  // Any remaining rootSession is a non-assistant sub-agent session with no
+  // parent linkage — that's a backend bug (missing parentSessionID / goalID
+  // stamping). Loud-fail instead of silently promoting to top level, which
+  // is how the fidelity card ended up there (and how `pending:session:*`
+  // ghost cards would leak if the guard above didn't skip them).
+  const orphans = rootSessions.filter(
+    (id) => cardTreeStore.cards[id]?.stage !== "assistant",
+  );
+  if (orphans.length > 0) {
+    const detail = orphans
+      .map((id) => {
+        const node = cardTreeStore.cards[id];
+        const info = [...sessions.values()].find((s) => s.cardID === id);
+        return `${id} (stage=${node?.stage ?? "?"}, goalID=${info?.goalID || "-"}, parentSessionID=${info?.parentSessionID || "-"})`;
+      })
+      .join(", ");
+    throw new Error(
+      `tree-writer: non-assistant sub-agent session escaped to top level — backend missing parentSessionID/goalID linkage: ${detail}`,
+    );
+  }
 
   // Orphan interaction cards: task-level prompts with no live session container.
   for (const id of orphanInteractionCards) order.push(id);
+
+  // Fidelity verdict cards are NOT placed at the top level — they attach
+  // under their requirements session via rebuildCardHierarchy. Card escape
+  // (a non-root card appearing at top level) is explicitly forbidden.
 
   // Synthetic pending / optimistic bubbles append at the end — they carry
   // `Date.now()` timestamps so chronological sort places them after all

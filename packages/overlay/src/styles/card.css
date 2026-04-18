@@ -444,31 +444,6 @@ body[data-theme="light"] .card__round {
   opacity: 0.85;
 }
 
-/* ── Compaction card ──
-   Distinct visual treatment for context-compaction events: dashed rail +
-   small ⤺ glyph in the title. Distinguishing the compaction trigger
-   (role=user CompactionPart) from the resulting summary (Assistant.summary ===
-   true) is done by title text in Card.tsx; both share this styling. */
-.card[data-kind="compaction"] {
-  background: var(--card-system-bg, rgba(140, 110, 80, 0.05));
-  border-left: 2px dashed var(--card-system-rail, #b08a5a);
-}
-.card[data-kind="compaction"] > .card__head .card__title {
-  font-size: var(--ui-font-tiny);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--card-system-rail, #b08a5a);
-  font-weight: 600;
-}
-.card[data-kind="compaction"] > .card__head .card__title::before {
-  content: "⤺ ";
-  margin-right: 2px;
-}
-.card[data-kind="compaction"] > .card__body {
-  color: var(--text-soft);
-  font-style: italic;
-}
-
 /* ─────────────────────────────────────────────────────────────
    Interaction Card
    Self-contained system-prompt card for pending permission /

@@ -15,7 +15,7 @@ import { toolNameKey } from "./tool";
 
 export type { StepPayload } from "../store/card-tree";
 
-export type CardKind = "agent" | "goal" | "step" | "tool" | "message" | "compaction";
+export type CardKind = "agent" | "goal" | "step" | "tool" | "message" | "fidelity";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
 
 /** A synthetic "part" inserted between messages when flattening multiple
@@ -97,13 +97,23 @@ export interface CardNode {
    * value contributed to the aggregate maximum.
    */
   contextTokensEstimated?: boolean
-  /**
-   * True when this card represents a conversation-compaction summary
-   * (Assistant.summary === true). The summary card replaces the compacted
-   * history; surfacing it as a distinct card tells the operator exactly
-   * where the window was reset.
-   */
-  isCompactionSummary?: boolean
+  /** Structured fidelity review payload — only populated for kind="fidelity"
+   *  nodes (produced by tree-writer on fidelity.review.completed). Mirrors
+   *  the shape defined in `store/card-tree.ts` so a store CardNode is
+   *  assignable to this utils CardNode without casting. */
+  fidelity?: {
+    verdict: "faithful" | "needs_correction";
+    issues: Array<{ type: string; description: string }>;
+    corrections: Array<{
+      action: "modify" | "split" | "remove";
+      goalID: string;
+      reason: string;
+      updatesTitle?: string;
+      updatesObjective?: string;
+    }>;
+    missingGoals: Array<{ title: string; objective: string; reason?: string }>;
+    attempts: number;
+  };
 }
 
 // ── Status normalisation ──
@@ -186,6 +196,10 @@ export function defaultExpandedForNode(node: CardNode): boolean {
   if (node.status === "running") return true;
   if (node.kind === "agent" || node.kind === "goal") return true;
   if (node.kind === "message") return true;
+  // Fidelity verdicts: always expand. The entire point of the card is to
+  // surface the structured verdict; a collapsed badge would be weaker than
+  // the previous raw-JSON render it replaces.
+  if (node.kind === "fidelity") return true;
   // step / tool defaults: collapsed when completed, open when running.
   return node.status !== "completed";
 }
