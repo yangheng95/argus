@@ -176,6 +176,13 @@ export async function evaluateGoal(input: {
     log.info("resolved eval directory from owned_paths", { goalID: goal.id, workDir, evalDir })
   }
 
+  // Authoritative changed-file list for rubric scorers. Read from the goal's
+  // delivery commit via git, NOT from delivery.diffs — diffs is display/audit
+  // only and must not drive integration scope.
+  const changedFiles = delivery.commitRef
+    ? (await (await import("@/goal/merge")).filesChangedByCommit(delivery.commitRef, workDir)).map((f) => f.file)
+    : []
+
   // ── 1. Translate specs ──
   const specs = goal.acceptance_specs ?? []
   const plan = translateSpecs(specs)
@@ -265,7 +272,7 @@ export async function evaluateGoal(input: {
 
     const out = await runRubric(item, {
       deliverySummary: delivery.summary,
-      changedFiles: delivery.diffs?.map((d) => d.file),
+      changedFiles,
       requirementText: requirementTextFor(contract, item),
       signal,
       cacheKey: `goal-${goal.id}-evaluator`,

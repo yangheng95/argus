@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { runGoalPipeline } from "../../src/pipeline/executor"
+import { runGoalPipeline, pickInactivityThreshold } from "../../src/pipeline/executor"
 import type { GoalContract, PipelineDeps, PipelineEvent } from "../../src/pipeline/types"
 
 /**
@@ -88,5 +88,28 @@ describe("runGoalPipeline (executor)", () => {
     }
 
     expect(true).toBe(true) // test completed without hanging
+  })
+})
+
+describe("pickInactivityThreshold", () => {
+  const PLAIN = 90_000
+  const TOOL = 600_000
+
+  test("returns plain threshold when no tool is running", () => {
+    expect(pickInactivityThreshold(0, PLAIN, TOOL)).toBe(PLAIN)
+  })
+
+  test("returns extended threshold while a tool is running", () => {
+    expect(pickInactivityThreshold(1, PLAIN, TOOL)).toBe(TOOL)
+  })
+
+  test("extended threshold applies regardless of how many tools are running", () => {
+    expect(pickInactivityThreshold(5, PLAIN, TOOL)).toBe(TOOL)
+    expect(pickInactivityThreshold(100, PLAIN, TOOL)).toBe(TOOL)
+  })
+
+  test("threshold selection is a pure function of the count", () => {
+    expect(pickInactivityThreshold(0, 1000, 2000)).toBe(1000)
+    expect(pickInactivityThreshold(1, 1000, 2000)).toBe(2000)
   })
 })

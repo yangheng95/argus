@@ -1,43 +1,12 @@
-import type { GoalRow, GoalRunRow, PlanNodeRow, EngineGoalRunStatus } from "@/engine"
+import type { GoalRow, GoalRunRow, PlanNodeRow } from "@/engine"
+import { doesGoalRunSatisfyGoal, isLiveGoalRunStatus } from "@/engine/catalog"
+import { isDispatchableGoal } from "@/goal/kind"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "goal-scheduler" })
 
 function goalNodes(nodes: PlanNodeRow[]) {
   return nodes.filter((node): node is PlanNodeRow & { goal_id: string } => node.kind === "goal" && !!node.goal_id)
-}
-
-/**
- * Classifier: for every goal_run status, is it "live" (scheduler must not
- * dispatch this goal again) or "retriable" (prior attempt ended badly, new
- * dispatch allowed)?
- *
- *   live      queued/accepted/planning/running/evaluating/blocked — still in
- *             flight; "completed" — terminal success, goal is done.
- *   retriable failed/aborted — terminal failure; creating a new goal_run for
- *             the same goal is how retries happen.
- *
- * The `satisfies Record<EngineGoalRunStatus, ...>` is load-bearing:
- * adding a new status to `EngineGoalRunStatus` will fail the type
- * check here until someone decides which bucket it belongs in. This is the
- * type-level guarantee against the "connected-two-goals" bug — a stray new
- * status silently defaulting to "retriable" is what would let the scheduler
- * dispatch the same goal twice.
- */
-const RUN_STATUS_CLASSIFIER = {
-  queued: "live",
-  accepted: "live",
-  planning: "live",
-  running: "live",
-  evaluating: "live",
-  blocked: "live",
-  completed: "live",
-  failed: "retriable",
-  aborted: "retriable",
-} as const satisfies Record<EngineGoalRunStatus, "live" | "retriable">
-
-function isLiveRun(status: GoalRunRow["status"]): boolean {
-  return RUN_STATUS_CLASSIFIER[status] === "live"
 }
 
 function isGoalSatisfied(goal: GoalRow | undefined, goalRuns: GoalRunRow[]) {
@@ -47,7 +16,7 @@ function isGoalSatisfied(goal: GoalRow | undefined, goalRuns: GoalRunRow[]) {
   if (goal.priority === "advisory" && goal.status === "failed") return true
   // Authoritative: any goal_run reaching "completed" satisfies the dep,
   // regardless of what mutated goal.status afterwards.
-  return goalRuns.some((r) => r.goal_id === goal.id && r.status === "completed")
+  return goalRuns.some((r) => r.goal_id === goal.id && doesGoalRunSatisfyGoal(r.status))
 }
 
 export type GoalNodeEntry = { node: PlanNodeRow & { goal_id: string }; goal: GoalRow }
@@ -70,11 +39,17 @@ export function readyGoalNodes(
   return ordered.flatMap((node) => {
     const goal = goals.find((item) => item.id === node.goal_id)
     if (!goal) return []
+    if (!isDispatchableGoal(goal)) return []
     // Dispatch gate: skip if any goal_run for this goal is active or already completed.
-    const hasLiveRun = goalRuns.some(
-      (r) => r.goal_id === goal.id && isLiveRun(r.status),
+    // Dispatch dedup must treat "terminal-successful" the same as "in flight":
+    // a completed goal_run is done, don't redispatch. The orchestrator
+    // dispatch-gate (agent.ts) uses the narrower "live only" check so the
+    // TaskAgent still wakes up on completion — the two checks intentionally
+    // diverge now that `completed` is classified `terminal`, not `live`.
+    const hasDispatchedRun = goalRuns.some(
+      (r) => r.goal_id === goal.id && (isLiveGoalRunStatus(r.status) || doesGoalRunSatisfyGoal(r.status)),
     )
-    if (hasLiveRun) return []
+    if (hasDispatchedRun) return []
     const ready = (node.depends_on_ids ?? []).every((depID) => {
       const dep = ordered.find((item) => item.id === depID)
       if (!dep) {
@@ -118,10 +93,14 @@ export function blockedGoalDiagnostics(
   for (const node of ordered) {
     const goal = goals.find((item) => item.id === node.goal_id)
     if (!goal) continue
-    const hasLiveRun = goalRuns.some(
-      (r) => r.goal_id === goal.id && isLiveRun(r.status),
+    if (!isDispatchableGoal(goal)) continue
+    // Same rule as readyGoalNodes: a completed goal_run means the goal is
+    // already satisfied — don't report its deps as "blocking", because the
+    // goal isn't waiting to dispatch, it's already done.
+    const alreadyDispatched = goalRuns.some(
+      (r) => r.goal_id === goal.id && (isLiveGoalRunStatus(r.status) || doesGoalRunSatisfyGoal(r.status)),
     )
-    if (hasLiveRun) continue
+    if (alreadyDispatched) continue
 
     const unsatisfied: BlockedGoalDiag["unsatisfiedDeps"] = []
     for (const depID of node.depends_on_ids ?? []) {

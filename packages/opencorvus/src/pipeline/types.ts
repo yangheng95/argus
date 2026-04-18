@@ -101,6 +101,22 @@ export type PipelineEvent =
 
 export interface PipelineDelivery {
   summary: string
+  /**
+   * Authoritative integration handle. Set iff the goal produced file changes —
+   * the delivery commit in the goal's worktree. All integration decisions
+   * (merge, owned_paths validation, changed-file scope for checks) MUST read
+   * `git show --name-status ${commitRef}` (see `goal/merge.ts → filesChangedByCommit`)
+   * rather than `diffs`. Absence of `commitRef` means the executor produced
+   * nothing — the goal is failed, not silently passed.
+   */
+  commitRef?: string
+  /**
+   * Display / audit only.
+   * Carries before/after content for UI diff viewers, LLM delivery prompts,
+   * and event payloads. Do NOT use this for integration (merge, verification,
+   * scope filtering) — the commit pointed to by `commitRef` is the single
+   * source of truth for "which files changed".
+   */
   diffs: Array<{ file: string; before?: string; after?: string; status?: string; additions?: number; deletions?: number; [key: string]: unknown }>
 }
 

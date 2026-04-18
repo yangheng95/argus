@@ -2,11 +2,16 @@ import { createMemo, Show } from "solid-js";
 import { displayToolIcon, displayToolDetail, toolStatusLabel, toolNameKey, stripAnsi } from "../utils/tool";
 import { extToLang, renderCodeBlock } from "../utils/markdown";
 import { activeDirectory } from "../store/board";
+import { TodoListPart, extractTodos } from "./TodoListPart";
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"]);
 const FILE_EDIT_TOOLS = new Set(["edit", "editfile", "applypatch"]);
 const FILE_READ_TOOLS = new Set(["read", "readfile"]);
+// todowrite/todoread/todoupdate render as a structured checklist instead of
+// raw JSON — the output is JSON.stringify of the todos array, which is
+// unreadable and floods the card body. updateplan uses the same shape.
+const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"]);
 
 function isFileContentTool(key: string): boolean {
   return FILE_WRITE_TOOLS.has(key) || FILE_EDIT_TOOLS.has(key) || FILE_READ_TOOLS.has(key);
@@ -74,6 +79,14 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     return renderCodeBlock(content, lang, Infinity);
   });
 
+  // Structured todo list — populated during streaming from state.input.todos,
+  // once committed from state.metadata.todos. Both shapes are handled by
+  // extractTodos so a streaming or completed todowrite renders identically.
+  const todoItems = createMemo(() => {
+    if (!TODO_TOOLS.has(key())) return null;
+    return extractTodos(state());
+  });
+
   const showChip = () => mode() !== "body";
   const showBody = () => mode() === "block" || mode() === "body";
 
@@ -92,14 +105,20 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
         </div>
       </Show>
       <Show when={showBody()}>
-        <Show when={status() === "pending" && raw()}>
-          <div class="msg-tool-input">{raw()}</div>
-        </Show>
-        <Show when={codeResult()}>
-          <div class="msg-tool-code md-content" innerHTML={codeResult()!.html} />
-        </Show>
-        <Show when={status() === "completed" && output() && !codeResult()}>
-          <div class="msg-tool-output msg-tool-output--expanded">{output()}</div>
+        <Show when={todoItems() && todoItems()!.length > 0} fallback={
+          <>
+            <Show when={status() === "pending" && raw() && !todoItems()}>
+              <div class="msg-tool-input">{raw()}</div>
+            </Show>
+            <Show when={codeResult()}>
+              <div class="msg-tool-code md-content" innerHTML={codeResult()!.html} />
+            </Show>
+            <Show when={status() === "completed" && output() && !codeResult()}>
+              <div class="msg-tool-output msg-tool-output--expanded">{output()}</div>
+            </Show>
+          </>
+        }>
+          <TodoListPart todos={todoItems()!} />
         </Show>
         <Show when={status() === "error" && error()}>
           <div class="msg-tool-error">{error()}</div>

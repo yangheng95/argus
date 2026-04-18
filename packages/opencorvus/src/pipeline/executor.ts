@@ -39,6 +39,29 @@ const EXECUTOR_STATUS_TIMEOUT_MS = 30_000
 const HEARTBEAT_INTERVAL_MS = 30_000
 
 /**
+ * Pick the applicable inactivity threshold based on current tool state.
+ * Exported for unit tests — production callers read env vars directly.
+ *
+ * Design: while a tool is actively running (e.g. bash spawning `npm install`)
+ * the session may legitimately go silent for minutes during subprocess work
+ * that doesn't produce stdout/stderr. Applying the plain ~90s threshold in
+ * that window causes false-positive "session dead" failures that kill real
+ * progress (observed on glr_d9b9f58d0 — bash `npm install` ran 114s before
+ * completing successfully, 22s after the watchdog had already aborted).
+ *
+ * When no tool is running the plain threshold still fires — that window
+ * genuinely should be tight because an idle LLM with no tool in flight is
+ * the canonical "stuck callback chain" symptom.
+ */
+export function pickInactivityThreshold(
+  runningToolCount: number,
+  plainMs: number,
+  toolRunningMs: number,
+): number {
+  return runningToolCount > 0 ? toolRunningMs : plainMs
+}
+
+/**
  * Execute a single goal: stream executor events, extract delivery.
  *
  * Returns an async generator of PipelineEvents.
@@ -88,7 +111,7 @@ export async function* runGoalPipeline(
     const deliveryID = Identifier.ascending("delivery")
     persistDelivery({
       task, run, goalRunID, deliveryID,
-      delivery: { summary: delivery.summary, diffs: delivery.diffs },
+      delivery: { summary: delivery.summary, commitRef: delivery.commitRef, diffs: delivery.diffs },
       now: Date.now(),
     })
 
@@ -150,8 +173,14 @@ async function* streamExecutorEvents(
   //    "running". session.idle is emitted synchronously when the session enters
   //    standby, so it's a more reliable LLM-turn-done signal.
   // 3. Fallback: status poller detects executor finished every 5s
-  // 4. Safety net: inactivity timeout — no events for this period → dead
+  // 4. Safety net: inactivity timeout — no events for this period → dead.
+  //    TOOL_RUNNING timeout applies while at least one tool is in the `running`
+  //    state; long-running subprocesses (e.g. `npm install`) can go silent for
+  //    90s+ of stdout/stderr, so the plain inactivity timeout would incorrectly
+  //    kill them. The extended threshold keeps the watchdog useful for genuinely
+  //    dead sessions while letting legitimately long tool invocations complete.
   const INACTIVITY_TIMEOUT_MS = Number(process.env.OPENCORVUS_GOAL_INACTIVITY_TIMEOUT_MS) || 90_000
+  const TOOL_RUNNING_INACTIVITY_TIMEOUT_MS = Number(process.env.OPENCORVUS_GOAL_TOOL_RUNNING_INACTIVITY_TIMEOUT_MS) || 600_000
   const STATUS_POLL_INTERVAL_MS = 5_000
   const IDLE_GRACE_MS = Number(process.env.OPENCORVUS_GOAL_IDLE_GRACE_MS) || 15_000
 
@@ -162,6 +191,10 @@ async function* streamExecutorEvents(
   let idleSince: number | undefined
   let idleGraceExceeded = false
   let inactivityTimeoutExceeded = false
+  // Tracks callIDs of tools currently in the `running` state. While non-empty,
+  // the inactivity watchdog uses the extended TOOL_RUNNING threshold. Populated
+  // from message.part.updated events whose part.type === "tool".
+  const runningTools = new Set<string>()
 
   // Status poller + inactivity watchdog + idle-grace detector
   const poller = (async () => {
@@ -190,12 +223,18 @@ async function* streamExecutorEvents(
           break
         }
       }
-      // Inactivity watchdog: if no event activity for INACTIVITY_TIMEOUT_MS, abort.
-      // Same remediation as idle-grace — reporting "executor stuck in running"
-      // is almost always a stuck callback chain, not a real LLM failure.
+      // Inactivity watchdog: if no event activity for the applicable threshold,
+      // abort. When a tool is executing (runningTools non-empty) the threshold
+      // is extended because tools like `npm install` can go silent for 90s+
+      // during dependency resolution without the session being dead.
       const inactiveMs = Date.now() - lastActivityAt
-      if (inactiveMs >= INACTIVITY_TIMEOUT_MS) {
-        log.warn("inactivity timeout — forcing completion", { goalRunID, inactiveMs })
+      const threshold = pickInactivityThreshold(
+        runningTools.size, INACTIVITY_TIMEOUT_MS, TOOL_RUNNING_INACTIVITY_TIMEOUT_MS,
+      )
+      if (inactiveMs >= threshold) {
+        log.warn("inactivity timeout — forcing completion", {
+          goalRunID, inactiveMs, threshold, runningTools: runningTools.size,
+        })
         inactivityTimeoutExceeded = true
         streamAbort.abort("inactivity timeout")
         break
@@ -204,13 +243,33 @@ async function* streamExecutorEvents(
   })()
 
   let lastHeartbeat = Date.now()
-  for await (const event of executor.events({ sessionID, queueTaskID, signal: combinedSignal })) {
+  for await (const event of executor.events({ goalID: goal.id, sessionID, queueTaskID, signal: combinedSignal })) {
     if (combinedSignal.aborted) break
 
     lastActivityAt = Date.now()
     if (event.type === "session.idle" && idleSince === undefined) {
       idleSince = Date.now()
       log.info("session idle detected — starting grace window", { goalRunID, graceMs: IDLE_GRACE_MS })
+    }
+    // Track tool lifecycle for the extended-threshold rule. The opencode
+    // executor wrapper re-emits Message.PartUpdated events as
+    // `message.part.updated` with payload.part. ToolPart carries callID +
+    // state.status (pending | running | completed | error).
+    if (event.type === "message.part.updated") {
+      const payload = (event as { payload?: unknown }).payload as { part?: unknown } | undefined
+      const part = payload?.part as {
+        type?: string
+        callID?: string
+        state?: { status?: string }
+      } | undefined
+      if (part?.type === "tool" && typeof part.callID === "string") {
+        const status = part.state?.status
+        if (status === "running") {
+          runningTools.add(part.callID)
+        } else if (status === "completed" || status === "error") {
+          runningTools.delete(part.callID)
+        }
+      }
     }
     yield { type: "executor_event", event }
 
@@ -233,26 +292,35 @@ async function* streamExecutorEvents(
   // the queue-task callback chain is stuck. Extract delivery normally.
   if (idleGraceExceeded) {
     log.info("session idle grace exceeded — extracting delivery", { goalRunID })
-    try {
-      const { TaskQueueTable } = await import("@/scheduler/task-queue.sql")
-      Database.use((db) =>
-        db
-          .update(TaskQueueTable)
-          .set({ status: "completed", time_completed: Date.now(), time_updated: Date.now() })
-          .where(and(eq(TaskQueueTable.id, queueTaskID), eq(TaskQueueTable.status, "running")))
-          .run(),
-      )
-    } catch (err) {
-      log.warn("failed to force-complete queue task row", { queueTaskID, error: String(err) })
-    }
+    await finalizeQueueTaskRow({
+      queueTaskID,
+      status: "completed",
+      goalRunID,
+    })
     return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
   }
 
-  // inactivityTimeoutExceeded: no events for INACTIVITY_TIMEOUT_MS. The executor
-  // is dead — permission hang, LLM crash, network failure. Fail loud.
+  // inactivityTimeoutExceeded: no events for the applicable threshold. The
+  // executor is dead — permission hang, LLM crash, network failure, or a
+  // genuinely wedged tool. Report which threshold fired so the operator
+  // knows whether it was the plain (no tool running) or tool-running variant.
   if (inactivityTimeoutExceeded) {
-    const reason = `Executor produced no events for ${INACTIVITY_TIMEOUT_MS / 1000}s — session is dead (possible causes: permission hang, LLM timeout, network failure)`
-    log.error("inactivity timeout — failing goal_run", { goalRunID, reason })
+    const hadRunningTool = runningTools.size > 0
+    const seconds = hadRunningTool
+      ? TOOL_RUNNING_INACTIVITY_TIMEOUT_MS / 1000
+      : INACTIVITY_TIMEOUT_MS / 1000
+    const cause = hadRunningTool
+      ? `tool wedged (${runningTools.size} running), permission hang, or LLM crash`
+      : "permission hang, LLM timeout, or network failure"
+    const reason = `Executor produced no events for ${seconds}s — session is dead (possible causes: ${cause})`
+    log.error("inactivity timeout — failing goal_run", { goalRunID, reason, hadRunningTool })
+    await abortDeadExecutor({
+      executor,
+      sessionID,
+      queueTaskID,
+      goalRunID,
+      reason,
+    })
     return { error: reason }
   }
 
@@ -317,8 +385,65 @@ async function extractDelivery(
 // ---------------------------------------------------------------------------
 
 async function findGoalRunByGoalAndRun(goalID: string, runID: string): Promise<string | undefined> {
-  const { listGoalRunsByCoordinator } = await import("@/engine/store")
-  const runs = listGoalRunsByCoordinator(runID) as Array<{ id: string; goal_id: string; status: string }>
+  const { listGoalRunsForRun } = await import("@/engine/store")
+  const runs = listGoalRunsForRun(runID) as Array<{ id: string; goal_id: string; status: string }>
   const active = runs.find((gr) => gr.goal_id === goalID && gr.status !== "completed" && gr.status !== "failed")
   return active?.id
+}
+
+async function abortDeadExecutor(input: {
+  executor: PipelineDeps["executor"]
+  sessionID: string
+  queueTaskID: string
+  goalRunID: string
+  reason: string
+}) {
+  try {
+    await input.executor.abort({
+      sessionID: input.sessionID,
+      queueTaskID: input.queueTaskID,
+    })
+  } catch (err) {
+    log.warn("failed to abort dead executor session", {
+      goalRunID: input.goalRunID,
+      queueTaskID: input.queueTaskID,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  await finalizeQueueTaskRow({
+    queueTaskID: input.queueTaskID,
+    status: "failed",
+    error: input.reason,
+    goalRunID: input.goalRunID,
+  })
+}
+
+async function finalizeQueueTaskRow(input: {
+  queueTaskID: string
+  status: "completed" | "failed"
+  error?: string
+  goalRunID: string
+}) {
+  try {
+    const { TaskQueueTable } = await import("@/scheduler/task-queue.sql")
+    Database.use((db) =>
+      db
+        .update(TaskQueueTable)
+        .set({
+          status: input.status,
+          ...(input.status === "failed" ? { error_message: input.error ?? "executor aborted" } : { error_message: null }),
+          time_completed: Date.now(),
+          time_updated: Date.now(),
+        })
+        .where(and(eq(TaskQueueTable.id, input.queueTaskID), eq(TaskQueueTable.status, "running")))
+        .run(),
+    )
+  } catch (err) {
+    log.warn("failed to finalize queue task row", {
+      goalRunID: input.goalRunID,
+      queueTaskID: input.queueTaskID,
+      status: input.status,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 }

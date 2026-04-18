@@ -10,7 +10,7 @@ import path from "node:path"
 import { Session } from "@/session"
 import { resolveAgentModel } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
-import { Database, eq, and } from "@/storage/db"
+import { Database, eq, and, inArray } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
@@ -25,17 +25,21 @@ import { withStageRetry } from "@/util/retry"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineConfig } from "@/engine/config"
 import { EngineProtocol } from "@/engine/protocol"
+import { isDispatchableGoal } from "@/goal/kind"
 import {
+  EngineGoalTable,
   EngineTaskTable,
 } from "@/engine/engine.sql"
 import {
   markDeliveryPublishing,
   finalizeDeliveryResult,
+  updateGoalRun,
 } from "@/engine/persist"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
+  findRun,
   findRuns,
   listGoals,
   requireRun,
@@ -47,11 +51,12 @@ import {
   GoalContractUpdateSchema,
 } from "@/pipeline/goal-contract.schema"
 import type { EngineBudget } from "@/engine/engine.sql"
-import { updateTask } from "@/engine/state"
+import { updateRun, updateTask } from "@/engine/state"
 
 import { findStepByTool, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
 import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
+import { GOAL_RUN_RESETTABLE_STATUSES, isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -107,6 +112,32 @@ function stageTimeout(stage: "requirements" | "goal" | "plan"): number {
   const env = { requirements: "OPENCORVUS_REQUIREMENTS_TIMEOUT_MS", goal: "OPENCORVUS_GOAL_TIMEOUT_MS", plan: "OPENCORVUS_PLAN_TIMEOUT_MS" }
   const defaults = { requirements: 300_000, goal: 180_000, plan: 300_000 }
   return parseInt(process.env[env[stage]] || String(defaults[stage]), 10)
+}
+
+/**
+ * Lightweight MIME guess from filename extension. Covers the design-material
+ * spectrum: images (inlined multimodal), PDFs (multimodal), text / markdown /
+ * JSON / CSS / YAML (reference-only, read via read_attachment). Falls back to
+ * `application/octet-stream` so AttachmentStore.write still accepts the file
+ * — the multimodal-vs-reference partition then decides how it's surfaced.
+ */
+function guessMimeFromFilename(filename: string): string {
+  const ext = (filename.split(".").pop() || "").toLowerCase()
+  const table: Record<string, string> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+    gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml",
+    avif: "image/avif", heic: "image/heic", heif: "image/heif",
+    pdf: "application/pdf",
+    md: "text/markdown", markdown: "text/markdown",
+    txt: "text/plain", log: "text/plain",
+    json: "application/json", jsonc: "application/json",
+    yaml: "text/yaml", yml: "text/yaml",
+    css: "text/css", scss: "text/css", less: "text/css",
+    html: "text/html", htm: "text/html",
+    mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+    mp3: "audio/mpeg", wav: "audio/wav",
+  }
+  return table[ext] ?? "application/octet-stream"
 }
 
 // The delivery agent emits a structured DeliveryVerdict with three typed
@@ -533,45 +564,87 @@ export function createOrchestratorTools(input: {
       ].join("\n"),
       inputSchema: z.object({
         reason: z.string().describe("Why design analysis is needed for this task"),
-        url: z.string().optional().describe("URL to fetch and analyze (live page or design reference)"),
+        url: z
+          .string()
+          .optional()
+          .describe("Deprecated — use `urls`. Single URL for back-compat; merged into `urls`."),
+        urls: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Any number of design-reference URLs: live pages, design-tool share links " +
+            "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
+            "Non-Figma URLs are screenshot-rendered via headless Chromium and attached as visual_reference; " +
+            "Figma URLs use the REST API path. The LLM can also call `webfetch` on them for HTML/CSS analysis.",
+          ),
         figma_url: z.string().optional().describe(
-          "Figma file URL to render via the Figma REST API (figma.com/file/... or figma.com/design/...). " +
-          "Requires FIGMA_API_TOKEN in env. The frame PNG is added as an in-line vision attachment.",
+          "Figma file URL rendered via the Figma REST API (figma.com/file/... or figma.com/design/...). " +
+          "Requires FIGMA_API_TOKEN in env.",
         ),
+        materials: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Local design-material paths (relative to project root, or absolute under it). " +
+            "Supported: images, PDFs, markdown/text style guides, design-tokens JSON, CSS. " +
+            "Each is read from disk and materialized into the attachment store as a visual_reference " +
+            "so it flows through the same multimodal / read_attachment pipeline as user uploads.",
+          ),
       }),
-      execute: async ({ reason, url, figma_url }) => {
+      execute: async ({ reason, url, urls, figma_url, materials }) => {
         const task = requireTask(taskID)
 
         // Guard: skip if no visual input available. Figma URL counts as visual.
         const hasAttachments = Array.isArray(task.attachments) && task.attachments.length > 0
-        // Auto-detect: a `figma.com` URL passed via `url` is treated as figma_url.
+        // Auto-detect: any `figma.com` URL passed via `url` / `urls` is
+        // treated as a Figma URL (uses REST API path instead of screenshot).
         const meta = (task.metadata as Record<string, unknown> | null) ?? {}
         const metaFigma = typeof meta.figma_url === "string" ? meta.figma_url : undefined
-        const figmaUrl = figma_url
-          ?? metaFigma
-          ?? (url && /(^|\.)figma\.com\//i.test(url) ? url : undefined)
-        const liveUrl = url && figmaUrl === url ? undefined : url
-        if (!hasAttachments && !liveUrl && !figmaUrl) {
-          return "No visual references available (no image attachments, no URL, no Figma URL). Skip design_analysis and proceed to requirements."
+        const inputUrls = [
+          ...(url ? [url] : []),
+          ...(Array.isArray(urls) ? urls : []),
+        ].filter((u) => typeof u === "string" && u.length > 0)
+        const figmaUrls = [
+          ...(figma_url ? [figma_url] : []),
+          ...(metaFigma ? [metaFigma] : []),
+          ...inputUrls.filter((u) => /(^|\.)figma\.com\//i.test(u)),
+        ]
+        const liveUrls = inputUrls.filter((u) => !/(^|\.)figma\.com\//i.test(u))
+        const materialPaths = Array.isArray(materials) ? materials.filter((m) => typeof m === "string" && m.length > 0) : []
+        if (!hasAttachments && liveUrls.length === 0 && figmaUrls.length === 0 && materialPaths.length === 0) {
+          return "No visual references available (no image attachments, no URLs, no Figma URL, no local materials). Skip design_analysis and proceed to requirements."
         }
 
         await trackStepStart("design_analysis")
 
-        log.info("design_analysis: starting", { taskID, hasAttachments, hasUrl: !!url, hasFigma: !!figmaUrl, reason })
+        log.info("design_analysis: starting", {
+          taskID,
+          hasAttachments,
+          liveUrlCount: liveUrls.length,
+          figmaUrlCount: figmaUrls.length,
+          materialCount: materialPaths.length,
+          reason,
+        })
 
-        // Reference materialization: any external visual source (Figma frame
-        // / URL screenshot) gets pulled, written to AttachmentStore, and
-        // attached to the task with intent="visual_reference". Two wins:
+        // Reference materialization: every external design source (Figma
+        // frame, URL-screenshot, local file) gets pulled, written to
+        // AttachmentStore, and attached to the task with
+        // intent="visual_reference". Three wins:
         //   1. design-analyst (and any later vision agent) reads it as a
         //      normal task attachment — no special-cased fetch path.
         //   2. The deliver-time visual SSIM gate picks it up automatically
         //      (it walks task.attachments looking for visual references).
-        // Same pattern can be extended to other reference kinds (api
-        // contract, test fixture, …) by writing with a different intent.
-        if (figmaUrl) {
+        //   3. Text materials (design tokens JSON, style-guide markdown, …)
+        //      flow through the same listing + read_attachment pipeline as
+        //      user uploads.
+        const { AttachmentStore } = await import("@/storage/attachment-store")
+        const fsMod = await import("node:fs/promises")
+        const pathMod = await import("node:path")
+
+        // --- Figma frames -----------------------------------------------------
+        for (const figmaUrl of figmaUrls) {
           try {
             const { fetchFigmaFrame } = await import("@/design-analyst/figma-fetch")
-            const { AttachmentStore } = await import("@/storage/attachment-store")
             const frame = await fetchFigmaFrame({ url: figmaUrl })
             const ref = await AttachmentStore.write(
               Instance.project.id,
@@ -597,6 +670,82 @@ export function createOrchestratorTools(input: {
           }
         }
 
+        // --- Generic URL screenshots -----------------------------------------
+        // Any non-Figma URL is rendered via headless Chromium so design-tool
+        // share links (Sketch Cloud, Adobe XD, Framer, InVision, Zeplin, …)
+        // and plain live pages contribute pixel references, not just markup.
+        for (const liveUrl of liveUrls) {
+          try {
+            const { fetchUrlScreenshot } = await import("@/design-analyst/url-screenshot")
+            const shot = await fetchUrlScreenshot({ url: liveUrl })
+            const hostname = (() => { try { return new URL(shot.finalUrl).hostname } catch { return "url" } })()
+            const slug = hostname.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60) || "url"
+            const ref = await AttachmentStore.write(
+              Instance.project.id,
+              Instance.directory,
+              shot.png,
+              "image/png",
+              `url-${slug}-${Date.now()}.png`,
+            )
+            await EngineService.appendTaskAttachment(taskID, {
+              ...ref,
+              intent: "visual_reference",
+              source: "url-screenshot",
+            })
+            log.info("design_analysis: url screenshot materialized", {
+              taskID, url: liveUrl, finalUrl: shot.finalUrl, sha: ref.sha, size: ref.size,
+            })
+          } catch (shotErr) {
+            log.warn("design_analysis: url screenshot failed", {
+              taskID,
+              url: liveUrl,
+              error: shotErr instanceof Error ? shotErr.message : String(shotErr),
+            })
+          }
+        }
+
+        // --- Local material files --------------------------------------------
+        // Paths are resolved against the project root and must stay inside
+        // it — refusing traversal matches the codebase-tools boundary rule.
+        const projectRoot = Instance.directory
+        for (const rawPath of materialPaths) {
+          try {
+            const abs = pathMod.isAbsolute(rawPath)
+              ? pathMod.normalize(rawPath)
+              : pathMod.normalize(pathMod.resolve(projectRoot, rawPath))
+            if (!abs.startsWith(pathMod.normalize(projectRoot))) {
+              log.warn("design_analysis: material path escapes project root — skipped", {
+                taskID, rawPath, projectRoot,
+              })
+              continue
+            }
+            const bytes = await fsMod.readFile(abs)
+            const filename = pathMod.basename(abs)
+            const mime = guessMimeFromFilename(filename)
+            const ref = await AttachmentStore.write(
+              Instance.project.id,
+              Instance.directory,
+              bytes,
+              mime,
+              filename,
+            )
+            await EngineService.appendTaskAttachment(taskID, {
+              ...ref,
+              intent: "visual_reference",
+              source: "material",
+            })
+            log.info("design_analysis: material materialized", {
+              taskID, path: rawPath, sha: ref.sha, size: ref.size, mime,
+            })
+          } catch (matErr) {
+            log.warn("design_analysis: material materialization failed", {
+              taskID,
+              path: rawPath,
+              error: matErr instanceof Error ? matErr.message : String(matErr),
+            })
+          }
+        }
+
         // Refresh task to pick up any newly-attached references.
         const enrichedTask = requireTask(taskID)
         const enrichedHasAttachments = Array.isArray(enrichedTask.attachments) && enrichedTask.attachments.length > 0
@@ -618,9 +767,11 @@ export function createOrchestratorTools(input: {
             title: task.title,
             request: task.request,
             attachments: enrichedHasAttachments ? enrichedTask.attachments as any : undefined,
-            url: liveUrl,
-            // figmaUrl is now materialized into task.attachments above —
-            // design-analyst reads it from there like any other reference.
+            // Pass the non-Figma URL list so the agent can call webfetch on
+            // each for HTML/CSS analysis. Figma URLs are already rendered
+            // as PNGs in task.attachments above, so design-analyst reads
+            // them through the normal multimodal channel.
+            urls: liveUrls,
             taskID,
             sessionID: designSession.id,
             signal: input.signal,
@@ -879,16 +1030,46 @@ export function createOrchestratorTools(input: {
           statusReset = true
         }
 
-        const { EngineGoalTable } = await import("@/engine/engine.sql")
-        Database.use((db) =>
+        const { EngineGoalTable, EngineGoalRunTable } = await import("@/engine/engine.sql")
+        // When the contract changes, retire the existing goal_run history for
+        // this goal. Readiness (readyGoalNodes) anchors on goal_run history,
+        // so leaving a `completed` row in place would keep the goal blocked
+        // from re-dispatch under the NEW contract. Marking the rows `aborted`
+        // with reason "contract modified" is semantically accurate: the
+        // successful run was successful under a *different* contract, and
+        // `aborted` is classified as retriable by RUN_STATUS_CLASSIFIER.
+        let abortedRuns = 0
+        Database.transaction((db) => {
           db.update(EngineGoalTable)
             .set(setValues as any)
             .where(eq(EngineGoalTable.id, goalID))
-            .run(),
-        )
+            .run()
+          if (statusReset) {
+            const toAbort = db
+              .select({ id: EngineGoalRunTable.id })
+              .from(EngineGoalRunTable)
+              .where(
+                and(
+                  eq(EngineGoalRunTable.goal_id, goalID),
+                  inArray(EngineGoalRunTable.status as any, GOAL_RUN_RESETTABLE_STATUSES),
+                ),
+              )
+              .all()
+            abortedRuns = toAbort.length
+          }
+        })
+        if (statusReset && abortedRuns > 0) {
+          const { listGoalRunsForTask } = await import("@/engine/store")
+          const toAbort = listGoalRunsForTask(taskID)
+            .filter((row) => row.goal_id === goalID && GOAL_RUN_RESETTABLE_STATUSES.includes(row.status))
+          for (const row of toAbort) {
+            updateGoalRun(row.id, { status: "aborted", error: "contract modified" })
+          }
+        }
         const changed = Object.keys(setValues).filter(k => k !== "time_updated")
-        const suffix = statusReset ? ` (status reset: ${goal.status} → pending)` : ""
-        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${suffix}`
+        const resetSuffix = statusReset ? ` (status reset: ${goal.status} → pending)` : ""
+        const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
+        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}`
       },
     }),
 
@@ -903,6 +1084,9 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find(g => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
+        if (!isDispatchableGoal(goal)) {
+          return `Goal ${goalID} is verification-only and does not dispatch to an executor. Re-run delivery to evaluate it on the merged worktree, or modify_goal to convert it into a dispatchable build goal.`
+        }
         if (goal.status === "running") return `Goal ${goalID} is already running.`
         if (goal.status === "passed") {
           return `Goal ${goalID} is already passed (terminal success state). ` +
@@ -927,28 +1111,18 @@ export function createOrchestratorTools(input: {
         // Ensure run exists
         let runID = task.active_run_id
         if (!runID) {
-          const { EngineRunTable } = await import("@/engine/engine.sql")
-          runID = Identifier.ascending("run")
-          const now = Date.now()
-          Database.use((db) => {
-            db.insert(EngineRunTable).values({
-              id: runID!,
-              task_id: taskID,
-              plan_version_id: task.active_plan_version_id ?? null,
-              session_id: task.session_id ?? null,
-              executor: "opencode",
-              status: "running",
-              phase: "execute",
-              retry_count: 0,
-              metadata: {},
-              time_created: now,
-              time_updated: now,
-            }).run()
-            db.update(EngineTaskTable)
-              .set({ active_run_id: runID, time_updated: now })
-              .where(eq(EngineTaskTable.id, taskID))
-              .run()
+          const { createRun } = await import("@/engine/writer")
+          const created = createRun({
+            taskID,
+            planVersionID: task.active_plan_version_id ?? null,
+            sessionID: task.session_id ?? null,
+            executor: "opencode",
+            status: "running",
+            phase: "execute",
+            linkAsActive: true,
+            summary: `execute_goal(${goalID}): ad-hoc run created`,
           })
+          runID = created.id
         }
 
         // Signal task loop to dispatch via GoalPool (goal is now "pending", pool will pick it up)
@@ -964,8 +1138,8 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         const failed = dbGoals.filter(g => g.status === "failed")
         if (failed.length === 0) return "No failed goals."
-        const { listGoalRunsByTask, findDeliveryByGoalRun } = await import("@/engine/store")
-        const goalRuns = listGoalRunsByTask(taskID)
+        const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
+        const goalRuns = listGoalRunsForTask(taskID)
         const sections: string[] = [`## Failed Goals (${failed.length})`]
         const ACCEPTANCE_SPEC_CAP = 300
         const DELIVERY_FILES_CAP = 10
@@ -973,7 +1147,7 @@ export function createOrchestratorTools(input: {
           sections.push(`\n### ${goal.id}: ${goal.title}`)
           sections.push(`- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, ACCEPTANCE_SPEC_CAP)}`)
           if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
-          // listGoalRunsByTask is desc by time_created; first match is latest.
+          // listGoalRunsForTask is desc by time_created; first match is latest.
           const latestGr = goalRuns.find(gr => gr.goal_id === goal.id)
           if (latestGr) {
             const delivery = findDeliveryByGoalRun(latestGr.id)
@@ -1215,17 +1389,23 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        if (!task.active_run_id) return "No active run. Use create_plan or execute_goal first."
+        if (!task.active_run_id) return "No active run. Use create_run or execute_goal first."
         const run = requireRun(task.active_run_id)
         const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-        if (!plan) return "No plan found. Use create_plan first."
+        if (!plan) return "No plan found. Use create_run first."
+        if (!isRunReadyForGoalDispatch({ status: run.status, planVersionID: run.plan_version_id })) {
+          if (run.status === "queued") {
+            return `Run ${run.id} is queued. Call submit_execution(runID=${run.id}) first so the task loop can activate and dispatch it.`
+          }
+          return `Run ${run.id} is ${run.status}. Only accepted/running/blocked runs may dispatch goals. Create a fresh run if this one is terminal.`
+        }
 
         // Check how many goals are ready (without dispatching — task loop handles dispatch via GoalPool)
         const { readyGoalNodes } = await import("@/goal/readiness")
-        const { listPlanNodesByPlan, listGoalsByPlan, listGoalRunsByCoordinator } = await import("@/engine/store")
+        const { listPlanNodesByPlan, listGoalsByPlan, listGoalRunsForDispatch } = await import("@/engine/store")
         const nodes = listPlanNodesByPlan(plan.id)
         const goals = listGoalsByPlan(plan.id)
-        const goalRuns = listGoalRunsByCoordinator(run.id)
+        const goalRuns = listGoalRunsForDispatch(taskID)
         const ready = readyGoalNodes(nodes, goals, goalRuns)
 
         if (ready.length === 0) {
@@ -1271,7 +1451,7 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "evaluations" || scope === "all") {
-          const { findEvaluationsByTask, listGoalRunsByTask } = await import("@/engine/store")
+          const { findEvaluationsByTask, listGoalRunsForTask } = await import("@/engine/store")
           const evals = findEvaluationsByTask(taskID) // desc by time_created
           if (evals.length > 0) {
             // Dedup to latest eval per underlying goal. Multiple evals for
@@ -1279,7 +1459,7 @@ export function createOrchestratorTools(input: {
             // is what drives next decisions. goal_run_id → goal_id lookup
             // avoids a SQL join by walking the task's goal_runs once.
             const runToGoal = new Map<string, string>()
-            for (const gr of listGoalRunsByTask(taskID)) runToGoal.set(gr.id, gr.goal_id)
+            for (const gr of listGoalRunsForTask(taskID)) runToGoal.set(gr.id, gr.goal_id)
             const seenGoals = new Set<string>()
             const latestPerGoal: typeof evals = []
             for (const e of evals) {
@@ -1315,8 +1495,8 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "deliveries" || scope === "all") {
-          const { listGoalRunsByTask, findDeliveryByGoalRun } = await import("@/engine/store")
-          const goalRuns = listGoalRunsByTask(taskID) // desc by time_created
+          const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
+          const goalRuns = listGoalRunsForTask(taskID) // desc by time_created
           // Keep only the latest delivery per goal. Previous runs' deliveries
           // are historical noise once superseded; the orchestrator decides from
           // current state, not delivery history.
@@ -1349,7 +1529,7 @@ export function createOrchestratorTools(input: {
     }),
 
     create_run: tool({
-      description: "Create a run record for goal execution. Returns the runID needed for submit_execution or dispatch_ready_goals. Use after requirements + architect.",
+      description: "Create a run record for goal execution. Returns the runID needed for submit_execution. Use after requirements + architect.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to create a run"),
       }),
@@ -1358,6 +1538,24 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         if (dbGoals.length === 0) return "No goals found. Run requirements first."
 
+        // Idempotency guard: refuse create_run while a prior run is still in
+        // a non-terminal state. Creating a second run while the first is
+        // running is the bug on tsk_d9bc59062001xuMSbxYap8hY5t — the new run
+        // re-dispatched the already-passed bootstrap goal instead of moving
+        // on to the pending batch-2 goals. After a run finishes (terminal
+        // status: completed / failed / aborted), orchestrator may create a
+        // new run for post-delivery rework.
+        if (task.active_run_id) {
+          const existing = findRun(task.active_run_id)
+          if (existing && isLiveRunStatus(existing.status)) {
+            return (
+              `Run ${existing.id} is still ${existing.status}. Cannot create a new run while a prior one is live. ` +
+              `Use dispatch_ready_goals (to continue with the current run's pending goals) or execute_goal (to kick off a specific goal). ` +
+              `If you need rework, first modify_goal to update contracts, then this tool will permit a new run after the active one reaches terminal status.`
+            )
+          }
+        }
+
         // Budget enforcement: max_runs
         const totalRuns = findRuns(taskID).length
         const maxRuns = (task.budget as EngineBudget | null)?.max_runs ?? DEFAULT_MAX_RUNS
@@ -1365,17 +1563,20 @@ export function createOrchestratorTools(input: {
           return `Budget exhausted: ${totalRuns}/${maxRuns} runs used. Cannot create more runs. Consider delivering current state or failing the task.`
         }
 
-        const runID = Identifier.ascending("run")
         const now = Date.now()
         const executor = (task.metadata?._pipeline as any)?.executor ?? "opencode"
         const sessionID = task.session_id!
 
         // Create a lightweight plan version (goals as plan nodes, no global planner)
         const planID = Identifier.ascending("plan")
-        const { EnginePlanVersionTable, EngineRunTable, EnginePlanNodeTable } = await import("@/engine/engine.sql")
+        const { EnginePlanVersionTable, EnginePlanNodeTable, EngineGoalTable } =
+          await import("@/engine/engine.sql")
 
+        // Plan + plan_nodes + goal linkage go in one transaction (they're
+        // domain-local to the plan snapshot). The run insert goes through
+        // the writer layer afterwards so RunCreated is emitted and the
+        // writer is the single insertion site.
         Database.transaction((db) => {
-          // Plan version (minimal — goals ARE the plan)
           db.insert(EnginePlanVersionTable).values({
             id: planID, task_id: taskID, spec_snapshot_id: task.active_spec_version_id ?? null,
             version: 1, status: "active",
@@ -1385,8 +1586,6 @@ export function createOrchestratorTools(input: {
             time_created: now, time_updated: now,
           }).run()
 
-          // Pre-generate plan_node IDs and build goal_id → plan_node_id mapping
-          // so depends_on_ids references plan_node IDs (not goal IDs).
           const goalToPlanNode = new Map<string, string>()
           const planNodeIDs: string[] = []
           for (const goal of dbGoals) {
@@ -1395,7 +1594,6 @@ export function createOrchestratorTools(input: {
             goalToPlanNode.set(goal.id, pnID)
           }
 
-          // Each goal becomes a plan node (so scheduler can compute DAG)
           for (const [index, goal] of dbGoals.entries()) {
             const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID: string) => {
               const pnID = goalToPlanNode.get(depGoalID)
@@ -1418,50 +1616,67 @@ export function createOrchestratorTools(input: {
             }).run()
           }
 
-          // Run record
-          db.insert(EngineRunTable).values({
-            id: runID, task_id: taskID, plan_version_id: planID,
-            session_id: sessionID, executor,
-            status: "queued", phase: "dispatch", retry_count: 0,
-            metadata: {}, time_created: now, time_updated: now,
-          }).run()
-
-          // Link goals to this plan so listGoalsByPlan() finds them during dispatch
-          const { EngineGoalTable: GT } = require("@/engine/engine.sql")
           for (const goal of dbGoals) {
-            db.update(GT)
+            db.update(EngineGoalTable)
               .set({ plan_version_id: planID, time_updated: now })
-              .where(eq(GT.id, goal.id))
+              .where(eq(EngineGoalTable.id, goal.id))
               .run()
           }
-
-          // Update task
-          db.update(EngineTaskTable)
-            .set({ active_plan_version_id: planID, active_run_id: runID, status: "active", time_updated: now })
-            .where(eq(EngineTaskTable.id, taskID))
-            .run()
         })
 
-        return `Run created. runID=${runID}, planID=${planID}, ${dbGoals.length} goals as plan nodes. Call dispatch_ready_goals or submit_execution to start execution.`
+        const { createRun } = await import("@/engine/writer")
+        const created = createRun({
+          taskID,
+          planVersionID: planID,
+          sessionID,
+          executor,
+          status: "queued",
+          phase: "dispatch",
+          summary: `create_run: ${dbGoals.length} goals queued`,
+          now,
+        })
+        const runID = created.id
+
+        // Link task to the new run/plan via updateTask so the transition is
+        // CAS-guarded and emits TaskUpdated.
+        await updateTask(
+          requireTask(taskID),
+          {
+            active_plan_version_id: planID,
+            active_run_id: runID,
+            status: "active",
+          },
+          `create_run: planID=${planID} runID=${runID}`,
+        )
+
+        return `Run created. runID=${runID}, planID=${planID}, ${dbGoals.length} goals as plan nodes. Call submit_execution(runID=${runID}) to activate dispatch.`
       },
     }),
 
     submit_execution: tool({
       description: "Activate a run and dispatch all dependency-ready goals in parallel. Equivalent to activating the run then calling dispatch_ready_goals. STOP after this call.",
       inputSchema: z.object({
-        runID: z.string().describe("The run ID from create_plan output"),
+        runID: z.string().describe("The run ID from create_run output"),
       }),
       execute: async ({ runID }) => {
         const task = requireTask(taskID)
         const run = requireRun(runID)
+        if (task.active_run_id && task.active_run_id !== runID) {
+          return `Run ${runID} is not the task's active run (active_run_id=${task.active_run_id}). Submit the active run or create a fresh run.`
+        }
+        if (!run.plan_version_id) {
+          return `Run ${runID} has no plan_version_id. Create a fresh run before submitting execution.`
+        }
+        if (run.status === "completed" || run.status === "failed" || run.status === "aborted") {
+          return `Run ${runID} is already ${run.status}. Create a fresh run before submitting execution again.`
+        }
+        if (run.status === "running" || run.status === "blocked") {
+          stopAfterDispatch.abort("submit_execution")
+          return `Run ${runID} is already ${run.status}. STOP HERE — task loop will continue dispatch via GoalPool.`
+        }
 
-        // Activate the run
-        Database.use((db) => {
-          const { EngineRunTable } = require("@/engine/engine.sql")
-          db.update(EngineRunTable).set({ status: "running", time_started: Date.now(), time_updated: Date.now() }).where(eq(EngineRunTable.id, runID)).run()
-          const { EngineTaskTable: TT } = require("@/engine/engine.sql")
-          db.update(TT).set({ status: "active", time_updated: Date.now() }).where(eq(TT.id, taskID)).run()
-        })
+        await updateTask(task, { status: "active", error: null, blocking_reason: null }, "Execution submitted")
+        await updateRun(run, { status: "running" }, "Execution submitted")
 
         // Signal task loop to dispatch via GoalPool (don't dispatch here)
         stopAfterDispatch.abort("submit_execution")
@@ -1489,9 +1704,119 @@ export function createOrchestratorTools(input: {
       }),
       execute: async ({ stage, reason }) => {
         const task = requireTask(taskID)
-        // All restarts go to "active" — the agent decides what to do next
-        await updateTask(task, { status: "active", error: null, blocking_reason: null }, `Restart from ${stage}: ${reason}`)
-        return `Task restarted from ${stage} stage. Reason: ${reason}. Continue with the appropriate tool (requirements for requirements, create_plan for plan, submit_execution for executor).`
+        const plan = restartStagePlan(stage, Boolean(task.active_plan_version_id))
+        const now = Date.now()
+        const runError = `restart_from_stage(${stage}): ${reason}`
+        const {
+          EngineGoalTable,
+          EnginePlanVersionTable,
+          EngineSpecSnapshotTable,
+        } = await import("@/engine/engine.sql")
+        const { abortLiveExecutionForTask, createRun } = await import("@/engine/writer")
+
+        // Abort live execution state (goal_runs + coordinator runs) through
+        // the shared writer primitive so restart and startup recovery share
+        // the same termination semantics (CAS + state-machine + events).
+        const aborted = await abortLiveExecutionForTask({
+          taskID,
+          reason: runError,
+          includeGoalRuns: plan.retireGoalRuns,
+        })
+        const retiredGoalRuns = aborted.goalRuns
+        const retiredRuns = aborted.runs
+
+        let resetGoals = 0
+        let deletedGoals = 0
+        let freshRun: { id: string } | null = null
+
+        Database.transaction((db) => {
+
+          if (plan.resetGoalStatuses) {
+            const rows = db
+              .select({ id: EngineGoalTable.id })
+              .from(EngineGoalTable)
+              .where(eq(EngineGoalTable.task_id, taskID))
+              .all()
+            resetGoals = rows.length
+            if (resetGoals > 0) {
+              db.update(EngineGoalTable)
+                .set({ status: "pending", time_updated: now })
+                .where(eq(EngineGoalTable.task_id, taskID))
+                .run()
+            }
+          }
+
+          if (plan.deleteGoals) {
+            const rows = db
+              .select({ id: EngineGoalTable.id })
+              .from(EngineGoalTable)
+              .where(eq(EngineGoalTable.task_id, taskID))
+              .all()
+            deletedGoals = rows.length
+            if (deletedGoals > 0) {
+              db.delete(EngineGoalTable)
+                .where(eq(EngineGoalTable.task_id, taskID))
+                .run()
+            }
+          }
+
+          if (plan.clearPlan && task.active_plan_version_id) {
+            db.update(EnginePlanVersionTable)
+              .set({ status: "superseded", time_updated: now })
+              .where(eq(EnginePlanVersionTable.id, task.active_plan_version_id))
+              .run()
+          }
+
+          if (plan.clearSpec && task.active_spec_version_id) {
+            db.update(EngineSpecSnapshotTable)
+              .set({ status: "superseded", time_updated: now })
+              .where(eq(EngineSpecSnapshotTable.id, task.active_spec_version_id))
+              .run()
+          }
+        })
+
+        if (plan.queueFreshRun && task.active_plan_version_id) {
+          const executor = (task.metadata?._pipeline as any)?.executor ?? "opencode"
+          freshRun = createRun({
+            taskID,
+            planVersionID: task.active_plan_version_id,
+            sessionID: task.session_id ?? null,
+            executor,
+            status: "queued",
+            phase: "dispatch",
+            metadata: { restart_stage: stage },
+            summary: `restart_from_stage(${stage}): fresh run queued`,
+            now,
+          })
+        }
+
+        // Route task status reset through updateTask so the restart emits
+        // TaskUpdated + records a progress snapshot — same invariants every
+        // other task status change goes through.
+        const currentTask = requireTask(taskID)
+        await updateTask(
+          currentTask,
+          {
+            status: "active",
+            error: null,
+            blocking_reason: null,
+            active_spec_version_id: plan.clearSpec ? null : currentTask.active_spec_version_id,
+            active_plan_version_id: plan.clearPlan ? null : currentTask.active_plan_version_id,
+            active_run_id: freshRun?.id ?? null,
+          },
+          `restart_from_stage(${stage})`,
+        )
+        const freshRunID = freshRun?.id ?? null
+
+        const detail = [
+          deletedGoals > 0 ? `${deletedGoals} goal(s) deleted` : null,
+          resetGoals > 0 ? `${resetGoals} goal(s) reset to pending` : null,
+          retiredGoalRuns > 0 ? `${retiredGoalRuns} goal_run(s) aborted` : null,
+          retiredRuns > 0 ? `${retiredRuns} run(s) aborted` : null,
+          freshRunID ? `fresh queued run=${freshRunID}` : null,
+        ].filter(Boolean).join(", ")
+
+        return `Task restarted from ${stage}. Reason: ${reason}. ${detail || "State cleared."} NEXT: ${plan.nextAction}${freshRunID ? `(${freshRunID})` : ""}.`
       },
     }),
 
@@ -1510,7 +1835,7 @@ export function createOrchestratorTools(input: {
         const goals = listGoals(taskID)
 
         // Hard lock: refuse delivery while any goals are still running/pending
-        const notDone = goals.filter(g => g.status === "running" || g.status === "pending")
+        const notDone = goals.filter(g => isDispatchableGoal(g) && (g.status === "running" || g.status === "pending"))
         if (notDone.length > 0) {
           return `Cannot deliver: ${notDone.length} goal(s) still in progress (${notDone.map(g => `${g.title}:${g.status}`).join(", ")}). Wait for ALL goals to complete before delivering.`
         }
@@ -1522,8 +1847,8 @@ export function createOrchestratorTools(input: {
         }
 
         // Aggregate per-goal deliveries
-        const { listGoalRunsByCoordinator, findDeliveryByGoalRun } = await import("@/engine/store")
-        const goalRuns = listGoalRunsByCoordinator(run.id)
+        const { listGoalRunsForRun, findDeliveryByGoalRun } = await import("@/engine/store")
+        const goalRuns = listGoalRunsForRun(run.id)
         const allDiffs: Array<{ file: string; diff?: string; [key: string]: unknown }> = []
         const seenFiles = new Set<string>()
         const summaries: string[] = []
@@ -1655,6 +1980,7 @@ export function createOrchestratorTools(input: {
         // overlay panel reflects what was actually verified deterministically.
         const evaluatorCheckResults: Array<{ name: string; status: "passed" | "failed" | "skipped"; evidence?: string }> = []
         const evaluatorCriteriaSink: Array<{ name: string; status: "passed" | "failed" | "skipped"; family: string; evidence?: string; label?: string }> = []
+        const verificationGoalStatuses = new Map<string, { status: "passed" | "failed" }>()
         // Track strict-mode failures from per-goal evaluator. If any strict
         // check failed, the delivery agent's verdict MUST be rejected — the
         // LLM is not allowed to override deterministic strict gates.
@@ -1694,6 +2020,11 @@ export function createOrchestratorTools(input: {
                   strictFailedChecks.push({ name: namespaced, evidence: check.output })
                 }
               }
+              if (!isDispatchableGoal(goal)) {
+                verificationGoalStatuses.set(goal.id, {
+                  status: verdict.pass ? "passed" : "failed",
+                })
+              }
               if (verdict.checks.length === 0) {
                 // Goal had no scorers AND no project-discovery fallback. Per the
                 // evaluator's own contract this is verdict=rejected with no
@@ -1725,7 +2056,27 @@ export function createOrchestratorTools(input: {
                 evidence: msg,
                 label: `${goal.title} · evaluator threw`,
               })
+              if (!isDispatchableGoal(goal)) {
+                verificationGoalStatuses.set(goal.id, {
+                  status: "failed",
+                })
+              }
+              strictFailedChecks.push({ name, evidence: msg })
             }
+          }
+          if (verificationGoalStatuses.size > 0) {
+            const now = Date.now()
+            Database.transaction((db) => {
+              for (const [goalID, result] of verificationGoalStatuses) {
+                db.update(EngineGoalTable)
+                  .set({
+                    status: result.status,
+                    time_updated: now,
+                  } as any)
+                  .where(eq(EngineGoalTable.id, goalID))
+                  .run()
+              }
+            })
           }
           if (evaluatorCriteriaSink.length > 0) {
             await EngineService.upsertTaskCriteria(taskID, evaluatorCriteriaSink)
@@ -2169,8 +2520,8 @@ export function createOrchestratorTools(input: {
 
         // Gather delivery context
         const goals = listGoals(taskID)
-        const { listGoalRunsByTask, findDeliveryByGoalRun } = await import("@/engine/store")
-        const goalRuns = listGoalRunsByTask(taskID)
+        const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
+        const goalRuns = listGoalRunsForTask(taskID)
 
         const goalSummaries: string[] = []
         const allChangedFiles: string[] = []

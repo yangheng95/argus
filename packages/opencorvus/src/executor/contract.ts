@@ -126,6 +126,7 @@ export type ExecutorAdapter = {
     queueTaskID: string
   }>
   events(input: {
+    goalID?: string
     sessionID?: string
     queueTaskID?: string
     signal?: AbortSignal

@@ -1,4 +1,5 @@
 import { createMemo, For, Show, onMount, onCleanup, createEffect, createSignal } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { Card } from "./Card";
 import { toCardTree } from "../utils/card-tree";
 import type { CardNode } from "../utils/card-tree";
@@ -46,7 +47,28 @@ export function Conversation(props: { container: HTMLElement }) {
   const ctx = createMemo(() => userContextMessages());
   const cards = createMemo(() => agentCardItems());
   const items = createMemo(() => combineConversation(main(), ctx(), cards()));
-  const tree = createMemo(() => toCardTree(items()));
+
+  // The CardNode tree is kept in a Solid store and updated via `reconcile`
+  // keyed on `id`. `toCardTree` is a pure derivation that produces fresh
+  // CardNode objects on every call, and agent.updated flushes the upstream
+  // memos at ~60Hz (AGENT_FLUSH_INTERVAL = 16ms in store/messages.ts). A
+  // naive `createMemo(() => toCardTree(items()))` therefore hands `<For>`
+  // a brand-new object array on every tick, causing `<For>`'s keyed-by-
+  // reference diff to remount every top-level <Card> — and every FilePart
+  // subtree with it — which is exactly the flicker source for attachment
+  // images (AuthedImage's onCleanup revokes the blob URL on each unmount,
+  // so the <img> disappears until the next fetch completes, at ~60Hz).
+  //
+  // `reconcile` performs an identity-preserving merge: nodes with the same
+  // `id` keep their proxy reference, non-key fields update in place as
+  // reactive writes, so consumers (Card and its descendants) re-read
+  // through the store proxy and re-render only what truly changed. Child
+  // arrays and nested objects recurse through the same merge.
+  const [treeStore, setTreeStore] = createStore<{ tree: CardNode[] }>({ tree: [] });
+  createEffect(() => {
+    setTreeStore("tree", reconcile(toCardTree(items()), { key: "id" }));
+  });
+  const tree = () => treeStore.tree;
 
   // ── Runtime duplicate detector ──
   // Scans the final card tree (items + all descendants) for duplicate IDs.

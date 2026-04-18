@@ -5,7 +5,6 @@ import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
-import { InstanceBootstrap } from "../project/bootstrap"
 import { Project } from "../project/project"
 import { Database, eq } from "../storage/db"
 import { ProjectTable } from "../project/project.sql"
@@ -74,7 +73,7 @@ export namespace Worktree {
       checkout: z
         .enum(["sync", "async"])
         .optional()
-        .describe("When 'sync', await file checkout before returning. Default 'async' (fire-and-forget)."),
+        .describe("Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning."),
     })
     .meta({
       ref: "WorktreeCreateInput",
@@ -471,18 +470,6 @@ export namespace Worktree {
     return true
   }
 
-  function queueStartScripts(directory: string, input: { projectID: string; extra?: string }) {
-    setTimeout(() => {
-      const start = async () => {
-        await runStartScripts(directory, input)
-      }
-
-      void start().catch((error) => {
-        log.error("worktree start task failed", { directory, error })
-      })
-    }, 0)
-  }
-
   export const create = fn(CreateInput.optional(), async (input) => {
     if (Instance.project.vcs !== "git") {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
@@ -540,40 +527,19 @@ export namespace Worktree {
         throw new CreateFailedError({ message })
       }
 
-      // Symlink node_modules from the primary worktree so that LSP type resolution
-      // works correctly in isolated worktrees (prevents false "Cannot find module" errors).
-      const primaryNodeModules = path.join(Instance.worktree, "node_modules")
-      const worktreeNodeModules = path.join(info.directory, "node_modules")
-      try {
-        const stat = await fs.stat(primaryNodeModules)
-        if (stat.isDirectory()) {
-          await fs.symlink(primaryNodeModules, worktreeNodeModules, "junction")
-        }
-      } catch {
-        // Primary project has no node_modules — nothing to link
-      }
-
-      const booted = await Instance.provide({
-        directory: info.directory,
-        init: InstanceBootstrap,
-        fn: () => undefined,
-      })
-        .then(() => true)
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
-          log.error("worktree bootstrap failed", { directory: info.directory, message })
-          GlobalBus.emit("event", {
-            directory: info.directory,
-            payload: {
-              type: Event.Failed.type,
-              properties: {
-                message,
-              },
+      const started = await runStartScripts(info.directory, { projectID, extra })
+      if (!started) {
+        GlobalBus.emit("event", {
+          directory: info.directory,
+          payload: {
+            type: Event.Failed.type,
+            properties: {
+              message: "Worktree startup scripts failed",
             },
-          })
-          return false
+          },
         })
-      if (!booted) return
+        throw new StartCommandFailedError({ message: `Worktree startup scripts failed: ${info.directory}` })
+      }
 
       GlobalBus.emit("event", {
         directory: info.directory,
@@ -585,18 +551,19 @@ export namespace Worktree {
           },
         },
       })
-
-      await runStartScripts(info.directory, { projectID, extra })
     }
 
-    if (input?.checkout === "sync") {
+    try {
       await populate()
-    } else {
-      setTimeout(() => {
-        void populate().catch((error) => {
-          log.error("worktree start task failed", { directory: info.directory, error })
+    } catch (error) {
+      await remove({ directory: info.directory }).catch((cleanupError) => {
+        log.error("worktree create cleanup failed", {
+          directory: info.directory,
+          error: String(cleanupError),
         })
-      }, 0)
+      })
+      await Project.removeSandbox(Instance.project.id, info.directory).catch(() => undefined)
+      throw error
     }
 
     return info
@@ -721,127 +688,129 @@ export namespace Worktree {
       throw new ResetFailedError({ message: "Cannot reset the primary workspace" })
     }
 
-    const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
-    if (list.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(list) || "Failed to read git worktrees" })
-    }
+    const worktreePath = await withGitLock(async () => {
+      const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+      if (list.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(list) || "Failed to read git worktrees" })
+      }
 
-    const lines = outputText(list.stdout)
-      .split("\n")
-      .map((line) => line.trim())
-    const entries = lines.reduce<{ path?: string; branch?: string }[]>((acc, line) => {
-      if (!line) return acc
-      if (line.startsWith("worktree ")) {
-        acc.push({ path: line.slice("worktree ".length).trim() })
+      const lines = outputText(list.stdout)
+        .split("\n")
+        .map((line) => line.trim())
+      const entries = lines.reduce<{ path?: string; branch?: string }[]>((acc, line) => {
+        if (!line) return acc
+        if (line.startsWith("worktree ")) {
+          acc.push({ path: line.slice("worktree ".length).trim() })
+          return acc
+        }
+        const current = acc[acc.length - 1]
+        if (!current) return acc
+        if (line.startsWith("branch ")) {
+          current.branch = line.slice("branch ".length).trim()
+        }
         return acc
+      }, [])
+
+      const entry = await (async () => {
+        for (const item of entries) {
+          if (!item.path) continue
+          const key = await canonical(item.path)
+          if (key === directory) return item
+        }
+      })()
+      if (!entry?.path) {
+        throw new ResetFailedError({ message: "Worktree not found" })
       }
-      const current = acc[acc.length - 1]
-      if (!current) return acc
-      if (line.startsWith("branch ")) {
-        current.branch = line.slice("branch ".length).trim()
+
+      const remoteList = await $`git remote`.quiet().nothrow().cwd(Instance.worktree)
+      if (remoteList.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(remoteList) || "Failed to list git remotes" })
       }
-      return acc
-    }, [])
 
-    const entry = await (async () => {
-      for (const item of entries) {
-        if (!item.path) continue
-        const key = await canonical(item.path)
-        if (key === directory) return item
+      const remotes = outputText(remoteList.stdout)
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+
+      const remote = remotes.includes("origin")
+        ? "origin"
+        : remotes.length === 1
+          ? remotes[0]
+          : remotes.includes("upstream")
+            ? "upstream"
+            : ""
+
+      const remoteHead = remote
+        ? await $`git symbolic-ref refs/remotes/${remote}/HEAD`.quiet().nothrow().cwd(Instance.worktree)
+        : { exitCode: 1, stdout: undefined, stderr: undefined }
+
+      const remoteRef = remoteHead.exitCode === 0 ? outputText(remoteHead.stdout) : ""
+      const remoteTarget = remoteRef ? remoteRef.replace(/^refs\/remotes\//, "") : ""
+      const remoteBranch = remote && remoteTarget.startsWith(`${remote}/`) ? remoteTarget.slice(`${remote}/`.length) : ""
+
+      const mainCheck = await $`git show-ref --verify --quiet refs/heads/main`.quiet().nothrow().cwd(Instance.worktree)
+      const masterCheck = await $`git show-ref --verify --quiet refs/heads/master`
+        .quiet()
+        .nothrow()
+        .cwd(Instance.worktree)
+      const localBranch = mainCheck.exitCode === 0 ? "main" : masterCheck.exitCode === 0 ? "master" : ""
+
+      const target = remoteBranch ? `${remote}/${remoteBranch}` : localBranch
+      if (!target) {
+        throw new ResetFailedError({ message: "Default branch not found" })
       }
-    })()
-    if (!entry?.path) {
-      throw new ResetFailedError({ message: "Worktree not found" })
-    }
 
-    const remoteList = await $`git remote`.quiet().nothrow().cwd(Instance.worktree)
-    if (remoteList.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(remoteList) || "Failed to list git remotes" })
-    }
-
-    const remotes = outputText(remoteList.stdout)
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-
-    const remote = remotes.includes("origin")
-      ? "origin"
-      : remotes.length === 1
-        ? remotes[0]
-        : remotes.includes("upstream")
-          ? "upstream"
-          : ""
-
-    const remoteHead = remote
-      ? await $`git symbolic-ref refs/remotes/${remote}/HEAD`.quiet().nothrow().cwd(Instance.worktree)
-      : { exitCode: 1, stdout: undefined, stderr: undefined }
-
-    const remoteRef = remoteHead.exitCode === 0 ? outputText(remoteHead.stdout) : ""
-    const remoteTarget = remoteRef ? remoteRef.replace(/^refs\/remotes\//, "") : ""
-    const remoteBranch = remote && remoteTarget.startsWith(`${remote}/`) ? remoteTarget.slice(`${remote}/`.length) : ""
-
-    const mainCheck = await $`git show-ref --verify --quiet refs/heads/main`.quiet().nothrow().cwd(Instance.worktree)
-    const masterCheck = await $`git show-ref --verify --quiet refs/heads/master`
-      .quiet()
-      .nothrow()
-      .cwd(Instance.worktree)
-    const localBranch = mainCheck.exitCode === 0 ? "main" : masterCheck.exitCode === 0 ? "master" : ""
-
-    const target = remoteBranch ? `${remote}/${remoteBranch}` : localBranch
-    if (!target) {
-      throw new ResetFailedError({ message: "Default branch not found" })
-    }
-
-    if (remoteBranch) {
-      const fetch = await $`git fetch ${remote} ${remoteBranch}`.quiet().nothrow().cwd(Instance.worktree)
-      if (fetch.exitCode !== 0) {
-        throw new ResetFailedError({ message: errorText(fetch) || `Failed to fetch ${target}` })
+      if (remoteBranch) {
+        const fetch = await $`git fetch ${remote} ${remoteBranch}`.quiet().nothrow().cwd(Instance.worktree)
+        if (fetch.exitCode !== 0) {
+          throw new ResetFailedError({ message: errorText(fetch) || `Failed to fetch ${target}` })
+        }
       }
-    }
 
-    if (!entry.path) {
-      throw new ResetFailedError({ message: "Worktree path not found" })
-    }
+      const worktreePath = entry.path
+      const resetToTarget = await $`git reset --hard ${target}`.quiet().nothrow().cwd(worktreePath)
+      if (resetToTarget.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(resetToTarget) || "Failed to reset worktree to target" })
+      }
 
-    const worktreePath = entry.path
+      const clean = await sweep(worktreePath)
+      if (clean.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(clean) || "Failed to clean worktree" })
+      }
 
-    const resetToTarget = await $`git reset --hard ${target}`.quiet().nothrow().cwd(worktreePath)
-    if (resetToTarget.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(resetToTarget) || "Failed to reset worktree to target" })
-    }
+      const update = await $`git submodule update --init --recursive --force`.quiet().nothrow().cwd(worktreePath)
+      if (update.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(update) || "Failed to update submodules" })
+      }
 
-    const clean = await sweep(worktreePath)
-    if (clean.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(clean) || "Failed to clean worktree" })
-    }
+      const subReset = await $`git submodule foreach --recursive git reset --hard`.quiet().nothrow().cwd(worktreePath)
+      if (subReset.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(subReset) || "Failed to reset submodules" })
+      }
 
-    const update = await $`git submodule update --init --recursive --force`.quiet().nothrow().cwd(worktreePath)
-    if (update.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(update) || "Failed to update submodules" })
-    }
+      const subClean = await $`git submodule foreach --recursive git clean -fdx`.quiet().nothrow().cwd(worktreePath)
+      if (subClean.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(subClean) || "Failed to clean submodules" })
+      }
 
-    const subReset = await $`git submodule foreach --recursive git reset --hard`.quiet().nothrow().cwd(worktreePath)
-    if (subReset.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(subReset) || "Failed to reset submodules" })
-    }
+      const status = await $`git status --porcelain=v1`.quiet().nothrow().cwd(worktreePath)
+      if (status.exitCode !== 0) {
+        throw new ResetFailedError({ message: errorText(status) || "Failed to read git status" })
+      }
 
-    const subClean = await $`git submodule foreach --recursive git clean -fdx`.quiet().nothrow().cwd(worktreePath)
-    if (subClean.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(subClean) || "Failed to clean submodules" })
-    }
+      const dirty = outputText(status.stdout)
+      if (dirty) {
+        throw new ResetFailedError({ message: `Worktree reset left local changes:\n${dirty}` })
+      }
 
-    const status = await $`git status --porcelain=v1`.quiet().nothrow().cwd(worktreePath)
-    if (status.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(status) || "Failed to read git status" })
-    }
-
-    const dirty = outputText(status.stdout)
-    if (dirty) {
-      throw new ResetFailedError({ message: `Worktree reset left local changes:\n${dirty}` })
-    }
+      return worktreePath
+    })
 
     const projectID = Instance.project.id
-    queueStartScripts(worktreePath, { projectID })
+    const started = await runStartScripts(worktreePath, { projectID })
+    if (!started) {
+      throw new StartCommandFailedError({ message: `Worktree startup scripts failed: ${worktreePath}` })
+    }
 
     return true
   })

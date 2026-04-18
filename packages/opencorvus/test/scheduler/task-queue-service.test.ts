@@ -199,6 +199,71 @@ describe("scheduler.task-queue-service", () => {
     expect(peak).toBe(2)
   })
 
+  test("claims new session work while earlier tasks are still running", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "2"
+    let releaseFirst: (() => void) | undefined
+    let firstStarted: (() => void) | undefined
+    let secondStarted: (() => void) | undefined
+    const firstRunning = new Promise<void>((resolve) => {
+      firstStarted = resolve
+    })
+    const secondRunning = new Promise<void>((resolve) => {
+      secondStarted = resolve
+    })
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const first = await Session.create({ kind: "assistant" })
+        const second = await Session.create({ kind: "assistant" })
+        const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+          input: Parameters<typeof SessionPrompt.prompt>[0],
+        ) => {
+          if (input.sessionID === first.id) {
+            firstStarted?.()
+            await firstReleased
+          }
+          if (input.sessionID === second.id) {
+            secondStarted?.()
+          }
+          return result()
+        }) as never)
+
+        TaskQueueService.enqueuePrompt({
+          sessionID: first.id,
+          prompt: {
+            parts: [{ type: "text", text: "first" }],
+          },
+        })
+        const firstRun = TaskQueueService.runNow()
+        await firstRunning
+
+        TaskQueueService.enqueuePrompt({
+          sessionID: second.id,
+          prompt: {
+            parts: [{ type: "text", text: "second" }],
+          },
+        })
+        const secondRun = TaskQueueService.runNow()
+
+        await Promise.race([
+          secondRunning,
+          Bun.sleep(250).then(() => {
+            throw new Error("second task was not claimed while the first task was still running")
+          }),
+        ])
+
+        releaseFirst?.()
+        await Promise.all([firstRun, secondRun])
+        expect(prompt).toHaveBeenCalledTimes(2)
+      },
+    })
+  })
+
   test("only claims one task per session in a single run", async () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "4"

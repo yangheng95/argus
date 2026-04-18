@@ -286,6 +286,10 @@ export const Task = z.object({
   error: z.string().optional(),
   budget: Budget.optional(),
   metadata: z.record(z.string(), z.any()).optional(),
+  /** Persisted attachment references carried from task creation. Exposed so the
+   *  overlay can render each attachment as a file part underneath the user's
+   *  request bubble (images inline, other MIMEs as filename chips). */
+  attachments: TaskAttachment.array().optional(),
   time: z.object({
     created: z.number(),
     updated: z.number(),
@@ -810,6 +814,18 @@ export const Event = {
   AgentUpdated: BusEvent.define("agent.updated", z.object({ taskID: z.string(), runID: z.string().optional(), stage: z.string(), kind: z.string(), id: z.string().optional(), toolName: z.string().optional(), text: z.string().optional(), summary: z.string() })),
   TaskCreated: BusEvent.define("task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
+  TaskWaiting: BusEvent.define("task.waiting", z.object({
+    taskID: Identifier.schema("task"),
+    runID: Identifier.schema("run").optional(),
+    reason: z.string(),
+    waitingOn: z.array(z.object({
+      goalRunID: Identifier.schema("goal_run"),
+      goalID: Identifier.schema("goal").optional(),
+      goalTitle: z.string(),
+      sinceMs: z.number().int().nonnegative(),
+    })),
+    summary: z.string(),
+  })),
   SpecCreated: BusEvent.define("spec.created", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
   SpecUpdated: BusEvent.define("spec.updated", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), status: z.string(), summary: z.string() })),
   SpecApproved: BusEvent.define("spec.approved", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),

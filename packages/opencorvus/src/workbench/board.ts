@@ -266,6 +266,10 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
             }
           : undefined,
         metadata: task.metadata ?? undefined,
+        // Attachment references (url/mime/filename/sha/size/intent/source) —
+        // the overlay's `buildUserContextMessages` appends each as a file part
+        // under the synthetic user-request bubble so images render inline.
+        attachments: Array.isArray(task.attachments) ? task.attachments : undefined,
         time: {
           created: task.time_created,
           updated: task.time_updated,

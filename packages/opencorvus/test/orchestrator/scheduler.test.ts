@@ -1,0 +1,82 @@
+import { describe, expect, test } from "bun:test"
+import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES, isRunReadyForGoalDispatch, restartStagePlan } from "../../src/orchestrator/scheduler"
+
+describe("orchestrator scheduler invariants", () => {
+  test("run dispatch requires both a plan and an activated run status", () => {
+    expect(isRunReadyForGoalDispatch(null)).toBe(false)
+    expect(isRunReadyForGoalDispatch({ status: "queued", planVersionID: "plan_1" })).toBe(false)
+    expect(isRunReadyForGoalDispatch({ status: "completed", planVersionID: "plan_1" })).toBe(false)
+    expect(isRunReadyForGoalDispatch({ status: "running", planVersionID: null })).toBe(false)
+
+    expect(isRunReadyForGoalDispatch({ status: "accepted", planVersionID: "plan_1" })).toBe(true)
+    expect(isRunReadyForGoalDispatch({ status: "running", planVersionID: "plan_1" })).toBe(true)
+    expect(isRunReadyForGoalDispatch({ status: "blocked", planVersionID: "plan_1" })).toBe(true)
+  })
+
+  test("live run statuses do not include terminal runs", () => {
+    expect(LIVE_RUN_STATUSES).toEqual(["queued", "accepted", "running", "blocked"])
+    expect(LIVE_RUN_STATUSES.includes("completed" as never)).toBe(false)
+    expect(LIVE_RUN_STATUSES.includes("failed" as never)).toBe(false)
+    expect(LIVE_RUN_STATUSES.includes("aborted" as never)).toBe(false)
+  })
+
+  test("resettable goal-run statuses include completed work that must be retired for rework", () => {
+    expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual([
+      "queued",
+      "accepted",
+      "planning",
+      "running",
+      "evaluating",
+      "blocked",
+      "completed",
+    ])
+  })
+
+  test("requirements restart clears spec/plan and deletes goals", () => {
+    expect(restartStagePlan("requirements", true)).toEqual({
+      clearSpec: true,
+      clearPlan: true,
+      deleteGoals: true,
+      resetGoalStatuses: false,
+      retireGoalRuns: false,
+      queueFreshRun: false,
+      nextAction: "requirements",
+    })
+  })
+
+  test("plan restart preserves spec but retires execution history", () => {
+    expect(restartStagePlan("plan", true)).toEqual({
+      clearSpec: false,
+      clearPlan: true,
+      deleteGoals: false,
+      resetGoalStatuses: true,
+      retireGoalRuns: true,
+      queueFreshRun: false,
+      nextAction: "create_run",
+    })
+  })
+
+  test("executor restart reuses an active plan by queuing a fresh run", () => {
+    expect(restartStagePlan("executor", true)).toEqual({
+      clearSpec: false,
+      clearPlan: false,
+      deleteGoals: false,
+      resetGoalStatuses: true,
+      retireGoalRuns: true,
+      queueFreshRun: true,
+      nextAction: "submit_execution",
+    })
+  })
+
+  test("executor restart falls back to create_run when no plan is active", () => {
+    expect(restartStagePlan("executor", false)).toEqual({
+      clearSpec: false,
+      clearPlan: false,
+      deleteGoals: false,
+      resetGoalStatuses: true,
+      retireGoalRuns: true,
+      queueFreshRun: false,
+      nextAction: "create_run",
+    })
+  })
+})

@@ -38,8 +38,11 @@ import {
   type EngineDeliveryStatus,
   type EngineArtifactKind,
 } from "./engine.sql"
+import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findPlan, findRequirements, listGoalsForPlan, listMilestonesByPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { findGoalRun, findPlan, findRequirements, listGoalsForPlan, listMilestonesByPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { assertGoalRunTransition, type GoalRunStatus } from "./goal-run-state-machine"
+import { StaleRowError } from "./state"
 
 const log = Log.create({ service: "engine-transition" })
 
@@ -182,7 +185,7 @@ export function createGoalRun(input: {
         input.planNodeID
           ? eq(EngineGoalRunTable.plan_node_id, input.planNodeID)
           : isNull(EngineGoalRunTable.plan_node_id),
-        inArray(EngineGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
+        inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
       ))
       .orderBy(desc(EngineGoalRunTable.time_created))
       .get(),
@@ -235,23 +238,46 @@ export function updateGoalRun(
   goalRunID: string,
   values: Partial<typeof EngineGoalRunTable.$inferInsert>,
 ) {
-  Database.use((db) =>
-    db
+  const row = findGoalRun(goalRunID)
+  if (!row) return undefined
+  const nextStatus = values.status ?? row.status
+  if (nextStatus !== row.status) {
+    assertGoalRunTransition(row.status as GoalRunStatus, nextStatus as GoalRunStatus)
+  }
+  const now = Date.now()
+  const statusChanged = nextStatus !== row.status
+  const normalizedValues = {
+    ...values,
+    ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
+    ...(!row.time_started && ["accepted", "planning", "running", "evaluating", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
+      ? { time_started: now }
+      : {}),
+    ...((nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") && values.time_completed === undefined
+      ? { time_completed: now }
+      : {}),
+  }
+  let updated: typeof EngineGoalRunTable.$inferSelect | undefined
+  Database.transaction((db) => {
+    const whereClause = statusChanged
+      ? and(
+          eq(EngineGoalRunTable.id, goalRunID),
+          eq(EngineGoalRunTable.status, row.status),
+        )
+      : eq(EngineGoalRunTable.id, goalRunID)
+    updated = db
       .update(EngineGoalRunTable)
       .set({
-        ...values,
-        time_updated: Date.now(),
+        ...normalizedValues,
+        time_updated: now,
       })
-      .where(eq(EngineGoalRunTable.id, goalRunID))
-      .run(),
-  )
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.id, goalRunID))
-      .get(),
-  )
+      .where(whereClause)
+      .returning()
+      .get()
+    if (!updated) {
+      throw new StaleRowError("goal_run", goalRunID, row.status, nextStatus)
+    }
+  })
+  return updated ?? findGoalRun(goalRunID)
 }
 
 type EvaluationStatus = "passed" | "failed" | "pending"
@@ -609,6 +635,7 @@ export function persistDelivery(input: {
   deliveryID: string
   delivery: {
     summary: string
+    commitRef?: string
     diffs: Array<{ file: string; [key: string]: unknown }>
   }
   now: number
@@ -634,6 +661,7 @@ export function persistDelivery(input: {
         summary: input.delivery.summary,
         result: {
           summary: input.delivery.summary,
+          commit_ref: input.delivery.commitRef,
           changed_files: input.delivery.diffs.map((item) => item.file),
           diffs: input.delivery.diffs,
           stats,
@@ -667,6 +695,22 @@ export function persistDelivery(input: {
           kind: "diff",
           label: "workspace-diff",
           payload: { diffs: input.delivery.diffs },
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    }
+    if (input.delivery.commitRef) {
+      db.insert(EngineArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.task.id,
+          run_id: input.run.id,
+          goal_run_id: input.goalRunID,
+          delivery_id: input.deliveryID,
+          kind: "git_ref",
+          label: "delivery-commit",
+          payload: { commit_ref: input.delivery.commitRef },
           time_created: input.now,
           time_updated: input.now,
         })
@@ -906,6 +950,13 @@ export function updateExecutorSessionStatus(runID: string, status: typeof Engine
       .get(),
   )
   if (!row) return
+  return updateExecutorSessionStatusByID(row.id, status)
+}
+
+export function updateExecutorSessionStatusByID(
+  executorSessionID: string,
+  status: typeof EngineExecutorSessionTable.$inferInsert.status,
+) {
   Database.use((db) =>
     db
       .update(EngineExecutorSessionTable)
@@ -916,7 +967,7 @@ export function updateExecutorSessionStatus(runID: string, status: typeof Engine
         time_completed: Date.now(),
         time_updated: Date.now(),
       })
-      .where(eq(EngineExecutorSessionTable.id, row.id))
+      .where(eq(EngineExecutorSessionTable.id, executorSessionID))
       .run(),
   )
 }
@@ -934,19 +985,7 @@ export function updateGoalRunExecutorSessionStatus(
       .get(),
   )
   if (!row) return
-  Database.use((db) =>
-    db
-      .update(EngineExecutorSessionTable)
-      .set({
-        status,
-        lease_owner: null,
-        lease_until: 0,
-        time_completed: Date.now(),
-        time_updated: Date.now(),
-      })
-      .where(eq(EngineExecutorSessionTable.id, row.id))
-      .run(),
-  )
+  return updateExecutorSessionStatusByID(row.id, status)
 }
 
 export function renewExecutorSessionLease(input: { executorSessionID: string; now?: number }) {

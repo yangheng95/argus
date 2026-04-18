@@ -12,6 +12,10 @@ export * from "./model"
 export * from "./config"
 export * from "./protocol"
 export * from "./workflow"
+export * from "./catalog"
+export * from "./run-state-machine"
+export * from "./goal-run-state-machine"
+export * from "./recovery"
 export {
   EngineTaskTable,
   EngineGoalTable,
