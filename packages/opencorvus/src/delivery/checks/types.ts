@@ -194,18 +194,19 @@ export const CORE_CHECK_DEFS = [
   { name: "verify_cmd", label: "Verify Command", family: "verify_cmd" },
 ] as const satisfies CheckDef[]
 
-export const BUILTIN_CHECK_INDEX = new Map<string, { label: string; family?: string; order: number }>()
-
-export function initBuiltinCheckIndex(defs: readonly CheckDef[]) {
-  BUILTIN_CHECK_INDEX.clear()
-  for (const [index, item] of defs.entries()) {
-    BUILTIN_CHECK_INDEX.set(item.name, {
-      label: item.label,
-      family: item.family,
-      order: index,
-    })
-  }
-}
+/**
+ * Static map from check name → metadata. Built once at module load from the
+ * CORE_CHECK_DEFS array. Previously populated via a runtime
+ * `initBuiltinCheckIndex()` that was never called, leaving the index empty
+ * and causing `checkResult()` to always fall through to input.label/family.
+ */
+export const BUILTIN_CHECK_INDEX: ReadonlyMap<string, { label: string; family?: string; order: number }> =
+  new Map(
+    CORE_CHECK_DEFS.map((item, index) => [
+      item.name,
+      { label: item.label, family: item.family, order: index },
+    ]),
+  )
 
 export function checkBase(name: string) {
   return name.replace(/#\d+$/, "")
@@ -238,6 +239,11 @@ export function emptyOptional(): EvaluationOutcome & { artifacts: EvaluationArti
   }
 }
 
+const OUTCOME_BY_MODE = {
+  strict: { outcome: "failed" as const, status: "failed" as const },
+  soft:   { outcome: "skipped" as const, status: "skipped" as const },
+} as const satisfies Record<"strict" | "soft", { outcome: "failed" | "skipped"; status: "failed" | "skipped" }>
+
 export function softOrStrict(input: {
   mode: "soft" | "strict"
   name: string
@@ -245,43 +251,12 @@ export function softOrStrict(input: {
   evidence: string
   payload: Record<string, unknown>
 }): EvaluationOutcome {
-  if (input.mode === "strict") {
-    return {
-      outcome: "failed" as const,
-      summary: input.summary,
-      checks: [
-        {
-          name: input.name,
-          status: "failed" as const,
-          evidence: input.evidence,
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: `evaluation:${input.name}`,
-          payload: input.payload,
-        },
-      ],
-    }
-  }
+  const { outcome, status } = OUTCOME_BY_MODE[input.mode]
   return {
-    outcome: "skipped" as const,
+    outcome,
     summary: input.summary,
-    checks: [
-      {
-        name: input.name,
-        status: "skipped" as const,
-        evidence: input.evidence,
-      },
-    ],
-    artifacts: [
-      {
-        kind: "report" as const,
-        label: `evaluation:${input.name}`,
-        payload: input.payload,
-      },
-    ],
+    checks: [{ name: input.name, status, evidence: input.evidence }],
+    artifacts: [{ kind: "report" as const, label: `evaluation:${input.name}`, payload: input.payload }],
   }
 }
 

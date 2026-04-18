@@ -77,8 +77,7 @@ export async function planGoal(input: {
   // Resolve model — per-agent model from Agent.Info (config: agent.planner.model),
   // falling back to the user's most recent in-session model pick when no per-agent
   // override is configured.
-  const model = await resolveAgentModel("planner", { taskID: task.id }).catch(() => undefined)
-  if (!model) throw new Error("no LLM model available for per-goal planner")
+  const model = await resolveAgentModel("planner", { taskID: task.id })
 
   const guard = toolGuard(await filterAgentTools(createPlannerTools(input.workDir), "planner"))
   const context = prefetchContext(task.title, task.request)
@@ -164,7 +163,10 @@ export async function planGoal(input: {
  * production mode.
  */
 export async function buildPlannerSystem(): Promise<string> {
-  const agent = await Agent.get("planner").catch(() => undefined)
+  // Agent.get returns undefined for unconfigured agents — absence is not an
+  // error, we fall through to the built-in PLANNER_CORE. Any other failure
+  // (e.g. config load threw) propagates.
+  const agent = await Agent.get("planner")
   const agentPrompt = agent?.prompt
   return typeof agentPrompt === "string" ? agentPrompt : PLANNER_CORE
 }

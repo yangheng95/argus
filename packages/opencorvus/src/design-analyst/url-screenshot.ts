@@ -120,6 +120,9 @@ export async function fetchUrlScreenshot(input: {
       e,
     )
   } finally {
+    // finally-block cleanup — browser may already be closing after an
+    // earlier abort; we swallow the close error rather than mask the
+    // primary screenshot error that led us here.
     await browser.close().catch(() => undefined)
   }
 }

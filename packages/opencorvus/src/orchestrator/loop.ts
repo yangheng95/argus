@@ -7,7 +7,8 @@
  * What this eliminates:
  *   - recoverOrphanedTasks (loop IS the lifecycle)
  *   - notifyGoalResult fire-and-forget (pool drain collects results)
- *   - agentNotifiedRuns dedup (single control point)
+ *   - fire-and-forget agent-notification races (PerRunState claim+finalize
+ *     runs on the single updateRun terminal transition, not scattered maps)
  *   - dispatch gate (Orchestrator only runs between pool drains)
  *   - infinite wake-up loops (no re-triggering — the loop decides)
  *

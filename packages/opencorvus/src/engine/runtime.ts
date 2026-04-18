@@ -57,17 +57,11 @@ const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
 const GOAL_HEARTBEAT_INTERVAL_MS = 30_000 // emit progress heartbeat every 30s per goal
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
-// Guard: runs that have already notified Orchestrator via run_completed.
-// Prevents syncRun from re-notifying Orchestrator every poll cycle.
-const agentNotifiedRuns = new Set<string>()
-// Per-run merge serialization: ensures parallel goal deliveries are merged one at a time.
-const mergeLocksPerRun = new Map<string, Promise<void>>()
+
+import { PerRunState } from "./per-run-state"
 
 async function serializedMerge(runID: string, fn: () => Promise<void>) {
-  const prev = mergeLocksPerRun.get(runID) ?? Promise.resolve()
-  const next = prev.then(fn, fn)
-  mergeLocksPerRun.set(runID, next)
-  await next
+  return PerRunState.serializedMerge(runID, fn)
 }
 
 
@@ -528,12 +522,12 @@ export namespace EngineRuntime {
 
     if (run.status === "completed") {
       // Already-completed runs reach this branch only when syncRun's downstream
-      // path (queue.status === "completed", line ~626) hasn't yet handled this
-      // run. That path adds run.id to agentNotifiedRuns in the same syncRun
-      // tick, so by the time we'd otherwise re-enter here the guard would be
-      // true. After process restart, completed runs are filtered out before
-      // syncRun even reaches them (queueTaskID check below). Nothing left for
-      // this branch to do — just return.
+      // path (queue.status === "completed") hasn't yet handled this run. That
+      // path claims via PerRunState.claimAgentNotification in the same tick,
+      // so by the time we'd otherwise re-enter here the run.status check above
+      // already short-circuited. After process restart, completed runs are
+      // filtered out before syncRun reaches them (queueTaskID check below).
+      // Nothing left for this branch to do — just return.
       return
     }
 
@@ -589,11 +583,11 @@ export namespace EngineRuntime {
 
     if (queue.status === "completed") {
       // Single-executor path: mark run completed and trigger task loop.
-      if (!agentNotifiedRuns.has(run.id)) {
-        agentNotifiedRuns.add(run.id)
+      if (PerRunState.claimAgentNotification(run.id)) {
         stopEventBridge(run.id)
-        mergeLocksPerRun.delete(run.id)
         updateExecutorSessionStatus(run.id, "completed")
+        // updateRun → engine/state.ts detects the terminal transition and
+        // calls PerRunState.finalize(run.id), so no manual cleanup here.
         await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
         Promise.all([import("@/orchestrator/loop"), import("@/engine/state")]).then(([{ runTaskLoop }, { hooks: getHooks }]) => {
           runTaskLoop({
@@ -655,9 +649,8 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     updateGoalRunExecutorSessionStatus(gr.id, "failed")
     if (gr.workspace_dir) await cleanupGoalWorkspace(gr.workspace_dir).catch(() => {})
   }
-  // Clean up in-memory tracking — run is dead, prevent stale map entries and leaks
-  mergeLocksPerRun.delete(run.id)
-  agentNotifiedRuns.delete(run.id)
+  // PerRunState.finalize is driven by updateRun's terminal transition below;
+  // executor_session is the only extra cleanup this path owns.
   updateExecutorSessionStatus(run.id, "failed")
   const task = requireTask(run.task_id)
   const now = Date.now()

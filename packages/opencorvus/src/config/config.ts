@@ -318,7 +318,10 @@ export namespace Config {
     const pkgExists = await Filesystem.exists(pkg)
     if (!pkgExists) return true
 
-    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => null)
+    // File exists — let malformed JSON propagate rather than treat it the
+    // same as missing. If package.json is corrupt the operator needs to see
+    // the parse error, not a silent "plugin needs reinstall" loop.
+    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg)
     const dependencies = parsed?.dependencies ?? {}
     const depVersion = dependencies["@opencorvus-ai/plugin"]
     if (!depVersion) return true

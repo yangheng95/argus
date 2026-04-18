@@ -174,7 +174,10 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
   } finally {
     for (const unsub of unsubs) unsub()
     if (shouldRemoveSession(control)) {
-      await Session.remove(control!.info.id).catch(() => undefined)
+      // Best-effort cleanup in finally — if the session was already removed
+      // (concurrent teardown) we move on; any real failure surfaces in the
+      // log but does not mask the main-branch result.
+      await Session.remove(control!.info.id).catch(err => log.warn("panel control session remove failed", { error: String(err) }))
       log.info("panel control session removed", {
         input: payload,
         panel_session_id: control!.info.id,
@@ -212,8 +215,9 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
 }
 
 async function resolveModel() {
-  const agentName = await Agent.defaultAgent().catch(() => undefined)
-  if (!agentName) return undefined
+  // Agent.defaultAgent throws on config issues (no visible agent, hidden
+  // default, etc.) — those should surface, not silently disable the model.
+  const agentName = await Agent.defaultAgent()
   const agent = await Agent.get(agentName)
   const target = agent?.model
   if (target) return target

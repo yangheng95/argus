@@ -905,7 +905,11 @@ export namespace EngineService {
       const refs = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
         ? row.metadata as Record<string, unknown>
         : undefined
-      await ExecutorRegistry.require(row.executor).abort({
+      // goal_run executor follows its coordinator run — the separate column
+      // was dead (written only, never read). Resolve via the parent run.
+      const coordinatorRun = findRun(row.coordinator_run_id)
+      if (!coordinatorRun) return
+      await ExecutorRegistry.require(coordinatorRun.executor).abort({
         sessionID:
           typeof refs?.provider_session_id === "string"
             ? refs.provider_session_id

@@ -1015,58 +1015,59 @@ export function createOrchestratorTools(input: {
         if (updates.priority !== undefined) setValues.priority = updates.priority
         if (updates.kind !== undefined) setValues.kind = updates.kind
 
-        // Contract change → reset status to "pending" so the goal is re-executed.
-        // This matches the help text contract and is the mechanism by which the
-        // orchestrator drives rework after delivery rejection: modifying a passed
-        // goal's contract makes it eligible for re-execution via submit_execution.
+        // Contract change → drive the goal back to "pending" so it re-executes.
+        // We do NOT write engine_goal.status directly: every path goes through
+        // the goal_run chain so syncGoalStatus() projects the new status. This
+        // keeps engine_goal.status authored by exactly two writers
+        // (syncGoalStatus via updateGoalRun/supersedeGoalRun, and
+        // updateGoalCascadeFailed for no-goal_run cascades).
         const contractFields = ["title", "objective", "acceptance_specs", "owned_paths", "depends_on", "exports", "imports", "priority", "kind"]
         const contractChanged = contractFields.some(f => f in setValues)
-        let statusReset = false
-        if (contractChanged && (goal.status === "passed" || goal.status === "failed")) {
-          setValues.status = "pending"
-          statusReset = true
-        }
+        const statusReset = contractChanged && (goal.status === "passed" || goal.status === "failed")
 
-        const { EngineGoalTable, EngineGoalRunTable } = await import("@/engine/engine.sql")
-        // When the contract changes, retire the existing goal_run history for
-        // this goal. Readiness (readyGoalNodes) anchors on goal_run history,
-        // so leaving a `completed` row in place would keep the goal blocked
-        // from re-dispatch under the NEW contract. Marking the rows `aborted`
-        // with reason "contract modified" is semantically accurate: the
-        // successful run was successful under a *different* contract, and
-        // `aborted` is classified as retriable by RUN_STATUS_CLASSIFIER.
-        let abortedRuns = 0
-        Database.transaction((db) => {
+        const { EngineGoalTable } = await import("@/engine/engine.sql")
+        Database.use((db) => {
           db.update(EngineGoalTable)
             .set(setValues as any)
             .where(eq(EngineGoalTable.id, goalID))
             .run()
-          if (statusReset) {
-            const toAbort = db
-              .select({ id: EngineGoalRunTable.id })
-              .from(EngineGoalRunTable)
-              .where(
-                and(
-                  eq(EngineGoalRunTable.goal_id, goalID),
-                  inArray(EngineGoalRunTable.status as any, GOAL_RUN_RESETTABLE_STATUSES),
-                ),
-              )
-              .all()
-            abortedRuns = toAbort.length
-          }
         })
-        if (statusReset && abortedRuns > 0) {
-          const { listGoalRunsForTask } = await import("@/engine/store")
+
+        let abortedRuns = 0
+        let supersededTipID: string | undefined
+        if (statusReset) {
+          const { listGoalRunsForTask, findLatestTipGoalRun } = await import("@/engine/store")
+          const { supersedeGoalRun } = await import("@/engine/persist")
+          // 1. Abort every resettable goal_run (live + completed). After this
+          //    the tip is either an aborted row (completed → aborted) or a
+          //    failed/aborted tip that was already retriable.
           const toAbort = listGoalRunsForTask(taskID)
             .filter((row) => row.goal_id === goalID && GOAL_RUN_RESETTABLE_STATUSES.includes(row.status))
           for (const row of toAbort) {
             updateGoalRun(row.id, { status: "aborted", error: "contract modified" })
           }
+          abortedRuns = toAbort.length
+          // 2. If the tip is still a failed/aborted terminal without a
+          //    superseded_reason marker, annotate it so deriveGoalStatus
+          //    projects "pending" (same contract as execute_goal /
+          //    retry_failed_goals). `aborted` rows already project as
+          //    "pending" via mapRunStatus, so supersede is only needed when
+          //    the tip is `failed` pre-modify.
+          const tip = findLatestTipGoalRun(goalID)
+          if (tip && tip.status === "failed") {
+            const existingMeta = (tip.metadata ?? {}) as Record<string, unknown>
+            if (typeof existingMeta.superseded_reason !== "string" || !existingMeta.superseded_reason) {
+              supersedeGoalRun({ oldGoalRunID: tip.id, reason: "[modify_goal] contract modified" })
+              supersededTipID = tip.id
+            }
+          }
         }
+
         const changed = Object.keys(setValues).filter(k => k !== "time_updated")
-        const resetSuffix = statusReset ? ` (status reset: ${goal.status} → pending)` : ""
+        const resetSuffix = statusReset ? ` (status reset: ${goal.status} → pending via goal_run chain)` : ""
         const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
-        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}`
+        const supersedeSuffix = supersededTipID ? `, tip ${supersededTipID} superseded` : ""
+        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}${supersedeSuffix}`
       },
     }),
 
@@ -1076,7 +1077,7 @@ export function createOrchestratorTools(input: {
         goalID: z.string().describe("The goal ID to execute (must be pending or failed status)"),
         reason: z.string().optional().describe("Why you decided to execute this goal now"),
       }),
-      execute: async ({ goalID }) => {
+      execute: async ({ goalID, reason }) => {
         const task = requireTask(taskID)
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find(g => g.id === goalID)
@@ -1091,15 +1092,24 @@ export function createOrchestratorTools(input: {
                  `execute_goal does not re-run passed goals.`
         }
 
-        // goal.status === "pending" | "failed" — reset failed to pending so infrastructure picks it up
+        // goal.status === "pending" | "failed". For failed goals we supersede
+        // the prior tip goal_run: the tip stays in its failed state but gets
+        // a `superseded_reason` metadata marker, which deriveGoalStatus()
+        // projects as `pending` so GoalPool re-dispatches on the next task
+        // loop iteration. Same contract as retry_failed_goals — there is
+        // exactly one canonical retry path, not two.
         if (goal.status === "failed") {
-          Database.use((db) => {
-            const { EngineGoalTable: GT } = require("@/engine/engine.sql")
-            db.update(GT)
-              .set({ status: "pending", time_updated: Date.now() })
-              .where(eq(GT.id, goalID))
-              .run()
-          })
+          const { findLatestTipGoalRun } = await import("@/engine/store")
+          const { supersedeGoalRun } = await import("@/engine/persist")
+          const priorTip = findLatestTipGoalRun(goalID)
+          if (!priorTip) {
+            throw new Error(
+              `execute_goal: goal ${goalID} is in status=failed but has no prior goal_run; ` +
+              `cannot retry without a row to supersede. This is a data inconsistency upstream of execute_goal.`,
+            )
+          }
+          const supersedeReason = reason ? `[execute_goal] ${reason}` : "execute_goal retry"
+          supersedeGoalRun({ oldGoalRunID: priorTip.id, reason: supersedeReason })
         }
 
         ensureGoalInWorkflow(goalID, goal.title)
@@ -1337,17 +1347,20 @@ export function createOrchestratorTools(input: {
           supersedeGoalRun({ oldGoalRunID: priorTip.id, reason, now })
         }
 
+        // Cascade: goals blocked by permanently-failed deps never get a
+        // goal_run — route through updateGoalCascadeFailed, the only
+        // canonical writer for no-goal_run cascades. This keeps
+        // engine_goal.status authored by exactly two entry points.
+        const { updateGoalCascadeFailed } = await import("@/engine/persist")
+        for (const goal of cascaded) {
+          updateGoalCascadeFailed({
+            goalID: goal.id,
+            reason: "cascade: dependency permanently failed",
+            now,
+          })
+        }
         Database.use((db) => {
-          const { EngineGoalTable: GT, EngineRunTable: RT } = require("@/engine/engine.sql")
-          // Cascade: goals blocked by permanently-failed deps never get a
-          // goal_run — mark them failed on engine_goal so the UI reflects it.
-          // (Phase 4 will make this a derived read, too.)
-          for (const goal of cascaded) {
-            db.update(GT)
-              .set({ status: "failed", time_updated: now })
-              .where(eq(GT.id, goal.id))
-              .run()
-          }
+          const { EngineRunTable: RT } = require("@/engine/engine.sql")
           // Run-level retry budget — unchanged.
           db.update(RT)
             .set({ retry_count: (run.retry_count ?? 0) + 1, time_updated: now })
@@ -1760,22 +1773,17 @@ export function createOrchestratorTools(input: {
         let deletedGoals = 0
         let freshRun: { id: string } | null = null
 
-        Database.transaction((db) => {
+        if (plan.resetGoalStatuses) {
+          const { resetTaskGoalsToPending } = await import("@/engine/persist")
+          const result = resetTaskGoalsToPending({
+            taskID,
+            reason: runError,
+            now,
+          })
+          resetGoals = result.total
+        }
 
-          if (plan.resetGoalStatuses) {
-            const rows = db
-              .select({ id: EngineGoalTable.id })
-              .from(EngineGoalTable)
-              .where(eq(EngineGoalTable.task_id, taskID))
-              .all()
-            resetGoals = rows.length
-            if (resetGoals > 0) {
-              db.update(EngineGoalTable)
-                .set({ status: "pending", time_updated: now })
-                .where(eq(EngineGoalTable.task_id, taskID))
-                .run()
-            }
-          }
+        Database.transaction((db) => {
 
           if (plan.deleteGoals) {
             const rows = db
@@ -2013,7 +2021,7 @@ export function createOrchestratorTools(input: {
             family: "runtime",
             status: "failed",
             evidence: `visual gate threw: ${visualErr instanceof Error ? visualErr.message : String(visualErr)}`,
-          }]).catch(() => undefined)
+          }])
         }
 
         // ── Deterministic per-goal evaluator (per specs/new-arch/01-agents.md L111
@@ -2111,17 +2119,15 @@ export function createOrchestratorTools(input: {
           }
           if (verificationGoalStatuses.size > 0) {
             const now = Date.now()
-            Database.transaction((db) => {
-              for (const [goalID, result] of verificationGoalStatuses) {
-                db.update(EngineGoalTable)
-                  .set({
-                    status: result.status,
-                    time_updated: now,
-                  } as any)
-                  .where(eq(EngineGoalTable.id, goalID))
-                  .run()
-              }
-            })
+            const { updateGoalVerificationOutcome } = await import("@/engine/persist")
+            for (const [goalID, result] of verificationGoalStatuses) {
+              updateGoalVerificationOutcome({
+                goalID,
+                outcome: result.status,
+                reason: "delivery-time evaluator verdict",
+                now,
+              })
+            }
           }
           if (evaluatorCriteriaSink.length > 0) {
             await EngineService.upsertTaskCriteria(taskID, evaluatorCriteriaSink)
@@ -2269,7 +2275,7 @@ export function createOrchestratorTools(input: {
                 const readyTask = requireTask(taskID)
                 await updateTask(readyTask, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
                 const { Plugin } = await import("@/plugin")
-                await Plugin.trigger("delivery.ready", { taskID, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(() => undefined)
+                await Plugin.trigger("delivery.ready", { taskID, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(err => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
                 EngineMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan })
                   .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
                 return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
@@ -2563,8 +2569,7 @@ export function createOrchestratorTools(input: {
 
         // Run refine analysis via LLM
         const { ProviderLLM } = await import("@/provider/llm")
-        const model = await resolveAgentModel("orchestrator", { taskID }).catch(() => undefined)
-        if (!model) return "No LLM model available for refine analysis."
+        const model = await resolveAgentModel("orchestrator", { taskID })
 
         const refineSession = await Session.createNext({
           kind: "assistant",
@@ -2781,7 +2786,7 @@ export function createOrchestratorTools(input: {
             agent: "build",
             parts: [{ type: "text", text: request, kind: "user_content" }],
           })
-          await Session.touch(buildSession.id).catch(() => undefined)
+          await Session.touch(buildSession.id).catch(err => log.warn("Session.touch failed (non-fatal metadata update)", { sessionID: buildSession.id, error: String(err) }))
           // Build does NOT mark the task complete — it returns control to the
           // orchestrator so it can call `deliver` for adversarial verification.
           // The direct-workflow contract is `build → deliver` (loop on reject),

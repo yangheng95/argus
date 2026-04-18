@@ -43,6 +43,7 @@ import {
   createGoalRun,
   updateGoalRun,
   ensureExecutorSession,
+  updateGoalCascadeFailed,
 } from "./persist"
 import { EngineGoalTable, EnginePlanNodeTable } from "./engine.sql"
 import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
@@ -398,7 +399,6 @@ export class GoalPool {
         planNodeID: entry.node.id,
         coordinatorRunID: run.id,
         sessionID: goalSession.id,
-        executor: run.executor,
         workspaceDir: worktreeDir,
         metadata: { worktree_branch: worktreeInfo.branch },
       })
@@ -468,7 +468,10 @@ export class GoalPool {
           projectID: Instance.project.id,
           sessionID: goalSession.id,
           query: prompt.slice(0, 500),
-        }).catch(() => null)
+        }).catch(err => {
+          log.warn("memory injection failed, continuing without historical context", { error: String(err) })
+          return null
+        })
         if (memory) sections.push(memory)
         const taskPlanSection = TaskPlan.toMarkdown(goalSession.id)
         if (taskPlanSection) sections.push(taskPlanSection)
@@ -600,7 +603,15 @@ export class GoalPool {
       }
 
       stallCtrl.abort()
-      await stallWatcher.catch(() => {})
+      await stallWatcher.catch(err => {
+        // stallWatcher is a background timer racing the pipeline stream. When
+        // the stream finishes first we abort and join the watcher; the abort
+        // itself is what lands in .catch. A genuine watcher bug would also
+        // land here, so we log rather than swallow.
+        if (!stallCtrl.signal.aborted) {
+          log.warn("stall watcher rejected unexpectedly", { goalID: entry.goal.id, error: String(err) })
+        }
+      })
 
       if (signal.aborted) {
         return { goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title, status: "failed", error: "aborted", attempts: 1 }
@@ -631,7 +642,7 @@ export class GoalPool {
 
         EngineProtocol.emit(Event.GoalFailed, {
           taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
-        }, { source: "executor" }).catch(() => {})
+        }, { source: "executor" }).catch(err => log.warn("GoalFailed emit failed (executor source)", { goalID: entry.goal.id, error: String(err) }))
 
         return {
           goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
@@ -646,8 +657,8 @@ export class GoalPool {
       // goal's acceptance_specs BEFORE marking passed. Gated by
       // `evaluator.per_goal_enabled` so the path can be flipped on when
       // downstream consumers (criteria panel, retry pipeline) are stable.
-      const orchCfgForEval = await EngineConfig.get().catch(() => undefined)
-      if (orchCfgForEval?.evaluator?.per_goal_enabled) {
+      const orchCfgForEval = await EngineConfig.get()
+      if (orchCfgForEval.evaluator?.per_goal_enabled) {
         try {
           const allGoalsForContract = listGoalsByPlan(plan.id)
           const goalFields = goalRowToContract(entry.goal)
@@ -693,7 +704,7 @@ export class GoalPool {
             updateGoalRun(goalRun.id, { status: "failed", error: failReason })
             EngineProtocol.emit(Event.GoalFailed, {
               taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
-            }, { source: "evaluator" }).catch(() => {})
+            }, { source: "evaluator" }).catch(err => log.warn("GoalFailed emit failed (evaluator source)", { goalID: entry.goal.id, error: String(err) }))
             return {
               goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
               status: "failed", verdict: verdict.verdict, error: failReason, evidence: verdict.evidence,
@@ -712,7 +723,7 @@ export class GoalPool {
           updateGoalRun(goalRun.id, { status: "failed", error: `evaluator threw: ${msg}` })
           EngineProtocol.emit(Event.GoalFailed, {
             taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: evaluator threw: ${msg}`,
-          }, { source: "evaluator" }).catch(() => {})
+          }, { source: "evaluator" }).catch(err => log.warn("GoalFailed emit failed (evaluator source)", { goalID: entry.goal.id, error: String(err) }))
           return {
             goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
             status: "failed", error: `evaluator threw: ${msg}`, delivery, attempts: 1,
@@ -777,12 +788,13 @@ export class GoalPool {
       }
 
       // If no goal_run exists (worktree/planning threw before createGoalRun),
-      // engine_goal.status has nothing to derive from — explicit cascade-style
-      // write. With a goal_run the updateGoalRun above already drove syncGoalStatus.
+      // route through the canonical cascade-state writer. With a goal_run the
+      // updateGoalRun above already drove syncGoalStatus.
       if (!goalRun) {
-        Database.use(db => db.update(EngineGoalTable)
-          .set({ status: "failed", time_updated: Date.now() })
-          .where(eq(EngineGoalTable.id, entry.goal.id)).run())
+        updateGoalCascadeFailed({
+          goalID: entry.goal.id,
+          reason: `dispatch threw before createGoalRun: ${error}`,
+        })
       }
 
       return {

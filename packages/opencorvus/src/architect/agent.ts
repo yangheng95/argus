@@ -80,8 +80,7 @@ async function run(input: {
   // Resolve model — per-agent model from Agent.Info (config: agent.architect.model),
   // falling back to the user's most recent in-session model pick when no per-agent
   // override is configured.
-  const model = await resolveAgentModel("architect", { taskID: input.taskID }).catch(() => undefined)
-  if (!model) throw new Error("no LLM model available for architect agent")
+  const model = await resolveAgentModel("architect", { taskID: input.taskID })
 
   if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
 
