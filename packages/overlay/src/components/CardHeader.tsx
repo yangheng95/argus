@@ -88,7 +88,7 @@ export function CardHeader(props: {
       <Show when={glyph()}>
         <span class="card__icon">{glyph()}</span>
       </Show>
-      <span class="card__title">{props.node.title}</span>
+      <span class="card__title">{t(props.node.title)}</span>
       <Show when={(props.node.round ?? 0) > 0}>
         <span class="card__round">#{props.node.round}</span>
       </Show>

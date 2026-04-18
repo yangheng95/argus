@@ -18,13 +18,14 @@ import {
   EngineRunTable,
   EngineTaskTable,
   EvaluationCheck,
+  TaskBoardGoalStepPayload,
   WorkflowRegistry,
 } from "@/engine"
 import type { WorkflowState } from "@/engine"
+import { projectGoalSteps } from "@/engine/workflow"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
-import { SessionTable } from "@/session/session.sql"
-import { Database, and, desc, eq, inArray, sql } from "@/storage/db"
+import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 
@@ -78,47 +79,6 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
           .orderBy(EngineGoalTable.order_index)
           .all(),
       )
-  const goalRunRows = run
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(EngineGoalRunTable)
-          .where(eq(EngineGoalRunTable.coordinator_run_id, run.id))
-          .all(),
-      )
-    : []
-  const executorSessionRows = run
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(EngineExecutorSessionTable)
-          .where(eq(EngineExecutorSessionTable.run_id, run.id))
-          .all(),
-      )
-    : []
-  const goalRunByGoalID = new Map(goalRunRows.map((r) => [r.goal_id, r]))
-  const goalRunSessionMap = new Map(goalRunRows.map((r) => [r.goal_id, r.session_id]))
-  const goalRunExecutorSessionMap = new Map(
-    executorSessionRows.flatMap((row) =>
-      row.goal_run_id ? [[row.goal_run_id, row.id] as const] : [],
-    ),
-  )
-  // Per-goal planner session: a session row with kind='planner' and
-  // goal_id=<goal>. Authoritative source — no longer reads from
-  // goal_run.metadata.plannerSessionID.
-  const goalIDsForLookup = goals.map((g) => g.id)
-  const plannerSessionRows = goalIDsForLookup.length
-    ? Database.use((db) =>
-        db
-          .select({ id: SessionTable.id, goal_id: SessionTable.goal_id })
-          .from(SessionTable)
-          .where(and(eq(SessionTable.kind, "planner"), inArray(SessionTable.goal_id, goalIDsForLookup)))
-          .all(),
-      )
-    : []
-  const plannerSessionByGoalID = new Map(
-    plannerSessionRows.flatMap((r) => (r.goal_id ? [[r.goal_id, r.id] as const] : [])),
-  )
   const interactions = Database.use((db) =>
     db
       .select()
@@ -292,24 +252,6 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
             },
           }
         : undefined,
-      goalRuns: goalRunRows.map((gr) => {
-        return {
-          id: gr.id,
-          goalID: gr.goal_id,
-          status: gr.status,
-          sessionID: gr.session_id ?? undefined,
-          executorSessionID: goalRunExecutorSessionMap.get(gr.id) ?? undefined,
-          plannerSessionID: plannerSessionByGoalID.get(gr.goal_id),
-          workspaceDir: gr.workspace_dir ?? undefined,
-          error: gr.error ?? undefined,
-          time: {
-            created: gr.time_created,
-            updated: gr.time_updated,
-            started: gr.time_started ?? undefined,
-            completed: gr.time_completed ?? undefined,
-          },
-        }
-      }),
       run: run
         ? {
             id: run.id,
@@ -813,6 +755,11 @@ function buildWorkflowFields(
     }
   }
 
+  // Goal-scope step status is projected from engine_goal_run (see
+  // engine/workflow.ts::projectGoalSteps). Task-scope steps remain persisted
+  // in task.metadata._workflow.taskSteps as before.
+  const projectedGoalSteps = projectGoalSteps(task.id, workflow)
+
   // Simple tasks without _workflow metadata get reported with all steps "pending".
   const workflowBoard = {
     id: workflow.id,
@@ -823,11 +770,9 @@ function buildWorkflowFields(
       tool: step.tool,
       scope: step.scope as "task" | "goal",
       skippable: step.skippable,
-      status: (ws
-        ? (step.scope === "task"
-          ? ws.taskSteps[step.id]?.status ?? "pending"
-          : deriveGoalScopeStatus(ws, step.id))
-        : "pending") as "pending" | "running" | "completed" | "skipped" | "failed",
+      status: (step.scope === "task"
+        ? (ws ? ws.taskSteps[step.id]?.status ?? "pending" : "pending")
+        : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id)) as "pending" | "running" | "completed" | "skipped" | "failed",
     })),
     goalLoopStepIDs: workflow.goalLoopStepIDs,
   }
@@ -836,7 +781,7 @@ function buildWorkflowFields(
   const architectEntries = buildArchitectEntries(task.id)
 
   const goalWorkflows = goals.map(goal => {
-    const gws = ws?.goalSteps[goal.id]
+    const gws = projectedGoalSteps[goal.id]
     // Contracts relevant to this goal: direct goalID match OR mentioned in reason
     const contracts = architectEntries
       .filter(e => e.goalID === goal.id || (e.reason && e.reason.includes(goal.id)))
@@ -879,15 +824,18 @@ function buildWorkflowFields(
   }
 }
 
-/** Derive aggregate status for a goal-scope step across all goals */
-function deriveGoalScopeStatus(ws: WorkflowState, stepID: string): string {
-  const entries = Object.values(ws.goalSteps)
+/** Derive aggregate status for a goal-scope step from the projected goal steps */
+function deriveGoalScopeStatusFromProjection(
+  projection: Record<string, { steps: Record<string, { status: string }> }>,
+  stepID: string,
+): string {
+  const entries = Object.values(projection)
   if (entries.length === 0) return "pending"
-  const statuses = entries.map(g => g.steps[stepID]?.status ?? "pending")
-  if (statuses.some(s => s === "running")) return "running"
-  if (statuses.every(s => s === "completed" || s === "skipped")) return "completed"
-  if (statuses.some(s => s === "failed")) return "failed"
-  if (statuses.some(s => s === "completed")) return "running"
+  const statuses = entries.map((g) => g.steps[stepID]?.status ?? "pending")
+  if (statuses.some((s) => s === "running")) return "running"
+  if (statuses.every((s) => s === "completed" || s === "skipped")) return "completed"
+  if (statuses.some((s) => s === "failed")) return "failed"
+  if (statuses.some((s) => s === "completed")) return "running"
   return "pending"
 }
 
@@ -908,14 +856,26 @@ function buildRequirements(taskID: string) {
   }))
 }
 
-/** Latest goal_run for a goal, ordered by time_created desc. */
-function latestGoalRun(goalID: string) {
-  return Database.use((db) =>
+/** Authoritative goal_run for a goal: the current supersede-chain tip. */
+export function currentGoalRunFromRows<T extends { id: string; supersede_of?: string | null }>(
+  rows: T[],
+): T | undefined {
+  if (rows.length === 0) return undefined
+  const supersededIDs = new Set<string>()
+  for (const row of rows) {
+    if (row.supersede_of) supersededIDs.add(row.supersede_of)
+  }
+  return rows.find((row) => !supersededIDs.has(row.id)) ?? rows[0]
+}
+
+function currentGoalRun(goalID: string) {
+  const rows = Database.use((db) =>
     db.select().from(EngineGoalRunTable)
       .where(eq(EngineGoalRunTable.goal_id, goalID))
       .orderBy(desc(EngineGoalRunTable.time_created))
-      .limit(1).get(),
+      .all(),
   )
+  return currentGoalRunFromRows(rows)
 }
 
 /** Latest evaluation row for a goal_run, ordered by time_created desc. */
@@ -935,7 +895,7 @@ function buildStepSummary(goalID: string, stepID: string, status?: string): stri
   if (!status || status === "pending") return undefined
   if (stepID !== "build") return undefined
 
-  const goalRun = latestGoalRun(goalID)
+  const goalRun = currentGoalRun(goalID)
   if (goalRun) {
     const delivery = Database.use((db) =>
       db.select().from(EngineDeliveryTable)
@@ -969,27 +929,14 @@ function buildStepSummary(goalID: string, stepID: string, status?: string): stri
  * the frontend never has to cross-reference task-level state. M2b/M2c/M2d
  * gradually fill out the three step types.
  */
-export interface GoalStepPayload {
-  // ── plan step ──
-  planNodes?: Array<{ id: string; title: string; brief: string; orderIndex: number }>
-
-  // ── execute step ──
-  executorSessionID?: string
-  changedFiles?: string[]
-  diffStats?: { files?: number; additions?: number; deletions?: number }
-
-  // ── eval step ──
-  checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>
-  evalSummary?: string
-  verdict?: string
-}
+export type GoalStepPayload = z.infer<typeof TaskBoardGoalStepPayload>
 
 function buildStepPayload(goalID: string, stepID: string, status?: string): GoalStepPayload | undefined {
   if (!status || status === "pending") return undefined
   // The `build` step folds plan + execute + eval into one payload.
   if (stepID !== "build") return undefined
 
-  const goalRun = latestGoalRun(goalID)
+  const goalRun = currentGoalRun(goalID)
   const nodes = Database.use((db) =>
     db.select().from(EnginePlanNodeTable)
       .where(eq(EnginePlanNodeTable.goal_id, goalID))
@@ -1002,10 +949,12 @@ function buildStepPayload(goalID: string, stepID: string, status?: string): Goal
     : undefined
 
   let executorSessionID: string | undefined
+  let workspaceDir: string | undefined
   let changedFiles: string[] | undefined
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
   if (goalRun) {
     executorSessionID = goalRun.session_id ?? undefined
+    workspaceDir = goalRun.workspace_dir ?? undefined
     const delivery = Database.use((db) =>
       db.select().from(EngineDeliveryTable)
         .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
@@ -1040,12 +989,13 @@ function buildStepPayload(goalID: string, stepID: string, status?: string): Goal
   if (
     planNodes === undefined &&
     executorSessionID === undefined &&
+    workspaceDir === undefined &&
     changedFiles === undefined &&
     checks === undefined
   ) {
     return undefined
   }
-  return { planNodes, executorSessionID, changedFiles, diffStats, checks, evalSummary, verdict }
+  return { planNodes, executorSessionID, workspaceDir, changedFiles, diffStats, checks, evalSummary, verdict }
 }
 
 /** Read all architect decision entries for per-goal distribution */

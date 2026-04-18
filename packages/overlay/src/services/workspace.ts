@@ -689,36 +689,43 @@ export async function ensureWorkspaceDirectory(): Promise<string> {
 
 // ── currentExecutionDirectory ──
 
-/**
- * Sort priority for goal-run status values used by currentExecutionDirectory.
- */
-function goalRunPriority(status: unknown): number {
+function goalStepPriority(status: unknown): number {
   if (status === "running") return 0;
-  if (status === "blocked") return 1;
-  if (status === "accepted") return 2;
-  if (status === "queued") return 3;
-  if (status === "completed") return 4;
-  if (status === "failed") return 5;
-  if (status === "aborted") return 6;
-  return 7;
+  if (status === "pending") return 1;
+  if (status === "completed") return 2;
+  if (status === "failed") return 3;
+  if (status === "skipped") return 4;
+  return 5;
 }
 
 /**
- * Return the workspace directory of the highest-priority active goal run.
+ * Return the workspace directory of the highest-priority goal build step.
  */
 export function currentExecutionDirectory(): string {
-  const goalRuns: unknown[] = Array.isArray(boardStore.board?.goalRuns)
-    ? boardStore.board.goalRuns
+  const goalWorkflows: unknown[] = Array.isArray(boardStore.board?.goalWorkflows)
+    ? boardStore.board.goalWorkflows
     : [];
-  const rows = goalRuns
+  const rows = goalWorkflows
+    .flatMap((workflow: any) =>
+      Array.isArray(workflow?.steps)
+        ? workflow.steps.map((step: any) => ({
+            status: step?.status,
+            workspaceDir: step?.payload?.workspaceDir,
+            updatedAt:
+              step?.completedAt ??
+              step?.startedAt ??
+              0,
+          }))
+        : [],
+    )
     .filter(
       (item: any) =>
         typeof item?.workspaceDir === "string" && item.workspaceDir.trim(),
     )
     .toSorted(
       (a: any, b: any) =>
-        goalRunPriority(a?.status) - goalRunPriority(b?.status) ||
-        (b?.time?.updated || 0) - (a?.time?.updated || 0),
+        goalStepPriority(a?.status) - goalStepPriority(b?.status) ||
+        (b?.updatedAt || 0) - (a?.updatedAt || 0),
     );
   return (rows[0] as any)?.workspaceDir?.trim() || "";
 }

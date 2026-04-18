@@ -67,7 +67,7 @@ export const MIN_WINDOW_OPACITY = 0.5;
 
 export function sanitizeOpacity(value: any): number {
   const n = parseFloat(String(value ?? ""));
-  if (!Number.isFinite(n)) return 0.8;
+  if (!Number.isFinite(n)) return 0.99;
   return Math.max(
     MIN_WINDOW_OPACITY,
     Math.min(1, Math.round(n * 100) / 100),
@@ -120,7 +120,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   sidebarWidth: null,
   sectionsWidth: null,
   workspacePanelHeight: null,
-  opacity: 0.8,
+  opacity: 0.99,
   zoom: 1,
   theme: "dark",
   locale: DEFAULT_LOCALE,

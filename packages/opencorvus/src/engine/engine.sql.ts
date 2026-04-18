@@ -13,7 +13,7 @@ export type EngineBudget = {
 export type EngineMetadata = Record<string, unknown>
 
 export type DeliveryResult = {
-  diffs?: Array<{ file: string; status?: string; after?: string; diff?: string }>
+  diffs?: Array<{ file: string; status?: string; before?: string; after?: string; diff?: string }>
   changed_files?: string[]
   commit_ref?: string
   [key: string]: unknown
@@ -386,6 +386,13 @@ export const EngineGoalRunTable = sqliteTable(
     workspace_dir: text(),
     base_ref: text(),
     merge_ref: text(),
+    /** When a retry creates a fresh goal_run for a goal whose prior run is
+     *  already in a terminal state (completed/failed/aborted), the new row
+     *  points at the old row via supersede_of. Readiness, dispatch gate,
+     *  and "satisfies goal" queries walk this chain and treat only the
+     *  tail (no successor) as authoritative — retries re-dispatch without
+     *  mutating history and without resurrecting terminal states. */
+    supersede_of: text(),
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),
     time_started: integer(),
     time_completed: integer(),
@@ -396,6 +403,7 @@ export const EngineGoalRunTable = sqliteTable(
     index("engine_goal_run_goal_idx").on(table.goal_id),
     index("engine_goal_run_coordinator_idx").on(table.coordinator_run_id),
     index("engine_goal_run_status_idx").on(table.status),
+    index("engine_goal_run_supersede_of_idx").on(table.supersede_of),
   ],
 )
 

@@ -1,7 +1,5 @@
-import { selectorList, selectorsSatisfied } from "@/check/policy"
 import { Identifier } from "@/id/id"
 import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
-import { type GoalJudgmentType, type EvaluationOutput } from "@/delivery/checks"
 
 /** Input shape for persisting a requirement extracted by the Requirements agent into
  *  engine_requirement. Mirrors the table columns plus an optional
@@ -29,18 +27,16 @@ import {
   EngineExecutorSessionTable,
   EngineGoalTable,
   EngineGoalRunTable,
-  EngineMilestoneTable,
   EngineRequirementTable,
   EngineRunTable,
-  EngineSpecSnapshotTable,
   EngineTaskTable,
-  type EngineMilestoneStatus,
   type EngineDeliveryStatus,
   type EngineArtifactKind,
 } from "./engine.sql"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findGoalRun, findPlan, findRequirements, listGoalsForPlan, listMilestonesByPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { findGoalRun, findPlan, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { syncGoalStatus } from "./goal-status"
 import { assertGoalRunTransition, type GoalRunStatus } from "./goal-run-state-machine"
 import { StaleRowError } from "./state"
 
@@ -173,9 +169,18 @@ export function createGoalRun(input: {
   baseRef?: string
   mergeRef?: string
   metadata?: Record<string, unknown>
+  /** When set, this new goal_run supersedes the referenced prior row.
+   *  Used by retry flows to re-dispatch a goal whose prior run is in a
+   *  terminal (completed/failed/aborted) status without mutating the
+   *  goal_run FSM. Readiness / dispatch / satisfies-dep filters walk the
+   *  supersede chain and only honour the tip. */
+  supersedeOf?: string
   now?: number
 }) {
-  const existing = Database.use((db) =>
+  // Live-run dedup: only collapse against a running goal_run that is itself
+  // a tip of the supersede chain. A live row that was already superseded is
+  // a leaked in-flight retry and must not block the new dispatch.
+  const liveCandidates = Database.use((db) =>
     db
       .select()
       .from(EngineGoalRunTable)
@@ -188,9 +193,26 @@ export function createGoalRun(input: {
         inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
       ))
       .orderBy(desc(EngineGoalRunTable.time_created))
-      .get(),
+      .all(),
   )
-  if (existing) return existing
+  if (liveCandidates.length > 0) {
+    const supersededIDs = new Set(
+      Database.use((db) =>
+        db
+          .select({ parent: EngineGoalRunTable.supersede_of })
+          .from(EngineGoalRunTable)
+          .where(and(
+            eq(EngineGoalRunTable.goal_id, input.goalID),
+            // any row whose supersede_of is set counts
+          ))
+          .all()
+          .map((r) => r.parent)
+          .filter((p): p is string => !!p),
+      ),
+    )
+    const tip = liveCandidates.find((r) => !supersededIDs.has(r.id))
+    if (tip) return tip
+  }
   const id = Identifier.ascending("goal_run")
   const now = input.now ?? Date.now()
   Database.use((db) =>
@@ -211,6 +233,7 @@ export function createGoalRun(input: {
         workspace_dir: input.workspaceDir,
         base_ref: input.baseRef,
         merge_ref: input.mergeRef,
+        supersede_of: input.supersedeOf,
         metadata:
           input.metadata || input.sessionID
             ? {
@@ -231,7 +254,50 @@ export function createGoalRun(input: {
       .get(),
   )
   if (!row) throw new Error(`createGoalRun: inserted goal run ${id} not found after insert`)
+  // engine_goal.status is derived — refresh it now that a new tip exists.
+  syncGoalStatus(input.goalID, "createGoalRun")
   return row
+}
+
+/**
+ * Record that a prior terminal goal_run is being superseded by a retry.
+ * Returns the new goal_run id (the caller calls createGoalRun immediately
+ * after with supersedeOf set). Separated from createGoalRun so that callers
+ * which know the old run id can keep the intent explicit; the actual
+ * supersede link is set by createGoalRun via supersedeOf.
+ */
+export function supersedeGoalRun(input: {
+  oldGoalRunID: string
+  reason: string
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const existing = findGoalRun(input.oldGoalRunID)
+  if (!existing) {
+    throw new Error(`supersedeGoalRun: goal_run ${input.oldGoalRunID} not found`)
+  }
+  // No FSM mutation on the ancestor — it stays in its terminal state. We only
+  // annotate metadata with the supersede reason so the UI / decision log can
+  // render why the retry happened without reading decision_log separately.
+  const nextMeta = {
+    ...((existing.metadata ?? {}) as Record<string, unknown>),
+    superseded_reason: input.reason,
+    superseded_at: now,
+  }
+  Database.use((db) =>
+    db
+      .update(EngineGoalRunTable)
+      .set({ metadata: nextMeta, time_updated: now })
+      .where(eq(EngineGoalRunTable.id, input.oldGoalRunID))
+      .run(),
+  )
+  // deriveGoalStatus treats `failed` tip with `metadata.superseded_reason` as
+  // pending (retry intent marker) so the task loop's `hasPending` check picks
+  // the goal up and pool.submit → readyGoalNodes → pool.dispatchGoal creates
+  // a fresh goal_run. Without this sync the metadata change never reaches
+  // engine_goal.status and the loop stays in `batch_complete` retry-spin.
+  syncGoalStatus(existing.goal_id, "supersedeGoalRun")
+  return existing
 }
 
 export function updateGoalRun(
@@ -277,356 +343,19 @@ export function updateGoalRun(
       throw new StaleRowError("goal_run", goalRunID, row.status, nextStatus)
     }
   })
+  if (statusChanged) syncGoalStatus(row.goal_id, `updateGoalRun ${row.status}→${nextStatus}`)
   return updated ?? findGoalRun(goalRunID)
 }
 
 type EvaluationStatus = "passed" | "failed" | "pending"
 type EvaluationVerdict = "accepted" | "rejected"
 
-export function beginEvaluation(input: {
-  task: TaskRow
-  run: RunRow
-  goalRunID?: string
-  deliveryID: string
-  evaluationID: string
-  now: number
-  summary: string
-}) {
-  const existing = Database.use((db) =>
-    db
-      .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.id, input.evaluationID))
-      .get(),
-  )
-  if (existing) return existing
-  Database.use((db) =>
-    db
-      .insert(EngineEvaluationTable)
-      .values({
-        id: input.evaluationID,
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        delivery_id: input.deliveryID,
-        status: "pending",
-        verdict: "rejected",
-        summary: input.summary,
-        checks: [],
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run(),
-  )
-  const row = Database.use((db) =>
-    db
-      .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.id, input.evaluationID))
-      .get(),
-  )
-  if (!row) throw new Error(`beginEvaluation: evaluation ${input.evaluationID} not found after insert`)
-  return row
-}
+// `beginEvaluation` and `persistEvaluation` were part of the old `transition.ts`
+// pipeline. With per-goal dispatch + delivery/checks they have no callers; the
+// evaluation row is now created by `persistDelivery()` (1:1 with delivery) and
+// updated by `updateEvaluationFromDeliveryVerdict()`. Do not re-add conditional
+// evaluation inserts — they break the delivery↔evaluation invariant.
 
-export function persistEvaluation(input: {
-  task: TaskRow
-  run: RunRow
-  goalRunID?: string
-  deliveryID: string
-  evaluationID: string
-  delivery: {
-    summary: string
-    diffs: Array<{ file: string; [key: string]: unknown }>
-  }
-  result: EvaluationOutput
-  analysis?: GoalJudgmentType
-  analysisError?: string
-  finalVerdict: string
-  finalStatus: string
-  finalSummary: string
-  goals: GoalRow[]
-  finalizeSpec?: boolean
-}) {
-  const now = Date.now()
-  const evaluation = {
-    id: input.evaluationID,
-    status: input.finalStatus as EvaluationStatus,
-    verdict: input.finalVerdict as EvaluationVerdict,
-    summary: input.finalSummary,
-    checks: input.result.checks.map((item) => ({
-      name: item.name,
-      status: item.status,
-      evidence: item.evidence,
-      label: item.label,
-      family: item.family,
-    })),
-  }
-  Database.transaction((db) => {
-    const existing = db
-      .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.id, input.evaluationID))
-      .get()
-    if (existing) {
-      db.update(EngineEvaluationTable)
-        .set({
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          status: input.finalStatus as EvaluationStatus,
-          verdict: input.finalVerdict as EvaluationVerdict,
-          summary: input.finalSummary,
-          checks: input.result.checks,
-          time_completed: now,
-          time_updated: now,
-        })
-        .where(eq(EngineEvaluationTable.id, input.evaluationID))
-        .run()
-    } else {
-      db.insert(EngineEvaluationTable)
-        .values({
-          id: input.evaluationID,
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          status: input.finalStatus as EvaluationStatus,
-          verdict: input.finalVerdict as EvaluationVerdict,
-          summary: input.finalSummary,
-          checks: input.result.checks,
-          time_completed: now,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    for (const artifact of input.result.artifacts) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          kind: artifact.kind as typeof EngineArtifactTable.$inferInsert.kind,
-          label: artifact.label,
-          payload: artifact.payload,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    if (input.analysisError) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          kind: "report",
-          label: "evaluator-agent-error",
-          payload: { error: input.analysisError, analysis_failed: true },
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    if (input.analysis) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          kind: "report",
-          label: "evaluator-agent-analysis",
-          payload: input.analysis as unknown as Record<string, unknown>,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    if (input.goals.length > 0) {
-      const now2 = Date.now()
-      const rawAnalysisGoals = Array.isArray(input.analysis?.goal_statuses) ? input.analysis.goal_statuses : []
-      // Fix 1-based index: if all indices are 1..N instead of 0..N-1, shift them
-      const allOneBased = rawAnalysisGoals.length > 0
-        && rawAnalysisGoals.every((gs) => gs.goal_index >= 1 && gs.goal_index <= input.goals.length)
-        && rawAnalysisGoals.some((gs) => gs.goal_index === input.goals.length)
-        && !rawAnalysisGoals.some((gs) => gs.goal_index === 0)
-      const analysisGoals = allOneBased
-        ? rawAnalysisGoals.map((gs) => ({ ...gs, goal_index: gs.goal_index - 1 }))
-        : rawAnalysisGoals
-      const goalStatuses =
-        input.goalRunID && input.goals.length === 1 && analysisGoals.length === 0
-          ? [{
-              goal_index: 0,
-              status: input.finalStatus === "passed" ? "passed" as const : "failed" as const,
-              evidence: input.finalSummary,
-            }]
-          : analysisGoals
-      const updatedGoalIndices = new Set<number>()
-      for (const gs of goalStatuses) {
-        const goal =
-          input.goalRunID && input.goals.length === 1
-            ? input.goals[0]
-            : input.goals[gs.goal_index]
-        if (!goal) {
-          log.warn("goal index out of bounds in analysis", {
-            goalIndex: gs.goal_index,
-            goalCount: input.goals.length,
-            taskID: input.task.id,
-          })
-          continue
-        }
-        updatedGoalIndices.add(input.goalRunID && input.goals.length === 1 ? 0 : gs.goal_index)
-        let goalStatus =
-          input.goalRunID && input.goals.length === 1
-            ? input.finalStatus === "passed"
-              ? "passed" as const
-              : input.finalStatus === "failed"
-                ? "failed" as const
-                : undefined
-            : gs.status === "passed"
-              ? "passed" as const
-              : gs.status === "failed"
-                ? "failed" as const
-                : undefined
-        if (!goalStatus && input.goalRunID && input.goals.length === 1 && input.finalStatus === "failed") {
-          goalStatus = "failed"
-        }
-        if (goalStatus === "passed" && !(input.goalRunID && input.goals.length === 1)) {
-          const selectors = selectorList(goal.metadata)
-          if (selectors.length > 0) {
-            const allSelectorsPassed = selectorsSatisfied(selectors, input.result.checks)
-            if (!allSelectorsPassed) {
-              goalStatus = undefined
-            }
-          }
-        }
-        if (!goalStatus || goal.status === goalStatus) continue
-        db.update(EngineGoalTable)
-          .set({ status: goalStatus, time_updated: now2 })
-          .where(eq(EngineGoalTable.id, goal.id))
-          .run()
-        if (goalStatus === "passed") {
-          Database.effect(() =>
-            EngineProtocol.emit(Event.GoalPassed, { taskID: input.task.id, goalID: goal.id, summary: goal.title }, { source: "persist.evaluation" }),
-          )
-        } else if (goalStatus === "failed") {
-          Database.effect(() =>
-            EngineProtocol.emit(Event.GoalFailed, { taskID: input.task.id, goalID: goal.id, summary: `${goal.title}: ${Array.isArray(gs.evidence) ? gs.evidence.join("; ") : gs.evidence}` }, { source: "persist.evaluation" }),
-          )
-        }
-      }
-      // When verdict is rejected and LLM missed some goals, mark uncovered pending goals as failed
-      if (input.finalVerdict === "rejected" && updatedGoalIndices.size < input.goals.length) {
-        for (let i = 0; i < input.goals.length; i++) {
-          if (updatedGoalIndices.has(i)) continue
-          const uncoveredGoal = input.goals[i]
-          if (!uncoveredGoal || uncoveredGoal.status !== "pending") continue
-          db.update(EngineGoalTable)
-            .set({ status: "failed", time_updated: now2 })
-            .where(eq(EngineGoalTable.id, uncoveredGoal.id))
-            .run()
-        }
-      }
-      if (input.run.plan_version_id) {
-        deriveMilestoneStatuses(db, input.task.id, input.run.plan_version_id, now2)
-      }
-    }
-    if (input.finalizeSpec !== false && input.task.active_spec_version_id) {
-      const requirements = findRequirements(input.task.active_spec_version_id)
-      const now3 = Date.now()
-      const blockingRequirements = requirements.filter((item) => item.priority === "blocking")
-      const scopedRequirements = blockingRequirements.length > 0 ? blockingRequirements : requirements
-      if (scopedRequirements.length > 0) {
-        // Per-requirement status: derive from covering goals' assessment
-        const analysisGoals = Array.isArray(input.analysis?.goal_statuses) ? input.analysis.goal_statuses : []
-        // Map: requirement DB ID → goal indices that cover it
-        const goalIndicesByRequirement = new Map<string, number[]>()
-        for (let gi = 0; gi < input.goals.length; gi++) {
-          const meta = input.goals[gi]?.metadata
-          const reqIDs = meta && typeof meta === "object" && !Array.isArray(meta)
-            ? (Array.isArray((meta as Record<string, unknown>).requirement_ids)
-              ? ((meta as Record<string, unknown>).requirement_ids as unknown[]).filter((id): id is string => typeof id === "string")
-              : [])
-            : []
-          for (const reqID of reqIDs) {
-            const list = goalIndicesByRequirement.get(reqID) ?? []
-            list.push(gi)
-            goalIndicesByRequirement.set(reqID, list)
-          }
-        }
-        for (const requirement of scopedRequirements) {
-          const coveringIndices = goalIndicesByRequirement.get(requirement.id) ?? []
-          let requirementStatus: "pending" | "passed" | "failed" | undefined
-          if (coveringIndices.length > 0 && analysisGoals.length > 0) {
-            // Derive from covering goals' statuses
-            const goalStatuses = coveringIndices.map((gi) => {
-              const gs = analysisGoals.find((a) => a.goal_index === gi)
-              return gs?.status ?? "inconclusive"
-            })
-            if (goalStatuses.every((s) => s === "passed")) {
-              requirementStatus = "passed"
-            } else if (goalStatuses.some((s) => s === "failed")) {
-              requirementStatus = "failed"
-            }
-          } else {
-            // No goal→requirement mapping: fall back to verdict-level status
-            requirementStatus = input.finalVerdict === "accepted" ? "passed" : "failed"
-          }
-          if (requirementStatus && requirement.status !== requirementStatus) {
-            db.update(EngineRequirementTable)
-              .set({ status: requirementStatus, time_updated: now3 })
-              .where(eq(EngineRequirementTable.id, requirement.id))
-              .run()
-          }
-        }
-        if (input.finalVerdict === "accepted") {
-          db.update(EngineSpecSnapshotTable)
-            .set({ status: "completed", time_updated: now3 })
-            .where(eq(EngineSpecSnapshotTable.id, input.task.active_spec_version_id))
-            .run()
-        }
-      }
-    }
-    Database.effect(() =>
-      EngineProtocol.emit(Event.EvaluationCompleted, {
-        taskID: input.task.id,
-        runID: input.run.id,
-        evaluationID: input.evaluationID,
-        status: input.finalStatus as EvaluationStatus,
-        verdict: input.finalVerdict as EvaluationVerdict,
-        summary: input.finalSummary,
-      }, { source: "persist.evaluation" }),
-    )
-  })
-  const plan = input.run.plan_version_id ? findPlan(input.run.plan_version_id) : undefined
-  writeEvaluationSnapshot({
-    task: input.task,
-    run: input.run,
-    goalRunID: input.goalRunID,
-    evaluation,
-    goals: input.goals,
-    analysis: input.analysis,
-    delivery: input.delivery,
-    createdAt: now,
-  })
-  if (plan) {
-    writeGoalSnapshot({
-      task: input.task,
-      plan,
-      goals: listGoalsForPlan(plan),
-      milestones: listMilestonesByPlan(plan.id),
-      createdAt: now,
-    })
-  }
-}
 
 export function persistDelivery(input: {
   task: TaskRow
@@ -637,6 +366,7 @@ export function persistDelivery(input: {
     summary: string
     commitRef?: string
     diffs: Array<{ file: string; [key: string]: unknown }>
+    report?: import("@/delivery/checks").GoalReportClaim
   }
   now: number
 }) {
@@ -650,6 +380,11 @@ export function persistDelivery(input: {
     },
     { additions: 0, deletions: 0 },
   )
+  // 1:1 delivery↔evaluation invariant — the row is created here pending, and
+  // update-in-place is the only allowed path afterwards. Never conditional-insert
+  // an evaluation elsewhere; doing so breaks the invariant and reintroduces the
+  // "delivery candidate + no evaluation" stall that the 006/007 benchmark hit.
+  const evaluationID = Identifier.ascending("evaluation")
   Database.transaction((db) => {
     db.insert(EngineDeliveryTable)
       .values({
@@ -665,7 +400,23 @@ export function persistDelivery(input: {
           changed_files: input.delivery.diffs.map((item) => item.file),
           diffs: input.delivery.diffs,
           stats,
+          report: input.delivery.report,
         },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    db.insert(EngineEvaluationTable)
+      .values({
+        id: evaluationID,
+        task_id: input.task.id,
+        run_id: input.run.id,
+        goal_run_id: input.goalRunID,
+        delivery_id: input.deliveryID,
+        status: "pending",
+        verdict: "inconclusive",
+        summary: input.delivery.summary,
+        checks: [],
         time_created: input.now,
         time_updated: input.now,
       })
@@ -736,6 +487,61 @@ export function persistDelivery(input: {
       EngineProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
     )
   })
+}
+
+/**
+ * Update the pending evaluation row attached to a delivery. Requires the row
+ * created by persistDelivery() to exist — throws loudly when it does not,
+ * because the 1:1 delivery↔evaluation invariant is the whole reason the
+ * evaluation-never-created stall is fixable. A missing row means something
+ * inserted a delivery without going through persistDelivery(), which is a
+ * bug that must be surfaced, not silently patched.
+ */
+export function updateEvaluationFromDeliveryVerdict(input: {
+  deliveryID: string
+  verdict: "accepted" | "rejected" | "inconclusive"
+  summary: string
+  issues?: string[]
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const status =
+    input.verdict === "accepted"
+      ? "passed"
+      : input.verdict === "rejected"
+        ? "failed"
+        : "inconclusive"
+  const existing = Database.use((db) =>
+    db
+      .select()
+      .from(EngineEvaluationTable)
+      .where(eq(EngineEvaluationTable.delivery_id, input.deliveryID))
+      .get(),
+  )
+  if (!existing) {
+    throw new Error(
+      `updateEvaluationFromDeliveryVerdict: no evaluation row found for delivery ${input.deliveryID}. ` +
+      `persistDelivery() must have been bypassed — deliveries and evaluations are 1:1.`,
+    )
+  }
+  Database.use((db) =>
+    db
+      .update(EngineEvaluationTable)
+      .set({
+        status,
+        verdict: input.verdict,
+        summary: input.summary,
+        checks: (input.issues ?? []).map((issue) => ({
+          name: "delivery-agent",
+          status: "failed" as const,
+          evidence: issue,
+        })),
+        time_completed: now,
+        time_updated: now,
+      })
+      .where(eq(EngineEvaluationTable.id, existing.id))
+      .run(),
+  )
 }
 
 export function persistFailedRunEvaluation(input: {
@@ -1069,43 +875,6 @@ export function finalizeDeliveryResult(input: {
   })
 }
 
-function deriveMilestoneStatuses(db: Parameters<Parameters<typeof Database.transaction>[0]>[0], taskID: string, planVersionID: string, now: number) {
-  const milestones = listMilestonesByPlan(planVersionID)
-  if (milestones.length === 0) return
-  const plan = findPlan(planVersionID)
-  if (!plan) return
-  const goals = listGoalsForPlan(plan)
-  for (const ms of milestones) {
-    const indices = Array.isArray(ms.metadata?.goal_indices)
-      ? ms.metadata.goal_indices.filter((item): item is number => typeof item === "number")
-      : []
-    const msGoals = indices.length > 0
-      ? indices.map((index) => goals[index]).filter((goal): goal is GoalRow => !!goal)
-      : []
-    const next = deriveMilestoneStatus(msGoals)
-    if (next === ms.status) continue
-    db.update(EngineMilestoneTable)
-      .set({ status: next, time_updated: now })
-      .where(eq(EngineMilestoneTable.id, ms.id))
-      .run()
-    if (next === "passed") {
-      Database.effect(() => EngineProtocol.emit(Event.MilestonePassed, { taskID, milestoneID: ms.id, summary: ms.title }, { source: "persist.milestone" }))
-    } else if (next === "failed") {
-      Database.effect(() => EngineProtocol.emit(Event.MilestoneFailed, { taskID, milestoneID: ms.id, summary: ms.title }, { source: "persist.milestone" }))
-    } else if (next === "active") {
-      Database.effect(() => EngineProtocol.emit(Event.MilestoneActivated, { taskID, milestoneID: ms.id, summary: ms.title }, { source: "persist.milestone" }))
-    }
-  }
-}
-
-function deriveMilestoneStatus(goals: GoalRow[]): EngineMilestoneStatus {
-  if (goals.length === 0) return "passed"
-  const blocking = goals.filter((g) => g.priority === "blocking")
-  if (blocking.some((g) => g.status === "failed")) return "failed"
-  if (blocking.every((g) => g.status === "passed")) return "passed"
-  if (goals.some((g) => g.status === "passed")) return "active"
-  return "pending"
-}
 
 function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
   if (!current && !next) return undefined

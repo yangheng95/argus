@@ -34,6 +34,7 @@ import { PlannerTool } from "./planner"
 import { PanelTool } from "./panel"
 import { TuiTool } from "./tui"
 import { TaskReportTool } from "./task-report"
+import { GoalReportTool } from "./goal-report"
 import { PlanEnterTool, PlanExitTool } from "./plan"
 import { SpecEnterTool, SpecExitTool } from "./spec"
 import { Glob } from "../util/glob"
@@ -139,6 +140,7 @@ export namespace ToolRegistry {
       PanelTool,
       TuiTool,
       TaskReportTool,
+      GoalReportTool,
       AnalyticsTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),

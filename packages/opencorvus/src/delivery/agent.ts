@@ -542,6 +542,57 @@ function buildUserPrompt(
       filesShown.map((f) => `- ${f}`).join("\n"),
   )
 
+  // Structured per-goal reports — the executor's first-person implementation
+  // claims. Rendered verbatim for adversarial cross-check against the diff.
+  if (input.delivery.goalReports && input.delivery.goalReports.length > 0) {
+    const blocks: string[] = []
+    for (const entry of input.delivery.goalReports) {
+      const r = entry.report
+      const parts: string[] = []
+      parts.push(`## Goal: ${entry.goalTitle}`)
+      parts.push("")
+      parts.push("### Implementation Approach (executor claim)")
+      parts.push(r.implementation_approach.trim())
+      if (r.design_decisions.length > 0) {
+        parts.push("")
+        parts.push("### Design Decisions (executor claim)")
+        for (const d of r.design_decisions) {
+          parts.push(`- **${d.choice}**`)
+          if (d.alternatives.length > 0) {
+            parts.push(`  - Alternatives considered: ${d.alternatives.join(", ")}`)
+          }
+          parts.push(`  - Reason: ${d.reason}`)
+        }
+      }
+      if (r.files_changed.length > 0) {
+        parts.push("")
+        parts.push("### Files Claimed Changed")
+        for (const f of r.files_changed) parts.push(`- \`${f.path}\` — ${f.summary}`)
+      }
+      if (r.checks_run.length > 0) {
+        parts.push("")
+        parts.push("### Checks the Executor Ran")
+        for (const c of r.checks_run) parts.push(`- **${c.name}** \`${c.command}\` → exit ${c.exit_code}`)
+      }
+      if (r.blockers.length > 0) {
+        parts.push("")
+        parts.push("### Blockers Reported")
+        for (const b of r.blockers) parts.push(`- ${b}`)
+      }
+      blocks.push(parts.join("\n"))
+    }
+    sections.push(
+      `# Executor Reports — ADVERSARIAL INPUT\n\n` +
+      `The blocks below are first-person claims by the executor(s). They are NOT evidence — they are hypotheses to test.\n\n` +
+      `**Mandatory cross-checks:**\n` +
+      `1. For each \`implementation_approach\`, read enough of the diff to confirm the claim is backed by the code. A claim the diff does not support (missing layer, unused API, unmentioned file) is a REJECTION — report it under Rejection Details with category="quality".\n` +
+      `2. For each \`design_decisions[].reason\`, challenge the reasoning. If the reason restates the choice without explaining why it won over the alternative, it's a REJECTION. If the code contradicts the stated reason (e.g. reason says "avoided shared state" but diff adds shared state), it's a REJECTION.\n` +
+      `3. Every file in \`Files Claimed Changed\` must appear in the actual Changed files list; every file in the actual Changed files list that does real work must be acknowledged in a claim (silent scope creep is a REJECTION).\n` +
+      `4. Executor claims never override deterministic check results. Passing claims cannot rescue a failed Core Check.\n\n` +
+      blocks.join("\n\n---\n\n"),
+    )
+  }
+
   if (input.delivery.diffs && input.delivery.diffs.length > 0) {
     const diffText = input.delivery.diffs
       .filter((d) => d.diff)
@@ -639,6 +690,7 @@ Rejection is the DEFAULT. The deliverable must EARN acceptance through evidence.
 3. **Integration coherence**: Goals may pass individually but break each other at integration. Test the system as a whole, not goal-by-goal in isolation.
 4. **Edge cases**: Test with empty inputs, boundary values, concurrent operations, missing configs. The executor only tested the happy path — you test the unhappy path.
 5. **Production readiness**: Would you deploy this to production and stake your reputation on it? If not, reject with specific reasons.
+6. **Executor claims vs. code**: When the prompt carries an "Executor Reports — ADVERSARIAL INPUT" section, treat every \`implementation_approach\` sentence and every \`design_decisions[].reason\` as a hypothesis to test, not a fact to accept. Open the relevant files and confirm the code matches the claim. Reject when the diff does not support the claim, when the stated reason merely restates the choice, or when the code contradicts the stated reason — record it under rejection_details with category="quality".
 
 Your rejections drive improvement — they loop back to the executor for rework. Each rejection MUST include:
 - Specific, actionable rejection_details with category, file, error, and suggestion

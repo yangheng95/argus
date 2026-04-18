@@ -8,7 +8,6 @@ import {
   shouldReloadConversationForMessageEvent,
   syncTask,
   loadConversation,
-  appendAgentEvent,
 } from "../store/messages";
 import {
   boardStore,
@@ -18,6 +17,16 @@ import {
 } from "../store/board";
 import { startSSE } from "./sse";
 import { loadConfigInfo } from "./init";
+import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
+import { isBoardInvalidatingEventType, isRouterConsumedNoopEventType } from "./event-policy";
+
+// Forward SSE events to the tree-writer. Runs alongside `enqueueEvent` so
+// the `messageStore.messages` index (still consumed by Board panels, chat
+// pending bubbles, SessionTokenBadge, and section phase detection) stays in
+// sync with the `cardTreeStore` that powers the conversation view.
+function writeToTree(event: any): void {
+  applyTreeWriterEvent(event);
+}
 
 // ── Helpers ──
 
@@ -66,10 +75,11 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
   const timestamp = Number(event.timestamp || Date.now());
   const msgID = executorMessageID(properties);
   const sessionID = executorSessionID(properties);
-  // Propagate the backend-stamped goalID so computeAgentCards can attach
-  // these synthesized executor messages to their goal card. Without this,
-  // external-executor tool_call/tool_result events create messages with
-  // no goalID and computeAgentCards drops the entire round.
+  // Propagate the backend-stamped goalID so tree-writer can nest these
+  // synthesized executor messages under their goal card. Without this,
+  // external-executor tool_call/tool_result events produce sessions with
+  // no goalID and the whole round floats to the top level instead of the
+  // goal group.
   const goalID =
     typeof properties.goalID === "string" && properties.goalID
       ? properties.goalID
@@ -273,6 +283,10 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
 export function routeSSEEvent(event: any): boolean {
   const type: string = event.type || "";
 
+  // Double-write to the new cardTreeStore. Runs before any legacy routing
+  // so a writer crash surfaces with the original event context intact.
+  writeToTree(event);
+
   // ── Message stream events → batched queue ──
   if (
     type === "message.updated" ||
@@ -326,6 +340,7 @@ export function routeSSEEvent(event: any): boolean {
     // Convert executor events (Codex/Claude-Code CodingEventInfo) to standard messages
     const messages = convertExecutorEventToMessages(event, properties);
     for (const msg of messages) {
+      writeToTree(msg);
       enqueueEvent(msg);
     }
     return true;
@@ -339,6 +354,7 @@ export function routeSSEEvent(event: any): boolean {
       text: typeof properties.text === "string" ? properties.text : event.summary || "",
     });
     for (const msg of messages) {
+      writeToTree(msg);
       enqueueEvent(msg);
     }
     return true;
@@ -350,28 +366,13 @@ export function routeSSEEvent(event: any): boolean {
     return true;
   }
 
-  // ── Live agent status / tool activity ──
-  if (type === "agent.updated") {
-    appendAgentEvent(event);
-    return true;
-  }
+  // Explicitly consumed protocol events that do not project into either
+  // messageStore or cardTreeStore. tree-writer whitelists them as no-ops so
+  // they remain auditable and don't surface as unknown-event crashes.
+  if (isRouterConsumedNoopEventType(type)) return true;
 
   // ── Board-invalidating events → forwarded to handleEventStreamEvent
-  if (
-    type === "task.updated" ||
-    type === "task.completed" ||
-    type === "task.failed" ||
-    type === "task.cancelled" ||
-    type === "task.blocked" ||
-    type.startsWith("run.") ||
-    type.startsWith("plan.") ||
-    type.startsWith("goal.") ||
-    type.startsWith("delivery.") ||
-    type.startsWith("evaluation.") ||
-    type.startsWith("interaction.")
-  ) {
-    return false;
-  }
+  if (isBoardInvalidatingEventType(type)) return false;
 
   return false;
 }
@@ -413,21 +414,7 @@ function eventSequence(event: any): number {
 }
 
 function boardInvalidatingEvent(type: string): boolean {
-  return (
-    type === "task.created" ||
-    type === "task.updated" ||
-    type === "task.completed" ||
-    type === "task.failed" ||
-    type === "task.cancelled" ||
-    type === "task.blocked" ||
-    type.startsWith("run.") ||
-    type.startsWith("plan.") ||
-    type.startsWith("goal.") ||
-    type.startsWith("delivery.") ||
-    type.startsWith("evaluation.") ||
-    type.startsWith("interaction.") ||
-    type.startsWith("workflow.")
-  );
+  return isBoardInvalidatingEventType(type);
 }
 
 function scheduleTasksCompat(delay = 0): void {
@@ -440,6 +427,8 @@ function scheduleTasksCompat(delay = 0): void {
 
 export function handleEventStreamEvent(event: any): void {
   const type = normalizedEventType(event);
+  // Double-write to the new cardTreeStore before any legacy routing.
+  writeToTree(event);
   if (type.startsWith("message.")) {
     if (shouldReloadConversationForMessageEvent({ ...event, type })) {
       void loadConversation();
@@ -464,6 +453,59 @@ export function handleEventStreamEvent(event: any): void {
       scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
       // Don't restart SSE for sequence gaps — the refresh will catch up.
       // Restarting SSE here causes cascading refreshes that lead to flickering.
+    }
+    setTaskSequence(sequence);
+  }
+  if (boardInvalidatingEvent(type)) {
+    scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
+    if (taskID && taskID === boardStore.selectedTaskID) {
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
+    }
+  }
+}
+
+/**
+ * Handler for the GLOBAL task-list SSE stream (`GET /task/events`).
+ *
+ * Server contract (see server/routes/orchestrator.ts): this stream emits a
+ * pure change-notification shape — `{type, taskID, sequence}` — with NO
+ * payload / properties. It is meant to tell the sidebar "some task changed,
+ * refetch the list"; it is NOT the per-task message stream.
+ *
+ * The previous implementation routed these notifications through
+ * `handleEventStreamEvent`, which feeds events into `writeToTree` →
+ * tree-writer. tree-writer correctly throws for missing partID/info/part,
+ * producing one throw per stream notification. Under active benchmarks
+ * the task-list stream emits `message.part.delta` at full SSE cadence,
+ * which flooded the console and made the browser miss render deadlines
+ * (observed as `Overlay did not render streamed task output within 120s`
+ * in the overlay-web-benchmark).
+ *
+ * Route them correctly here instead:
+ *   - `message.*` notifications → only mean "that task changed"; if it
+ *     is the selected task, refresh the board.
+ *   - task lifecycle events → same refresh path.
+ *   - sequence tracking mirrors handleEventStreamEvent's rules.
+ *
+ * tree-writer is reserved for task-scope events that carry full payload
+ * (delivered via `routeSSEEvent` on the per-task stream).
+ */
+export function handleTaskListNotification(event: any): void {
+  const type = normalizedEventType(event);
+  if (type === "task.replay_expired") {
+    if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
+    scheduleTasksCompat(0);
+    scheduleBoard(0);
+    return;
+  }
+  const taskID = eventTaskID(event);
+  const sequence = eventSequence(event);
+  if (taskID && taskID === boardStore.selectedTaskID && sequence > 0) {
+    const current = boardStore.taskSequence;
+    if (current > 0 && sequence <= current) return;
+    if (current > 0 && sequence > current + 1) {
+      scheduleBoard(BOARD_EVENT_DEBOUNCE);
+      scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
     }
     setTaskSequence(sequence);
   }

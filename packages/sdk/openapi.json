@@ -13011,65 +13011,6 @@
                         "time"
                       ]
                     },
-                    "goalRuns": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "goalID": {
-                            "type": "string"
-                          },
-                          "status": {
-                            "type": "string"
-                          },
-                          "sessionID": {
-                            "type": "string"
-                          },
-                          "executorSessionID": {
-                            "type": "string"
-                          },
-                          "plannerSessionID": {
-                            "type": "string"
-                          },
-                          "workspaceDir": {
-                            "type": "string"
-                          },
-                          "error": {
-                            "type": "string"
-                          },
-                          "time": {
-                            "type": "object",
-                            "properties": {
-                              "created": {
-                                "type": "number"
-                              },
-                              "updated": {
-                                "type": "number"
-                              },
-                              "started": {
-                                "type": "number"
-                              },
-                              "completed": {
-                                "type": "number"
-                              }
-                            },
-                            "required": [
-                              "created",
-                              "updated"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "goalID",
-                          "status",
-                          "time"
-                        ]
-                      }
-                    },
                     "run": {
                       "type": "object",
                       "properties": {
@@ -14171,6 +14112,93 @@
                                 },
                                 "summary": {
                                   "type": "string"
+                                },
+                                "payload": {
+                                  "type": "object",
+                                  "properties": {
+                                    "planNodes": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "title": {
+                                            "type": "string"
+                                          },
+                                          "brief": {
+                                            "type": "string"
+                                          },
+                                          "orderIndex": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "title",
+                                          "brief",
+                                          "orderIndex"
+                                        ]
+                                      }
+                                    },
+                                    "executorSessionID": {
+                                      "type": "string"
+                                    },
+                                    "workspaceDir": {
+                                      "type": "string"
+                                    },
+                                    "changedFiles": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "diffStats": {
+                                      "type": "object",
+                                      "properties": {
+                                        "files": {
+                                          "type": "number"
+                                        },
+                                        "additions": {
+                                          "type": "number"
+                                        },
+                                        "deletions": {
+                                          "type": "number"
+                                        }
+                                      }
+                                    },
+                                    "checks": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "status": {
+                                            "type": "string"
+                                          },
+                                          "evidence": {
+                                            "type": "string"
+                                          },
+                                          "family": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "name",
+                                          "status"
+                                        ]
+                                      }
+                                    },
+                                    "evalSummary": {
+                                      "type": "string"
+                                    },
+                                    "verdict": {
+                                      "type": "string"
+                                    }
+                                  }
                                 }
                               },
                               "required": [
@@ -20074,54 +20102,6 @@
           "properties"
         ]
       },
-      "Event.agent.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "agent.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string"
-              },
-              "runID": {
-                "type": "string"
-              },
-              "stage": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string"
-              },
-              "id": {
-                "type": "string"
-              },
-              "toolName": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "stage",
-              "kind",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.task.created": {
         "type": "object",
         "properties": {
@@ -24149,6 +24129,140 @@
           "properties"
         ]
       },
+      "Event.goal.report": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.report"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "report": {
+                "type": "object",
+                "properties": {
+                  "files_changed": {
+                    "description": "Every file touched in this goal. A goal that produced zero file changes is invalid — do not call this tool without deliverables.",
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "summary": {
+                          "description": "What changed in this file and why. One or two sentences, concrete — not 'updated foo'.",
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "summary"
+                      ]
+                    }
+                  },
+                  "checks_run": {
+                    "description": "Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.",
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "command": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "exit_code": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "output_excerpt": {
+                          "description": "Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "command",
+                        "exit_code"
+                      ]
+                    }
+                  },
+                  "implementation_approach": {
+                    "description": "The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.",
+                    "type": "string",
+                    "minLength": 40
+                  },
+                  "design_decisions": {
+                    "description": "Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.",
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "choice": {
+                          "description": "The decision made, stated as a concrete claim.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "alternatives": {
+                          "description": "Alternatives that were considered and rejected. Empty array if none were weighed.",
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "reason": {
+                          "description": "Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.",
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "choice",
+                        "reason"
+                      ]
+                    }
+                  },
+                  "blockers": {
+                    "description": "Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.",
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "files_changed",
+                  "implementation_approach"
+                ]
+              }
+            },
+            "required": [
+              "sessionID",
+              "report"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.command.executed": {
         "type": "object",
         "properties": {
@@ -24717,9 +24831,6 @@
             "$ref": "#/components/schemas/Event.installation.update-available"
           },
           {
-            "$ref": "#/components/schemas/Event.agent.updated"
-          },
-          {
             "$ref": "#/components/schemas/Event.task.created"
           },
           {
@@ -24916,6 +25027,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.task.report"
+          },
+          {
+            "$ref": "#/components/schemas/Event.goal.report"
           },
           {
             "$ref": "#/components/schemas/Event.command.executed"

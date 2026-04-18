@@ -284,22 +284,35 @@ export async function runTaskLoop(input: {
           blockedGoals: diag.map(d => d.goalTitle),
         })
 
-        // Stale-state detection: same goal snapshot as last time?
-        const snapshot = goals.map(g => `${g.id}:${g.status}`).sort().join(",")
+        // Stale-state detection based on goal_run (immutable history) rather
+        // than engine_goal.status (now derived, could appear unchanged while
+        // the underlying goal_run chain has grown). Any new goal_run row or
+        // status transition changes the snapshot and resets the counter.
+        const snapshot = goalRuns
+          .map((r) => `${r.id}:${r.status}:${(r as { supersede_of?: string | null }).supersede_of ?? ""}`)
+          .sort()
+          .join(",")
         if (snapshot === lastGoalSnapshot) {
           staleCount++
           log.warn("stale state detected", { taskID, staleCount, maxStale: MAX_STALE_ITERATIONS })
           if (staleCount >= MAX_STALE_ITERATIONS) {
-            const blockedSummary = diag.map(d =>
-              `"${d.goalTitle}" blocked by: ${d.unsatisfiedDeps.map(dep => `${dep.depGoalTitle} [${dep.depStatus}]`).join(", ")}`
-            ).join("; ")
+            // Classify WHY the loop is stuck. Four realistic shapes:
+            //   1. pending goals with unsatisfied deps — the dep tree has a gap
+            //   2. pending goals but no unmet deps and nothing ready — readiness
+            //      filter rejected them (supersede / live row leak / bug)
+            //   3. deliveries in candidate with no evaluation verdict — the
+            //      deliver tool or delivery agent is wedged
+            //   4. unknown — surface enough state for the operator to triage
+            const breakdown = await classifyBreakerCause(taskID, goals, goalRuns, diag)
             log.error("stale-state circuit breaker triggered — failing task", {
-              taskID, staleCount, blockedSummary,
+              taskID, staleCount, cause: breakdown.cause, detail: breakdown.detail,
             })
             const { updateTask } = await import("@/engine/state")
             await updateTask(task, {
               status: "failed",
-              error: `Task stuck: ${staleCount} consecutive decision cycles with no progress. Pending goals permanently blocked by failed dependencies: ${blockedSummary}`,
+              error:
+                `Task stuck: ${staleCount} consecutive decision cycles with no progress.\n` +
+                `Cause: ${breakdown.cause}.\n${breakdown.detail}`,
             }, "Stale-state circuit breaker")
             break
           }
@@ -363,6 +376,7 @@ export async function runTaskLoop(input: {
 
   activeLoops.delete(taskID)
   log.info("task loop exited", { taskID, iteration })
+  // (continues below — serial queue dispatch)
 
   // Serial queue: when this task's loop exits, start the next queued task in the project.
   const completedTask = findTask(taskID)
@@ -377,6 +391,85 @@ export async function runTaskLoop(input: {
       })
     }
   }
+}
+
+/**
+ * Produce a concrete explanation for why the stale-state circuit breaker
+ * fired. Reads engine_goal_run, engine_delivery, engine_evaluation to
+ * distinguish the realistic shapes of "stuck":
+ *
+ *  - deps_unsatisfied: pending goals waiting on failed/missing upstream goals
+ *  - stranded_pending: pending goals with deps met but never dispatched
+ *    (readiness filter bug, supersede leak, live row without progress)
+ *  - delivery_unverified: deliveries exist but their evaluation stayed
+ *    pending/inconclusive for the breaker window — deliver tool stuck
+ *  - goal_runs_wedged: live goal_runs never transitioned to terminal
+ *  - unknown: fallback with raw counts for triage
+ */
+async function classifyBreakerCause(
+  taskID: string,
+  goals: Array<{ id: string; status: string; title: string }>,
+  goalRuns: Array<{ id: string; goal_id: string; status: string; time_updated: number; supersede_of?: string | null }>,
+  diag: Array<{ goalID: string; goalTitle: string; unsatisfiedDeps: Array<{ depGoalTitle: string; depStatus: string }> }>,
+): Promise<{ cause: string; detail: string }> {
+  const { findDeliveriesForTask, findEvaluationsByTask } = await loadStore()
+  const deliveries = findDeliveriesForTask(taskID)
+  const evaluations = findEvaluationsByTask(taskID)
+  const pendingGoals = goals.filter((g) => g.status === "pending")
+  const supersededIDs = new Set(
+    goalRuns
+      .map((r) => (r as { supersede_of?: string | null }).supersede_of)
+      .filter((x): x is string => !!x),
+  )
+  const liveTips = goalRuns.filter(
+    (r) =>
+      !supersededIDs.has(r.id) &&
+      ["queued", "accepted", "planning", "running", "evaluating", "blocked"].includes(r.status),
+  )
+  const unverifiedDeliveries = deliveries.filter((d) => {
+    if (d.status !== "candidate") return false
+    const ev = evaluations.find((e) => e.delivery_id === d.id)
+    return !ev || ev.status === "pending"
+  })
+
+  if (diag.length > 0) {
+    const blocked = diag.map((d) =>
+      `"${d.goalTitle}" blocked by: ${d.unsatisfiedDeps.map((dep) => `${dep.depGoalTitle} [${dep.depStatus}]`).join(", ")}`,
+    ).join("; ")
+    return { cause: "deps_unsatisfied", detail: blocked }
+  }
+  if (unverifiedDeliveries.length > 0) {
+    const list = unverifiedDeliveries.map((d) => `${d.id}@${d.goal_run_id ?? "run"}`).join(", ")
+    return {
+      cause: "delivery_unverified",
+      detail: `${unverifiedDeliveries.length} delivery candidates with pending evaluation: ${list}`,
+    }
+  }
+  if (liveTips.length > 0) {
+    const list = liveTips.map((r) => `${r.id}[${r.status}]`).join(", ")
+    return {
+      cause: "goal_runs_wedged",
+      detail: `${liveTips.length} live goal_run(s) that never transitioned to terminal: ${list}`,
+    }
+  }
+  if (pendingGoals.length > 0) {
+    const titles = pendingGoals.map((g) => g.title).join(", ")
+    return {
+      cause: "stranded_pending",
+      detail:
+        `${pendingGoals.length} pending goal(s) with no unmet deps but no ready dispatch: ${titles}. ` +
+        `This indicates a readiness filter bug (supersede chain / live row leak) — inspect engine_goal_run rows for this task.`,
+    }
+  }
+  return {
+    cause: "unknown",
+    detail: `goals=${goals.length} goal_runs=${goalRuns.length} deliveries=${deliveries.length} evaluations=${evaluations.length}`,
+  }
+}
+
+async function loadStore() {
+  const mod = await import("@/engine/store")
+  return mod as typeof import("@/engine/store")
 }
 
 /**

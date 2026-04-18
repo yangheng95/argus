@@ -45,7 +45,9 @@ export namespace EngineMemoryBridge {
   }) {
     const { task, run, delivery, evaluation, plan } = input
     try {
-      const changedFiles = delivery.result?.changed_files ?? []
+      const changedFiles = Array.isArray(delivery.result?.changed_files)
+        ? delivery.result.changed_files.filter((item): item is string => typeof item === "string")
+        : []
       const checks = (evaluation?.checks as Array<{ name: string; status: string; evidence?: string }>) ?? []
 
       const sections: string[] = [

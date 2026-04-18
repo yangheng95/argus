@@ -34,6 +34,7 @@ import {
   markDeliveryPublishing,
   finalizeDeliveryResult,
   updateGoalRun,
+  updateEvaluationFromDeliveryVerdict,
 } from "@/engine/persist"
 import {
   findDeliveryByRun,
@@ -221,18 +222,27 @@ export function createOrchestratorTools(input: {
     const now = Date.now()
     const ws = input.workflowState
 
+    // Only task-scope steps track state here. Goal-scope step status is
+    // projected from engine_goal_run on read (see workflow.ts::projectGoalSteps);
+    // there is no longer a shadow table to write into.
     if (step.scope === "task") {
       ws.taskSteps[step.id] = { status: "running", startedAt: now }
-    } else if (goalID && ws.goalSteps[goalID]) {
-      ws.goalSteps[goalID].steps[step.id] = { status: "running", startedAt: now }
+      ws.currentStepID = step.id
+      try {
+        const task = requireTask(taskID)
+        const meta = { ...(task.metadata ?? {}), _workflow: ws }
+        await updateTask(task, { metadata: meta }, `Workflow step started: ${step.label}`)
+        EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
+          taskID, stepID: step.id, goalID, status: "running",
+          summary: `Step "${step.label}" started`,
+        })
+      } catch { /* best effort */ }
+      return
     }
-    ws.currentStepID = step.id
-
-    // Persist + emit
+    // goal-scope: nothing to persist — goal_run creation/update downstream
+    // drives the derived state. Emit an event so the overlay still sees the
+    // tool-level transition without needing to poll the board.
     try {
-      const task = requireTask(taskID)
-      const meta = { ...(task.metadata ?? {}), _workflow: ws }
-      await updateTask(task, { metadata: meta }, `Workflow step started: ${step.label}`)
       EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
         taskID, stepID: step.id, goalID, status: "running",
         summary: `Step "${step.label}" started`,
@@ -248,18 +258,25 @@ export function createOrchestratorTools(input: {
     const ws = input.workflowState
     const status = failed ? "failed" as const : "completed" as const
 
-    if (step.scope === "task") {
-      const existing = ws.taskSteps[step.id]
-      ws.taskSteps[step.id] = { ...existing, status, completedAt: now }
-    } else if (goalID && ws.goalSteps[goalID]) {
-      const existing = ws.goalSteps[goalID].steps[step.id]
-      ws.goalSteps[goalID].steps[step.id] = { ...existing, status, completedAt: now }
+    if (step.scope !== "task") {
+      // Goal-scope step completion is derived from engine_goal_run transitions.
+      // Emit-only here.
+      try {
+        EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
+          taskID, stepID: step.id, goalID, status,
+          summary: `Step "${step.label}" ${status}`,
+        })
+      } catch { /* best effort */ }
+      return
     }
 
-    // Advance currentStepID to next pending step
+    const existing = ws.taskSteps[step.id]
+    ws.taskSteps[step.id] = { ...existing, status, completedAt: now }
+
+    // Advance currentStepID to next pending task-scope step
     const nextStep = input.workflow.steps.find(s => {
       if (s.scope === "task") return ws.taskSteps[s.id]?.status === "pending"
-      return false // goal-scope steps don't drive currentStepID
+      return false
     })
     ws.currentStepID = nextStep?.id ?? null
 
@@ -271,35 +288,15 @@ export function createOrchestratorTools(input: {
         taskID, stepID: step.id, goalID, status,
         summary: `Step "${step.label}" ${status}`,
       })
-
-      // Emit per-goal progress when a goal-scope step completes
-      if (goalID && step.scope === "goal" && ws.goalSteps[goalID]) {
-        const goalSteps = ws.goalSteps[goalID].steps
-        const totalSteps = Object.keys(goalSteps).length
-        const completedSteps = Object.values(goalSteps).filter(s => s.status === "completed" || s.status === "skipped").length
-        const currentStep = Object.entries(goalSteps).find(([, s]) => s.status === "running")?.[0]
-        EngineProtocol.emit(EngineEvent.GoalWorkflowProgress, {
-          taskID,
-          goalID,
-          completedSteps,
-          totalSteps,
-          currentStep,
-          summary: `Goal ${goalID}: ${completedSteps}/${totalSteps} steps done`,
-        })
-      }
     } catch { /* best effort */ }
   }
 
-  /** Ensure a goal has initialized step states in workflow tracking */
-  function ensureGoalInWorkflow(goalID: string, goalTitle: string): void {
-    if (!input.workflow || !input.workflowState) return
-    const ws = input.workflowState
-    if (ws.goalSteps[goalID]) return
-    const steps: Record<string, { status: "pending" }> = {}
-    for (const s of input.workflow.steps) {
-      if (s.scope === "goal") steps[s.id] = { status: "pending" }
-    }
-    ws.goalSteps[goalID] = { goalID, goalTitle, goalStatus: "pending", steps }
+  /** ensureGoalInWorkflow was the _workflow.goalSteps pre-allocator. The
+   *  shadow table is gone — goal step status is derived from engine_goal_run
+   *  at read time. This remains as a no-op for callers still referencing it;
+   *  those call sites will be removed as the architecture settles. */
+  function ensureGoalInWorkflow(_goalID: string, _goalTitle: string): void {
+    // intentional no-op: see workflow.ts::projectGoalSteps
   }
 
   // Agents that need to ask the user a question do so directly via
@@ -1295,29 +1292,63 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Apply DB changes
+        // Retry via supersede chain — the prior goal_run is terminal per the
+        // goal_run FSM; we create a fresh goal_run referencing it via
+        // supersede_of so readiness (goal/readiness.ts) sees the new row as
+        // the tip and re-dispatches the goal. engine_goal.status is NOT
+        // rewritten here — goal-pool.ts moves it to running on dispatch.
+        // This replaces the prior "mutate engine_goal back to pending" path
+        // that deadlocked against doesGoalRunSatisfyGoal("completed")=true.
+        const { findLatestTipGoalRun } = await import("@/engine/store")
+        const { supersedeGoalRun } = await import("@/engine/persist")
+        const now = Date.now()
+        for (const goal of retryable) {
+          const analysis = per_goal_analysis[goal.id]
+          const reason = analysis
+            ? `[${analysis.failure_class}] ${analysis.expected_fix}`
+            : "retry_failed_goals"
+          const priorTip = findLatestTipGoalRun(goal.id)
+          if (!priorTip) {
+            // No prior goal_run but the goal is marked failed — data shape the
+            // rest of the pipeline does not produce. Surface instead of silent
+            // no-op so the bug source is visible.
+            throw new Error(
+              `retry_failed_goals: goal ${goal.id} is in status=failed but has no prior goal_run; ` +
+              `cannot retry without a row to supersede. This is a data inconsistency upstream of retry.`,
+            )
+          }
+          // Only annotate the old row with the retry reason (metadata marker).
+          // DO NOT createGoalRun here. Creating a `queued` row out-of-band
+          // leaks a live-tip that isLiveGoalRunStatus("queued")=true filters
+          // out via readyGoalNodes, while GoalPool never picks it up because
+          // pool.dispatch only operates on pool-internal createGoalRun calls
+          // that wire session/worktree/baseRef. The iter-5 benchmark stalled
+          // exactly here: new queued row with no pipeline → alive-stall.
+          //
+          // The old tip stays in its failed/aborted state; readyGoalNodes
+          // sees "not live, not satisfy" → goal is released for re-dispatch;
+          // GoalPool.submit on the next task-loop iteration calls
+          // createGoalRun itself with the full executor/worktree payload
+          // and re-runs the pipeline. No external goal_run creation needed.
+          //
+          // supersede_of is reserved for the "completed tip needs re-dispatch"
+          // case (modify_goal on a passed goal) where tip.satisfiesGoal=true
+          // would otherwise keep readiness filtered forever.
+          supersedeGoalRun({ oldGoalRunID: priorTip.id, reason, now })
+        }
+
         Database.use((db) => {
           const { EngineGoalTable: GT, EngineRunTable: RT } = require("@/engine/engine.sql")
-          const now = Date.now()
-
-          // Reset retryable goals to pending + increment their per-goal retry_count
-          for (const goal of retryable) {
-            const goalRetries = (goal as any).retry_count ?? 0
-            db.update(GT)
-              .set({ status: "pending", retry_count: goalRetries + 1, time_updated: now })
-              .where(eq(GT.id, goal.id))
-              .run()
-          }
-
-          // Mark cascaded pending goals as failed (blocked by permanently failed deps)
+          // Cascade: goals blocked by permanently-failed deps never get a
+          // goal_run — mark them failed on engine_goal so the UI reflects it.
+          // (Phase 4 will make this a derived read, too.)
           for (const goal of cascaded) {
             db.update(GT)
               .set({ status: "failed", time_updated: now })
               .where(eq(GT.id, goal.id))
               .run()
           }
-
-          // Increment run-level retry_count for global budget tracking
+          // Run-level retry budget — unchanged.
           db.update(RT)
             .set({ retry_count: (run.retry_count ?? 0) + 1, time_updated: now })
             .where(eq(RT.id, run.id))
@@ -1852,11 +1883,24 @@ export function createOrchestratorTools(input: {
         const allDiffs: Array<{ file: string; diff?: string; [key: string]: unknown }> = []
         const seenFiles = new Set<string>()
         const summaries: string[] = []
+        const aggregatedGoalReports: Array<{ goalTitle: string; report: import("@/delivery/checks").GoalReportClaim }> = []
         for (const gr of goalRuns) {
           const d = findDeliveryByGoalRun(gr.id)
           if (!d) continue
           if (d.summary) summaries.push(d.summary)
-          const result = d.result as { diffs?: Array<{ file: string; diff?: string; [key: string]: unknown }> } | null
+          const result = d.result as {
+            diffs?: Array<{ file: string; diff?: string; [key: string]: unknown }>
+            report?: import("@/delivery/checks").GoalReportClaim
+          } | null
+          if (result?.report) {
+            const goalRow = gr.goal_id
+              ? Database.use((db) => db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, gr.goal_id!)).get())
+              : undefined
+            aggregatedGoalReports.push({
+              goalTitle: goalRow?.title ?? gr.goal_id ?? gr.id,
+              report: result.report,
+            })
+          }
           if (!result?.diffs) continue
           for (const diff of result.diffs) {
             if (!seenFiles.has(diff.file)) {
@@ -1891,6 +1935,7 @@ export function createOrchestratorTools(input: {
           summary: summaries.join("\n"),
           changedFiles: allDiffs.map(d => d.file),
           diffs: allDiffs.map(d => ({ file: d.file, diff: d.diff })),
+          goalReports: aggregatedGoalReports,
         }
 
         // Visual gate: if the task carried any image attachments, run an
@@ -2202,27 +2247,14 @@ export function createOrchestratorTools(input: {
                 const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
                 const published = findDeliveryByRun(run.id) ?? delivery
                 const verdictPayload = verdictArtifact?.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
-                if (verdictPayload?.verdict && !findEvaluationByRun(run.id)) {
-                  const { EngineEvaluationTable } = await import("@/engine/engine.sql")
-                  Database.use((db) =>
-                    db.insert(EngineEvaluationTable).values({
-                      id: Identifier.ascending("evaluation"),
-                      task_id: taskID,
-                      run_id: run.id,
-                      delivery_id: delivery.id,
-                      status: verdictPayload.verdict === "accepted" ? "passed" : "failed",
-                      verdict: verdictPayload.verdict as any,
-                      summary: verdictPayload.summary ?? "Delivery agent verification",
-                      checks: (verdictPayload.issues_found ?? []).map((issue: string) => ({
-                        name: "delivery-agent",
-                        status: "failed" as const,
-                        evidence: issue,
-                      })),
-                      time_completed: completed,
-                      time_created: completed,
-                      time_updated: completed,
-                    }).run(),
-                  )
+                if (verdictPayload?.verdict) {
+                  updateEvaluationFromDeliveryVerdict({
+                    deliveryID: delivery.id,
+                    verdict: verdictPayload.verdict as "accepted" | "rejected" | "inconclusive",
+                    summary: verdictPayload.summary ?? "Delivery agent verification",
+                    issues: verdictPayload.issues_found,
+                    now: completed,
+                  })
                 }
                 const finalized = await EngineGit.complete(current, currentPlan, published)
                 if (finalized.error) {
@@ -2438,29 +2470,17 @@ export function createOrchestratorTools(input: {
           const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
           const published = findDeliveryByRun(run.id) ?? delivery
 
-          // Create evaluation record from delivery-agent-verdict so board/quality-gate can read it
+          // Update the evaluation row persistDelivery() created for this delivery.
+          // 1:1 delivery↔evaluation invariant: the row always exists here.
           const verdictPayload = verdictArtifact.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
-          if (verdictPayload?.verdict && !findEvaluationByRun(run.id)) {
-            const { EngineEvaluationTable } = await import("@/engine/engine.sql")
-            Database.use((db) =>
-              db.insert(EngineEvaluationTable).values({
-                id: Identifier.ascending("evaluation"),
-                task_id: task.id,
-                run_id: run.id,
-                delivery_id: delivery.id,
-                status: verdictPayload.verdict === "accepted" ? "passed" : "failed",
-                verdict: verdictPayload.verdict as any,
-                summary: verdictPayload.summary ?? "Delivery agent verification",
-                checks: (verdictPayload.issues_found ?? []).map((issue: string) => ({
-                  name: "delivery-agent",
-                  status: "failed" as const,
-                  evidence: issue,
-                })),
-                time_completed: completed,
-                time_created: completed,
-                time_updated: completed,
-              }).run(),
-            )
+          if (verdictPayload?.verdict) {
+            updateEvaluationFromDeliveryVerdict({
+              deliveryID: delivery.id,
+              verdict: verdictPayload.verdict as "accepted" | "rejected" | "inconclusive",
+              summary: verdictPayload.summary ?? "Delivery agent verification",
+              issues: verdictPayload.issues_found,
+              now: completed,
+            })
           }
 
           const finalized = await EngineGit.complete(current, currentPlan, published)

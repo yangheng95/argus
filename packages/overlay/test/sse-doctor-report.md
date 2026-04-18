@@ -8,7 +8,7 @@
 
 ### SSE 事件链路：✅ 正常
 - SSE 连接成功
-- task.created, task.updated, agent.updated 事件正常到达
+- task.created, task.updated 事件正常到达
 - 事件格式正确（type, payload 字段完整）
 
 ### 消息事件：❌ 全零

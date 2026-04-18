@@ -607,25 +607,6 @@ export const SpecSnapshot = z.object({
   }),
 })
 
-export const TaskBoardGoalRun = z.object({
-  id: z.string(),
-  goalID: z.string(),
-  status: z.string(),
-  sessionID: z.string().optional(),
-  /** opencode executor's native session (distinct from run session). */
-  executorSessionID: z.string().optional(),
-  /** Pipeline-planner child session — required so planner rounds attach to the goal. */
-  plannerSessionID: z.string().optional(),
-  workspaceDir: z.string().optional(),
-  error: z.string().optional(),
-  time: z.object({
-    created: z.number(),
-    updated: z.number(),
-    started: z.number().optional(),
-    completed: z.number().optional(),
-  }),
-})
-
 // ---------------------------------------------------------------------------
 // MiniWorkflow — workflow state projected to TaskBoard
 // ---------------------------------------------------------------------------
@@ -659,6 +640,31 @@ export const TaskBoardArchitect = z.object({
   categories: z.array(z.string()),
 })
 
+export const TaskBoardGoalStepPayload = z.object({
+  planNodes: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    brief: z.string(),
+    orderIndex: z.number(),
+  })).optional(),
+  executorSessionID: z.string().optional(),
+  workspaceDir: z.string().optional(),
+  changedFiles: z.array(z.string()).optional(),
+  diffStats: z.object({
+    files: z.number().optional(),
+    additions: z.number().optional(),
+    deletions: z.number().optional(),
+  }).optional(),
+  checks: z.array(z.object({
+    name: z.string(),
+    status: z.string(),
+    evidence: z.string().optional(),
+    family: z.string().optional(),
+  })).optional(),
+  evalSummary: z.string().optional(),
+  verdict: z.string().optional(),
+})
+
 export const TaskBoardGoalWorkflowStep = z.object({
   stepID: z.string(),
   label: z.string(),
@@ -667,6 +673,7 @@ export const TaskBoardGoalWorkflowStep = z.object({
   completedAt: z.number().optional(),
   /** Human-readable summary: "5 steps", "12 files", "3/4 checks" */
   summary: z.string().optional(),
+  payload: TaskBoardGoalStepPayload.optional(),
 })
 
 export const TaskBoardGoalContract = z.object({
@@ -694,7 +701,6 @@ export const TaskBoard = z.object({
   task: Task,
   spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
-  goalRuns: TaskBoardGoalRun.array().optional(),
   run: Run.optional(),
   delivery: Delivery.optional(),
   candidateDelivery: Delivery.optional(),
@@ -811,7 +817,6 @@ export const RunMetrics = z.object({
 export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "planner" | "evaluator" | "delivery"
 
 export const Event = {
-  AgentUpdated: BusEvent.define("agent.updated", z.object({ taskID: z.string(), runID: z.string().optional(), stage: z.string(), kind: z.string(), id: z.string().optional(), toolName: z.string().optional(), text: z.string().optional(), summary: z.string() })),
   TaskCreated: BusEvent.define("task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskWaiting: BusEvent.define("task.waiting", z.object({

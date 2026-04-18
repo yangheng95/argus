@@ -18,20 +18,6 @@ export type EventInstallationUpdateAvailable = {
   }
 }
 
-export type EventAgentUpdated = {
-  type: "agent.updated"
-  properties: {
-    taskID: string
-    runID?: string
-    stage: string
-    kind: string
-    id?: string
-    toolName?: string
-    text?: string
-    summary: string
-  }
-}
-
 export type EventTaskCreated = {
   type: "task.created"
   properties: {
@@ -1189,6 +1175,62 @@ export type EventTaskReport = {
   }
 }
 
+export type EventGoalReport = {
+  type: "goal.report"
+  properties: {
+    sessionID: string
+    report: {
+      /**
+       * Every file touched in this goal. A goal that produced zero file changes is invalid — do not call this tool without deliverables.
+       */
+      files_changed: Array<{
+        path: string
+        /**
+         * What changed in this file and why. One or two sentences, concrete — not 'updated foo'.
+         */
+        summary: string
+      }>
+      /**
+       * Commands executed to verify the goal (build / test / lint / verify). Empty array is allowed only for goals whose acceptance is entirely rubric/semantic.
+       */
+      checks_run?: Array<{
+        name: string
+        command: string
+        exit_code: number
+        /**
+         * Last relevant lines of stdout/stderr (≤ 2000 chars). Omit when trivially green.
+         */
+        output_excerpt?: string
+      }>
+      /**
+       * The actual implementation plan: what scheme you used, core structure, key APIs, and data flow. Must describe the approach concretely so an evaluator can cross-check the diff against it.
+       */
+      implementation_approach: string
+      /**
+       * Key decisions and why. Each entry names the alternatives considered and the reason the chosen one won. Empty array means the goal required no non-trivial decision.
+       */
+      design_decisions?: Array<{
+        /**
+         * The decision made, stated as a concrete claim.
+         */
+        choice: string
+        /**
+         * Alternatives that were considered and rejected. Empty array if none were weighed.
+         */
+        alternatives?: Array<string>
+        /**
+         * Why this choice won over the alternatives. Must be a real reason, not a restatement of the choice.
+         */
+        reason: string
+      }>
+      /**
+       * Hard blockers hit during execution. Empty when none. A filled array signals the goal did not fully complete.
+       */
+      blockers?: Array<string>
+    }
+  }
+}
+
 export type EventCommandExecuted = {
   type: "command.executed"
   properties: {
@@ -1358,7 +1400,6 @@ export type EventWorkspaceFailed = {
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
-  | EventAgentUpdated
   | EventTaskCreated
   | EventTaskUpdated
   | EventTaskWaiting
@@ -1425,6 +1466,7 @@ export type Event =
   | EventWorktreeReady
   | EventWorktreeFailed
   | EventTaskReport
+  | EventGoalReport
   | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
@@ -7725,22 +7767,6 @@ export type TaskBoardResponses = {
         updated: number
       }
     }
-    goalRuns?: Array<{
-      id: string
-      goalID: string
-      status: string
-      sessionID?: string
-      executorSessionID?: string
-      plannerSessionID?: string
-      workspaceDir?: string
-      error?: string
-      time: {
-        created: number
-        updated: number
-        started?: number
-        completed?: number
-      }
-    }>
     run?: {
       id: string
       taskID: string
@@ -7981,6 +8007,30 @@ export type TaskBoardResponses = {
         startedAt?: number
         completedAt?: number
         summary?: string
+        payload?: {
+          planNodes?: Array<{
+            id: string
+            title: string
+            brief: string
+            orderIndex: number
+          }>
+          executorSessionID?: string
+          workspaceDir?: string
+          changedFiles?: Array<string>
+          diffStats?: {
+            files?: number
+            additions?: number
+            deletions?: number
+          }
+          checks?: Array<{
+            name: string
+            status: string
+            evidence?: string
+            family?: string
+          }>
+          evalSummary?: string
+          verdict?: string
+        }
       }>
       contracts?: Array<{
         key: string

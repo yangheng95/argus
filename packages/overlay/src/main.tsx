@@ -23,7 +23,6 @@ import { initApp } from "./services/init";
 import { applyTasks, loadTasks, boardStore, loadBoard, setBoardStore, setBoardData } from "./store/board";
 import {
   messageStore,
-  setAgentEvents,
   setMessages,
   setSelectedTaskID,
   setSseConnected,
@@ -91,12 +90,7 @@ import { installInlineLlmConfig, refreshInlineLlmConfig } from "./services/llm-i
 import { loadConversation } from "./store/messages";
 import { executorSelectable, executorCurrentModel, setExecutorModel } from "./services/executor";
 import { syncExecutorWidth } from "./services/window";
-import {
-  mainMessages,
-  userContextMessages,
-  agentCardItems,
-  combineConversation,
-} from "./utils/conversation";
+import { cardTreeStore } from "./store/card-tree";
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -208,7 +202,6 @@ function installGlobalBridges(): void {
     if (prop === "vcs") return boardStore.vcs;
     if (prop === "changes") return boardStore.changes;
     if (prop === "messages") return messageStore.messages;
-    if (prop === "agentEvents") return messageStore.agentEvents;
     if (prop === "sseConnected") return messageStore.sseConnected;
     if (prop in appStore) return (appStore as unknown as Record<string, unknown>)[prop];
     if (prop === "settings") return settingsStore;
@@ -255,10 +248,6 @@ function installGlobalBridges(): void {
       setMessages(Array.isArray(value) ? (value as any[]) : []);
       return true;
     }
-    if (prop === "agentEvents") {
-      setAgentEvents(Array.isArray(value) ? (value as any[]) : []);
-      return true;
-    }
     if (prop === "sseConnected") {
       setSseConnected(value === true);
       return true;
@@ -302,8 +291,11 @@ function installGlobalBridges(): void {
       };
     },
   });
+  // Test hook: snapshot the current card tree as a flat JSON shape. Used by
+  // Playwright / integration tests to read the live store-backed tree.
   (window as any).renderConversation = () =>
-    combineConversation(mainMessages(), userContextMessages(), agentCardItems());
+    cardTreeStore.order.map((id) => cardTreeStore.cards[id]).filter(Boolean);
+  (window as any).cardTree = cardTreeStore;
   (window as any).applyDirectory = applyDirectory;
   (window as any).loadTasks = loadTasks;
   (window as any).selectTask = selectTask;

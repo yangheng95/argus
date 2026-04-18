@@ -1,22 +1,17 @@
 // ── SessionTokenBadge ──
 // Compact titlebar indicator that surfaces the session's peak context-token
-// usage at a glance. The value is the high-water mark of `contextTokens`
-// across the live CardNode tree — the same figure each card's own footer
-// hint shows, promoted to a persistent position so operators can see
-// context pressure without scrolling.
+// usage at a glance. Peak = max `contextTokens` across every message the
+// provider has reported so far; rendered with low contrast and an "est."
+// marker when the max came from a local chars/token approximation.
 //
-// When the peak was taken from a local chars/token approximation (no
-// provider figure yet), the badge tags the number with "est." just like
-// the per-card hint. Hidden when the conversation is empty.
+// Data source: `messageStore.messages` — the flat chronological index. A
+// direct O(n) walk over messages that have run through the LLM. Solid tracks
+// reads of `messageStore.messages`, so this memo only re-runs when the flat
+// list itself changes (not on every part delta).
 
 import { createMemo, Show } from "solid-js";
-import {
-  mainMessages,
-  userContextMessages,
-  agentCardItems,
-  combineConversation,
-} from "../utils/conversation";
-import { toCardTree, type CardNode } from "../utils/card-tree";
+import { messageStore } from "../store/messages";
+import { providerContextTokens, charsToTokens, estimateMessageChars } from "../utils/tokens-estimate";
 import { t } from "../utils/i18n";
 
 function formatTokenCount(n: number): string {
@@ -31,27 +26,21 @@ interface Peak {
   estimated: boolean;
 }
 
-function walk(node: CardNode, acc: { peak?: Peak }): void {
-  const v = node.contextTokens;
-  if (typeof v === "number" && Number.isFinite(v) && v > 0) {
-    if (!acc.peak || v > acc.peak.value) {
-      acc.peak = { value: v, estimated: !!node.contextTokensEstimated };
-    }
-  }
-  for (const child of node.children || []) walk(child, acc);
-}
-
 export function SessionTokenBadge() {
   const peak = createMemo<Peak | undefined>(() => {
-    const items = combineConversation(
-      mainMessages(),
-      userContextMessages(),
-      agentCardItems(),
-    );
-    const tree = toCardTree(items);
-    const acc: { peak?: Peak } = {};
-    for (const node of tree) walk(node, acc);
-    return acc.peak;
+    let best: Peak | undefined = undefined;
+    for (const message of messageStore.messages) {
+      const provided = providerContextTokens(message);
+      if (typeof provided === "number" && Number.isFinite(provided) && provided > 0) {
+        if (!best || provided > best.value) best = { value: provided, estimated: false };
+        continue;
+      }
+      const est = charsToTokens(estimateMessageChars(message));
+      if (Number.isFinite(est) && est > 0) {
+        if (!best || est > best.value) best = { value: est, estimated: true };
+      }
+    }
+    return best;
   });
 
   const tooltipKey = () =>

@@ -14,6 +14,7 @@
  * "推荐路径 + 当前进度" 的形式注入。
  */
 import { EngineConfig } from "./config"
+import { listGoals, listGoalRunsForTask } from "./store"
 
 // ═══════════════════════════════════════════════════════════════════
 // 类型定义
@@ -250,93 +251,96 @@ export function createWorkflowState(workflow: MiniWorkflow): WorkflowState {
   }
 }
 
-/** 为一个新 goal 初始化 per-goal 步骤状态 */
-export function createGoalStepStates(workflow: MiniWorkflow): Record<string, GoalStepStatus> {
-  const steps: Record<string, GoalStepStatus> = {}
-  for (const step of workflow.steps) {
-    if (step.scope === "goal") {
-      steps[step.id] = { status: "pending" }
-    }
-  }
-  return steps
-}
-
 /** 根据 tool 名查找 workflow 中对应的 step */
 export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWorkflowStep | undefined {
   return workflow.steps.find(s => s.tool === toolName)
 }
 
 /**
- * 直接驱动一个 goal-scope 步骤的状态，不经过 Orchestrator 工具调用。
+ * Project goal-scope step state from engine_goal_run rows for rendering.
  *
- * 场景：per-goal build 由 GoalPool 内部调度（worktree + executor），没有对应的
- * Orchestrator 工具调用来触发 trackStepStart/Complete。此 helper 让 goal-pool.ts
- * 可以手动推进步骤状态，同时持久化到 task.metadata._workflow 并 emit 事件，
- * 让 UI 与 orchestrator 的 workflow 追踪保持一致。
+ * Per-goal step state was previously a shadow table written imperatively
+ * (markGoalWorkflowStep) from goal-pool.ts — that diverged from goal_run in
+ * the 006/007 benchmark when updateTask races / exceptions were swallowed.
+ *
+ * Now the projection is computed fresh each read: there's exactly one
+ * goal-scope step (`build`) and its status is whatever the goal's
+ * supersede-chain tip goal_run says. One true source, no drift.
+ *
+ * Returns the `goalSteps` shape (keyed by goalID) so callers (board.ts,
+ * renderWorkflowPrompt) can consume it as if it had been persisted.
  */
-export async function markGoalWorkflowStep(
+export function projectGoalSteps(
   taskID: string,
-  goalID: string,
-  goalTitle: string,
-  stepID: string,
-  status: GoalStepStatus["status"],
-): Promise<void> {
-  const [{ requireTask }, { updateTask }, { EngineProtocol }, { Event }] = await Promise.all([
-    import("./store"),
-    import("./state"),
-    import("./protocol"),
-    import("./model"),
-  ])
-  const task = requireTask(taskID)
-  const raw = (task.metadata as Record<string, unknown> | null | undefined)?._workflow as WorkflowState | undefined
-  const ws: WorkflowState = raw ?? {
-    workflowID: "pipeline",
-    currentStepID: null,
-    taskSteps: {},
-    goalSteps: {},
+  workflow: MiniWorkflow,
+): Record<string, GoalWorkflowState> {
+  const goalScopeStepIDs = workflow.steps.filter((s) => s.scope === "goal").map((s) => s.id)
+  if (goalScopeStepIDs.length === 0) return {}
+  const goals = listGoals(taskID)
+  const goalRuns = listGoalRunsForTask(taskID)
+  const result: Record<string, GoalWorkflowState> = {}
+  const supersededIDs = new Set<string>()
+  for (const r of goalRuns) {
+    const p = (r as { supersede_of?: string | null }).supersede_of
+    if (p) supersededIDs.add(p)
   }
-  const workflow = WorkflowRegistry.resolveSync(ws.workflowID)
-  if (!workflow) {
-    throw new Error(`workflow "${ws.workflowID}" not found`)
-  }
-  const step = workflow.steps.find(s => s.id === stepID && s.scope === "goal")
-  if (!step) {
-    throw new Error(`goal-scope step "${stepID}" not found in workflow "${ws.workflowID}"`)
-  }
-
-  if (!ws.goalSteps[goalID]) {
-    ws.goalSteps[goalID] = {
-      goalID,
-      goalTitle,
-      goalStatus: "pending",
-      steps: createGoalStepStates(workflow),
+  for (const goal of goals) {
+    const runs = goalRuns.filter((r) => r.goal_id === goal.id)
+    const tip = runs.find((r) => !supersededIDs.has(r.id)) // runs are desc by time_created
+    const stepStatus = mapGoalRunToStepStatus(tip?.status)
+    const startedAt = tip?.time_started ?? undefined
+    const completedAt = tip?.time_completed ?? undefined
+    const steps: Record<string, GoalStepStatus> = {}
+    for (const stepID of goalScopeStepIDs) {
+      steps[stepID] = { status: stepStatus, startedAt, completedAt }
+    }
+    result[goal.id] = {
+      goalID: goal.id,
+      goalTitle: goal.title,
+      goalStatus: goal.status,
+      steps,
     }
   }
-  const existing = ws.goalSteps[goalID].steps[stepID] ?? { status: "pending" }
-  const now = Date.now()
-  ws.goalSteps[goalID].steps[stepID] = {
-    ...existing,
-    status,
-    startedAt: status === "running" ? now : existing.startedAt ?? now,
-    completedAt: status === "completed" || status === "failed" || status === "skipped" ? now : existing.completedAt,
-  }
+  return result
+}
 
-  const meta = { ...(task.metadata ?? {}), _workflow: ws }
-  await updateTask(task, { metadata: meta }, `Goal step ${status}: ${goalID} ${stepID}`)
-  EngineProtocol.emit(Event.WorkflowStepUpdated, {
-    taskID, stepID, goalID, status,
-    summary: `Goal ${goalID}: ${step.label} ${status}`,
-  }, { taskID }).catch(() => undefined)
+function mapGoalRunToStepStatus(
+  runStatus: string | undefined,
+): GoalStepStatus["status"] {
+  switch (runStatus) {
+    case undefined:
+    case "queued":
+    case "accepted":
+    case "planning":
+    case "aborted":
+      return "pending"
+    case "running":
+    case "evaluating":
+    case "blocked":
+      return "running"
+    case "completed":
+      return "completed"
+    case "failed":
+      return "failed"
+    default:
+      return "pending"
+  }
 }
 
 /**
  * 渲染 workflow 为 system prompt 文本。
  * 每个步骤标注 [DONE] / [CURRENT] / [PENDING] / [SKIPPED] / [FAILED]。
+ *
+ * Goal-scope step status is projected from engine_goal_run rows at call time
+ * (projectGoalSteps) — NOT read from state.goalSteps, which is no longer
+ * a persisted shadow table. Task-scope steps are still read from state.
  */
-export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowState): string {
+export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowState, taskID?: string): string {
   const lines: string[] = []
   lines.push(`## Recommended Workflow: ${workflow.name}`)
   lines.push("")
+
+  const derivedGoalSteps = taskID ? projectGoalSteps(taskID, workflow) : state.goalSteps
 
   for (let i = 0; i < workflow.steps.length; i++) {
     const step = workflow.steps[i]
@@ -352,7 +356,7 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
       }
     } else {
       // goal-scope: 如果任意 goal 在跑就算 running，全部 done 算 done
-      const goalEntries = Object.values(state.goalSteps)
+      const goalEntries = Object.values(derivedGoalSteps)
       if (goalEntries.length > 0) {
         const statuses = goalEntries.map(g => g.steps[step.id]?.status ?? "pending")
         if (statuses.some(s => s === "running")) statusTag = "[RUNNING]"

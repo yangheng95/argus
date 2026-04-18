@@ -57,16 +57,16 @@ export async function tools(model, agent?) {
 
 | Agent | 模式 | 声明 | 理由 |
 |---|---|---|---|
-| build | exclude | `["planner", "panel", "tui", "task_report", "analytics"]` | 交互模式需要大部分工具，排除 orchestrator 专用的 |
+| build | exclude | `["planner", "panel", "tui", "task_report", "analytics"]` | 交互模式需要大部分工具，排除 orchestrator 专用的；`goal_report` 对 build 开放，它就是 goal executor |
 | spec | include | `["read", "glob", "grep", "codesearch", "lsp", "question", "spec_exit", "task", "memory", "webfetch", "websearch"]` | 只读 + 规格相关 |
 | plan | include | `["read", "glob", "grep", "codesearch", "lsp", "question", "plan_exit", "task", "memory", "webfetch", "websearch"]` | 只读 + 计划相关 |
 | explore | include | `["read", "glob", "grep", "bash", "codesearch", "lsp", "webfetch", "memory"]` | 搜索专用 |
-| general | exclude | `["planner", "panel", "tui", "task_report", "analytics", "plan_enter", "plan_exit", "spec_enter", "spec_exit"]` | 通用但不进入 spec/plan 模式 |
+| general | exclude | `["planner", "panel", "tui", "task_report", "analytics", "plan_enter", "plan_exit", "spec_enter", "spec_exit"]` | 通用但不进入 spec/plan 模式；`goal_report` 暂不排除（非 goal executor 也不会主动调用，调用则被 extractGoalReport 按 session 过滤） |
 | compaction | include | `[]` | 无工具 |
 | title | include | `[]` | 无工具 |
 | summary | include | `[]` | 无工具 |
 | evaluator | include | `["read", "glob", "grep", "bash", "codesearch", "question"]` | 只读 + 验证命令 |
-| delivery | exclude | `["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "analytics"]` | 完整编码能力，无 orchestration |
+| delivery | exclude | `["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "goal_report", "analytics"]` | 完整编码能力，无 orchestration；排除 `goal_report` — delivery 是 adversarial evaluator，不产出 goal report |
 | requirements | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
 | architect | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |
 | planner | — | 不走 ToolRegistry（orchestrator/tools.ts 自建） | |

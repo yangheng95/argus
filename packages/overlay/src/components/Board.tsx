@@ -6,10 +6,13 @@
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
 import { createMemo, For, Show, onMount } from "solid-js";
-import { boardStore } from "../store/board";
-import { computeAgentCards } from "../store/messages";
+import { boardStore, rootTaskSessionID } from "../store/board";
+import { messageStore } from "../store/messages";
+import { classifyMessage } from "../utils/message";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
+import { goalStageStepID } from "../utils/workflow-step";
+import { deliveryGoalProgress } from "../utils/goal-workflow";
 import { WorkflowProgressBar } from "./WorkflowProgressBar";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
@@ -284,17 +287,12 @@ export function Board(props: BoardProps) {
   // the section gets `data-phase-state="active"` highlighting. Falls back to
   // the most recently completed/failed step when nothing is running.
   // Step ID → right-pane section. Pipeline workflow has exactly ONE goal-scope
-  // step now: `build` (plan + execute + eval are sub-phases inside build).
-  // Older step IDs (plan / execute / eval) are kept for backward compatibility
-  // with tasks created on the previous workflow schema.
+  // step now: `build`.
   const STEP_TO_SECTION: Record<string, string> = {
     design_analysis: "requirements",
     requirements: "requirements",
     architect: "architect",
     build: "goalWorkflows",
-    plan: "goalWorkflows",
-    execute: "goalWorkflows",
-    eval: "goalWorkflows",
     deliver: "delivery",
     refine: "delivery",
   };
@@ -321,66 +319,56 @@ export function Board(props: BoardProps) {
   // been planned; downstream section badges must render progress as
   // "done/total goals" so the panel is never blank when execution artifacts
   // (delivery rows, evaluation rows) haven't been produced yet.
-  const stepStatus = (g: any, id: string): string =>
-    g?.steps?.find((s: any) => s.stepID === id)?.status ?? "pending";
-  const stepDone = (g: any, id: string): boolean =>
-    stepStatus(g, id) === "completed";
+  // Messages feeding the RequirementsPanel / GoalWorkflowList live-stream
+  // surfaces. Read directly from `messageStore.messagesBySession` and filter
+  // by `classifyMessage` / bridge-stamped goalID.
+  //
+  // Reactivity: Solid tracks the buckets we actually read (per sid), so a
+  // delta on session A only re-runs the memo when session A's bucket is
+  // touched. Sessions B..Z stay cached.
 
-  // Collect agent messages for requirements stage (spec/goal stages map to requirements).
-  // Data-driven: emit whenever spec/goal cards exist, independent of workflow mode.
-  const requirementsMessages = createMemo(() => {
-    const computed = computeAgentCards();
-    const cards = computed.cards;
-    const order = computed.order;
-    const msgs: any[] = [];
-    for (const cardID of order) {
-      const card = cards[cardID];
-      if (!card) continue;
-      const stage: string = card.stage || "";
-      if (stage === "spec" || stage === "goal") {
-        const m = Array.isArray((card as any).messages) ? (card as any).messages : [];
-        msgs.push(...m);
-      }
+  /** Messages routed into a given agent stage — used by RequirementsPanel. */
+  function messagesForStage(stage: string): any[] {
+    const rootSID = rootTaskSessionID();
+    const out: any[] = [];
+    for (const sid of Object.keys(messageStore.messagesBySession)) {
+      const bucket = messageStore.messagesBySession[sid];
+      if (!bucket || bucket.length === 0) continue;
+      const sample = bucket[0];
+      const channel = sample.info?.channel || classifyMessage(sample, rootSID);
+      if (channel === stage) out.push(...bucket);
     }
-    return msgs;
-  });
+    return out;
+  }
 
   // Bridge: map agent card messages to workflow goal steps.
-  // Pipeline workflow now has ONE goal-scope step (`build`) — planner /
-  // executor / build / evaluator stages are all sub-phases that surface in
-  // the same `build` bucket. The build card UI displays them as nested
-  // sessions under the build step.
-  const STAGE_TO_STEP: Record<string, string> = {
-    planner: "build",
-    executor: "build",
-    build: "build",
-    evaluator: "build",
-  };
+  // Pipeline workflow has ONE goal-scope step (`build`) — planner / executor /
+  // build / evaluator stages are sub-phases that all surface in the same
+  // `build` bucket. The build card UI displays them as nested sessions under
+  // the build step.
+  const requirementsMessages = createMemo(() => {
+    // Spec + goal stages merged into the Requirements surface.
+    return [...messagesForStage("spec"), ...messagesForStage("goal")];
+  });
 
   const goalStepMessages = createMemo(() => {
-    const computed = computeAgentCards();
-    const cards = computed.cards;
-    const order = computed.order;
+    const rootSID = rootTaskSessionID();
     const result: Record<string, Record<string, any[]>> = {};
-
-    // Walk the nested session tree under each goal so a stage like "build"
-    // (child of executor) still lands in the matching step bucket via
-    // STAGE_TO_STEP. Recursion is required because internalCards is no
-    // longer flat — sub-agents nest under their parent session's card.
-    const collect = (node: any, bucket: Record<string, any[]>) => {
-      if (!node || node.kind !== "agent") return;
-      const stepID = STAGE_TO_STEP[node.stage];
-      if (stepID) {
-        (bucket[stepID] ??= []).push(...(node.messages || []));
-      }
-      for (const child of node.children || []) collect(child, bucket);
-    };
-
-    for (const cardID of order) {
-      const card = cards[cardID];
-      if (!card || card.kind !== "goal") continue;
-      const bucket = (result[card.goalID] ??= {});
-      for (const inner of card.internalCards || []) collect(inner, bucket);
+    for (const sid of Object.keys(messageStore.messagesBySession)) {
+      const bucket = messageStore.messagesBySession[sid];
+      if (!bucket || bucket.length === 0) continue;
+      const sample = bucket[0];
+      const channel = sample.info?.channel || classifyMessage(sample, rootSID);
+      const stepID = goalStageStepID(channel);
+      if (!stepID) continue;
+      // Each session carries its own goalID on every message via the bridge
+      // stamp; use the first message's goalID as the bucket key. Sessions
+      // whose goalID hasn't been stamped (rare transcript edge cases) land
+      // under an empty string and are ignored by the panel.
+      const goalID = String(sample.info?.goalID || "");
+      if (!goalID) continue;
+      const bucketMap = (result[goalID] ??= {});
+      (bucketMap[stepID] ??= []).push(...bucket);
     }
     return result;
   });
@@ -532,10 +520,8 @@ export function Board(props: BoardProps) {
           if (gs.length === 0) {
             return delivery() ? deliveryStatusLabel(delivery()?.status) : "";
           }
-          const delivered = gs.filter(
-            (g: any) => stepDone(g, "execute") || g.goalStatus === "passed",
-          ).length;
-          return `${delivered}/${gs.length}`;
+          const progress = deliveryGoalProgress(gs);
+          return `${progress.completed}/${progress.total}`;
         })()}
         badgeTone={(() => {
           const gs = goalWorkflows();
@@ -548,11 +534,14 @@ export function Board(props: BoardProps) {
                   ? "accent"
                   : "";
           }
-          const failed = gs.filter((g: any) => stepStatus(g, "execute") === "failed").length;
-          const delivered = gs.filter(
-            (g: any) => stepDone(g, "execute") || g.goalStatus === "passed",
-          ).length;
-          return failed > 0 ? "bad" : delivered === gs.length ? "good" : delivered > 0 ? "accent" : "";
+          const progress = deliveryGoalProgress(gs);
+          return progress.failed > 0
+            ? "bad"
+            : progress.completed === progress.total
+              ? "good"
+              : progress.completed > 0
+                ? "accent"
+                : "";
         })()}
       >
         <DeliveryPanel delivery={delivery()} />
@@ -578,4 +567,3 @@ export function Board(props: BoardProps) {
     </>
   );
 }
-

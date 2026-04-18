@@ -9,7 +9,7 @@ import { pathBreadcrumb } from "../utils/dom-utils";
 import { t } from "../utils/i18n";
 import { AppLog } from "../utils/log";
 import { apiJson } from "./api";
-import { setWorkspaceDirectory } from "./workspace";
+import { currentExecutionDirectory, setWorkspaceDirectory } from "./workspace";
 
 // ── Types ──
 
@@ -159,10 +159,7 @@ export function renderMeta(): void {
   }
 
   if (workspaceNode) {
-    const executionDir =
-      Array.isArray((boardStore.board as any)?.goalRuns) &&
-      (boardStore.board as any).goalRuns.find((item: any) => item?.workspaceDir)?.workspaceDir;
-    const workspaceText = typeof executionDir === "string" ? executionDir.trim() : "";
+    const workspaceText = currentExecutionDirectory();
     const dirText = dir.replace(/[\\/]+$/, "");
     const same = !!dirText && !!workspaceText && dirText.toLowerCase() === workspaceText.toLowerCase();
     const show = !!workspaceText && !same;
