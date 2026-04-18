@@ -32,7 +32,7 @@ opencorvus serve [flags]
 | flag | default | purpose |
 |---|---|---|
 | `--hostname` | `127.0.0.1` | Listen address (switched to `0.0.0.0` when `--mdns` is on) |
-| `--port` | `0` (auto) | Listen port; **conventionally 7878**, but the flag default is `0` (ephemeral) |
+| `--port` | `7878` | Listen port |
 | `--project-dir` | `cwd()` | Target repo |
 | `--mdns` | off | Enable mDNS discovery |
 | `--mdns-domain` | `opencorvus.local` | mDNS domain |

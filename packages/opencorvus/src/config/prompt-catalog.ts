@@ -4,6 +4,17 @@ import { Agent } from "@/agent/agent"
 import PROMPT_SYSTEM from "@/session/prompt/system.txt"
 import PROMPT_GENERATE from "@/agent/generate.txt"
 
+/** Native agents whose prompt is NOT consumed from `config.agent.<name>.prompt`
+ *  at runtime. Surfacing them in the catalog is a UX trap: users edit the
+ *  card, hit Save, and nothing changes.
+ *  - orchestrator → dynamic prompt built per-trigger in `buildSystemParts`;
+ *    the whole core_header + workflow state is reconstructed from DB every
+ *    invocation, so a static override has no place to land.
+ *  - summary → `PROMPT_SUMMARY` is attached to the agent registry but has
+ *    no consumer; `task-api/index.ts::generateFollowup` only picks a model
+ *    via `resolveAgentModel("summary")` and constructs its own prompt. */
+const UNEDITABLE_AGENTS = new Set<string>(["orchestrator", "summary"])
+
 export namespace PromptCatalog {
   export interface Entry {
     scope: "system" | "agent"
@@ -60,7 +71,6 @@ export namespace PromptCatalog {
     if (!agent.native) return "custom_agent"
     if (agent.mode === "subagent") return "subagent"
     // Assistant-level agents
-    if (["spec", "plan"].includes(agent.name)) return "assistant"
     return "primary_agent"
   }
 
@@ -97,6 +107,7 @@ export namespace PromptCatalog {
     // the single source of truth for the default prompt; dynamically-loaded
     // agents (e.g. delivery) fall back to `agent.prompt` populated in state().
     for (const agent of agents) {
+      if (UNEDITABLE_AGENTS.has(agent.name)) continue
       const agentCfg = (cfg.agent ?? {})[agent.name]
       const configuredPrompt = agentCfg?.prompt ?? null
       const nativeDefault = agent.native ? Agent.nativeDefaultPrompt(agent.name) : undefined

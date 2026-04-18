@@ -70,16 +70,20 @@ export namespace RequirementsService {
       }
 
       // Fidelity Review — LLM verifies goals cover the original user request.
-      // Stream + taskID propagate so the fidelity LLM's tokens land in the
-      // same visible agent card and reuse the requirements stage's hexin
-      // cache stickiness (avoids cold-cache cost + 401 from missing x-user).
+      // taskID propagates for hexin cache stickiness (avoids cold-cache cost
+      // + 401 from missing x-user) and as the aggregate for the
+      // FidelityReviewCompleted event. Stream is intentionally NOT passed:
+      // the fidelity LLM emits a JSON contract, and piping those tokens into
+      // the requirements card produced a raw-JSON reasoning block. The
+      // parsed verdict is now delivered via event and rendered natively by
+      // the overlay.
       const fidelity = await reviewFidelity({
         userRequest: input.request,
         taskTitle: input.title,
         goals: result.goals,
         signal: input.signal,
         taskID: input.taskID,
-        stream: input.stream,
+        sessionID: input.sessionID,
       })
 
       if (fidelity.verdict === "needs_correction") {

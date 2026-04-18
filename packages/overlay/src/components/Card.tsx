@@ -8,6 +8,7 @@ import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
 import { StepPayloadBody } from "./StepPayloadBody";
+import { FidelityBody } from "./FidelityCard";
 
 /**
  * Unified recursive card primitive.
@@ -96,6 +97,13 @@ export function Card(props: { node: CardNode; depth: number }) {
               payload={props.node.stepPayload}
               stepID={props.node.stepID!}
             />
+          </Show>
+
+          {/* Fidelity verdict: renders the parsed FidelityResult (verdict
+              badge + issues list + corrections diff) in place of the raw
+              JSON that used to leak into the requirements reasoning card. */}
+          <Show when={props.node.kind === "fidelity" && props.node.fidelity}>
+            <FidelityBody fidelity={props.node.fidelity!} />
           </Show>
 
           {/* Generic parts */}

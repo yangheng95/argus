@@ -86,6 +86,31 @@ export async function fetchUrlScreenshot(input: {
     // `networkidle2` waits for ≤2 in-flight requests, which is enough for
     // layout to have settled on most design-tool viewers.
     await page.goto(input.url, { waitUntil: "networkidle2", timeout: timeoutMs })
+
+    // ── Render settle ─────────────────────────────────────────────────
+    // `networkidle2` only proves the network is quiet. SPAs hydrate, web
+    // fonts swap, and lazy-load / CSS animations all run after that point
+    // — screenshotting immediately yields unstyled text flashes, skeleton
+    // loaders, or blank hero images. Three gates before the shot:
+    //   1. document.fonts.ready   — resolves once FOUT/FOIT closes
+    //   2. readyState === "complete" — defence against sub-resource races
+    //                                  that slipped past networkidle2
+    //   3. 500 ms tail buffer     — absorbs IntersectionObserver-driven
+    //                              lazy loads + initial CSS animation frames
+    // Each gate is bounded by the overall timeout so a pathological page
+    // still loud-fails instead of hanging (rule 1: let it crash).
+    await Promise.race([
+      page.evaluateHandle("document.fonts.ready"),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("document.fonts.ready timeout")), timeoutMs),
+      ),
+    ])
+    await page.waitForFunction(
+      () => document.readyState === "complete",
+      { timeout: timeoutMs },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
     const title = (await page.title().catch(() => "")) || new URL(input.url).hostname
     const finalUrl = page.url()
     const shotBuf = await page.screenshot({

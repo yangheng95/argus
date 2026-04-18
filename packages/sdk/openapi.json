@@ -21295,6 +21295,128 @@
           "properties"
         ]
       },
+      "Event.fidelity.review.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "fidelity.review.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "faithful",
+                  "needs_correction"
+                ]
+              },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "uncovered",
+                        "partial",
+                        "distorted",
+                        "merged_incorrectly"
+                      ]
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "description"
+                  ]
+                }
+              },
+              "corrections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "modify",
+                        "split",
+                        "remove"
+                      ]
+                    },
+                    "goalID": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "updatesTitle": {
+                      "type": "string"
+                    },
+                    "updatesObjective": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "goalID",
+                    "reason"
+                  ]
+                }
+              },
+              "missingGoals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "objective": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "objective"
+                  ]
+                }
+              },
+              "attempts": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID",
+              "verdict",
+              "issues",
+              "corrections",
+              "missingGoals",
+              "attempts"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Project": {
         "type": "object",
         "properties": {
@@ -24918,6 +25040,9 @@
             "$ref": "#/components/schemas/Event.architect.completed"
           },
           {
+            "$ref": "#/components/schemas/Event.fidelity.review.completed"
+          },
+          {
             "$ref": "#/components/schemas/Event.project.updated"
           },
           {
@@ -25620,18 +25745,6 @@
               "question": {
                 "$ref": "#/components/schemas/PermissionActionConfig"
               },
-              "plan_enter": {
-                "$ref": "#/components/schemas/PermissionActionConfig"
-              },
-              "plan_exit": {
-                "$ref": "#/components/schemas/PermissionActionConfig"
-              },
-              "spec_enter": {
-                "$ref": "#/components/schemas/PermissionActionConfig"
-              },
-              "spec_exit": {
-                "$ref": "#/components/schemas/PermissionActionConfig"
-              },
               "webfetch": {
                 "$ref": "#/components/schemas/PermissionActionConfig"
               },
@@ -26285,9 +26398,6 @@
             "description": "Agent configuration, see https://opencorvus.ai/docs/agents",
             "type": "object",
             "properties": {
-              "plan": {
-                "$ref": "#/components/schemas/AgentConfig"
-              },
               "build": {
                 "$ref": "#/components/schemas/AgentConfig"
               },

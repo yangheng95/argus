@@ -31,7 +31,7 @@ export type CardKind =
   | "step"      // step row inside a goal
   | "tool"      // promoted tool call (nested card for task/subagent)
   | "message"   // user / system synthetic bubble
-  | "compaction";
+  | "fidelity"; // requirements fidelity review verdict
 
 export type CardStatus =
   | "pending"
@@ -117,7 +117,23 @@ export interface CardNode {
   toolPart?: any;
   contextTokens?: number;
   contextTokensEstimated?: boolean;
-  isCompactionSummary?: boolean;
+  /** Structured fidelity review payload — only populated for kind="fidelity"
+   *  nodes. Mirrors `FidelityReviewCompleted` event shape (see
+   *  opencorvus/engine/model.ts). Rendered natively by <FidelityCard>; the
+   *  raw JSON that the fidelity LLM produces never reaches the UI. */
+  fidelity?: {
+    verdict: "faithful" | "needs_correction";
+    issues: Array<{ type: string; description: string }>;
+    corrections: Array<{
+      action: "modify" | "split" | "remove";
+      goalID: string;
+      reason: string;
+      updatesTitle?: string;
+      updatesObjective?: string;
+    }>;
+    missingGoals: Array<{ title: string; objective: string; reason?: string }>;
+    attempts: number;
+  };
 }
 
 export interface CardTreeStore {

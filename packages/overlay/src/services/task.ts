@@ -29,6 +29,7 @@ import {
 import { settingsStore } from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
 import { applyDirectory } from "./workspace";
+import { resetWriter } from "./tree-writer";
 
 // ── Types ──
 
@@ -226,6 +227,12 @@ export async function selectTask(
   stopSSE();
   clearBoard();
   clearMessages();
+  // Drop cardTreeStore + the writer's internal session/message/fidelity
+  // indices so the conversation panel doesn't carry stale cards into the
+  // next task. resetWriter() was documented for task-switch use but had no
+  // production call site — the old pipeline's derivation from messageStore
+  // masked the leak until the new writer became source-of-truth.
+  resetWriter();
   if (appStore.budgetDirty) setAppStore("budgetDirty", false);
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);

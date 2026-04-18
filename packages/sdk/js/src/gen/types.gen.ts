@@ -317,6 +317,32 @@ export type EventArchitectCompleted = {
   }
 }
 
+export type EventFidelityReviewCompleted = {
+  type: "fidelity.review.completed"
+  properties: {
+    taskID: string
+    sessionID: string
+    verdict: "faithful" | "needs_correction"
+    issues: Array<{
+      type: "uncovered" | "partial" | "distorted" | "merged_incorrectly"
+      description: string
+    }>
+    corrections: Array<{
+      action: "modify" | "split" | "remove"
+      goalID: string
+      reason: string
+      updatesTitle?: string
+      updatesObjective?: string
+    }>
+    missingGoals: Array<{
+      title: string
+      objective: string
+      reason?: string
+    }>
+    attempts: number
+  }
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -1429,6 +1455,7 @@ export type Event =
   | EventGoalWorkflowProgress
   | EventRequirementsCompleted
   | EventArchitectCompleted
+  | EventFidelityReviewCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
   | EventServerConnected
@@ -1895,10 +1922,6 @@ export type PermissionConfig =
       todowrite?: PermissionActionConfig
       todoread?: PermissionActionConfig
       question?: PermissionActionConfig
-      plan_enter?: PermissionActionConfig
-      plan_exit?: PermissionActionConfig
-      spec_enter?: PermissionActionConfig
-      spec_exit?: PermissionActionConfig
       webfetch?: PermissionActionConfig
       websearch?: PermissionActionConfig
       codesearch?: PermissionActionConfig
@@ -2203,7 +2226,6 @@ export type Config = {
    * Agent configuration, see https://opencorvus.ai/docs/agents
    */
   agent?: {
-    plan?: AgentConfig
     build?: AgentConfig
     general?: AgentConfig
     explore?: AgentConfig

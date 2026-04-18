@@ -71,13 +71,28 @@ status, parts[], children[], ...`），类型定义挪到 `store/card-tree.ts`�
 
 ### 身份规则（决定 id，保证唯一 & 稳定）
 
-- `session:<sid>` —— 一个 session 一张卡
-- `goal:<gid>` —— 一个 goal 一个容器卡
-- `msg:<mid>` —— 一条消息（仅 main channel 用户/系统气泡）
-- `part:<msgID>:<partID>` —— message 内 part
-- `tool:<callID>` —— promote 出来的工具卡
+实现 ID 前缀（`packages/overlay/src/services/tree-writer.ts` 为唯一写入方）：
+
+- `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename
+- `goal-group:<gid>` —— 一个 goal 一个容器卡
+- `goal-group:<gid>:step:<stepID>` —— goal 容器内的 step 行
 - `ctx:user-request` —— task 请求气泡
-- `ctx:user-request:file:<url|idx>` —— 附件
+- `ctx:user-request:text` / `ctx:user-request:file:<url|idx>` —— 请求内容 / 附件（作为 `parts` 项，不是独立卡）
+- `interaction-card:<messageID>` —— synthetic interaction 卡（认得 session 就挂 session；否则作为 orphan 出现在顶层）
+- `synthetic:<messageID>` —— chat.ts 的 pending / optimistic 气泡
+- `fidelity:<taskID>` —— requirements fidelity 评审卡（稳定 per-task，upsert；挂在 requirements session 下，绝不逃逸到顶层）
+
+tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts 内通过 `toolToCardNode` 瞬态构造，始终嵌在 parent card body 内——因此没有 escape 风险，也不在本规则表内。
+
+**顶层 order 白名单**（`rebuildTopLevelOrder` 只推这些 id 进 `cardTreeStore.order`）：
+
+- `ctx:user-request`
+- 唯一 `<stage>:session:<rootSID>`（stage=assistant 的 orchestrator 根）
+- `goal-group:<gid>`
+- 无 session 容器的 orphan `interaction-card:*`
+- `synthetic:*`（真实 session 到达前临时存在）
+
+任何其它 kind 出现在顶层都是 bug。`rebuildTopLevelOrder` 对非 assistant 的 rootSession 直接 throw（与 `applyEvent` 对未知事件类型 throw 一致），避免像 fidelity 卡逃逸那样的症状被掩盖。
 
 不再用"依据当前 shape 计算"的 id，全部在事件到达瞬间确定。
 
@@ -219,7 +234,7 @@ status, parts[], children[], ...`），类型定义挪到 `store/card-tree.ts`�
 | 风险 | 缓解 |
 |---|---|
 | CardNode shape 里有些字段（contextTokens）依赖跨消息聚合 | 新 store 节点上用 getter 或 derived field，读取时从 parts 聚合 |
-| Interaction 归属逻辑复杂（orphan vs 已知 session） | tree-writer 里依据 sessionID 直接路由；未知 session → 挂到顶层 `ctx:orphan-interaction:<id>` 卡 |
+| Interaction 归属逻辑复杂（orphan vs 已知 session） | tree-writer 里依据 sessionID 直接路由；未知 session → 作为 `interaction-card:<messageID>` 留在顶层 order 的 orphan 通道 |
 | chat.ts 的 pending 气泡同步写（optimistic update） | 写入专属 `pending:<requestID>` 卡；真实 session 到达时按 requestID 关联替换 |
 | 测试套件大幅重写 | 测试是为架构服务，不是相反 —— 按新架构重写基线测试 |
 | board.ts 里 interactionMapping 被多个面板消费 | Board.tsx 改成直接读 board.interactions + cardTreeStore（无中间层） |
