@@ -6,17 +6,13 @@
 // synthetic `Message` objects that flow through the same CardParts renderer
 // as regular messages.
 //
-// The routing rule is simple: an interaction whose `sessionID` matches a
-// known agent card is "claimed" by that card (its synthetic messages are
-// merged into the card's message list). Interactions without a sessionID, or
-// whose session isn't represented by any card, fall back to the task-level
-// `userContextMessages` slice so they are still visible — never silently
-// dropped.
+// The routing rule: an interaction whose `sessionID` matches a known agent
+// card is "claimed" by that card; interactions without a sessionID (or whose
+// session has no card yet) are returned as "unclaimed" so the caller can
+// surface them separately.
 //
-// Keeping this logic here (rather than duplicating it in both
-// `computeAgentCards` and `buildUserContextMessages`) guarantees both paths
-// agree on what "claimed" means and what a synthetic message for a given
-// interaction looks like.
+// tree-writer and the message store both consume this module so that both
+// paths agree on what "claimed" means and on the synthetic-message shape.
 
 import {
   syntheticTextMessage,

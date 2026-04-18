@@ -17,7 +17,7 @@ import {
   setMessages,
   mergeLoadedConversationMessages,
 } from "../store/messages";
-import { boardStore, setTasksData, loadBoard } from "../store/board";
+import { boardStore, setTasksData, loadBoard, loadTasks } from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
 import { workspaceMode } from "./workspace";
 import {
@@ -64,6 +64,50 @@ function currentTaskSessionID(): string {
     )?.task?.sessionID ||
     ""
   );
+}
+
+export function classifyPanelMessageTarget(input: {
+  selectedTaskID?: string;
+  boardTaskID?: string;
+  tasks?: any[];
+}): "create" | "task" | "reload" | "orphan" {
+  const selectedTaskID = String(input.selectedTaskID || "").trim();
+  if (!selectedTaskID) return "create";
+  if (selectedTaskID === String(input.boardTaskID || "").trim()) return "task";
+  const tasks = Array.isArray(input.tasks) ? input.tasks : [];
+  return tasks.some((item: any) => item?.task?.id === selectedTaskID)
+    ? "reload"
+    : "orphan";
+}
+
+async function resolvePanelMessageTaskID(): Promise<string> {
+  const selectedTaskID = String(boardStore.selectedTaskID || "").trim();
+  if (!selectedTaskID) return "";
+
+  let target = classifyPanelMessageTarget({
+    selectedTaskID,
+    boardTaskID: boardStore.board?.task?.id,
+    tasks: boardStore.tasks,
+  });
+
+  if (target === "orphan") {
+    await loadTasks();
+    target = classifyPanelMessageTarget({
+      selectedTaskID,
+      boardTaskID: boardStore.board?.task?.id,
+      tasks: boardStore.tasks,
+    });
+  }
+
+  if (target === "task") return selectedTaskID;
+
+  if (target === "reload") {
+    await selectTask(selectedTaskID);
+    return String(boardStore.selectedTaskID || "").trim();
+  }
+
+  await selectTask("");
+  return "";
 }
 
 // ── Public: conversationTarget ──
@@ -456,37 +500,38 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
     aborted: false,
     manualAbort: false,
   };
-  setConnectionStatus("online");
-  setChatRequest(request as any);
   try {
+    const taskID = await resolvePanelMessageTaskID();
+    setConnectionStatus("online");
+    setChatRequest(request as any);
     // If no task is selected, create a new task via direct API (no LLM round-trip)
-    if (!boardStore.selectedTaskID) {
-      const taskID = await createTask({
+    if (!taskID) {
+      const createdTaskID = await createTask({
         text,
         attachments,
         metadata: meta,
         signal: controller.signal,
         budget: draftBudget(),
       });
-      if (taskID) {
-        await selectTask(taskID);
-        return { task_id: taskID };
+      if (createdTaskID) {
+        await selectTask(createdTaskID);
+        return { task_id: createdTaskID };
       }
       throw new Error("Task creation returned no task_id");
     }
     // Completed tasks → create a follow-up task (the previous one is done).
     const taskStatus = boardStore.board?.task?.status;
     if (taskStatus === "completed") {
-      const taskID = await createTask({
+      const createdTaskID = await createTask({
         text,
         attachments,
         metadata: meta,
         signal: controller.signal,
         budget: draftBudget(),
       });
-      if (taskID) {
-        await selectTask(taskID);
-        return { task_id: taskID };
+      if (createdTaskID) {
+        await selectTask(createdTaskID);
+        return { task_id: createdTaskID };
       }
       throw new Error("Task creation returned no task_id");
     }
@@ -495,7 +540,7 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
     // The task's own agent handles intent (inject into running executor,
     // record as operator note, or restart a stopped task).
     const result = await apiJson(
-      `task/${encodeURIComponent(boardStore.selectedTaskID)}/message`,
+      `task/${encodeURIComponent(taskID)}/message`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

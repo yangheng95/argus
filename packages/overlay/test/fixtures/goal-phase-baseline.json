@@ -1,0 +1,207 @@
+{
+  "nodes": {
+    "architect:session:ses_architect": {
+      "childIDs": [],
+      "id": "architect:session:ses_architect",
+      "kind": "agent",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_architect_text",
+          "text": "Defined the system contracts.",
+          "type": "text"
+        }
+      ],
+      "round": 0,
+      "stage": "architect",
+      "status": "running",
+      "title": "chat.role.architect"
+    },
+    "assistant:session:ses_root_orch": {
+      "childIDs": [
+        "requirements:session:ses_requirements",
+        "design-analyst:session:ses_design",
+        "architect:session:ses_architect"
+      ],
+      "id": "assistant:session:ses_root_orch",
+      "kind": "agent",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_orch_reason",
+          "text": "Analyzing the request.",
+          "type": "reasoning"
+        },
+        {
+          "id": "part_orch_text",
+          "text": "Will plan the work.",
+          "type": "text"
+        }
+      ],
+      "round": 0,
+      "stage": "assistant",
+      "status": "running",
+      "title": "chat.role.assistant"
+    },
+    "build:session:ses_goal_build": {
+      "childIDs": [
+        "planner:session:ses_planner"
+      ],
+      "id": "build:session:ses_goal_build",
+      "kind": "agent",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_build_text",
+          "text": "Build passed.",
+          "type": "text"
+        }
+      ],
+      "round": 0,
+      "stage": "build",
+      "status": "running",
+      "title": "chat.role.build"
+    },
+    "ctx:user-request": {
+      "childIDs": [],
+      "id": "ctx:user-request",
+      "kind": "message",
+      "parts": [
+        {
+          "id": "ctx:user-request:text",
+          "text": "复刻网页，包含完整前后端和组件交互",
+          "type": "text"
+        }
+      ],
+      "title": "chat.role.user"
+    },
+    "design-analyst:session:ses_design": {
+      "childIDs": [],
+      "id": "design-analyst:session:ses_design",
+      "kind": "agent",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_design_text",
+          "text": "Captured the visual system.",
+          "type": "text"
+        }
+      ],
+      "round": 0,
+      "stage": "design-analyst",
+      "status": "running",
+      "title": "chat.role.design-analyst"
+    },
+    "executor:session:ses_goal_exec": {
+      "childIDs": [
+        "build:session:ses_goal_build",
+        "interaction-card:synthetic:system:1776000004500:1pjr37f"
+      ],
+      "id": "executor:session:ses_goal_exec",
+      "kind": "agent",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_exec_tool_1",
+          "output": "added 42 packages",
+          "tool": "bash",
+          "toolStatus": "completed",
+          "type": "tool"
+        }
+      ],
+      "round": 0,
+      "stage": "executor",
+      "status": "running",
+      "title": "chat.role.executor"
+    },
+    "goal-group:goal_fixture_g1": {
+      "childIDs": [
+        "goal-group:goal_fixture_g1:step:build"
+      ],
+      "id": "goal-group:goal_fixture_g1",
+      "kind": "goal",
+      "parts": [],
+      "round": 1,
+      "stage": "goal",
+      "status": "completed",
+      "subtitle": "xture_g1",
+      "title": "Scaffold project"
+    },
+    "goal-group:goal_fixture_g1:step:build": {
+      "childIDs": [
+        "executor:session:ses_goal_exec"
+      ],
+      "id": "goal-group:goal_fixture_g1:step:build",
+      "kind": "step",
+      "parts": [],
+      "stage": "build",
+      "status": "completed",
+      "title": "Build"
+    },
+    "interaction-card:synthetic:system:1776000004500:1pjr37f": {
+      "childIDs": [],
+      "id": "interaction-card:synthetic:system:1776000004500:1pjr37f",
+      "kind": "message",
+      "parts": [
+        {
+          "text": "detail.pending_interactions",
+          "type": "text"
+        }
+      ],
+      "title": "chat.role.system"
+    },
+    "planner:session:ses_planner": {
+      "childIDs": [],
+      "id": "planner:session:ses_planner",
+      "kind": "agent",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_planner_text",
+          "text": "Planned the build sequence.",
+          "type": "text"
+        }
+      ],
+      "round": 0,
+      "stage": "planner",
+      "status": "running",
+      "title": "chat.role.planner"
+    },
+    "requirements:session:ses_requirements": {
+      "childIDs": [],
+      "id": "requirements:session:ses_requirements",
+      "kind": "agent",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_requirements_text",
+          "text": "Collected product requirements.",
+          "type": "text"
+        }
+      ],
+      "round": 0,
+      "stage": "requirements",
+      "status": "running",
+      "title": "chat.role.requirements"
+    }
+  },
+  "order": [
+    "ctx:user-request",
+    "assistant:session:ses_root_orch",
+    "goal-group:goal_fixture_g1"
+  ]
+}

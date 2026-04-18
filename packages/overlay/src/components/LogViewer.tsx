@@ -541,7 +541,21 @@ export function LogViewer(props: LogViewerProps) {
         <div
           id="logViewerBody"
           class="log-viewer"
-          ref={(el) => onCleanup(setupAutoScroll(el))}
+          ref={(el) => {
+            // setupAutoScroll requires an AutoScrollOptions object. The prior
+            // `setupAutoScroll(el)` call (missing opts) threw at first scroll:
+            // `Cannot read properties of undefined (reading 'isTracking')`
+            // which aborted the entire component tree render, leaving the
+            // overlay blank and the benchmark's puppeteer assertion
+            // (`Overlay did not render streamed task output within 120s`)
+            // failing. Log panels want always-follow behaviour; provide a
+            // constant tracker + no-op onUserScrollUp.
+            const ctrl = setupAutoScroll(el, {
+              isTracking: () => true,
+              onUserScrollUp: () => {},
+            });
+            onCleanup(() => ctrl.cleanup());
+          }}
         >
           <Show
             when={entries().length > 0}

@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
-import type { CardNode } from "../utils/card-tree";
+import type { CardNode } from "../store/card-tree";
+import { cardTreeStore } from "../store/card-tree";
 import { defaultExpandedForNode } from "../utils/card-tree";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { CardHeader } from "./CardHeader";
@@ -102,11 +103,31 @@ export function Card(props: { node: CardNode; depth: number }) {
             <CardParts parts={props.node.parts} depth={props.depth} />
           </Show>
 
-          {/* Recursive children */}
-          <Show when={(props.node.children?.length ?? 0) > 0}>
+          {/* Recursive children.
+              Store-backed cards use `childIDs` — the renderer dereferences
+              each id through the `cardTreeStore.cards` proxy so targeted
+              writes to a single descendant don't re-run any intermediate
+              memo. Transient cards (tool promotion in CardParts) still
+              carry inline `children`; when both are set `childIDs` wins. */}
+          <Show
+            when={(props.node.childIDs?.length ?? 0) > 0}
+            fallback={
+              <Show when={(props.node.children?.length ?? 0) > 0}>
+                <div class="card__children">
+                  <For each={props.node.children}>
+                    {(child) => <Card node={child} depth={props.depth + 1} />}
+                  </For>
+                </div>
+              </Show>
+            }
+          >
             <div class="card__children">
-              <For each={props.node.children}>
-                {(child) => <Card node={child} depth={props.depth + 1} />}
+              <For each={props.node.childIDs}>
+                {(id) => (
+                  <Show when={cardTreeStore.cards[id]}>
+                    <Card node={cardTreeStore.cards[id]!} depth={props.depth + 1} />
+                  </Show>
+                )}
               </For>
             </div>
           </Show>

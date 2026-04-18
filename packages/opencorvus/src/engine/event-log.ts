@@ -24,7 +24,6 @@ const LOGGED_TYPES = new Set([
   "engine.run.updated",
   "engine.run.progress",
   "engine.run.output",
-  "engine.agent.updated",
   "engine.interaction.requested",
   "engine.interaction.resolved",
   "engine.delivery.ready",
@@ -137,55 +136,6 @@ export namespace EngineEventLog {
   }
 
   // -- Event routing --
-
-  function handleAgentUpdated(ctx: TaskCtx, p: Record<string, unknown>) {
-    const stage = String(p.stage ?? "")
-    const kind = String(p.kind ?? "")
-    const summary = String(p.summary ?? "")
-    const S = stage.toUpperCase()
-
-    if (kind === "error") {
-      flushStage(ctx); ctx.stage = null
-      tl(ctx, `[${elapsed(ctx)}] ${S} ✗ ${summary}`)
-      nd(ctx, { at: new Date().toISOString(), elapsed_ms: Date.now() - ctx.t0, type: "engine.agent.updated", stage, kind, summary })
-      return
-    }
-
-    if (kind !== "status") return // drop message_delta, tool_delta, etc.
-
-    // "Spec agent → toolName" — accumulate
-    if (summary.includes("→")) {
-      const tool = summary.split("→").pop()!.trim()
-      if (!ctx.stage) ctx.stage = { stage, startAt: Date.now(), tools: new Map(), toolOrder: [] }
-      const existing = ctx.stage.tools.get(tool)
-      if (existing) { existing.count++; existing.lastAt = Date.now() }
-      else { ctx.stage.tools.set(tool, { count: 1, firstAt: Date.now(), lastAt: Date.now() }); ctx.stage.toolOrder.push(tool) }
-      return
-    }
-
-    // "finished/completed" — flush accumulated tools, then mark end
-    if (/finished|completed/i.test(summary)) {
-      const startAt = ctx.stage?.startAt
-      flushStage(ctx); ctx.stage = null
-      const dur = startAt ? ` (${((Date.now() - startAt) / 1000).toFixed(0)}s)` : ""
-      tl(ctx, `[${elapsed(ctx)}] ${S} ▸ finished${dur}`)
-      nd(ctx, { at: new Date().toISOString(), elapsed_ms: Date.now() - ctx.t0, type: "engine.agent.updated", stage, kind, summary })
-      return
-    }
-
-    // "started" — begin new stage
-    if (/started|start$/i.test(summary)) {
-      flushStage(ctx); ctx.stage = null
-      ctx.stage = { stage, startAt: Date.now(), tools: new Map(), toolOrder: [] }
-      tl(ctx, `[${elapsed(ctx)}] ${S} ▸ started`)
-      nd(ctx, { at: new Date().toISOString(), elapsed_ms: Date.now() - ctx.t0, type: "engine.agent.updated", stage, kind, summary })
-      return
-    }
-
-    // other status (e.g. "Goal compiler classifying 12 requirements")
-    tl(ctx, `[${elapsed(ctx)}] ${S} ▸ ${summary}`)
-    nd(ctx, { at: new Date().toISOString(), elapsed_ms: Date.now() - ctx.t0, type: "engine.agent.updated", stage, kind, summary })
-  }
 
   function handleRunProgress(ctx: TaskCtx, p: Record<string, unknown>) {
     const pt = String(p.type ?? "")
@@ -305,7 +255,6 @@ export namespace EngineEventLog {
 
       const ctx = tasks.get(taskID)!
 
-      if (type === "engine.agent.updated") return handleAgentUpdated(ctx, p)
       if (type === "engine.run.progress") return handleRunProgress(ctx, p)
       if (type === "engine.run.output") return // text deltas — skip
       handleMilestone(ctx, type, p)

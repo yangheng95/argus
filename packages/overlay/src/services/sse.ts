@@ -13,7 +13,7 @@
 import { apiUrl } from "./api";
 import { clearEventQueue, syncTask, setSseConnected } from "../store/messages";
 import { boardStore, loadBoard } from "../store/board";
-import { routeSSEEvent, handleEventStreamEvent } from "./events";
+import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events";
 
 let sseSource: EventSource | null = null;
 let sseRetryTimer: any = null;
@@ -36,19 +36,29 @@ export function startSSE(taskID: string) {
   };
 
   source.onmessage = (e) => {
+    // Per 07-panel-reactivity.md constraint 1 and root CLAUDE.md rule 1:
+    // tree-writer's `let it crash` is meaningless if sse.ts's onmessage
+    // silently swallows the throw. Split the try/catch:
+    //   (a) JSON.parse error → benign (malformed chunk), just skip
+    //   (b) router / dispatch error → surface via console.error (crash visibly)
+    //
+    // Without (b), every `throw new Error("tree-writer: unhandled event type …")`
+    // disappeared and the operator had no way to know why the conversation
+    // panel was empty.
+    let event: any;
     try {
-      const event = JSON.parse(e.data);
-      if (
-        event.type === "task.heartbeat" ||
-        event.type === "task.connected"
-      )
-        return;
+      event = JSON.parse(e.data);
+    } catch {
+      return;
+    }
+    if (event.type === "task.heartbeat" || event.type === "task.connected") return;
+    try {
       const handled = routeSSEEvent(event);
       if (!handled) {
         handleEventStreamEvent(event);
       }
-    } catch {
-      // malformed JSON — skip
+    } catch (err) {
+      console.error("[sse] dispatch error for event", event?.type, err, event);
     }
   };
 
@@ -107,12 +117,22 @@ export function startTaskListSSE() {
   const source = new EventSource(url);
   taskListSource = source;
   source.onmessage = (e) => {
+    // Same split as startSSE above: parse errors silent, dispatch errors surfaced.
+    let event: any;
     try {
-      const event = JSON.parse(e.data);
-      if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return;
-      handleEventStreamEvent(event);
+      event = JSON.parse(e.data);
     } catch {
-      // malformed — skip
+      return;
+    }
+    if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return;
+    try {
+      // Task-list stream emits only `{type, taskID, sequence}` — not the
+      // full task-scope event shape. Route to the notification handler,
+      // NOT handleEventStreamEvent (which feeds tree-writer and would
+      // throw on every missing payload).
+      handleTaskListNotification(event);
+    } catch (err) {
+      console.error("[task-list-sse] dispatch error for event", event?.type, err, event);
     }
   };
   source.onerror = () => {

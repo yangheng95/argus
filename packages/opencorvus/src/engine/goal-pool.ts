@@ -50,7 +50,6 @@ import { buildGoalPrompt, createBuildSession, createGoalSession } from "@/goal/r
 import { sessionStreamHooks } from "@/agent/runtime"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
-import { markGoalWorkflowStep } from "./workflow"
 import { projectExecutorEventToSession } from "./runtime"
 import { MemoryInjection } from "@/memory/injection"
 import { TaskPlan } from "@/memory/task-plan"
@@ -267,13 +266,11 @@ export class GoalPool {
     const sessionID = task.session_id
     if (!sessionID) throw new Error(`Task ${task.id} has no session`)
 
-    // ── 1. Mark goal as running ──
-    Database.use(db =>
-      db.update(EngineGoalTable)
-        .set({ status: "running", time_updated: Date.now() })
-        .where(eq(EngineGoalTable.id, entry.goal.id))
-        .run(),
-    )
+    // ── 1. engine_goal.status is derived from goal_run chain tip; see
+    // engine/goal-status.ts. We do NOT write "running" here — the upcoming
+    // createGoalRun(queued) + pipeline/executor.ts updateGoalRun(running)
+    // will drive syncGoalStatus → goal.status=running within a few hundred ms.
+    //
 
     let worktreeDir: string | undefined
     let goalRun: GoalRunRow | undefined
@@ -314,7 +311,6 @@ export class GoalPool {
       // front and nest planner + executor as its children — this matches
       // the overlay's goalToNode lookup (step "build" → stage "build") and
       // surfaces the plan/execute sub-phases beneath a single build card.
-      await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "running").catch(() => undefined)
       const buildSession = await createBuildSession(
         task as any,
         entry.goal as any,
@@ -382,7 +378,6 @@ export class GoalPool {
           // execution sub-phase reports completion/failure below.
         } catch (planErr) {
           // Plan failure terminates the build step.
-          await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "failed").catch(() => undefined)
           throw planErr
         } finally {
           await planHooks.flush()
@@ -504,7 +499,6 @@ export class GoalPool {
 
       // Build step already running from plan sub-phase above; this re-mark
       // is a no-op but keeps the call site for parity with the failure paths.
-      await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "running").catch(() => undefined)
       const executor = ExecutorRegistry.createInstance(run.executor)
       const submission = await executor.submit({
         sessionID: goalSession.id,
@@ -609,28 +603,32 @@ export class GoalPool {
       await stallWatcher.catch(() => {})
 
       if (signal.aborted) {
-        await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "failed").catch(() => undefined)
         return { goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title, status: "failed", error: "aborted", attempts: 1 }
       }
 
       // ── 8. Determine goal status from executor result ──
-      // No delivery OR no commit → "failed".
-      // commitRef is the single source of truth: deliveryFromSnapshot only
-      // produces one when it actually committed file changes, so "no commitRef"
-      // ≡ "zero file changes". A goal that produced nothing is not "passed" —
-      // the executor either crashed, hung on permissions, or genuinely did
-      // nothing.
+      // Any of the following is a goal failure:
+      //   • pipeline reported no delivery at all
+      //   • Snapshot produced no commit ref (no stage-able changes)
+      //   • commit exists but diffs are empty (executor committed no-op)
+      // Each of these means the executor produced nothing actionable, and we
+      // MUST NOT treat it as passed — silent empty-delivery was the root of
+      // the chgZ-style hang + the benchmark 006/007 stall: a permission hang
+      // or LLM crash surfaces here and nowhere else. Let it crash loud.
       const now = Date.now()
-      if (!delivery || !delivery.commitRef) {
+      if (!delivery || !delivery.commitRef || delivery.diffs.length === 0) {
         const failReason = !delivery
           ? (pipelineError ?? "Executor completed without delivery (no error detail)")
-          : (pipelineError ?? "Executor completed but produced no commit (zero file changes)")
+          : !delivery.commitRef
+            ? (pipelineError ?? "Executor completed but produced no commit (zero file changes)")
+            : (pipelineError ?? "Executor committed but produced zero file diffs (no-op commit)")
         if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
-        Database.use(db => db.update(EngineGoalTable)
-          .set({ status: "failed", time_updated: now })
-          .where(eq(EngineGoalTable.id, entry.goal.id)).run())
+        // goal_run is in `evaluating` here (pipeline/executor.ts set it);
+        // settle it to `failed` — engine_goal.status is derived, no direct UPDATE.
+        if (goalRun) {
+          updateGoalRun(goalRun.id, { status: "failed", error: failReason })
+        }
 
-        await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "failed").catch(() => undefined)
         EngineProtocol.emit(Event.GoalFailed, {
           taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
         }, { source: "executor" }).catch(() => {})
@@ -691,10 +689,8 @@ export class GoalPool {
           if (!verdict.pass) {
             const failReason = verdict.reasoning || `Per-goal evaluator rejected: ${verdict.verdict}`
             if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
-            Database.use(db => db.update(EngineGoalTable)
-              .set({ status: "failed", time_updated: now })
-              .where(eq(EngineGoalTable.id, entry.goal.id)).run())
-            await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "failed").catch(() => undefined)
+            // Settle goal_run → failed; engine_goal.status derives from it.
+            updateGoalRun(goalRun.id, { status: "failed", error: failReason })
             EngineProtocol.emit(Event.GoalFailed, {
               taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
             }, { source: "evaluator" }).catch(() => {})
@@ -713,10 +709,7 @@ export class GoalPool {
             goalID: entry.goal.id, error: msg,
           })
           if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
-          Database.use(db => db.update(EngineGoalTable)
-            .set({ status: "failed", time_updated: now })
-            .where(eq(EngineGoalTable.id, entry.goal.id)).run())
-          await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "failed").catch(() => undefined)
+          updateGoalRun(goalRun.id, { status: "failed", error: `evaluator threw: ${msg}` })
           EngineProtocol.emit(Event.GoalFailed, {
             taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: evaluator threw: ${msg}`,
           }, { source: "evaluator" }).catch(() => {})
@@ -727,14 +720,14 @@ export class GoalPool {
         }
       }
 
-      // Executor produced delivery (and evaluator passed if enabled) → mark goal passed.
-      // `delivery.commitRef` is guaranteed truthy here: the step-8 guard above
-      // returns "failed" for !delivery.commitRef before reaching this branch.
-      Database.use(db => db.update(EngineGoalTable)
-        .set({ status: "passed", time_updated: now })
-        .where(eq(EngineGoalTable.id, entry.goal.id)).run())
+      // Executor produced delivery (and evaluator passed if enabled). Settle
+      // the goal_run from `evaluating` → `completed`; engine_goal.status is
+      // derived (goal-status.ts). The step-8 guard above has already returned
+      // "failed" for !delivery / !commitRef / empty diffs.
+      if (goalRun) {
+        updateGoalRun(goalRun.id, { status: "completed" })
+      }
 
-      await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "completed").catch(() => undefined)
       EngineProtocol.emit(Event.GoalPassed, {
         taskID: task.id, goalID: entry.goal.id, summary: entry.goal.title,
       }, { source: "executor" }).catch(() => {})
@@ -783,9 +776,14 @@ export class GoalPool {
         }
       }
 
-      Database.use(db => db.update(EngineGoalTable)
-        .set({ status: "failed", time_updated: Date.now() })
-        .where(eq(EngineGoalTable.id, entry.goal.id)).run())
+      // If no goal_run exists (worktree/planning threw before createGoalRun),
+      // engine_goal.status has nothing to derive from — explicit cascade-style
+      // write. With a goal_run the updateGoalRun above already drove syncGoalStatus.
+      if (!goalRun) {
+        Database.use(db => db.update(EngineGoalTable)
+          .set({ status: "failed", time_updated: Date.now() })
+          .where(eq(EngineGoalTable.id, entry.goal.id)).run())
+      }
 
       return {
         goalID: entry.goal.id, goalRunID: goalRun?.id ?? "", title: entry.goal.title,

@@ -22,6 +22,7 @@ import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatu
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromSnapshot } from "@/goal/runner"
+import { extractGoalReport } from "@/tool/goal-report"
 import { Instance } from "@/project/instance"
 
 import type { GoalContract, GoalContractFields, PipelineEvent, PipelineDelivery, PipelineDeps } from "./types"
@@ -111,15 +112,21 @@ export async function* runGoalPipeline(
     const deliveryID = Identifier.ascending("delivery")
     persistDelivery({
       task, run, goalRunID, deliveryID,
-      delivery: { summary: delivery.summary, commitRef: delivery.commitRef, diffs: delivery.diffs },
+      delivery: { summary: delivery.summary, commitRef: delivery.commitRef, diffs: delivery.diffs, report: delivery.report },
       now: Date.now(),
     })
 
-    // Mark goal_run completed — NOT goal.status (Orchestrator decides after eval)
-    updateGoalRun(goalRunID, { status: "completed", time_completed: Date.now() })
+    // Executor finished — move to `evaluating`, not `completed`. goal-pool is
+    // the only caller; it either runs the per-goal evaluator and then settles
+    // the row to completed/failed, or (when per_goal_enabled=false) immediately
+    // marks completed after the empty-delivery guard. Keeping the row in
+    // `evaluating` at this point means engine_goal.status can be derived from
+    // goal_run alone (Phase 4 invariant) — a delivered-but-rejected goal no
+    // longer requires a separate UPDATE on engine_goal.
+    updateGoalRun(goalRunID, { status: "evaluating" })
     updateGoalRunExecutorSessionStatus(goalRunID, "completed")
 
-    log.info("goal_run completed", {
+    log.info("goal_run moved to evaluating", {
       goalRunID, goalID: goal.id, files: delivery.diffs.length,
     })
 
@@ -161,7 +168,7 @@ async function* streamExecutorEvents(
     if (status.status === "failed") {
       return { error: status.error ?? "Executor failed (no event stream)" }
     }
-    return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
+    return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef, sessionID) }
   }
 
   // Completion detection (multi-signal):
@@ -289,15 +296,28 @@ async function* streamExecutorEvents(
   if (signal.aborted) return { error: "Execution aborted" }
 
   // idleGraceExceeded: session.idle fired → LLM turn genuinely done, but
-  // the queue-task callback chain is stuck. Extract delivery normally.
+  // the queue-task callback chain is stuck. Previously this path called
+  // extractDelivery() under the assumption that "idle means finished". That
+  // assumption is a silent-pass: a goal session can be idle because it hung
+  // on a permission prompt, crashed mid-thought, or genuinely completed —
+  // we cannot tell from the idle signal alone. Returning an error here
+  // forces goal-pool's empty-delivery guard to surface the failure to the
+  // Orchestrator, which can then decide to retry, modify, or fail the goal.
+  // Extracting a possibly-empty snapshot and calling it "passed" was the
+  // mechanism behind the 006/007 benchmark stall.
   if (idleGraceExceeded) {
-    log.info("session idle grace exceeded — extracting delivery", { goalRunID })
+    log.warn("session idle grace exceeded — treating as failure (no silent extract)", { goalRunID })
     await finalizeQueueTaskRow({
       queueTaskID,
-      status: "completed",
+      status: "failed",
       goalRunID,
     })
-    return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
+    return {
+      error:
+        "Session idle-grace window exceeded without queue-task completion — " +
+        "callback chain is stuck or session hung mid-turn. " +
+        "Goal is marked failed; Orchestrator decides whether to retry.",
+    }
   }
 
   // inactivityTimeoutExceeded: no events for the applicable threshold. The
@@ -340,7 +360,7 @@ async function* streamExecutorEvents(
     return { error: failError }
   }
 
-  return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef) }
+  return { delivery: await extractDelivery(goalRunID, workDir, goal.id, baseRef, sessionID) }
 }
 
 // ---------------------------------------------------------------------------
@@ -363,6 +383,13 @@ async function extractDelivery(
   workDir: string | undefined,
   goalID: string,
   baseRef: string,
+  // `goal_report` is a tool call persisted on the user-facing session
+  // (sessionID, prefix "ses"), not the executor protocol session
+  // (executorSessionID, prefix "exs"). extractGoalReport calls
+  // `Session.messages({sessionID})` which Zod-validates the id prefix —
+  // passing the executor session id caused every goal to fail with
+  // `Invalid string: must start with "ses"` (iter-6).
+  sessionID: string,
 ): Promise<PipelineDelivery> {
   if (!workDir) {
     throw new Error(`extractDelivery: workDir is required (goalRunID=${goalRunID}, goalID=${goalID}). Per-goal dispatch must create a worktree before running the executor — an absent worktree is a dispatch-time bug, not a runtime condition.`)
@@ -371,13 +398,20 @@ async function extractDelivery(
     directory: workDir,
     fn: () => deliveryFromSnapshot(baseRef, `Goal ${goalID.slice(-8)}`),
   })
+  // Executor contract: goal_report is mandatory and terminal. extractGoalReport
+  // throws on missing / duplicated / invalid — those are failures, not fallback
+  // conditions. Attach the parsed report to the delivery so the delivery agent
+  // can adversarially cross-check its claims against the diff.
+  const report = await extractGoalReport(sessionID)
   log.info("delivery extracted", {
     goalRunID,
     files: result.delivery.diffs.length,
     baseRef,
     mergeRef: result.mergeRef,
+    reportFiles: report.files_changed.length,
+    reportDecisions: report.design_decisions.length,
   })
-  return result.delivery
+  return { ...result.delivery, report }
 }
 
 // ---------------------------------------------------------------------------

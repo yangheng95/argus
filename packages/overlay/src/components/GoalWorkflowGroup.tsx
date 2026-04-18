@@ -1,11 +1,11 @@
 /**
  * GoalWorkflowGroup — per-goal collapsible card with step-level detail.
  *
- * Each goal shows its workflow steps (plan → execute → eval).
+ * Each goal shows its workflow steps as emitted by board.goalWorkflows[].
  * Each step is a mini-container that can show:
  *   - Status indicator (pending/running/completed/failed)
- *   - Agent card messages (when available, e.g., planner/executor/evaluator output)
- *   - Evaluation check details (for eval step)
+ *   - Agent card messages for the matching step
+ *   - Structured payload detail (plan nodes, changed files, checks, etc.)
  *
  * This bridges the workflow step tracking system and the live agent event system:
  *   - Step status comes from board.goalWorkflows[].steps[] (structured progress)
@@ -18,6 +18,7 @@ import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { orderedMessageParts } from "../utils/message";
 import { openExecutorSessionDialog } from "../services/dialog";
+import type { StepPayload } from "../store/card-tree";
 
 // ── Types ──
 
@@ -29,19 +30,6 @@ import { openExecutorSessionDialog } from "../services/dialog";
  * step now carries its own data so the frontend never has to cross-
  * reference task-level state.
  */
-interface GoalStepPayload {
-  // plan
-  planNodes?: Array<{ id: string; title: string; brief: string; orderIndex: number }>;
-  // execute
-  executorSessionID?: string;
-  changedFiles?: string[];
-  diffStats?: { files?: number; additions?: number; deletions?: number };
-  // eval
-  checks?: Array<{ name: string; status: string; evidence?: string; family?: string }>;
-  evalSummary?: string;
-  verdict?: string;
-}
-
 interface GoalStep {
   stepID: string;
   label: string;
@@ -51,7 +39,7 @@ interface GoalStep {
   /** Summary detail: e.g., "5 steps" for plan, "12 files changed" for execute, "3/4 checks passed" for eval */
   summary?: string;
   /** Structured per-step content — backend-driven, see GoalStepPayload */
-  payload?: GoalStepPayload;
+  payload?: StepPayload;
 }
 
 interface AcceptanceScorerLike {
@@ -96,7 +84,7 @@ interface GoalWorkflowGroupProps {
   goal: GoalWorkflow;
   /** 1-based display index shown in the header (e.g. #3) */
   goalIndex?: number;
-  /** Agent card messages grouped by step: { plan: msg[], execute: msg[], eval: msg[] } */
+  /** Agent card messages grouped by canonical stepID. */
   stepMessages?: Record<string, any[]>;
   defaultOpen?: boolean;
   /** Optional: edit the goal (title + detail). */

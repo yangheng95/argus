@@ -118,6 +118,21 @@ export interface PipelineDelivery {
    * source of truth for "which files changed".
    */
   diffs: Array<{ file: string; before?: string; after?: string; status?: string; additions?: number; deletions?: number; [key: string]: unknown }>
+  /**
+   * Structured implementation report emitted by the goal executor via the
+   * `goal_report` tool call. Authoritative source for the delivery agent's
+   * adversarial cross-check: `implementation_approach` is matched against
+   * the diff and `design_decisions[].reason` is challenged.
+   *
+   * Invariant: always present on a PipelineDelivery freshly produced by
+   * `extractDelivery()`. `extractGoalReport()` throws when the executor
+   * skipped the tool call, so a missing report maps to a failed goal, never
+   * to a silent pass. The field is typed optional only because the
+   * orchestrator's aggregated-re-evaluation path synthesizes a narrow
+   * PipelineDelivery (summary + diffs) to feed `evaluateGoal`; that synthetic
+   * shape has no executor session to read a report from.
+   */
+  report?: import("@/delivery/checks").GoalReportClaim
 }
 
 // ---------------------------------------------------------------------------

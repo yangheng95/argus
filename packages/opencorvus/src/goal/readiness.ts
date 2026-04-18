@@ -9,14 +9,37 @@ function goalNodes(nodes: PlanNodeRow[]) {
   return nodes.filter((node): node is PlanNodeRow & { goal_id: string } => node.kind === "goal" && !!node.goal_id)
 }
 
+/**
+ * The "tips" of the supersede chain — goal_runs that are NOT pointed at by
+ * any other goal_run's supersede_of. These are the only rows whose status
+ * is considered authoritative by readiness / dispatch / dependency checks.
+ * Ancestors are frozen history; they cannot re-acquire authority.
+ *
+ * A retry inserts a new goal_run with supersede_of=<old terminal run.id>.
+ * The old row becomes a non-tip and is invisible to the filters below.
+ * This is the single mechanism that allows retry to re-dispatch without
+ * mutating the immutable goal_run FSM.
+ */
+function supersedeTips(goalRuns: GoalRunRow[]): GoalRunRow[] {
+  const supersededIDs = new Set<string>()
+  for (const r of goalRuns) {
+    const parent = (r as { supersede_of?: string | null }).supersede_of
+    if (parent) supersededIDs.add(parent)
+  }
+  return goalRuns.filter((r) => !supersededIDs.has(r.id))
+}
+
 function isGoalSatisfied(goal: GoalRow | undefined, goalRuns: GoalRunRow[]) {
   if (!goal) return false
   // system goals (setup/teardown) never block the pipeline regardless of outcome
   if (goal.source === "system") return true
   if (goal.priority === "advisory" && goal.status === "failed") return true
-  // Authoritative: any goal_run reaching "completed" satisfies the dep,
-  // regardless of what mutated goal.status afterwards.
-  return goalRuns.some((r) => r.goal_id === goal.id && doesGoalRunSatisfyGoal(r.status))
+  // Authoritative: a tip of this goal's supersede chain in a satisfies-goal
+  // status ("completed") means the dep is met. A completed run that was
+  // later superseded by a retry is NOT authoritative — the retry is the
+  // new head and its status is what counts.
+  const tips = supersedeTips(goalRuns.filter((r) => r.goal_id === goal.id))
+  return tips.some((r) => doesGoalRunSatisfyGoal(r.status))
 }
 
 export type GoalNodeEntry = { node: PlanNodeRow & { goal_id: string }; goal: GoalRow }
@@ -40,14 +63,14 @@ export function readyGoalNodes(
     const goal = goals.find((item) => item.id === node.goal_id)
     if (!goal) return []
     if (!isDispatchableGoal(goal)) return []
-    // Dispatch gate: skip if any goal_run for this goal is active or already completed.
-    // Dispatch dedup must treat "terminal-successful" the same as "in flight":
-    // a completed goal_run is done, don't redispatch. The orchestrator
-    // dispatch-gate (agent.ts) uses the narrower "live only" check so the
-    // TaskAgent still wakes up on completion — the two checks intentionally
-    // diverge now that `completed` is classified `terminal`, not `live`.
-    const hasDispatchedRun = goalRuns.some(
-      (r) => r.goal_id === goal.id && (isLiveGoalRunStatus(r.status) || doesGoalRunSatisfyGoal(r.status)),
+    // Dispatch gate operates on supersede-chain tips only — a retry-created
+    // goal_run (which supersedes a prior completed/failed row) makes the old
+    // row a non-tip and therefore invisible here. That way the new head's
+    // status alone decides dispatch: live or completed-tip → skip; no tips
+    // or only retriable tips → eligible (readiness then checks deps below).
+    const tips = supersedeTips(goalRuns.filter((r) => r.goal_id === goal.id))
+    const hasDispatchedRun = tips.some(
+      (r) => isLiveGoalRunStatus(r.status) || doesGoalRunSatisfyGoal(r.status),
     )
     if (hasDispatchedRun) return []
     const ready = (node.depends_on_ids ?? []).every((depID) => {
@@ -96,9 +119,11 @@ export function blockedGoalDiagnostics(
     if (!isDispatchableGoal(goal)) continue
     // Same rule as readyGoalNodes: a completed goal_run means the goal is
     // already satisfied — don't report its deps as "blocking", because the
-    // goal isn't waiting to dispatch, it's already done.
-    const alreadyDispatched = goalRuns.some(
-      (r) => r.goal_id === goal.id && (isLiveGoalRunStatus(r.status) || doesGoalRunSatisfyGoal(r.status)),
+    // goal isn't waiting to dispatch, it's already done. Uses supersede
+    // tips so a retry-superseded completion is NOT treated as satisfied.
+    const tips = supersedeTips(goalRuns.filter((r) => r.goal_id === goal.id))
+    const alreadyDispatched = tips.some(
+      (r) => isLiveGoalRunStatus(r.status) || doesGoalRunSatisfyGoal(r.status),
     )
     if (alreadyDispatched) continue
 

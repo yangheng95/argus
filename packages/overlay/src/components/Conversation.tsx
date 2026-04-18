@@ -1,106 +1,22 @@
-import { createMemo, For, Show, onMount, onCleanup, createEffect, createSignal } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import { For, Show, onMount, onCleanup, createSignal } from "solid-js";
 import { Card } from "./Card";
-import { toCardTree } from "../utils/card-tree";
-import type { CardNode } from "../utils/card-tree";
+import { cardTreeStore } from "../store/card-tree";
 import { t } from "../utils/i18n";
-import {
-  mainMessages,
-  userContextMessages,
-  agentCardItems,
-  combineConversation,
-} from "../utils/conversation";
 import { setupAutoScroll } from "../utils/dom-utils";
 
 // ── Conversation Component ──
-// Renders directly into the host container (e.g. #chatScroll).
-// The host element already has the correct CSS classes; this component
-// only renders children — no extra wrapper div.
 //
-// All conversation items route through a single unified <Card> primitive.
-// The CardNode tree is built by toCardTree() from messageStore output;
-// goal groups, agent stage cards, tool promotions and user / system
-// message bubbles are all recursive CardNodes — no legacy branching.
-
-// Collect all CardNode IDs recursively — used by the duplicate-detection
-// effect below to catch any rendering-layer bug that would otherwise be
-// invisible from the data layer.
-function collectAllIDs(nodes: CardNode[], out: string[] = []): string[] {
-  for (const n of nodes) {
-    out.push(n.id);
-    if (n.children && n.children.length > 0) collectAllIDs(n.children, out);
-  }
-  return out;
-}
+// Reads directly from `cardTreeStore`, the single reactive source of truth
+// maintained by `services/tree-writer.ts`. Each top-level card id in
+// `cardTreeStore.order` resolves to a CardNode via `cardTreeStore.cards[id]`;
+// `<Card>` then walks the card's `childIDs` via the same proxy dereference,
+// so targeted writes to any descendant update only that branch of the DOM.
+// See specs/new-arch/07-panel-reactivity.md for the design rationale.
 
 export function Conversation(props: { container: HTMLElement }) {
   const el = props.container;
 
-  // Three independent slices, each backed by its own createMemo so that
-  // - a chat-message arrival only re-runs `main` (not the agent-card path);
-  // - a board.interactions delta only re-runs `ctx`;
-  // - a goalWorkflows status flip only re-runs `cards`.
-  // The combine memo is cheap (merge + sort by time) and reuses element
-  // references from upstream when those slices haven't changed, so the
-  // downstream toCardTree memo also sees stable inputs in the no-change case.
-  const main = createMemo(() => mainMessages());
-  const ctx = createMemo(() => userContextMessages());
-  const cards = createMemo(() => agentCardItems());
-  const items = createMemo(() => combineConversation(main(), ctx(), cards()));
-
-  // The CardNode tree is kept in a Solid store and updated via `reconcile`
-  // keyed on `id`. `toCardTree` is a pure derivation that produces fresh
-  // CardNode objects on every call, and agent.updated flushes the upstream
-  // memos at ~60Hz (AGENT_FLUSH_INTERVAL = 16ms in store/messages.ts). A
-  // naive `createMemo(() => toCardTree(items()))` therefore hands `<For>`
-  // a brand-new object array on every tick, causing `<For>`'s keyed-by-
-  // reference diff to remount every top-level <Card> — and every FilePart
-  // subtree with it — which is exactly the flicker source for attachment
-  // images (AuthedImage's onCleanup revokes the blob URL on each unmount,
-  // so the <img> disappears until the next fetch completes, at ~60Hz).
-  //
-  // `reconcile` performs an identity-preserving merge: nodes with the same
-  // `id` keep their proxy reference, non-key fields update in place as
-  // reactive writes, so consumers (Card and its descendants) re-read
-  // through the store proxy and re-render only what truly changed. Child
-  // arrays and nested objects recurse through the same merge.
-  const [treeStore, setTreeStore] = createStore<{ tree: CardNode[] }>({ tree: [] });
-  createEffect(() => {
-    setTreeStore("tree", reconcile(toCardTree(items()), { key: "id" }));
-  });
-  const tree = () => treeStore.tree;
-
-  // ── Runtime duplicate detector ──
-  // Scans the final card tree (items + all descendants) for duplicate IDs.
-  // If the data layer is correct this never fires; if it ever does, the
-  // user sees a visible banner and the dupe IDs land in the console so we
-  // can pinpoint the source without needing a full profiling session.
-  createEffect(() => {
-    const allIDs = collectAllIDs(tree());
-    const seen = new Set<string>();
-    const dupes: string[] = [];
-    for (const id of allIDs) {
-      if (seen.has(id)) dupes.push(id);
-      else seen.add(id);
-    }
-    const prevBanner = document.getElementById("overlay-dup-banner");
-    if (dupes.length > 0) {
-      console.error("[overlay] DOM-tree has duplicate CardNode IDs:", dupes);
-      if (!prevBanner) {
-        const banner = document.createElement("div");
-        banner.id = "overlay-dup-banner";
-        banner.style.cssText =
-          "position:fixed;top:0;left:0;right:0;z-index:99999;padding:6px 12px;" +
-          "background:#c00;color:#fff;font:12px/1.4 monospace;text-align:center;";
-        banner.textContent = `[overlay BUG] duplicate cards: ${dupes.slice(0, 5).join(", ")}`;
-        document.body.appendChild(banner);
-      } else {
-        prevBanner.textContent = `[overlay BUG] duplicate cards: ${dupes.slice(0, 5).join(", ")}`;
-      }
-    } else if (prevBanner) {
-      prevBanner.remove();
-    }
-  });
+  const hasItems = () => cardTreeStore.order.length > 0;
 
   const [tracking, setTracking] = createSignal(false);
   let controller: { scrollToBottom: () => void } | undefined;
@@ -127,7 +43,7 @@ export function Conversation(props: { container: HTMLElement }) {
 
   return (
     <>
-      <Show when={items().length === 0}>
+      <Show when={!hasItems()}>
         <div class="chat-empty">
           <svg class="chat-empty-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
             <rect x="4" y="5" width="32" height="22" rx="3.5" stroke="currentColor" stroke-width="1.6"/>
@@ -137,8 +53,14 @@ export function Conversation(props: { container: HTMLElement }) {
           <span class="chat-empty-text">{emptyText()}</span>
         </div>
       </Show>
-      <For each={tree()}>{(node) => <Card node={node} depth={0} />}</For>
-      <Show when={items().length > 0}>
+      <For each={cardTreeStore.order}>
+        {(id) => (
+          <Show when={cardTreeStore.cards[id]}>
+            <Card node={cardTreeStore.cards[id]!} depth={0} />
+          </Show>
+        )}
+      </For>
+      <Show when={hasItems()}>
         <button
           type="button"
           class="chat-follow-toggle"

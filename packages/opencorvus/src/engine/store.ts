@@ -234,6 +234,17 @@ export function findLatestDeliveryForRun(runID: string) {
   )
 }
 
+export function findDeliveriesForTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineDeliveryTable)
+      .where(eq(EngineDeliveryTable.task_id, taskID))
+      .orderBy(desc(EngineDeliveryTable.time_created))
+      .all(),
+  )
+}
+
 export function findDeliveryByGoalRun(goalRunID: string) {
   return Database.use((db) =>
     db
@@ -254,6 +265,35 @@ export function listGoalRunsForTask(taskID: string) {
       .orderBy(desc(EngineGoalRunTable.time_created))
       .all(),
   )
+}
+
+export function listGoalRunsByGoal(goalID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineGoalRunTable)
+      .where(eq(EngineGoalRunTable.goal_id, goalID))
+      .orderBy(desc(EngineGoalRunTable.time_created))
+      .all(),
+  )
+}
+
+/**
+ * Latest goal_run for a goal that is itself a tip of the supersede chain —
+ * i.e. no newer goal_run points at it via supersede_of. Callers planning a
+ * retry should pass this row's id as the `supersedeOf` to createGoalRun.
+ * Returns undefined when no goal_run exists for the goal yet.
+ */
+export function findLatestTipGoalRun(goalID: string) {
+  const rows = listGoalRunsByGoal(goalID)
+  if (rows.length === 0) return undefined
+  const supersededIDs = new Set(
+    rows
+      .map((r) => (r as { supersede_of?: string | null }).supersede_of)
+      .filter((x): x is string => !!x),
+  )
+  // Rows are ordered by time_created desc, so the first tip is the newest.
+  return rows.find((r) => !supersededIDs.has(r.id))
 }
 
 export function findEvaluationByRun(runID: string) {
@@ -283,6 +323,16 @@ export function findExecutorSession(executorSessionID: string) {
       .select()
       .from(EngineExecutorSessionTable)
       .where(eq(EngineExecutorSessionTable.id, executorSessionID))
+      .get(),
+  )
+}
+
+export function findGoal(goalID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineGoalTable)
+      .where(eq(EngineGoalTable.id, goalID))
       .get(),
   )
 }

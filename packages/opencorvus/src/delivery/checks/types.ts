@@ -65,10 +65,29 @@ export interface GoalInfo {
   requirement_ids?: string[]
 }
 
+export interface GoalReportClaim {
+  files_changed: Array<{ path: string; summary: string }>
+  checks_run: Array<{ name: string; command: string; exit_code: number; output_excerpt?: string }>
+  implementation_approach: string
+  design_decisions: Array<{ choice: string; alternatives: string[]; reason: string }>
+  blockers: string[]
+}
+
 export interface DeliveryInfo {
   summary: string
   changedFiles: string[]
   diffs?: Array<{ file: string; diff?: string }>
+  /**
+   * Structured per-goal implementation reports emitted by goal executors via
+   * the `goal_report` tool call. One entry per delivered goal. Length 1 for
+   * per-goal evaluator input; length N for the aggregated final-delivery
+   * context. Authoritative source for the delivery agent's adversarial
+   * cross-check: `implementation_approach` is matched against the diff and
+   * `design_decisions[].reason` is challenged. Absence of the array (or an
+   * empty array) means the executor never produced a report — the pipeline
+   * fails loud rather than silently passing.
+   */
+  goalReports?: Array<{ goalTitle: string; report: GoalReportClaim }>
 }
 
 // ---------------------------------------------------------------------------

@@ -18,12 +18,7 @@ import { t, tc, localeTag } from "./i18n";
 import { joinBullet, stripAssistantBrief } from "./string";
 import { roleLabel } from "./message";
 import { displayToolDetail, toolStatusLabel } from "./tool";
-import {
-  mainMessages,
-  userContextMessages,
-  agentCardItems,
-  combineConversation,
-} from "./conversation";
+import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { AppLog } from "./log";
 import { nativeMessage } from "../services/app-dialog";
 
@@ -550,15 +545,47 @@ export function interactionResponseText(interaction: any): string {
  * Copy the current chat conversation transcript to the clipboard.
  * Shows a native error dialog on failure.
  */
+/** Flatten a `cardTreeStore` card plus its descendants into a flat array
+ *  of transcript-compatible pseudo-messages. Each session / goal card
+ *  emits one entry with `role` = the card's role/stage and `parts` =
+ *  its rendered leaf parts; children are walked recursively via
+ *  `childIDs`. Callers pass this to `formatConversationTranscript`. */
+function flattenCardToMessages(node: CardNode | undefined, out: any[]): void {
+  if (!node) return;
+  const role = node.role || node.stage || (node.kind === "goal" ? "goal" : "assistant");
+  const time = { created: node.time };
+  const parts: any[] = [];
+  if (node.kind === "goal" && node.goalDescription) {
+    parts.push({ type: "text", text: node.goalDescription });
+  }
+  if (node.kind === "goal" && Array.isArray(node.contracts)) {
+    for (const c of node.contracts) {
+      const key = String(c.key || "").trim();
+      const value = String(c.value || "").trim();
+      if (key || value) parts.push({ type: "text", text: key ? `${key}: ${value}` : value });
+    }
+  }
+  if (Array.isArray(node.parts)) {
+    for (const p of node.parts) parts.push(p);
+  }
+  out.push({ info: { role, time }, parts });
+  const childIDs = node.childIDs ?? [];
+  for (const cid of childIDs) {
+    flattenCardToMessages(cardTreeStore.cards[cid], out);
+  }
+  // Transient cards (tool promotion) use the inline `children` field.
+  for (const child of node.children ?? []) {
+    flattenCardToMessages(child, out);
+  }
+}
+
 export async function copyChatConversation(): Promise<void> {
   try {
-    const transcript = formatConversationTranscript(
-      combineConversation(
-        mainMessages(),
-        userContextMessages(),
-        agentCardItems(),
-      ),
-    );
+    const items: any[] = [];
+    for (const id of cardTreeStore.order) {
+      flattenCardToMessages(cardTreeStore.cards[id], items);
+    }
+    const transcript = formatConversationTranscript(items);
     if (!transcript) return;
     const ok = await copyText(transcript);
     if (!ok) throw new Error(t("chat.copy_failed"));

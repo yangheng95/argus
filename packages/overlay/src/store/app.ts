@@ -107,7 +107,7 @@ const DEFAULT_APP_STATE: AppState = {
   theme: "dark",
   locale: "en-US",
   zoom: 1,
-  opacity: 0.8,
+  opacity: 0.99,
   logEntries: [],
   logFilterLevel: "debug",
   i18n: {},

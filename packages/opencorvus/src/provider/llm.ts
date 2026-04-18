@@ -19,6 +19,9 @@ import {
   streamText,
   wrapLanguageModel,
   type ModelMessage,
+  type StreamTextOnChunkCallback,
+  type StreamTextOnErrorCallback,
+  type StreamTextOnStepFinishCallback,
   type StreamTextResult,
   type ToolSet,
 } from "ai"
@@ -50,9 +53,9 @@ export namespace ProviderLLM {
     maxRetries?: number
 
     // ── Callbacks ──
-    onChunk?: (event: { chunk: { type: string; [key: string]: unknown } }) => void | Promise<void>
-    onError?: (error: { error: unknown }) => void
-    onStepFinish?: (step: unknown) => void
+    onChunk?: StreamTextOnChunkCallback<ToolSet>
+    onError?: StreamTextOnErrorCallback
+    onStepFinish?: StreamTextOnStepFinishCallback<ToolSet>
 
     // ── Overrides (rare — let the layer compute by default) ──
     /** Override auto-computed maxOutputTokens */

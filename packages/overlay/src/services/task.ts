@@ -13,7 +13,6 @@ import { startSSE, stopSSE } from "./sse";
 import {
   syncTask,
   clearMessages,
-  clearAgentEvents,
   setSelectedTaskID,
   abortChatRequest,
   setChatAttachments,
@@ -227,7 +226,6 @@ export async function selectTask(
   stopSSE();
   clearBoard();
   clearMessages();
-  clearAgentEvents();
   if (appStore.budgetDirty) setAppStore("budgetDirty", false);
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);
@@ -513,8 +511,8 @@ export async function interruptTask(taskID: string): Promise<boolean> {
 // When it detects that `selectedTaskID` points to a task no longer present in
 // the list (and not in pendingTasks), it calls this handler to fully reset
 // the selection — driving the same cleanup path (clearBoard / clearMessages /
-// clearAgentEvents / stopSSE) that every intentional deselect uses. Registered
-// at module load so it's in place before any tasks fetch completes.
+// stopSSE) that every intentional deselect uses. Registered at module load so
+// it's in place before any tasks fetch completes.
 setOrphanedSelectionHandler(() => {
   void selectTask("");
 });

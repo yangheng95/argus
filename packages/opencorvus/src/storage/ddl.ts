@@ -575,6 +575,13 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   workspace_dir       text,
   base_ref            text,
   merge_ref           text,
+  -- supersede_of: when an operator retry needs to re-execute an already-terminal
+  -- goal_run (the FSM keeps completed/failed immutable), a NEW goal_run row is
+  -- inserted with supersede_of pointing at the old row. The goal-readiness /
+  -- dispatch-gate / satisfies-dep queries walk this chain and only treat the
+  -- LAST link as authoritative. This lets retry re-dispatch without mutating
+  -- history and without collapsing the live/terminal/retriable catalog.
+  supersede_of        text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
   metadata            text,
   lease_until          integer,
   time_started        integer,
@@ -586,10 +593,11 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   FOREIGN KEY (coordinator_run_id) REFERENCES engine_run(id)  ON DELETE CASCADE,
   FOREIGN KEY (session_id)         REFERENCES session(id)           ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS engine_goal_run_task_idx        ON engine_goal_run (task_id);
-CREATE INDEX IF NOT EXISTS engine_goal_run_goal_idx        ON engine_goal_run (goal_id);
-CREATE INDEX IF NOT EXISTS engine_goal_run_coordinator_idx ON engine_goal_run (coordinator_run_id);
-CREATE INDEX IF NOT EXISTS engine_goal_run_status_idx      ON engine_goal_run (status);
+CREATE INDEX IF NOT EXISTS engine_goal_run_task_idx          ON engine_goal_run (task_id);
+CREATE INDEX IF NOT EXISTS engine_goal_run_goal_idx          ON engine_goal_run (goal_id);
+CREATE INDEX IF NOT EXISTS engine_goal_run_coordinator_idx   ON engine_goal_run (coordinator_run_id);
+CREATE INDEX IF NOT EXISTS engine_goal_run_status_idx        ON engine_goal_run (status);
+CREATE INDEX IF NOT EXISTS engine_goal_run_supersede_of_idx  ON engine_goal_run (supersede_of);
 
 CREATE TABLE IF NOT EXISTS engine_interaction_request (
   id            text PRIMARY KEY,

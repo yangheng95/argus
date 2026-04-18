@@ -87,14 +87,14 @@ export function setOrphanedSelectionHandler(
 function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
   const id = boardStore.selectedTaskID;
   if (!id) return false;
-  // Stable-state guard: orphan detection only runs once the current selection
-  // has a loaded board snapshot. During selectTask()'s async phase we have
-  // `taskSwitching === true` and `board === null`; a concurrent loadTasks()
-  // response from SSE may not yet include the freshly-created task, and
+  // Stable-state guard: during selectTask()'s async phase a concurrent
+  // loadTasks() response may not yet include the freshly-created task, and
   // firing the handler then would incorrectly reset a selection that is in
-  // the process of being loaded.
+  // the process of being loaded. Once taskSwitching has settled, the
+  // tasks/pending lists are the source of truth for whether the selection
+  // still exists; requiring a loaded board snapshot lets an invalid task ID
+  // survive forever after a failed task switch or cross-project mismatch.
   if (boardStore.taskSwitching) return false;
-  if (!boardStore.board) return false;
   const inTasks = Array.isArray(tasks)
     && tasks.some((item: any) => item?.task?.id === id);
   if (inTasks) return false;
@@ -121,9 +121,8 @@ function boardSnapshot(board: any): string {
 // `workflow.*` SSE bursts that mutate just one corner of the tree.
 //
 // JSON.stringify is acceptable because typical board fields are small (KB
-// scale) and the diff cost is amortised against the recompute work it
-// avoids — `computeAgentCards` and the conversation-slice memos are tens of
-// ms vs sub-ms per-field stringify.
+// scale) and the diff cost is amortised against the recompute work it avoids
+// — downstream memos cost tens of ms vs sub-ms per-field stringify.
 
 function fieldChanged(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return false;
@@ -134,8 +133,7 @@ function fieldChanged(a: unknown, b: unknown): boolean {
 // ── Boundary invariants ──
 //
 // The board snapshot from the server must satisfy a small set of structural
-// invariants so that downstream view code (`buildUserContextMessages`,
-// `computeAgentCards`, the conversation slices) can trust its inputs without
+// invariants so that downstream view code can trust its inputs without
 // defensive `?? Date.now()` / `?? 0` fallbacks. Any violation is a real bug
 // (server payload corruption or schema drift) that must surface, not be
 // papered over here. We throw — `loadBoard`'s catch will retry with backoff
@@ -353,7 +351,7 @@ export async function loadTasks(): Promise<void> {
 
 /**
  * Clear all task-scoped board state on task switch.
- * Symmetric with clearMessages() / clearAgentEvents() in messages.ts.
+ * Symmetric with clearMessages() in messages.ts.
  * Cancels pending retry timers and resets all per-task sync machinery so that
  * the next loadBoard() call starts from a clean slate.
  */

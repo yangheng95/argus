@@ -119,6 +119,7 @@ const KNOWN_FLAGS = new Set<string>([
   // boolean (no value) switches
   "--no-keep",
   "--skip-local-verify",
+  "--no-browser",
 ])
 
 function validateFlags(): void {
@@ -210,7 +211,12 @@ if (requestFile && requestAttachment) {
 const figmaUrl = flag("--figma-url")?.trim() || undefined
 const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
-const noBrowser = false
+// `--no-browser` bypasses the puppeteer-driven overlay UI and drives the
+// benchmark entirely through HTTP API polling. The downstream code already
+// guards every puppeteer call with `if (page)` — this flag activates those
+// branches. Useful when the overlay UI is under refactor (07-panel-reactivity.md)
+// and we only want to exercise the opencorvus server pipeline end-to-end.
+const noBrowser = process.argv.includes("--no-browser")
 // Only set task-level budget when explicitly provided via CLI flag.
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
@@ -464,9 +470,26 @@ await Instance.provide({
     await ExecutorBootstrap.autoRegister(true)
   },
 })
-const browser = await launchBrowser()
-let page = await browser.newPage()
+const browser = noBrowser ? null : await launchBrowser()
+let page = browser ? await browser.newPage() : null
 if (page) await page.setViewport({ width: 1600, height: 1200 })
+// Forward overlay browser console + pageerror events to benchmark stdout.
+// Without this the overlay's own `console.error(...)` (including the
+// `[sse] dispatch error for event X` introduced to surface tree-writer
+// throws that were previously silently swallowed) is invisible to the
+// benchmark driver, making every UI-side regression appear as a generic
+// `Overlay did not render streamed task output within 120000ms` timeout.
+if (page) {
+  page.on("console", (msg) => {
+    const type = msg.type()
+    // Only forward warning+ to avoid log noise from info/debug.
+    if (type === "log" || type === "info" || type === "debug") return
+    process.stderr.write(`[overlay-console:${type}] ${msg.text()}\n`)
+  })
+  page.on("pageerror", (err) => {
+    process.stderr.write(`[overlay-pageerror] ${err.message}\n${err.stack ?? ""}\n`)
+  })
+}
 
 const marks = {
   startedAt: Date.now(),

@@ -282,7 +282,7 @@ export namespace Agent {
       delivery: {
         name: "delivery",
         description: "Delivery verification agent. Verifies runtime behavior, fixes bugs, and makes final acceptance decisions.",
-        tools: { exclude: ["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "analytics"] },
+        tools: { exclude: ["task", "plan_enter", "plan_exit", "spec_enter", "spec_exit", "planner", "panel", "tui", "task_report", "goal_report", "analytics"] },
         options: {},
         prompt: DELIVERY_AGENT_SYSTEM,
         mode: "primary",
