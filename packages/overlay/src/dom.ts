@@ -117,14 +117,6 @@ export interface DomRefs {
   criteriaList: HTMLElement | null;
   evalBody: HTMLElement | null;
 
- // Budget
-  budgetConfigBody: HTMLElement | null;
-  budgetHint: HTMLElement | null;
-  budgetMaxRuns: HTMLInputElement | null;
-  budgetMaxReplans: HTMLInputElement | null;
-  btnBudgetReset: HTMLButtonElement | null;
-  btnBudgetSave: HTMLButtonElement | null;
-
  // Changes
   changesBadge: HTMLElement | null;
   changesBody: HTMLElement | null;
@@ -391,14 +383,6 @@ export function getDomRefs(): DomRefs {
     criteriaBadge: $<HTMLElement>("#criteriaBadge"),
     criteriaList: $<HTMLElement>("#criteriaList"),
     evalBody: $<HTMLElement>("#evalBody"),
-
- // Budget
-    budgetConfigBody: $<HTMLElement>("#budgetConfigBody"),
-    budgetHint: $<HTMLElement>("#budgetHint"),
-    budgetMaxRuns: $<HTMLInputElement>("#budgetMaxRuns"),
-    budgetMaxReplans: $<HTMLInputElement>("#budgetMaxReplans"),
-    btnBudgetReset: $<HTMLButtonElement>("#btnBudgetReset"),
-    btnBudgetSave: $<HTMLButtonElement>("#btnBudgetSave"),
 
  // Changes
     changesBadge: $<HTMLElement>("#changesBadge"),

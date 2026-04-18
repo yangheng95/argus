@@ -55,7 +55,6 @@ import {
 } from "./services/theme";
 import { settingsStore, setSettingsStore, saveSettings } from "./store/settings";
 import { initPaneResizers, cancelPaneResize, currentUIScale } from "./services/pane";
-import { installBudgetBindings, renderBudget } from "./services/budget";
 import { panelMessage } from "./services/chat";
 import PromptCatalog from "./components/settings/PromptCatalog";
 import ChannelsPanel from "./components/settings/ChannelsPanel";
@@ -368,7 +367,6 @@ function installGoalFormHandlers(): void {
 }
 
 installGlobalBridges();
-installBudgetBindings();
 installInlineLlmConfig();
 setupDialogBackdropClose();
 installSettingsFormHandlers();
@@ -1144,13 +1142,6 @@ disposers.push(createRoot((dispose) => {
  // interactionBridge.renderInteractions removed — the unified InteractionCard
  // renders the UI in both inline conversation and sidebar surfaces, and
  // PermissionAutoResolver handles auto-approval.
-
-  createEffect(() => {
-    settingsStore.locale;
-    appStore.budgetDirty;
-    appStore.budgetSaving;
-    renderBudget((boardStore.board as any)?.task);
-  });
 
   return dispose;
 }));

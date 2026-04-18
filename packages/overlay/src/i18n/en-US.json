@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "ab804dcf9c78898e"
+    "panel_revision": "2c59638dbd957585"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -39,13 +39,6 @@
   "brand.guide_usage_4": "Titlebar actions are operational: Channels for delivery, Settings and Logs for debugging, pin-to-top for long-running supervision.",
   "brand.guide_usage_title": "Fast Path",
   "brand.logo_alt": "OpenCorvus logo",
-  "budget.hint": "Configure budget for the next new task. Leave blank to use global defaults.",
-  "budget.hint_readonly": "Budget is locked after a task has started and cannot be changed.",
-  "budget.max_executor_groups": "Goal Concurrency",
-  "budget.max_runs": "Max Runs",
-  "budget.placeholder": "Default",
-  "budget.reset": "Reset",
-  "budget.save_failed": "Failed to save budget",
   "channel.available": "Available: {{names}}",
   "channel.channels": "Channels",
   "channel.configuration_title": "{{name}} Channel",
@@ -441,7 +434,6 @@
   "prompt.status.empty": "Unset",
   "prompt.status.inherits_core": "Inherits Core",
   "prompt.title": "Prompts",
-  "section.budget": "Task Budget",
   "section.delivery": "Delivery",
   "section.criteria": "Evaluation Criteria",
   "section.files": "Files",
@@ -535,6 +527,11 @@
   "titlebar.auto_question": "Auto-reject questions",
   "titlebar.auto_question_hint": "Auto-reject unanswered questions after 10 minutes; off means wait indefinitely for a reply.",
   "titlebar.background_notice": "OpenCorvus is still running in the background. Use the tray icon to reopen, or choose Quit from the tray menu to exit completely.",
+  "titlebar.budget_locked": "Locked — task already started",
+  "titlebar.budget_max_executor_groups": "Goal parallelism",
+  "titlebar.budget_max_executor_groups_hint": "How many goals the orchestrator may execute at the same time. Higher = faster but more concurrent cost.",
+  "titlebar.budget_max_runs": "Max execution runs",
+  "titlebar.budget_max_runs_hint": "Upper bound on total orchestrator runs for a new task. Each run is a full plan → execute → evaluate cycle.",
   "titlebar.background_notice_title": "Running in background",
   "titlebar.close": "Close",
   "titlebar.connection.connecting": "Connecting",

@@ -6,9 +6,8 @@
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
 import { createMemo, For, Show, onMount } from "solid-js";
-import { boardStore, rootTaskSessionID } from "../store/board";
-import { messageStore } from "../store/messages";
-import { classifyMessage } from "../utils/message";
+import { boardStore } from "../store/board";
+import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { goalStageStepID } from "../utils/workflow-step";
@@ -315,60 +314,93 @@ export function Board(props: BoardProps) {
   const phaseFor = (id: string): "active" | "" =>
     activeSection() === id ? "active" : "";
 
-  // Goal-derived step status. The board always has goals once a task has
-  // been planned; downstream section badges must render progress as
-  // "done/total goals" so the panel is never blank when execution artifacts
-  // (delivery rows, evaluation rows) haven't been produced yet.
   // Messages feeding the RequirementsPanel / GoalWorkflowList live-stream
-  // surfaces. Read directly from `messageStore.messagesBySession` and filter
-  // by `classifyMessage` / bridge-stamped goalID.
+  // surfaces. Single source of truth: `cardTreeStore.cards` — the same
+  // store that powers the left conversation panel. Each agent session card
+  // already carries a stage (spec / goal / requirements / planner / build
+  // / executor / evaluator / ...), a goalID, and a flat `parts` array with
+  // boundary markers between the messages it aggregated.
   //
-  // Reactivity: Solid tracks the buckets we actually read (per sid), so a
-  // delta on session A only re-runs the memo when session A's bucket is
-  // touched. Sessions B..Z stay cached.
-
-  /** Messages routed into a given agent stage — used by RequirementsPanel. */
-  function messagesForStage(stage: string): any[] {
-    const rootSID = rootTaskSessionID();
-    const out: any[] = [];
-    for (const sid of Object.keys(messageStore.messagesBySession)) {
-      const bucket = messageStore.messagesBySession[sid];
-      if (!bucket || bucket.length === 0) continue;
-      const sample = bucket[0];
-      const channel = sample.info?.channel || classifyMessage(sample, rootSID);
-      if (channel === stage) out.push(...bucket);
+  // We re-split the card's parts at boundary markers so each synthetic
+  // message preserves per-turn reasoning ordering when `CardParts` re-renders
+  // them in the panel. One card → N synthetic messages (N = boundary count + 1,
+  // minus empty trailing groups).
+  function cardToSyntheticMessages(card: CardNode): any[] {
+    const parts = card.parts || [];
+    if (parts.length === 0) return [];
+    const groups: any[] = [];
+    let boundary: { role?: string; time?: number } | null = null;
+    let buffer: any[] = [];
+    const flush = () => {
+      if (buffer.length === 0) return;
+      groups.push({
+        info: {
+          id: `${card.id}:msg:${groups.length}`,
+          role: boundary?.role || "assistant",
+          time: { created: boundary?.time ?? card.time ?? 0 },
+        },
+        parts: buffer,
+      });
+      buffer = [];
+    };
+    for (const part of parts) {
+      if (part?.type === "boundary") {
+        flush();
+        boundary = part;
+        continue;
+      }
+      buffer.push(part);
     }
-    return out;
+    flush();
+    return groups;
   }
 
-  // Bridge: map agent card messages to workflow goal steps.
-  // Pipeline workflow has ONE goal-scope step (`build`) — planner / executor /
-  // build / evaluator stages are sub-phases that all surface in the same
-  // `build` bucket. The build card UI displays them as nested sessions under
-  // the build step.
+  /** Agent cards for a given stage, in chronological order. */
+  function agentCardsForStage(stage: string): CardNode[] {
+    const ids = Object.keys(cardTreeStore.cards);
+    const matched: CardNode[] = [];
+    for (const id of ids) {
+      const card = cardTreeStore.cards[id];
+      if (!card || card.kind !== "agent") continue;
+      if (card.stage !== stage) continue;
+      matched.push(card);
+    }
+    return matched.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+  }
+
+  // Requirements surface merges the spec + goal stage sessions — both are
+  // produced by the requirements pipeline before any goal-group appears.
   const requirementsMessages = createMemo(() => {
-    // Spec + goal stages merged into the Requirements surface.
-    return [...messagesForStage("spec"), ...messagesForStage("goal")];
+    const out: any[] = [];
+    for (const stage of ["spec", "goal"]) {
+      for (const card of agentCardsForStage(stage)) {
+        out.push(...cardToSyntheticMessages(card));
+      }
+    }
+    return out;
   });
 
+  // Bucket goal-step session messages by goalID + stepID. Pipeline workflow
+  // has ONE goal-scope step (`build`) — planner / executor / build /
+  // evaluator stages all collapse into `build` via goalStageStepID().
   const goalStepMessages = createMemo(() => {
-    const rootSID = rootTaskSessionID();
     const result: Record<string, Record<string, any[]>> = {};
-    for (const sid of Object.keys(messageStore.messagesBySession)) {
-      const bucket = messageStore.messagesBySession[sid];
-      if (!bucket || bucket.length === 0) continue;
-      const sample = bucket[0];
-      const channel = sample.info?.channel || classifyMessage(sample, rootSID);
-      const stepID = goalStageStepID(channel);
+    const ids = Object.keys(cardTreeStore.cards);
+    const agentCards: CardNode[] = [];
+    for (const id of ids) {
+      const card = cardTreeStore.cards[id];
+      if (!card || card.kind !== "agent") continue;
+      if (!card.goalID) continue;
+      agentCards.push(card);
+    }
+    agentCards.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
+    for (const card of agentCards) {
+      const stepID = goalStageStepID(card.stage || "");
       if (!stepID) continue;
-      // Each session carries its own goalID on every message via the bridge
-      // stamp; use the first message's goalID as the bucket key. Sessions
-      // whose goalID hasn't been stamped (rare transcript edge cases) land
-      // under an empty string and are ignored by the panel.
-      const goalID = String(sample.info?.goalID || "");
+      const goalID = String(card.goalID);
       if (!goalID) continue;
       const bucketMap = (result[goalID] ??= {});
-      (bucketMap[stepID] ??= []).push(...bucket);
+      (bucketMap[stepID] ??= []).push(...cardToSyntheticMessages(card));
     }
     return result;
   });

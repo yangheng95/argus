@@ -25,7 +25,6 @@ import {
   createTask,
 } from "./task";
 import { syntheticTextMessage } from "../utils/transcript";
-import { draftBudget } from "../utils/budget";
 
 // ── Types ──
 
@@ -511,7 +510,6 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
         attachments,
         metadata: meta,
         signal: controller.signal,
-        budget: draftBudget(),
       });
       if (createdTaskID) {
         await selectTask(createdTaskID);
@@ -527,7 +525,6 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
         attachments,
         metadata: meta,
         signal: controller.signal,
-        budget: draftBudget(),
       });
       if (createdTaskID) {
         await selectTask(createdTaskID);

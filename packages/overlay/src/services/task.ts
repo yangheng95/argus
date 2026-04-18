@@ -233,7 +233,6 @@ export async function selectTask(
   // production call site — the old pipeline's derivation from messageStore
   // masked the leak until the new writer became source-of-truth.
   resetWriter();
-  if (appStore.budgetDirty) setAppStore("budgetDirty", false);
   setSelectedTaskID(nextTaskID);
   setBoardStore("selectedTaskID", nextTaskID);
 

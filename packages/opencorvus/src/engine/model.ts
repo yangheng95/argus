@@ -884,6 +884,29 @@ export const Event = {
       summary: z.string(),
     }),
   ),
+  /** Fidelity review lifecycle markers. The review makes a non-streaming LLM
+   *  call that can take 60–180s; without these events the SSE stream falls
+   *  silent long enough to trip the benchmark alive-stall detector (cap
+   *  120s) and mask real progress. `Started` fires once before the first
+   *  LLM attempt; `Progress` fires on an interval while we wait for the
+   *  verdict so the stream keeps ticking. Neither is rendered by the
+   *  overlay — they exist purely to expose liveness. */
+  FidelityReviewStarted: BusEvent.define(
+    "fidelity.review.started",
+    z.object({
+      taskID: Identifier.schema("task"),
+      sessionID: z.string(),
+    }),
+  ),
+  FidelityReviewProgress: BusEvent.define(
+    "fidelity.review.progress",
+    z.object({
+      taskID: Identifier.schema("task"),
+      sessionID: z.string(),
+      attempt: z.number(),
+      elapsedMs: z.number(),
+    }),
+  ),
   /** Fidelity review verdict with the full structured result. Emitted once
    *  per reviewFidelity() call after the LLM's JSON output has been parsed
    *  and validated. Carries the same shape as FidelityResult so the overlay

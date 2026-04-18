@@ -8,7 +8,7 @@ import { FilePart } from "./FilePart";
 import { shouldPromoteTool, type CardNode } from "../utils/card-tree";
 import { stamp } from "../utils/time";
 import { toolNameKey, displayToolDetail, shortRelativePath } from "../utils/tool";
-import { activeDirectory } from "../store/board";
+import { selectedTaskDirectory } from "../store/board";
 
 /** Build a transient CardNode for a promoted tool part so <Card> can frame it. */
 function toolToCardNode(part: any): CardNode {
@@ -20,7 +20,7 @@ function toolToCardNode(part: any): CardNode {
   })();
   const toolName = String(part?.tool || "tool");
   const state = part?.state || {};
-  const detail = displayToolDetail(toolName, state.input || {}, state, activeDirectory());
+  const detail = displayToolDetail(toolName, state.input || {}, state, selectedTaskDirectory());
   const subtitle =
     detail && detail.toLowerCase() !== toolName.toLowerCase() ? detail : undefined;
   return {
@@ -74,7 +74,7 @@ export function CardParts(props: { parts: any[]; depth: number }) {
             <div class="msg-patch">
               {"\u2699 " +
                 (part.files || [])
-                  .map((f: string) => shortRelativePath(f, activeDirectory()))
+                  .map((f: string) => shortRelativePath(f, selectedTaskDirectory()))
                   .join(", ")}
             </div>
           </Match>
