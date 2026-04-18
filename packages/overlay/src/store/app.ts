@@ -91,12 +91,8 @@ export interface AppState {
   promptEntries: any[];
   /** Map of prompt ID → draft text */
   promptDrafts: Record<string, string>;
- // ── Criteria / Budget (mirrors state.criteriaSpecs / state.budgetDirty / state.budgetSaving) ──
+ // ── Criteria ──
   criteriaSpecs: any[];
-  /** Whether the budget config form has unsaved changes */
-  budgetDirty: boolean;
-  /** Whether a budget-save request is in flight */
-  budgetSaving: boolean;
 }
 
 // ── Defaults ──
@@ -131,8 +127,6 @@ const DEFAULT_APP_STATE: AppState = {
   promptEntries: [],
   promptDrafts: {},
   criteriaSpecs: [],
-  budgetDirty: false,
-  budgetSaving: false,
 };
 
 // ── Store ──

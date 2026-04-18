@@ -86,6 +86,44 @@ export async function reviewFidelity(input: {
 }): Promise<FidelityResult> {
   const { goals, signal } = input
 
+  // Liveness: fidelity makes a non-streaming LLM call that can run 60–180s.
+  // Without a visible marker + periodic progress tick the SSE stream goes
+  // silent long enough to trip the benchmark alive-stall (cap 120s) and
+  // the operator has no signal that the review is in flight. The Started
+  // event + Progress tick below are the ONLY source of liveness during
+  // this window; they are not rendered by the overlay (see event-policy
+  // noop list) and carry no LLM output.
+  emitFidelityLifecycle("started", input.taskID, input.sessionID, 0, 0)
+  const startedAt = Date.now()
+  let currentAttempt = 0
+  const progressTicker =
+    input.taskID && input.sessionID
+      ? setInterval(() => {
+          emitFidelityLifecycle(
+            "progress",
+            input.taskID,
+            input.sessionID,
+            currentAttempt,
+            Date.now() - startedAt,
+          )
+        }, 20_000)
+      : null
+
+  try {
+    return await reviewFidelityInner(input, (attempt) => {
+      currentAttempt = attempt
+    })
+  } finally {
+    if (progressTicker) clearInterval(progressTicker)
+  }
+}
+
+async function reviewFidelityInner(
+  input: Parameters<typeof reviewFidelity>[0],
+  recordAttempt: (attempt: number) => void,
+): Promise<FidelityResult> {
+  const { goals, signal } = input
+
   if (goals.length === 0) {
     const result: FidelityResult = {
       verdict: "needs_correction",
@@ -123,6 +161,7 @@ export async function reviewFidelity(input: {
 
   while (attempts < MAX_ATTEMPTS) {
     attempts++
+    recordAttempt(attempts)
     if (signal?.aborted) throw new Error("fidelity review aborted")
 
     try {
@@ -280,6 +319,45 @@ function emitFidelityEvent(
     attempts,
   }
   void EngineProtocol.emit(EngineEvent.FidelityReviewCompleted, payload, { source: "requirements.fidelity" })
+}
+
+/** Emit fidelity review lifecycle events — Started and Progress — while the
+ *  non-streaming LLM call is in flight. The overlay treats both as no-ops
+ *  (see event-policy TREE_WRITER_NOOP_TYPES); they exist solely to advance
+ *  the benchmark alive-stall timer and give operators a "fidelity in flight"
+ *  signal via the protocol_event log. Silently skips when taskID or
+ *  sessionID is missing — CLI dry-runs don't need liveness events. */
+function emitFidelityLifecycle(
+  phase: "started" | "progress",
+  taskID: string | undefined,
+  sessionID: string | undefined,
+  attempt: number,
+  elapsedMs: number,
+): void {
+  if (!taskID || !sessionID) {
+    log.warn("fidelity lifecycle event skipped — missing taskID/sessionID", {
+      phase,
+      hasTaskID: !!taskID,
+      hasSessionID: !!sessionID,
+    })
+    return
+  }
+  const def = phase === "started" ? EngineEvent.FidelityReviewStarted : EngineEvent.FidelityReviewProgress
+  const properties =
+    phase === "started"
+      ? { taskID, sessionID }
+      : { taskID, sessionID, attempt, elapsedMs }
+  log.info("fidelity lifecycle emit", { phase, taskID, sessionID, attempt, elapsedMs })
+  EngineProtocol.emit(def as any, properties as any, { source: "requirements.fidelity" }).catch(
+    (err) => {
+      log.error("fidelity lifecycle emit failed", {
+        phase,
+        taskID,
+        sessionID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    },
+  )
 }
 
 // ---------------------------------------------------------------------------

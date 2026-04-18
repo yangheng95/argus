@@ -80,17 +80,28 @@ export function getTasksKickTimer(): ReturnType<typeof setTimeout> | null {
  * @param source How the directory was set: "manual" (user-driven) or
  * "task" (task-scoped) or "auto" (restored). Defaults to
  * "manual".
- * When source is "manual":
- * - Persists the directory as the saved directory.
- * - Clears the temp directory when a non-empty value is provided.
- * - Updates directoryMode to "custom" or "temp".
- * Mirrors workspace.js setWorkspaceDirectory.
+ *
+ * Source semantics:
+ * - "manual": caller is `applyDirectory`, which owns the full switch
+ *   lifecycle (epoch bump, persistence, clearProjectScopeData,
+ *   reloadProjectScope). Do nothing extra here.
+ * - "task": caller is `enterTaskWorkspace` — the user clicked a task in a
+ *   different workspace. `settingsStore.directory` changes and
+ *   `main.tsx`'s configureApi effect retargets the API client, but
+ *   project-scope stores (appStore.config, boardStore.vcs, boardStore.path,
+ *   appStore.providerCatalog / providerAuth / channels, tasks list) would
+ *   otherwise keep serving the previous workspace's data until another
+ *   full switch. Trigger a reload here so the config / git-status / task
+ *   list align with the new workspace immediately.
+ * - "auto": caller is `meta.ts` echoing the server's /path response; data
+ *   is already fresh on that request — no reload needed.
  */
 export function setWorkspaceDirectory(
   value: string,
   source: "manual" | "task" | "auto" = "manual",
 ): string {
   const next = typeof value === "string" ? value.trim() : "";
+  const prev = settingsStore.directory;
 
   if (source === "manual") {
     setSettingsStore({
@@ -99,6 +110,14 @@ export function setWorkspaceDirectory(
     });
   } else {
     setSettingsStore("directory", next);
+  }
+
+  if (source === "task" && next && next !== prev) {
+    setSettingsStore("directoryEpoch", (n: number) => n + 1);
+    clearProjectScopeData();
+    void reloadProjectScope({ restoreWorkspace: false }).catch((e: unknown) =>
+      console.error("[setWorkspaceDirectory/task] reload failed", e),
+    );
   }
 
   return next;

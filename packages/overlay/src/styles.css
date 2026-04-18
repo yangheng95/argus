@@ -2823,20 +2823,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .criteria-status[data-result="off"] + .criteria-result { color: var(--text-muted); }
 .criteria-status:not([data-result]) { display: none; }
 
-.budget-note {
-  margin-bottom: calc(10px * var(--ui-scale));
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-}
-
-.budget-grid {
-  margin-bottom: calc(8px * var(--ui-scale));
-}
-
-.budget-actions {
-  margin-top: calc(2px * var(--ui-scale));
-}
-
 /* ── Evaluation Errors ── */
 .eval-error {
   margin-top: 4px;

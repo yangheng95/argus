@@ -638,6 +638,17 @@ export function createOrchestratorTools(input: {
         const fsMod = await import("node:fs/promises")
         const pathMod = await import("node:path")
 
+        // Track how many external sources actually produced visual bytes. If
+        // every Figma fetch, URL screenshot, and local material fails to
+        // materialize AND the task had no pre-existing attachments, we must
+        // abort before calling design-analyst — otherwise the agent runs
+        // blind, registers nothing, and the orchestrator hangs waiting for
+        // a design spec that cannot exist. See benchmark run on
+        // usage-replica-vague: assistant hallucinated ./image-N.png paths,
+        // all 3 ENOENT'd, design-analyst still ran for 45s producing
+        // nothing, and the pipeline stalled on the empty verdict.
+        let materializedCount = 0
+
         // --- Figma frames -----------------------------------------------------
         for (const figmaUrl of figmaUrls) {
           try {
@@ -658,6 +669,7 @@ export function createOrchestratorTools(input: {
             log.info("design_analysis: figma frame materialized", {
               taskID, fileKey: frame.fileKey, nodeId: frame.nodeId, sha: ref.sha, size: ref.size,
             })
+            materializedCount++
           } catch (figmaErr) {
             log.warn("design_analysis: figma materialization failed", {
               taskID,
@@ -692,6 +704,7 @@ export function createOrchestratorTools(input: {
             log.info("design_analysis: url screenshot materialized", {
               taskID, url: liveUrl, finalUrl: shot.finalUrl, sha: ref.sha, size: ref.size,
             })
+            materializedCount++
           } catch (shotErr) {
             log.warn("design_analysis: url screenshot failed", {
               taskID,
@@ -734,6 +747,7 @@ export function createOrchestratorTools(input: {
             log.info("design_analysis: material materialized", {
               taskID, path: rawPath, sha: ref.sha, size: ref.size, mime,
             })
+            materializedCount++
           } catch (matErr) {
             log.warn("design_analysis: material materialization failed", {
               taskID,
@@ -746,6 +760,30 @@ export function createOrchestratorTools(input: {
         // Refresh task to pick up any newly-attached references.
         const enrichedTask = requireTask(taskID)
         const enrichedHasAttachments = Array.isArray(enrichedTask.attachments) && enrichedTask.attachments.length > 0
+
+        // Fail-fast if design_analysis was invoked on the strength of URLs /
+        // materials but every source failed to materialize. Running
+        // design-analyst blind produces zero output tools, which the caller
+        // turns into "Design analysis failed" — we surface the real root
+        // cause (no usable visual input) back to the orchestrator instead
+        // of letting the downstream agent run for 45s and emit nothing.
+        if (!enrichedHasAttachments && materializedCount === 0) {
+          await trackStepComplete("design_analysis", undefined, true)
+          const providedCount = liveUrls.length + figmaUrls.length + materialPaths.length
+          const message =
+            `Design analysis aborted: all ${providedCount} provided visual source(s) ` +
+            `failed to materialize (URLs unreachable, Figma fetch failed, or local material ` +
+            `paths did not exist). Check that the paths/URLs in the 'materials' / 'url' / ` +
+            `'urls' / 'figma_url' arguments actually exist. If no real visual reference is ` +
+            `available, skip design_analysis and call requirements directly.`
+          log.warn("design_analysis: no visual input materialized — aborting before agent call", {
+            taskID,
+            liveUrlCount: liveUrls.length,
+            figmaUrlCount: figmaUrls.length,
+            materialCount: materialPaths.length,
+          })
+          return message
+        }
 
         const designSession = await Session.createNext({
           kind: "design-analyst",

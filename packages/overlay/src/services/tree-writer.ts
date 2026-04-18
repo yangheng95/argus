@@ -23,6 +23,7 @@ import { cardTreeStore, setCardTreeStore, type CardNode, type CardStatus } from 
 import { boardStore } from "../store/board";
 import { messageStore } from "../store/messages";
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message";
+import { stageAccent } from "../utils/card-color";
 import { t } from "../utils/i18n";
 
 /** Raw i18n key for a role/stage, normalized so that backend variants
@@ -471,6 +472,7 @@ function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): v
     id: cardID,
     kind: "fidelity",
     stage: "fidelity",
+    accent: stageAccent("fidelity"),
     status,
     title: roleTitleKey("fidelity"),
     parts: [],
@@ -539,6 +541,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
                 ...node,
                 id: newCardID,
                 stage: opts.stage,
+                accent: stageAccent(opts.stage),
                 title: roleTitleKey(opts.stage),
               };
               delete cards[existing.cardID];
@@ -569,6 +572,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
     id: cardID,
     kind: "agent",
     stage,
+    accent: stage ? stageAccent(stage) : undefined,
     status: "running",
     title: stage ? roleTitleKey(stage) : "chat.role.assistant",
     round: 0,
@@ -730,6 +734,7 @@ function rebuildGoalGroupCards(board: any): void {
         id: childID,
         kind: "step",
         stage: stepID,
+        accent: stageAccent(stepID),
         status: stepStatus,
         title: step.label || agentStageLabel(stepID) || stepID,
         subtitle: step.summary || undefined,
@@ -745,6 +750,7 @@ function rebuildGoalGroupCards(board: any): void {
       id: cardID,
       kind: "goal",
       stage: "goal",
+      accent: stageAccent("goal"),
       status: goalStatus,
       title: String(gw.goalTitle || "Goal"),
       subtitle: gid.length > 8 ? gid.slice(-8) : undefined,
@@ -862,21 +868,17 @@ function resolveGoalContainerCardID(goalID: string, stage: string): string | nul
 }
 
 function resolveSessionContainerCardID(info: SessionInfo): string | null {
+  // Only goal-step cards are allowed session containers — every sub-agent
+  // session is otherwise a top-level card, as designed. The previous
+  // "parent session claim" branch (landed with the tree-writer rewrite in
+  // 93f8cf8de) silently nested design-analyst / requirements / build /
+  // architect under the orchestrator assistant card, which collapsed the
+  // visible hierarchy into a single tree. Removed — one session = one
+  // top-level card, with goal-group as the sole exception for goal-scoped
+  // agent sessions (executor / build inside a goal are claimed under their
+  // goal-step so the goal-group card can collect them into one block).
   if (info.goalID) {
-    const parent = info.parentSessionID ? sessions.get(info.parentSessionID) : undefined;
-    if (
-      parent &&
-      parent.goalID &&
-      parent.goalID === info.goalID &&
-      cardTreeStore.cards[parent.cardID]
-    ) {
-      return parent.cardID;
-    }
     return resolveGoalContainerCardID(info.goalID, info.stage);
-  }
-  if (info.parentSessionID) {
-    const parent = sessions.get(info.parentSessionID);
-    if (parent && cardTreeStore.cards[parent.cardID]) return parent.cardID;
   }
   return null;
 }
@@ -978,18 +980,12 @@ function normalizeGoalStatus(raw: any): CardStatus {
 
 // ── Top-level ordering ──
 //
-// Authorized top-level kinds (anything else is an escape — throw):
-//   • ctx:user-request                   — the task request bubble
-//   • the single assistant root session  — orchestrator entry point
-//   • goal-group:<gid>                   — goal container
-//   • orphan interaction-card:*          — interactions with no live session
-//   • synthetic:*                        — chat.ts pending / optimistic bubbles
-//
-// Any non-assistant agent session that lands here without a parent session or
-// goal-step container represents a backend linkage bug (missing
-// parentSessionID / goalID stamp in task-message-protocol-bridge.ts). We
-// surface it loudly per CLAUDE.md rule 1 — silent fallback to top level
-// would mask the bug and produce UI "escape" cards like the fidelity one.
+// Every session that isn't claimed by a goal-step is a top-level card:
+// assistant orchestrator, design-analyst, requirements, architect, planner,
+// build, etc. are siblings in the main order (sorted chronologically by
+// `time`). Goal-group cards are interleaved in their own board-defined
+// order. Session ↔ session nesting was removed in the fix that restored
+// the original design (see specs/new-arch/07-panel-reactivity.md §身份规则).
 
 function rebuildTopLevelOrder(): void {
   const order: string[] = [];
@@ -998,37 +994,25 @@ function rebuildTopLevelOrder(): void {
     for (const childID of node.childIDs || []) claimedChildIDs.add(childID);
   }
 
-  // Classify each session into one of four buckets:
-  //
-  //   (a) stage === ""                      → skip (pending placeholder)
-  //   (b) has resolved container (parent session in sessions, or matching
-  //       goal-step card exists)            → skip (will be claimed by
-  //                                            rebuildCardHierarchy)
-  //   (c) stage === "assistant"             → authorized top-level root.
-  //       Its parentSessionID typically points at task.sessionID, the
-  //       task-level registration session that never emits message.updated
-  //       (see opencorvus task-message-protocol-bridge.ts). That parent
-  //       will never be in `sessions`, so resolveSessionContainerCardID
-  //       correctly returns null and we surface the assistant here.
-  //   (d) stage !== "assistant", parentSessionID OR goalID stamped, but
-  //       container not yet materialized → skip silently (waiting for
-  //       parent session's message.updated / goal-step construction to
-  //       arrive in this event batch; next rebuild will claim it).
-  //   (e) stage !== "assistant", no parentSessionID AND no goalID
-  //                                         → genuine backend linkage bug;
-  //                                           loud-fail below.
+  // Collect every session card that isn't claimed by a goal-step. Two filters:
+  //   1. stage === "" → `pending:session:<sid>` placeholders created when a
+  //      message.part.updated arrives before its message.updated. They will
+  //      be renamed + surfaced once the real stage lands; showing them now
+  //      would render an identity that mutates mid-frame.
+  //   2. resolveSessionContainerCardID(info) → session has a goalID whose
+  //      goal-step card exists. In that case rebuildCardHierarchy will nest
+  //      it under the goal-step; skip here to avoid duplicating.
   const rootSessions: string[] = [];
   for (const info of sessions.values()) {
     if (info.stage === "") continue;
     if (resolveSessionContainerCardID(info)) continue;
     if (!cardTreeStore.cards[info.cardID]) continue;
-    if (info.stage === "assistant") {
-      rootSessions.push(info.cardID);
-      continue;
-    }
-    if (info.parentSessionID || info.goalID) continue; // waiting (d)
-    rootSessions.push(info.cardID); // escape candidate (e) — orphan check throws
+    rootSessions.push(info.cardID);
   }
+  rootSessions.sort(
+    (a, b) => (cardTreeStore.cards[a]?.time || 0) - (cardTreeStore.cards[b]?.time || 0),
+  );
+
   // Goal groups in board order.
   const goalCards: string[] = [];
   const goalWorkflows: any[] = Array.isArray(boardStore.board?.goalWorkflows)
@@ -1058,35 +1042,14 @@ function rebuildTopLevelOrder(): void {
     order.push("ctx:user-request");
   }
 
-  // Assistant-stage root session sorts next (single root orchestrator).
-  const assistantRoots = rootSessions.filter(
-    (id) => cardTreeStore.cards[id]?.stage === "assistant",
-  );
-  for (const id of assistantRoots) order.push(id);
+  // All session cards (assistant + sub-agents), chronological.
+  for (const id of rootSessions) order.push(id);
 
-  // Goal groups.
+  // Goal groups in board order — surfaced after sessions. (If a goal-group
+  // is active at the same time an independent sub-agent session is
+  // running, the goal-group still reads as a structured container so it
+  // belongs after the free-form session stream.)
   for (const id of goalCards) order.push(id);
-
-  // Any remaining rootSession is a non-assistant sub-agent session with no
-  // parent linkage — that's a backend bug (missing parentSessionID / goalID
-  // stamping). Loud-fail instead of silently promoting to top level, which
-  // is how the fidelity card ended up there (and how `pending:session:*`
-  // ghost cards would leak if the guard above didn't skip them).
-  const orphans = rootSessions.filter(
-    (id) => cardTreeStore.cards[id]?.stage !== "assistant",
-  );
-  if (orphans.length > 0) {
-    const detail = orphans
-      .map((id) => {
-        const node = cardTreeStore.cards[id];
-        const info = [...sessions.values()].find((s) => s.cardID === id);
-        return `${id} (stage=${node?.stage ?? "?"}, goalID=${info?.goalID || "-"}, parentSessionID=${info?.parentSessionID || "-"})`;
-      })
-      .join(", ");
-    throw new Error(
-      `tree-writer: non-assistant sub-agent session escaped to top level — backend missing parentSessionID/goalID linkage: ${detail}`,
-    );
-  }
 
   // Orphan interaction cards: task-level prompts with no live session container.
   for (const id of orphanInteractionCards) order.push(id);

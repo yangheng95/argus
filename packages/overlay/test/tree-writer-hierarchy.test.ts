@@ -17,7 +17,14 @@ import {
   TASK_ID,
 } from "./fixtures/goal-phase-events";
 
-test("tree-writer nests goal sessions under goal steps and parent sessions", async () => {
+test("tree-writer claims goal-scoped sessions under their goal-step card only", async () => {
+  // All three goal-scoped sessions (executor / build / planner) share
+  // goalID=GOAL_ID and the same "build" step, so they collect under
+  // `goal-group:<gid>:step:build` regardless of their session-to-session
+  // parent links. Non-goal sub-agent sessions (requirements / design-analyst
+  // / architect) surface as independent top-level siblings of the root
+  // assistant card — session ↔ session nesting was intentionally removed
+  // (see specs/new-arch/07-panel-reactivity.md §身份规则).
   const snapshot = await replay(EVENTS, INITIAL_BOARD);
   const buildStepID = `goal-group:${GOAL_ID}:step:build`;
   const executorCardID = `executor:session:${GOAL_SID}`;
@@ -29,21 +36,39 @@ test("tree-writer nests goal sessions under goal steps and parent sessions", asy
   const rootCardID = `assistant:session:${ROOT_SID}`;
 
   expect(snapshot.nodes[buildStepID]).toBeDefined();
-  expect(snapshot.nodes[executorCardID]).toBeDefined();
-  expect(snapshot.nodes[buildCardID]).toBeDefined();
-  expect(snapshot.nodes[plannerCardID]).toBeDefined();
-  expect(snapshot.nodes[requirementsCardID]).toBeDefined();
-  expect(snapshot.nodes[designCardID]).toBeDefined();
-  expect(snapshot.nodes[architectCardID]).toBeDefined();
-  expect(snapshot.nodes[buildStepID]!.childIDs).toContain(executorCardID);
-  expect(snapshot.nodes[executorCardID]!.childIDs).toContain(buildCardID);
-  expect(snapshot.nodes[buildCardID]!.childIDs).toContain(plannerCardID);
-  expect(snapshot.nodes[rootCardID]!.childIDs).toContain(requirementsCardID);
-  expect(snapshot.nodes[rootCardID]!.childIDs).toContain(designCardID);
-  expect(snapshot.nodes[rootCardID]!.childIDs).toContain(architectCardID);
+  for (const cardID of [
+    executorCardID,
+    buildCardID,
+    plannerCardID,
+    requirementsCardID,
+    designCardID,
+    architectCardID,
+    rootCardID,
+  ]) {
+    expect(snapshot.nodes[cardID]).toBeDefined();
+  }
+
+  // Goal-step claims the three goal-scoped sessions.
+  for (const cardID of [executorCardID, buildCardID, plannerCardID]) {
+    expect(snapshot.nodes[buildStepID]!.childIDs).toContain(cardID);
+  }
+
+  // Non-goal sub-agent sessions are top-level siblings, not children of root.
+  const rootChildren = snapshot.nodes[rootCardID]!.childIDs || [];
+  for (const cardID of [requirementsCardID, designCardID, architectCardID]) {
+    expect(rootChildren).not.toContain(cardID);
+    expect(snapshot.order).toContain(cardID);
+  }
+  expect(snapshot.order).toContain(rootCardID);
+
+  // Goal-scoped sessions do NOT nest session-under-session anymore — the old
+  // executor→build→planner chain flattens so all three sit as siblings of
+  // the goal-step.
+  expect(snapshot.nodes[executorCardID]!.childIDs || []).not.toContain(buildCardID);
+  expect(snapshot.nodes[buildCardID]!.childIDs || []).not.toContain(plannerCardID);
 });
 
-test("tree-writer nests non-goal child sessions under their parent session card", () => {
+test("non-goal sub-agent sessions surface at top level, not under their parent session", () => {
   setBoardStore("board", {
     task: {
       id: TASK_ID,
@@ -93,8 +118,8 @@ test("tree-writer nests non-goal child sessions under their parent session card"
   const architectCardID = "architect:session:ses_architect";
 
   expect(cardTreeStore.order).toContain(rootCardID);
-  expect(cardTreeStore.order).not.toContain(architectCardID);
-  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).toContain(architectCardID);
+  expect(cardTreeStore.order).toContain(architectCardID);
+  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(architectCardID);
 });
 
 test("tree-writer preserves step summaries and payloads from board.goalWorkflows", () => {
@@ -322,46 +347,11 @@ test("pending:session:* placeholder does not escape to top-level order", () => {
   expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined();
   expect(cardTreeStore.cards["planner:session:ses_race"]).toBeDefined();
   expect(cardTreeStore.order).toContain(rootCardID);
-  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).toContain(
+  // Planner is now a top-level sibling of the root assistant, not a child.
+  expect(cardTreeStore.order).toContain("planner:session:ses_race");
+  expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(
     "planner:session:ses_race",
   );
-});
-
-test("non-assistant orphan sub-agent session throws (no silent top-level escape)", () => {
-  resetWriter();
-  setBoardStore("board", {
-    task: {
-      id: TASK_ID,
-      status: "active",
-      request: "trace orphans",
-      sessionID: ROOT_SID,
-      time: { created: 1_776_000_000_000 },
-      attachments: [],
-    },
-    goalWorkflows: [],
-    interactions: [],
-  });
-  setBoardStore("selectedTaskID", TASK_ID);
-
-  // A sub-agent session with NO parentSessionID and NO goalID is a backend
-  // linkage bug. The writer must loud-fail instead of dropping the session
-  // into rebuildTopLevelOrder's old "others" bucket.
-  expect(() =>
-    applyEvent({
-      type: "message.updated",
-      properties: {
-        taskID: TASK_ID,
-        info: {
-          id: "msg_orphan",
-          sessionID: "ses_orphan",
-          role: "assistant",
-          resolvedRole: "planner",
-          agent: "planner",
-          time: { created: 1_776_000_001_000 },
-        },
-      },
-    }),
-  ).toThrow(/non-assistant sub-agent session escaped to top level/);
 });
 
 test("fidelity card attaches under requirements session when session is known", () => {

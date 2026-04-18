@@ -19,6 +19,12 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "milestone.activated",
   "milestone.passed",
   "milestone.failed",
+  // Fidelity review lifecycle markers — emitted by requirements/fidelity.ts
+  // purely to keep the SSE stream alive while the non-streaming verdict LLM
+  // runs (60–180s). The overlay renders the verdict via fidelity.review.completed;
+  // started/progress carry no payload the user needs.
+  "fidelity.review.started",
+  "fidelity.review.progress",
 ]);
 
 const TREE_WRITER_PASS_THROUGH_PREFIXES = [

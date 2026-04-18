@@ -43,6 +43,7 @@ import {
 // callers can pass appStore-sourced data (e.g. connection status, log
 // entries) into the menu without a separate import line at the call site.
 import { appStore, setAppStore } from "../store/app";
+import { boardStore } from "../store/board";
 import { t } from "../utils/i18n";
 import {
   sanitizeTheme,
@@ -132,6 +133,62 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
  // Opacity as integer percent (mirrors renderTitlebarMenu opacityRange / opacityValue)
   const opacityPct = createMemo(() =>
     Math.round(sanitizeOpacity(settingsStore.opacity) * 100),
+  );
+
+ // ── Task budget sliders ──
+ //
+ // Bounds mirror what the backend validates against — max_runs and
+ // max_executor_groups are plain numbers on `assistant` config (see
+ // opencorvus/src/engine/config.ts). Bounds chosen from the defaults
+ // documented in docs/product/zh-CN/opencorvus/configuration.md:
+ //   max_runs default 15, practical ceiling ~30 before cost dominates
+ //   max_executor_groups default 5, backend uses 1-10 for parallel dispatch
+ // Keeping the range narrow forces the slider to be a cost-conscious dial,
+ // not a free-form input — the old number fields let users type 999 and
+ // burn tokens.
+  const MAX_RUNS_MIN = 1;
+  const MAX_RUNS_MAX = 30;
+  const MAX_RUNS_DEFAULT = 15;
+  const MAX_GROUPS_MIN = 1;
+  const MAX_GROUPS_MAX = 10;
+  const MAX_GROUPS_DEFAULT = 5;
+
+  const clamp = (v: number, lo: number, hi: number): number =>
+    Math.min(Math.max(Math.round(v), lo), hi);
+
+ // Task budget is locked once the task has started — show and disable the
+ // slider reflecting `engine_task.budget` values. Otherwise the slider
+ // reflects the active global config defaults.
+  const taskLockedMaxRuns = createMemo<number | null>(() => {
+    const n = Number((boardStore.board as any)?.task?.budget?.maxRuns);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
+  const taskLockedMaxGroups = createMemo<number | null>(() => {
+    const n = Number((boardStore.board as any)?.task?.budget?.maxExecutorGroups);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
+  const budgetLocked = createMemo(
+    () => !!boardStore.selectedTaskID && taskLockedMaxRuns() !== null,
+  );
+
+  const configMaxRuns = createMemo<number>(() => {
+    const n = Number((appStore.config as any)?.assistant?.max_runs);
+    return Number.isFinite(n) && n > 0 ? n : MAX_RUNS_DEFAULT;
+  });
+  const configMaxGroups = createMemo<number>(() => {
+    const n = Number((appStore.config as any)?.assistant?.max_executor_groups);
+    return Number.isFinite(n) && n > 0 ? n : MAX_GROUPS_DEFAULT;
+  });
+
+  const displayMaxRuns = createMemo(() =>
+    clamp(taskLockedMaxRuns() ?? configMaxRuns(), MAX_RUNS_MIN, MAX_RUNS_MAX),
+  );
+  const displayMaxGroups = createMemo(() =>
+    clamp(
+      taskLockedMaxGroups() ?? configMaxGroups(),
+      MAX_GROUPS_MIN,
+      MAX_GROUPS_MAX,
+    ),
   );
 
  // ── Menu open / close helpers ──
@@ -235,6 +292,34 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     applySettings({ ...settingsStore, opacity: next });
     saveSettings();
     closeMenu();
+  }
+
+ // Budget sliders — commit on `change` (mouseup), not `input`. Each change is
+ // a server PATCH, so holding a commit-per-tick contract keeps the write
+ // volume bounded. The slider's visible value is driven by the reactive
+ // createMemo (config → displayMaxRuns/displayMaxGroups), so optimistic
+ // update isn't needed — `patchConfig` will update appStore.config on
+ // response and the memo re-renders.
+  async function handleMaxRunsChange(rawValue: string) {
+    if (budgetLocked()) return;
+    const next = clamp(Number(rawValue), MAX_RUNS_MIN, MAX_RUNS_MAX);
+    if (next === configMaxRuns()) return;
+    try {
+      await patchConfig({ assistant: { max_runs: next } });
+    } catch (e) {
+      console.error("[titlebar] failed to patch max_runs", e);
+    }
+  }
+
+  async function handleMaxGroupsChange(rawValue: string) {
+    if (budgetLocked()) return;
+    const next = clamp(Number(rawValue), MAX_GROUPS_MIN, MAX_GROUPS_MAX);
+    if (next === configMaxGroups()) return;
+    try {
+      await patchConfig({ assistant: { max_executor_groups: next } });
+    } catch (e) {
+      console.error("[titlebar] failed to patch max_executor_groups", e);
+    }
   }
 
  // ── Lifecycle ──
@@ -573,6 +658,66 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
               )
             }
           />
+        </label>
+
+        {/* ── Max execution runs slider ── */}
+        <label class="titlebar-menu-range" for="budgetMaxRunsRange">
+          <span class="titlebar-menu-copy">
+            <span class="titlebar-menu-title">
+              {t("titlebar.budget_max_runs")}
+            </span>
+            <span class="titlebar-menu-meta">
+              {budgetLocked()
+                ? t("titlebar.budget_locked")
+                : t("titlebar.budget_max_runs_hint")}
+            </span>
+          </span>
+          <span class="titlebar-menu-range-control">
+            <input
+              class="titlebar-menu-slider"
+              id="budgetMaxRunsRange"
+              type="range"
+              min={String(MAX_RUNS_MIN)}
+              max={String(MAX_RUNS_MAX)}
+              step="1"
+              value={String(displayMaxRuns())}
+              disabled={budgetLocked()}
+              onChange={(e) =>
+                void handleMaxRunsChange((e.target as HTMLInputElement).value)
+              }
+            />
+            <span class="titlebar-menu-value">{displayMaxRuns()}</span>
+          </span>
+        </label>
+
+        {/* ── Goal parallelism slider ── */}
+        <label class="titlebar-menu-range" for="budgetMaxGroupsRange">
+          <span class="titlebar-menu-copy">
+            <span class="titlebar-menu-title">
+              {t("titlebar.budget_max_executor_groups")}
+            </span>
+            <span class="titlebar-menu-meta">
+              {budgetLocked()
+                ? t("titlebar.budget_locked")
+                : t("titlebar.budget_max_executor_groups_hint")}
+            </span>
+          </span>
+          <span class="titlebar-menu-range-control">
+            <input
+              class="titlebar-menu-slider"
+              id="budgetMaxGroupsRange"
+              type="range"
+              min={String(MAX_GROUPS_MIN)}
+              max={String(MAX_GROUPS_MAX)}
+              step="1"
+              value={String(displayMaxGroups())}
+              disabled={budgetLocked()}
+              onChange={(e) =>
+                void handleMaxGroupsChange((e.target as HTMLInputElement).value)
+              }
+            />
+            <span class="titlebar-menu-value">{displayMaxGroups()}</span>
+          </span>
         </label>
 
         {/* ── Window opacity slider ── */}

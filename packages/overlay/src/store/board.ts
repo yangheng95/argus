@@ -437,8 +437,17 @@ export function rootTaskSessionID(): string {
 
 
 
-/** Returns the active working directory from the current board task. */
-export function activeDirectory(): string {
+/** Returns the **selected task's** frozen working directory (the directory
+ *  the task was created in, carried on `board.task.directory`).
+ *
+ *  NOTE: this is NOT the user's current cwd. That lives in
+ *  `settingsStore.directory` and is exposed by `services/workspace.ts`'s
+ *  own `activeDirectory()`. The two used to share a name, which silently
+ *  routed UI that meant "current cwd" (e.g. the Init Git button) to the
+ *  frozen task directory instead — leading to visible stale state after
+ *  the user switched workspaces. Callers should pick the semantic they
+ *  actually want. */
+export function selectedTaskDirectory(): string {
   return boardStore.board?.task?.directory ?? "";
 }
 

@@ -5,9 +5,9 @@
 import { t } from "./i18n";
 import { apiJson } from "../services/api";
 import { appStore } from "../store/app";
-import { boardStore, activeDirectory } from "../store/board";
+import { boardStore } from "../store/board";
 import { showAppDialog } from "../services/app-dialog";
-import { clearProjectScopeData } from "../services/workspace";
+import { activeDirectory, clearProjectScopeData } from "../services/workspace";
 import { reloadProjectScope } from "../services/config";
 
 // ── Internal helpers ──

@@ -1,7 +1,7 @@
 import { createMemo, Show } from "solid-js";
 import { displayToolIcon, displayToolDetail, toolStatusLabel, toolNameKey, stripAnsi } from "../utils/tool";
 import { extToLang, renderCodeBlock } from "../utils/markdown";
-import { activeDirectory } from "../store/board";
+import { selectedTaskDirectory } from "../store/board";
 import { TodoListPart, extractTodos } from "./TodoListPart";
 
 // Same tool-kind sets used to drive code rendering below.
@@ -49,7 +49,7 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
   const icon = () => displayToolIcon(toolName());
   const statusLabel = () => toolStatusLabel(status());
   const detail = () => {
-    const raw = displayToolDetail(toolName(), input(), state(), activeDirectory());
+    const raw = displayToolDetail(toolName(), input(), state(), selectedTaskDirectory());
     return raw && raw.toLowerCase() !== toolName().toLowerCase() ? raw : "";
   };
   const raw = () => {

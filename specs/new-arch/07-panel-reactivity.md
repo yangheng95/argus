@@ -73,26 +73,31 @@ status, parts[], children[], ...`），类型定义挪到 `store/card-tree.ts`�
 
 实现 ID 前缀（`packages/overlay/src/services/tree-writer.ts` 为唯一写入方）：
 
-- `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename
+- `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename。**每个 session 默认都是顶级卡**——assistant orchestrator 和 design-analyst / requirements / architect / planner / build / delivery 等 sub-agent session 在 `cardTreeStore.order` 里按 time 并列，没有 session ↔ session 的嵌套。
 - `goal-group:<gid>` —— 一个 goal 一个容器卡
 - `goal-group:<gid>:step:<stepID>` —— goal 容器内的 step 行
 - `ctx:user-request` —— task 请求气泡
 - `ctx:user-request:text` / `ctx:user-request:file:<url|idx>` —— 请求内容 / 附件（作为 `parts` 项，不是独立卡）
 - `interaction-card:<messageID>` —— synthetic interaction 卡（认得 session 就挂 session；否则作为 orphan 出现在顶层）
 - `synthetic:<messageID>` —— chat.ts 的 pending / optimistic 气泡
-- `fidelity:<taskID>` —— requirements fidelity 评审卡（稳定 per-task，upsert；挂在 requirements session 下，绝不逃逸到顶层）
+- `fidelity:<taskID>` —— requirements fidelity 评审卡（稳定 per-task，upsert；挂在 requirements session 的 `childIDs` 下作为其评审产物，绝不直接出现在顶层）
 
 tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts 内通过 `toolToCardNode` 瞬态构造，始终嵌在 parent card body 内——因此没有 escape 风险，也不在本规则表内。
 
-**顶层 order 白名单**（`rebuildTopLevelOrder` 只推这些 id 进 `cardTreeStore.order`）：
+**嵌套规则（唯一允许的 session 容器化）：**
 
-- `ctx:user-request`
-- 唯一 `<stage>:session:<rootSID>`（stage=assistant 的 orchestrator 根）
-- `goal-group:<gid>`
-- 无 session 容器的 orphan `interaction-card:*`
-- `synthetic:*`（真实 session 到达前临时存在）
+- session 有 `goalID` 且对应的 `goal-group:<gid>:step:<stepID>` 卡已存在 → 该 session 作为 step 卡的 child，再经由 goal-group 聚合在 goal 容器里。这是 session 唯一允许的嵌套路径。
+- session 有 `parentSessionID` 但无 `goalID` —— **不嵌套**。即使 parent session 在 `sessions` Map 里也只是元信息，不影响渲染结构。（历史上 93f8cf8de 曾在此分支把 sub-agent 盲目嵌到 parent session 下，73ece775f 又用 throw 把它硬化，都是错误；已删。）
 
-任何其它 kind 出现在顶层都是 bug。`rebuildTopLevelOrder` 对非 assistant 的 rootSession 直接 throw（与 `applyEvent` 对未知事件类型 throw 一致），避免像 fidelity 卡逃逸那样的症状被掩盖。
+**顶层 order**（`rebuildTopLevelOrder` 按此顺序推入 `cardTreeStore.order`）：
+
+1. `ctx:user-request`
+2. 所有未被 goal-step claim 的 session 卡（assistant + 所有 sub-agent），按 `time` 升序
+3. `goal-group:<gid>`（按 board.goalWorkflows 顺序）
+4. 无 session 容器的 orphan `interaction-card:*`
+5. `synthetic:*`（真实 session 到达前临时存在）
+
+`rebuildTopLevelOrder` **不 throw**；session 带 `parentSessionID` 但 parent 尚未 materialize 属正常 SSE 乱序，等下次 rebuild 自然归位。
 
 不再用"依据当前 shape 计算"的 id，全部在事件到达瞬间确定。
 
