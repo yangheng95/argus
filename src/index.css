@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+@theme {
+  /* Apple Design System Colors */
+  --color-bg-primary: #000000;
+  --color-bg-secondary: #1c1c1e;
+  --color-bg-tertiary: #2c2c2e;
+  --color-bg-elevated: #3a3a3c;
+
+  /* Fill colors */
+  --color-fill-primary: rgba(120, 120, 128, 0.36);
+  --color-fill-secondary: rgba(120, 120, 128, 0.32);
+  --color-fill-tertiary: rgba(120, 120, 128, 0.24);
+  --color-fill-quaternary: rgba(120, 120, 128, 0.18);
+
+  /* Text colors */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: rgba(235, 235, 245, 0.6);
+  --color-text-tertiary: rgba(235, 235, 245, 0.3);
+  --color-text-quaternary: rgba(235, 235, 245, 0.18);
+
+  /* Separator colors */
+  --color-separator: rgba(84, 84, 88, 0.65);
+  --color-separator-opaque: #38383a;
+
+  /* Accent colors */
+  --color-accent-blue: #0a84ff;
+  --color-accent-green: #30d158;
+  --color-accent-red: #ff453a;
+  --color-accent-orange: #ff9f0a;
+  --color-accent-yellow: #ffd60a;
+  --color-accent-teal: #64d2ff;
+  --color-accent-indigo: #5e5ce6;
+
+  /* Trading semantic colors (A-share convention: red=up, green=down) */
+  --color-up: #ff453a;
+  --color-down: #30d158;
+  --color-flat: rgba(235, 235, 245, 0.6);
+  --color-up-bg: rgba(255, 69, 58, 0.15);
+  --color-down-bg: rgba(48, 209, 88, 0.15);
+
+  /* Chart colors */
+  --color-chart-line: #0a84ff;
+  --color-chart-area-up: rgba(255, 69, 58, 0.2);
+  --color-chart-area-down: rgba(48, 209, 88, 0.2);
+  --color-chart-candle-up: #ff453a;
+  --color-chart-candle-down: #30d158;
+  --color-chart-ma5: #ff9f0a;
+  --color-chart-ma10: #64d2ff;
+  --color-chart-ma20: #bf5af2;
+  --color-chart-macd-dif: #0a84ff;
+  --color-chart-macd-dea: #ff9f0a;
+  --color-chart-grid: rgba(84, 84, 88, 0.3);
+  --color-chart-crosshair: rgba(235, 235, 245, 0.3);
+
+  /* Primary aliases for backward compatibility */
+  --color-primary-blue: #3B82F6;
+  --color-positive-green: #22C55E;
+  --color-negative-red: #EF4444;
+
+  /* Design tokens from spec */
+  --color-background: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-light: #334155;
+
+  /* MA line colors */
+  --color-ma5: #f59e0b;
+  --color-ma10: #3b82f6;
+  --color-ma20: #8b5cf6;
+  --color-ma60: #ec4899;
+
+  /* Font family */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+}
+
+/* Global styles */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Scrollbar styling for webkit */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-fill-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fill-secondary);
+}
+
+/* Selection styling */
+::selection {
+  background: var(--color-accent-blue);
+  color: white;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: -2px;
+}
+
+/* Number tabular style */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Animation keyframes */
+@keyframes flash-up {
+  0% {
+    background-color: var(--color-up-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flash-down {
+  0% {
+    background-color: var(--color-down-bg);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.animate-flash-up {
+  animation: flash-up 300ms ease-out;
+}
+
+.animate-flash-down {
+  animation: flash-down 300ms ease-out;
+}
