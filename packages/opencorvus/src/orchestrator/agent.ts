@@ -38,7 +38,7 @@ import {
   findRuns,
   findSpecSnapshot,
   findTask,
-  listActiveGoalRunsByCoordinator,
+  listActiveGoalRunsForRun,
   listGoals,
   requireTask,
   DEFAULT_MAX_RUNS,
@@ -107,8 +107,23 @@ export namespace Orchestrator {
     // redundant syncRun re-notifications) are blocked.
     const gateTask = findTask(taskID)
     if (gateTask?.active_run_id) {
-      const activeGoalRuns = listActiveGoalRunsByCoordinator(gateTask.active_run_id)
+      const activeGoalRuns = listActiveGoalRunsForRun(gateTask.active_run_id)
       if (activeGoalRuns.length > 0) {
+        const goalTitleByID = new Map(listGoals(taskID).map((goal) => [goal.id, goal.title]))
+        const now = Date.now()
+        const waitingOn = activeGoalRuns.map((goalRun) => ({
+          goalRunID: goalRun.id,
+          goalID: goalRun.goal_id,
+          goalTitle: goalTitleByID.get(goalRun.goal_id) ?? goalRun.goal_id,
+          sinceMs: Math.max(0, now - (goalRun.time_started ?? goalRun.time_created ?? now)),
+        }))
+        await EngineProtocol.emit(EngineEvent.TaskWaiting, {
+          taskID,
+          runID: gateTask.active_run_id,
+          reason: "dispatch_gate_suppressed",
+          waitingOn,
+          summary: `Waiting on ${waitingOn.length} active goal run(s) before orchestrator dispatch can resume`,
+        }, { source: "orchestrator.dispatch-gate" })
         log.info("orchestrator suppressed by dispatch gate", {
           taskID,
           trigger: trigger.kind,
@@ -553,8 +568,9 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "",
   "## After batch completes (re-triggered with batch_complete)",
   "",
-  "- If ANY goal is still `running` or `pending` → do NOTHING. Wait for the next batch_complete.",
-  "- Once ALL goals are terminal (passed/failed):",
+  "- If ANY dispatchable goal is still `running` or `pending` → do NOTHING. Wait for the next batch_complete.",
+  "- `verification` goals do not dispatch to an executor worktree; they stay pending until **deliver** runs merged-worktree verification.",
+  "- Once ALL dispatchable goals are terminal (passed/failed):",
   "  - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).",
   "  - Some failed → call **query_failed_goals** first, then **retry_failed_goals** with per-goal analysis (root_cause + failure_class + expected_fix). Reflexive retry without analysis is rejected by the tool.",
   "  - Missing dependency discovered → **add_goal** then **retry_failed_goals**.",

@@ -30,7 +30,6 @@ import {
   EngineArtifactTable,
   EngineChannelBindingTable,
   EngineDeliveryTable,
-  EngineExecutorSessionTable,
   EngineEvaluationTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
@@ -85,13 +84,13 @@ import {
   findTask,
   findTaskByRequest,
   hasActiveTaskInProject,
-  findNextQueuedTaskForProject,
   listGlobalTasks,
   listProjectTasks,
   listTaskRows,
   searchProjectTasks,
   listGoals,
   listGoalsByPlan,
+  listGoalRunsForTask,
   listInteractions,
   listMilestones,
   listMilestonesByPlan,
@@ -381,41 +380,28 @@ export namespace EngineService {
       scope: "instance",
       run: () => EngineRuntime.monitorRuns(hooks()),
     })
-    // Serial queue recovery: if the process was restarted while a task was
-    // running, the "active" task may be stuck (its loop is gone). Find it,
-    // reset it to "queued", then kick off the queue from the front.
-    // We do this after a short delay to allow other init code to finish.
-    // Note: extracted into a named async function because Bun does not support
-    // await inside setTimeout(async () => {...}) in bundled output.
-    async function recoverSerialQueue() {
+    // Startup recovery is centralized in engine/recovery.ts. It reconciles
+    // executor_session -> goal_run -> run -> task ordering before any task
+    // loop resumes, so restart recovery cannot requeue a task while stale
+    // live rows still block readiness.
+    async function recoverProjectExecution() {
       const projectID = Instance.project.id
-      // Reset "active" tasks that have no running loop (orphaned by restart).
-      // CRITICAL: check isTaskLoopActive() — tasks with an active loop are NOT orphaned.
-      const { isTaskLoopActive } = await import("@/orchestrator/loop")
-      const orphaned = searchProjectTasks(projectID, { status: "active" })
-      for (const task of orphaned) {
-        if (isTaskLoopActive(task.id)) continue
-        log.warn("serial queue recovery: resetting orphaned active task to queued", { taskID: task.id })
-        const { updateTask: ut } = await import("@/engine/state")
-        await ut(task, { status: "queued", error: null, blocking_reason: null }, "Requeued after process restart")
-      }
-      // Start the queue if there's anything waiting
-      if (!hasActiveTaskInProject(projectID)) {
-        const next = findNextQueuedTaskForProject(projectID)
-        if (next) {
-          log.info("serial queue recovery: starting queued task", { taskID: next.id })
-          import("@/orchestrator/loop").then(async ({ runTaskLoop }) => {
-            const { hooks: h } = await import("@/engine/state")
-            runTaskLoop({ taskID: next.id, trigger: { kind: "restart-recovery" }, hooks: h() }).catch((err) => {
-              log.error("serial queue recovery: task loop failed", { taskID: next.id, error: err instanceof Error ? err.message : String(err) })
-            })
-          })
-        }
-      }
+      const [{ isTaskLoopActive, runTaskLoop }, { hooks: stateHooks }, { recoverProjectExecution }] = await Promise.all([
+        import("@/orchestrator/loop"),
+        import("@/engine/state"),
+        import("@/engine/recovery"),
+      ])
+      await recoverProjectExecution({
+        projectID,
+        isTaskLoopActive,
+        startTaskLoop: async (taskID) => {
+          await runTaskLoop({ taskID, trigger: { kind: "restart-recovery" }, hooks: stateHooks() })
+        },
+      })
     }
     setTimeout(() => {
-      recoverSerialQueue().catch((err) => {
-        log.error("serial queue recovery failed", { error: err instanceof Error ? err.message : String(err) })
+      recoverProjectExecution().catch((err) => {
+        log.error("project recovery failed", { error: err instanceof Error ? err.message : String(err) })
       })
     }, 500)
   }
@@ -912,6 +898,28 @@ export namespace EngineService {
     // Abort Orchestrator and any in-progress pipeline stage
     Orchestrator.abort(taskID)
     abortTaskPipeline(taskID)
+    const liveGoalRuns = listGoalRunsForTask(taskID).filter((row) =>
+      !["completed", "failed", "aborted"].includes(row.status),
+    )
+    await Promise.all(liveGoalRuns.map(async (row) => {
+      const refs = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? row.metadata as Record<string, unknown>
+        : undefined
+      await ExecutorRegistry.require(row.executor).abort({
+        sessionID:
+          typeof refs?.provider_session_id === "string"
+            ? refs.provider_session_id
+            : row.session_id ?? undefined,
+        queueTaskID: typeof refs?.queue_task_id === "string" ? refs.queue_task_id : undefined,
+      }).catch(() => false)
+    }))
+    const { abortLiveExecutionForTask } = await import("@/engine/writer")
+    await abortLiveExecutionForTask({
+      taskID,
+      reason: "task cancelled",
+      cleanupWorkspace: true,
+      includeRuns: false,
+    })
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     if (run) {
       await ExecutorRegistry.require(run.executor).abort({
@@ -1189,17 +1197,8 @@ export namespace EngineService {
       },
       "Run aborted",
     )
-    Database.use((db) =>
-      db
-        .update(EngineExecutorSessionTable)
-        .set({
-          status: "aborted",
-          time_completed: Date.now(),
-          time_updated: Date.now(),
-        })
-        .where(eq(EngineExecutorSessionTable.run_id, runID))
-        .run(),
-    )
+    const { abortExecutorSessionForRun } = await import("@/engine/writer")
+    abortExecutorSessionForRun(runID)
     const task = requireTask(run.task_id)
     if (task.active_run_id === run.id) {
       await updateTask(task, { status: "failed", error: "run aborted", blocking_reason: null, time_completed: Date.now() }, "Run aborted")

@@ -138,6 +138,8 @@ function normGoalStatus(raw: any): CardStatus | undefined {
 
 const ALWAYS_PROMOTE_TOOLS = new Set([
   "task", "agent", "spawnagent", "subagent",
+  // Todo tools render a structured checklist; inline chips would hide the list.
+  "todowrite", "todoread", "todoupdate", "updateplan",
 ]);
 const CODE_WRITE_TOOLS = new Set([
   "write", "writefile", "edit", "editfile", "applypatch",

@@ -114,6 +114,7 @@ This is the core phase. For EVERY requirement from Phase 1, assign it to a goal.
 - `imports`: Interfaces this goal CONSUMES from its dependencies
 - `priority`: blocking (must pass) or advisory (nice-to-have)
 - `kind`: bootstrap | feature | verification | integration | system
+  - `verification` means merged-worktree verification only. It does NOT dispatch to a per-goal executor worktree.
 - `requirement_ids`: REQ-N references this goal covers (MANDATORY — empty = implicit goal)
 
 **The objective field is an EXECUTION DIRECTIVE, not a copy of the PRD.** Each goal executes in an isolated worktree, but the executor ALSO has access to:
@@ -235,6 +236,7 @@ Call `register_goal` once per goal. All fields are validated:
 - exports: every interface/type this goal provides, as actual signature strings (not English).
 - imports: every interface this goal consumes, naming the source dependency.
 - kind must be: bootstrap | feature | verification | integration | system
+- Do NOT create standalone verification goals for "file exists", "design spec exists", or other requirements-stage self-checks. Fold those checks into the owning build goal's `acceptance_specs`, or leave them for delivery verification.
 - priority must be: blocking | advisory
 
 The executor will receive: your `objective`, your `acceptance_specs`, your `owned_paths`, your `exports`, your `imports`, the Decision Log, and `.opencorvus/intent/` (user request + attachments). Your objective therefore does NOT need to restate any of those channels.

@@ -35,8 +35,8 @@ import {
   findRun,
   findTask,
   goalRunQueueTaskID,
-  listActiveGoalRunsByCoordinator,
-  listGoalRunsByCoordinator,
+  listActiveGoalRunsForRun,
+  listGoalRunsForRun,
   listPlanNodesByPlan,
   requireRun,
   requireTask,
@@ -45,12 +45,12 @@ import {
   type RunRow,
   type TaskRow,
 } from "./store"
-import { applyGoalDelivery, cleanupGoalWorkspace } from "@/goal/runner"
+import { cleanupGoalWorkspace } from "@/goal/runner"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
+import { EXECUTOR_ACTIVE_RUN_STATUSES, RUNTIME_MONITORED_RUN_STATUSES } from "./catalog"
 
 const log = Log.create({ service: "engine-runtime" })
-const processStartTime = Date.now()
 const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
 const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Orchestrator eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
@@ -391,7 +391,7 @@ export function hasActiveSessions(): boolean {
         .innerJoin(EngineTaskTable, eq(EngineRunTable.task_id, EngineTaskTable.id))
         .where(and(
           eq(EngineTaskTable.project_id, Instance.project.id),
-          inArray(EngineRunTable.status, ["accepted", "running"]),
+          inArray(EngineRunTable.status, EXECUTOR_ACTIVE_RUN_STATUSES),
         ))
         .limit(1)
         .get(),
@@ -421,7 +421,7 @@ export namespace EngineRuntime {
           .where(
             and(
               eq(EngineTaskTable.project_id, Instance.project.id),
-              inArray(EngineRunTable.status, ["accepted", "running", "blocked", "completed"]),
+              inArray(EngineRunTable.status, RUNTIME_MONITORED_RUN_STATUSES),
             ),
           )
           .all(),
@@ -444,52 +444,14 @@ export namespace EngineRuntime {
   }
 
   /**
-   * Sync per-goal runs: stall detection + orphan recovery.
+   * Per-goal execution is owned by GoalPool + the event bridge.
    *
-   * Goal completion is driven by GoalPool (within the Task Control Loop).
-   * GoalPool handles per-goal stall detection internally (goal-pool.ts).
-   *
-   * This function only handles orphan detection: goal runs from a previous
-   * process that have no event bridge (leftovers from a crash).
+   * Startup orphan cleanup was moved to engine/recovery.ts so runtime polling
+   * no longer tries to reconcile previous-process state here.
    */
   async function syncGoalRuns(runID: string, hooks: RuntimeHooks) {
-    const run = requireRun(runID)
-    if (!run.plan_version_id) return
-
-    // Orphan detection: goal runs created BEFORE the current process started
-    // that have no event bridge. These are leftovers from a crashed process.
-    // The executor process is dead — mark them failed so the task loop
-    // can detect the failure and let Orchestrator decide next steps.
-    const activeGoalRuns = listActiveGoalRunsByCoordinator(runID)
-    for (const goalRun of activeGoalRuns) {
-      if (eventBridgeAborts.has(goalRun.id)) continue
-      if ((goalRun.time_created ?? 0) >= processStartTime) continue
-      log.warn("orphaned goal_run from previous process", { runID, goalRunID: goalRun.id, goalID: goalRun.goal_id })
-      updateGoalRun(goalRun.id, { status: "failed", error: "Orphaned: event bridge lost (process restart)", time_completed: Date.now() })
-      updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
-      if (goalRun.workspace_dir) {
-        await cleanupGoalWorkspace(goalRun.workspace_dir).catch(() => {})
-      }
-    }
-
-    // After orphan cleanup: if all goal runs are dead and no event bridges remain,
-    // the pipeline is fully dead (process restart killed everything).
-    const remaining = listActiveGoalRunsByCoordinator(runID)
-    const hasAnyBridge = remaining.some((gr) => eventBridgeAborts.has(gr.id))
-    if (remaining.length === 0 && !hasAnyBridge && !agentNotifiedRuns.has(run.id)) {
-      const allGoalRuns = listGoalRunsByCoordinator(runID)
-      const orphanFailCount = allGoalRuns.filter((gr) =>
-        gr.status === "failed" && gr.error?.includes("Orphaned"),
-      ).length
-      if (orphanFailCount > 0) {
-        const task = requireTask(run.task_id)
-        if (task.active_run_id === run.id) {
-          log.warn("all goal runs dead after orphan cleanup, failing run", { runID, orphanFailCount })
-          agentNotifiedRuns.add(run.id)
-          await failRun(run, `All goal runs failed (${orphanFailCount} orphaned)`, hooks)
-        }
-      }
-    }
+    void runID
+    void hooks
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -505,10 +467,10 @@ export namespace EngineRuntime {
 
     // Per-goal parallel mode: if this run has ANY goal runs (active or completed),
     // delegate to syncGoalRuns which handles both active-goal polling and pipeline continuation.
-    // Using listGoalRunsByCoordinator (ALL statuses) to detect per-goal mode even when
+    // Using listGoalRunsForRun (ALL statuses) to detect per-goal mode even when
     // all goals have already completed but the run hasn't been finalized yet.
     if (run.status !== "completed" && run.status !== "failed" && run.status !== "aborted") {
-      const allGoalRuns = listGoalRunsByCoordinator(runID)
+      const allGoalRuns = listGoalRunsForRun(runID)
       if (allGoalRuns.length > 0) {
         await syncGoalRuns(runID, hooks)
         return
@@ -648,56 +610,34 @@ export namespace EngineRuntime {
     if (task.status === "completed" || task.status === "cancelled") {
       throw new Error(`Cannot create operator run: task ${task.id} is in terminal state "${task.status}"`)
     }
-    const nextRunID = Identifier.ascending("run")
-    const now = Date.now()
-    Database.transaction((db) => {
-      db.insert(EngineRunTable)
-        .values({
-          id: nextRunID,
-          task_id: task.id,
-          plan_version_id: task.active_plan_version_id,
-          session_id: run.session_id,
-          executor: run.executor,
-          status: "queued",
-          phase: "execute",
-          retry_count: 0,
-          metadata: {
-            previous_run_id: run.id,
-            strategy: "operator_note",
-            prompt_override: buildOperatorPrompt(note),
-          },
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      db.update(EngineTaskTable)
-        .set({
-          active_run_id: nextRunID,
-          status: "active",
-          error: null,
-          blocking_reason: null,
-          time_completed: null,
-          time_updated: now,
-        })
-        .where(eq(EngineTaskTable.id, task.id))
-        .run()
-      Database.effect(() =>
-        EngineProtocol.emit(Event.RunCreated, {
-          taskID: task.id,
-          runID: nextRunID,
-          status: "queued",
-          summary: "Run queued from operator note",
-        }, { taskID: task.id, runID: nextRunID, source: "runtime.operator" }),
-      )
-      Database.effect(() =>
-        EngineProtocol.emit(Event.TaskUpdated, {
-          taskID: task.id,
-          status: "active",
-          summary: "Operator note queued a follow-up run",
-        }, { taskID: task.id, source: "runtime.operator" }),
-      )
+    const { createRun } = await import("./writer")
+    const { updateTask } = await import("./state")
+    const created = createRun({
+      taskID: task.id,
+      planVersionID: task.active_plan_version_id,
+      sessionID: run.session_id ?? null,
+      executor: run.executor,
+      status: "queued",
+      phase: "execute",
+      metadata: {
+        previous_run_id: run.id,
+        strategy: "operator_note",
+        prompt_override: buildOperatorPrompt(note),
+      },
+      summary: "Run queued from operator note",
     })
-    return nextRunID
+    await updateTask(
+      task,
+      {
+        active_run_id: created.id,
+        status: "active",
+        error: null,
+        blocking_reason: null,
+        time_completed: null,
+      },
+      "Operator note queued a follow-up run",
+    )
+    return created.id
   }
 
 }
@@ -708,7 +648,7 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   stopEventBridge(run.id) // serial bridge
   // Stop all per-goal event bridges (abort propagates to executor via consumeExecutorEvents)
   // Infrastructure only writes goal_run.status — goal.status is Orchestrator's decision
-  const goalRuns = listActiveGoalRunsByCoordinator(run.id)
+  const goalRuns = listActiveGoalRunsForRun(run.id)
   for (const gr of goalRuns) {
     stopEventBridge(gr.id) // aborts the controller → consumeExecutorEvents loop breaks → executor.abort() called
     updateGoalRun(gr.id, { status: "failed", error: `Parent run failed: ${error}`, time_completed: Date.now() })
@@ -745,65 +685,71 @@ function requirementIDsFromMetadata(metadata: unknown): string[] {
 /**
  * Merge goal delivery to main workspace (orchestrator responsibility).
  * Serialized per-run. Commits merged files to advance HEAD for subsequent worktrees.
+ *
+ * Integration is driven by `delivery.commitRef` alone:
+ *   - The goal's delivery commit is cherry-picked into the main worktree.
+ *   - Owned-paths validation and merge verification read the authoritative file
+ *     list via `filesChangedByCommit(commitRef)` — NEVER from `delivery.diffs`.
+ *     `delivery.diffs` is display/audit only and must not re-enter the merge path.
  */
 export async function mergeGoalDelivery(
   task: TaskRow, run: RunRow, plan: PlanRow, goalRun: GoalRunRow,
-  delivery: { diffs: Array<{ file: string; [key: string]: unknown }> },
+  delivery: { commitRef?: string },
   hooks: RuntimeHooks,
 ) {
   const goalRow = goalRun.goal_id ? Database.use((db) =>
     db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalRun.goal_id)).get(),
   ) : undefined
   const ownedPaths = Array.isArray(goalRow?.owned_paths) ? goalRow.owned_paths : []
+  const commitRef = typeof (delivery as { commitRef?: unknown }).commitRef === "string"
+    ? (delivery as { commitRef?: string }).commitRef?.trim()
+    : undefined
 
-  await serializedMerge(run.id, async () => {
-    await applyGoalDelivery({
-      directory: Instance.directory,
-      delivery: { diffs: delivery.diffs as any },
+  if (!commitRef) {
+    throw new Error(`mergeGoalDelivery: missing commitRef for goalRun ${goalRun.id}`)
+  }
+
+  const { filesChangedByCommit, validateOwnedPaths, getMerger } = await import("@/goal/merge")
+  const committedFiles = await filesChangedByCommit(commitRef, Instance.directory)
+
+  if (ownedPaths.length > 0) {
+    const validation = validateOwnedPaths(
+      committedFiles.map((f) => f.file),
       ownedPaths,
-    })
-    const { $ } = await import("bun")
-    const files = delivery.diffs.map((d) => d.file as string)
-    if (files.length > 0) {
-      // Git operations serialized with Worktree.create/remove via shared lock
-      await Worktree.lock(async () => {
-        const addResult = await $`git add -- ${files}`.quiet().cwd(Instance.directory).nothrow()
-        if (addResult.exitCode !== 0) {
-          log.error("goal merge: git add failed", {
-            goalRunID: goalRun.id,
-            exitCode: addResult.exitCode,
-            stderr: addResult.stderr.toString().slice(0, 500),
-          })
-        }
-        const label = goalRun.goal_id?.slice(-8) ?? "unknown"
-        const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${"goal-merge: " + label}`.quiet().cwd(Instance.directory).nothrow()
-        if (commitResult.exitCode !== 0) {
-          const stderr = commitResult.stderr.toString()
-          if (!stderr.includes("nothing to commit")) {
-            log.error("goal merge: git commit failed", {
-              goalRunID: goalRun.id,
-              exitCode: commitResult.exitCode,
-              stderr: stderr.slice(0, 500),
-            })
-          }
-        }
-        log.info("committed goal merge to advance HEAD", { goalRunID: goalRun.id, files: files.length })
+    )
+    if (!validation.valid) {
+      log.warn("goal merge: files outside owned_paths", {
+        goalRunID: goalRun.id,
+        violations: validation.violations,
+        ownedPaths,
       })
     }
+  }
+
+  await serializedMerge(run.id, async () => {
+    const { $ } = await import("bun")
+    await Worktree.lock(async () => {
+      const cherryPick = await $`git cherry-pick -x ${commitRef}`.quiet().cwd(Instance.directory).nothrow()
+      if (cherryPick.exitCode !== 0) {
+        const stderr = cherryPick.stderr.toString().trim() || cherryPick.stdout.toString().trim() || "git cherry-pick failed"
+        await $`git cherry-pick --abort`.quiet().cwd(Instance.directory).nothrow()
+        throw new Error(`goal merge conflict for ${goalRun.id}: ${stderr}`)
+      }
+      log.info("merged goal delivery by cherry-pick", { goalRunID: goalRun.id, commitRef, files: committedFiles.length })
+    })
   })
 
-  // Verify merge
-  if (delivery.diffs.length > 0) {
-    const { getMerger } = await import("@/goal/merge")
-    const expected = delivery.diffs
-      .filter((d: any) => d.status !== "deleted" && getMerger(d.file as string) !== "skip")
-      .map((d: any) => ({ rel: d.file as string, abs: path.resolve(Instance.directory, d.file as string) }))
-    const missing = expected.filter((f) => !existsSync(f.abs))
-    if (missing.length > 0) {
-      log.error("merge verification failed", { goalRunID: goalRun.id, missing: missing.length })
-      // Non-fatal for pipeline flow — delivery was already persisted, goal_run already completed
-      // The overall evaluator will catch integration issues
-    }
+  // Verify merge: every non-deleted, non-skip file in the commit must now
+  // exist on disk in the main workspace. Source of truth is the commit itself,
+  // not the delivery object.
+  const expected = committedFiles
+    .filter((f) => f.status !== "deleted" && getMerger(f.file) !== "skip")
+    .map((f) => ({ rel: f.file, abs: path.resolve(Instance.directory, f.file) }))
+  const missing = expected.filter((f) => !existsSync(f.abs))
+  if (missing.length > 0) {
+    log.error("merge verification failed", { goalRunID: goalRun.id, missing: missing.length, files: missing.map((m) => m.rel) })
+    // Non-fatal for pipeline flow — delivery was already persisted, goal_run already completed
+    // The overall evaluator will catch integration issues
   }
 }
 

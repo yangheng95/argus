@@ -23,6 +23,7 @@ import type { TaskRow, RunRow, PlanRow } from "@/engine"
 import { mergeGoalDelivery } from "@/engine/runtime"
 import { Database, eq } from "@/storage/db"
 import { blockedGoalDiagnostics } from "@/goal/readiness"
+import { isRunReadyForGoalDispatch } from "./scheduler"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
@@ -162,8 +163,8 @@ export async function runTaskLoop(input: {
     // wait before re-checking instead of busy-looping. Active goal runs mean
     // the executor is still working — poll every 5s until they complete or fail.
     if (run) {
-      const { listActiveGoalRunsByCoordinator } = await import("@/engine/store")
-      const activeRuns = listActiveGoalRunsByCoordinator(run.id)
+      const { listActiveGoalRunsForRun } = await import("@/engine/store")
+      const activeRuns = listActiveGoalRunsForRun(run.id)
       if (activeRuns.length > 0) {
         log.info("active goal runs present, waiting before re-check", {
           taskID, activeGoalRuns: activeRuns.length,
@@ -187,6 +188,16 @@ export async function runTaskLoop(input: {
     const plan = findPlan(run.plan_version_id)
     if (!plan) {
       log.warn("plan not found", { taskID, planID: run.plan_version_id })
+      trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
+      continue
+    }
+
+    if (!isRunReadyForGoalDispatch({ status: run.status, planVersionID: run.plan_version_id })) {
+      log.info("active run is not dispatchable yet", {
+        taskID,
+        runID: run.id,
+        status: run.status,
+      })
       trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
       continue
     }
@@ -263,8 +274,8 @@ export async function runTaskLoop(input: {
         const passed = goals.filter(g => g.status === "passed").length
         const failed = goals.filter(g => g.status === "failed").length
         const nodes = listPlanNodesByPlan(plan.id)
-        const { listGoalRunsByCoordinator } = await import("@/engine/store")
-        const goalRuns = listGoalRunsByCoordinator(run.id)
+        const { listGoalRunsForDispatch } = await import("@/engine/store")
+        const goalRuns = listGoalRunsForDispatch(taskID)
         const diag = blockedGoalDiagnostics(nodes, goals, goalRuns)
 
         log.warn("pending goals blocked — feeding to Orchestrator", {
@@ -384,7 +395,7 @@ async function waitForGoalCompletion(
   plan: PlanRow,
   signal?: AbortSignal,
 ) {
-  const { listGoalRunsByCoordinator, listActiveGoalRunsByCoordinator } = await import("@/engine/store")
+  const { listGoalRunsForRun, listActiveGoalRunsForRun } = await import("@/engine/store")
 
   const POLL_INTERVAL = 5_000 // 5 seconds
   let lastChange = Date.now()
@@ -395,8 +406,8 @@ async function waitForGoalCompletion(
     if (signal?.aborted) break
 
     // Check goal_run status (more granular than goal status)
-    const activeGoalRuns = listActiveGoalRunsByCoordinator(run.id)
-    const allGoalRuns = listGoalRunsByCoordinator(run.id)
+    const activeGoalRuns = listActiveGoalRunsForRun(run.id)
+    const allGoalRuns = listGoalRunsForRun(run.id)
     const snapshot = allGoalRuns.map(gr => `${gr.id}:${gr.status}`).join(",")
 
     if (snapshot !== lastSnapshot) {

@@ -6,9 +6,61 @@
  * - Shared file merging: JSON deep-merge for package.json, tsconfig.json
  * - Conflict detection: flags files modified by multiple concurrent goals
  */
+import { $ } from "bun"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "goal-merge" })
+
+// ── Authoritative file list: what changed in a given commit ──
+
+export interface CommittedFile {
+  file: string
+  status: "added" | "modified" | "deleted" | "renamed" | "copied" | "typechanged" | "unmerged" | "unknown"
+}
+
+/**
+ * Return the list of files changed by `commitRef`, as recorded by git.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for "which files did this goal change".
+ * `delivery.diffs` is display/audit only — any integration decision (merge
+ * verification, owned_paths validation, changed-file scope for per-goal
+ * checks) must go through this helper so the delivery object cannot diverge
+ * from what is actually committed.
+ *
+ * Let it crash: invalid commitRef, non-git directory, or shell failure all
+ * throw. Callers must not swallow the error with an empty-list fallback.
+ */
+export async function filesChangedByCommit(
+  commitRef: string,
+  cwd: string,
+): Promise<CommittedFile[]> {
+  if (!commitRef) throw new Error("filesChangedByCommit: commitRef is empty")
+  const result = await $`git show --name-status --format= ${commitRef}`.quiet().cwd(cwd).nothrow()
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim() || result.stdout.toString().trim() || "git show failed"
+    throw new Error(`filesChangedByCommit(${commitRef}): ${stderr}`)
+  }
+  const stdout = result.stdout.toString()
+  const lines = stdout.split("\n").map((l) => l.trim()).filter((l) => l.length > 0)
+  return lines.map((line) => {
+    const parts = line.split("\t")
+    const code = parts[0] ?? ""
+    const file = parts[parts.length - 1] ?? ""
+    return { file, status: decodeStatus(code) }
+  })
+}
+
+function decodeStatus(code: string): CommittedFile["status"] {
+  const head = code[0]
+  if (head === "A") return "added"
+  if (head === "M") return "modified"
+  if (head === "D") return "deleted"
+  if (head === "R") return "renamed"
+  if (head === "C") return "copied"
+  if (head === "T") return "typechanged"
+  if (head === "U") return "unmerged"
+  return "unknown"
+}
 
 // ── owned_paths validation ──
 

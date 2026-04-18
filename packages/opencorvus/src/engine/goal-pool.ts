@@ -32,8 +32,7 @@ import { Snapshot } from "@/snapshot"
 import {
   listPlanNodesByPlan,
   listGoalsByPlan,
-  listGoalRunsByCoordinator,
-  findLatestDeliveryForGoal,
+  listGoalRunsForDispatch,
   type TaskRow,
   type RunRow,
   type PlanRow,
@@ -118,10 +117,18 @@ export class GoalPool {
    * the rest wait in the queue until their deps are satisfied.
    */
   submit(goalIDs?: string[]) {
-    const { plan, run } = this.opts
+    const { plan, task } = this.opts
     const nodes = listPlanNodesByPlan(plan.id)
     const goals = listGoalsByPlan(plan.id) as GoalRow[]
-    const goalRuns = listGoalRunsByCoordinator(run.id)
+    // Task-scoped goal_run history: readiness must see COMPLETED runs from
+    // prior runs on the same task so goals that passed earlier are not
+    // re-dispatched when the orchestrator creates a second run. A run-scoped
+    // query hides that history, which is the bug that re-executed goal
+    // gol_d9bdd3508002x4iAK65I9apfNo on tsk_d9bc59062001xuMSbxYap8hY5t.
+    // modify_goal / restart_from_stage abort the old goal_runs when they
+    // reset a passed goal, so the retriable `aborted` status re-admits
+    // dispatch for intentional rework.
+    const goalRuns = listGoalRunsForDispatch(task.id)
 
     const ready = readyGoalNodes(nodes, goals, goalRuns)
     const filtered = goalIDs
@@ -199,14 +206,15 @@ export class GoalPool {
   // ---------------------------------------------------------------------------
 
   private fillSlots() {
-    const { plan, run, signal } = this.opts
+    const { plan, task, signal } = this.opts
     if (signal?.aborted) return
 
     while (this.active.size < this.opts.concurrency && this.queue.length > 0) {
-      // Re-evaluate readiness each iteration (a just-dispatched goal's dep resolution may change)
+      // Re-evaluate readiness each iteration (a just-dispatched goal's dep resolution may change).
+      // Task-scoped goal_runs — see submit() for rationale.
       const nodes = listPlanNodesByPlan(plan.id)
       const goals = listGoalsByPlan(plan.id) as GoalRow[]
-      const goalRuns = listGoalRunsByCoordinator(run.id)
+      const goalRuns = listGoalRunsForDispatch(task.id)
       const ready = readyGoalNodes(nodes, goals, goalRuns)
       const readyIDs = new Set(ready.map(e => e.goal.id))
 
@@ -268,6 +276,7 @@ export class GoalPool {
     )
 
     let worktreeDir: string | undefined
+    let goalRun: GoalRunRow | undefined
     try {
       // ── 2. Create worktree ──
       const worktreeInfo = await Worktree.create({
@@ -276,38 +285,7 @@ export class GoalPool {
       })
       worktreeDir = worktreeInfo.directory
 
-      // ── 2b. Apply previous delivery as safety net (if retry) ──
-      // Normally, all deliveries (passed or failed) are merged to HEAD in
-      // step 9, so the retry worktree already contains the previous code.
-      // This replay is a defensive fallback for cases where the HEAD merge
-      // failed silently (e.g., git errors). For normal files this is an
-      // idempotent overwrite; merge-strategy files use the merger.
-      const prevDelivery = findLatestDeliveryForGoal(entry.goal.id)
-      if (prevDelivery) {
-        const result = prevDelivery.result
-        if (result?.diffs && result.diffs.length > 0) {
-          const { applyGoalDelivery } = await import("@/goal/runner")
-          try {
-            await applyGoalDelivery({
-              directory: worktreeDir,
-              delivery: { diffs: result.diffs },
-              ownedPaths: entry.goal.owned_paths ?? [],
-            })
-            log.info("retry: restored previous delivery into worktree", {
-              goalID: entry.goal.id,
-              files: result.diffs.length,
-            })
-          } catch (err) {
-            log.error("retry: FAILED to apply previous delivery — executor starts from scratch", {
-              goalID: entry.goal.id,
-              error: String(err),
-              diffCount: result.diffs.length,
-            })
-          }
-        }
-      }
-
-      // ── 2c-pre. Mount the intent bundle at .opencorvus/intent/ BEFORE planning ──
+      // ── 2b-pre. Mount the intent bundle at .opencorvus/intent/ BEFORE planning ──
       // Every subsequent stage (per-goal planner, executor) runs inside this
       // worktree and its tools may read the mounted files. The bundle must
       // exist before any of them start so prompts that reference
@@ -419,7 +397,7 @@ export class GoalPool {
       const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir, buildSession.id)
 
       // ── 4. Create GoalRun record ──
-      const goalRun = createGoalRun({
+      goalRun = createGoalRun({
         taskID: task.id,
         goalID: entry.goal.id,
         planNodeID: entry.node.id,
@@ -453,6 +431,8 @@ export class GoalPool {
       const slot = this.active.get(entry.goal.id)
       if (slot) slot.goalRunID = goalRun.id
 
+      throwIfAborted(signal)
+
       // ── 5. Build prompt ──
       // Pass only direct dependency rows so the executor prompt does not
       // inflate with N-1 sibling contracts. buildGoalPrompt only ever looks
@@ -472,6 +452,8 @@ export class GoalPool {
         dependencies: dependencyGoals,
         cwd: worktreeDir,
       })
+
+      throwIfAborted(signal)
 
       // ── 6. Submit to executor ──
       // For managed (external) executors, build enriched system context that
@@ -518,6 +500,7 @@ export class GoalPool {
         throw new Error(`goal-pool: Snapshot.track() returned empty for worktree ${worktreeDir}. Per-goal dispatch requires the project to be a git repo with snapshot enabled — current state is incompatible with delivery extraction.`)
       }
       updateGoalRun(goalRun.id, { base_ref: baseRef })
+      throwIfAborted(signal)
 
       // Build step already running from plan sub-phase above; this re-mark
       // is a no-op but keeps the call site for parity with the failure paths.
@@ -631,14 +614,17 @@ export class GoalPool {
       }
 
       // ── 8. Determine goal status from executor result ──
-      // No delivery OR empty delivery → "failed".
-      // A goal that produced zero file changes is not "passed" — the executor
-      // either crashed, hung on permissions, or genuinely did nothing.
+      // No delivery OR no commit → "failed".
+      // commitRef is the single source of truth: deliveryFromSnapshot only
+      // produces one when it actually committed file changes, so "no commitRef"
+      // ≡ "zero file changes". A goal that produced nothing is not "passed" —
+      // the executor either crashed, hung on permissions, or genuinely did
+      // nothing.
       const now = Date.now()
-      if (!delivery || delivery.diffs.length === 0) {
+      if (!delivery || !delivery.commitRef) {
         const failReason = !delivery
           ? (pipelineError ?? "Executor completed without delivery (no error detail)")
-          : (pipelineError ?? "Executor completed but produced zero file changes")
+          : (pipelineError ?? "Executor completed but produced no commit (zero file changes)")
         if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
         Database.use(db => db.update(EngineGoalTable)
           .set({ status: "failed", time_updated: now })
@@ -741,37 +727,9 @@ export class GoalPool {
         }
       }
 
-      // Executor produced nothing → FAIL the goal, don't leak a ghost "passed".
-      //
-      // pipeline/executor.ts:240-258 forces completion after inactivity /
-      // idle-grace, leaving diffs=[] when the LLM hung silently. The comment
-      // there promises "surfaced explicitly downstream" — THIS is that
-      // downstream. Marking passed would push an empty delivery into the
-      // delivery agent, which would then improvise files via write_file and
-      // hide the real failure (provider disconnect, rate limit, etc.). Fail
-      // here so Orchestrator sees the ground truth and can retry with a fresh
-      // goal run or stop the task.
-      if (delivery.diffs.length === 0) {
-        const reason = "Executor produced no files. Likely cause: executor LLM call " +
-          "hung or errored silently (see pipeline/executor.ts forced-completion path)."
-        if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
-        Database.use(db => db.update(EngineGoalTable)
-          .set({ status: "failed", time_updated: now })
-          .where(eq(EngineGoalTable.id, entry.goal.id)).run())
-        await markGoalWorkflowStep(task.id, entry.goal.id, entry.goal.title, "build", "failed").catch(() => undefined)
-        EngineProtocol.emit(Event.GoalFailed, {
-          taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${reason}`,
-        }, { source: "executor" }).catch(() => {})
-        log.warn("goal pool: goal failed — empty delivery", {
-          goalID: entry.goal.id, goalRunID: goalRun.id, reason,
-        })
-        return {
-          goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
-          status: "failed", error: reason, delivery, attempts: 1,
-        }
-      }
-
-      // Executor produced delivery (and evaluator passed if enabled) → mark goal passed
+      // Executor produced delivery (and evaluator passed if enabled) → mark goal passed.
+      // `delivery.commitRef` is guaranteed truthy here: the step-8 guard above
+      // returns "failed" for !delivery.commitRef before reaching this branch.
       Database.use(db => db.update(EngineGoalTable)
         .set({ status: "passed", time_updated: now })
         .where(eq(EngineGoalTable.id, entry.goal.id)).run())
@@ -782,14 +740,12 @@ export class GoalPool {
       }, { source: "executor" }).catch(() => {})
 
       // ── 9. Merge delivery ──
-      if (delivery.diffs.length > 0) {
-        await hooks.mergeDelivery(task, run, plan, goalRun, delivery)
-      }
+      await hooks.mergeDelivery(task, run, plan, goalRun!, delivery)
 
       // ── 10. Cleanup worktree ──
       if (worktreeDir) {
         await cleanupGoalWorkspace(worktreeDir).catch(err => {
-          log.warn("worktree cleanup failed", { goalRunID: goalRun.id, error: String(err) })
+          log.warn("worktree cleanup failed", { goalRunID: goalRun!.id, error: String(err) })
         })
       }
 
@@ -799,7 +755,7 @@ export class GoalPool {
 
       return {
         goalID: entry.goal.id,
-        goalRunID: goalRun.id,
+        goalRunID: goalRun!.id,
         title: entry.goal.title,
         status: "passed",
         verdict: "accepted",
@@ -811,13 +767,28 @@ export class GoalPool {
       if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
       const error = err instanceof Error ? err.message : String(err)
       log.error("goal dispatch/execution failed", { goalID: entry.goal.id, error })
+      if (goalRun) {
+        try {
+          updateGoalRun(goalRun.id, {
+            status: signal.aborted ? "aborted" : "failed",
+            error: signal.aborted ? "aborted" : error,
+            blocking_reason: null,
+          })
+        } catch (updateErr) {
+          log.warn("goal pool: failed to finalize goal_run after dispatch error", {
+            goalID: entry.goal.id,
+            goalRunID: goalRun.id,
+            error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+          })
+        }
+      }
 
       Database.use(db => db.update(EngineGoalTable)
         .set({ status: "failed", time_updated: Date.now() })
         .where(eq(EngineGoalTable.id, entry.goal.id)).run())
 
       return {
-        goalID: entry.goal.id, goalRunID: "", title: entry.goal.title,
+        goalID: entry.goal.id, goalRunID: goalRun?.id ?? "", title: entry.goal.title,
         status: "failed", error, attempts: 1,
       }
     }
@@ -828,5 +799,11 @@ export class GoalPool {
     return new Promise<never>((_, reject) => {
       this.opts.signal!.addEventListener("abort", () => reject(new Error("pool aborted")), { once: true })
     })
+  }
+}
+
+function throwIfAborted(signal: AbortSignal) {
+  if (signal.aborted) {
+    throw new Error("goal dispatch aborted")
   }
 }

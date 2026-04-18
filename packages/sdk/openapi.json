@@ -10120,6 +10120,43 @@
                                 },
                                 "additionalProperties": {}
                               },
+                              "attachments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sha": {
+                                      "type": "string"
+                                    },
+                                    "url": {
+                                      "type": "string"
+                                    },
+                                    "mime": {
+                                      "type": "string"
+                                    },
+                                    "size": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "filename": {
+                                      "type": "string"
+                                    },
+                                    "intent": {
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "sha",
+                                    "url",
+                                    "mime",
+                                    "size"
+                                  ]
+                                }
+                              },
                               "time": {
                                 "type": "object",
                                 "properties": {
@@ -10736,6 +10773,43 @@
                                 },
                                 "additionalProperties": {}
                               },
+                              "attachments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sha": {
+                                      "type": "string"
+                                    },
+                                    "url": {
+                                      "type": "string"
+                                    },
+                                    "mime": {
+                                      "type": "string"
+                                    },
+                                    "size": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "filename": {
+                                      "type": "string"
+                                    },
+                                    "intent": {
+                                      "type": "string"
+                                    },
+                                    "source": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "sha",
+                                    "url",
+                                    "mime",
+                                    "size"
+                                  ]
+                                }
+                              },
                               "time": {
                                 "type": "object",
                                 "properties": {
@@ -11327,6 +11401,43 @@
                       },
                       "additionalProperties": {}
                     },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sha": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "mime": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "filename": {
+                            "type": "string"
+                          },
+                          "intent": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "sha",
+                          "url",
+                          "mime",
+                          "size"
+                        ]
+                      }
+                    },
                     "time": {
                       "type": "object",
                       "properties": {
@@ -11572,6 +11683,43 @@
                             "type": "string"
                           },
                           "additionalProperties": {}
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sha": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "mime": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "intent": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "sha",
+                              "url",
+                              "mime",
+                              "size"
+                            ]
+                          }
                         },
                         "time": {
                           "type": "object",
@@ -12697,6 +12845,43 @@
                             "type": "string"
                           },
                           "additionalProperties": {}
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sha": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "mime": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "filename": {
+                                "type": "string"
+                              },
+                              "intent": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "sha",
+                              "url",
+                              "mime",
+                              "size"
+                            ]
+                          }
                         },
                         "time": {
                           "type": "object",
@@ -20017,6 +20202,73 @@
           "properties"
         ]
       },
+      "Event.task.waiting": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.waiting"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "waitingOn": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "goalRunID": {
+                      "type": "string",
+                      "pattern": "^glr.*"
+                    },
+                    "goalID": {
+                      "type": "string",
+                      "pattern": "^gol.*"
+                    },
+                    "goalTitle": {
+                      "type": "string"
+                    },
+                    "sinceMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "goalRunID",
+                    "goalTitle",
+                    "sinceMs"
+                  ]
+                }
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "reason",
+              "waitingOn",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.spec.created": {
         "type": "object",
         "properties": {
@@ -24474,6 +24726,9 @@
             "$ref": "#/components/schemas/Event.task.updated"
           },
           {
+            "$ref": "#/components/schemas/Event.task.waiting"
+          },
+          {
             "$ref": "#/components/schemas/Event.spec.created"
           },
           {
@@ -26506,17 +26761,13 @@
                 "description": "Continue the agent loop when a tool call is denied",
                 "type": "boolean"
               },
-              "unattended": {
-                "description": "Enable unattended mode — auto-approve permissions and auto-reject stale interactions",
-                "type": "boolean"
-              },
               "auto_permission": {
-                "description": "Auto-approve permission requests in unattended mode (default: true)",
+                "description": "Auto-approve PermissionNext requests (default: true). Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
                 "default": true,
                 "type": "boolean"
               },
               "auto_question": {
-                "description": "Auto-reject unanswered questions after the stale timeout (default: true). When false, questions wait indefinitely for a user reply.",
+                "description": "Auto-reject unanswered question interactions after the stale timeout (default: true). Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
                 "default": true,
                 "type": "boolean"
               },
@@ -27075,7 +27326,7 @@
             "type": "string"
           },
           "checkout": {
-            "description": "When 'sync', await file checkout before returning. Default 'async' (fire-and-forget).",
+            "description": "Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning.",
             "type": "string",
             "enum": [
               "sync",

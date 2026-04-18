@@ -3570,6 +3570,84 @@ code .file-link:hover {
   overflow-x: auto;
 }
 
+/* Structured todo list (todowrite / todoread / updateplan tool body) */
+.msg-todo-list {
+  list-style: none;
+  margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
+  border-radius: calc(14px * var(--ui-scale));
+  background: var(--subtle-2);
+  border: 1px solid var(--subtle-4);
+  font-size: var(--ui-font-control);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+}
+.msg-todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) 0;
+  color: var(--text);
+}
+.msg-todo-icon {
+  flex: 0 0 auto;
+  width: calc(16px * var(--ui-scale));
+  text-align: center;
+  font-family: var(--mono);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.msg-todo-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+.msg-todo-item[data-status="completed"] .msg-todo-icon { color: var(--good); }
+.msg-todo-item[data-status="completed"] .msg-todo-content {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--subtle-4);
+}
+.msg-todo-item[data-status="in_progress"] .msg-todo-icon { color: var(--accent); }
+.msg-todo-item[data-status="in_progress"] .msg-todo-content {
+  color: var(--text);
+  font-weight: 600;
+}
+.msg-todo-item[data-status="cancelled"] .msg-todo-icon { color: var(--bad); }
+.msg-todo-item[data-status="cancelled"] .msg-todo-content {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--subtle-4);
+}
+.msg-todo-priority {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: calc(1px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: calc(8px * var(--ui-scale));
+  font-size: calc(var(--ui-font-control) * 0.82);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--subtle-3, var(--subtle-2));
+  border: 1px solid var(--subtle-4);
+}
+.msg-todo-priority[data-priority="high"] {
+  color: var(--bad);
+  background: var(--bad-dim);
+  border-color: transparent;
+}
+.msg-todo-priority[data-priority="medium"] {
+  color: var(--warn);
+  background: var(--warn-dim);
+  border-color: transparent;
+}
+.msg-todo-priority[data-priority="low"] {
+  color: var(--text-muted);
+}
+
 /* ── Executor Summary Panel (right-panel section) ── */
 .executor-summary {
   display: flex;
@@ -6521,6 +6599,21 @@ body[data-theme="light"] .config-close-btn:hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 0 0 1px var(--hover-accent-border);
+}
+
+.config-subsection-head-actions {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.config-subsection-secondary-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(4px * var(--ui-scale));
+  flex-wrap: wrap;
 }
 
 /* Draw chevrons in CSS so the config toggles do not depend on glyph encoding. */

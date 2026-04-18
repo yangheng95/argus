@@ -50,6 +50,22 @@ export type EventTaskUpdated = {
   }
 }
 
+export type EventTaskWaiting = {
+  type: "task.waiting"
+  properties: {
+    taskID: string
+    runID?: string
+    reason: string
+    waitingOn: Array<{
+      goalRunID: string
+      goalID?: string
+      goalTitle: string
+      sinceMs: number
+    }>
+    summary: string
+  }
+}
+
 export type EventSpecCreated = {
   type: "spec.created"
   properties: {
@@ -1345,6 +1361,7 @@ export type Event =
   | EventAgentUpdated
   | EventTaskCreated
   | EventTaskUpdated
+  | EventTaskWaiting
   | EventSpecCreated
   | EventSpecUpdated
   | EventSpecApproved
@@ -2471,15 +2488,11 @@ export type Config = {
      */
     continue_loop_on_deny?: boolean
     /**
-     * Enable unattended mode — auto-approve permissions and auto-reject stale interactions
-     */
-    unattended?: boolean
-    /**
-     * Auto-approve permission requests in unattended mode (default: true)
+     * Auto-approve PermissionNext requests (default: true). Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.
      */
     auto_permission?: boolean
     /**
-     * Auto-reject unanswered questions after the stale timeout (default: true). When false, questions wait indefinitely for a user reply.
+     * Auto-reject unanswered question interactions after the stale timeout (default: true). Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
      */
     auto_question?: boolean
     /**
@@ -2655,7 +2668,7 @@ export type WorktreeCreateInput = {
    */
   startCommand?: string
   /**
-   * When 'sync', await file checkout before returning. Default 'async' (fire-and-forget).
+   * Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning.
    */
   checkout?: "sync" | "async"
 }
@@ -6975,6 +6988,15 @@ export type TaskListResponses = {
         metadata?: {
           [key: string]: unknown
         }
+        attachments?: Array<{
+          sha: string
+          url: string
+          mime: string
+          size: number
+          filename?: string
+          intent?: string
+          source?: string
+        }>
         time: {
           created: number
           updated: number
@@ -7109,6 +7131,15 @@ export type TaskGlobalListResponses = {
         metadata?: {
           [key: string]: unknown
         }
+        attachments?: Array<{
+          sha: string
+          url: string
+          mime: string
+          size: number
+          filename?: string
+          intent?: string
+          source?: string
+        }>
         time: {
           created: number
           updated: number
@@ -7287,6 +7318,15 @@ export type TaskGetResponses = {
     metadata?: {
       [key: string]: unknown
     }
+    attachments?: Array<{
+      sha: string
+      url: string
+      mime: string
+      size: number
+      filename?: string
+      intent?: string
+      source?: string
+    }>
     time: {
       created: number
       updated: number
@@ -7347,6 +7387,15 @@ export type TaskProgressResponses = {
       metadata?: {
         [key: string]: unknown
       }
+      attachments?: Array<{
+        sha: string
+        url: string
+        mime: string
+        size: number
+        filename?: string
+        intent?: string
+        source?: string
+      }>
       time: {
         created: number
         updated: number
@@ -7635,6 +7684,15 @@ export type TaskBoardResponses = {
       metadata?: {
         [key: string]: unknown
       }
+      attachments?: Array<{
+        sha: string
+        url: string
+        mime: string
+        size: number
+        filename?: string
+        intent?: string
+        source?: string
+      }>
       time: {
         created: number
         updated: number

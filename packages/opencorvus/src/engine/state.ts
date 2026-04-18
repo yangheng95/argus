@@ -6,6 +6,7 @@ import { EngineProgressSnapshotTable, EngineRunTable, EngineTaskTable } from "./
 import { requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { Identifier } from "@/id/id"
 import { assertTransition, type TaskStatus } from "./state-machine"
+import { assertRunTransition, type RunStatus } from "./run-state-machine"
 
 /**
  * Raised by updateTask/updateRun when the caller's row snapshot is stale:
@@ -18,7 +19,7 @@ import { assertTransition, type TaskStatus } from "./state-machine"
 export class StaleRowError extends Error {
   readonly kind = "StaleRow" as const
   constructor(
-    readonly entity: "task" | "run",
+    readonly entity: "task" | "run" | "goal_run",
     readonly id: string,
     readonly expectedStatus: string,
     readonly attemptedStatus: string,
@@ -127,6 +128,9 @@ export async function updateRun(
   summary: string,
 ) {
   const nextStatus = values.status ?? row.status
+  if (nextStatus !== row.status) {
+    assertRunTransition(row.status as RunStatus, nextStatus as RunStatus)
+  }
   const nextBlocking = values.blocking_reason === undefined ? row.blocking_reason : values.blocking_reason
   const nextError = values.error === undefined ? row.error : values.error
   const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
@@ -146,6 +150,16 @@ export async function updateRun(
   }
   const now = Date.now()
   const statusChanged = nextStatus !== row.status
+  const normalizedValues = {
+    ...values,
+    ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
+    ...(!row.time_started && ["accepted", "running", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
+      ? { time_started: now }
+      : {}),
+    ...((nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") && values.time_completed === undefined
+      ? { time_completed: now }
+      : {}),
+  }
   let updated: RunRow | undefined
   Database.transaction((db) => {
     const whereClause = statusChanged
@@ -157,7 +171,7 @@ export async function updateRun(
     updated = db
       .update(EngineRunTable)
       .set({
-        ...values,
+        ...normalizedValues,
         time_updated: now,
       })
       .where(whereClause)

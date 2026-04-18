@@ -12,6 +12,7 @@ import { Snapshot } from "@/snapshot"
 import { Database, eq, and, inArray } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { sessionGoalID } from "@/server/routes/task-event"
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -129,9 +130,8 @@ export namespace OpencodeExecutor {
     }
   }
 
-  export async function* events(input: { sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
-    if (!input.sessionID) return
-    const sessionID = input.sessionID
+  export async function* events(input: { goalID?: string; sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
+    if (!input.goalID && !input.sessionID) return
     const queue: Array<z.infer<typeof EventResult>> = []
     let done = false
     let wake: (() => void) | undefined
@@ -149,7 +149,7 @@ export namespace OpencodeExecutor {
     const handler = (msg: { payload: any }) => {
       const event = msg.payload
       if (!event || typeof event.type !== "string") return
-      const next = mapEvent(event, sessionID)
+      const next = mapEvent(event, input)
       if (!next) return
       push(next)
       if (next.type === "task-queue.completed" && input.queueTaskID) {
@@ -187,24 +187,34 @@ export namespace OpencodeExecutor {
   }
 }
 
-function mapEvent(event: { type: string; properties: Record<string, unknown> }, sessionID: string) {
+function eventSessionID(event: { type: string; properties: Record<string, unknown> }) {
   const props = event.properties
-  const matchSession =
-    props.sessionID === sessionID ||
-    (typeof props === "object" &&
-      props !== null &&
-      "info" in props &&
-      typeof props.info === "object" &&
-      props.info !== null &&
-      (props.info as Record<string, unknown>).sessionID === sessionID) ||
-    (typeof props === "object" &&
-      props !== null &&
-      "part" in props &&
-      typeof props.part === "object" &&
-      props.part !== null &&
-      (props.part as Record<string, unknown>).sessionID === sessionID)
+  if (typeof props.sessionID === "string" && props.sessionID.length > 0) return props.sessionID
+  const info = props.info
+  if (typeof info === "object" && info !== null && typeof (info as Record<string, unknown>).sessionID === "string") {
+    return (info as Record<string, unknown>).sessionID as string
+  }
+  const part = props.part
+  if (typeof part === "object" && part !== null && typeof (part as Record<string, unknown>).sessionID === "string") {
+    return (part as Record<string, unknown>).sessionID as string
+  }
+  return undefined
+}
 
-  if (!matchSession) return
+function mapEvent(
+  event: { type: string; properties: Record<string, unknown> },
+  input: { goalID?: string; sessionID?: string },
+) {
+  const props = event.properties
+  const sessionID = eventSessionID(event)
+  if (!sessionID) return
+  if (input.goalID) {
+    if (sessionGoalID(sessionID) !== input.goalID) return
+  } else if (input.sessionID) {
+    if (sessionID !== input.sessionID) return
+  } else {
+    return
+  }
 
   if (event.type === SessionStatus.Event.Status.type) {
     return {

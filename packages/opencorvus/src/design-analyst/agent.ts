@@ -37,8 +37,10 @@ import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
+import { Instance } from "@/project/instance"
 import type { DesignAnalysis } from "./types"
 import { createDesignOutputTools, collectorToAnalysis } from "./output-tools"
+import { createReadAttachmentTool } from "./read-attachment-tool"
 
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 
@@ -63,10 +65,11 @@ export namespace DesignAnalystAgent {
     /** Visual references already materialized into the task's attachment store
      *  (user uploads, Figma-rendered frames, URL screenshots — any source). */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
-    /** URL to fetch and analyze (live page or design reference). Note:
-     *  Figma URLs are materialized into `attachments` upstream by the
-     *  design_analysis tool — design-analyst itself does not re-fetch them. */
-    url?: string
+    /** URLs to analyze as live references. Figma URLs are materialized into
+     *  `attachments` upstream by the design_analysis tool — design-analyst
+     *  itself does not re-fetch them. Non-Figma URLs are listed here so the
+     *  agent can call `webfetch` on them for HTML/CSS inspection. */
+    urls?: string[]
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -204,7 +207,7 @@ async function run(input: {
   title: string
   request: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
-  url?: string
+  urls?: string[]
   taskID?: string
   sessionID?: string
   signal?: AbortSignal
@@ -224,10 +227,19 @@ async function run(input: {
 
   if (input.signal?.aborted) throw new Error("design analyst aborted after model resolution")
 
-  // Merge planner tools (codebase exploration) + webfetch + design output tools
+  // Merge planner tools (codebase exploration) + webfetch + read_attachment
+  // + design output tools
   const plannerTools = await filterAgentTools(createPlannerTools(), "design-analyst")
   const outputToolKit = createDesignOutputTools()
-  const guard = toolGuard({ ...plannerTools, ...createWebfetchTool(), ...outputToolKit.tools })
+  const projectID = (() => {
+    try { return Instance.project.id } catch { return "" }
+  })()
+  const guard = toolGuard({
+    ...plannerTools,
+    ...createWebfetchTool(),
+    ...createReadAttachmentTool(projectID),
+    ...outputToolKit.tools,
+  })
 
   if (input.signal?.aborted) throw new Error("design analyst aborted before LLM call")
 
@@ -241,7 +253,7 @@ async function run(input: {
     title: input.title,
     model: model.id,
     hasAttachments: !!input.attachments?.length,
-    hasUrl: !!input.url,
+    urlCount: input.urls?.length ?? 0,
   })
 
   const abortSignals: AbortSignal[] = [guard.signal]
@@ -322,17 +334,27 @@ async function buildMultimodalContent(
 function buildUserPrompt(input: {
   title: string
   request: string
-  url?: string
+  urls?: string[]
 }): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
-  if (input.url) {
+  const urls = (input.urls ?? []).filter((u) => typeof u === "string" && u.length > 0)
+  if (urls.length > 0) {
+    const lines = urls.map((u, i) => `${i + 1}. ${u}`).join("\n")
     sections.push(
-      `# URL Reference\n\nFetch and analyze this URL: ${input.url}\n` +
-      "Use webfetch to retrieve the page HTML. Analyze the DOM structure, CSS, " +
-      "and visual layout. Cross-reference with any attached images.",
+      `# URL References\n\n${lines}\n\n` +
+      "For each URL: call \`webfetch\` to retrieve the page HTML for DOM / CSS / " +
+      "semantic analysis. A pre-rendered PNG may already be attached as a " +
+      "visual_reference — check the multimodal attachments and cross-reference " +
+      "pixel output with webfetched markup.",
     )
   }
+
+  sections.push(
+    "If textual references (design tokens JSON, style-guide markdown, " +
+    "brand-voice docs) appear in the attachment manifest, read them with " +
+    "`read_attachment` — do NOT ignore or hallucinate their contents.",
+  )
 
   sections.push(
     "Analyze the visual references thoroughly. Register every layout section, " +

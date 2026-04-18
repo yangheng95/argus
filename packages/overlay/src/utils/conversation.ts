@@ -61,10 +61,22 @@ function buildUserContextMessages(): any[] {
   // duplicate by also writing a session message on the backend.
   if (task?.request) {
     const taskCreated = Number(task.time.created);
-    const parts: any[] = [{ type: "text", text: task.request }];
+    // Every part gets a stable id so the upstream reconcile pass (see
+    // Conversation.tsx tree store) can merge by key on re-derivation. Without
+    // these, each rebuild produces a new part object, and any keyed <For>
+    // that walks this bubble's parts would rebind its children on every
+    // board delta — which, in turn, unmounts FilePart/AuthedImage and forces
+    // the blob URL / image to reload from scratch.
+    const parts: any[] = [{ id: "ctx:user-request:text", type: "text", text: task.request }];
     const attachments = Array.isArray((task as any).attachments) ? (task as any).attachments : [];
-    for (const a of attachments) {
+    for (let i = 0; i < attachments.length; i++) {
+      const a = attachments[i];
+      // Prefer `a.url` for the id when present — it's the attachment's
+      // canonical identity and survives attachment reordering. Fall back to
+      // position only when the attachment hasn't been persisted yet.
+      const keySuffix = typeof a?.url === "string" && a.url ? a.url : `idx:${i}`;
       parts.push({
+        id: `ctx:user-request:file:${keySuffix}`,
         type: "file",
         url: a?.url,
         mime: a?.mime,

@@ -1,0 +1,253 @@
+/**
+ * Writer/invariant primitives for terminating live execution state.
+ *
+ * Both process-restart recovery and operator-driven restart_from_stage need
+ * to abort the same kinds of rows — live goal_runs, live executor_sessions,
+ * live runs — and optionally clean up per-goal workspaces. Historically
+ * each call site had its own copy of the "loop + abort" logic, which
+ * drifted: recovery cleaned goal workspaces but restart_from_stage did not,
+ * executor session aborts in some paths went through the writer layer and
+ * in others didn't, error messages formatted differently, and new rows
+ * were created with raw `db.insert` side-stepping the state-machine writers.
+ *
+ * This module keeps the primitives in one place so callers only choose the
+ * scope filter (project vs task) and the cleanup policy. All status writes
+ * go through `updateGoalRun` / `updateExecutorSessionStatus*` / `updateRun`,
+ * which enforce CAS + state-machine transitions + event emission (for
+ * task/run).
+ */
+import { Log } from "@/util/log"
+import { Database, eq } from "@/storage/db"
+import { Identifier } from "@/id/id"
+import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
+import { EngineRunTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
+import { Event } from "./model"
+import { EngineProtocol } from "./protocol"
+import {
+  updateExecutorSessionStatus,
+  updateExecutorSessionStatusByID,
+  updateGoalRun,
+} from "./persist"
+import {
+  findRuns,
+  listGoalRunsForTask,
+  listLiveExecutorSessionsForProject,
+  listLiveGoalRunsForProject,
+  listLiveRunsForProject,
+  type ExecutorSessionRow,
+  type GoalRunRow,
+  type RunRow,
+  type TaskRow,
+} from "./store"
+import { updateRun } from "./state"
+
+const log = Log.create({ service: "engine-writer" })
+
+// ---------------------------------------------------------------------------
+// Initial writes (insertions)
+// ---------------------------------------------------------------------------
+
+export interface CreateRunInput {
+  taskID: string
+  planVersionID?: string | null
+  sessionID?: string | null
+  executor: RunRow["executor"]
+  status: EngineRunStatus
+  phase?: RunRow["phase"]
+  retryCount?: number
+  metadata?: Record<string, unknown>
+  linkAsActive?: boolean
+  summary?: string
+  now?: number
+}
+
+/**
+ * Insert a new EngineRunTable row and emit RunCreated.
+ *
+ * Callers used to do `db.insert(EngineRunTable).values({...})` directly with
+ * their own `status`/`phase`/`metadata`, which (a) bypassed event emission
+ * and (b) scattered initial-state conventions across three different tools
+ * (execute_goal, create_run, restart_from_stage). Funnel everything through
+ * here so "a new run exists" is one fact with one audit trail.
+ *
+ * Optional `linkAsActive=true` also sets `task.active_run_id` in the same
+ * transaction — matches the behavior the tools previously inlined.
+ */
+export function createRun(input: CreateRunInput): RunRow {
+  const runID = Identifier.ascending("run")
+  const now = input.now ?? Date.now()
+  const summary = input.summary ?? `run created (${input.status})`
+  let inserted: RunRow | undefined
+  Database.transaction((db) => {
+    db.insert(EngineRunTable)
+      .values({
+        id: runID,
+        task_id: input.taskID,
+        plan_version_id: input.planVersionID ?? null,
+        session_id: input.sessionID ?? null,
+        executor: input.executor,
+        status: input.status,
+        phase: input.phase ?? "dispatch",
+        retry_count: input.retryCount ?? 0,
+        metadata: input.metadata ?? {},
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    if (input.linkAsActive) {
+      db.update(EngineTaskTable)
+        .set({ active_run_id: runID, time_updated: now })
+        .where(eq(EngineTaskTable.id, input.taskID))
+        .run()
+    }
+    inserted = db
+      .select()
+      .from(EngineRunTable)
+      .where(eq(EngineRunTable.id, runID))
+      .get()
+    Database.effect(() =>
+      EngineProtocol.emit(
+        Event.RunCreated,
+        { taskID: input.taskID, runID, status: input.status, summary },
+        { source: "writer.createRun" },
+      ),
+    )
+  })
+  if (!inserted) throw new Error(`createRun: inserted run ${runID} not found after insert`)
+  return inserted
+}
+
+// ---------------------------------------------------------------------------
+// Termination primitives (used by both recovery and restart_from_stage)
+// ---------------------------------------------------------------------------
+
+export interface AbortOptions {
+  reason: string
+  cleanupWorkspace?: boolean
+}
+
+/** Abort a batch of goal_run rows, optionally cleaning up their worktrees. */
+export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): Promise<number> {
+  let aborted = 0
+  for (const row of rows) {
+    const updated = updateGoalRun(row.id, {
+      status: "aborted",
+      error: options.reason,
+      blocking_reason: null,
+    })
+    if (updated) aborted += 1
+    if (options.cleanupWorkspace && row.workspace_dir) {
+      const { cleanupGoalWorkspace } = await import("@/goal/runner")
+      await cleanupGoalWorkspace(row.workspace_dir).catch((error) => {
+        log.warn("goal workspace cleanup failed", {
+          goalRunID: row.id,
+          workspaceDir: row.workspace_dir,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }
+  }
+  return aborted
+}
+
+/** Abort a batch of executor_session rows. */
+export function abortExecutorSessions(rows: ExecutorSessionRow[]): number {
+  for (const row of rows) {
+    updateExecutorSessionStatusByID(row.id, "aborted")
+  }
+  return rows.length
+}
+
+/** Abort a batch of run rows via the state.ts writer (CAS + event emission). */
+export async function abortRuns(rows: RunRow[], reason: string): Promise<number> {
+  let aborted = 0
+  for (const row of rows) {
+    await updateRun(
+      row,
+      { status: "aborted", error: reason, blocking_reason: null },
+      reason,
+    )
+    aborted += 1
+  }
+  return aborted
+}
+
+/** Convenience: abort the executor_session attached to a specific run. */
+export function abortExecutorSessionForRun(runID: string) {
+  updateExecutorSessionStatus(runID, "aborted")
+}
+
+// ---------------------------------------------------------------------------
+// Scoped composites
+// ---------------------------------------------------------------------------
+
+export interface AbortLiveResult {
+  goalRuns: number
+  runs: number
+  executorSessions: number
+}
+
+/**
+ * Scope: all live execution state for a single task.
+ *
+ * Used by restart_from_stage. Filters mirror what the previous inline
+ * implementation used:
+ *   - goal_runs with a resettable status (skips completed/aborted/failed)
+ *   - runs in any live status (LIVE_RUN_STATUSES)
+ *   - executor_sessions transitively aborted by goal_run/run termination
+ *     are NOT handled here — callers that need to also abort the
+ *     coordinator run's executor_session should pass `abortRunSession=true`.
+ *
+ * `cleanupWorkspace` defaults to false for parity with the prior
+ * restart_from_stage behavior (which left goal worktrees behind for the
+ * orchestrator to re-enter).
+ */
+export async function abortLiveExecutionForTask(input: {
+  taskID: string
+  reason: string
+  cleanupWorkspace?: boolean
+  includeGoalRuns?: boolean
+  includeRuns?: boolean
+}): Promise<AbortLiveResult> {
+  const goalRunRows = input.includeGoalRuns === false
+    ? []
+    : listGoalRunsForTask(input.taskID).filter((row) =>
+        GOAL_RUN_RESETTABLE_STATUSES.includes(row.status),
+      )
+  const runRows = input.includeRuns === false
+    ? []
+    : findRuns(input.taskID).filter((row) => LIVE_RUN_STATUSES.includes(row.status))
+  const goalRuns = await abortGoalRuns(goalRunRows, {
+    reason: input.reason,
+    cleanupWorkspace: input.cleanupWorkspace,
+  })
+  const runs = await abortRuns(runRows, input.reason)
+  return { goalRuns, runs, executorSessions: 0 }
+}
+
+/**
+ * Scope: all live execution state for a project (process-restart recovery).
+ *
+ * Used by recoverProjectExecution. Cleans goal workspaces because the old
+ * worktree directory is no longer registered with any running process — if
+ * we don't remove them, leftover worktrees confuse subsequent runs.
+ *
+ * Orphan-run detection (run is live but has no live goal_run / session) is
+ * left to the caller so recovery can log orphan IDs before aborting.
+ */
+export async function abortLiveExecutionForProject(input: {
+  projectID: string
+  reason: string
+  cleanupWorkspace?: boolean
+}): Promise<AbortLiveResult> {
+  const sessionRows = listLiveExecutorSessionsForProject(input.projectID)
+  const goalRunRows = listLiveGoalRunsForProject(input.projectID)
+  const executorSessions = abortExecutorSessions(sessionRows)
+  const goalRuns = await abortGoalRuns(goalRunRows, {
+    reason: input.reason,
+    cleanupWorkspace: input.cleanupWorkspace ?? true,
+  })
+  return { goalRuns, runs: 0, executorSessions }
+}
+
+export { listLiveRunsForProject }

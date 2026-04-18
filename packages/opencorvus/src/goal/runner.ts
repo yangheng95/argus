@@ -1,3 +1,4 @@
+import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "@/global"
@@ -678,12 +679,61 @@ ${compactPlanContext(input.plan)}`,
  * empty — silently producing a false-negative delivery. Snapshot tree-hash
  * diffs are immune: `baseRef` is a committed tree hash, immutable.
  */
+/**
+ * Remove nested `.git` entries anywhere under `worktreeDir` except the
+ * worktree's own `.git` at the root.
+ *
+ * Why: scaffolding tools (`create-next-app`, `vite create`, `npm init`, etc.)
+ * run `git init` inside the generated directory. If those nested repos
+ * survive to delivery time, both the snapshot subsystem's `git add .` and
+ * the per-goal worktree's own `git add` auto-convert them into gitlink
+ * entries (index mode 160000) — the commit captures a submodule SHA pointer
+ * instead of the scaffolded files. When that commit is cherry-picked back
+ * into the main project, the target directory is an empty submodule pointer
+ * and the user sees no generated code.
+ *
+ * Let it crash: fs.rm / fs.readdir errors propagate. This runs after the
+ * executor has terminated, so there is no concurrent writer to race with.
+ *
+ * Skips `node_modules` because (a) it's noise the snapshot subsystem already
+ * ignores via BASELINE_EXCLUDE and (b) it contains many `.git`-less package
+ * trees whose traversal is expensive and unnecessary.
+ */
+export async function stripNestedGitDirs(worktreeDir: string): Promise<string[]> {
+  const stripped: string[] = []
+  async function walk(dir: string, atRoot: boolean): Promise<void> {
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch((err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return []
+      throw err
+    })
+    for (const entry of entries) {
+      if (entry.name === ".git") {
+        if (atRoot) continue
+        const full = path.join(dir, entry.name)
+        await fs.rm(full, { recursive: true, force: true })
+        stripped.push(path.relative(worktreeDir, full).replaceAll("\\", "/"))
+        continue
+      }
+      if (entry.name === "node_modules") continue
+      if (entry.isDirectory()) {
+        await walk(path.join(dir, entry.name), false)
+      }
+    }
+  }
+  await walk(worktreeDir, true)
+  return stripped
+}
+
 export async function deliveryFromSnapshot(
   baseRef: string | undefined,
   prefix: string,
-): Promise<{ mergeRef: string | undefined; delivery: { summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] } }> {
+): Promise<{ mergeRef: string | undefined; delivery: { summary: string; commitRef?: string; diffs: z.infer<typeof Snapshot.FileDiff>[] } }> {
   if (!baseRef) {
     throw new Error("deliveryFromSnapshot: baseRef is required — it must be captured via Snapshot.track() BEFORE executor starts, inside Instance.provide({ directory: worktreeDir }). Missing baseRef means the upstream dispatch code forgot to snapshot the pre-execution tree.")
+  }
+  const stripped = await stripNestedGitDirs(Instance.worktree)
+  if (stripped.length > 0) {
+    log.info("stripped nested .git before delivery snapshot", { count: stripped.length, paths: stripped })
   }
   const mergeRef = await Snapshot.track()
   if (!mergeRef) {
@@ -691,76 +741,70 @@ export async function deliveryFromSnapshot(
   }
   const rawDiffs = await Snapshot.diffFull(baseRef, mergeRef)
   const diffs = filterDeliveryDiffs(rawDiffs)
+  const commitRef = diffs.length > 0 ? await createGoalDeliveryCommit(diffs, prefix) : undefined
   log.info("snapshot delivery extracted", { baseRef, mergeRef, files: diffs.length, fileNames: diffs.map((d) => d.file) })
   return {
     mergeRef,
     delivery: {
       summary: summary(prefix, diffs.map((d) => d.file)),
+      commitRef,
       diffs,
     },
   }
 }
 
-export async function applyGoalDelivery(input: {
-  directory: string
-  delivery: {
-    diffs: z.infer<typeof Snapshot.FileDiff>[]
+export async function createGoalDeliveryCommit(
+  diffs: Array<{ file: string; status?: string }>,
+  prefix: string,
+): Promise<string> {
+  const files = [...new Set(diffs.map((item) => item.file).filter(Boolean))]
+  if (files.length === 0) {
+    throw new Error("createGoalDeliveryCommit: delivery has no files to commit")
   }
-  ownedPaths?: string[]
-}) {
-  const baseDir = path.resolve(input.directory)
-  const ownedPaths = input.ownedPaths ?? []
 
-  // Validate owned_paths if specified
-  if (ownedPaths.length > 0) {
-    const { validateOwnedPaths } = await import("./merge")
-    const validation = validateOwnedPaths(
-      input.delivery.diffs.map((d) => d.file),
-      ownedPaths,
+  const addResult = await $`git add -A -- ${files}`.quiet().cwd(Instance.directory).nothrow()
+  if (addResult.exitCode !== 0) {
+    const stderr = addResult.stderr.toString().trim() || addResult.stdout.toString().trim() || "git add failed"
+    throw new Error(`createGoalDeliveryCommit: git add failed: ${stderr}`)
+  }
+
+  // Invariant: staged entries must be regular files, not gitlinks. Mode 160000
+  // is a submodule pointer — it captures only a SHA, never the underlying
+  // files. Reaching this branch means stripNestedGitDirs() missed a nested
+  // `.git` (e.g. a .git *file* pointer or a race); fail loud so the scaffold
+  // path is fixed rather than silently shipping an empty submodule pointer.
+  const lsResult = await $`git ls-files --stage -- ${files}`.quiet().cwd(Instance.directory).nothrow()
+  if (lsResult.exitCode !== 0) {
+    const stderr = lsResult.stderr.toString().trim() || lsResult.stdout.toString().trim() || "git ls-files failed"
+    throw new Error(`createGoalDeliveryCommit: git ls-files failed: ${stderr}`)
+  }
+  const gitlinks = lsResult.stdout
+    .toString()
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("160000 "))
+    .map((l) => l.split("\t")[1] ?? "")
+    .filter(Boolean)
+  if (gitlinks.length > 0) {
+    throw new Error(
+      `createGoalDeliveryCommit: delivery contains submodule pointer(s) instead of real files: ${gitlinks.join(", ")}. This happens when a nested .git (from create-next-app, vite create, npm init, etc.) survived stripNestedGitDirs(). Fix the stripping logic; do not commit gitlinks.`,
     )
-    if (!validation.valid) {
-      log.warn("goal delivery: files outside owned_paths", {
-        violations: validation.violations,
-        ownedPaths,
-      })
-      // Allow but warn — emergent changes may be necessary
-    }
   }
 
-  const { getMerger } = await import("./merge")
-
-  for (const diff of input.delivery.diffs) {
-    const file = path.resolve(path.join(input.directory, diff.file))
-    if (!file.startsWith(baseDir + path.sep) && file !== baseDir) {
-      log.warn("goal delivery: skipping path traversal attempt", { file, baseDir })
-      continue
-    }
-    if (diff.status === "deleted") {
-      await fs.rm(file, { force: true }).catch((err) => {
-        log.warn("failed to delete file during goal delivery apply", { file, error: String(err) })
-      })
-      continue
-    }
-
-    // Use merge strategy for shared files (package.json, tsconfig.json, etc.)
-    const merger = getMerger(diff.file)
-    if (merger === "skip") {
-      log.info("goal delivery: skipping lockfile (will be regenerated)", { file: diff.file })
-      continue
-    }
-    if (merger) {
-      const existing = await Filesystem.readText(file).catch(() => "")
-      const result = merger(existing, diff.after ?? "")
-      if (result.conflict) {
-        log.warn("goal delivery: merge conflict", { file: diff.file, reason: result.reason })
-      }
-      await Filesystem.write(file, result.content)
-      log.info("goal delivery: merged shared file", { file: diff.file })
-      continue
-    }
-
-    // Normal file: direct write (owned_paths guarantees no conflict)
-    await Filesystem.write(file, diff.after ?? "")
+  const commitMessage = `${prefix} delivery`
+  const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${commitMessage}`
+    .quiet()
+    .cwd(Instance.directory)
+    .nothrow()
+  if (commitResult.exitCode !== 0) {
+    const stderr = commitResult.stderr.toString().trim() || commitResult.stdout.toString().trim() || "git commit failed"
+    throw new Error(`createGoalDeliveryCommit: git commit failed: ${stderr}`)
   }
+
+  const revParse = await $`git rev-parse HEAD`.quiet().cwd(Instance.directory).nothrow().text()
+  const commitRef = revParse.trim()
+  if (!commitRef) {
+    throw new Error("createGoalDeliveryCommit: git rev-parse HEAD returned empty")
+  }
+  return commitRef
 }
-

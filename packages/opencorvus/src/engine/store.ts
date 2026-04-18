@@ -27,6 +27,7 @@ import {
   type EngineExecutorRef,
   type EngineGoalCheck,
 } from "./engine.sql"
+import { DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
 
 export type TaskRow = typeof EngineTaskTable.$inferSelect
 export type PlanRow = typeof EnginePlanVersionTable.$inferSelect
@@ -244,28 +245,7 @@ export function findDeliveryByGoalRun(goalRunID: string) {
   )
 }
 
-/** Returns the most recent delivery for a goal (across all goal runs for that goal). */
-export function findLatestDeliveryForGoal(goalID: string) {
-  return Database.use((db) =>
-    db
-      .select({
-        id: EngineDeliveryTable.id,
-        goalRunID: EngineDeliveryTable.goal_run_id,
-        summary: EngineDeliveryTable.summary,
-        result: EngineDeliveryTable.result,
-        status: EngineDeliveryTable.status,
-        timeCreated: EngineDeliveryTable.time_created,
-      })
-      .from(EngineDeliveryTable)
-      .innerJoin(EngineGoalRunTable, eq(EngineDeliveryTable.goal_run_id, EngineGoalRunTable.id))
-      .where(eq(EngineGoalRunTable.goal_id, goalID))
-      .orderBy(desc(EngineDeliveryTable.time_created))
-      .limit(1)
-      .get(),
-  )
-}
-
-export function listGoalRunsByTask(taskID: string) {
+export function listGoalRunsForTask(taskID: string) {
   return Database.use((db) =>
     db
       .select()
@@ -324,7 +304,11 @@ export function goalRunQueueTaskID(goalRun?: GoalRunRow) {
   return queueTaskID
 }
 
-export function listActiveGoalRunsByCoordinator(coordinatorRunID: string) {
+export function listGoalRunsForDispatch(taskID: string) {
+  return listGoalRunsForTask(taskID)
+}
+
+export function listActiveGoalRunsForRun(coordinatorRunID: string) {
   return Database.use((db) =>
     db
       .select()
@@ -332,14 +316,14 @@ export function listActiveGoalRunsByCoordinator(coordinatorRunID: string) {
       .where(
         and(
           eq(EngineGoalRunTable.coordinator_run_id, coordinatorRunID),
-          inArray(EngineGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
+          inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
         ),
       )
       .all(),
   )
 }
 
-export function listGoalRunsByCoordinator(coordinatorRunID: string) {
+export function listGoalRunsForRun(coordinatorRunID: string) {
   return Database.use((db) =>
     db
       .select()
@@ -349,6 +333,15 @@ export function listGoalRunsByCoordinator(coordinatorRunID: string) {
       .all(),
   )
 }
+
+/** @deprecated Use listGoalRunsForTask or listGoalRunsForDispatch. */
+export const listGoalRunsByTask = listGoalRunsForTask
+
+/** @deprecated Use listActiveGoalRunsForRun. */
+export const listActiveGoalRunsByCoordinator = listActiveGoalRunsForRun
+
+/** @deprecated Use listGoalRunsForRun. */
+export const listGoalRunsByCoordinator = listGoalRunsForRun
 
 export function listGoals(taskID: string) {
   return Database.use((db) =>
@@ -443,6 +436,60 @@ export function findRuns(taskID: string) {
       .where(eq(EngineRunTable.task_id, taskID))
       .orderBy(desc(EngineRunTable.time_created))
       .all(),
+  )
+}
+
+export function listLiveRunsForProject(projectID: string) {
+  return Database.use((db) =>
+    db
+      .select({ run: EngineRunTable })
+      .from(EngineRunTable)
+      .innerJoin(EngineTaskTable, eq(EngineRunTable.task_id, EngineTaskTable.id))
+      .where(
+        and(
+          eq(EngineTaskTable.project_id, projectID),
+          inArray(EngineRunTable.status, LIVE_RUN_STATUSES),
+        ),
+      )
+      .orderBy(desc(EngineRunTable.time_created))
+      .all()
+      .map((row) => row.run),
+  )
+}
+
+export function listLiveGoalRunsForProject(projectID: string) {
+  return Database.use((db) =>
+    db
+      .select({ goalRun: EngineGoalRunTable })
+      .from(EngineGoalRunTable)
+      .innerJoin(EngineTaskTable, eq(EngineGoalRunTable.task_id, EngineTaskTable.id))
+      .where(
+        and(
+          eq(EngineTaskTable.project_id, projectID),
+          inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
+        ),
+      )
+      .orderBy(desc(EngineGoalRunTable.time_created))
+      .all()
+      .map((row) => row.goalRun),
+  )
+}
+
+export function listLiveExecutorSessionsForProject(projectID: string) {
+  return Database.use((db) =>
+    db
+      .select({ session: EngineExecutorSessionTable })
+      .from(EngineExecutorSessionTable)
+      .innerJoin(EngineTaskTable, eq(EngineExecutorSessionTable.task_id, EngineTaskTable.id))
+      .where(
+        and(
+          eq(EngineTaskTable.project_id, projectID),
+          inArray(EngineExecutorSessionTable.status, LIVE_EXECUTOR_SESSION_STATUSES),
+        ),
+      )
+      .orderBy(desc(EngineExecutorSessionTable.time_created))
+      .all()
+      .map((row) => row.session),
   )
 }
 
@@ -712,7 +759,7 @@ export function activeRunBySession(sessionID: string) {
         and(
           eq(EngineRunTable.session_id, sessionID),
           eq(EngineTaskTable.project_id, Instance.project.id),
-          inArray(EngineRunTable.status, ["accepted", "running", "blocked"]),
+          inArray(EngineRunTable.status, DISPATCHABLE_RUN_STATUSES),
         ),
       )
       .orderBy(desc(EngineRunTable.time_created))

@@ -15,6 +15,7 @@ export type EngineMetadata = Record<string, unknown>
 export type DeliveryResult = {
   diffs?: Array<{ file: string; status?: string; after?: string; diff?: string }>
   changed_files?: string[]
+  commit_ref?: string
   [key: string]: unknown
 }
 

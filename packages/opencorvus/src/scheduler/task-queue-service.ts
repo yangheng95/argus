@@ -43,21 +43,25 @@ export namespace TaskQueueService {
   const CONCURRENCY_DEFAULT = 4
 
   const state = lazyInstanceState(() => ({
-    running: false,
+    polling: false,
+    inFlight: new Set<Promise<void>>(),
   }))
 
   export function init() {
     Scheduler.register({
       id: "task-queue-service.poll",
       interval: POLL_INTERVAL_MS,
-      run: poll,
+      run: async () => {
+        await poll()
+      },
       scope: "instance",
     })
     log.info("task queue service initialized")
   }
 
   export async function runNow() {
-    await poll()
+    const started = await poll()
+    await Promise.allSettled(started)
   }
 
   export async function executePrompt(raw: { sessionID: string; prompt: unknown; source?: string }) {
@@ -107,18 +111,20 @@ export namespace TaskQueueService {
 
   async function poll() {
     const current = state()
-    if (current.running) return
-    current.running = true
-    await run(Date.now()).finally(() => {
-      current.running = false
+    if (current.polling) return []
+    current.polling = true
+    return run(Date.now()).finally(() => {
+      current.polling = false
     })
   }
 
-  async function run(now: number): Promise<void> {
+  async function run(now: number): Promise<Promise<void>[]> {
+    const current = state()
     recover(now)
-    const limit = concurrency()
+    const limit = Math.max(0, concurrency() - current.inFlight.size)
+    if (limit === 0) return []
     const queued = pending(limit)
-    if (queued.length === 0) return
+    if (queued.length === 0) return []
     log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
     const list: Array<typeof TaskQueueTable.$inferSelect> = []
     for (const item of queued) {
@@ -127,8 +133,18 @@ export namespace TaskQueueService {
       if (!task) continue
       list.push(task)
     }
-    if (list.length === 0) return
-    await Promise.all(list.map((task) => execute(task).catch((error) => fail(task, error))))
+    if (list.length === 0) return []
+    const started = list.map((task) => {
+      let running!: Promise<void>
+      running = execute(task)
+        .catch((error) => fail(task, error))
+        .finally(() => {
+          current.inFlight.delete(running)
+        })
+      current.inFlight.add(running)
+      return running
+    })
+    return started
   }
 
   function concurrency() {

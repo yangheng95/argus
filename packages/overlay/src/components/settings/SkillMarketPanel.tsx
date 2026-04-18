@@ -337,28 +337,34 @@ export default function SkillMarketPanel() {
 
       {/* ── Installed Skills ── */}
       <details class="config-subsection">
-        <summary class="config-subsection-head">{t("skill.title")}</summary>
+        <summary class="config-subsection-head">
+          {t("skill.title")}
+          <span class="config-subsection-head-actions" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              class="btn btn-ghost mini"
+              onClick={(e) => { e.stopPropagation(); setShowAddSkill(!showAddSkill()); }}
+            >
+              {t("skill.add")}
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost mini danger"
+              disabled={removableSkills().length === 0}
+              onClick={(e) => { e.stopPropagation(); handleDeleteAllSkills(); }}
+            >
+              {t("skill.delete_all")}
+            </button>
+          </span>
+        </summary>
         <div class="config-subsection-body">
-          <div class="extension-head">
-            <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
-                {t("common.reload")}
-              </button>
-              <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
-                {t("skill.open_dir")}
-              </button>
-              <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddSkill(!showAddSkill())}>
-                {t("skill.add")}
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost mini danger"
-                disabled={removableSkills().length === 0}
-                onClick={handleDeleteAllSkills}
-              >
-                {t("skill.delete_all")}
-              </button>
-            </div>
+          <div class="config-subsection-secondary-bar">
+            <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
+              {t("common.reload")}
+            </button>
+            <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
+              {t("skill.open_dir")}
+            </button>
           </div>
 
         {/* Add Skill inline form */}
@@ -476,24 +482,27 @@ export default function SkillMarketPanel() {
 
       {/* ── MCP Servers ── */}
       <details class="config-subsection">
-        <summary class="config-subsection-head">{t("mcp.title")}</summary>
-        <div class="config-subsection-body">
-          <div class="extension-head">
-            <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost mini" onClick={() => setShowAddMcp(!showAddMcp())}>
-                {t("mcp.add_action")}
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost mini danger"
-                disabled={mcpEntries().length === 0}
-                onClick={handleDeleteAllMcp}
+        <summary class="config-subsection-head">
+          {t("mcp.title")}
+          <span class="config-subsection-head-actions" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              class="btn btn-ghost mini"
+              onClick={(e) => { e.stopPropagation(); setShowAddMcp(!showAddMcp()); }}
+            >
+              {t("mcp.add_action")}
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost mini danger"
+              disabled={mcpEntries().length === 0}
+              onClick={(e) => { e.stopPropagation(); handleDeleteAllMcp(); }}
             >
               {t("mcp.delete_all")}
             </button>
-          </div>
-        </div>
-
+          </span>
+        </summary>
+        <div class="config-subsection-body">
         {/* Add MCP inline form */}
         <Show when={showAddMcp()}>
           <div class="config-inline-form">
