@@ -37,6 +37,8 @@ export interface NormalizedNode {
   title: string;
   subtitle?: string;
   round?: number;
+  phaseID?: string;
+  phaseSessionKind?: string;
   parts: NormalizedPart[];
   childIDs: string[];
 }
@@ -76,6 +78,8 @@ function normalizeNode(id: string, acc: Record<string, NormalizedNode>): string 
   if (node.status) out.status = node.status;
   if (node.subtitle) out.subtitle = node.subtitle;
   if (typeof node.round === "number") out.round = node.round;
+  if (node.phaseID) out.phaseID = node.phaseID;
+  if (node.phaseSessionKind) out.phaseSessionKind = node.phaseSessionKind;
   acc[id] = out;
   return id;
 }
