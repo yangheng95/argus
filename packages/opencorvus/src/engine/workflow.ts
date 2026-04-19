@@ -36,6 +36,29 @@ export interface MiniWorkflowStep {
   skippable: boolean
   /** 前置步骤 ID（声明式依赖，非强制约束） */
   after: string[]
+  /** Optional sub-phases within this step — only populated for goal-scope
+   *  steps whose single-tool-call invocation internally spawns multiple
+   *  sub-agents (e.g. pipeline.build dispatches planner → build worker →
+   *  evaluator as plan/build/evaluate phases). Task-scope steps map 1:1
+   *  to an orchestrator tool call and have no phases. When present, the
+   *  overlay renders phase rows inside the step card and claims child
+   *  sessions by phase (not by step). */
+  phases?: MiniWorkflowPhase[]
+}
+
+/** Sub-phase inside a goal-scope step — reflects the internal structure
+ *  of a single `execute_goal` dispatch. Phases are projected from
+ *  `goal_run.status` (planning / running / evaluating / ...), not driven
+ *  by independent tool calls. Each phase maps to the SessionKind the
+ *  overlay should claim under this phase. */
+export interface MiniWorkflowPhase {
+  /** Phase unique ID (within its step). */
+  id: string
+  /** UI label for the phase row. */
+  label: string
+  /** SessionKind whose sessions claim under this phase. One phase = one
+   *  session kind; multiple phases can't share a kind. */
+  sessionKind: string
 }
 
 /** 一个完整的可插拔工作流模板 */
@@ -65,6 +88,11 @@ export interface GoalWorkflowState {
   goalTitle: string
   goalStatus: string
   steps: Record<string, GoalStepStatus>
+  /** Per-step, per-phase status — only populated for steps that declare
+   *  `phases` in their workflow definition. Derived freshly from
+   *  `goal_run.status` each projection (see `projectGoalSteps`); never
+   *  persisted. Empty for steps without phases. */
+  stepPhases?: Record<string, Record<string, GoalStepStatus>>
 }
 
 /** 任务级工作流追踪状态，存储在 task.metadata._workflow */
@@ -158,13 +186,23 @@ const PIPELINE: MiniWorkflow = {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
       // 真实派发由 GoalPool 完成，工具入口是 `execute_goal`，但语义上每个
       // goal 就是一次"build"调用，UI label 与 direct 路径保持一致。
+      //
+      // 单次 execute_goal 调用内部串联 plan → build → evaluate 三个 phase
+      // （对应 session kind planner / build / evaluator）。phase 状态从
+      // goal_run.status 投影，不是各自独立的 tool 调用 —— orchestrator
+      // 看到的仍是一个 step。见 specs/new-arch/07-panel-reactivity §phase 规则。
       id: "build",
       tool: "execute_goal",
       label: "Build",
-      hint: "每个 goal 在隔离 worktree 中由 build agent 实现。GoalPool 自动调度。",
+      hint: "每个 goal 在隔离 worktree 中由 build agent 实现（内部 plan → build → evaluate）。GoalPool 自动调度。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
+      phases: [
+        { id: "plan",     label: "Plan",     sessionKind: "planner" },
+        { id: "build",    label: "Build",    sessionKind: "build" },
+        { id: "evaluate", label: "Evaluate", sessionKind: "evaluator" },
+      ],
     },
     {
       id: "deliver",
@@ -267,6 +305,12 @@ export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWo
  * goal-scope step (`build`) and its status is whatever the goal's
  * supersede-chain tip goal_run says. One true source, no drift.
  *
+ * When a step declares `phases` (e.g. pipeline.build with plan/build/
+ * evaluate), we also project per-phase status from the same goal_run.status
+ * — goal_run states already encode the phase timeline (planning / running /
+ * evaluating). Phase status transitions are deterministic from run status,
+ * so there's still one source of truth.
+ *
  * Returns the `goalSteps` shape (keyed by goalID) so callers (board.ts,
  * renderWorkflowPrompt) can consume it as if it had been persisted.
  */
@@ -274,8 +318,8 @@ export function projectGoalSteps(
   taskID: string,
   workflow: MiniWorkflow,
 ): Record<string, GoalWorkflowState> {
-  const goalScopeStepIDs = workflow.steps.filter((s) => s.scope === "goal").map((s) => s.id)
-  if (goalScopeStepIDs.length === 0) return {}
+  const goalScopeSteps = workflow.steps.filter((s) => s.scope === "goal")
+  if (goalScopeSteps.length === 0) return {}
   const goals = listGoals(taskID)
   const goalRuns = listGoalRunsForTask(taskID)
   const result: Record<string, GoalWorkflowState> = {}
@@ -291,17 +335,102 @@ export function projectGoalSteps(
     const startedAt = tip?.time_started ?? undefined
     const completedAt = tip?.time_completed ?? undefined
     const steps: Record<string, GoalStepStatus> = {}
-    for (const stepID of goalScopeStepIDs) {
-      steps[stepID] = { status: stepStatus, startedAt, completedAt }
+    const stepPhases: Record<string, Record<string, GoalStepStatus>> = {}
+    for (const step of goalScopeSteps) {
+      steps[step.id] = { status: stepStatus, startedAt, completedAt }
+      if (step.phases && step.phases.length > 0) {
+        stepPhases[step.id] = projectPhases(step.phases, tip?.status, startedAt, completedAt)
+      }
     }
     result[goal.id] = {
       goalID: goal.id,
       goalTitle: goal.title,
       goalStatus: goal.status,
       steps,
+      ...(Object.keys(stepPhases).length > 0 ? { stepPhases } : {}),
     }
   }
   return result
+}
+
+/**
+ * Map a goal_run.status to per-phase status within a step that declares
+ * phases [plan, build, evaluate] (or any 3-phase decomposition).
+ *
+ * The mapping reflects the in-run timeline:
+ *   - queued / accepted          → all phases pending
+ *   - planning                   → phase[0] running, rest pending
+ *   - running                    → phase[0] completed, phase[1] running, phase[2] pending
+ *   - evaluating                 → phases[0..1] completed, phase[2] running
+ *   - completed                  → all phases completed
+ *   - failed                     → the phase matching the status at failure time
+ *                                   is marked failed; earlier phases are completed;
+ *                                   later phases stay pending. Without a stored
+ *                                   "last active phase" we approximate: failed runs
+ *                                   show final phase failed, which is the common case
+ *                                   for evaluator-rejection and executor crashes alike.
+ *   - aborted                    → all pending
+ *   - blocked                    → current phase running (blocked ≈ waiting for input)
+ *
+ * `startedAt/completedAt` are propagated to every phase to keep the shape
+ * simple; the overlay doesn't read them per-phase today.
+ */
+function projectPhases(
+  phases: MiniWorkflowPhase[],
+  runStatus: string | undefined,
+  startedAt: number | undefined,
+  completedAt: number | undefined,
+): Record<string, GoalStepStatus> {
+  const out: Record<string, GoalStepStatus> = {}
+  const setAll = (s: GoalStepStatus["status"]) => {
+    for (const p of phases) out[p.id] = { status: s, startedAt, completedAt }
+  }
+  const setCascade = (runningIndex: number) => {
+    // Phases before runningIndex: completed. At runningIndex: running.
+    // After: pending. Works for any phase count ≥ runningIndex + 1.
+    for (let i = 0; i < phases.length; i++) {
+      const status: GoalStepStatus["status"] =
+        i < runningIndex ? "completed" : i === runningIndex ? "running" : "pending"
+      out[phases[i].id] = { status, startedAt, completedAt }
+    }
+  }
+  switch (runStatus) {
+    case undefined:
+    case "queued":
+    case "accepted":
+    case "aborted":
+      setAll("pending")
+      break
+    case "planning":
+      setCascade(0)
+      break
+    case "running":
+      setCascade(1)
+      break
+    case "evaluating":
+      setCascade(2)
+      break
+    case "blocked":
+      // Conservative: mark the last known running phase. Without more
+      // information we fall back to "build" (index 1) — that's the phase
+      // most commonly stalled on user input / interaction prompts.
+      setCascade(Math.min(1, phases.length - 1))
+      break
+    case "completed":
+      setAll("completed")
+      break
+    case "failed":
+      // Mark final phase failed, earlier phases completed. See block comment.
+      for (let i = 0; i < phases.length; i++) {
+        const status: GoalStepStatus["status"] =
+          i < phases.length - 1 ? "completed" : "failed"
+        out[phases[i].id] = { status, startedAt, completedAt }
+      }
+      break
+    default:
+      setAll("pending")
+  }
+  return out
 }
 
 function mapGoalRunToStepStatus(

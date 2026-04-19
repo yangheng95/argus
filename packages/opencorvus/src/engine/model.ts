@@ -611,6 +611,12 @@ export const SpecSnapshot = z.object({
 // MiniWorkflow — workflow state projected to TaskBoard
 // ---------------------------------------------------------------------------
 
+export const TaskBoardWorkflowPhase = z.object({
+  id: z.string(),
+  label: z.string(),
+  sessionKind: z.string(),
+})
+
 export const TaskBoardWorkflowStep = z.object({
   id: z.string(),
   label: z.string(),
@@ -618,6 +624,11 @@ export const TaskBoardWorkflowStep = z.object({
   scope: z.enum(["task", "goal"]),
   skippable: z.boolean(),
   status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+  /** Sub-phase definitions for steps that decompose a single tool-call
+   *  into multiple internal phases (e.g. pipeline.build → plan / build /
+   *  evaluate). Absent for steps that map 1:1 to a tool call. Per-goal
+   *  phase status is delivered on the TaskBoardGoalWorkflowStep rows. */
+  phases: TaskBoardWorkflowPhase.array().optional(),
 })
 
 export const TaskBoardWorkflow = z.object({
@@ -679,6 +690,21 @@ export const TaskBoardGoalWorkflowStep = z.object({
   /** Human-readable summary: "5 steps", "12 files", "3/4 checks" */
   summary: z.string().optional(),
   payload: TaskBoardGoalStepPayload.optional(),
+  /** Per-phase status for steps that declare phases. Key = phase.id (as
+   *  declared in the workflow step definition). Overlay uses this to
+   *  render phase rows inside the step card and drive the per-phase
+   *  terminal status on each nested session's card.
+   *
+   *  Absent when the step has no phases, or when no goal_run data is
+   *  available yet. */
+  phases: z.record(
+    z.string(),
+    z.object({
+      status: z.enum(["pending", "running", "completed", "skipped", "failed"]),
+      startedAt: z.number().optional(),
+      completedAt: z.number().optional(),
+    }),
+  ).optional(),
 })
 
 export const TaskBoardGoalContract = z.object({

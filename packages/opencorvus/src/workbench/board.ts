@@ -22,7 +22,7 @@ import {
   WorkflowRegistry,
 } from "@/engine"
 import type { WorkflowState } from "@/engine"
-import { projectGoalSteps } from "@/engine/workflow"
+import { projectGoalSteps, type MiniWorkflowStep } from "@/engine/workflow"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, desc, eq, sql } from "@/storage/db"
@@ -773,6 +773,9 @@ function buildWorkflowFields(
       status: (step.scope === "task"
         ? (ws ? ws.taskSteps[step.id]?.status ?? "pending" : "pending")
         : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id)) as "pending" | "running" | "completed" | "skipped" | "failed",
+      ...(step.phases && step.phases.length > 0
+        ? { phases: step.phases.map(p => ({ id: p.id, label: p.label, sessionKind: p.sessionKind })) }
+        : {}),
     })),
     goalLoopStepIDs: workflow.goalLoopStepIDs,
   }
@@ -796,14 +799,18 @@ function buildWorkflowFields(
         .filter(s => s.scope === "goal")
         .map(s => {
           const stepStatus = (gws?.steps[s.id]?.status ?? "pending") as "pending" | "running" | "completed" | "skipped" | "failed"
+          const phaseProjection = gws?.stepPhases?.[s.id]
           return {
             stepID: s.id,
             label: s.label,
             status: stepStatus,
             startedAt: gws?.steps[s.id]?.startedAt,
             completedAt: gws?.steps[s.id]?.completedAt,
-            summary: buildStepSummary(goal.id, s.id, stepStatus),
-            payload: buildStepPayload(goal.id, s.id, stepStatus),
+            summary: buildStepSummary(s, goal.id, stepStatus),
+            payload: buildStepPayload(s, goal.id, stepStatus),
+            ...(phaseProjection && Object.keys(phaseProjection).length > 0
+              ? { phases: phaseProjection }
+              : {}),
           }
         }),
       contracts,
@@ -889,11 +896,13 @@ function latestEvaluationForGoalRun(goalRunID: string) {
 }
 
 /** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks").
- *  The pipeline workflow has ONE goal-scope step: `build` (plan + execute +
- *  eval are sub-phases inside it). */
-function buildStepSummary(goalID: string, stepID: string, status?: string): string | undefined {
+ *  Only applies to goal-scope steps that own the plan + build + evaluate
+ *  phase block — detected via the `phases` declaration rather than
+ *  hardcoded step id, so renaming the step doesn't break the surface. */
+function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: string): string | undefined {
   if (!status || status === "pending") return undefined
-  if (stepID !== "build") return undefined
+  if (step.scope !== "goal") return undefined
+  if (!step.phases || step.phases.length === 0) return undefined
 
   const goalRun = currentGoalRun(goalID)
   if (goalRun) {
@@ -931,10 +940,14 @@ function buildStepSummary(goalID: string, stepID: string, status?: string): stri
  */
 export type GoalStepPayload = z.infer<typeof TaskBoardGoalStepPayload>
 
-function buildStepPayload(goalID: string, stepID: string, status?: string): GoalStepPayload | undefined {
+function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: string): GoalStepPayload | undefined {
   if (!status || status === "pending") return undefined
-  // The `build` step folds plan + execute + eval into one payload.
-  if (stepID !== "build") return undefined
+  // Payload applies only to goal-scope phase-owning steps — the plan +
+  // build + evaluate block folds into one payload that ships plan nodes,
+  // diff stats, and evaluator checks. Detected by phases presence, not
+  // hardcoded step id.
+  if (step.scope !== "goal") return undefined
+  if (!step.phases || step.phases.length === 0) return undefined
 
   const goalRun = currentGoalRun(goalID)
   const nodes = Database.use((db) =>
