@@ -523,6 +523,14 @@ export function persistDelivery(input: {
         run_id: input.run.id,
         goal_run_id: input.goalRunID,
         delivery_id: input.deliveryID,
+        // spec-09: this row belongs to the delivery scope. The invariant
+        // "scope='delivery' ⇒ delivery_id NOT NULL" holds trivially here
+        // because persistDelivery is the only inserter that sets
+        // delivery_id. signature stays empty until
+        // updateEvaluationFromDeliveryVerdict fills it in with the actual
+        // checks.
+        scope: "delivery",
+        signature: "",
         status: "pending",
         verdict: "inconclusive",
         summary: input.delivery.summary,
@@ -612,6 +620,15 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   verdict: "accepted" | "rejected" | "inconclusive"
   summary: string
   issues?: string[]
+  /** spec-09 Phase D: structured checks that made up the delivery-scope
+   *  verdict — on_delivery scorer results + delivery-agent judgement +
+   *  visual-diff outcome merged into one list. When supplied, these replace
+   *  the legacy `issues` → "delivery-agent" failure rows. When omitted,
+   *  legacy path is preserved so existing callers compile unchanged. */
+  checks?: import("./engine.sql").EngineEvaluationCheck[]
+  /** Pre-computed signature over the failed-check subset. When omitted we
+   *  recompute from `checks`. Empty string when no failures to compare. */
+  signature?: string
   now?: number
 }) {
   const now = input.now ?? Date.now()
@@ -634,6 +651,39 @@ export function updateEvaluationFromDeliveryVerdict(input: {
       `persistDelivery() must have been bypassed — deliveries and evaluations are 1:1.`,
     )
   }
+  // Resolve which check array to persist.
+  //   - `checks` supplied explicitly ⇒ replace wholesale.
+  //   - only `issues` supplied ⇒ legacy path: synthesise "delivery-agent"
+  //     rows (pre-spec-09 behaviour for callers that never migrated).
+  //   - neither supplied ⇒ PRESERVE whatever the row already has. Used by
+  //     `publish_delivery` which runs after `deliver` already wrote the
+  //     structured check set; without preservation we'd overwrite it with
+  //     an empty fallback and kill the signature for the rework loop.
+  const existingChecks: import("./engine.sql").EngineEvaluationCheck[] = Array.isArray(existing.checks)
+    ? (existing.checks as import("./engine.sql").EngineEvaluationCheck[])
+    : []
+  const checks: import("./engine.sql").EngineEvaluationCheck[] = input.checks
+    ? input.checks
+    : input.issues !== undefined
+      ? (input.issues ?? []).map((issue) => ({
+          name: "delivery-agent",
+          status: "failed" as const,
+          evidence: issue,
+          scorer_kind: "delivery_verdict" as const,
+          mode: "strict" as const,
+        }))
+      : existingChecks
+  // Compute signature unless caller supplied one. Done lazily (only on
+  // rejected outcomes) because an accepted delivery produces no failures and
+  // therefore no signature worth storing — keeps historical noise out of the
+  // rework convergence check.
+  let signature = input.signature ?? existing.signature ?? ""
+  if (!signature && input.verdict === "rejected") {
+    // Local import to dodge the circular (engine/persist.ts is pre-verification
+    // in the load order). Lazy import keeps the cycle one-way.
+    const { computeSignature } = require("@/verification/signature") as typeof import("@/verification/signature")
+    signature = computeSignature("delivery", checks)
+  }
   Database.use((db) =>
     db
       .update(EngineEvaluationTable)
@@ -641,11 +691,8 @@ export function updateEvaluationFromDeliveryVerdict(input: {
         status,
         verdict: input.verdict,
         summary: input.summary,
-        checks: (input.issues ?? []).map((issue) => ({
-          name: "delivery-agent",
-          status: "failed" as const,
-          evidence: issue,
-        })),
+        checks,
+        signature,
         time_completed: now,
         time_updated: now,
       })

@@ -83,6 +83,58 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
       },
     }),
 
+    /** spec-09: structured drill-down into a single evidence row.
+     *  `query_criteria` above is the task-wide aggregate (a projection); this
+     *  tool returns the structured per-goal or per-delivery evaluation row
+     *  with full scorer_kind / exit_code / output_digest fields. Use it when
+     *  `query_criteria` shows a strict failure and you need specifics to
+     *  write a concrete rejection_details entry. */
+    query_evidence: tool({
+      description:
+        "Drill down into a single verification-evidence row. `query_criteria` " +
+        "is the task-wide aggregate for a quick overview; this tool returns the " +
+        "rich per-check detail (spec_id, scorer_kind, exit_code, output digest) " +
+        "for one goal's latest goal_run evidence, a specific goal_run, or the " +
+        "latest delivery-scope evidence. Call this when you need to cite a " +
+        "specific failing scorer in rejection_details, or when the summary " +
+        "doesn't tell you WHY a check failed.",
+      inputSchema: z.object({
+        scope: z
+          .enum(["goal_run", "delivery"])
+          .describe(
+            'Which evidence scope to read. "goal_run" for a specific goal\'s latest at-exit evaluation; "delivery" for the merged-worktree result.',
+          ),
+        goal_id: z
+          .string()
+          .optional()
+          .describe('Required when scope="goal_run". Ignored for "delivery".'),
+        goal_run_id: z
+          .string()
+          .optional()
+          .describe(
+            'Optional: when set with scope="goal_run", returns evidence for THAT specific run rather than the latest for the goal.',
+          ),
+      }),
+      execute: async ({ scope, goal_id, goal_run_id }) => {
+        if (!taskID) return "query_evidence: no task context available"
+        try {
+          const { queryEvidence, renderEvidence } = await import("@/verification")
+          const evidence = queryEvidence({
+            scope,
+            goalID: goal_id,
+            goalRunID: goal_run_id,
+            taskID,
+          })
+          if (!evidence) {
+            return `query_evidence: no ${scope} evidence found yet${goal_id ? ` for goal ${goal_id}` : ""}${goal_run_id ? ` (goal_run=${goal_run_id})` : ""}.`
+          }
+          return renderEvidence(evidence)
+        } catch (err) {
+          return `query_evidence error: ${err instanceof Error ? err.message : String(err)}`
+        }
+      },
+    }),
+
     submit_next_task: tool({
       description:
         "Spawn a follow-up task in the same project. Use this whenever what " +
