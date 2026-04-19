@@ -859,17 +859,25 @@ export const Event = {
   GoalWorkflowProgress: BusEvent.define("goal.workflow.progress", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), completedSteps: z.number(), totalSteps: z.number(), currentStep: z.string().optional(), summary: z.string() })),
 
   // ── Phase-level completion events (per specs/new-arch.svg "SSE 事件扩展") ──
-  // Emitted when a sub-agent finishes a major phase. The Panel uses these to
-  // refresh its Requirements / Architect sections without having to track
-  // individual workflow steps.
+  // Emitted when a sub-agent finishes a major phase — success OR error.
+  // Carries `sessionID` so the overlay's tree-writer can write the terminal
+  // status back to the corresponding session card (see
+  // specs/new-arch/07-panel-reactivity.md §SSE 事件 → 精细写入). The Panel
+  // also uses the phase-specific counts (requirementCount, contractCount, …)
+  // to refresh its Requirements / Architect sections without tracking
+  // individual workflow steps. Error emissions carry `status: "error"` and
+  // `error: <message>`; success-only fields are optional on error.
   RequirementsCompleted: BusEvent.define(
     "requirements.completed",
     z.object({
       taskID: Identifier.schema("task"),
-      requirementCount: z.number(),
-      goalCount: z.number(),
-      decisionCount: z.number(),
-      traceabilityCount: z.number(),
+      sessionID: z.string(),
+      status: z.enum(["completed", "error"]),
+      error: z.string().optional(),
+      requirementCount: z.number().optional(),
+      goalCount: z.number().optional(),
+      decisionCount: z.number().optional(),
+      traceabilityCount: z.number().optional(),
       fidelityScore: z.number().optional(),
       summary: z.string(),
     }),
@@ -878,9 +886,26 @@ export const Event = {
     "architect.completed",
     z.object({
       taskID: Identifier.schema("task"),
-      contractCount: z.number(),
-      categories: z.array(z.string()),
+      sessionID: z.string(),
+      status: z.enum(["completed", "error"]),
+      error: z.string().optional(),
+      contractCount: z.number().optional(),
+      categories: z.array(z.string()).optional(),
       blueprintSummary: z.string().optional(),
+      summary: z.string(),
+    }),
+  ),
+  DesignAnalysisCompleted: BusEvent.define(
+    "design_analysis.completed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      sessionID: z.string(),
+      status: z.enum(["completed", "error"]),
+      error: z.string().optional(),
+      layoutSections: z.number().optional(),
+      styleTokens: z.number().optional(),
+      componentCount: z.number().optional(),
+      interactionCount: z.number().optional(),
       summary: z.string(),
     }),
   ),
