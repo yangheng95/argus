@@ -14098,6 +14098,11 @@
                           "goalStatus": {
                             "type": "string"
                           },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
                           "priority": {
                             "type": "string",
                             "enum": [
@@ -14286,6 +14291,7 @@
                           "goalID",
                           "goalTitle",
                           "goalStatus",
+                          "orderIndex",
                           "priority",
                           "steps"
                         ]
@@ -21493,6 +21499,43 @@
           "properties"
         ]
       },
+      "Event.fidelity.review.chunk": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "fidelity.review.chunk"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "attempt": {
+                "type": "number"
+              },
+              "textDelta": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID",
+              "attempt",
+              "textDelta"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.fidelity.review.completed": {
         "type": "object",
         "properties": {
@@ -25245,6 +25288,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.fidelity.review.progress"
+          },
+          {
+            "$ref": "#/components/schemas/Event.fidelity.review.chunk"
           },
           {
             "$ref": "#/components/schemas/Event.fidelity.review.completed"

@@ -161,6 +161,7 @@ export const EVENTS: FixtureEvent[] = [
         goalID: GOAL_ID,
         goalTitle: "Scaffold project",
         goalStatus: "running",
+        orderIndex: 0,
         steps: [{
           stepID: "build",
           label: "Executor",
@@ -366,6 +367,7 @@ export const EVENTS: FixtureEvent[] = [
         goalID: GOAL_ID,
         goalTitle: "Scaffold project",
         goalStatus: "passed",
+        orderIndex: 0,
         steps: [{
           stepID: "build",
           label: "Executor",

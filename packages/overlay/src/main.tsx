@@ -125,6 +125,92 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Format a millisecond timestamp for the debug blob. Returns "—" for
+ *  missing / zero values so the blob stays aligned when fields are empty. */
+function formatDebugTime(ms: unknown): string {
+  const n = typeof ms === "number" ? ms : Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return new Date(n).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "Z");
+}
+
+/**
+ * Build a plain-text debug blob for the currently selected task board.
+ * Contains everything an operator needs to triage a stuck / mis-merged task
+ * directly from the DB: identity + paths + per-goal worktree coords + ready
+ * SQL. Returns `""` when no task is selected so the caller can show a hint.
+ */
+function buildTaskDebugBlob(board: any): string {
+  const task = board?.task;
+  const id = typeof task?.id === "string" ? task.id : "";
+  if (!id) return "";
+  const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : [];
+  const lines: string[] = [];
+  const push = (...l: string[]) => lines.push(...l);
+
+  push(
+    `# Task Debug Info (double-click 任务 → clipboard)`,
+    `# Generated: ${formatDebugTime(Date.now())}`,
+    ``,
+    `task.id:        ${id}`,
+    `task.title:     ${String(task?.title ?? "—")}`,
+    `task.status:    ${String(task?.status ?? "—")}`,
+    `task.directory: ${String(task?.directory ?? "—")}`,
+    `task.session:   ${String(task?.sessionID ?? "—")}`,
+    `task.run.id:    ${String(task?.activeRunID ?? "—")}`,
+    `task.time.created: ${formatDebugTime(task?.time?.created)}`,
+    `task.time.updated: ${formatDebugTime(task?.time?.updated ?? task?.time?.created)}`,
+    ``,
+    `Goals (${goalWorkflows.length}):`,
+  );
+  if (goalWorkflows.length === 0) {
+    push(`  (none — task has not produced goals yet)`);
+  } else {
+    for (const gw of goalWorkflows) {
+      const gid = String(gw?.goalID ?? "?");
+      const n = typeof gw?.orderIndex === "number" ? gw.orderIndex + 1 : "?";
+      push(
+        `  #${n}  ${gid}  ${String(gw?.goalStatus ?? "?")}  ${String(gw?.goalTitle ?? "").slice(0, 80)}`,
+        `      retry:     ${gw?.retryCount ?? 0}`,
+        `      workspace: ${String(gw?.workspaceDir ?? "—")}`,
+        `      branch:    ${String(gw?.workspaceBranch ?? "—")}`,
+      );
+    }
+  }
+  push(
+    ``,
+    `# SQL templates (read-only — open the DB with bun:sqlite readonly:true,`,
+    `#  default path C:/Users/<user>/.local/share/opencorvus/opencorvus.db)`,
+    ``,
+    `-- Task snapshot`,
+    `SELECT * FROM engine_task WHERE id = '${id}';`,
+    ``,
+    `-- Goals & worktree coords`,
+    `SELECT id, title, status, cascade_state, workspace_dir, workspace_branch, retry_count, order_index`,
+    `FROM engine_goal WHERE task_id = '${id}' ORDER BY order_index;`,
+    ``,
+    `-- Goal-run chain (supersede-of maps retries / revisions)`,
+    `SELECT id, goal_id, status, supersede_of, time_created, time_updated`,
+    `FROM engine_goal_run WHERE task_id = '${id}' ORDER BY time_created;`,
+    ``,
+    `-- Deliveries with commit refs + structured report presence`,
+    `SELECT id, goal_run_id, status, summary,`,
+    `       json_extract(result, '$.commit_ref') AS commit_ref,`,
+    `       json_extract(result, '$.stats')     AS stats,`,
+    `       CASE WHEN json_extract(result, '$.report') IS NULL THEN 'no-report' ELSE 'has-report' END AS report`,
+    `FROM engine_delivery WHERE task_id = '${id}' ORDER BY time_created;`,
+    ``,
+    `-- Evaluations`,
+    `SELECT id, delivery_id, verdict, status, summary, time_created`,
+    `FROM engine_evaluation WHERE task_id = '${id}' ORDER BY time_created;`,
+    ``,
+    `-- Recent protocol events (last 2 min)`,
+    `SELECT type, source, emitted_at FROM protocol_event`,
+    `WHERE task_id = '${id}' AND emitted_at > strftime('%s','now','-2 minutes')*1000`,
+    `ORDER BY emitted_at DESC LIMIT 60;`,
+  );
+  return lines.join("\n");
+}
+
 /**
  * Open the workspace panel, optionally with a specific view. If no view is
  * supplied, the last-used view is restored.
@@ -1070,6 +1156,49 @@ disposers.push(createRoot((dispose) => {
       el.textContent = id.length > 10 ? `${id.slice(0, 4)}…${id.slice(-6)}` : id;
       el.title = id;
     });
+  }
+
+  // ── Debug-copy (double-click `任务` header) ──
+  // Dumps a plain-text debug blob with everything a human needs to diagnose a
+  // stuck / mis-merged task from the DB: task id, project dir, session, active
+  // run, per-goal worktree path + branch + retry count, plus ready-to-paste
+  // SQL queries keyed on the task id. Reads `boardStore.board` — the live
+  // projection for the currently selected task — so no extra fetch.
+  //
+  // Triggered by a double-click on `.chat-title` (the "任务" label). Single
+  // click remains free for future use. The same button flashes a "已复制"
+  // hint via a transient `data-copied` attribute.
+  {
+    const title = document.querySelector(".chat-title") as HTMLElement | null;
+    if (title) {
+      title.style.cursor = "copy";
+      title.title =
+        "双击复制调试信息 (task id / directory / session / run / worktrees + SQL)";
+      const flash = (text: string) => {
+        title.dataset.copied = "true";
+        const prev = title.textContent ?? "";
+        title.textContent = text;
+        setTimeout(() => {
+          delete title.dataset.copied;
+          title.textContent = prev;
+        }, 1400);
+      };
+      title.addEventListener("dblclick", async (ev) => {
+        ev.preventDefault();
+        const blob = buildTaskDebugBlob(boardStore.board);
+        if (!blob) {
+          flash("无任务");
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(blob);
+          flash("已复制");
+        } catch (err) {
+          console.error("[chat-title dblclick] clipboard write failed", err);
+          flash("复制失败");
+        }
+      });
+    }
   }
 
   // ── Task-switch progress bar (non-blocking) ──

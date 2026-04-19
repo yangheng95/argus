@@ -921,7 +921,7 @@ export namespace EngineService {
     await abortLiveExecutionForTask({
       taskID,
       reason: "task cancelled",
-      cleanupWorkspace: true,
+      cleanupGoalWorkspaces: true,
       includeRuns: false,
     })
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined

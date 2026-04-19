@@ -45,7 +45,6 @@ import {
   type RunRow,
   type TaskRow,
 } from "./store"
-import { cleanupGoalWorkspace } from "@/goal/runner"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
 import { EXECUTOR_ACTIVE_RUN_STATUSES, RUNTIME_MONITORED_RUN_STATUSES } from "./catalog"
@@ -647,7 +646,6 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     stopEventBridge(gr.id) // aborts the controller → consumeExecutorEvents loop breaks → executor.abort() called
     updateGoalRun(gr.id, { status: "failed", error: `Parent run failed: ${error}`, time_completed: Date.now() })
     updateGoalRunExecutorSessionStatus(gr.id, "failed")
-    if (gr.workspace_dir) await cleanupGoalWorkspace(gr.workspace_dir).catch(() => {})
   }
   // PerRunState.finalize is driven by updateRun's terminal transition below;
   // executor_session is the only extra cleanup this path owns.

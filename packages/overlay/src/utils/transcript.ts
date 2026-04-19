@@ -552,13 +552,13 @@ export function interactionResponseText(interaction: any): string {
  *  `childIDs`. Callers pass this to `formatConversationTranscript`. */
 function flattenCardToMessages(node: CardNode | undefined, out: any[]): void {
   if (!node) return;
-  const role = node.role || node.stage || (node.kind === "goal" ? "goal" : "assistant");
+  const role = node.role || node.stage || "assistant";
   const time = { created: node.time };
   const parts: any[] = [];
-  if (node.kind === "goal" && node.goalDescription) {
+  if (node.kind === "step" && node.goalDescription) {
     parts.push({ type: "text", text: node.goalDescription });
   }
-  if (node.kind === "goal" && Array.isArray(node.contracts)) {
+  if (node.kind === "step" && Array.isArray(node.contracts)) {
     for (const c of node.contracts) {
       const key = String(c.key || "").trim();
       const value = String(c.value || "").trim();

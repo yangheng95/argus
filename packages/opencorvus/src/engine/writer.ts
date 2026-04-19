@@ -29,7 +29,10 @@ import {
   updateGoalRun,
 } from "./persist"
 import {
+  findGoal,
   findRuns,
+  listGoals,
+  listGoalWorkspacesForProject,
   listGoalRunsForTask,
   listLiveExecutorSessionsForProject,
   listLiveGoalRunsForProject,
@@ -40,6 +43,7 @@ import {
   type TaskRow,
 } from "./store"
 import { updateRun } from "./state"
+import { updateGoalWorkspace } from "./persist"
 
 const log = Log.create({ service: "engine-writer" })
 
@@ -123,10 +127,41 @@ export function createRun(input: CreateRunInput): RunRow {
 
 export interface AbortOptions {
   reason: string
-  cleanupWorkspace?: boolean
 }
 
-/** Abort a batch of goal_run rows, optionally cleaning up their worktrees. */
+export async function cleanupGoalWorkspaceForGoal(goalID: string): Promise<boolean> {
+  const goal = findGoal(goalID)
+  if (!goal?.workspace_dir) return false
+
+  const { cleanupGoalWorkspace } = await import("@/goal/runner")
+  await cleanupGoalWorkspace(goal.workspace_dir).catch((error) => {
+    log.warn("goal workspace cleanup failed", {
+      goalID,
+      workspaceDir: goal.workspace_dir,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+  updateGoalWorkspace({
+    goalID,
+    workspaceDir: null,
+    workspaceBranch: null,
+    // Terminal cleanup also clears the goal-scoped baseRef. A later fresh
+    // dispatch (restart_from_stage / max_retries reset / etc.) will
+    // re-capture Snapshot.track() from the new scaffold state.
+    workspaceBaseRef: null,
+  })
+  return true
+}
+
+async function cleanupGoalWorkspaces(goalIDs: string[]) {
+  let cleaned = 0
+  for (const goalID of new Set(goalIDs)) {
+    if (await cleanupGoalWorkspaceForGoal(goalID)) cleaned += 1
+  }
+  return cleaned
+}
+
+/** Abort a batch of goal_run rows. Workspace lifecycle is goal-scoped. */
 export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): Promise<number> {
   let aborted = 0
   for (const row of rows) {
@@ -136,16 +171,6 @@ export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): 
       blocking_reason: null,
     })
     if (updated) aborted += 1
-    if (options.cleanupWorkspace && row.workspace_dir) {
-      const { cleanupGoalWorkspace } = await import("@/goal/runner")
-      await cleanupGoalWorkspace(row.workspace_dir).catch((error) => {
-        log.warn("goal workspace cleanup failed", {
-          goalRunID: row.id,
-          workspaceDir: row.workspace_dir,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
-    }
   }
   return aborted
 }
@@ -198,14 +223,13 @@ export interface AbortLiveResult {
  *     are NOT handled here — callers that need to also abort the
  *     coordinator run's executor_session should pass `abortRunSession=true`.
  *
- * `cleanupWorkspace` defaults to false for parity with the prior
- * restart_from_stage behavior (which left goal worktrees behind for the
- * orchestrator to re-enter).
+ * Goal workspaces are goal-scoped, not goal_run-scoped. By default terminal
+ * task-level aborts clean the owning goals' workspaces.
  */
 export async function abortLiveExecutionForTask(input: {
   taskID: string
   reason: string
-  cleanupWorkspace?: boolean
+  cleanupGoalWorkspaces?: boolean
   includeGoalRuns?: boolean
   includeRuns?: boolean
 }): Promise<AbortLiveResult> {
@@ -217,10 +241,11 @@ export async function abortLiveExecutionForTask(input: {
   const runRows = input.includeRuns === false
     ? []
     : findRuns(input.taskID).filter((row) => LIVE_RUN_STATUSES.includes(row.status))
-  const goalRuns = await abortGoalRuns(goalRunRows, {
-    reason: input.reason,
-    cleanupWorkspace: input.cleanupWorkspace,
-  })
+  const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
+  const cleanupGoals = input.cleanupGoalWorkspaces ?? true
+    ? listGoals(input.taskID).map((goal) => goal.id)
+    : []
+  await cleanupGoalWorkspaces(cleanupGoals)
   const runs = await abortRuns(runRows, input.reason)
   return { goalRuns, runs, executorSessions: 0 }
 }
@@ -238,15 +263,16 @@ export async function abortLiveExecutionForTask(input: {
 export async function abortLiveExecutionForProject(input: {
   projectID: string
   reason: string
-  cleanupWorkspace?: boolean
+  cleanupGoalWorkspaces?: boolean
 }): Promise<AbortLiveResult> {
   const sessionRows = listLiveExecutorSessionsForProject(input.projectID)
   const goalRunRows = listLiveGoalRunsForProject(input.projectID)
   const executorSessions = abortExecutorSessions(sessionRows)
-  const goalRuns = await abortGoalRuns(goalRunRows, {
-    reason: input.reason,
-    cleanupWorkspace: input.cleanupWorkspace ?? true,
-  })
+  const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
+  const cleanupGoals = input.cleanupGoalWorkspaces === true
+    ? listGoalWorkspacesForProject(input.projectID).map((goal) => goal.id)
+    : []
+  await cleanupGoalWorkspaces(cleanupGoals)
   return { goalRuns, runs: 0, executorSessions }
 }
 

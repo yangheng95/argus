@@ -356,6 +356,16 @@ export type EventFidelityReviewProgress = {
   }
 }
 
+export type EventFidelityReviewChunk = {
+  type: "fidelity.review.chunk"
+  properties: {
+    taskID: string
+    sessionID: string
+    attempt: number
+    textDelta: string
+  }
+}
+
 export type EventFidelityReviewCompleted = {
   type: "fidelity.review.completed"
   properties: {
@@ -1497,6 +1507,7 @@ export type Event =
   | EventDesignAnalysisCompleted
   | EventFidelityReviewStarted
   | EventFidelityReviewProgress
+  | EventFidelityReviewChunk
   | EventFidelityReviewCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
@@ -8068,6 +8079,7 @@ export type TaskBoardResponses = {
       goalID: string
       goalTitle: string
       goalStatus: string
+      orderIndex: number
       priority: "blocking" | "advisory"
       steps: Array<{
         stepID: string

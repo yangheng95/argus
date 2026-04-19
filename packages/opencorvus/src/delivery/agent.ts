@@ -757,6 +757,9 @@ Do NOT re-run build/test/lint commands the Evaluator already ran — the results
 ### Execution
 - **run_command**: Build, start server, run tests, curl endpoints
 
+### Parallel deep review (use when goal count or contract surface is large)
+- **task**: Dispatch a focused review subagent on one goal (or one cross-cutting concern) in parallel. Use \`subagent_type: "general"\` when the reviewer needs to run commands / read files, or \`"explore"\` when a pure read-only investigation is enough. Every subagent gets its own context window — spawning one per goal scales adversarial depth linearly instead of thinning your own attention across six goals. The structured JSON each subagent returns is YOUR evidence in Phase 7; their passed=true does not by itself accept anything, their passed=false with concrete evidence does reject.
+
 ### Follow-up pipeline
 - **submit_next_task**: Spawn any follow-up task in the same project. Three shapes to pick between:
   1. **Fix** — verification surfaced failed criteria the executor needs to repair. Pass \`priority="critical"\` + \`failed_criteria\` so the next task jumps the queue and inherits the evidence.
@@ -782,6 +785,70 @@ For EACH goal in the goals list below, evaluator covered the heuristic-shaped (e
 1. Read the goal's acceptance criteria carefully
 2. Identify rubric / semantic items the evaluator could not run (e.g. "the README explains X", "API matches the documented contract") — judge these with read_file + reasoning
 3. Record: PASS or FAIL with specific evidence for each criterion item
+
+### Phase 2.5: PARALLEL DEEP REVIEW VIA SUBAGENTS
+Your attention does not scale linearly across 6 goals in one context — you start skimming, miss contract mismatches, and the rejection/accept decision degrades. Offload per-goal adversarial review to focused subagents whenever the surface is large.
+
+**Dispatch when ANY of these hold** (else skip this phase — small tasks do not need it):
+- goals.length ≥ 3
+- Any goal has rubric / semantic / llm_judge acceptance_specs (the evaluator cannot score those deterministically)
+- Cross-goal architect contracts exist (exports on one goal consumed by another)
+
+**How to dispatch.** Fire ALL subagents in ONE response (one assistant turn with multiple parallel \`task\` tool calls) — serial dispatch wastes the main reason to do this. Each call uses \`subagent_type: "general"\` and a prompt shaped like:
+
+\`\`\`
+You are an adversarial reviewer for goal <goalID>: "<goalTitle>".
+Scope: ONLY this goal. Do not comment on other goals or the overall task.
+
+Goal objective:
+<objective>
+
+Acceptance criteria (pay adversarial attention to the rubric / semantic items the evaluator could not run):
+<acceptance_specs rendered as text>
+
+Architect contracts involving this goal:
+<contracts where goalID matches>
+
+Files this goal touched (from the delivery diff):
+<diffs filtered to owned_paths>
+
+Executor's self-report — treat every sentence as a HYPOTHESIS, not a fact:
+- implementation_approach: <report.implementation_approach>
+- design_decisions: <report.design_decisions>
+
+Run these checks:
+1. Open every file in the diff. Does the code ACTUALLY match implementation_approach? Does any design_decisions[].reason match the code, or is it restated / contradicted?
+2. Verify each acceptance_spec: rubric items by reading + reasoning; heuristic items by running the command when the evaluator did not.
+3. Integration surface: are the exports / public contracts this goal declares actually what other goals import?
+4. Edge cases + production readiness within this goal's scope (empty input, concurrency, resource leaks, error paths).
+
+Return ONE fenced \`\`\`json block and nothing else:
+{
+  "goalID": "<goalID>",
+  "passed": true | false,
+  "issues": [
+    { "category": "build" | "test" | "lint" | "runtime" | "quality" | "startup" | "criteria",
+      "file": "<relative path or null>",
+      "evidence": "<direct quote or tool output>",
+      "suggestion": "<one-line fix pointer>" }
+  ],
+  "claims_verified": [
+    { "claim": "<quote from executor report>",
+      "verdict": "supported" | "unsupported" | "contradicted",
+      "evidence": "<why>" }
+  ]
+}
+\`\`\`
+\`\`\`
+
+**Also dispatch these cross-cutting subagents when relevant** (one per concern, parallel with the per-goal ones):
+- **Integration coherence** (always when ≥2 goals with contracts): "Review the contract alignment across goals. For each architect contract, verify the exporting goal actually exports the declared symbol with the declared shape, AND every importing goal actually consumes it. Return \`{issues[]}\` naming each mismatch with file paths."
+- **Cross-goal duplication** (when owned_paths overlap or similar module names): "Review whether goals duplicated or conflicted on implementation — two goals writing to the same registry, two competing auth helpers, etc."
+- **Security surface** (when goals added endpoints / tools / IPC): "Review every new externally-reachable surface for missing auth / permission / input validation."
+
+**After subagents return.** Each returns a JSON block. Parse them yourself (no additional tool); merge their \`issues[]\` into your Phase 7 Issues Found / Rejection Details. A subagent's \`passed=false\` with concrete evidence SHOULD flip your verdict to rejected; a subagent's \`passed=true\` is one data point, not acceptance — the cross-goal and runtime phases still run.
+
+**When to SKIP Phase 2.5.** None of the triggers fired (small task, single goal, no rubric specs, no cross-goal contracts). Record the skip in Deferred Checks so the audit trail shows the decision was intentional.
 
 ### Phase 3: RUNTIME VERIFICATION
 1. Find entry point (package.json scripts, src/app.ts, framework config)
@@ -838,9 +905,11 @@ When Skip: record the skip reason under "Deferred Checks" in Phase 7 so
 the audit trail shows the decision was intentional, not forgotten.
 
 ### Phase 4: EXTENDED CHECKS
-1. **Code review**: Read changed files, check for obvious bugs, bad patterns, security issues
-2. **Dead code**: Check if any imports or functions became unused
-3. **Style/conventions**: Check against project conventions
+Whatever Phase 2.5 did NOT cover. If Phase 2.5 ran per-goal reviewers, they already covered per-file bugs / security / dead-code WITHIN each goal — do not repeat that work here. What stays on YOUR plate:
+1. **Cross-goal seams** the per-goal subagents could not see: end-to-end control flow that crosses goal boundaries, config/env consistency, bootstrap ordering
+2. **Project-level style / conventions**: a per-goal reviewer judges within-goal style; you judge project-wide consistency (naming, module layout, import discipline)
+3. **Residual dead code** after all goals merged: a symbol exported by goal A and never imported by goal B is dead in the integrated tree even if each looked alive in isolation
+4. When Phase 2.5 was SKIPPED (small task), THIS phase picks up all of: code review, dead code, style — do the full pass yourself
 
 ### Phase 5: FIX AND RE-VERIFY
 If you find issues in Phase 1-4 that you can fix:

@@ -159,6 +159,19 @@ async function reviewFidelityInner(
   let lastParseError: unknown = undefined
   let lastResult: FidelityResult | undefined
 
+  // Throttled chunk forwarding: onChunk fires per token; a 500ms flush
+  // window amortises that into ~2 events/sec, which keeps protocol_event
+  // row counts sane (≤ ~360 rows per 180s review) without visibly lagging
+  // the overlay's reasoning panel. One flusher shared across attempts; the
+  // attempt counter travels with every emit so the overlay opens a fresh
+  // reasoning part when the retry loop rolls over.
+  const chunkFlush = createChunkFlusher({
+    taskID: input.taskID,
+    sessionID: input.sessionID,
+    intervalMs: 500,
+  })
+
+  try {
   while (attempts < MAX_ATTEMPTS) {
     attempts++
     recordAttempt(attempts)
@@ -172,12 +185,14 @@ async function reviewFidelityInner(
       // hexin-routed sonnet-4-6 because the gateway's per-key sticky
       // routing rejected requests without `x-user`.
       //
-      // Intentionally no onChunk/onError hooks — the fidelity LLM's raw
-      // output is a JSON contract (verdict + issues + corrections). Piping
-      // those tokens into the requirements agent card surfaced the JSON
-      // source as a reasoning block to the operator. Replaced by the
-      // FidelityReviewCompleted event emitted after parse, which the
-      // overlay renders as a structured verdict card.
+      // onChunk forwards text-delta tokens into a reasoning part on the
+      // fidelity card itself (not the requirements agent card). Attaching
+      // to the agent card is what originally poisoned the UX — schema
+      // tokens surfaced as "reasoning" on an unrelated session. The
+      // fidelity card is already a separate card, so the noise stays
+      // scoped. Post-parse the structured FidelityReviewCompleted event
+      // still owns the verdict render (see FidelityBody); the reasoning
+      // stream is purely observational.
       const llmResult = await ProviderLLM.stream({
         model,
         system: systemPrompt,
@@ -185,8 +200,32 @@ async function reviewFidelityInner(
         maxOutputTokens: 8192,
         abortSignal: signal,
         cacheKey: input.taskID,
+        onChunk: async ({ chunk }: { chunk: any }) => {
+          // Forward both text-delta (the final JSON) AND reasoning-delta
+          // (the model's intermediate thinking). A reasoning-heavy provider
+          // (qwq, deepseek-r1, o1) can spend 2–3 minutes emitting ONLY
+          // reasoning-delta tokens before a single text-delta lands; if we
+          // filter to text-delta the card reads as "hung 3 min then dumps
+          // JSON in one burst" even though the stream is live the whole
+          // time. Both kinds feed the same reasoning part — the overlay
+          // renders them as one collapsible "思考过程" block, which is
+          // exactly what the operator needs for liveness.
+          const type = chunk?.type
+          if (type !== "text-delta" && type !== "reasoning-delta") return
+          const delta = typeof chunk.text === "string"
+            ? chunk.text
+            : typeof chunk.delta === "string"
+              ? chunk.delta
+              : ""
+          if (!delta) return
+          chunkFlush.append(attempts, delta)
+        },
       })
       const text = (await llmResult.text)?.trim() || ""
+      // Flush any residual tokens before moving on — the throttle timer may
+      // have been armed when the stream ended; without an explicit flush the
+      // last 0–500ms of text would never reach the overlay.
+      await chunkFlush.flushAttempt(attempts)
       const { result: parsed, validationFeedback } = parseFidelityOutput(text)
 
       // Reconcile: if there are corrections/missing but verdict says faithful, fix it
@@ -274,6 +313,13 @@ async function reviewFidelityInner(
     return lastResult
   }
   throw new Error(`fidelity review exhausted retries: ${String(lastParseError ?? "unknown error")}`)
+  } finally {
+    // Cancels the throttle timer and drops any tokens still buffered. We do
+    // NOT await a final flush here: on the success path the per-attempt
+    // flushAttempt() already drained the buffer; on the failure path the
+    // partial delta has no caller willing to read it (the task errors out).
+    chunkFlush.dispose()
+  }
 }
 
 /** Broadcast the parsed fidelity verdict so the overlay can render a native
@@ -321,12 +367,111 @@ function emitFidelityEvent(
   void EngineProtocol.emit(EngineEvent.FidelityReviewCompleted, payload, { source: "requirements.fidelity" })
 }
 
+/** Throttled buffer that forwards fidelity text-delta tokens into the
+ *  FidelityReviewChunk event stream. Created once per reviewFidelity call
+ *  and reused across retry attempts — the `attempt` passed into append()
+ *  lets the overlay open a fresh reasoning part each time the loop rolls.
+ *
+ *  Flush rules:
+ *    • First token in an idle window → schedule a flush at +intervalMs
+ *    • Subsequent tokens within the window → append to buffer, no new timer
+ *    • flushAttempt() is called by the producer after `await llmResult.text`
+ *      to drain any residual tokens before the next attempt begins
+ *    • dispose() clears the timer and drops the buffer (failure path)
+ *
+ *  Emits nothing when taskID/sessionID are missing (CLI dry-runs). */
+interface FidelityChunkFlusher {
+  append(attempt: number, delta: string): void
+  flushAttempt(attempt: number): Promise<void>
+  dispose(): void
+}
+
+function createChunkFlusher(opts: {
+  taskID: string | undefined
+  sessionID: string | undefined
+  intervalMs: number
+}): FidelityChunkFlusher {
+  const inactive: FidelityChunkFlusher = {
+    append: () => {},
+    flushAttempt: async () => {},
+    dispose: () => {},
+  }
+  if (!opts.taskID || !opts.sessionID) return inactive
+
+  let buffer = ""
+  let pendingAttempt = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  const emit = async (attempt: number, delta: string): Promise<void> => {
+    if (!delta) return
+    try {
+      await EngineProtocol.emit(
+        EngineEvent.FidelityReviewChunk,
+        { taskID: opts.taskID!, sessionID: opts.sessionID!, attempt, textDelta: delta },
+        { source: "requirements.fidelity" },
+      )
+    } catch (err) {
+      log.error("fidelity chunk emit failed", {
+        taskID: opts.taskID,
+        sessionID: opts.sessionID,
+        attempt,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  const flushNow = async (): Promise<void> => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    if (buffer.length === 0) return
+    const attempt = pendingAttempt
+    const delta = buffer
+    buffer = ""
+    await emit(attempt, delta)
+  }
+
+  return {
+    append(attempt: number, delta: string): void {
+      // Attempt boundary: if the producer advanced to the next attempt while
+      // tokens from a prior attempt still sit in the buffer, ship those tokens
+      // under their original attempt number before starting the new group.
+      if (buffer.length > 0 && attempt !== pendingAttempt) {
+        const prevAttempt = pendingAttempt
+        const prevDelta = buffer
+        buffer = ""
+        void emit(prevAttempt, prevDelta)
+      }
+      pendingAttempt = attempt
+      buffer += delta
+      if (!timer) {
+        timer = setTimeout(() => {
+          timer = null
+          void flushNow()
+        }, opts.intervalMs)
+      }
+    },
+    async flushAttempt(_attempt: number): Promise<void> {
+      await flushNow()
+    },
+    dispose(): void {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      buffer = ""
+    },
+  }
+}
+
 /** Emit fidelity review lifecycle events — Started and Progress — while the
- *  non-streaming LLM call is in flight. The overlay treats both as no-ops
- *  (see event-policy TREE_WRITER_NOOP_TYPES); they exist solely to advance
- *  the benchmark alive-stall timer and give operators a "fidelity in flight"
- *  signal via the protocol_event log. Silently skips when taskID or
- *  sessionID is missing — CLI dry-runs don't need liveness events. */
+ *  LLM call is in flight. Started fires once before the first attempt; Progress
+ *  fires every 20s while we wait. Both advance the benchmark alive-stall
+ *  detector and feed the overlay's running-fidelity card header (tree-writer's
+ *  handleFidelityStarted / handleFidelityProgress own the card lifecycle).
+ *  Silently skips when taskID or sessionID is missing — CLI dry-runs don't
+ *  need liveness events. */
 function emitFidelityLifecycle(
   phase: "started" | "progress",
   taskID: string | undefined,

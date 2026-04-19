@@ -717,6 +717,19 @@ export const TaskBoardGoalWorkflow = z.object({
   goalID: z.string(),
   goalTitle: z.string(),
   goalStatus: z.string(),
+  /** Decomposition-time position (0-based). Stable across goal removals so
+   *  the overlay can display "#N" that matches the requirements breakdown
+   *  operators see during planning — NOT the live array index. */
+  orderIndex: z.number().int(),
+  /** Per-goal worktree directory (absolute path) — set by the dispatcher
+   *  when the goal first starts, reused across retries until the terminal
+   *  cleanup. Surfaced here so operators can find the worktree from the
+   *  overlay debug-copy flow without joining engine_goal in SQLite. */
+  workspaceDir: z.string().optional(),
+  /** Branch currently checked out inside `workspaceDir`. */
+  workspaceBranch: z.string().optional(),
+  /** How many times `retry_failed_goals` has reset this goal. */
+  retryCount: z.number().int(),
   priority: z.enum(["blocking", "advisory"]),
   steps: TaskBoardGoalWorkflowStep.array(),
   /** Architect contracts relevant to this specific goal */
@@ -961,6 +974,24 @@ export const Event = {
       sessionID: z.string(),
       attempt: z.number(),
       elapsedMs: z.number(),
+    }),
+  ),
+  /** Streamed reasoning delta for the fidelity review LLM call. The JSON
+   *  contract the reviewer emits is still structured-parsed at the end
+   *  (FidelityReviewCompleted), but we forward the raw token stream into a
+   *  collapsible reasoning part on the fidelity card itself — that card is
+   *  already a separate card from the requirements agent session, so the
+   *  token noise no longer pollutes the agent card. `attempt` allows the
+   *  overlay to open a fresh reasoning part when the retry loop rolls over;
+   *  `textDelta` carries only the increment since the last emit (the emitter
+   *  throttles at ~500ms). */
+  FidelityReviewChunk: BusEvent.define(
+    "fidelity.review.chunk",
+    z.object({
+      taskID: Identifier.schema("task"),
+      sessionID: z.string(),
+      attempt: z.number(),
+      textDelta: z.string(),
     }),
   ),
   /** Fidelity review verdict with the full structured result. Emitted once

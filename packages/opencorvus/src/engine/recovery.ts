@@ -25,7 +25,7 @@ export async function recoverProjectExecution(input: {
     await abortLiveExecutionForProject({
       projectID: input.projectID,
       reason: RECOVERY_REASON,
-      cleanupWorkspace: true,
+      cleanupGoalWorkspaces: false,
     })
   const abortedRuns = await recoverOrphanRuns(input.projectID)
   const resumedTaskID = await resumeProjectQueue(

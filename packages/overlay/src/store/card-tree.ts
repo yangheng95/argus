@@ -14,10 +14,14 @@
 //   ctx:user-request:file:<url|idx>                        — an attachment part
 //   <stage>:session:<sid>                                  — per-session agent card
 //   part:<messageID>:<partID>                              — part inside a session card
-//   goal-group:<goalID>                                    — goal container
-//   goal-group:<goalID>:step:<stepID>                      — step row inside a goal
-//   goal-group:<goalID>:step:<stepID>:phase:<phaseID>      — phase row inside a step
+//   step:<goalID>:<stepID>                                 — per-goal executor step (top-level)
+//   step:<goalID>:<stepID>:phase:<phaseID>                 — phase row inside an executor step
 //   interaction:<interactionID>                            — synthetic interaction card
+//
+// Note: the legacy `goal-group:*` container layer was removed in the
+// 2026-04-19 flatten. Each goal now surfaces its single goal-scope step
+// directly at the top level, with goal title / decomposition index
+// (`#orderIndex+1`) / description / contracts stamped onto the step card.
 //
 // The writer (services/tree-writer.ts) is the only module that mutates
 // this store. Components read only. No memos, no derivations — components
@@ -28,8 +32,7 @@ import { createStore } from "solid-js/store";
 
 export type CardKind =
   | "agent"     // per-session agent card (orchestrator, build worker, planner, ...)
-  | "goal"      // goal-group container
-  | "step"      // step row inside a goal
+  | "step"      // per-goal executor step card — top-level, carries goal metadata
   | "phase"     // phase row inside a step (plan / build / evaluate inside pipeline.build)
   | "tool"      // promoted tool call (nested card for task/subagent)
   | "message"   // user / system synthetic bubble
@@ -81,13 +84,20 @@ export interface CardNode {
   role?: string;
   title: string;
   subtitle?: string;
-  /** Goal index / round number; shown as #N when > 0. */
+  /** Goal decomposition index + 1; shown as `#N` when > 0. Stamped onto the
+   *  executor step card from the backend `goalWorkflow.orderIndex` so the
+   *  number matches the numbered breakdown operators see during requirements
+   *  planning (and does NOT re-number when a goal is removed). */
   round?: number;
+  /** Goal this card belongs to. Set on executor step cards, goal-phase cards,
+   *  and any session card that was routed to a goal phase. */
   goalID?: string;
+  /** Goal objective prose — rendered at the top of the step card body. Set
+   *  only on executor step cards (kind="step"). */
   goalDescription?: string;
-  goalStatus?: string;
+  /** Architect contracts for this goal — rendered as a collapsible section
+   *  under goalDescription. Set only on executor step cards. */
   contracts?: Array<{ key: string; value: string; reason?: string }>;
-  steps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
   stepPayload?: StepPayload;
   stepID?: string;
   /** Phase identifier for kind="phase" nodes. Matches the phase.id declared

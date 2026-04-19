@@ -19,11 +19,11 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "milestone.activated",
   "milestone.passed",
   "milestone.failed",
-  // Fidelity `started` / `progress` are NOT noop — they promote a running
-  // fidelity card so the operator sees the 60–180s review in flight instead
-  // of a silent requirements session. Handled by tree-writer's
-  // `handleFidelityStarted` / `handleFidelityProgress`; the same card id is
-  // upserted by `handleFidelityCompleted` when the verdict lands.
+  // Fidelity `started` / `progress` / `chunk` / `completed` are NOT noop —
+  // started/progress promote a running fidelity card, chunk streams reasoning
+  // tokens into that card, and completed upserts it with the structured
+  // verdict. Handled by tree-writer's `handleFidelity*` family; the same card
+  // id (`fidelity:<taskID>`) is upserted across all four events.
 ])
 
 /** Subagent phase-completion events. Each carries `sessionID` + `status`

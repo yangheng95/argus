@@ -30,8 +30,10 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   //     surface as top-level siblings of the root assistant card.
   const snapshot = await replay(EVENTS, INITIAL_BOARD);
 
-  const goalCardID = `goal-group:${GOAL_ID}`;
-  const stepCardID = `${goalCardID}:step:build`;
+  // 2026-04-19 flatten: the goal-group wrapper card is gone. Each goal's
+  // single goal-scope executor step is now a top-level card with goal
+  // title / round / description / contracts stamped on it.
+  const stepCardID = `step:${GOAL_ID}:build`;
   const planPhaseID = `${stepCardID}:phase:plan`;
   const buildPhaseID = `${stepCardID}:phase:build`;
   const evaluatePhaseID = `${stepCardID}:phase:evaluate`;
@@ -165,6 +167,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
         goalID: GOAL_ID,
         goalTitle: "Scaffold project",
         goalStatus: "running",
+        orderIndex: 0,
         steps: [
           {
             stepID: "build",
@@ -195,9 +198,17 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
     },
   });
 
-  const stepCardID = `goal-group:${GOAL_ID}:step:build`;
-  expect(cardTreeStore.cards[stepCardID]?.subtitle).toBe("3 planned steps");
+  const stepCardID = `step:${GOAL_ID}:build`;
+  // Subtitle format: `${goalID tail} · ${step.summary}` — executor step
+  // absorbed the old goal-group card, so both the stable identity (last
+  // 8 of goalID) and the step's own summary live in the header.
+  expect(cardTreeStore.cards[stepCardID]?.subtitle).toBe(
+    `${GOAL_ID.slice(-8)} · 3 planned steps`,
+  );
+  expect(cardTreeStore.cards[stepCardID]?.title).toBe("Scaffold project");
+  expect(cardTreeStore.cards[stepCardID]?.round).toBe(1);
   expect(cardTreeStore.cards[stepCardID]?.stepID).toBe("build");
+  expect(cardTreeStore.cards[stepCardID]?.goalID).toBe(GOAL_ID);
   expect(cardTreeStore.cards[stepCardID]?.stepPayload?.buildSessionID).toBe(BUILD_SID);
   expect(cardTreeStore.cards[stepCardID]?.stepPayload?.planNodes?.[0]?.title).toBe("Create shell");
 });

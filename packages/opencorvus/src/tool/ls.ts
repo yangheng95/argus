@@ -10,6 +10,10 @@ export const IGNORE_PATTERNS = [
   "node_modules/",
   "__pycache__/",
   ".git/",
+  // `.opencorvus/` covers all our scratch, including goal worktrees which
+  // now live under `.opencorvus/worktrees/`. The legacy sibling pattern is
+  // retained for projects that still have leftover dirs from the prior
+  // parent-directory layout.
   ".opencorvus/",
   ".opencorvus-worktrees/",
   ".opencorvus-meta.json",

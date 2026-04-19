@@ -477,7 +477,6 @@
   "skill.delete_confirm": "确认删除技能「{{name}}」？",
   "skill.install": "安装技能",
   "skill.market.install_button_title": "将此技能安装到当前工作区。",
-  "skill.market.none": "暂无精选技能",
   "skill.market.open_site": "访问主页",
   "skill.market.open_site_title": "在浏览器中打开该技能主页。",
   "skill.market.title": "技能市场",
