@@ -47,7 +47,7 @@ import {
 } from "./persist"
 import { EngineGoalTable, EnginePlanNodeTable } from "./engine.sql"
 import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
-import { buildGoalPrompt, createBuildSession, createExecutorSession } from "@/goal/runner"
+import { buildGoalPrompt, createBuildSession, createEvaluatorSession, createExecutorSession } from "@/goal/runner"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -668,6 +668,19 @@ export class GoalPool {
       // downstream consumers (criteria panel, retry pipeline) are stable.
       const orchCfgForEval = await EngineConfig.get()
       if (orchCfgForEval.evaluator?.per_goal_enabled) {
+        // Per-goal evaluator session — makes the evaluate phase card in the
+        // overlay come alive. evaluateGoal() is a pure shell/rubric runner
+        // with no LLM of its own, but it can stream command-by-command
+        // output through the session hooks so the operator sees test/build
+        // output in real time (and why a failing goal rejected).
+        const evaluatorSession = await createEvaluatorSession(
+          task as any, entry.goal as any, worktreeDir!, containerSession.id,
+        )
+        const evalHooks = sessionStreamHooks({
+          sessionID: evaluatorSession.id,
+          taskID: task.id,
+          stage: "evaluator",
+        })
         try {
           const allGoalsForContract = listGoalsByPlan(plan.id)
           const goalFields = goalRowToContract(entry.goal)
@@ -688,6 +701,8 @@ export class GoalPool {
             delivery,
             signal,
             tier: orchCfgForEval.evaluator.tier,
+            sessionID: evaluatorSession.id,
+            stream: evalHooks,
           })
 
           // Sink each check into task.metadata.criteria_results so the overlay
@@ -728,6 +743,15 @@ export class GoalPool {
           log.error("per-goal eval threw; marking goal failed", {
             goalID: entry.goal.id, error: msg,
           })
+          // Surface the infrastructure failure into the evaluator session
+          // so the overlay's evaluate phase card shows WHY eval could not
+          // run (instead of an empty phase that silently flipped to failed).
+          try {
+            const r = evalHooks.onChunk?.({ chunk: { type: "reasoning-delta", id: "eval-infra-error", text: `\n✗ evaluator threw: ${msg}\n` } as any })
+            if (r && typeof (r as Promise<unknown>).then === "function") await r
+          } catch {
+            /* broadcast best-effort; real error is already logged above */
+          }
           if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
           updateGoalRun(goalRun.id, { status: "failed", error: `evaluator threw: ${msg}` })
           EngineProtocol.emit(Event.GoalFailed, {
@@ -737,6 +761,14 @@ export class GoalPool {
             goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
             status: "failed", error: `evaluator threw: ${msg}`, delivery, attempts: 1,
           }
+        } finally {
+          // Persist whatever text/reasoning the evaluator streamed during
+          // its run. Without this, the trailing parts of the eval output
+          // (final rubric judgment, supplement command results) would be
+          // stranded in memory.
+          await evalHooks.flush().catch((err) => {
+            log.warn("eval hooks flush failed (non-fatal)", { goalID: entry.goal.id, error: String(err) })
+          })
         }
       }
 

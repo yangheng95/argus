@@ -346,6 +346,32 @@ export async function createExecutorSession(
   return session
 }
 
+/**
+ * Create the per-goal **evaluator** session — no LLM of its own; the
+ * sessionStreamHooks attached to it by the caller let the pure-function
+ * `evaluateGoal` (shell runner + rubric judge) broadcast per-command
+ * output so the overlay's evaluate phase card shows live progress.
+ *
+ * Like createBuildSession, parentID points at the executor container so
+ * the session nests into the goal's step in the overlay's hierarchy.
+ * `directory` is the per-goal worktree — evaluator shells out there.
+ */
+export async function createEvaluatorSession(
+  task: TaskRow,
+  goal: GoalRow,
+  worktreeDir: string,
+  parentSessionID: string,
+) {
+  const session = await Session.createNext({
+    kind: "evaluator",
+    goalID: goal.id,
+    parentID: parentSessionID,
+    title: `Evaluate: ${goal.title}`,
+    directory: worktreeDir,
+  })
+  return session
+}
+
 function strings(input: unknown) {
   return [...new Set(Array.isArray(input) ? input.filter((item): item is string => typeof item === "string" && item.length > 0) : [])]
 }
