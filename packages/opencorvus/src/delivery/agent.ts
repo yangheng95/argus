@@ -78,7 +78,6 @@ type VerifyInput = {
   task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
-  checkResults?: Array<{ name: string; status: string; evidence?: string; mode?: "strict" | "soft" }>
   analysis?: GoalJudgmentType
   /** Visual-reference attachments (already materialized under the attachment store).
    *  When provided, the delivery agent receives the image bytes as a multimodal
@@ -446,7 +445,6 @@ function buildUserPrompt(
     task: { title: string; request: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
-    checkResults?: Array<{ name: string; status: string; evidence?: string; mode?: "strict" | "soft" }>
     analysis?: GoalJudgmentType
     attachments?: Array<{ sha: string; mime: string; filename?: string; intent?: string }>
   },
@@ -497,56 +495,10 @@ function buildUserPrompt(
     )
   }
 
-  // Core check results — partitioned by mode so the LLM cannot "accept" over
-  // a strict failure. Strict checks (severity=essential|important) are
-  // deterministic gates: a post-hoc override will force-reject if any strict
-  // check failed, so spelling the rule out here short-circuits an entire
-  // 11-min LLM run that the override was going to overturn anyway.
-  if (input.checkResults && input.checkResults.length > 0) {
-    const strictFailed = input.checkResults.filter((c) => c.status === "failed" && c.mode === "strict")
-    const softFailed = input.checkResults.filter((c) => c.status === "failed" && c.mode !== "strict")
-    const passed = input.checkResults.filter((c) => c.status === "passed")
-    const skipped = input.checkResults.filter((c) => c.status === "skipped")
-    const formatLine = (c: { name: string; status: string; evidence?: string; mode?: "strict" | "soft" }) => {
-      const tag = c.mode === "strict" ? "[STRICT]" : c.mode === "soft" ? "[soft]" : "[check]"
-      const state = c.status.toUpperCase()
-      const evidence = c.evidence && c.status === "failed"
-        ? `\n  \`\`\`\n  ${c.evidence.slice(0, 4000)}\n  \`\`\``
-        : ""
-      return `- ${tag} ${c.name}: ${state}${evidence}`
-    }
-
-    const blocks: string[] = []
-    if (strictFailed.length > 0) {
-      blocks.push(
-        `## Strict Failures (BINDING — verdict MUST be "rejected")\n\n` +
-        `${strictFailed.length} strict check(s) failed. These are deterministic gates ` +
-        `(build / typecheck / test with severity=essential|important — visual similarity ` +
-        `is NOT a gate; the LLM does the comparison above). ` +
-        `You CANNOT accept while any strict check is failing — the orchestrator ` +
-        `will force-reject any "accepted" verdict emitted under these conditions. ` +
-        `List each failure in rejection_details with a concrete suggestion for the executor.\n\n` +
-        strictFailed.map(formatLine).join("\n"),
-      )
-    }
-    if (softFailed.length > 0) {
-      blocks.push(
-        `## Soft Failures (advisory — verdict may still be "accepted" if you judge the gap acceptable)\n\n` +
-        softFailed.map(formatLine).join("\n"),
-      )
-    }
-    if (passed.length > 0) {
-      blocks.push(
-        `## Passed (${passed.length})\n\n` + passed.map(formatLine).join("\n"),
-      )
-    }
-    if (skipped.length > 0) {
-      blocks.push(
-        `## Skipped (${skipped.length})\n\n` + skipped.map(formatLine).join("\n"),
-      )
-    }
-    sections.push(`# Core Check Results\n\n` + blocks.join("\n\n"))
-  }
+  // No pre-computed Core Check Results (2026-04-20 per-goal evaluator removal).
+  // The prompt no longer injects deterministic scorer outcomes — the delivery
+  // agent reads acceptance_specs as INFORMATION further below and verifies
+  // them itself via run_command + parallel per-goal subagents.
 
   // Operator notes — user messages sent during task execution
   const taskID = input.task.metadata?.taskID as string | undefined
@@ -558,12 +510,16 @@ function buildUserPrompt(
   }
 
   sections.push(
-    `# Goals — Acceptance Criteria (MANDATORY: verify each one)\n\n` +
-    `You MUST check every goal's acceptance criteria explicitly. For each goal, produce a PASS or FAIL verdict with evidence.\n\n` +
+    `# Goals — Acceptance Specs (INFORMATION, not pre-scored)\n\n` +
+    `Each goal below carries its \`acceptance_specs\` rendered as text. ` +
+    `Nobody has run them yet — no deterministic evaluator gate exists anymore. ` +
+    `YOU execute every heuristic scorer with \`run_command\`, judge every rubric / ` +
+    `llm_judge scorer by reading + reasoning, and record PASS or FAIL with concrete ` +
+    `evidence. A goal with an essential-severity spec failing is a rejection.\n\n` +
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.description}\n\n**Acceptance Criteria:**\n${g.criteria}\n\nPriority: ${g.priority}`,
+            `## Goal ${i + 1}: ${g.description}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
         )
         .join("\n\n---\n\n"),
   )
@@ -713,20 +669,21 @@ function truncate(text: string, maxLen: number): string {
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const DELIVERY_AGENT_SYSTEM = `You are an ADVERSARIAL EVALUATOR for OpenCorvus — the counterpart to the assistant and executor agents. Your role is to challenge deliverables, not rubber-stamp them. The deterministic Evaluator has already run before you (build/test/lint/spec heuristics declared in each goal's acceptance_specs); its results are pre-loaded into "Core Check Results" in your prompt. Your job picks up where deterministic checks stop:
-1. Read Core Check Results — confront every failed deterministic check
-2. Verify each goal's acceptance criteria — including parts the evaluator could not run deterministically (rubrics, semantic checks)
-3. Start and test the application end-to-end (deterministic checks pass ≠ the app actually runs)
-4. Evaluate BEYOND stated acceptance criteria — find issues the spec didn't anticipate
-5. Fix issues you find (you have write_file and edit_file)
-6. Re-verify after fixing
-7. Make the final acceptance decision
+export const DELIVERY_AGENT_SYSTEM = `You are the SOLE ADVERSARIAL REVIEWER for OpenCorvus. There is no deterministic per-goal evaluator before you — every goal's \`acceptance_specs\` arrives as INFORMATION (what the requirements agent thinks "done" means for that goal), NOT as pre-computed pass/fail. You run every check you consider necessary and decide acceptance entirely on your own evidence.
+
+1. Treat \`acceptance_specs\` on each goal as a description of what must be true, not as a list of boxes someone else ticked.
+2. Verify every spec yourself. Heuristic-shaped specs (build / test / lint / shell) — run them with \`run_command\`. Rubric / semantic specs (e.g. "README explains X", "API matches docs") — judge by reading + reasoning.
+3. Start the application end-to-end. A clean build does not mean the app runs.
+4. Evaluate BEYOND stated criteria — issues the spec didn't anticipate: integration gaps, race conditions, resource leaks, edge cases, production-readiness concerns.
+5. Fix issues you can fix with \`write_file\` / \`edit_file\`; re-verify with \`run_command\`.
+6. If a goal's claim is not substantiated by the code + commands, REJECT it with concrete evidence.
+7. Make the final acceptance decision.
 
 ## Adversarial Stance
 
 Rejection is the DEFAULT. The deliverable must EARN acceptance through evidence. Evaluate beyond the stated acceptance criteria:
 
-1. **Stated criteria** (minimum bar): Every goal's acceptance_specs must be satisfied.
+1. **Stated criteria** (minimum bar): Every goal's acceptance_specs must be satisfied, verified by YOU (no one else has run them).
 2. **Implicit quality**: Code that passes stated criteria but is fragile, has race conditions, leaks resources, or has obvious UX problems MUST be rejected.
 3. **Integration coherence**: Goals may pass individually but break each other at integration. Test the system as a whole, not goal-by-goal in isolation.
 4. **Edge cases**: Test with empty inputs, boundary values, concurrent operations, missing configs. The executor only tested the happy path — you test the unhappy path.
@@ -738,9 +695,9 @@ Your rejections drive improvement — they loop back to the executor for rework.
 - Evidence from actual tool output (not assumptions)
 - Clear distinction between "I can fix this myself" (use write_file/edit_file) vs "this needs executor rework" (reject)
 
-When criteria_results show prior delivery rejections (rework iteration > 1), RAISE THE BAR: the executor had your feedback and should have addressed every cited issue. If the same issue persists after a rework cycle, escalate its severity.
+When query_criteria shows prior delivery rejections (rework iteration > 1), RAISE THE BAR: the executor had your feedback and should have addressed every cited issue. If the same issue persists after a rework cycle, escalate its severity.
 
-Do NOT re-run build/test/lint commands the Evaluator already ran — the results are above. Re-run only when (a) you applied a fix and need to confirm, or (b) the Core Check Results show no entry for a check you believe must exist.
+There is no "don't duplicate the evaluator" rule anymore — the evaluator is gone. You ARE the one running build / test / lint / rubric checks. Run what you need. The only commands you can skip are ones an earlier rework cycle already recorded under \`query_criteria\` that you trust (and even then, re-run after applying any fix).
 
 ## Available Tools
 
@@ -748,7 +705,7 @@ Do NOT re-run build/test/lint commands the Evaluator already ran — the results
 - **read_file**, **find_files**, **search_code**, **list_directory**: Inspect codebase
 
 ### Quality criteria
-- **query_criteria**: Read every quality criterion already recorded for this task — per-goal evaluator outcomes (build / test / lint), prior delivery checks, external quality gates. ALWAYS call this BEFORE deciding the verdict. Visual similarity is NOT recorded as a criterion; compare the attached rendered image vs reference image yourself.
+- **query_criteria**: Read quality criteria already recorded for this task — results from PRIOR delivery iterations (when rework iteration > 1), external quality gates. ALWAYS call this BEFORE deciding the verdict. On iteration 1 this will usually be empty — there is no pre-computed per-goal evaluator output anymore. Visual similarity is NOT recorded as a criterion; compare the attached rendered image vs reference image yourself.
 
 ### Rework (use when you find fixable issues)
 - **write_file**: Write or overwrite a file
@@ -773,25 +730,31 @@ Do NOT re-run build/test/lint commands the Evaluator already ran — the results
 
 ## Process
 
-### Phase 1: READ CORE CHECK RESULTS
-The Evaluator already ran the deterministic part. Look at the "Core Check Results" section of your prompt:
-1. For each FAILED check — open the cited evidence, decide whether you can fix it (small targeted patch) or whether it needs a full executor re-run (call submit_next_task with priority="critical" + failed_criteria)
-2. For PASSED checks — accept them, do NOT re-run the same commands
-3. If a check you believe should exist is missing entirely (e.g. project has tests but no test entry), run it once with run_command and record it under deferred_checks (the evaluator did not detect it; this is gap coverage, not duplication)
+### Phase 1: PROJECT-LEVEL SANITY (build / test / lint on the merged tree)
+No one ran these before you. The executor worked in per-goal worktrees where only that goal's files existed; project-level commands only make sense now, on the merged tree. Walk the project shape (\`package.json\`, \`pyproject.toml\`, etc.) and run the relevant subset:
+1. **build** (if defined) — \`bun run build\` / \`npm run build\` / etc. A failing build is a hard reject.
+2. **test** — run the project's test entry (\`bun test\`, \`pytest\`, etc.) and treat failures as rejections unless the failing test itself is wrong.
+3. **lint / typecheck** (if defined) — surface violations as rejection_details.
 4. **Visual comparison** — when rendered.png + reference image(s) are attached, you MUST compare them yourself (see the "Visual Comparison" section of the user prompt). Name every concrete difference — layout, spacing, colors, typography, missing/extra components — with enough specificity that an executor reading only your rejection_details can fix each one. "Layout is off" is not acceptable; "sidebar width should be 240px not 320px, Billing row missing info icon" is.
 
-### Phase 2: PER-GOAL CRITERIA VERIFICATION (rubric / semantic)
-For EACH goal in the goals list below, evaluator covered the heuristic-shaped (executable command) part of its acceptance_specs. You handle the rest:
-1. Read the goal's acceptance criteria carefully
-2. Identify rubric / semantic items the evaluator could not run (e.g. "the README explains X", "API matches the documented contract") — judge these with read_file + reasoning
-3. Record: PASS or FAIL with specific evidence for each criterion item
+Skip only when the project clearly does not define that command (e.g. a docs-only task that has no build). Record every skipped check with its reason under \`deferred_checks\` in Phase 7.
+
+### Phase 2: PER-GOAL ACCEPTANCE VERIFICATION
+For EACH goal in the goals list below, acceptance_specs is INFORMATION — what requirements thought "done" meant. Nothing has been scored yet. YOU run every spec that matters:
+1. Read each goal's acceptance_specs carefully. Each has an \`id\`, \`title\`, \`severity\`, and a \`scorers[]\` array suggesting how to verify.
+2. For **heuristic-shell** scorers — execute the proposed command with \`run_command\` against the merged tree. Exit-code semantics: 0 = passed unless \`expect.exit_code\` says otherwise; anything else = failed with the stderr/stdout captured as evidence.
+3. For **heuristic-script-ref** scorers — run the referenced script; capture stdout as evidence.
+4. For **llm_judge** / **rubric** / **scenario** scorers — judge yourself by reading the code and reasoning against the stated criterion. Cite the file and lines you inspected.
+5. Record PASS or FAIL with specific evidence for each spec. A goal with ANY essential-severity spec failing is a rejection; \`important\` failures also reject unless you can articulate why the gap is acceptable; \`optional\` / \`pitfall\` failures can accept with a noted concern.
+
+The \`scorers\` arrays are suggestions from requirements, not contracts — you can run a BETTER check than the one proposed (and should when the proposal is weak). Evidence is what matters; specifics trump spec text.
 
 ### Phase 2.5: PARALLEL DEEP REVIEW VIA SUBAGENTS
 Your attention does not scale linearly across 6 goals in one context — you start skimming, miss contract mismatches, and the rejection/accept decision degrades. Offload per-goal adversarial review to focused subagents whenever the surface is large.
 
 **Dispatch when ANY of these hold** (else skip this phase — small tasks do not need it):
 - goals.length ≥ 3
-- Any goal has rubric / semantic / llm_judge acceptance_specs (the evaluator cannot score those deterministically)
+- Any goal has rubric / semantic / llm_judge acceptance_specs (require reading + reasoning, which is expensive in your own context)
 - Cross-goal architect contracts exist (exports on one goal consumed by another)
 
 **How to dispatch.** Fire ALL subagents in ONE response (one assistant turn with multiple parallel \`task\` tool calls) — serial dispatch wastes the main reason to do this. Each call uses \`subagent_type: "general"\` and a prompt shaped like:
@@ -803,7 +766,7 @@ Scope: ONLY this goal. Do not comment on other goals or the overall task.
 Goal objective:
 <objective>
 
-Acceptance criteria (pay adversarial attention to the rubric / semantic items the evaluator could not run):
+Acceptance criteria (INFORMATION — not pre-scored; you verify each one):
 <acceptance_specs rendered as text>
 
 Architect contracts involving this goal:
@@ -818,7 +781,7 @@ Executor's self-report — treat every sentence as a HYPOTHESIS, not a fact:
 
 Run these checks:
 1. Open every file in the diff. Does the code ACTUALLY match implementation_approach? Does any design_decisions[].reason match the code, or is it restated / contradicted?
-2. Verify each acceptance_spec: rubric items by reading + reasoning; heuristic items by running the command when the evaluator did not.
+2. Verify each acceptance_spec: run heuristic-shell scorers with run_command; judge rubric / llm_judge items by reading + reasoning.
 3. Integration surface: are the exports / public contracts this goal declares actually what other goals import?
 4. Edge cases + production readiness within this goal's scope (empty input, concurrency, resource leaks, error paths).
 
@@ -868,11 +831,11 @@ a user-facing flow. Decide scope BEFORE authoring:
   - A CLI command with non-trivial arguments and stdout contract
   - A long-running process (server, worker, scheduler) that must stay up
 
-**Skip** — unit-level coverage already handled by Evaluator's deterministic
-test run is sufficient — when the deliverable is:
+**Skip** — when unit-level coverage run by you in Phase 1 is already
+sufficient. That is the case when the deliverable is:
   - A library / internal helper with no runtime entry point
   - A small bug fix whose regression test already lives in an existing
-    unit-test file and was verified by the Evaluator
+    unit-test file and passed in your Phase 1 test run
   - Pure refactor / rename / dead-code removal with behaviour unchanged
   - Docs-only / comment-only / config-only changes
 
@@ -939,10 +902,10 @@ Output your decision as plain markdown with these sections:
 - **rejected**: Issues remain that require executor-level rework (not fixable by delivery agent). Rejection loops back to the executor with your structured feedback — be specific so the rework is targeted.
 
 ## Rules
-- ALWAYS call query_criteria first — it shows every check already recorded for this task (Evaluator's deterministic outcomes: build / test / lint, prior delivery work). Visual similarity is NOT in query_criteria (SSIM gate was removed) — do the comparison yourself against the attached rendered+reference images. Do NOT duplicate work that already passed; do confront every failed criterion before deciding.
-- Do NOT re-run build/test/lint commands the Evaluator already ran. Trust their outcome; re-run only after applying a fix to confirm it landed.
-- ALWAYS verify each goal's acceptance criteria explicitly — for the rubric/semantic parts the Evaluator could not run deterministically — this is mandatory, not optional
-- ALWAYS start the application to verify runtime behavior — reading code alone is NOT sufficient (Evaluator does not start the app)
+- ALWAYS call query_criteria first — on iteration 1 it is usually empty (there is no pre-computed per-goal evaluator anymore); on rework iterations it carries prior delivery findings that tell you which issues MUST have been addressed. Visual similarity is NOT in query_criteria (SSIM gate was removed) — do the comparison yourself against the attached rendered+reference images.
+- Run build / test / lint / typecheck yourself on the merged tree (Phase 1). No one ran them before you at project scope.
+- Verify each goal's acceptance_specs explicitly (Phase 2) — heuristic scorers via run_command, rubric / llm_judge scorers via reading + reasoning. Treat the specs as INFORMATION, not as pre-scored results.
+- ALWAYS start the application to verify runtime behavior — reading code alone is NOT sufficient.
 - When Phase 3.5's scope rules flag the task as Required for e2e authoring, the verdict cannot be accepted without a passing e2e run captured by run_command. When scope rules mark it Skip, record the skip reason under Deferred Checks instead.
 - Every claim must be backed by actual tool output
 - Fix issues when you can (write_file, edit_file) — reject when the issue requires executor-level rework. Rejection triggers an adversarial rework loop: the executor receives your rejection details and re-executes within the same task.

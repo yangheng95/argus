@@ -20,13 +20,13 @@ export const TASK_ID = "tsk_fixture_goal_phase";
 export const ROOT_SID = "ses_root_orch";
 export const GOAL_ID = "goal_fixture_g1";
 /** kind="executor" container session — empty parent that groups
- *  planner / build worker / evaluator children. Does NOT render as a
- *  card; the step card in the overlay represents it. */
+ *  planner / build worker children. Does NOT render as a card; the
+ *  step card in the overlay represents it. (2026-04-20: the per-goal
+ *  evaluator child session was retired.) */
 export const EXECUTOR_SID = "ses_goal_executor";
 /** kind="build" worker session — the LLM that actually writes code. */
 export const BUILD_SID = "ses_goal_build";
 export const PLANNER_SID = "ses_goal_planner";
-export const EVALUATOR_SID = "ses_goal_evaluator";
 export const REQUIREMENTS_SID = "ses_requirements";
 export const DESIGN_SID = "ses_design";
 export const ARCHITECT_SID = "ses_architect";
@@ -149,10 +149,11 @@ export const EVENTS: FixtureEvent[] = [
 
   // ── Goal running (board.goalWorkflows updates via task.updated) ──
   // Per-goal step payload ships `phases` as a record — per-phase status
-  // for the plan / build / evaluate phases inside the `build` step.
-  // goal_run.status="running" maps to plan=completed, build=running,
-  // evaluate=pending via projectPhases() in the backend; here we bake
-  // the projection into the fixture directly.
+  // for the plan / build phases inside the `build` step.
+  // goal_run.status="running" maps to plan=completed, build=running via
+  // projectPhases() in the backend; here we bake the projection into the
+  // fixture directly. (The legacy `evaluate` phase was dropped on
+  // 2026-04-20 together with the per-goal evaluator.)
   e("task.updated", {
     task: {
       id: TASK_ID,
@@ -169,7 +170,6 @@ export const EVENTS: FixtureEvent[] = [
           phases: {
             plan: { status: "completed" },
             build: { status: "running" },
-            evaluate: { status: "pending" },
           },
         }],
       }],
@@ -375,7 +375,6 @@ export const EVENTS: FixtureEvent[] = [
           phases: {
             plan: { status: "completed" },
             build: { status: "completed" },
-            evaluate: { status: "completed" },
           },
         }],
       }],
@@ -421,9 +420,8 @@ export const INITIAL_BOARD = {
         skippable: false,
         status: "pending",
         phases: [
-          { id: "plan",     label: "Plan",     sessionKind: "planner" },
-          { id: "build",    label: "Build",    sessionKind: "build" },
-          { id: "evaluate", label: "Evaluate", sessionKind: "evaluator" },
+          { id: "plan",  label: "Plan",  sessionKind: "planner" },
+          { id: "build", label: "Build", sessionKind: "build" },
         ],
       },
       { id: "deliver", label: "Deliver", tool: "deliver", scope: "task", skippable: false, status: "pending" },

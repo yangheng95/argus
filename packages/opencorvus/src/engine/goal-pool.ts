@@ -23,9 +23,7 @@ import { Database, eq } from "@/storage/db"
 import { Worktree } from "@/worktree"
 import { ExecutorRegistry } from "@/executor/registry"
 import { runGoalPipeline } from "@/pipeline"
-import { evaluateGoal } from "@/delivery/checks"
 import { EngineConfig } from "./config"
-import { upsertTaskCriteria } from "./state"
 import { createDecisionLog } from "@/decision-log"
 import { readyGoalNodes, type GoalNodeEntry } from "@/goal/readiness"
 import { cleanupGoalWorkspace } from "@/goal/runner"
@@ -52,7 +50,7 @@ import {
 } from "./persist"
 import { EngineGoalTable, EnginePlanNodeTable } from "./engine.sql"
 import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
-import { buildGoalPrompt, createBuildSession, createEvaluatorSession, createExecutorSession } from "@/goal/runner"
+import { buildGoalPrompt, createBuildSession, createExecutorSession } from "@/goal/runner"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -114,63 +112,6 @@ function logWorktreePreservedForRetry(goalID: string, worktreeDir: string | unde
     directory: worktreeDir,
     reason,
   })
-}
-
-function ownedPathsConformanceCheck(input: {
-  goalID: string
-  goalTitle: string
-  ownedPaths: string[]
-  violations: Array<{ file: string; expected?: string; message: string }>
-  changedFiles: string[]
-}): {
-  summary: string
-  check: EngineEvaluationCheck
-  criteria: {
-    name: string
-    status: "failed"
-    family: string
-    evidence: string
-    label: string
-    mode: "strict"
-  }
-} {
-  const lines = [
-    "owned_paths conformance gate rejected this delivery.",
-    "",
-    "Violations:",
-    ...input.violations.map((item) => `- ${item.message}`),
-    "",
-    `Declared owned_paths: ${input.ownedPaths.join(", ") || "(none)"}`,
-    `Changed files: ${input.changedFiles.join(", ") || "(none)"}`,
-  ]
-  const evidence = lines.join("\n")
-  const summary = input.violations.length === 1
-    ? `owned_paths conformance failed: ${input.violations[0]!.message}`
-    : `owned_paths conformance failed: ${input.violations.length} files fell outside declared owned_paths`
-  const checkName = `${input.goalID}.owned_paths_conformance`
-  return {
-    summary,
-    check: {
-      name: checkName,
-      label: `${input.goalTitle} · owned_paths conformance`,
-      family: "goal_eval",
-      status: "failed",
-      evidence,
-      mode: "strict",
-      severity: "essential",
-      scorer_kind: "prebuilt",
-      trigger: "on_goal",
-      matched_paths: input.violations.map((item) => item.expected).filter((item): item is string => typeof item === "string" && item.length > 0),
-    },
-    criteria: {
-      name: checkName,
-      status: "failed",
-      family: "goal_eval",
-      evidence,
-      label: `${input.goalTitle} · owned_paths conformance`,
-      mode: "strict",
-    },
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -797,41 +738,17 @@ export class GoalPool {
         }
       }
 
-      const allGoalsForContract = listGoalsByPlan(plan.id)
-      const goalFields = goalRowToContract(entry.goal)
-      const depIds: string[] = Array.isArray(goalFields.depends_on) ? goalFields.depends_on : []
-      const dependencies = allGoalsForContract
-        .filter((g) => depIds.includes(g.id))
-        .map((g) => goalRowToContract(g))
-      const contract: GoalContract = {
-        goal: goalFields,
-        planNode: null,
-        run,
-        task,
-        plan,
-        dependencies,
-      }
-
-      // ── Manifest conformance advisory (non-binding) ──
+      // ── Manifest conformance — log only ──
       // Detect files written outside the goal's declared `owned_paths` and
-      // surface them as an advisory criterion row + soft check in the
-      // per-goal evidence. This is NOT a hard gate anymore:
-      //
-      //   - Framework byproducts (next-env.d.ts, .next/, dist/, node_modules/),
-      //     generic project files (.gitignore, .env.example, README.md), and
-      //     config files (tailwind.config.*, next.config.*, vite.config.*)
-      //     routinely fall outside any declared owned_paths but are NOT
-      //     genuine scope violations — rejecting on them burned every retry
-      //     on cosmetic drift while the executor produced perfectly
-      //     working output.
-      //
-      //   - Real scope conflicts (goal A writing into goal B's declared
-      //     paths) and real layout-drift bugs (src/src/ double-wrap that
-      //     breaks the build) are caught downstream by the per-goal
-      //     evaluator's build / test / typecheck shell checks — those ARE
-      //     binding. An advisory row records the drift so the delivery
-      //     agent can still see it, but the path check itself cannot
-      //     kill the goal.
+      // log them for operator visibility. This is purely informational and
+      // does NOT gate the goal — per-goal acceptance verdicts are the
+      // delivery agent's job now (2026-04-20 per-goal evaluator removal,
+      // see Phase 2.5 in delivery/agent.ts prompt). Framework byproducts
+      // (next-env.d.ts, .next/, config files) routinely fall outside
+      // owned_paths but aren't genuine scope violations; a real conflict
+      // (goal A writing into goal B's files) surfaces as a delivery-agent
+      // rejection once the tree is merged.
+      const goalFields = goalRowToContract(entry.goal)
       const { filesChangedByCommit, validateOwnedPathsDetailed } = await import("@/goal/merge")
       const committedFiles = await filesChangedByCommit(delivery.commitRef, worktreeDir!)
       const conformance = validateOwnedPathsDetailed(
@@ -839,181 +756,11 @@ export class GoalPool {
         goalFields.owned_paths,
       )
       if (!conformance.valid) {
-        log.warn("owned_paths advisory: files outside declared scope", {
+        log.warn("owned_paths: files outside declared scope (informational only)", {
           goalID: entry.goal.id,
           count: conformance.details.length,
           violations: conformance.details.slice(0, 5).map(v => v.message),
         })
-        await upsertTaskCriteria(task.id, [{
-          name: `${entry.goal.id}.owned_paths_advisory`,
-          label: `${entry.goal.title} · owned_paths (advisory)`,
-          family: "goal_eval",
-          status: "skipped",
-          evidence: [
-            `${conformance.details.length} file(s) outside declared owned_paths (advisory — not a rejection).`,
-            "",
-            "Violations:",
-            ...conformance.details.map(v => `- ${v.message}`),
-            "",
-            "Declared owned_paths: " + (goalFields.owned_paths.join(", ") || "(none)"),
-            "Build / test / typecheck remain the binding gates; this row is informational.",
-          ].join("\n"),
-          mode: "soft",
-        }]).catch((err) => {
-          log.warn("owned_paths advisory: sink criteria failed (non-fatal)", {
-            goalID: entry.goal.id, error: String(err),
-          })
-        })
-      }
-
-      // ── Per-goal deterministic evaluator (gated) ──
-      // The legacy path treats "executor produced delivery" as sufficient for
-      // a passed goal. Per design (01-agents.md L111 + docs/product/.../evaluator.md):
-      // evaluator is the deterministic command runner that verifies each
-      // goal's acceptance_specs BEFORE marking passed. Gated by
-      // `evaluator.per_goal_enabled` so the path can be flipped on when
-      // downstream consumers (criteria panel, retry pipeline) are stable.
-      const orchCfgForEval = await EngineConfig.get()
-      if (orchCfgForEval.evaluator?.per_goal_enabled) {
-        // Per-goal evaluator session — makes the evaluate phase card in the
-        // overlay come alive. evaluateGoal() is a pure shell/rubric runner
-        // with no LLM of its own, but it can stream command-by-command
-        // output through the session hooks so the operator sees test/build
-        // output in real time (and why a failing goal rejected).
-        const evaluatorSession = await createEvaluatorSession(
-          task as any, entry.goal as any, worktreeDir!, containerSession.id,
-        )
-        const evalHooks = sessionStreamHooks({
-          sessionID: evaluatorSession.id,
-          taskID: task.id,
-          stage: "evaluator",
-        })
-        try {
-          const verdict = await evaluateGoal({
-            contract,
-            delivery,
-            workDir: worktreeDir!,
-            signal,
-            tier: orchCfgForEval.evaluator.tier,
-            sessionID: evaluatorSession.id,
-            stream: evalHooks,
-          })
-
-          // Sink each check into task.metadata.criteria_results so the overlay
-          // Quality Gates panel reflects deterministic per-goal outcomes.
-          // NOTE: spec-09 invariant — criteria_results is a PROJECTION of
-          // evidence. The persistEvidence call below is the single source of
-          // truth; this upsert is the aggregate view. Both must always happen
-          // together.
-          if (verdict.checks.length > 0) {
-            await upsertTaskCriteria(task.id, verdict.checks.map((c) => ({
-              name: `${entry.goal.id}.${c.name}`,
-              status: c.passed ? "passed" as const : "failed" as const,
-              family: "goal_eval",
-              evidence: c.output,
-              label: `${entry.goal.title} · ${c.name}`,
-              mode: c.mode,
-            }))).catch((err) => {
-              log.warn("per-goal eval: sink criteria failed (non-fatal)", {
-                goalID: entry.goal.id, error: String(err),
-              })
-            })
-          }
-
-          // spec-09 Phase B: persist a `scope="goal_run"` evidence row right
-          // after evaluateGoal, BEFORE the goal_run status transition. The
-          // row records the full per-check detail (spec_id, scorer_kind,
-          // mode, trigger, exit_code, output_digest) that downstream
-          // consumers — retry prompt builder, delivery short-circuit, rework
-          // no-progress signature — will read. Failure to persist is
-          // non-fatal for this goal run (we already have verdict), but the
-          // warning is loud because all downstream spec-09 features depend
-          // on this row.
-          try {
-            const { persistEvidence, outputDigest } = await import("@/verification")
-            const evaluationChecks = verdict.checks.map((c) => ({
-              name: c.name,
-              label: `${entry.goal.title} · ${c.name}`,
-              family: "goal_eval",
-              status: c.passed ? "passed" as const : (c.output?.startsWith("deferred to delivery") ? "skipped" as const : "failed" as const),
-              evidence: c.output,
-              spec_id: c.spec_id,
-              scorer_kind: c.scorer_kind,
-              mode: c.mode,
-              severity: c.severity,
-              trigger: c.trigger,
-              exit_code: c.exit_code,
-              idle_timed_out: c.idle_timed_out,
-              output_digest: c.output ? outputDigest(c.output) : undefined,
-            }))
-            persistEvidence({
-              taskID: task.id,
-              runID: run.id,
-              goalRunID: goalRun.id,
-              scope: "goal_run",
-              status: verdict.pass ? "passed" : "failed",
-              verdict: verdict.verdict,
-              summary: verdict.reasoning || (verdict.pass ? "per-goal evaluator passed" : "per-goal evaluator rejected"),
-              checks: evaluationChecks,
-              timeCompleted: Date.now(),
-            })
-          } catch (err) {
-            log.warn("per-goal eval: persistEvidence failed (non-fatal but blocks spec-09 downstream)", {
-              goalID: entry.goal.id,
-              goalRunID: goalRun.id,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }
-
-          if (!verdict.pass) {
-            const failReason = verdict.reasoning || `Per-goal evaluator rejected: ${verdict.verdict}`
-            // Settle goal_run → failed; engine_goal.status derives from it.
-            updateGoalRun(goalRun.id, { status: "failed", error: failReason })
-            logWorktreePreservedForRetry(entry.goal.id, worktreeDir, failReason)
-            EngineProtocol.emit(Event.GoalFailed, {
-              taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
-            }, { source: "evaluator" }).catch(err => log.warn("GoalFailed emit failed (evaluator source)", { goalID: entry.goal.id, error: String(err) }))
-            return {
-              goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
-              status: "failed", verdict: verdict.verdict, error: failReason, evidence: verdict.evidence,
-              delivery, attempts: 1,
-            }
-          }
-        } catch (evalErr) {
-          // Evaluator infrastructure failure (shell missing, worktree vanished,
-          // llm-judge provider down). Surface loud — do NOT silently pass the
-          // goal. Operator needs to see why eval could not run.
-          const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-          log.error("per-goal eval threw; marking goal failed", {
-            goalID: entry.goal.id, error: msg,
-          })
-          // Surface the infrastructure failure into the evaluator session
-          // so the overlay's evaluate phase card shows WHY eval could not
-          // run (instead of an empty phase that silently flipped to failed).
-          try {
-            const r = evalHooks.onChunk?.({ chunk: { type: "reasoning-delta", id: "eval-infra-error", text: `\n✗ evaluator threw: ${msg}\n` } as any })
-            if (r && typeof (r as Promise<unknown>).then === "function") await r
-          } catch {
-            /* broadcast best-effort; real error is already logged above */
-          }
-          updateGoalRun(goalRun.id, { status: "failed", error: `evaluator threw: ${msg}` })
-          logWorktreePreservedForRetry(entry.goal.id, worktreeDir, `evaluator threw: ${msg}`)
-          EngineProtocol.emit(Event.GoalFailed, {
-            taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: evaluator threw: ${msg}`,
-          }, { source: "evaluator" }).catch(err => log.warn("GoalFailed emit failed (evaluator source)", { goalID: entry.goal.id, error: String(err) }))
-          return {
-            goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
-            status: "failed", error: `evaluator threw: ${msg}`, delivery, attempts: 1,
-          }
-        } finally {
-          // Persist whatever text/reasoning the evaluator streamed during
-          // its run. Without this, the trailing parts of the eval output
-          // (final rubric judgment, supplement command results) would be
-          // stranded in memory.
-          await evalHooks.flush().catch((err) => {
-            log.warn("eval hooks flush failed (non-fatal)", { goalID: entry.goal.id, error: String(err) })
-          })
-        }
       }
 
       // ── 9. Merge delivery ──

@@ -7,21 +7,20 @@
  * Tools:
  *   runGoalPipeline  — execute a goal (worktree + executor + delivery)
  *   planGoal          — create implementation steps for a goal (optional)
- *   evaluateGoal      — deterministic command runner; the deliver tool
- *                       (orchestrator/tools.ts) drives it per-goal before
- *                       handing checkResults to the delivery agent.
+ *
+ * Per-goal evaluator (`evaluateGoal`) was removed on 2026-04-20: the
+ * delivery agent now owns per-goal verification (it reads
+ * acceptance_specs as INFORMATION and runs its own checks via run_command
+ * and parallel subagents).
  */
 
 export { runGoalPipeline } from "./executor"
 export { planGoal, type PlanSteps } from "@/planner/agent"
-export { evaluateGoal } from "@/delivery/checks"
 export type {
   GoalContract,
   GoalContractFields,
   PipelineEvent,
   PipelineDelivery,
-  EvalVerdict,
-  EvalCheckResult,
   FailureClass,
   PipelineDeps,
 } from "./types"
