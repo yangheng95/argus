@@ -19,12 +19,17 @@ const T0 = 1_776_000_000_000;
 export const TASK_ID = "tsk_fixture_goal_phase";
 export const ROOT_SID = "ses_root_orch";
 export const GOAL_ID = "goal_fixture_g1";
-export const GOAL_SID = "ses_goal_exec";
+/** kind="executor" container session — empty parent that groups
+ *  planner / build worker / evaluator children. Does NOT render as a
+ *  card; the step card in the overlay represents it. */
+export const EXECUTOR_SID = "ses_goal_executor";
+/** kind="build" worker session — the LLM that actually writes code. */
 export const BUILD_SID = "ses_goal_build";
+export const PLANNER_SID = "ses_goal_planner";
+export const EVALUATOR_SID = "ses_goal_evaluator";
 export const REQUIREMENTS_SID = "ses_requirements";
 export const DESIGN_SID = "ses_design";
 export const ARCHITECT_SID = "ses_architect";
-export const PLANNER_SID = "ses_planner";
 
 /** Top-level SSE event shape (same as `streamSSE` emits server-side). */
 export interface FixtureEvent {
@@ -143,6 +148,11 @@ export const EVENTS: FixtureEvent[] = [
   }, 2200),
 
   // ── Goal running (board.goalWorkflows updates via task.updated) ──
+  // Per-goal step payload ships `phases` as a record — per-phase status
+  // for the plan / build / evaluate phases inside the `build` step.
+  // goal_run.status="running" maps to plan=completed, build=running,
+  // evaluate=pending via projectPhases() in the backend; here we bake
+  // the projection into the fixture directly.
   e("task.updated", {
     task: {
       id: TASK_ID,
@@ -151,7 +161,16 @@ export const EVENTS: FixtureEvent[] = [
         goalID: GOAL_ID,
         goalTitle: "Scaffold project",
         goalStatus: "running",
-        steps: [{ stepID: "build", label: "Build", status: "running" }],
+        steps: [{
+          stepID: "build",
+          label: "Build",
+          status: "running",
+          phases: {
+            plan: { status: "completed" },
+            build: { status: "running" },
+            evaluate: { status: "pending" },
+          },
+        }],
       }],
     },
   }, 2500),
@@ -218,11 +237,13 @@ export const EVENTS: FixtureEvent[] = [
     },
   }, 2850),
 
-  // ── Executor session (child of orchestrator, bound to GOAL_ID) ──
+  // ── Executor container session (child of orchestrator, bound to GOAL_ID) ──
+  // The container itself has no visible card — overlay filters it out via
+  // `stage === "executor"` so the step card represents it visually.
   e("message.updated", {
     info: {
       id: "msg_exec_1",
-      sessionID: GOAL_SID,
+      sessionID: EXECUTOR_SID,
       role: "assistant",
       resolvedRole: "executor",
       agent: "executor",
@@ -231,41 +252,6 @@ export const EVENTS: FixtureEvent[] = [
       time: { created: T0 + 3000 },
     },
   }, 3000),
-
-  // Tool call (running) — a bash command
-  e("message.part.updated", {
-    part: {
-      id: "part_exec_tool_1",
-      messageID: "msg_exec_1",
-      sessionID: GOAL_SID,
-      type: "tool",
-      tool: "bash",
-      callID: "call_bash_1",
-      state: {
-        status: "running",
-        input: { command: "npm install" },
-        time: { start: T0 + 3100 },
-      },
-    },
-  }, 3100),
-
-  // Tool completed (output arrives)
-  e("message.part.updated", {
-    part: {
-      id: "part_exec_tool_1",
-      messageID: "msg_exec_1",
-      sessionID: GOAL_SID,
-      type: "tool",
-      tool: "bash",
-      callID: "call_bash_1",
-      state: {
-        status: "completed",
-        input: { command: "npm install" },
-        output: "added 42 packages",
-        time: { start: T0 + 3100, end: T0 + 4000 },
-      },
-    },
-  }, 4000),
 
   e("agent.updated", {
     stage: "executor",
@@ -282,7 +268,7 @@ export const EVENTS: FixtureEvent[] = [
     interaction: {
       id: "int_1",
       type: "permission",
-      sessionID: GOAL_SID,
+      sessionID: BUILD_SID,
       status: "pending",
       prompt: "Allow writing to src/server/index.ts?",
       time: { created: T0 + 4500 },
@@ -293,7 +279,7 @@ export const EVENTS: FixtureEvent[] = [
     interaction: {
       id: "int_1",
       type: "permission",
-      sessionID: GOAL_SID,
+      sessionID: BUILD_SID,
       status: "resolved",
       prompt: "Allow writing to src/server/index.ts?",
       response: "allow",
@@ -306,20 +292,7 @@ export const EVENTS: FixtureEvent[] = [
     summary: "Build milestone passed",
   }, 5200),
 
-  // ── Build sub-session (child of executor) ──
-  e("message.updated", {
-    info: {
-      id: "msg_build_1",
-      sessionID: BUILD_SID,
-      role: "assistant",
-      resolvedRole: "build",
-      agent: "build",
-      parentSessionID: GOAL_SID,
-      goalID: GOAL_ID,
-      time: { created: T0 + 6000 },
-    },
-  }, 6000),
-
+  // ── Planner (plan phase) — first child of executor container ──
   e("message.updated", {
     info: {
       id: "msg_planner_1",
@@ -327,11 +300,11 @@ export const EVENTS: FixtureEvent[] = [
       role: "assistant",
       resolvedRole: "planner",
       agent: "planner",
-      parentSessionID: BUILD_SID,
+      parentSessionID: EXECUTOR_SID,
       goalID: GOAL_ID,
-      time: { created: T0 + 6050 },
+      time: { created: T0 + 5800 },
     },
-  }, 6050),
+  }, 5800),
   e("message.part.updated", {
     part: {
       id: "part_planner_text",
@@ -340,7 +313,39 @@ export const EVENTS: FixtureEvent[] = [
       type: "text",
       text: "Planned the build sequence.",
     },
-  }, 6075),
+  }, 5850),
+
+  // ── Build worker (build phase) — writes code ──
+  e("message.updated", {
+    info: {
+      id: "msg_build_1",
+      sessionID: BUILD_SID,
+      role: "assistant",
+      resolvedRole: "build",
+      agent: "build",
+      parentSessionID: EXECUTOR_SID,
+      goalID: GOAL_ID,
+      time: { created: T0 + 6000 },
+    },
+  }, 6000),
+
+  // Build worker runs a bash tool
+  e("message.part.updated", {
+    part: {
+      id: "part_build_tool_1",
+      messageID: "msg_build_1",
+      sessionID: BUILD_SID,
+      type: "tool",
+      tool: "bash",
+      callID: "call_bash_1",
+      state: {
+        status: "completed",
+        input: { command: "npm install" },
+        output: "added 42 packages",
+        time: { start: T0 + 6050, end: T0 + 6080 },
+      },
+    },
+  }, 6080),
 
   e("message.part.updated", {
     part: {
@@ -352,7 +357,7 @@ export const EVENTS: FixtureEvent[] = [
     },
   }, 6100),
 
-  // ── Goal passed ──
+  // ── Goal passed: all phases complete ──
   e("task.updated", {
     task: {
       id: TASK_ID,
@@ -361,9 +366,16 @@ export const EVENTS: FixtureEvent[] = [
         goalID: GOAL_ID,
         goalTitle: "Scaffold project",
         goalStatus: "passed",
-        steps: [
-          { stepID: "build", label: "Build", status: "completed" },
-        ],
+        steps: [{
+          stepID: "build",
+          label: "Build",
+          status: "completed",
+          phases: {
+            plan: { status: "completed" },
+            build: { status: "completed" },
+            evaluate: { status: "completed" },
+          },
+        }],
       }],
     },
   }, 7000),
@@ -390,6 +402,30 @@ export const INITIAL_BOARD = {
     sessionID: ROOT_SID,
     time: { created: T0 },
     attachments: [],
+  },
+  workflow: {
+    id: "pipeline",
+    name: "Pipeline",
+    goalLoopStepIDs: ["build"],
+    steps: [
+      { id: "design_analysis", label: "Design", tool: "design_analysis", scope: "task", skippable: true, status: "pending" },
+      { id: "requirements",    label: "Requirements", tool: "requirements", scope: "task", skippable: false, status: "pending" },
+      { id: "architect",       label: "Architect", tool: "architect", scope: "task", skippable: true, status: "pending" },
+      {
+        id: "build",
+        label: "Build",
+        tool: "execute_goal",
+        scope: "goal",
+        skippable: false,
+        status: "pending",
+        phases: [
+          { id: "plan",     label: "Plan",     sessionKind: "planner" },
+          { id: "build",    label: "Build",    sessionKind: "build" },
+          { id: "evaluate", label: "Evaluate", sessionKind: "evaluator" },
+        ],
+      },
+      { id: "deliver", label: "Deliver", tool: "deliver", scope: "task", skippable: false, status: "pending" },
+    ],
   },
   goalWorkflows: [],
   interactions: [],

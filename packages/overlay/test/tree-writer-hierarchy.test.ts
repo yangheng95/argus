@@ -8,52 +8,67 @@ import {
   INITIAL_BOARD,
   GOAL_ID,
   ROOT_SID,
-  GOAL_SID,
+  EXECUTOR_SID,
   BUILD_SID,
+  PLANNER_SID,
   REQUIREMENTS_SID,
   DESIGN_SID,
   ARCHITECT_SID,
-  PLANNER_SID,
   TASK_ID,
 } from "./fixtures/goal-phase-events";
 
-test("tree-writer claims goal-scoped sessions under their goal-step card only", async () => {
-  // All three goal-scoped sessions (executor / build / planner) share
-  // goalID=GOAL_ID and the same "build" step, so they collect under
-  // `goal-group:<gid>:step:build` regardless of their session-to-session
-  // parent links. Non-goal sub-agent sessions (requirements / design-analyst
-  // / architect) surface as independent top-level siblings of the root
-  // assistant card — session ↔ session nesting was intentionally removed
-  // (see specs/new-arch/07-panel-reactivity.md §身份规则).
+test("tree-writer nests goal-scoped sessions under their phase card (4-level: goal → step → phase → session)", async () => {
+  // New architecture (正本清源 pass):
+  //   - session.kind="executor" is a CONTAINER (no LLM); overlay filters
+  //     it out so it never renders as its own card. Its step card in the
+  //     overlay represents it visually.
+  //   - session.kind="planner" claims phase "plan"
+  //   - session.kind="build" claims phase "build"
+  //   - session.kind="evaluator" claims phase "evaluate"
+  //   - Non-goal sub-agents (requirements / design-analyst / architect)
+  //     surface as top-level siblings of the root assistant card
+  //     (session ↔ session nesting is forbidden).
   const snapshot = await replay(EVENTS, INITIAL_BOARD);
-  const buildStepID = `goal-group:${GOAL_ID}:step:build`;
-  const executorCardID = `executor:session:${GOAL_SID}`;
-  const buildCardID = `build:session:${BUILD_SID}`;
+
+  const goalCardID = `goal-group:${GOAL_ID}`;
+  const stepCardID = `${goalCardID}:step:build`;
+  const planPhaseID = `${stepCardID}:phase:plan`;
+  const buildPhaseID = `${stepCardID}:phase:build`;
+  const evaluatePhaseID = `${stepCardID}:phase:evaluate`;
+
+  const executorCardID = `executor:session:${EXECUTOR_SID}`;
+  const buildWorkerCardID = `build:session:${BUILD_SID}`;
   const plannerCardID = `planner:session:${PLANNER_SID}`;
   const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}`;
   const designCardID = `design-analyst:session:${DESIGN_SID}`;
   const architectCardID = `architect:session:${ARCHITECT_SID}`;
   const rootCardID = `assistant:session:${ROOT_SID}`;
 
-  expect(snapshot.nodes[buildStepID]).toBeDefined();
-  for (const cardID of [
-    executorCardID,
-    buildCardID,
-    plannerCardID,
-    requirementsCardID,
-    designCardID,
-    architectCardID,
-    rootCardID,
-  ]) {
-    expect(snapshot.nodes[cardID]).toBeDefined();
+  // Step card exists and has the three phase cards in order.
+  expect(snapshot.nodes[stepCardID]).toBeDefined();
+  expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([planPhaseID, buildPhaseID, evaluatePhaseID]);
+
+  // Each phase card exists with the declared kind + phase metadata.
+  for (const [id, phaseID] of [
+    [planPhaseID, "plan"],
+    [buildPhaseID, "build"],
+    [evaluatePhaseID, "evaluate"],
+  ] as const) {
+    const node = snapshot.nodes[id];
+    expect(node).toBeDefined();
+    expect(node!.kind).toBe("phase");
+    expect(node!.phaseID).toBe(phaseID);
   }
 
-  // Goal-step claims the three goal-scoped sessions.
-  for (const cardID of [executorCardID, buildCardID, plannerCardID]) {
-    expect(snapshot.nodes[buildStepID]!.childIDs).toContain(cardID);
-  }
+  // Planner session nests under plan phase.
+  expect(snapshot.nodes[planPhaseID]!.childIDs).toContain(plannerCardID);
+  // Build worker nests under build phase.
+  expect(snapshot.nodes[buildPhaseID]!.childIDs).toContain(buildWorkerCardID);
 
-  // Non-goal sub-agent sessions are top-level siblings, not children of root.
+  // Executor container is NOT rendered as its own card and NOT in top-level.
+  expect(snapshot.order).not.toContain(executorCardID);
+
+  // Non-goal sub-agents surface at top level, not nested under root.
   const rootChildren = snapshot.nodes[rootCardID]!.childIDs || [];
   for (const cardID of [requirementsCardID, designCardID, architectCardID]) {
     expect(rootChildren).not.toContain(cardID);
@@ -61,11 +76,9 @@ test("tree-writer claims goal-scoped sessions under their goal-step card only", 
   }
   expect(snapshot.order).toContain(rootCardID);
 
-  // Goal-scoped sessions do NOT nest session-under-session anymore — the old
-  // executor→build→planner chain flattens so all three sit as siblings of
-  // the goal-step.
-  expect(snapshot.nodes[executorCardID]!.childIDs || []).not.toContain(buildCardID);
-  expect(snapshot.nodes[buildCardID]!.childIDs || []).not.toContain(plannerCardID);
+  // Goal-scoped sessions do NOT nest session-under-session — each claims
+  // its phase directly, not its parent session.
+  expect(snapshot.nodes[buildWorkerCardID]!.childIDs || []).not.toContain(plannerCardID);
 });
 
 test("non-goal sub-agent sessions surface at top level, not under their parent session", () => {
@@ -133,6 +146,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
       time: { created: 1_776_000_000_000 },
       attachments: [],
     },
+    workflow: INITIAL_BOARD.workflow,
     goalWorkflows: [
       {
         goalID: GOAL_ID,
@@ -146,7 +160,12 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
             summary: "3 planned steps",
             payload: {
               planNodes: [{ id: "pn_1", title: "Create shell", brief: "init app", orderIndex: 1 }],
-              executorSessionID: GOAL_SID,
+              buildSessionID: BUILD_SID,
+            },
+            phases: {
+              plan:     { status: "completed" },
+              build:    { status: "running" },
+              evaluate: { status: "pending" },
             },
           },
         ],
@@ -166,7 +185,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
   const stepCardID = `goal-group:${GOAL_ID}:step:build`;
   expect(cardTreeStore.cards[stepCardID]?.subtitle).toBe("3 planned steps");
   expect(cardTreeStore.cards[stepCardID]?.stepID).toBe("build");
-  expect(cardTreeStore.cards[stepCardID]?.stepPayload?.executorSessionID).toBe(GOAL_SID);
+  expect(cardTreeStore.cards[stepCardID]?.stepPayload?.buildSessionID).toBe(BUILD_SID);
   expect(cardTreeStore.cards[stepCardID]?.stepPayload?.planNodes?.[0]?.title).toBe("Create shell");
 });
 

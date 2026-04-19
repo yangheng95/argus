@@ -81,9 +81,10 @@ status, parts[], children[], ...`），类型定义挪到 `store/card-tree.ts`�
 
 实现 ID 前缀（`packages/overlay/src/services/tree-writer.ts` 为唯一写入方）：
 
-- `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename。**每个 session 默认都是顶级卡**——assistant orchestrator 和 design-analyst / requirements / architect / planner / build / delivery 等 sub-agent session 在 `cardTreeStore.order` 里按 time 并列，没有 session ↔ session 的嵌套。
+- `<stage>:session:<sid>` —— 一个 session 一张卡，stage 取自 message.info.channel / agent / resolvedRole；stage 未知时临时用 `pending:session:<sid>`，收到真正的 message.updated 后 rename。**每个 session 默认都是顶级卡**——assistant orchestrator 和 design-analyst / requirements / architect / planner / build / evaluator / delivery 等 sub-agent session 在 `cardTreeStore.order` 里按 time 并列，没有 session ↔ session 的嵌套。
 - `goal-group:<gid>` —— 一个 goal 一个容器卡
 - `goal-group:<gid>:step:<stepID>` —— goal 容器内的 step 行
+- `goal-group:<gid>:step:<stepID>:phase:<phaseID>` —— step 内部的 phase 行（仅当 workflow 层在 step 上声明了 `phases` 时存在；例如 pipeline.build 声明 plan / build / evaluate 三个 phase）
 - `ctx:user-request` —— task 请求气泡
 - `ctx:user-request:text` / `ctx:user-request:file:<url|idx>` —— 请求内容 / 附件（作为 `parts` 项，不是独立卡）
 - `interaction-card:<messageID>` —— synthetic interaction 卡（认得 session 就挂 session；否则作为 orphan 出现在顶层）
@@ -94,8 +95,16 @@ tool 卡（`kind: "tool"`）不进 cardTreeStore，由 renderer 在 CardParts �
 
 **嵌套规则（唯一允许的 session 容器化）：**
 
-- session 有 `goalID` 且对应的 `goal-group:<gid>:step:<stepID>` 卡已存在 → 该 session 作为 step 卡的 child，再经由 goal-group 聚合在 goal 容器里。这是 session 唯一允许的嵌套路径。
+- session 有 `goalID` 且对应的 phase 卡已存在 → 该 session 作为 phase 卡的 child；phase 是 step 的 child；step 是 goal-group 的 child；goal-group 顶层。完整 4 级：`goal-group → step → phase → session`。
+- session.kind="executor" 是 **容器角色**（goal-scope，无 LLM），`goalStagePhaseID("executor")` 返回 null → session **不作为独立卡渲染**，也不嵌入任何 phase；step 卡在视觉上代表它。`rebuildTopLevelOrder` 里用 `stage === "executor"` 显式过滤。
 - session 有 `parentSessionID` 但无 `goalID` —— **不嵌套**。即使 parent session 在 `sessions` Map 里也只是元信息，不影响渲染结构。（历史上 93f8cf8de 曾在此分支把 sub-agent 盲目嵌到 parent session 下，73ece775f 又用 throw 把它硬化，都是错误；已删。）
+
+**phase 规则：**
+
+- phase 定义在 backend `packages/opencorvus/src/engine/workflow.ts` 的 `MiniWorkflowStep.phases`。pipeline.build 声明 `[{plan, planner}, {build, build}, {evaluate, evaluator}]`。
+- phase 状态从 `goal_run.status` 投影（`projectPhases` in workflow.ts）——timeline 映射：queued/accepted → all pending；planning → plan running；running → plan done + build running；evaluating → plan+build done + evaluate running；completed → all done；failed → 最后 phase failed。
+- overlay 的 `goalStagePhaseID(stage)` 按 session.kind 映射：planner → {build, plan}、build → {build, build}、evaluator → {build, evaluate}、executor → null（容器，不映 phase）。
+- phase 卡永远不独立出现在顶层，永远作为 step 的 children；step 卡的 children 永远是 phases（而非 session）；session 只挂在 phase 下。
 
 **顶层 order**（`rebuildTopLevelOrder` 按此顺序推入 `cardTreeStore.order`）：
 

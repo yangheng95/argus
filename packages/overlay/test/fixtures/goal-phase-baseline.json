@@ -44,12 +44,21 @@
       "title": "chat.role.assistant"
     },
     "build:session:ses_goal_build": {
-      "childIDs": [],
+      "childIDs": [
+        "interaction-card:synthetic:system:1776000004500:1pjr37f"
+      ],
       "id": "build:session:ses_goal_build",
       "kind": "agent",
       "parts": [
         {
           "type": "boundary"
+        },
+        {
+          "id": "part_build_tool_1",
+          "output": "added 42 packages",
+          "tool": "bash",
+          "toolStatus": "completed",
+          "type": "tool"
         },
         {
           "id": "part_build_text",
@@ -94,29 +103,6 @@
       "status": "running",
       "title": "chat.role.design-analyst"
     },
-    "executor:session:ses_goal_exec": {
-      "childIDs": [
-        "interaction-card:synthetic:system:1776000004500:1pjr37f"
-      ],
-      "id": "executor:session:ses_goal_exec",
-      "kind": "agent",
-      "parts": [
-        {
-          "type": "boundary"
-        },
-        {
-          "id": "part_exec_tool_1",
-          "output": "added 42 packages",
-          "tool": "bash",
-          "toolStatus": "completed",
-          "type": "tool"
-        }
-      ],
-      "round": 0,
-      "stage": "executor",
-      "status": "running",
-      "title": "chat.role.executor"
-    },
     "goal-group:goal_fixture_g1": {
       "childIDs": [
         "goal-group:goal_fixture_g1:step:build"
@@ -132,9 +118,9 @@
     },
     "goal-group:goal_fixture_g1:step:build": {
       "childIDs": [
-        "executor:session:ses_goal_exec",
-        "build:session:ses_goal_build",
-        "planner:session:ses_planner"
+        "goal-group:goal_fixture_g1:step:build:phase:plan",
+        "goal-group:goal_fixture_g1:step:build:phase:build",
+        "goal-group:goal_fixture_g1:step:build:phase:evaluate"
       ],
       "id": "goal-group:goal_fixture_g1:step:build",
       "kind": "step",
@@ -142,6 +128,43 @@
       "stage": "build",
       "status": "completed",
       "title": "Build"
+    },
+    "goal-group:goal_fixture_g1:step:build:phase:build": {
+      "childIDs": [
+        "build:session:ses_goal_build"
+      ],
+      "id": "goal-group:goal_fixture_g1:step:build:phase:build",
+      "kind": "phase",
+      "parts": [],
+      "phaseID": "build",
+      "phaseSessionKind": "build",
+      "stage": "build",
+      "status": "completed",
+      "title": "Build"
+    },
+    "goal-group:goal_fixture_g1:step:build:phase:evaluate": {
+      "childIDs": [],
+      "id": "goal-group:goal_fixture_g1:step:build:phase:evaluate",
+      "kind": "phase",
+      "parts": [],
+      "phaseID": "evaluate",
+      "phaseSessionKind": "evaluator",
+      "stage": "evaluator",
+      "status": "completed",
+      "title": "Evaluate"
+    },
+    "goal-group:goal_fixture_g1:step:build:phase:plan": {
+      "childIDs": [
+        "planner:session:ses_goal_planner"
+      ],
+      "id": "goal-group:goal_fixture_g1:step:build:phase:plan",
+      "kind": "phase",
+      "parts": [],
+      "phaseID": "plan",
+      "phaseSessionKind": "planner",
+      "stage": "planner",
+      "status": "completed",
+      "title": "Plan"
     },
     "interaction-card:synthetic:system:1776000004500:1pjr37f": {
       "childIDs": [],
@@ -155,9 +178,9 @@
       ],
       "title": "chat.role.system"
     },
-    "planner:session:ses_planner": {
+    "planner:session:ses_goal_planner": {
       "childIDs": [],
-      "id": "planner:session:ses_planner",
+      "id": "planner:session:ses_goal_planner",
       "kind": "agent",
       "parts": [
         {
