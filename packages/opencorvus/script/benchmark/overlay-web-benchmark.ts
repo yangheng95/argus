@@ -678,14 +678,25 @@ function topLevelText(item: Record<string, unknown>, key: string) {
 }
 
 const onEvent = ({ payload }: { payload: unknown }) => {
+  // Any parsed SSE frame advances the alive-stall timer. "Alive" means bytes
+  // are flowing from the server; whether we log/diagnose the event is a
+  // separate concern handled below via DIAG_TYPES. Without this
+  // unconditional reset, long-running backend steps that emit only
+  // non-diag events (e.g. fidelity.review.started / .progress) would trip
+  // the 120s alive cap even while the server is actively working and
+  // streaming them over the wire.
+  if (payload && typeof payload === "object") {
+    lastEventAt = Date.now()
+  }
   // LLM delta events (message.part.delta) are ephemeral and high-frequency.
-  // They don't produce a log line, but they DO count as activity — prevents
-  // false stall detection while a reasoning model is generating tokens.
+  // They don't produce a log line, but they DO count as progress activity —
+  // prevents false stall detection while a reasoning model is generating
+  // tokens. (Alive-stall is already reset above; this block also advances
+  // the progress-stall timer for part.*.)
   if (payload && typeof payload === "object" && "type" in payload) {
     const rawType = String((payload as any).type ?? "")
     if (rawType === "message.part.delta" || rawType.endsWith(".part.delta") ||
         rawType === "message.part.updated" || rawType.endsWith(".part.updated")) {
-      lastEventAt = Date.now()
       lastActivityLogAt = Date.now()
       lastLogAt = Date.now()
       // message.part.updated carries tool calls — let it through to normalizeEvent
@@ -1819,17 +1830,24 @@ async function settle(progress: any, api: (pathname: string, init?: RequestInit)
     : []
   for (const item of pending) {
     if (item.type === "permission") {
+      // ReplyInteractionInput.autoReply is non-optional per engine/model.ts;
+      // omitting it was the silent cause of HTTP 400 on benchmark reply that
+      // turned every clarification gate into an abort.
       await api(`/interaction/${item.id}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reply: "always" }),
+        body: JSON.stringify({ autoReply: true, reply: "always" }),
       })
       continue
     }
+    // Question / other interactions: the server falls back to
+    // `answersFromMessage(message)` when `answers` isn't provided. The
+    // benchmark has no way to know the question set ahead of time, so we
+    // ship AUTO_REPLY as the message and let the server split it evenly.
     await api(`/interaction/${item.id}/reply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: AUTO_REPLY }),
+      body: JSON.stringify({ autoReply: true, message: AUTO_REPLY }),
     })
   }
   if (pending.length === 0) return progress

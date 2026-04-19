@@ -112,8 +112,15 @@ export namespace SystemPrompt {
     if (compatible.length === 0) return
 
     return [
-      "Skills provide specialized instructions and workflows for specific tasks.",
-      "Use the skill tool to load a skill when a task matches its description.",
+      "## Skill Policy",
+      "",
+      "Skills are curated, tested workflows for recurring task shapes (webpage cloning, spec research, delivery verification, etc.). Each skill bundles instructions, the right tool sequence, and resource files.",
+      "",
+      "### Check First",
+      "1. Before planning, scan `<available_skills>` below for any entry whose description matches the current task.",
+      "2. If one matches, call the `skill` tool with its name to load the full instructions into context **before** you start executing.",
+      "3. Follow the loaded skill's prescribed tools and step order rather than improvising — skills encode workflows that have already been validated.",
+      "4. If several skills could apply, load the most specific one first; load additional skills only if the task spans their domains.",
       "",
       "<available_skills>",
       ...compatible.map((s) => `- ${s.name}: ${s.description}`),

@@ -86,6 +86,10 @@ export namespace Agent {
       task: "allow",
       webfetch: "allow",
       websearch: "deny",
+      // Mirror tools — launch headless browser and hit external URLs on behalf
+      // of the agent. Default to "ask" so a user sees the host before extract.
+      webpage_extract: "ask",
+      webpage_render: "allow",
       codesearch: "allow",
       lsp: "allow",
       memory: "allow",
