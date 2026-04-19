@@ -100,13 +100,57 @@ export type EngineProgressStatus = "created" | "active" | "completed" | "failed"
 export type EngineExecutorTransport = "inproc" | "stdio" | "ws" | "http"
 export type EngineExecutorSessionStatus = "active" | "completed" | "failed" | "aborted"
 
-export type EngineGoalCheck = {
+/**
+ * Verification evidence check — a structured result for one scorer evaluation.
+ * See specs/new-arch/09-verification-evidence.md.
+ *
+ * All new fields are optional for backward compatibility with historical rows
+ * written before this schema extension. The signature computation (see
+ * `src/verification/signature.ts`) tolerates missing fields so historical rows
+ * simply produce stable-but-uninformative signatures.
+ *
+ * Alias `EngineGoalCheck` preserved for call sites that only need the original
+ * shape; new code should use `EngineEvaluationCheck`.
+ */
+export type EngineEvaluationCheckScorerKind =
+  | "heuristic_shell"
+  | "heuristic_script_ref"
+  | "llm_judge"
+  | "prebuilt"
+  | "visual_diff"
+  | "delivery_verdict"
+
+export type EngineEvaluationCheckMode = "strict" | "soft"
+export type EngineEvaluationCheckSeverity = "essential" | "important" | "optional" | "pitfall"
+export type EngineEvaluationCheckTrigger = "on_goal" | "on_delivery"
+
+export type EngineEvaluationCheck = {
   name: string
   label?: string
   family?: string
   status: "passed" | "failed" | "skipped"
   evidence?: string
+  // Spec-09 additions
+  spec_id?: string
+  scorer_kind?: EngineEvaluationCheckScorerKind
+  mode?: EngineEvaluationCheckMode
+  severity?: EngineEvaluationCheckSeverity
+  trigger?: EngineEvaluationCheckTrigger
+  exit_code?: number
+  idle_timed_out?: boolean
+  matched_paths?: string[]
+  output_digest?: string
 }
+
+/** Legacy alias — structural subset of `EngineEvaluationCheck`. Kept so call
+ *  sites that only use {name,label,family,status,evidence} compile without
+ *  churn during the Phase B–F rollout. */
+export type EngineGoalCheck = EngineEvaluationCheck
+
+/** Scope marker for an evaluation row. See spec-09 for invariants:
+ *  - scope="goal_run" ⇒ goal_run_id NOT NULL
+ *  - scope="delivery" ⇒ delivery_id NOT NULL */
+export type EngineEvaluationScope = "goal_run" | "delivery"
 
 export type EngineExecutorRef = {
   session_id?: string
@@ -506,15 +550,29 @@ export const EngineEvaluationTable = sqliteTable(
       .references(() => EngineRunTable.id, { onDelete: "cascade" }),
     goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
     delivery_id: text().references(() => EngineDeliveryTable.id, { onDelete: "set null" }),
+    /** Scope marker — see specs/new-arch/09-verification-evidence.md.
+     *  Physical invariant (enforced at application layer, not SQL):
+     *    scope="goal_run" ⇒ goal_run_id NOT NULL
+     *    scope="delivery" ⇒ delivery_id NOT NULL
+     *  Historical rows (written before spec-09) default to "delivery" when
+     *  delivery_id is set, else "goal_run" — the backfill is applied on read
+     *  for rows that predate the migration. */
+    scope: text().$type<EngineEvaluationScope>().notNull().default("delivery"),
+    /** Stable hash over the failed-check set. Used by delivery-rework loop
+     *  to detect no-progress (two consecutive deliveries with identical
+     *  signature → fail-fast). Empty string = "not computed yet / historical
+     *  row"; never participates in signature comparisons. */
+    signature: text().notNull().default(""),
     status: text().notNull().$type<EngineEvaluationStatus>().default("pending"),
     verdict: text().notNull().$type<EngineEvaluationVerdict>().default("inconclusive"),
     summary: text().notNull(),
-    checks: text({ mode: "json" }).$type<EngineGoalCheck[]>(),
+    checks: text({ mode: "json" }).$type<EngineEvaluationCheck[]>(),
     time_completed: integer(),
     ...Timestamps,
   },
   (table) => [
     index("engine_evaluation_run_idx").on(table.run_id),
+    index("engine_evaluation_scope_task_idx").on(table.task_id, table.scope),
   ],
 )
 

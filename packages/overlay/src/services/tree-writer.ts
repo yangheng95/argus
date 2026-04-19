@@ -124,6 +124,7 @@ export function resetWriter(): void {
   knownGoalIDs.clear();
   fidelityCardOwners.clear();
   pendingFidelity.clear();
+  runningFidelity.clear();
   pendingSubagentTerminal.clear();
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
@@ -233,11 +234,19 @@ export function applyEvent(event: any): void {
     return handleInteraction(event);
   }
 
-  // ── Fidelity review verdict ──
-  // The fidelity LLM produces a JSON contract (verdict/issues/corrections/
-  // missing_goals). Rendering raw JSON tokens in a reasoning block was the
-  // old behaviour — this branch turns the parsed result into a structured
-  // card so the operator sees a verdict badge + diff list instead.
+  // ── Fidelity review lifecycle ──
+  // started/progress put a running placeholder card under the requirements
+  // session (kind="fidelity", status="running"), so the operator sees the
+  // non-streaming LLM review in flight during its 60–180s window. completed
+  // upserts the same cardID with the parsed verdict / issues / corrections.
+  // Identity is `fidelity:<taskID>` (stable per task) so all three events
+  // land on the same card.
+  if (type === "fidelity.review.started") {
+    return handleFidelityStarted(event);
+  }
+  if (type === "fidelity.review.progress") {
+    return handleFidelityProgress(event);
+  }
   if (type === "fidelity.review.completed") {
     return handleFidelityCompleted(event);
   }
@@ -496,6 +505,105 @@ function fidelityCardID(taskID: string): string {
   return `fidelity:${taskID}`;
 }
 
+/** Buffered running-phase payload so `rebuildCardHierarchy` can re-attach a
+ *  running card if its owning requirements session card disappears + reappears
+ *  (task reselect / replay). Keyed by taskID. Separate from `pendingFidelity`
+ *  because that map is for COMPLETED payloads that predate their session. */
+interface RunningFidelityPayload {
+  taskID: string
+  sessionID: string
+  startedAt: number
+  attempt: number
+  elapsedMs: number
+}
+const runningFidelity = new Map<string, RunningFidelityPayload>()
+
+function handleFidelityStarted(event: any): void {
+  const props = propsOf(event);
+  const taskID = String(props.taskID || "");
+  const sessionID = String(props.sessionID || "");
+  if (!taskID) throw new Error("fidelity.review.started missing taskID");
+  if (!sessionID) {
+    throw new Error(
+      `fidelity.review.started missing sessionID (taskID=${taskID})`,
+    );
+  }
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  const payload: RunningFidelityPayload = {
+    taskID,
+    sessionID,
+    startedAt: emittedAt > 0 ? emittedAt : Date.now(),
+    attempt: 0,
+    elapsedMs: 0,
+  };
+  runningFidelity.set(taskID, payload);
+  materializeRunningFidelity(payload);
+}
+
+function handleFidelityProgress(event: any): void {
+  const props = propsOf(event);
+  const taskID = String(props.taskID || "");
+  const sessionID = String(props.sessionID || "");
+  if (!taskID) throw new Error("fidelity.review.progress missing taskID");
+  if (!sessionID) {
+    throw new Error(
+      `fidelity.review.progress missing sessionID (taskID=${taskID})`,
+    );
+  }
+  const attempt = Number(props.attempt || 0);
+  const elapsedMs = Number(props.elapsedMs || props.elapsed_ms || 0);
+  const existing = runningFidelity.get(taskID);
+  const payload: RunningFidelityPayload = {
+    taskID,
+    sessionID,
+    startedAt: existing?.startedAt ?? (Date.now() - elapsedMs),
+    attempt,
+    elapsedMs,
+  };
+  runningFidelity.set(taskID, payload);
+  materializeRunningFidelity(payload);
+}
+
+/** Upsert the running-phase fidelity card. If the owning requirements session
+ *  isn't in `sessions` yet (SSE reorder / replay), we still write the card
+ *  WITHOUT an owner — `rebuildCardHierarchy` will place it under the session
+ *  once it materialises via the `fidelityCardOwners` map. This matches how
+ *  the completed path handles the same race, just inverted (we always have a
+ *  card, possibly orphaned momentarily, vs. completed's out-of-band hold). */
+function materializeRunningFidelity(p: RunningFidelityPayload): void {
+  const cardID = fidelityCardID(p.taskID);
+  const existing = cardTreeStore.cards[cardID];
+  // If the completed event has already landed, don't downgrade the verdict
+  // card back to "running". `attempts` on a completed card is > 0 and the
+  // `fidelity` payload is populated — that's how we tell.
+  if (existing && existing.fidelity) return;
+  const elapsedSec = Math.max(0, Math.round(p.elapsedMs / 1000));
+  const subtitle = p.attempt > 0
+    ? `attempt ${p.attempt} · ${formatElapsed(elapsedSec)}`
+    : formatElapsed(elapsedSec);
+  setCardTreeStore("cards", cardID, {
+    id: cardID,
+    kind: "fidelity",
+    stage: "fidelity",
+    accent: stageAccent("fidelity"),
+    status: "running",
+    title: roleTitleKey("fidelity"),
+    subtitle,
+    parts: [],
+    childIDs: [],
+    time: p.startedAt,
+  });
+  fidelityCardOwners.set(cardID, p.sessionID);
+  rebuildCardHierarchy();
+}
+
+function formatElapsed(sec: number): string {
+  if (sec < 60) return `${sec}s elapsed`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s === 0 ? `${m}m elapsed` : `${m}m ${s}s elapsed`;
+}
+
 function handleFidelityCompleted(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
@@ -552,6 +660,10 @@ function handleFidelityCompleted(event: any): void {
   }
 
   materializeFidelity(session, payload);
+  // Running-card lifecycle: the completed upsert now owns this cardID; drop
+  // the runningFidelity entry so a late `progress` event for the same task
+  // doesn't rewrite the verdict back to a running placeholder.
+  runningFidelity.delete(taskID);
 }
 
 /** Atomically write the fidelity card into cardTreeStore and register its

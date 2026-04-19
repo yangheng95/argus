@@ -707,6 +707,10 @@ export class GoalPool {
 
           // Sink each check into task.metadata.criteria_results so the overlay
           // Quality Gates panel reflects deterministic per-goal outcomes.
+          // NOTE: spec-09 invariant — criteria_results is a PROJECTION of
+          // evidence. The persistEvidence call below is the single source of
+          // truth; this upsert is the aggregate view. Both must always happen
+          // together.
           if (verdict.checks.length > 0) {
             await upsertTaskCriteria(task.id, verdict.checks.map((c) => ({
               name: `${entry.goal.id}.${c.name}`,
@@ -714,10 +718,56 @@ export class GoalPool {
               family: "goal_eval",
               evidence: c.output,
               label: `${entry.goal.title} · ${c.name}`,
+              mode: c.mode,
             }))).catch((err) => {
               log.warn("per-goal eval: sink criteria failed (non-fatal)", {
                 goalID: entry.goal.id, error: String(err),
               })
+            })
+          }
+
+          // spec-09 Phase B: persist a `scope="goal_run"` evidence row right
+          // after evaluateGoal, BEFORE the goal_run status transition. The
+          // row records the full per-check detail (spec_id, scorer_kind,
+          // mode, trigger, exit_code, output_digest) that downstream
+          // consumers — retry prompt builder, delivery short-circuit, rework
+          // no-progress signature — will read. Failure to persist is
+          // non-fatal for this goal run (we already have verdict), but the
+          // warning is loud because all downstream spec-09 features depend
+          // on this row.
+          try {
+            const { persistEvidence, outputDigest } = await import("@/verification")
+            const evaluationChecks = verdict.checks.map((c) => ({
+              name: c.name,
+              label: `${entry.goal.title} · ${c.name}`,
+              family: "goal_eval",
+              status: c.passed ? "passed" as const : (c.output?.startsWith("deferred to delivery") ? "skipped" as const : "failed" as const),
+              evidence: c.output,
+              spec_id: c.spec_id,
+              scorer_kind: c.scorer_kind,
+              mode: c.mode,
+              severity: c.severity,
+              trigger: c.trigger,
+              exit_code: c.exit_code,
+              idle_timed_out: c.idle_timed_out,
+              output_digest: c.output ? outputDigest(c.output) : undefined,
+            }))
+            persistEvidence({
+              taskID: task.id,
+              runID: run.id,
+              goalRunID: goalRun.id,
+              scope: "goal_run",
+              status: verdict.pass ? "passed" : "failed",
+              verdict: verdict.verdict,
+              summary: verdict.reasoning || (verdict.pass ? "per-goal evaluator passed" : "per-goal evaluator rejected"),
+              checks: evaluationChecks,
+              timeCompleted: Date.now(),
+            })
+          } catch (err) {
+            log.warn("per-goal eval: persistEvidence failed (non-fatal but blocks spec-09 downstream)", {
+              goalID: entry.goal.id,
+              goalRunID: goalRun.id,
+              error: err instanceof Error ? err.message : String(err),
             })
           }
 

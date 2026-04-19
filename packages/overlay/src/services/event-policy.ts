@@ -19,12 +19,11 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "milestone.activated",
   "milestone.passed",
   "milestone.failed",
-  // Fidelity review lifecycle markers — emitted by requirements/fidelity.ts
-  // purely to keep the SSE stream alive while the non-streaming verdict LLM
-  // runs (60–180s). The overlay renders the verdict via fidelity.review.completed;
-  // started/progress carry no payload the user needs.
-  "fidelity.review.started",
-  "fidelity.review.progress",
+  // Fidelity `started` / `progress` are NOT noop — they promote a running
+  // fidelity card so the operator sees the 60–180s review in flight instead
+  // of a silent requirements session. Handled by tree-writer's
+  // `handleFidelityStarted` / `handleFidelityProgress`; the same card id is
+  // upserted by `handleFidelityCompleted` when the verdict lands.
 ])
 
 /** Subagent phase-completion events. Each carries `sessionID` + `status`

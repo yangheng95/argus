@@ -26,6 +26,11 @@ export interface TranslatedHeuristic {
   label: string
   /** Shell command to execute. */
   command: string
+  /** Which heuristic sub-kind produced this row — consumers need this to
+   *  populate `EngineEvaluationCheck.scorer_kind` (see spec-09). `shell`
+   *  scorers map to `heuristic_shell`; `script_ref` scorers map to
+   *  `heuristic_script_ref` even though the rendered command is `bun run ...`. */
+  subKind: "shell" | "script_ref"
   /** Optional cwd override (relative to eval dir). */
   cwd?: string
   /** Expected exit code; undefined means "0 = pass". */
@@ -74,6 +79,7 @@ export function translateSpecs(specs: readonly AcceptanceSpec[]): TranslationPla
           name,
           label,
           command: buildHeuristicCommand(scorer),
+          subKind: scorer.spec.kind,
           cwd: scorer.spec.kind === "shell" ? scorer.spec.cwd : undefined,
           expectedExitCode: scorer.expect?.exit_code,
           mode,

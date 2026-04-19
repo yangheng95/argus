@@ -2181,9 +2181,24 @@ export function createOrchestratorTools(input: {
         // Track strict-mode failures from per-goal evaluator. If any strict
         // check failed, the delivery agent's verdict MUST be rejected — the
         // LLM is not allowed to override deterministic strict gates.
+        //
+        // spec-09 Phase D: the strict check set is now sourced from TWO
+        // places rather than the single in-loop evaluateGoal call:
+        //   1. Each goal's latest `scope="goal_run"` evidence (written by
+        //      goal-pool.ts at goal exit; covers on_goal scorers).
+        //   2. A fresh evaluateGoal pass with triggerFilter="on_delivery"
+        //      for scorers the requirements agent deferred to the merged
+        //      worktree.
+        // This eliminates the duplicate on_goal shell commands that the old
+        // delivery-time loop was re-running against the merged worktree.
         const strictFailedChecks: Array<{ name: string; evidence?: string }> = []
+        // spec-09 Phase D: capture the full structured check set for this
+        // delivery scope. Written into the delivery-scope evaluation row at
+        // the end of this handler via updateEvaluationFromDeliveryVerdict.
+        const deliveryScopeChecks: import("@/engine/engine.sql").EngineEvaluationCheck[] = []
         {
           const { evaluateGoal } = await import("@/delivery/checks/per-goal")
+          const { findLatestGoalRunEvidence, outputDigest } = await import("@/verification")
           const evaluatorTier = (await EngineConfig.get()).evaluator.tier ?? "standard"
           const evalDelivery = {
             summary: deliveryInfo.summary,
@@ -2191,63 +2206,134 @@ export function createOrchestratorTools(input: {
           }
           for (const goal of allGoals) {
             if (input.signal?.aborted) break
+
+            // ── Read goal_run scope evidence (on_goal results) ──
+            const goalEvidence = findLatestGoalRunEvidence(goal.id)
+            if (goalEvidence) {
+              for (const check of goalEvidence.checks) {
+                const namespaced = `${goal.id}.${check.name}`
+                evaluatorCheckResults.push({
+                  name: namespaced,
+                  status: check.status,
+                  evidence: check.evidence,
+                  mode: check.mode,
+                })
+                evaluatorCriteriaSink.push({
+                  name: namespaced,
+                  status: check.status,
+                  family: check.family ?? "goal_eval",
+                  evidence: check.evidence,
+                  label: `${goal.title} · ${check.name}`,
+                  mode: check.mode,
+                })
+                // Mirror the goal_run check straight into delivery scope too
+                // so the delivery row carries the full evidence trail used by
+                // the signature and short-circuit check. The family tag is
+                // preserved verbatim.
+                deliveryScopeChecks.push({
+                  ...check,
+                  name: namespaced,
+                })
+                if (check.status === "failed" && check.mode === "strict") {
+                  strictFailedChecks.push({ name: namespaced, evidence: check.evidence })
+                }
+              }
+              if (!isDispatchableGoal(goal)) {
+                verificationGoalStatuses.set(goal.id, {
+                  status: goalEvidence.verdict === "accepted" ? "passed" : "failed",
+                })
+              }
+            }
+
+            // ── Run on_delivery scope scorers against the merged worktree ──
             try {
               const contract = buildGoalContract(task, goal, allGoals)
-              const verdict = await evaluateGoal({
+              const deliveryVerdict = await evaluateGoal({
                 contract,
                 delivery: evalDelivery,
                 signal: input.signal,
                 tier: evaluatorTier,
+                triggerFilter: "on_delivery",
               })
-              for (const check of verdict.checks) {
+              for (const check of deliveryVerdict.checks) {
+                // The on_goal items in this verdict are "skipped" rows (see
+                // evaluateGoal's scope guard). We ignore those — the real
+                // on_goal truth already flowed in from goalEvidence above.
+                if (check.trigger === "on_goal") continue
                 const namespaced = `${goal.id}.${check.name}`
+                const status: "passed" | "failed" | "skipped" = check.passed
+                  ? "passed"
+                  : "failed"
                 evaluatorCheckResults.push({
                   name: namespaced,
-                  status: check.passed ? "passed" : "failed",
+                  status,
                   evidence: check.output,
                   mode: check.mode,
                 })
                 evaluatorCriteriaSink.push({
                   name: namespaced,
-                  status: check.passed ? "passed" : "failed",
+                  status,
                   family: "goal_eval",
                   evidence: check.output,
                   label: `${goal.title} · ${check.name}`,
                   mode: check.mode,
                 })
-                if (!check.passed && check.mode === "strict") {
+                deliveryScopeChecks.push({
+                  name: namespaced,
+                  label: `${goal.title} · ${check.name}`,
+                  family: "goal_eval",
+                  status,
+                  evidence: check.output,
+                  spec_id: check.spec_id,
+                  scorer_kind: check.scorer_kind,
+                  mode: check.mode,
+                  severity: check.severity,
+                  trigger: check.trigger,
+                  exit_code: check.exit_code,
+                  idle_timed_out: check.idle_timed_out,
+                  output_digest: check.output ? outputDigest(check.output) : undefined,
+                })
+                if (status === "failed" && check.mode === "strict") {
                   strictFailedChecks.push({ name: namespaced, evidence: check.output })
                 }
               }
-              if (!isDispatchableGoal(goal)) {
-                verificationGoalStatuses.set(goal.id, {
-                  status: verdict.pass ? "passed" : "failed",
-                })
-              }
-              if (verdict.checks.length === 0) {
-                // Goal had no scorers AND no project-discovery fallback. Per the
-                // evaluator's own contract this is verdict=rejected with no
-                // checks — surface as a single failed criterion so the operator
-                // sees the goal_wrong cause in the panel rather than just an
-                // empty section.
+              // A goal with no specs AT ALL still produces verdict.checks=[]
+              // via the no_scorers path. goalEvidence above already captured
+              // the no_scorers row at goal exit, so we don't re-emit it here.
+              // Only act when goalEvidence is MISSING — i.e., the goal never
+              // ran through goal-pool evaluation (legacy cached task?) — to
+              // preserve the original "surface missing scorers" behaviour.
+              if (!goalEvidence && deliveryVerdict.checks.length === 0) {
                 evaluatorCheckResults.push({
                   name: `${goal.id}.no_scorers`,
                   status: "failed",
-                  evidence: verdict.reasoning,
+                  evidence: deliveryVerdict.reasoning,
                   mode: "strict",
                 })
                 evaluatorCriteriaSink.push({
                   name: `${goal.id}.no_scorers`,
                   status: "failed",
                   family: "goal_eval",
-                  evidence: verdict.reasoning,
+                  evidence: deliveryVerdict.reasoning,
                   label: `${goal.title} · no acceptance scorers`,
                   mode: "strict",
+                })
+                deliveryScopeChecks.push({
+                  name: `${goal.id}.no_scorers`,
+                  label: `${goal.title} · no acceptance scorers`,
+                  family: "goal_eval",
+                  status: "failed",
+                  evidence: deliveryVerdict.reasoning,
+                  mode: "strict",
+                })
+                strictFailedChecks.push({
+                  name: `${goal.id}.no_scorers`,
+                  evidence: deliveryVerdict.reasoning,
                 })
               }
             } catch (evalErr) {
               const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-              log.warn("evaluateGoal threw at delivery time", { goalID: goal.id, error: msg })
+              log.warn("on_delivery evaluateGoal threw", { goalID: goal.id, error: msg })
               const name = `${goal.id}.evaluator_error`
               evaluatorCheckResults.push({ name, status: "failed", evidence: msg, mode: "strict" })
               evaluatorCriteriaSink.push({
@@ -2258,10 +2344,18 @@ export function createOrchestratorTools(input: {
                 label: `${goal.title} · evaluator threw`,
                 mode: "strict",
               })
+              deliveryScopeChecks.push({
+                name,
+                label: `${goal.title} · evaluator threw`,
+                family: "goal_eval",
+                status: "failed",
+                evidence: msg,
+                mode: "strict",
+                scorer_kind: "heuristic_shell",
+                trigger: "on_delivery",
+              })
               if (!isDispatchableGoal(goal)) {
-                verificationGoalStatuses.set(goal.id, {
-                  status: "failed",
-                })
+                verificationGoalStatuses.set(goal.id, { status: "failed" })
               }
               strictFailedChecks.push({ name, evidence: msg })
             }
@@ -2453,6 +2547,13 @@ export function createOrchestratorTools(input: {
                     verdict: verdictPayload.verdict as "accepted" | "rejected" | "inconclusive",
                     summary: verdictPayload.summary ?? "Delivery agent verification",
                     issues: verdictPayload.issues_found,
+                    // spec-09 Phase D: full structured check set for the
+                    // delivery-scope evaluation row. updateEvaluationFrom...
+                    // computes signature from checks when verdict=rejected.
+                    // On accept the set contains only passed rows so the
+                    // signature is empty, which is correct — nothing to
+                    // converge on.
+                    checks: deliveryScopeChecks,
                     now: completed,
                   })
                 }
@@ -2495,6 +2596,65 @@ export function createOrchestratorTools(input: {
             : []
           const iterationCount = reworkHistory.length + 1
           const maxIterations = orchCfg.max_delivery_iterations
+
+          // spec-09 Phase D: whatever happens next (fail-fast, rework,
+          // fail-at-budget), we need the delivery-scope evaluation row
+          // updated with the actual verdict/checks/signature. Without this
+          // update the row stays at status="pending" which the rework
+          // convergence detector (Phase E) cannot read. The 1:1 invariant
+          // (persist.ts:465) guarantees the row exists.
+          const deliveryRejectedNow = Date.now()
+          updateEvaluationFromDeliveryVerdict({
+            deliveryID,
+            verdict: verdict.verdict,
+            summary: verdict.summary,
+            issues: verdict.issues_found,
+            checks: deliveryScopeChecks,
+            now: deliveryRejectedNow,
+          })
+
+          // spec-09 Phase E: convergence detection. If the previous delivery
+          // rejection had the SAME signature (same failed checks, same
+          // exit codes, same output digests), retrying a third time is
+          // pointless — the rework isn't moving the system. Fail fast before
+          // burning the iteration budget on known-no-progress work.
+          const { findLatestDeliveryEvidence, findPreviousDeliveryEvidence, signaturesConverge } = await import("@/verification")
+          const currentDeliveryEvidence = findLatestDeliveryEvidence(taskID)
+          const priorDeliveryEvidence = currentDeliveryEvidence
+            ? findPreviousDeliveryEvidence(taskID, currentDeliveryEvidence.id)
+            : undefined
+          if (
+            currentDeliveryEvidence &&
+            priorDeliveryEvidence &&
+            signaturesConverge(currentDeliveryEvidence.signature, priorDeliveryEvidence.signature)
+          ) {
+            const failMsg = SubAgentProtocol.yieldResult({
+              headline:
+                `Delivery rejected with identical failure signature across two iterations — ` +
+                `rework is not converging. Fast-failing at iteration ${iterationCount}/${maxIterations} ` +
+                `instead of burning the remaining budget.`,
+              fields: [
+                ["signature", currentDeliveryEvidence.signature.slice(0, 16) + "…"],
+                ["issues_found", verdict.issues_found],
+              ],
+              pointer: `verdict artifact ${verdictArtifactId} (full evidence + logs)`,
+            })
+            log.warn("deliver: fast-fail on convergence", {
+              taskID,
+              iteration: iterationCount,
+              signaturePrefix: currentDeliveryEvidence.signature.slice(0, 16),
+            })
+            const currentTaskR = requireTask(taskID)
+            if (currentTaskR.status === "active") {
+              await updateTask(
+                currentTaskR,
+                { status: "failed", error: failMsg, time_completed: Date.now() },
+                failMsg,
+              )
+            }
+            stopAfterDispatch.abort("deliver_rejected_no_progress")
+            return failMsg
+          }
 
           if (iterationCount > maxIterations) {
             // Exhausted iteration budget — fail the task (original behavior)
@@ -2672,13 +2832,15 @@ export function createOrchestratorTools(input: {
 
           // Update the evaluation row persistDelivery() created for this delivery.
           // 1:1 delivery↔evaluation invariant: the row always exists here.
+          // No `checks` argument: the `deliver` tool already wrote the full
+          // structured check set; updateEvaluationFromDeliveryVerdict
+          // preserves existing checks when none are supplied (spec-09 Phase D).
           const verdictPayload = verdictArtifact.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
           if (verdictPayload?.verdict) {
             updateEvaluationFromDeliveryVerdict({
               deliveryID: delivery.id,
               verdict: verdictPayload.verdict as "accepted" | "rejected" | "inconclusive",
               summary: verdictPayload.summary ?? "Delivery agent verification",
-              issues: verdictPayload.issues_found,
               now: completed,
             })
           }

@@ -163,6 +163,20 @@ export async function evaluateGoal(input: {
    *  discovery if no spec heuristic supplied them). Read from
    *  `EngineConfig.evaluator.tier` by callers. */
   tier?: EvaluatorTier
+  /** spec-09 Phase D: which trigger scope to execute.
+   *    "on_goal" (default) — run goal-scope scorers; on_delivery scorers
+   *      are recorded as skipped evidence. This matches the original
+   *      behaviour before Phase D.
+   *    "on_delivery" — run delivery-scope scorers only; on_goal scorers
+   *      are recorded as skipped ("already evaluated at goal exit").
+   *      Supplementary project discovery is also suppressed under this
+   *      mode because it re-does work already captured in goal_run
+   *      evidence.
+   *    "all" — run both. Retained for migration periods only; do not
+   *      build new callers against "all" — it's the pre-Phase-D behaviour
+   *      dressed in one flag, and it re-runs on_goal shell commands a
+   *      second time, wasting the rework loop's time budget. */
+  triggerFilter?: "on_goal" | "on_delivery" | "all"
 }): Promise<EvalVerdict> {
   const { contract, delivery, signal } = input
   const { goal } = contract
@@ -199,7 +213,16 @@ export async function evaluateGoal(input: {
   //      Tier filters which discovered commands actually run: tier=core keeps
   //      build/test only; tier=standard/full keeps everything discovered.
   const tier: EvaluatorTier = input.tier ?? "standard"
-  const discoveredAll = plan.heuristic.length === 0 ? await discoverCommands(evalDir) : []
+  const triggerFilter = input.triggerFilter ?? "on_goal"
+  // Project discovery only makes sense for goal-scope evaluation. At delivery
+  // scope the merged worktree has already been through each goal's discovery
+  // pass; redoing it would re-run the same build/test commands the on_goal
+  // evidence already captured, wasting wall time and making the rework
+  // convergence signature noisy.
+  const discoveredAll =
+    triggerFilter !== "on_goal" || plan.heuristic.length > 0
+      ? []
+      : await discoverCommands(evalDir)
   const discovered = discoveredAll.filter((d) => tierAllowsDiscovered(d.name, tier))
   const supplement = deduplicateDiscovered(plan.heuristic, discovered)
 
@@ -239,17 +262,32 @@ export async function evaluateGoal(input: {
   for (const item of plan.heuristic) {
     if (signal?.aborted) throw new Error("eval aborted")
 
-    if (item.trigger === "on_delivery") {
+    // spec-09 Phase D: honour triggerFilter both ways. When evaluating at
+    // delivery scope, on_goal items get recorded as skipped (they were
+    // already run during goal-pool evaluation); when evaluating at goal
+    // scope, on_delivery items get recorded as skipped (deferred to
+    // delivery). "all" runs both categories unchanged.
+    const skipBecauseScope =
+      (triggerFilter === "on_goal" && item.trigger === "on_delivery") ||
+      (triggerFilter === "on_delivery" && item.trigger === "on_goal")
+    if (skipBecauseScope) {
+      const reason =
+        item.trigger === "on_delivery"
+          ? "deferred to delivery — not executed at goal stage"
+          : "already evaluated at goal exit — not rerun at delivery"
       results.push({
         name: item.name,
         command: item.command,
         passed: true,
-        output: "deferred to delivery — not executed at goal stage",
+        output: reason,
         source: "spec_heuristic",
         mode: item.mode,
         severity: item.severity,
+        spec_id: item.sourceSpecId,
+        scorer_kind: item.subKind === "script_ref" ? "heuristic_script_ref" : "heuristic_shell",
+        trigger: item.trigger,
       })
-      await emit(`\n⟳ heuristic \`${item.name}\` — deferred to delivery, skipping at goal stage\n`)
+      await emit(`\n⟳ heuristic \`${item.name}\` — ${reason}\n`)
       continue
     }
 
@@ -272,6 +310,11 @@ export async function evaluateGoal(input: {
       source: "spec_heuristic",
       mode: item.mode,
       severity: item.severity,
+      spec_id: item.sourceSpecId,
+      scorer_kind: item.subKind === "script_ref" ? "heuristic_script_ref" : "heuristic_shell",
+      trigger: "on_goal",
+      exit_code: typeof run.exitCode === "number" ? run.exitCode : undefined,
+      idle_timed_out: run.idleTimedOut === true,
     })
     await emit(renderShellResult(item.name, item.command, `heuristic (${item.mode})`, run, passed))
 
@@ -290,17 +333,27 @@ export async function evaluateGoal(input: {
   for (const item of plan.rubric) {
     if (signal?.aborted) throw new Error("eval aborted")
 
-    if (item.trigger === "on_delivery") {
+    const skipBecauseScope =
+      (triggerFilter === "on_goal" && item.trigger === "on_delivery") ||
+      (triggerFilter === "on_delivery" && item.trigger === "on_goal")
+    if (skipBecauseScope) {
+      const reason =
+        item.trigger === "on_delivery"
+          ? "deferred to delivery — not executed at goal stage"
+          : "already evaluated at goal exit — not rerun at delivery"
       results.push({
         name: item.name,
         command: `rubric:${item.kind}`,
         passed: true,
-        output: "deferred to delivery — not executed at goal stage",
+        output: reason,
         source: "spec_rubric",
         mode: item.mode,
         severity: item.severity,
+        spec_id: item.sourceSpecId,
+        scorer_kind: item.kind === "prebuilt" ? "prebuilt" : "llm_judge",
+        trigger: item.trigger,
       })
-      await emit(`\n⟳ rubric \`${item.name}\` (${item.kind}) — deferred to delivery, skipping at goal stage\n`)
+      await emit(`\n⟳ rubric \`${item.name}\` (${item.kind}) — ${reason}\n`)
       continue
     }
 
@@ -322,6 +375,9 @@ export async function evaluateGoal(input: {
       source: "spec_rubric",
       mode: item.mode,
       severity: item.severity,
+      spec_id: item.sourceSpecId,
+      scorer_kind: item.kind === "prebuilt" ? "prebuilt" : "llm_judge",
+      trigger: "on_goal",
     })
     const evidenceSnippet = out.evidence.split("\n").map(l => "    " + l).join("\n").slice(0, 2000)
     await emit(`\n${icon(out.status === "passed")} rubric \`${item.name}\` (${item.mode}) — ${out.status}\n${evidenceSnippet}\n`)
@@ -346,6 +402,10 @@ export async function evaluateGoal(input: {
       output: [run.stdout.trim().slice(0, 3000), run.stderr.trim().slice(0, 1000)].filter(Boolean).join("\n"),
       source: "project_discovery",
       mode: "soft",
+      scorer_kind: "heuristic_shell",
+      trigger: "on_goal",
+      exit_code: typeof run.exitCode === "number" ? run.exitCode : undefined,
+      idle_timed_out: run.idleTimedOut === true,
     })
     await emit(renderShellResult(name, command, "discovered (soft)", run, passed))
     log.info("eval discovery", { goalID: goal.id, name, command, exitCode: run.exitCode, passed })
@@ -365,6 +425,8 @@ export async function evaluateGoal(input: {
         output: `no index.html found under ${evalDir} — executor must produce a renderable entry point`,
         source: "visual",
         mode: "strict",
+        scorer_kind: "visual_diff",
+        trigger: "on_goal",
       })
     } else {
       const visualOut = path.join(evalDir, ".opencorvus", "visual-diff")
@@ -377,6 +439,8 @@ export async function evaluateGoal(input: {
           output: summarizeVisualReport(report),
           source: "visual",
           mode: "strict",
+          scorer_kind: "visual_diff",
+          trigger: "on_goal",
         })
       } catch (err) {
         results.push({
@@ -386,6 +450,8 @@ export async function evaluateGoal(input: {
           output: `visual-diff failed to run: ${err instanceof Error ? err.message : String(err)}`,
           source: "visual",
           mode: "strict",
+          scorer_kind: "visual_diff",
+          trigger: "on_goal",
         })
       }
     }

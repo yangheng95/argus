@@ -17,9 +17,9 @@ import { Identifier } from "@/id/id"
 import z from "zod"
 import {
   findTask,
-  findLatestFailedEvalForGoal,
   updateGoalRun,
 } from "@/engine"
+import { findLatestGoalRunEvidence } from "@/verification"
 import type {
   TaskRow,
   GoalRow,
@@ -456,18 +456,21 @@ function extractPlanSection(prompt: string, heading: string) {
 /**
  * Compose the "Prior Attempt Failed" section that retries see in their prompt.
  *
- * Reads the latest rejected evaluation for this goal and the decision-log
- * "retry" entries that the Orchestrator recorded via retry_failed_goals().
- * Returns "" on first attempts (no prior failure) — callers should `.filter(Boolean)`.
+ * spec-09 change (Phase C): reads the structured `VerificationEvidence` row
+ * written by goal-pool.ts right after `evaluateGoal`. Strict failures surface
+ * `spec_id`, `scorer_kind`, `exit_code`, and truncated `evidence` body so the
+ * executor has specific mechanical signals — not just a natural-language
+ * "retry analysis" fragment.
  *
- * No fallback: if `findLatestFailedEvalForGoal` returns nothing we treat it as
- * "first attempt" and emit nothing. If checks/summary are missing fields, we
- * still emit the sections we have — never fabricate data.
+ * The coordinator's decision-log retry entries stay as auxiliary context.
+ *
+ * Returns "" on first attempts (no prior failure) — callers should `.filter(Boolean)`.
  */
 export function buildRetryFeedbackSection(taskID: string, goalID: string): string {
-  const latest = findLatestFailedEvalForGoal(goalID)
-  if (!latest || latest.length === 0) return ""
-  const failed = latest[0]!
+  const evidence = findLatestGoalRunEvidence(goalID)
+  if (!evidence) return ""
+  const failedChecks = evidence.checks.filter((c) => c.status === "failed")
+  if (failedChecks.length === 0) return ""
 
   const decisionLog = createDecisionLog(taskID)
   const retryEntries = decisionLog
@@ -482,21 +485,26 @@ export function buildRetryFeedbackSection(taskID: string, goalID: string): strin
   )
   lines.push("")
 
-  if (failed.summary && failed.summary.trim().length > 0) {
+  if (evidence.summary && evidence.summary.trim().length > 0) {
     lines.push("### Evaluator Summary")
-    lines.push(failed.summary.trim())
+    lines.push(evidence.summary.trim())
     lines.push("")
   }
 
-  const checks = Array.isArray(failed.checks) ? failed.checks : []
-  const failedChecks = checks.filter((c) => c && c.status === "failed")
-  if (failedChecks.length > 0) {
-    lines.push("### Failed Checks")
-    for (const check of failedChecks) {
-      lines.push(`- **${check.name}**`)
-      const evidence = (check.evidence ?? "").toString().trim()
-      if (evidence.length > 0) {
-        const truncated = evidence.length > 1500 ? evidence.slice(0, 1500) + "\n…(truncated)" : evidence
+  const strictFailed = failedChecks.filter((c) => c.mode === "strict")
+  const softFailed = failedChecks.filter((c) => c.mode !== "strict")
+
+  if (strictFailed.length > 0) {
+    lines.push("### Strict Failures (MUST FIX)")
+    for (const check of strictFailed) {
+      const specTag = check.spec_id ? ` · spec \`${check.spec_id}\`` : ""
+      const kindTag = check.scorer_kind ? ` · ${check.scorer_kind}` : ""
+      const exitTag = typeof check.exit_code === "number" ? ` · exit=${check.exit_code}` : ""
+      const idleTag = check.idle_timed_out ? " · idle-timeout" : ""
+      lines.push(`- **${check.name}**${specTag}${kindTag}${exitTag}${idleTag}`)
+      const evText = (check.evidence ?? "").toString().trim()
+      if (evText.length > 0) {
+        const truncated = evText.length > 1500 ? evText.slice(0, 1500) + "\n…(truncated)" : evText
         lines.push("  ```")
         for (const row of truncated.split("\n")) lines.push("  " + row)
         lines.push("  ```")
@@ -505,8 +513,21 @@ export function buildRetryFeedbackSection(taskID: string, goalID: string): strin
     lines.push("")
   }
 
+  if (softFailed.length > 0) {
+    lines.push("### Soft Failures (advisory — address if feasible)")
+    for (const check of softFailed) {
+      const specTag = check.spec_id ? ` · spec \`${check.spec_id}\`` : ""
+      lines.push(`- ${check.name}${specTag}`)
+      const evText = (check.evidence ?? "").toString().trim()
+      if (evText.length > 0 && evText.length <= 400) {
+        lines.push(`  - ${evText.replace(/\s+/g, " ")}`)
+      }
+    }
+    lines.push("")
+  }
+
   if (retryEntries.length > 0) {
-    lines.push("### Coordinator Root-Cause Analysis")
+    lines.push("### Coordinator Root-Cause Analysis (aux)")
     for (const entry of retryEntries) {
       const reasonSuffix = entry.reason ? ` — _why: ${entry.reason}_` : ""
       lines.push(`- ${entry.value}${reasonSuffix}`)
@@ -515,8 +536,8 @@ export function buildRetryFeedbackSection(taskID: string, goalID: string): strin
   }
 
   lines.push("### Required For This Retry")
-  lines.push("- Read the failed checks and evidence above before writing any code.")
-  lines.push("- Make the failing checks pass while keeping the previously passing checks intact.")
+  lines.push("- Read the strict failures above before writing any code. Each bullet names the spec_id you must satisfy.")
+  lines.push("- Make the failing STRICT checks pass while keeping previously passing checks intact.")
   lines.push("- Do NOT repeat an approach that was already tried and rejected above.")
   lines.push("- If the root cause sits outside your owned_paths, report it as a SCOPE BLOCKER instead of widening scope.")
 

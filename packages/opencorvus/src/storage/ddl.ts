@@ -670,6 +670,13 @@ CREATE TABLE IF NOT EXISTS engine_evaluation (
   run_id         text NOT NULL,
   goal_run_id    text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
   delivery_id    text,
+  -- Scope marker, see specs/new-arch/09-verification-evidence.md.
+  -- Invariant (app-layer): scope='goal_run' ⇒ goal_run_id NOT NULL;
+  -- scope='delivery' ⇒ delivery_id NOT NULL. Historical rows default to
+  -- 'delivery' since they were all written from persistDelivery().
+  scope          text NOT NULL DEFAULT 'delivery',
+  -- Stable hash over failed-check set — powers rework no-progress detection.
+  signature      text NOT NULL DEFAULT '',
   status         text NOT NULL DEFAULT 'pending',
   verdict        text NOT NULL DEFAULT 'inconclusive',
   summary        text NOT NULL,
@@ -683,7 +690,8 @@ CREATE TABLE IF NOT EXISTS engine_evaluation (
   FOREIGN KEY (run_id)      REFERENCES engine_run(id)      ON DELETE CASCADE,
   FOREIGN KEY (delivery_id) REFERENCES engine_delivery(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS engine_evaluation_run_idx ON engine_evaluation (run_id);
+CREATE INDEX IF NOT EXISTS engine_evaluation_run_idx       ON engine_evaluation (run_id);
+CREATE INDEX IF NOT EXISTS engine_evaluation_scope_task_idx ON engine_evaluation (task_id, scope);
 
 CREATE TABLE IF NOT EXISTS engine_progress_snapshot (
   id           text PRIMARY KEY,

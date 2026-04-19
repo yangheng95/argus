@@ -227,7 +227,18 @@ export function hooks() {
  */
 export async function upsertTaskCriteria(
   taskID: string,
-  checks: Array<{ name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }>,
+  checks: Array<{
+    name: string
+    label?: string
+    family?: string
+    status: "passed" | "failed" | "skipped"
+    evidence?: string
+    /** spec-09: strict/soft marker so the aggregate view carries the same
+     *  STRICT vs soft distinction that evidence rows have. Delivery prompt
+     *  partitions on this; `query_criteria` tags on this. Optional — old
+     *  writers (legacy aggregate sinks) leave it undefined. */
+    mode?: "strict" | "soft"
+  }>,
 ) {
   const task = requireTask(taskID)
   const meta = ((task.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>
