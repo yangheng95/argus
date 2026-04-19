@@ -477,7 +477,6 @@
   "skill.delete_confirm": "Delete skill \"{{name}}\"?",
   "skill.install": "Install Skill",
   "skill.market.install_button_title": "Install this skill into the workspace.",
-  "skill.market.none": "No curated skills available",
   "skill.market.open_site": "Open Site",
   "skill.market.open_site_title": "Open this skill's homepage in the browser.",
   "skill.market.title": "Skill Market",

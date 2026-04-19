@@ -323,6 +323,57 @@ export function updateGoalVerificationOutcome(input: {
   writeCascadeState({ ...input, writer: "updateGoalVerificationOutcome" })
 }
 
+export function updateGoalWorkspace(input: {
+  goalID: string
+  workspaceDir: string | null
+  workspaceBranch: string | null
+  /** Optional — only written when explicitly provided. Leave `undefined`
+   *  to preserve the existing baseRef across retries; pass `null` to
+   *  clear it at terminal cleanup (see writer.ts cleanupGoalWorkspaceForGoal). */
+  workspaceBaseRef?: string | null
+  now?: number
+}) {
+  const now = input.now ?? Date.now()
+  const goal = Database.use((db) =>
+    db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, input.goalID)).get(),
+  )
+  if (!goal) {
+    throw new Error(`updateGoalWorkspace: goal ${input.goalID} not found`)
+  }
+  const patch: Record<string, unknown> = {
+    workspace_dir: input.workspaceDir,
+    workspace_branch: input.workspaceBranch,
+    time_updated: now,
+  }
+  if (input.workspaceBaseRef !== undefined) {
+    patch.workspace_base_ref = input.workspaceBaseRef
+  }
+  Database.use((db) =>
+    db.update(EngineGoalTable)
+      .set(patch as any)
+      .where(eq(EngineGoalTable.id, input.goalID))
+      .run(),
+  )
+}
+
+/** Set or clear the goal-scoped baseRef without touching workspace_dir /
+ *  workspace_branch. Used by dispatchGoal to persist the first-attempt
+ *  Snapshot.track() result exactly once per goal (see goal-pool.ts). */
+export function updateGoalWorkspaceBaseRef(goalID: string, baseRef: string | null, now = Date.now()) {
+  const goal = Database.use((db) =>
+    db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get(),
+  )
+  if (!goal) {
+    throw new Error(`updateGoalWorkspaceBaseRef: goal ${goalID} not found`)
+  }
+  Database.use((db) =>
+    db.update(EngineGoalTable)
+      .set({ workspace_base_ref: baseRef, time_updated: now } as any)
+      .where(eq(EngineGoalTable.id, goalID))
+      .run(),
+  )
+}
+
 /**
  * Batch reset every goal in a task back to the "pending" projection by:
  *  1. clearing any explicit cascade_state marker

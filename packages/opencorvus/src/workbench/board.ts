@@ -793,6 +793,10 @@ function buildWorkflowFields(
       goalID: goal.id,
       goalTitle: goal.title,
       goalStatus: goal.status,
+      orderIndex: goal.order_index,
+      workspaceDir: goal.workspace_dir ?? undefined,
+      workspaceBranch: goal.workspace_branch ?? undefined,
+      retryCount: goal.retry_count,
       acceptanceSpecs: goal.acceptance_specs,
       priority: (goal.priority ?? "blocking") as "blocking" | "advisory",
       steps: workflow.steps

@@ -75,92 +75,6 @@
       "status": "running",
       "title": "chat.role.design-analyst"
     },
-    "goal-group:goal_fixture_g1": {
-      "childIDs": [
-        "goal-group:goal_fixture_g1:step:build"
-      ],
-      "id": "goal-group:goal_fixture_g1",
-      "kind": "goal",
-      "parts": [],
-      "round": 1,
-      "stage": "goal",
-      "status": "completed",
-      "subtitle": "xture_g1",
-      "title": "Scaffold project"
-    },
-    "goal-group:goal_fixture_g1:step:build": {
-      "childIDs": [
-        "goal-group:goal_fixture_g1:step:build:phase:plan",
-        "goal-group:goal_fixture_g1:step:build:phase:build",
-        "goal-group:goal_fixture_g1:step:build:phase:evaluate"
-      ],
-      "id": "goal-group:goal_fixture_g1:step:build",
-      "kind": "step",
-      "parts": [],
-      "stage": "build",
-      "status": "completed",
-      "title": "Executor"
-    },
-    "goal-group:goal_fixture_g1:step:build:phase:build": {
-      "childIDs": [
-        "interaction-card:synthetic:system:1776000004500:1pjr37f"
-      ],
-      "id": "goal-group:goal_fixture_g1:step:build:phase:build",
-      "kind": "phase",
-      "parts": [
-        {
-          "type": "boundary"
-        },
-        {
-          "id": "part_build_tool_1",
-          "output": "added 42 packages",
-          "tool": "bash",
-          "toolStatus": "completed",
-          "type": "tool"
-        },
-        {
-          "id": "part_build_text",
-          "text": "Build passed.",
-          "type": "text"
-        }
-      ],
-      "phaseID": "build",
-      "phaseSessionKind": "build",
-      "stage": "build",
-      "status": "completed",
-      "title": "Build"
-    },
-    "goal-group:goal_fixture_g1:step:build:phase:evaluate": {
-      "childIDs": [],
-      "id": "goal-group:goal_fixture_g1:step:build:phase:evaluate",
-      "kind": "phase",
-      "parts": [],
-      "phaseID": "evaluate",
-      "phaseSessionKind": "evaluator",
-      "stage": "evaluator",
-      "status": "completed",
-      "title": "Evaluate"
-    },
-    "goal-group:goal_fixture_g1:step:build:phase:plan": {
-      "childIDs": [],
-      "id": "goal-group:goal_fixture_g1:step:build:phase:plan",
-      "kind": "phase",
-      "parts": [
-        {
-          "type": "boundary"
-        },
-        {
-          "id": "part_planner_text",
-          "text": "Planned the build sequence.",
-          "type": "text"
-        }
-      ],
-      "phaseID": "plan",
-      "phaseSessionKind": "planner",
-      "stage": "planner",
-      "status": "completed",
-      "title": "Plan"
-    },
     "interaction-card:synthetic:system:1776000004500:1pjr37f": {
       "childIDs": [],
       "id": "interaction-card:synthetic:system:1776000004500:1pjr37f",
@@ -191,6 +105,81 @@
       "stage": "requirements",
       "status": "running",
       "title": "chat.role.requirements"
+    },
+    "step:goal_fixture_g1:build": {
+      "childIDs": [
+        "step:goal_fixture_g1:build:phase:plan",
+        "step:goal_fixture_g1:build:phase:build",
+        "step:goal_fixture_g1:build:phase:evaluate"
+      ],
+      "id": "step:goal_fixture_g1:build",
+      "kind": "step",
+      "parts": [],
+      "round": 1,
+      "stage": "build",
+      "status": "completed",
+      "subtitle": "xture_g1",
+      "title": "Scaffold project"
+    },
+    "step:goal_fixture_g1:build:phase:build": {
+      "childIDs": [
+        "interaction-card:synthetic:system:1776000004500:1pjr37f"
+      ],
+      "id": "step:goal_fixture_g1:build:phase:build",
+      "kind": "phase",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_build_tool_1",
+          "output": "added 42 packages",
+          "tool": "bash",
+          "toolStatus": "completed",
+          "type": "tool"
+        },
+        {
+          "id": "part_build_text",
+          "text": "Build passed.",
+          "type": "text"
+        }
+      ],
+      "phaseID": "build",
+      "phaseSessionKind": "build",
+      "stage": "build",
+      "status": "completed",
+      "title": "Build"
+    },
+    "step:goal_fixture_g1:build:phase:evaluate": {
+      "childIDs": [],
+      "id": "step:goal_fixture_g1:build:phase:evaluate",
+      "kind": "phase",
+      "parts": [],
+      "phaseID": "evaluate",
+      "phaseSessionKind": "evaluator",
+      "stage": "evaluator",
+      "status": "completed",
+      "title": "Evaluate"
+    },
+    "step:goal_fixture_g1:build:phase:plan": {
+      "childIDs": [],
+      "id": "step:goal_fixture_g1:build:phase:plan",
+      "kind": "phase",
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_planner_text",
+          "text": "Planned the build sequence.",
+          "type": "text"
+        }
+      ],
+      "phaseID": "plan",
+      "phaseSessionKind": "planner",
+      "stage": "planner",
+      "status": "completed",
+      "title": "Plan"
     }
   },
   "order": [
@@ -199,6 +188,6 @@
     "requirements:session:ses_requirements",
     "design-analyst:session:ses_design",
     "architect:session:ses_architect",
-    "goal-group:goal_fixture_g1"
+    "step:goal_fixture_g1:build"
   ]
 }

@@ -110,6 +110,7 @@ const boardData = {
       goalID: "goal-auth",
       goalTitle: "Implement JWT authentication module",
       goalStatus: "running",
+      orderIndex: 0,
       priority: "blocking",
       steps: [
         { stepID: "build", label: "Executor", status: "running" },
@@ -119,6 +120,7 @@ const boardData = {
       goalID: "goal-api",
       goalTitle: "Add REST API endpoints for dashboard",
       goalStatus: "running",
+      orderIndex: 1,
       priority: "blocking",
       steps: [
         { stepID: "build", label: "Executor", status: "running" },
@@ -128,6 +130,7 @@ const boardData = {
       goalID: "goal-rbac",
       goalTitle: "Implement role-based access control",
       goalStatus: "running",
+      orderIndex: 2,
       priority: "blocking",
       steps: [
         { stepID: "build", label: "Executor", status: "running" },

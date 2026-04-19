@@ -15,7 +15,7 @@ import { toolNameKey } from "./tool";
 
 export type { StepPayload } from "../store/card-tree";
 
-export type CardKind = "agent" | "goal" | "step" | "phase" | "tool" | "message" | "fidelity";
+export type CardKind = "agent" | "step" | "phase" | "tool" | "message" | "fidelity";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
 
 /** A synthetic "part" inserted between messages when flattening multiple
@@ -47,10 +47,12 @@ export interface CardNode {
   subtitle?: string;
   /** Goal index / round number; shown as #N when > 0. */
   round?: number;
-  /** Goal description (markdown) — only set on kind=goal. */
+  /** Goal this card belongs to — stamped on the executor step card and any
+   *  goal-phase / session card routed into it. */
+  goalID?: string;
+  /** Goal description (markdown) — only set on executor step cards. */
   goalDescription?: string;
   contracts?: Array<{ key: string; value: string; reason?: string }>;
-  steps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
   /** Structured per-step content. Only set for kind="step" nodes — drives
    *  the step body render path (changed files, diff stats, plan nodes, eval
    *  checks, etc.) so the main conversation shows the same detail as the
@@ -194,20 +196,24 @@ export function shouldPromoteTool(part: any): boolean {
 export function defaultExpandedForNode(node: CardNode): boolean {
   if (typeof node.defaultExpanded === "boolean") return node.defaultExpanded;
   if (node.status === "running") return true;
-  if (node.kind === "agent" || node.kind === "goal") return true;
+  if (node.kind === "agent") return true;
   if (node.kind === "message") return true;
   // Fidelity verdicts: always expand. The entire point of the card is to
   // surface the structured verdict; a collapsed badge would be weaker than
   // the previous raw-JSON render it replaces.
   if (node.kind === "fidelity") return true;
-  // step / tool defaults: collapsed when completed, open when running.
+  // Executor step cards carry goal description + phase children — the
+  // operator almost always wants those visible when the goal is alive.
+  // A completed executor collapses to save space.
+  if (node.kind === "step") return node.status !== "completed";
+  // tool defaults: collapsed when completed, open when running.
   return node.status !== "completed";
 }
 
 // ── Text collection (for copy-to-clipboard) ──
 // Walks a card node and its descendants, emitting the human-readable prose
-// parts: text / reasoning, plus goal description and contracts for goal
-// cards. Tool input/output and binary parts (patch/file) are skipped —
+// parts: text / reasoning, plus goal description and contracts on executor
+// step cards. Tool input/output and binary parts (patch/file) are skipped —
 // they rarely belong in a pasted transcript.
 
 function partText(part: any): string {
@@ -221,10 +227,10 @@ function partText(part: any): string {
 export function collectCardText(node: CardNode): string {
   if (!node) return "";
   const chunks: string[] = [];
-  if (node.kind === "goal" && node.goalDescription) {
+  if (node.kind === "step" && node.goalDescription) {
     chunks.push(String(node.goalDescription).trim());
   }
-  if (node.kind === "goal" && node.contracts?.length) {
+  if (node.kind === "step" && node.contracts?.length) {
     for (const c of node.contracts) {
       const key = String(c.key || "").trim();
       const value = String(c.value || "").trim();

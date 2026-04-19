@@ -473,6 +473,9 @@ CREATE TABLE IF NOT EXISTS engine_goal (
   -- deriveGoalStatus() reads this before walking the goal_run chain.
   cascade_state    text,
   retry_count      integer NOT NULL DEFAULT 0,
+  workspace_dir    text,
+  workspace_branch text,
+  workspace_base_ref text,
   order_index      integer NOT NULL DEFAULT 0,
   metadata         text,
   time_created     integer NOT NULL,

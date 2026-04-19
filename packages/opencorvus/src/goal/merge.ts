@@ -69,6 +69,16 @@ export interface ValidationResult {
   violations: string[]
 }
 
+export interface OwnedPathViolation {
+  file: string
+  expected?: string
+  message: string
+}
+
+export interface DetailedValidationResult extends ValidationResult {
+  details: OwnedPathViolation[]
+}
+
 /**
  * Check if all modified files are within the goal's declared owned_paths.
  * Returns violations (files outside scope). Empty owned_paths = no constraint.
@@ -77,11 +87,32 @@ export function validateOwnedPaths(
   modifiedFiles: string[],
   ownedPaths: string[],
 ): ValidationResult {
-  if (ownedPaths.length === 0) return { valid: true, violations: [] }
-  const violations = modifiedFiles.filter(
-    (file) => !ownedPaths.some((p) => file === p || file.startsWith(p + "/") || isSharedFile(file)),
-  )
-  return { valid: violations.length === 0, violations }
+  const result = validateOwnedPathsDetailed(modifiedFiles, ownedPaths)
+  return { valid: result.valid, violations: result.violations }
+}
+
+export function validateOwnedPathsDetailed(
+  modifiedFiles: string[],
+  ownedPaths: string[],
+): DetailedValidationResult {
+  if (ownedPaths.length === 0) return { valid: true, violations: [], details: [] }
+  const details = modifiedFiles
+    .filter((file) => !ownedPaths.some((p) => pathWithinOwned(file, p) || isSharedFile(file)))
+    .map((file) => {
+      const expected = closestOwnedPath(file, ownedPaths)
+      return {
+        file,
+        expected,
+        message: expected
+          ? `wrote ${file} but owned_paths declares ${expected}`
+          : `wrote ${file} outside owned_paths (${ownedPaths.join(", ")})`,
+      }
+    })
+  return {
+    valid: details.length === 0,
+    violations: details.map((item) => item.file),
+    details,
+  }
 }
 
 // ── Shared file detection ──
@@ -99,6 +130,47 @@ const SHARED_FILES = new Set([
 export function isSharedFile(file: string): boolean {
   const basename = file.split("/").pop() ?? file
   return SHARED_FILES.has(basename)
+}
+
+function normalizePath(input: string): string {
+  return input.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\//, "").replace(/\/$/, "")
+}
+
+function pathWithinOwned(file: string, ownedPath: string): boolean {
+  const normalizedFile = normalizePath(file)
+  const normalizedOwned = normalizePath(ownedPath)
+  return (
+    normalizedFile === normalizedOwned ||
+    normalizedFile.startsWith(`${normalizedOwned}/`)
+  )
+}
+
+function closestOwnedPath(file: string, ownedPaths: string[]): string | undefined {
+  const normalizedFile = normalizePath(file)
+  let best: { path: string; score: number } | undefined
+  for (const ownedPath of ownedPaths) {
+    const normalizedOwned = normalizePath(ownedPath)
+    const score = similarityScore(normalizedFile, normalizedOwned)
+    if (score <= 0) continue
+    if (!best || score > best.score) best = { path: ownedPath, score }
+  }
+  return best?.path
+}
+
+function similarityScore(file: string, ownedPath: string): number {
+  const fileParts = file.split("/")
+  const ownedParts = ownedPath.split("/")
+  let sharedSuffix = 0
+  while (
+    sharedSuffix < fileParts.length &&
+    sharedSuffix < ownedParts.length &&
+    fileParts[fileParts.length - 1 - sharedSuffix] === ownedParts[ownedParts.length - 1 - sharedSuffix]
+  ) {
+    sharedSuffix++
+  }
+  const sameBasename = fileParts[fileParts.length - 1] === ownedParts[ownedParts.length - 1]
+  const nestedSuffix = file.endsWith(`/${ownedPath}`)
+  return (sharedSuffix * 100) + (sameBasename ? 25 : 0) + (nestedSuffix ? 10 : 0) - Math.abs(fileParts.length - ownedParts.length)
 }
 
 // ── JSON deep merge ──

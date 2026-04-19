@@ -3,8 +3,9 @@
  *
  * Pipeline:
  *   1. Translate AcceptanceSpec[] → heuristic commands + rubric checks.
- *   2. Resolve the correct working directory (nearest project root inside
- *      owned_paths) and discover supplementary build/test commands.
+ *   2. Run from the goal worktree root and discover supplementary build/test
+ *      commands there. owned_paths scope is enforced earlier by the
+ *      goal-exit conformance gate; evaluator never path-adapts around drift.
  *   3. Execute on_goal heuristics via Shell; deferred (on_delivery) ones are
  *      reported as evidence but skipped here.
  *   4. Execute on_goal rubric scorers via llm-judge-runner.
@@ -35,43 +36,12 @@ interface DiscoveredCommand {
 type CheckResult = EvalCheckResult
 
 // ---------------------------------------------------------------------------
-// resolveEvalDir — find the nearest project root inside the goal's owned_paths
+// resolveEvalDir — legacy helper retained as a no-op for API stability.
+// owned_paths conformance is enforced before evaluator start; the evaluator
+// must stay anchored at the worktree root.
 // ---------------------------------------------------------------------------
 
-export async function resolveEvalDir(workDir: string, ownedPaths: string[]): Promise<string> {
-  if (ownedPaths.length === 0) return workDir
-
-  const dirs = ownedPaths.map((p) => {
-    const clean = p.replace(/[*?[\]{}]/g, "").replace(/\/+$/, "")
-    return path.dirname(clean)
-  })
-
-  let common = dirs[0]!
-  for (const d of dirs.slice(1)) {
-    const parts1 = common.split(/[/\\]/)
-    const parts2 = d.split(/[/\\]/)
-    const shared: string[] = []
-    for (let i = 0; i < Math.min(parts1.length, parts2.length); i++) {
-      if (parts1[i] === parts2[i]) shared.push(parts1[i]!)
-      else break
-    }
-    common = shared.join("/")
-    if (!common) return workDir
-  }
-
-  const markers = ["package.json", "pyproject.toml", "setup.py", "Cargo.toml", "go.mod"]
-  let current = path.resolve(workDir, common)
-  const root = path.resolve(workDir)
-
-  while (current.length >= root.length && current.startsWith(root)) {
-    for (const marker of markers) {
-      if (await fileExists(path.join(current, marker))) return current
-    }
-    const parent = path.dirname(current)
-    if (parent === current) break
-    current = parent
-  }
-
+export async function resolveEvalDir(workDir: string, _ownedPaths: string[]): Promise<string> {
   return workDir
 }
 
@@ -155,7 +125,15 @@ export async function evaluateGoal(input: {
   contract: GoalContract
   delivery: PipelineDelivery
   decisionLog?: DecisionLog
-  workDir?: string
+  /** Required. The directory where heuristic shell commands execute:
+   *   - per-goal eval  → the goal's worktree (e.g. `.../worktrees/goal-XXX`)
+   *   - on-delivery eval → the primary project directory (post cherry-pick merge)
+   * Callers MUST decide which. A silent fallback to Instance.directory
+   * misrouted per-goal checks against the primary worktree (where executor
+   * files had NOT been cherry-picked yet), producing false failures like
+   * `test -f tailwind.config.ts → exit 1` even though the goal worktree
+   * contained that file. */
+  workDir: string
   sessionID?: string
   signal?: AbortSignal
   stream?: TextHooks
@@ -183,12 +161,8 @@ export async function evaluateGoal(input: {
 
   if (signal?.aborted) throw new Error("eval aborted")
 
-  const workDir = input.workDir ?? (await import("@/project/instance")).Instance.directory
-  const ownedPaths = (goal.owned_paths ?? []) as string[]
-  const evalDir = await resolveEvalDir(workDir, ownedPaths)
-  if (evalDir !== workDir) {
-    log.info("resolved eval directory from owned_paths", { goalID: goal.id, workDir, evalDir })
-  }
+  const workDir = input.workDir
+  const evalDir = await resolveEvalDir(workDir, (goal.owned_paths ?? []) as string[])
 
   // Authoritative changed-file list for rubric scorers. Read from the goal's
   // delivery commit via git, NOT from delivery.diffs — diffs is display/audit

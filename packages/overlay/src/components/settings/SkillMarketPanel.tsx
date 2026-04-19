@@ -336,14 +336,20 @@ export default function SkillMarketPanel() {
       </Show>
 
       {/* ── Installed Skills ── */}
-      <details class="config-subsection">
-        <summary class="config-subsection-head">
-          {t("skill.title")}
-          <span class="config-subsection-head-actions" onClick={(e) => e.stopPropagation()}>
+      <section class="ext-group">
+        <header class="ext-group-head">
+          <span class="ext-group-head-title">{t("skill.title")}</span>
+          <span class="ext-group-head-actions">
+            <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
+              {t("common.reload")}
+            </button>
+            <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
+              {t("skill.open_dir")}
+            </button>
             <button
               type="button"
               class="btn btn-ghost mini"
-              onClick={(e) => { e.stopPropagation(); setShowAddSkill(!showAddSkill()); }}
+              onClick={() => setShowAddSkill(!showAddSkill())}
             >
               {t("skill.add")}
             </button>
@@ -351,21 +357,13 @@ export default function SkillMarketPanel() {
               type="button"
               class="btn btn-ghost mini danger"
               disabled={removableSkills().length === 0}
-              onClick={(e) => { e.stopPropagation(); handleDeleteAllSkills(); }}
+              onClick={handleDeleteAllSkills}
             >
               {t("skill.delete_all")}
             </button>
           </span>
-        </summary>
-        <div class="config-subsection-body">
-          <div class="config-subsection-secondary-bar">
-            <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
-              {t("common.reload")}
-            </button>
-            <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
-              {t("skill.open_dir")}
-            </button>
-          </div>
+        </header>
+        <div class="ext-group-body">
 
         {/* Add Skill inline form */}
         <Show when={showAddSkill()}>
@@ -478,17 +476,17 @@ export default function SkillMarketPanel() {
             </Show>
           </div>
         </div>
-      </details>
+      </section>
 
       {/* ── MCP Servers ── */}
-      <details class="config-subsection">
-        <summary class="config-subsection-head">
-          {t("mcp.title")}
-          <span class="config-subsection-head-actions" onClick={(e) => e.stopPropagation()}>
+      <section class="ext-group">
+        <header class="ext-group-head">
+          <span class="ext-group-head-title">{t("mcp.title")}</span>
+          <span class="ext-group-head-actions">
             <button
               type="button"
               class="btn btn-ghost mini"
-              onClick={(e) => { e.stopPropagation(); setShowAddMcp(!showAddMcp()); }}
+              onClick={() => setShowAddMcp(!showAddMcp())}
             >
               {t("mcp.add_action")}
             </button>
@@ -496,13 +494,13 @@ export default function SkillMarketPanel() {
               type="button"
               class="btn btn-ghost mini danger"
               disabled={mcpEntries().length === 0}
-              onClick={(e) => { e.stopPropagation(); handleDeleteAllMcp(); }}
+              onClick={handleDeleteAllMcp}
             >
               {t("mcp.delete_all")}
             </button>
           </span>
-        </summary>
-        <div class="config-subsection-body">
+        </header>
+        <div class="ext-group-body">
         {/* Add MCP inline form */}
         <Show when={showAddMcp()}>
           <div class="config-inline-form">
@@ -601,17 +599,16 @@ export default function SkillMarketPanel() {
             </Show>
           </div>
         </div>
-      </details>
+      </section>
 
-      {/* ── Skill Market ── */}
-      <details class="config-subsection">
-        <summary class="config-subsection-head">{t("skill.market.title")}</summary>
-        <div class="config-subsection-body">
-          <div class="extension-list" id="skillMarketList">
-            <Show
-              when={market().length > 0}
-              fallback={<div class="empty-hint">{t("skill.market.none")}</div>}
-            >
+      {/* ── Skill Market ── hidden when empty to avoid a standalone header bar */}
+      <Show when={market().length > 0}>
+        <section class="ext-group">
+          <header class="ext-group-head">
+            <span class="ext-group-head-title">{t("skill.market.title")}</span>
+          </header>
+          <div class="ext-group-body">
+            <div class="extension-list" id="skillMarketList">
               <For each={market()}>
                 {(item) => {
                   const installable = !!item.source && item.install_kind !== "manual";
@@ -663,10 +660,10 @@ export default function SkillMarketPanel() {
                   );
                 }}
               </For>
-            </Show>
+            </div>
           </div>
-        </div>
-      </details>
+        </section>
+      </Show>
     </>
   );
 }

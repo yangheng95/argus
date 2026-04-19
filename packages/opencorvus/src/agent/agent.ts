@@ -232,7 +232,18 @@ export namespace Agent {
       delivery: {
         name: "delivery",
         description: "Delivery verification agent. Verifies runtime behavior, fixes bugs, and makes final acceptance decisions.",
-        tools: { exclude: ["task", "planner", "panel", "tui", "task_report", "goal_report", "analytics"] },
+        // `task` is INTENTIONALLY not excluded: delivery dispatches per-goal
+        // review subagents (Phase 2.5 in DELIVERY_AGENT_SYSTEM) to deepen its
+        // otherwise thin per-goal verification. Adversarial review across 3+
+        // goals in one delivery context dilutes attention; parallel general
+        // / explore subagents get a goal each with clean context.
+        tools: { exclude: ["planner", "panel", "tui", "task_report", "goal_report", "analytics"] },
+        // Inherit the shared `defaults` ruleset (task: "allow" included) so
+        // subagent dispatch does not trip the permission "ask" default and
+        // hang the flow waiting for a non-existent operator. Without this
+        // delivery was relying implicitly on `experimental.auto_permission`
+        // to auto-approve its own tool calls — making auto-dispatch brittle.
+        permission: PermissionNext.merge(defaults, user),
         options: {},
         prompt: DELIVERY_AGENT_SYSTEM,
         mode: "primary",

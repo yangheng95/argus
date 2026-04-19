@@ -138,13 +138,17 @@ function evaluatorManagedSelectors(goal: GoalRow) {
 
 export async function cleanupGoalWorkspace(directory?: string) {
   if (!directory) return
-  // Accept both goal-workspace paths AND .opencorvus-worktrees paths.
-  // Per-goal dispatch creates worktrees under .opencorvus-worktrees/ (via Worktree.create),
-  // not under goal-workspace/. Without this check, cleanup is silently skipped,
-  // leaking LSP servers and worktree directories.
+  // Accept both the Global goal-workspace path and the per-project worktree
+  // path. Per-goal dispatch creates worktrees under
+  // `<primary>/.opencorvus/worktrees/` (via Worktree.create). Without this
+  // check cleanup is silently skipped, leaking LSP servers + worktree dirs.
+  // The legacy parent-directory layout (`.opencorvus-worktrees/`) is also
+  // still matched so a cleanup straddling the migration still works.
   const goalWorkspaceRoot = path.join(Global.Path.data, "goal-workspace")
   const isGoalWorkspace = Filesystem.contains(goalWorkspaceRoot, directory)
-  const isWorktree = directory.includes(".opencorvus-worktrees")
+  const isWorktree =
+    directory.includes(path.join(".opencorvus", "worktrees")) ||
+    directory.includes(".opencorvus-worktrees")
   if (!isGoalWorkspace && !isWorktree) return
 
   // [observability/phase-0] Per-step timing + outcome breakdown. Until we have
@@ -472,7 +476,8 @@ export function buildRetryFeedbackSection(taskID: string, goalID: string): strin
   const evidence = findLatestGoalRunEvidence(goalID)
   if (!evidence) return ""
   const failedChecks = evidence.checks.filter((c) => c.status === "failed")
-  if (failedChecks.length === 0) return ""
+  const hasSummary = typeof evidence.summary === "string" && evidence.summary.trim().length > 0
+  if (failedChecks.length === 0 && !hasSummary) return ""
 
   const decisionLog = createDecisionLog(taskID)
   const retryEntries = decisionLog
@@ -483,11 +488,11 @@ export function buildRetryFeedbackSection(taskID: string, goalID: string): strin
   lines.push("## Prior Attempt Failed — Read This Before Implementing")
   lines.push("")
   lines.push(
-    "The previous attempt at this goal was rejected by the evaluator. The previous delivery files have already been restored into this worktree — modify them to address the failures below; do NOT start over from a clean slate.",
+    "The previous attempt at this goal was rejected by the evaluator. This worktree still contains your prior attempt files — read them, compare them to the failures below, and edit in place. Do NOT start over from a clean slate unless the failure requires a structural rewrite.",
   )
   lines.push("")
 
-  if (evidence.summary && evidence.summary.trim().length > 0) {
+  if (hasSummary) {
     lines.push("### Evaluator Summary")
     lines.push(evidence.summary.trim())
     lines.push("")

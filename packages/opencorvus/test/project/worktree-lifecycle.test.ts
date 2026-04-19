@@ -40,7 +40,7 @@ describe("Worktree lifecycle", () => {
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     const name = `start-fail-${Date.now().toString(36)}`
-    const directory = path.join(path.dirname(tmp.path), ".opencorvus-worktrees", name)
+    const directory = path.join(tmp.path, ".opencorvus", "worktrees", name)
     const branch = `opencorvus/${name}`
 
     await Project.update({

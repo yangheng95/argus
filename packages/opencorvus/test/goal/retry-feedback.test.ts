@@ -123,6 +123,7 @@ function insertRejectedEval(checks: EngineGoalCheck[], summary: string) {
       task_id: taskID,
       run_id: runID,
       goal_run_id: goalRunID,
+      scope: "goal_run",
       status: "failed",
       verdict: "rejected",
       summary,
@@ -169,9 +170,9 @@ describe("buildRetryFeedbackSection", () => {
       fn: async () => {
         insertRejectedEval(
           [
-            { name: "bun_test", status: "failed", evidence: "math.test.ts: expected 5 got NaN" },
+            { name: "bun_test", status: "failed", mode: "strict", evidence: "math.test.ts: expected 5 got NaN" },
             { name: "tsc", status: "passed" },
-            { name: "lint", status: "failed", evidence: "Unused import 'foo' on line 3" },
+            { name: "lint", status: "failed", mode: "strict", evidence: "Unused import 'foo' on line 3" },
           ],
           "Build succeeded but tests and lint failed.",
         )
@@ -196,7 +197,7 @@ describe("buildRetryFeedbackSection", () => {
       directory: tmp.path,
       fn: async () => {
         insertRejectedEval(
-          [{ name: "bun_test", status: "failed", evidence: "test failed" }],
+          [{ name: "bun_test", status: "failed", mode: "strict", evidence: "test failed" }],
           "Tests failed.",
         )
         const log = createDecisionLog(taskID)
@@ -231,13 +232,13 @@ describe("buildRetryFeedbackSection", () => {
       directory: tmp.path,
       fn: async () => {
         insertRejectedEval(
-          [{ name: "bun_test", status: "failed", evidence: "first attempt evidence" }],
+          [{ name: "bun_test", status: "failed", mode: "strict", evidence: "first attempt evidence" }],
           "First failure",
         )
         // Sleep 5ms to ensure distinct time_created
         await new Promise((r) => setTimeout(r, 5))
         insertRejectedEval(
-          [{ name: "bun_test", status: "failed", evidence: "second attempt evidence" }],
+          [{ name: "bun_test", status: "failed", mode: "strict", evidence: "second attempt evidence" }],
           "Second failure",
         )
 
@@ -250,12 +251,36 @@ describe("buildRetryFeedbackSection", () => {
     })
   })
 
+  test("surfaces owned_paths gate failures without requiring a spec_id", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        insertRejectedEval(
+          [{
+            name: "goal_owned_paths_conformance",
+            status: "failed",
+            mode: "strict",
+            scorer_kind: "prebuilt",
+            trigger: "on_goal",
+            evidence: "wrote src/src/app/layout.tsx but owned_paths declares src/app/layout.tsx",
+          }],
+          "owned_paths conformance failed: wrote src/src/app/layout.tsx but owned_paths declares src/app/layout.tsx",
+        )
+
+        const result = buildRetryFeedbackSection(taskID, goalID)
+        expect(result).toContain("owned_paths conformance failed")
+        expect(result).toContain("goal_owned_paths_conformance")
+        expect(result).toContain("wrote src/src/app/layout.tsx but owned_paths declares src/app/layout.tsx")
+      },
+    })
+  })
+
   test("buildGoalPrompt embeds retry feedback section between architect and Goal", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         insertRejectedEval(
-          [{ name: "bun_test", status: "failed", evidence: "expected 5 got NaN" }],
+          [{ name: "bun_test", status: "failed", mode: "strict", evidence: "expected 5 got NaN" }],
           "Tests failed in math.test.ts",
         )
 
@@ -352,7 +377,7 @@ describe("buildRetryFeedbackSection", () => {
       fn: async () => {
         const longEvidence = "x".repeat(2000)
         insertRejectedEval(
-          [{ name: "bun_test", status: "failed", evidence: longEvidence }],
+          [{ name: "bun_test", status: "failed", mode: "strict", evidence: longEvidence }],
           "long evidence",
         )
 
@@ -379,6 +404,7 @@ describe("buildRetryFeedbackSection", () => {
             task_id: taskID,
             run_id: runID,
             goal_run_id: goalRunID,
+            scope: "goal_run",
             status: "failed",
             verdict: "rejected",
             summary: "Evaluator could not parse output but rejected anyway",

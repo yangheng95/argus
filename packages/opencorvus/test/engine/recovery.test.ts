@@ -9,7 +9,7 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { recoverProjectExecution } from "../../src/engine/recovery"
-import { findExecutorSession, findGoalRun, findRun, findTask } from "../../src/engine/store"
+import { findExecutorSession, findGoal, findGoalRun, findRun, findTask } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
 
 let projectID = ""
@@ -19,6 +19,7 @@ let runID = ""
 let goalID = ""
 let goalRunID = ""
 let executorSessionID = ""
+let workspaceDir = ""
 
 function seedProject() {
   const now = Date.now()
@@ -66,6 +67,8 @@ function seedActiveExecution() {
       source: "test",
       status: "running",
       retry_count: 0,
+      workspace_dir: workspaceDir,
+      workspace_branch: "opencorvus/recovery-test",
       order_index: 0,
       time_created: now,
       time_updated: now,
@@ -139,6 +142,7 @@ beforeEach(async () => {
   goalID = `goal_${Date.now()}`
   goalRunID = `goal_run_${Date.now()}`
   executorSessionID = `executor_session_${Date.now()}`
+  workspaceDir = `C:/tmp/recovery-workspace-${Date.now()}`
 })
 
 afterEach(async () => {
@@ -169,6 +173,8 @@ describe("engine recovery", () => {
     expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
     expect(findGoalRun(goalRunID)?.status).toBe("aborted")
     expect(findGoalRun(goalRunID)?.error).toContain("Process restart")
+    expect(findGoal(goalID)?.workspace_dir).toBe(workspaceDir)
+    expect(findGoal(goalID)?.workspace_branch).toBe("opencorvus/recovery-test")
     expect(findRun(runID)?.status).toBe("aborted")
     expect(findTask(activeTaskID)?.status).toBe("active")
   })

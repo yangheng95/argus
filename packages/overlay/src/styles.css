@@ -6700,19 +6700,43 @@ body[data-theme="light"] .config-close-btn:hover {
     0 0 0 1px var(--hover-accent-border);
 }
 
-.config-subsection-head-actions {
+/* Flat (non-collapsible) groups used inside the Extensions panel. Replaces
+ * nested <details class="config-subsection"> which produced redundant
+ * collapsible bars inside an already-collapsible outer section. */
+.ext-group {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+}
+.ext-group + .ext-group {
+  margin-top: calc(10px * var(--ui-scale));
+  padding-top: calc(10px * var(--ui-scale));
+  border-top: 1px solid var(--border);
+}
+.ext-group-head {
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-wrap: wrap;
+}
+.ext-group-head-title {
+  font-size: var(--subhead-size);
+  font-weight: 600;
+  letter-spacing: var(--subhead-track);
+  color: var(--text-strong);
+}
+.ext-group-head-actions {
   display: flex;
   align-items: center;
   gap: calc(4px * var(--ui-scale));
   margin-left: auto;
   flex-shrink: 0;
-}
-
-.config-subsection-secondary-bar {
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
   flex-wrap: wrap;
+}
+.ext-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
 }
 
 /* Draw chevrons in CSS so the config toggles do not depend on glyph encoding. */
@@ -9426,6 +9450,13 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   align-items: center;
   min-height: calc(16px * var(--ui-scale));
   line-height: 1;
+}
+.chat-title {
+  user-select: none;
+  transition: color 160ms ease;
+}
+.chat-title[data-copied="true"] {
+  color: var(--accent-success, #5ac8a8);
 }
 
 .sidebar-subtitle {

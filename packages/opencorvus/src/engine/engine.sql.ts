@@ -310,6 +310,20 @@ export const EngineGoalTable = sqliteTable(
     cascade_state: text().$type<"failed" | "passed">(),
     /** Per-goal retry counter. Incremented each time retry_failed_goals resets this goal. */
     retry_count: integer().notNull().default(0),
+    /** Goal-scoped live workspace directory reused across retries until terminal cleanup. */
+    workspace_dir: text(),
+    /** Branch currently checked out in workspace_dir. */
+    workspace_branch: text(),
+    /** Goal-scoped Snapshot baseRef (tree-hash) captured BEFORE the first
+     *  attempt's executor ran. Reused across all retries so that "zero file
+     *  changes" semantics stay anchored to the original scaffold state rather
+     *  than the post-prior-attempt state. Without this, retry #2 of a goal
+     *  that kept its files would capture a new baseRef after the prior
+     *  attempt's diff, then a no-op executor would produce zero diffs against
+     *  that contaminated baseline and the snapshot subsystem would report
+     *  "zero file changes" — forcing a false failure even though the branch
+     *  HEAD already contains the goal's work. */
+    workspace_base_ref: text(),
     order_index: integer().notNull().default(0),
     /** Remaining metadata (check_selector, visual hints, etc.) */
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),

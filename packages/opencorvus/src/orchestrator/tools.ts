@@ -1486,7 +1486,12 @@ export function createOrchestratorTools(input: {
         // canonical writer for no-goal_run cascades. This keeps
         // engine_goal.status authored by exactly two entry points.
         const { updateGoalCascadeFailed } = await import("@/engine/persist")
+        const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
+        for (const goal of exhausted) {
+          await cleanupGoalWorkspaceForGoal(goal.id)
+        }
         for (const goal of cascaded) {
+          await cleanupGoalWorkspaceForGoal(goal.id)
           updateGoalCascadeFailed({
             goalID: goal.id,
             reason: "cascade: dependency permanently failed",
@@ -2278,6 +2283,11 @@ export function createOrchestratorTools(input: {
               const deliveryVerdict = await evaluateGoal({
                 contract,
                 delivery: evalDelivery,
+                // on_delivery scope runs against the primary worktree
+                // where all goal diffs have been cherry-picked (post-merge
+                // snapshot). Per-goal worktrees aren't the right target
+                // here — those hold only the owning goal's diff.
+                workDir: Instance.directory,
                 signal: input.signal,
                 tier: evaluatorTier,
                 triggerFilter: "on_delivery",

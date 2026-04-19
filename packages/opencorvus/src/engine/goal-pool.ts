@@ -14,6 +14,8 @@
  * then feeds results back to the Decision Point. No fire-and-forget.
  */
 
+import { existsSync } from "fs"
+import path from "path"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
@@ -30,6 +32,7 @@ import { cleanupGoalWorkspace } from "@/goal/runner"
 import { writeIntentBundle } from "@/goal/intent-bundle"
 import { Snapshot } from "@/snapshot"
 import {
+  findGoal,
   listPlanNodesByPlan,
   listGoalsByPlan,
   listGoalRunsForDispatch,
@@ -44,6 +47,8 @@ import {
   updateGoalRun,
   ensureExecutorSession,
   updateGoalCascadeFailed,
+  updateGoalWorkspace,
+  updateGoalWorkspaceBaseRef,
 } from "./persist"
 import { EngineGoalTable, EnginePlanNodeTable } from "./engine.sql"
 import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
@@ -55,8 +60,118 @@ import { projectExecutorEventToSession } from "./runtime"
 import { MemoryInjection } from "@/memory/injection"
 import { TaskPlan } from "@/memory/task-plan"
 import type { GoalContract, PipelineDelivery, PipelineEvent } from "@/pipeline/types"
+import type { EngineEvaluationCheck } from "./engine.sql"
+import { cleanupGoalWorkspaceForGoal } from "./writer"
 
 const log = Log.create({ service: "goal-pool" })
+
+function goalWorkspaceMissingMessage(goal: GoalRow) {
+  return `goal ${goal.id} recorded workspace ${goal.workspace_dir} but the directory is missing on disk`
+}
+
+async function acquireGoalWorkspace(goal: GoalRow) {
+  if (goal.workspace_dir) {
+    if (!existsSync(goal.workspace_dir)) {
+      throw new Error(goalWorkspaceMissingMessage(goal))
+    }
+    if (!goal.workspace_branch) {
+      throw new Error(`goal ${goal.id} recorded workspace ${goal.workspace_dir} without workspace_branch`)
+    }
+    const reused = {
+      name: path.basename(goal.workspace_dir),
+      branch: goal.workspace_branch,
+      directory: goal.workspace_dir,
+    }
+    log.info("reusing workspace dir", {
+      goalID: goal.id,
+      directory: reused.directory,
+      branch: reused.branch,
+    })
+    return reused
+  }
+
+  const created = await Worktree.create({
+    name: `goal-${goal.id.slice(-8)}`,
+    checkout: "sync",
+  })
+  updateGoalWorkspace({
+    goalID: goal.id,
+    workspaceDir: created.directory,
+    workspaceBranch: created.branch,
+  })
+  log.info("created workspace dir", {
+    goalID: goal.id,
+    directory: created.directory,
+    branch: created.branch,
+  })
+  return created
+}
+
+function logWorktreePreservedForRetry(goalID: string, worktreeDir: string | undefined, reason: string) {
+  if (!worktreeDir) return
+  log.info("worktree preserved for retry", {
+    goalID,
+    directory: worktreeDir,
+    reason,
+  })
+}
+
+function ownedPathsConformanceCheck(input: {
+  goalID: string
+  goalTitle: string
+  ownedPaths: string[]
+  violations: Array<{ file: string; expected?: string; message: string }>
+  changedFiles: string[]
+}): {
+  summary: string
+  check: EngineEvaluationCheck
+  criteria: {
+    name: string
+    status: "failed"
+    family: string
+    evidence: string
+    label: string
+    mode: "strict"
+  }
+} {
+  const lines = [
+    "owned_paths conformance gate rejected this delivery.",
+    "",
+    "Violations:",
+    ...input.violations.map((item) => `- ${item.message}`),
+    "",
+    `Declared owned_paths: ${input.ownedPaths.join(", ") || "(none)"}`,
+    `Changed files: ${input.changedFiles.join(", ") || "(none)"}`,
+  ]
+  const evidence = lines.join("\n")
+  const summary = input.violations.length === 1
+    ? `owned_paths conformance failed: ${input.violations[0]!.message}`
+    : `owned_paths conformance failed: ${input.violations.length} files fell outside declared owned_paths`
+  const checkName = `${input.goalID}.owned_paths_conformance`
+  return {
+    summary,
+    check: {
+      name: checkName,
+      label: `${input.goalTitle} · owned_paths conformance`,
+      family: "goal_eval",
+      status: "failed",
+      evidence,
+      mode: "strict",
+      severity: "essential",
+      scorer_kind: "prebuilt",
+      trigger: "on_goal",
+      matched_paths: input.violations.map((item) => item.expected).filter((item): item is string => typeof item === "string" && item.length > 0),
+    },
+    criteria: {
+      name: checkName,
+      status: "failed",
+      family: "goal_eval",
+      evidence,
+      label: `${input.goalTitle} · owned_paths conformance`,
+      mode: "strict",
+    },
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -276,11 +391,8 @@ export class GoalPool {
     let worktreeDir: string | undefined
     let goalRun: GoalRunRow | undefined
     try {
-      // ── 2. Create worktree ──
-      const worktreeInfo = await Worktree.create({
-        name: `goal-${entry.goal.id.slice(-8)}`,
-        checkout: "sync",
-      })
+      // ── 2. Acquire goal-scoped workspace ──
+      const worktreeInfo = await acquireGoalWorkspace(entry.goal)
       worktreeDir = worktreeInfo.directory
 
       // ── 2b-pre. Mount the intent bundle at .opencorvus/intent/ BEFORE planning ──
@@ -499,12 +611,38 @@ export class GoalPool {
       // a git repo with snapshot enabled, which is a dispatch-time invariant
       // for per-goal worktree execution. A silent empty baseRef would produce
       // silent empty deliveries downstream.
-      const baseRef = await Instance.provide({
-        directory: worktreeDir,
-        fn: () => Snapshot.track(),
-      })
-      if (!baseRef) {
-        throw new Error(`goal-pool: Snapshot.track() returned empty for worktree ${worktreeDir}. Per-goal dispatch requires the project to be a git repo with snapshot enabled — current state is incompatible with delivery extraction.`)
+      // Goal-scoped baseRef: captured ONCE when the goal first dispatches,
+      // then reused on every retry. Snapshot diffs (`baseRef → mergeRef`)
+      // stay anchored to the original scaffold state so "zero file changes"
+      // only fires when the executor genuinely produced nothing relative to
+      // task-start — not when a noop retry produced nothing relative to the
+      // PRIOR attempt's output (which is still sitting in the preserved
+      // worktree per spec-10).
+      const goalRowForBaseRef = findGoal(entry.goal.id)
+      if (!goalRowForBaseRef) {
+        throw new Error(
+          `goal-pool: findGoal(${entry.goal.id}) returned undefined after acquireGoalWorkspace — engine_goal row must exist at dispatch time.`,
+        )
+      }
+      let baseRef: string
+      if (goalRowForBaseRef.workspace_base_ref) {
+        baseRef = goalRowForBaseRef.workspace_base_ref
+        log.info("reusing goal-scoped baseRef", {
+          goalID: entry.goal.id, baseRef, goalRunID: goalRun.id,
+        })
+      } else {
+        const fresh = await Instance.provide({
+          directory: worktreeDir,
+          fn: () => Snapshot.track(),
+        })
+        if (!fresh) {
+          throw new Error(`goal-pool: Snapshot.track() returned empty for worktree ${worktreeDir}. Per-goal dispatch requires the project to be a git repo with snapshot enabled — current state is incompatible with delivery extraction.`)
+        }
+        baseRef = fresh
+        updateGoalWorkspaceBaseRef(entry.goal.id, baseRef)
+        log.info("captured goal-scoped baseRef", {
+          goalID: entry.goal.id, baseRef, goalRunID: goalRun.id,
+        })
       }
       updateGoalRun(goalRun.id, { base_ref: baseRef })
       throwIfAborted(signal)
@@ -544,7 +682,7 @@ export class GoalPool {
       // ── 7. Run pipeline with inactivity detection ──
       const execGoal = goalRowToContract(entry.goal)
       const execDeps = (Array.isArray(execGoal.depends_on) ? execGoal.depends_on : []) as string[]
-      const contract: GoalContract = {
+      const executionContract: GoalContract = {
         goal: execGoal,
         planNode: entry.node as any,
         run, task, plan,
@@ -557,7 +695,7 @@ export class GoalPool {
       let delivery: PipelineDelivery | undefined
       let pipelineError: string | undefined
 
-      const pipeline = runGoalPipeline(contract, {
+      const pipeline = runGoalPipeline(executionContract, {
         executor,
         workDir: worktreeDir,
         sessionID: buildSession.id,
@@ -642,12 +780,12 @@ export class GoalPool {
           : !delivery.commitRef
             ? (pipelineError ?? "Executor completed but produced no commit (zero file changes)")
             : (pipelineError ?? "Executor committed but produced zero file diffs (no-op commit)")
-        if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
         // goal_run is in `evaluating` here (pipeline/executor.ts set it);
         // settle it to `failed` — engine_goal.status is derived, no direct UPDATE.
         if (goalRun) {
           updateGoalRun(goalRun.id, { status: "failed", error: failReason })
         }
+        logWorktreePreservedForRetry(entry.goal.id, worktreeDir, failReason)
 
         EngineProtocol.emit(Event.GoalFailed, {
           taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
@@ -657,6 +795,75 @@ export class GoalPool {
           goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
           status: "failed", error: failReason, attempts: 1,
         }
+      }
+
+      const allGoalsForContract = listGoalsByPlan(plan.id)
+      const goalFields = goalRowToContract(entry.goal)
+      const depIds: string[] = Array.isArray(goalFields.depends_on) ? goalFields.depends_on : []
+      const dependencies = allGoalsForContract
+        .filter((g) => depIds.includes(g.id))
+        .map((g) => goalRowToContract(g))
+      const contract: GoalContract = {
+        goal: goalFields,
+        planNode: null,
+        run,
+        task,
+        plan,
+        dependencies,
+      }
+
+      // ── Manifest conformance advisory (non-binding) ──
+      // Detect files written outside the goal's declared `owned_paths` and
+      // surface them as an advisory criterion row + soft check in the
+      // per-goal evidence. This is NOT a hard gate anymore:
+      //
+      //   - Framework byproducts (next-env.d.ts, .next/, dist/, node_modules/),
+      //     generic project files (.gitignore, .env.example, README.md), and
+      //     config files (tailwind.config.*, next.config.*, vite.config.*)
+      //     routinely fall outside any declared owned_paths but are NOT
+      //     genuine scope violations — rejecting on them burned every retry
+      //     on cosmetic drift while the executor produced perfectly
+      //     working output.
+      //
+      //   - Real scope conflicts (goal A writing into goal B's declared
+      //     paths) and real layout-drift bugs (src/src/ double-wrap that
+      //     breaks the build) are caught downstream by the per-goal
+      //     evaluator's build / test / typecheck shell checks — those ARE
+      //     binding. An advisory row records the drift so the delivery
+      //     agent can still see it, but the path check itself cannot
+      //     kill the goal.
+      const { filesChangedByCommit, validateOwnedPathsDetailed } = await import("@/goal/merge")
+      const committedFiles = await filesChangedByCommit(delivery.commitRef, worktreeDir!)
+      const conformance = validateOwnedPathsDetailed(
+        committedFiles.map((item) => item.file),
+        goalFields.owned_paths,
+      )
+      if (!conformance.valid) {
+        log.warn("owned_paths advisory: files outside declared scope", {
+          goalID: entry.goal.id,
+          count: conformance.details.length,
+          violations: conformance.details.slice(0, 5).map(v => v.message),
+        })
+        await upsertTaskCriteria(task.id, [{
+          name: `${entry.goal.id}.owned_paths_advisory`,
+          label: `${entry.goal.title} · owned_paths (advisory)`,
+          family: "goal_eval",
+          status: "skipped",
+          evidence: [
+            `${conformance.details.length} file(s) outside declared owned_paths (advisory — not a rejection).`,
+            "",
+            "Violations:",
+            ...conformance.details.map(v => `- ${v.message}`),
+            "",
+            "Declared owned_paths: " + (goalFields.owned_paths.join(", ") || "(none)"),
+            "Build / test / typecheck remain the binding gates; this row is informational.",
+          ].join("\n"),
+          mode: "soft",
+        }]).catch((err) => {
+          log.warn("owned_paths advisory: sink criteria failed (non-fatal)", {
+            goalID: entry.goal.id, error: String(err),
+          })
+        })
       }
 
       // ── Per-goal deterministic evaluator (gated) ──
@@ -682,23 +889,10 @@ export class GoalPool {
           stage: "evaluator",
         })
         try {
-          const allGoalsForContract = listGoalsByPlan(plan.id)
-          const goalFields = goalRowToContract(entry.goal)
-          const depIds: string[] = Array.isArray(goalFields.depends_on) ? goalFields.depends_on : []
-          const dependencies = allGoalsForContract
-            .filter((g) => depIds.includes(g.id))
-            .map((g) => goalRowToContract(g))
-          const contract: GoalContract = {
-            goal: goalFields,
-            planNode: null,
-            run,
-            task,
-            plan,
-            dependencies,
-          }
           const verdict = await evaluateGoal({
             contract,
             delivery,
+            workDir: worktreeDir!,
             signal,
             tier: orchCfgForEval.evaluator.tier,
             sessionID: evaluatorSession.id,
@@ -773,9 +967,9 @@ export class GoalPool {
 
           if (!verdict.pass) {
             const failReason = verdict.reasoning || `Per-goal evaluator rejected: ${verdict.verdict}`
-            if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
             // Settle goal_run → failed; engine_goal.status derives from it.
             updateGoalRun(goalRun.id, { status: "failed", error: failReason })
+            logWorktreePreservedForRetry(entry.goal.id, worktreeDir, failReason)
             EngineProtocol.emit(Event.GoalFailed, {
               taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: ${failReason}`,
             }, { source: "evaluator" }).catch(err => log.warn("GoalFailed emit failed (evaluator source)", { goalID: entry.goal.id, error: String(err) }))
@@ -802,8 +996,8 @@ export class GoalPool {
           } catch {
             /* broadcast best-effort; real error is already logged above */
           }
-          if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
           updateGoalRun(goalRun.id, { status: "failed", error: `evaluator threw: ${msg}` })
+          logWorktreePreservedForRetry(entry.goal.id, worktreeDir, `evaluator threw: ${msg}`)
           EngineProtocol.emit(Event.GoalFailed, {
             taskID: task.id, goalID: entry.goal.id, summary: `${entry.goal.title}: evaluator threw: ${msg}`,
           }, { source: "evaluator" }).catch(err => log.warn("GoalFailed emit failed (evaluator source)", { goalID: entry.goal.id, error: String(err) }))
@@ -822,27 +1016,19 @@ export class GoalPool {
         }
       }
 
-      // Executor produced delivery (and evaluator passed if enabled). Settle
-      // the goal_run from `evaluating` → `completed`; engine_goal.status is
-      // derived (goal-status.ts). The step-8 guard above has already returned
-      // "failed" for !delivery / !commitRef / empty diffs.
-      if (goalRun) {
-        updateGoalRun(goalRun.id, { status: "completed" })
-      }
+      // ── 9. Merge delivery ──
+      await hooks.mergeDelivery(task, run, plan, goalRun!, delivery)
+
+      // ── 10. Goal terminal cleanup ──
+      await cleanupGoalWorkspaceForGoal(entry.goal.id)
+
+      // Delivery merged and terminal cleanup attempted. The goal_run now
+      // transitions to completed; engine_goal.status is derived from it.
+      updateGoalRun(goalRun.id, { status: "completed" })
 
       EngineProtocol.emit(Event.GoalPassed, {
         taskID: task.id, goalID: entry.goal.id, summary: entry.goal.title,
       }, { source: "executor" }).catch(() => {})
-
-      // ── 9. Merge delivery ──
-      await hooks.mergeDelivery(task, run, plan, goalRun!, delivery)
-
-      // ── 10. Cleanup worktree ──
-      if (worktreeDir) {
-        await cleanupGoalWorkspace(worktreeDir).catch(err => {
-          log.warn("worktree cleanup failed", { goalRunID: goalRun!.id, error: String(err) })
-        })
-      }
 
       log.info("goal pool: goal execution complete", {
         goalID: entry.goal.id, status: "passed", files: delivery.diffs.length,
@@ -859,7 +1045,6 @@ export class GoalPool {
       }
 
     } catch (err) {
-      if (worktreeDir) await cleanupGoalWorkspace(worktreeDir).catch(() => {})
       const error = err instanceof Error ? err.message : String(err)
       log.error("goal dispatch/execution failed", { goalID: entry.goal.id, error })
       if (goalRun) {
@@ -876,16 +1061,67 @@ export class GoalPool {
             error: updateErr instanceof Error ? updateErr.message : String(updateErr),
           })
         }
+        if (!signal.aborted) {
+          logWorktreePreservedForRetry(entry.goal.id, worktreeDir, error)
+        }
       }
 
-      // If no goal_run exists (worktree/planning threw before createGoalRun),
-      // route through the canonical cascade-state writer. With a goal_run the
-      // updateGoalRun above already drove syncGoalStatus.
+      // No goal_run was created before the dispatch threw. Two cases with
+      // very different semantics:
+      //
+      //   A. Worktree WAS acquired (worktreeDir set). The failure happened
+      //      during per-goal planning — typically a transient LLM/provider
+      //      error (e.g. "No output generated" from a stream interruption).
+      //      This is retryable: create a shadow failed goal_run so
+      //      Option B (supersedeGoalRun) + retry_failed_goals can route a
+      //      fresh attempt through the same goal.workspace_dir. Preserve the
+      //      workspace per spec-10 §2.4 — cleanup is reserved for terminal
+      //      goal states (passed / cascade_failed / task cancel), not
+      //      single-attempt transient errors.
+      //
+      //   B. Worktree could NOT be acquired (no worktreeDir, e.g. disk full,
+      //      git init failed, process crash during Worktree.create). This is
+      //      a genuine cascade: without a workspace, retries have no place
+      //      to run. Escalate to updateGoalCascadeFailed to mark the goal
+      //      permanently failed — we cannot salvage it with the same
+      //      infrastructure it already failed on.
+      //
+      // Prior behavior conflated A and B and clamped every pre-createGoalRun
+      // failure to cascade_failed, which meant a single provider stream blip
+      // nuked the worktree (wiping prior attempts' files + evidence) and
+      // forced the orchestrator to start the goal from scratch. That
+      // contradicts spec-10's "preserve on progress" invariant.
       if (!goalRun) {
-        updateGoalCascadeFailed({
-          goalID: entry.goal.id,
-          reason: `dispatch threw before createGoalRun: ${error}`,
-        })
+        if (worktreeDir) {
+          const goalRow = findGoal(entry.goal.id)
+          const branch = goalRow?.workspace_branch ?? undefined
+          const shadowRun = createGoalRun({
+            taskID: task.id,
+            goalID: entry.goal.id,
+            planNodeID: entry.node.id,
+            coordinatorRunID: run.id,
+            workspaceDir: worktreeDir,
+            metadata: {
+              worktree_branch: branch,
+              pre_create_failure: true,
+            },
+          })
+          updateGoalRun(shadowRun.id, {
+            status: "failed",
+            error,
+            blocking_reason: null,
+          })
+          logWorktreePreservedForRetry(
+            entry.goal.id,
+            worktreeDir,
+            `pre-createGoalRun: ${error}`,
+          )
+        } else {
+          updateGoalCascadeFailed({
+            goalID: entry.goal.id,
+            reason: `worktree acquire failed before dispatch: ${error}`,
+          })
+        }
       }
 
       return {

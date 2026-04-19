@@ -525,6 +525,24 @@ export function listLiveGoalRunsForProject(projectID: string) {
   )
 }
 
+export function listGoalWorkspacesForProject(projectID: string) {
+  return Database.use((db) =>
+    db
+      .select({ goal: EngineGoalTable })
+      .from(EngineGoalTable)
+      .innerJoin(EngineTaskTable, eq(EngineGoalTable.task_id, EngineTaskTable.id))
+      .where(
+        and(
+          eq(EngineTaskTable.project_id, projectID),
+          sql`${EngineGoalTable.workspace_dir} IS NOT NULL`,
+        ),
+      )
+      .orderBy(desc(EngineGoalTable.time_updated))
+      .all()
+      .map((row) => row.goal),
+  )
+}
+
 export function listLiveExecutorSessionsForProject(projectID: string) {
   return Database.use((db) =>
     db
@@ -882,6 +900,8 @@ export function viewGoal(row: GoalRow) {
     priority: row.priority,
     status: row.status,
     retryCount: row.retry_count,
+    workspaceDir: row.workspace_dir ?? undefined,
+    workspaceBranch: row.workspace_branch ?? undefined,
     orderIndex: row.order_index,
     time: {
       created: row.time_created,
