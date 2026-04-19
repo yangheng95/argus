@@ -46,7 +46,10 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         "per-goal evaluator outcomes, delivery checks already submitted, and external " +
         "quality gates such as visual-diff. Call this BEFORE deciding the verdict so " +
         "you have a full picture of which criteria passed, failed, or were skipped, " +
-        "with their evidence.",
+        "with their evidence. Output marks each entry [STRICT] or [soft]: a failing " +
+        "STRICT check is a binding gate — the orchestrator will force-reject any " +
+        "accepted verdict that coexists with one, so the only correct verdict in " +
+        "that state is rejected with rejection_details for every strict failure.",
       inputSchema: z.object({}),
       execute: async () => {
         if (!taskID) return "query_criteria: no task context available"
@@ -65,12 +68,18 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
           },
           {} as Record<string, number>,
         )
+        let strictFailed = 0
         const lines = list.map((c) => {
           const family = c?.family ? `[${c.family}] ` : ""
+          const mode = c?.mode === "strict" ? "[STRICT] " : c?.mode === "soft" ? "[soft] " : ""
           const ev = c?.evidence ? ` — ${String(c.evidence).slice(0, 400)}` : ""
-          return `${family}${c?.name ?? "?"} = ${c?.status ?? "?"}${ev}`
+          if (c?.mode === "strict" && c?.status === "failed") strictFailed++
+          return `${family}${mode}${c?.name ?? "?"} = ${c?.status ?? "?"}${ev}`
         })
-        return `criteria summary: ${JSON.stringify(counts)}\n${lines.join("\n")}`
+        const strictGate = strictFailed > 0
+          ? `\n\nGATE: ${strictFailed} strict check(s) failed. Verdict MUST be "rejected" with one rejection_details entry per strict failure.`
+          : ""
+        return `criteria summary: ${JSON.stringify(counts)}\n${lines.join("\n")}${strictGate}`
       },
     }),
 

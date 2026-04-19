@@ -78,7 +78,7 @@ type VerifyInput = {
   task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
-  checkResults?: Array<{ name: string; status: string; evidence?: string }>
+  checkResults?: Array<{ name: string; status: string; evidence?: string; mode?: "strict" | "soft" }>
   analysis?: GoalJudgmentType
   /** Visual-reference attachments (already materialized under the attachment store).
    *  When provided, the delivery agent receives the image bytes as a multimodal
@@ -446,7 +446,7 @@ function buildUserPrompt(
     task: { title: string; request: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
-    checkResults?: Array<{ name: string; status: string; evidence?: string }>
+    checkResults?: Array<{ name: string; status: string; evidence?: string; mode?: "strict" | "soft" }>
     analysis?: GoalJudgmentType
     attachments?: Array<{ sha: string; mime: string; filename?: string }>
   },
@@ -486,25 +486,54 @@ function buildUserPrompt(
     )
   }
 
-  // Core check results — delivery agent must fix failures before proceeding
+  // Core check results — partitioned by mode so the LLM cannot "accept" over
+  // a strict failure. Strict checks (severity=essential|important) are
+  // deterministic gates: a post-hoc override will force-reject if any strict
+  // check failed, so spelling the rule out here short-circuits an entire
+  // 11-min LLM run that the override was going to overturn anyway.
   if (input.checkResults && input.checkResults.length > 0) {
-    const failed = input.checkResults.filter((c) => c.status === "failed")
-    const lines = input.checkResults.map((c) => {
-      const icon = c.status === "passed" ? "PASSED" : "FAILED"
-      const evidence = c.evidence && c.status === "failed" ? `\n  \`\`\`\n  ${c.evidence.slice(0, 4000)}\n  \`\`\`` : ""
-      return `- ${c.name}: ${icon}${evidence}`
-    })
-    if (failed.length > 0) {
-      sections.push(
-        `# Core Check Results\n\n` +
-        `**${failed.length} check(s) FAILED.** You MUST fix these before proceeding to extended verification.\n\n` +
-        lines.join("\n"),
-      )
-    } else {
-      sections.push(
-        `# Core Check Results\n\nAll core checks passed.\n\n` + lines.join("\n"),
+    const strictFailed = input.checkResults.filter((c) => c.status === "failed" && c.mode === "strict")
+    const softFailed = input.checkResults.filter((c) => c.status === "failed" && c.mode !== "strict")
+    const passed = input.checkResults.filter((c) => c.status === "passed")
+    const skipped = input.checkResults.filter((c) => c.status === "skipped")
+    const formatLine = (c: { name: string; status: string; evidence?: string; mode?: "strict" | "soft" }) => {
+      const tag = c.mode === "strict" ? "[STRICT]" : c.mode === "soft" ? "[soft]" : "[check]"
+      const state = c.status.toUpperCase()
+      const evidence = c.evidence && c.status === "failed"
+        ? `\n  \`\`\`\n  ${c.evidence.slice(0, 4000)}\n  \`\`\``
+        : ""
+      return `- ${tag} ${c.name}: ${state}${evidence}`
+    }
+
+    const blocks: string[] = []
+    if (strictFailed.length > 0) {
+      blocks.push(
+        `## Strict Failures (BINDING — verdict MUST be "rejected")\n\n` +
+        `${strictFailed.length} strict check(s) failed. These are deterministic gates ` +
+        `(build / typecheck / test / visual_diff with severity=essential|important). ` +
+        `You CANNOT accept while any strict check is failing — the orchestrator ` +
+        `will force-reject any "accepted" verdict emitted under these conditions. ` +
+        `List each failure in rejection_details with a concrete suggestion for the executor.\n\n` +
+        strictFailed.map(formatLine).join("\n"),
       )
     }
+    if (softFailed.length > 0) {
+      blocks.push(
+        `## Soft Failures (advisory — verdict may still be "accepted" if you judge the gap acceptable)\n\n` +
+        softFailed.map(formatLine).join("\n"),
+      )
+    }
+    if (passed.length > 0) {
+      blocks.push(
+        `## Passed (${passed.length})\n\n` + passed.map(formatLine).join("\n"),
+      )
+    }
+    if (skipped.length > 0) {
+      blocks.push(
+        `## Skipped (${skipped.length})\n\n` + skipped.map(formatLine).join("\n"),
+      )
+    }
+    sections.push(`# Core Check Results\n\n` + blocks.join("\n\n"))
   }
 
   // Operator notes — user messages sent during task execution
