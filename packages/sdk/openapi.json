@@ -14103,6 +14103,17 @@
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
                           },
+                          "workspaceDir": {
+                            "type": "string"
+                          },
+                          "workspaceBranch": {
+                            "type": "string"
+                          },
+                          "retryCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
                           "priority": {
                             "type": "string",
                             "enum": [
@@ -14292,6 +14303,7 @@
                           "goalTitle",
                           "goalStatus",
                           "orderIndex",
+                          "retryCount",
                           "priority",
                           "steps"
                         ]

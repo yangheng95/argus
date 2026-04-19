@@ -139,63 +139,10 @@ export interface PipelineDelivery {
 // Eval Verdict — what the deterministic evaluator produces
 // ---------------------------------------------------------------------------
 
-/** Per-check structured row carried alongside the verdict so consumers can
- *  sink results into criteria_results / forward to the delivery agent without
- *  re-parsing the formatted evidence strings.
- *
- *  See specs/new-arch/09-verification-evidence.md — the extra fields
- *  (`spec_id` / `scorer_kind` / `trigger` / `exit_code` / `idle_timed_out`)
- *  feed the structural evidence signature that drives rework no-progress
- *  detection. They are all optional so legacy code that produces
- *  EvalCheckResult values compiles without churn; the evaluator populates
- *  them on new writes. */
-export interface EvalCheckResult {
-  name: string
-  command: string
-  passed: boolean
-  output: string
-  source: "spec_heuristic" | "spec_rubric" | "project_discovery" | "visual"
-  mode: "soft" | "strict"
-  severity?: "essential" | "important" | "optional" | "pitfall"
-  /** Stable spec identifier — enables linking a check result back to the
-   *  `acceptance_specs[].id` that produced it. */
-  spec_id?: string
-  /** Coarse classification of the scorer operator that produced this check.
-   *  Maps to `EngineEvaluationCheck.scorer_kind`; populated by the evaluator
-   *  so downstream consumers don't have to reverse-engineer the shell. */
-  scorer_kind?:
-    | "heuristic_shell"
-    | "heuristic_script_ref"
-    | "llm_judge"
-    | "prebuilt"
-    | "visual_diff"
-    | "delivery_verdict"
-  /** on_goal checks execute at goal exit; on_delivery checks are deferred
-   *  to the delivery-merged worktree. Relevant for signature computation
-   *  because scope is determined by trigger. */
-  trigger?: "on_goal" | "on_delivery"
-  /** Shell exit code when `source="spec_heuristic"` or project_discovery.
-   *  Undefined for rubric / llm_judge / visual diff. */
-  exit_code?: number
-  /** Shell idle-timeout flag — separate from `timedOut` (wall clock) so
-   *  callers can distinguish "process went quiet" from "process ran too
-   *  long". */
-  idle_timed_out?: boolean
-}
-
-export interface EvalVerdict {
-  pass: boolean
-  verdict: "accepted" | "rejected" | "inconclusive"
-  evidence: string[]
-  /** Per-evidence pass/fail status parsed from PASS:/FAIL: prefixes. undefined = no explicit marker. */
-  evidenceStatus?: Array<"passed" | "failed" | undefined>
-  reasoning: string
-  /** Eval agent's classification of why it failed (used by retry policy). */
-  failureClass?: FailureClass
-  /** Structured per-check rows — populated by evaluateGoal so the deliver
-   *  tool can sink results into criteria_results without parsing evidence. */
-  checks: EvalCheckResult[]
-}
+// EvalVerdict / EvalCheckResult removed 2026-04-20 together with per-goal
+// evaluator. Delivery agent now shapes its own check records inside
+// DeliveryVerdict (see @/delivery/agent), which is the single downstream
+// carrier that criteria_results + engine_evaluation_checks project from.
 
 // ---------------------------------------------------------------------------
 // Failure classification (used by eval verdict, read by Orchestrator for reasoning)

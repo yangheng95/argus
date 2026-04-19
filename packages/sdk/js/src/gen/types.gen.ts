@@ -8080,6 +8080,9 @@ export type TaskBoardResponses = {
       goalTitle: string
       goalStatus: string
       orderIndex: number
+      workspaceDir?: string
+      workspaceBranch?: string
+      retryCount: number
       priority: "blocking" | "advisory"
       steps: Array<{
         stepID: string

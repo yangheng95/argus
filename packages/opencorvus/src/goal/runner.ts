@@ -19,7 +19,6 @@ import {
   findTask,
   updateGoalRun,
 } from "@/engine"
-import { findLatestGoalRunEvidence } from "@/verification"
 import type {
   TaskRow,
   GoalRow,
@@ -472,79 +471,48 @@ function extractPlanSection(prompt: string, heading: string) {
  *
  * Returns "" on first attempts (no prior failure) — callers should `.filter(Boolean)`.
  */
+/**
+ * Retry feedback for a goal that was rejected on a prior attempt.
+ *
+ * Pulls from the decision log's "retry" entries (written by
+ * `retry_failed_goals` after the delivery agent rejects) — that is the
+ * single authoritative source now that the per-goal evaluator is gone
+ * (2026-04-20). The orchestrator's retry tool writes a structured
+ * `retry_analysis_<goalID>` entry containing the delivery agent's
+ * rejection_details + coordinator's root-cause analysis; the executor
+ * reads that on its next attempt.
+ *
+ * Returns "" on first attempts (no retry entry yet). Callers should
+ * `.filter(Boolean)` the composition chain.
+ */
 export function buildRetryFeedbackSection(taskID: string, goalID: string): string {
-  const evidence = findLatestGoalRunEvidence(goalID)
-  if (!evidence) return ""
-  const failedChecks = evidence.checks.filter((c) => c.status === "failed")
-  const hasSummary = typeof evidence.summary === "string" && evidence.summary.trim().length > 0
-  if (failedChecks.length === 0 && !hasSummary) return ""
-
   const decisionLog = createDecisionLog(taskID)
   const retryEntries = decisionLog
     .readByPhase("retry")
     .filter((e) => e.goalID === goalID)
+  if (retryEntries.length === 0) return ""
 
   const lines: string[] = []
   lines.push("## Prior Attempt Failed — Read This Before Implementing")
   lines.push("")
   lines.push(
-    "The previous attempt at this goal was rejected by the evaluator. This worktree still contains your prior attempt files — read them, compare them to the failures below, and edit in place. Do NOT start over from a clean slate unless the failure requires a structural rewrite.",
+    "The previous attempt at this goal was rejected by the delivery agent. " +
+      "This worktree still contains your prior attempt files — read them, " +
+      "compare them to the rejections below, and edit in place. Do NOT start " +
+      "over from a clean slate unless the failure requires a structural rewrite.",
   )
   lines.push("")
 
-  if (hasSummary) {
-    lines.push("### Evaluator Summary")
-    lines.push(evidence.summary.trim())
-    lines.push("")
+  lines.push("### Coordinator Root-Cause Analysis + Delivery Agent Rejections")
+  for (const entry of retryEntries) {
+    const reasonSuffix = entry.reason ? ` — _why: ${entry.reason}_` : ""
+    lines.push(`- ${entry.value}${reasonSuffix}`)
   }
-
-  const strictFailed = failedChecks.filter((c) => c.mode === "strict")
-  const softFailed = failedChecks.filter((c) => c.mode !== "strict")
-
-  if (strictFailed.length > 0) {
-    lines.push("### Strict Failures (MUST FIX)")
-    for (const check of strictFailed) {
-      const specTag = check.spec_id ? ` · spec \`${check.spec_id}\`` : ""
-      const kindTag = check.scorer_kind ? ` · ${check.scorer_kind}` : ""
-      const exitTag = typeof check.exit_code === "number" ? ` · exit=${check.exit_code}` : ""
-      const idleTag = check.idle_timed_out ? " · idle-timeout" : ""
-      lines.push(`- **${check.name}**${specTag}${kindTag}${exitTag}${idleTag}`)
-      const evText = (check.evidence ?? "").toString().trim()
-      if (evText.length > 0) {
-        const truncated = evText.length > 1500 ? evText.slice(0, 1500) + "\n…(truncated)" : evText
-        lines.push("  ```")
-        for (const row of truncated.split("\n")) lines.push("  " + row)
-        lines.push("  ```")
-      }
-    }
-    lines.push("")
-  }
-
-  if (softFailed.length > 0) {
-    lines.push("### Soft Failures (advisory — address if feasible)")
-    for (const check of softFailed) {
-      const specTag = check.spec_id ? ` · spec \`${check.spec_id}\`` : ""
-      lines.push(`- ${check.name}${specTag}`)
-      const evText = (check.evidence ?? "").toString().trim()
-      if (evText.length > 0 && evText.length <= 400) {
-        lines.push(`  - ${evText.replace(/\s+/g, " ")}`)
-      }
-    }
-    lines.push("")
-  }
-
-  if (retryEntries.length > 0) {
-    lines.push("### Coordinator Root-Cause Analysis (aux)")
-    for (const entry of retryEntries) {
-      const reasonSuffix = entry.reason ? ` — _why: ${entry.reason}_` : ""
-      lines.push(`- ${entry.value}${reasonSuffix}`)
-    }
-    lines.push("")
-  }
+  lines.push("")
 
   lines.push("### Required For This Retry")
-  lines.push("- Read the strict failures above before writing any code. Each bullet names the spec_id you must satisfy.")
-  lines.push("- Make the failing STRICT checks pass while keeping previously passing checks intact.")
+  lines.push("- Read every rejection above before writing any code.")
+  lines.push("- Address each concrete issue the delivery agent cited.")
   lines.push("- Do NOT repeat an approach that was already tried and rejected above.")
   lines.push("- If the root cause sits outside your owned_paths, report it as a SCOPE BLOCKER instead of widening scope.")
 

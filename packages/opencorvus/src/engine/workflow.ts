@@ -194,14 +194,13 @@ const PIPELINE: MiniWorkflow = {
       id: "build",
       tool: "execute_goal",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中调度 plan → build → evaluate 三个 phase 跑完一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
+      hint: "执行器在隔离 worktree 中调度 plan → build 两个 phase 跑完一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
       phases: [
-        { id: "plan",     label: "Plan",     sessionKind: "planner" },
-        { id: "build",    label: "Build",    sessionKind: "build" },
-        { id: "evaluate", label: "Evaluate", sessionKind: "evaluator" },
+        { id: "plan",  label: "Plan",  sessionKind: "planner" },
+        { id: "build", label: "Build", sessionKind: "build" },
       ],
     },
     {
@@ -405,10 +404,12 @@ function projectPhases(
       setCascade(0)
       break
     case "running":
-      setCascade(1)
-      break
     case "evaluating":
-      setCascade(2)
+      // `evaluating` is kept as a legal FSM state for backwards compatibility
+      // with existing DB rows (2026-04-20 per-goal evaluator removal); the
+      // orchestrator no longer transitions into it, but projecting any
+      // historical row alongside `running` (the build phase) stays honest.
+      setCascade(1)
       break
     case "blocked":
       // Conservative: mark the last known running phase. Without more

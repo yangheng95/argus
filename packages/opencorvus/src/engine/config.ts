@@ -49,18 +49,6 @@ export interface PlannerConfig {
  * runner config: which check tier to apply and whether to run them inside
  * the goal-pool dispatch loop.
  */
-export interface EvaluatorConfig {
-  /** Evaluation tier: "core" (build/test/lint only), "standard" (+ judge/spec_check/code_review), "full" (all checks). Default: "standard". */
-  tier?: "core" | "standard" | "full"
-  /** Run the deterministic per-goal evaluator (`evaluateGoal`) inside the
-   *  goal-pool dispatch loop, AFTER the executor produces a delivery and
-   *  BEFORE the goal is marked passed. When false, goal-pool falls back to
-   *  the legacy "executor returned OK → passed" shortcut — intended as a
-   *  debugging gate so the per-goal path can be toggled while downstream
-   *  code paths are being stabilized. Default: false. */
-  per_goal_enabled?: boolean
-}
-
 export interface DeliveryConfig {
   max_steps: number
   timeout_ms: number
@@ -84,7 +72,6 @@ export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
   planner: PlannerConfig
-  evaluator: EvaluatorConfig
   delivery: DeliveryConfig
   design_analyst: DesignAnalystConfig
   intent_analysis: IntentAnalysisConfig
@@ -132,19 +119,12 @@ const DEFAULTS: EngineConfigType = {
     max_attempts: 3,
     skills: [],
   },
-  evaluator: {
-    tier: "standard",
-    // Per-goal evaluator is now the goal-exit gate (spec-09 Phase B). Path is
-    // load-bearing: produces `scope="goal_run"` verification-evidence rows that
-    // retry prompts (Phase C), delivery short-circuit (Phase D), and rework
-    // no-progress detection (Phase E) all depend on. The original "debug gate,
-    // off until stabilized" note is resolved — spec-09 is the stabilization.
-    per_goal_enabled: true,
-  },
   delivery: {
     // Vision-driven fig2code delivery loops compare rendered output against
-    // the reference image and edit CSS/layout before producing verdict.
-    // Now also runs evaluator's deterministic checks before the LLM verifies.
+    // the reference image and edit CSS/layout before producing verdict. Per
+    // 2026-04-20 per-goal evaluator removal, delivery also owns per-goal
+    // verification (runs build / test / lint / rubric specs itself via
+    // run_command and parallel per-goal subagents).
     max_steps: 160,        // was 80
     timeout_ms: 1_200_000, // 20 min (was 10)
     max_retries: 2,
@@ -221,10 +201,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       quality_threshold: user?.planner?.quality_threshold ?? DEFAULTS.planner.quality_threshold,
       max_attempts: user?.planner?.max_attempts ?? DEFAULTS.planner.max_attempts,
       skills: user?.planner?.skills ?? DEFAULTS.planner.skills,
-    },
-    evaluator: {
-      tier: user?.evaluator?.tier ?? "standard",
-      per_goal_enabled: user?.evaluator?.per_goal_enabled ?? DEFAULTS.evaluator.per_goal_enabled ?? false,
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,

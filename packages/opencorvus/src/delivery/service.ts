@@ -31,7 +31,6 @@ export namespace DeliveryService {
     task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
-    checkResults?: Array<{ name: string; status: string; evidence?: string; mode?: "strict" | "soft" }>
     analysis?: GoalJudgmentType
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
     signal?: AbortSignal
@@ -48,7 +47,6 @@ export namespace DeliveryService {
         task: input.task,
         goals: input.goals,
         delivery: input.delivery,
-        checkResults: input.checkResults,
         analysis: input.analysis,
         attachments: input.attachments,
         stream: input.stream,

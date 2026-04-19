@@ -65,50 +65,6 @@ const log = Log.create({ service: "task-tools" })
 // Helpers (from pipeline.ts)
 // ---------------------------------------------------------------------------
 
-/**
- * Build a GoalContract from DB rows for use by per-goal tools.
- *
- * `dependencies` is filtered down to the goals that THIS goal directly
- * declares in `depends_on` — passing all sibling goals (the previous
- * shape) bloated every executor/planner prompt with N-1 irrelevant
- * contracts and was the single biggest contributor to per-goal token
- * inflation. Sibling exports beyond direct dependencies belong in the
- * Decision Log, not in every contract.
- */
-function buildGoalContract(task: any, goal: any, allGoals: any[]): import("@/pipeline/types").GoalContract {
-  const dependsOnIds: string[] = Array.isArray(goal.depends_on) ? goal.depends_on : []
-  const dependencyRows = dependsOnIds.length > 0
-    ? allGoals.filter((g) => dependsOnIds.includes(g.id))
-    : []
-  return {
-    goal: {
-      id: goal.id,
-      title: goal.title,
-      objective: goal.objective,
-      acceptance_specs: (goal.acceptance_specs ?? []) as AcceptanceSpec[],
-      owned_paths: goal.owned_paths ?? [],
-      depends_on: goal.depends_on ?? [],
-      exports: goal.exports ?? [],
-      imports: goal.imports ?? [],
-      priority: goal.priority ?? "blocking",
-      kind: goal.kind ?? "feature",
-      requirement_ids: goal.requirement_ids ?? [],
-    },
-    planNode: null,
-    run: { id: task.active_run_id ?? "", task_id: task.id } as any,
-    task,
-    plan: { id: task.active_plan_version_id ?? "" } as any,
-    dependencies: dependencyRows.map(g => ({
-      id: g.id, title: g.title, objective: g.objective,
-      acceptance_specs: (g.acceptance_specs ?? []) as AcceptanceSpec[],
-      owned_paths: g.owned_paths ?? [], depends_on: g.depends_on ?? [],
-      exports: g.exports ?? [], imports: g.imports ?? [],
-      priority: g.priority ?? "blocking", kind: g.kind ?? "feature",
-      requirement_ids: g.requirement_ids ?? [],
-    })),
-  }
-}
-
 function stageTimeout(stage: "requirements" | "goal" | "plan"): number {
   const env = { requirements: "OPENCORVUS_REQUIREMENTS_TIMEOUT_MS", goal: "OPENCORVUS_GOAL_TIMEOUT_MS", plan: "OPENCORVUS_PLAN_TIMEOUT_MS" }
   const defaults = { requirements: 300_000, goal: 180_000, plan: 300_000 }
@@ -2183,236 +2139,17 @@ export function createOrchestratorTools(input: {
           })
         }
 
-        // ── Deterministic per-goal evaluator (per specs/new-arch/01-agents.md L111
-        //    "Evaluator: 确定性命令 runner（无 LLM）, delivery agent 调用").
-        // Runs each goal's acceptance_specs against the merged worktree BEFORE
-        // delivery agent sees the diff. Results feed delivery agent as
-        // checkResults (so it does not duplicate work) and are sunk into
-        // task.metadata.criteria_results under family="goal_eval" so the
-        // overlay panel reflects what was actually verified deterministically.
-        // `mode` tags each check strict|soft so downstream consumers (delivery
-        // agent prompt, query_criteria) can treat strict failures as binding.
-        // Without this the delivery LLM saw only pass/fail and would "accept"
-        // despite a strict failure, forcing the post-hoc override to kick in —
-        // wasting the full 11-min LLM verify run each iteration.
-        const evaluatorCheckResults: Array<{
-          name: string
-          status: "passed" | "failed" | "skipped"
-          evidence?: string
-          mode?: "strict" | "soft"
-        }> = []
-        const evaluatorCriteriaSink: Array<{
-          name: string
-          status: "passed" | "failed" | "skipped"
-          family: string
-          evidence?: string
-          label?: string
-          mode?: "strict" | "soft"
-        }> = []
-        const verificationGoalStatuses = new Map<string, { status: "passed" | "failed" }>()
-        // Track strict-mode failures from per-goal evaluator. If any strict
-        // check failed, the delivery agent's verdict MUST be rejected — the
-        // LLM is not allowed to override deterministic strict gates.
-        //
-        // spec-09 Phase D: the strict check set is now sourced from TWO
-        // places rather than the single in-loop evaluateGoal call:
-        //   1. Each goal's latest `scope="goal_run"` evidence (written by
-        //      goal-pool.ts at goal exit; covers on_goal scorers).
-        //   2. A fresh evaluateGoal pass with triggerFilter="on_delivery"
-        //      for scorers the requirements agent deferred to the merged
-        //      worktree.
-        // This eliminates the duplicate on_goal shell commands that the old
-        // delivery-time loop was re-running against the merged worktree.
-        const strictFailedChecks: Array<{ name: string; evidence?: string }> = []
-        // spec-09 Phase D: capture the full structured check set for this
-        // delivery scope. Written into the delivery-scope evaluation row at
-        // the end of this handler via updateEvaluationFromDeliveryVerdict.
+        // ── Delivery-scope evidence carrier (2026-04-20 per-goal evaluator removal) ──
+        // The deterministic per-goal evaluator is gone. The delivery agent reads
+        // each goal's acceptance_specs as INFORMATION and verifies them itself
+        // (Phase 2 / 2.5 in DELIVERY_AGENT_SYSTEM), including parallel per-goal
+        // subagent dispatch for adversarial review at scale. No pre-scored
+        // checks, no pre-flight gate, no criteria_results sink. The empty
+        // `deliveryScopeChecks` below preserves the downstream payload shape
+        // (updateEvaluationFromDeliveryVerdict / signature / short-circuit) —
+        // the delivery-scope evaluation row can still carry delivery-agent
+        // findings once the agent populates them post-verdict.
         const deliveryScopeChecks: import("@/engine/engine.sql").EngineEvaluationCheck[] = []
-        {
-          const { evaluateGoal } = await import("@/delivery/checks/per-goal")
-          const { findLatestGoalRunEvidence, outputDigest } = await import("@/verification")
-          const evaluatorTier = (await EngineConfig.get()).evaluator.tier ?? "standard"
-          const evalDelivery = {
-            summary: deliveryInfo.summary,
-            diffs: deliveryInfo.diffs as Array<{ file: string; [key: string]: unknown }>,
-          }
-          for (const goal of allGoals) {
-            if (input.signal?.aborted) break
-
-            // ── Read goal_run scope evidence (on_goal results) ──
-            const goalEvidence = findLatestGoalRunEvidence(goal.id)
-            if (goalEvidence) {
-              for (const check of goalEvidence.checks) {
-                const namespaced = `${goal.id}.${check.name}`
-                evaluatorCheckResults.push({
-                  name: namespaced,
-                  status: check.status,
-                  evidence: check.evidence,
-                  mode: check.mode,
-                })
-                evaluatorCriteriaSink.push({
-                  name: namespaced,
-                  status: check.status,
-                  family: check.family ?? "goal_eval",
-                  evidence: check.evidence,
-                  label: `${goal.title} · ${check.name}`,
-                  mode: check.mode,
-                })
-                // Mirror the goal_run check straight into delivery scope too
-                // so the delivery row carries the full evidence trail used by
-                // the signature and short-circuit check. The family tag is
-                // preserved verbatim.
-                deliveryScopeChecks.push({
-                  ...check,
-                  name: namespaced,
-                })
-                if (check.status === "failed" && check.mode === "strict") {
-                  strictFailedChecks.push({ name: namespaced, evidence: check.evidence })
-                }
-              }
-              if (!isDispatchableGoal(goal)) {
-                verificationGoalStatuses.set(goal.id, {
-                  status: goalEvidence.verdict === "accepted" ? "passed" : "failed",
-                })
-              }
-            }
-
-            // ── Run on_delivery scope scorers against the merged worktree ──
-            try {
-              const contract = buildGoalContract(task, goal, allGoals)
-              const deliveryVerdict = await evaluateGoal({
-                contract,
-                delivery: evalDelivery,
-                // on_delivery scope runs against the primary worktree
-                // where all goal diffs have been cherry-picked (post-merge
-                // snapshot). Per-goal worktrees aren't the right target
-                // here — those hold only the owning goal's diff.
-                workDir: Instance.directory,
-                signal: input.signal,
-                tier: evaluatorTier,
-                triggerFilter: "on_delivery",
-              })
-              for (const check of deliveryVerdict.checks) {
-                // The on_goal items in this verdict are "skipped" rows (see
-                // evaluateGoal's scope guard). We ignore those — the real
-                // on_goal truth already flowed in from goalEvidence above.
-                if (check.trigger === "on_goal") continue
-                const namespaced = `${goal.id}.${check.name}`
-                const status: "passed" | "failed" | "skipped" = check.passed
-                  ? "passed"
-                  : "failed"
-                evaluatorCheckResults.push({
-                  name: namespaced,
-                  status,
-                  evidence: check.output,
-                  mode: check.mode,
-                })
-                evaluatorCriteriaSink.push({
-                  name: namespaced,
-                  status,
-                  family: "goal_eval",
-                  evidence: check.output,
-                  label: `${goal.title} · ${check.name}`,
-                  mode: check.mode,
-                })
-                deliveryScopeChecks.push({
-                  name: namespaced,
-                  label: `${goal.title} · ${check.name}`,
-                  family: "goal_eval",
-                  status,
-                  evidence: check.output,
-                  spec_id: check.spec_id,
-                  scorer_kind: check.scorer_kind,
-                  mode: check.mode,
-                  severity: check.severity,
-                  trigger: check.trigger,
-                  exit_code: check.exit_code,
-                  idle_timed_out: check.idle_timed_out,
-                  output_digest: check.output ? outputDigest(check.output) : undefined,
-                })
-                if (status === "failed" && check.mode === "strict") {
-                  strictFailedChecks.push({ name: namespaced, evidence: check.output })
-                }
-              }
-              // A goal with no specs AT ALL still produces verdict.checks=[]
-              // via the no_scorers path. goalEvidence above already captured
-              // the no_scorers row at goal exit, so we don't re-emit it here.
-              // Only act when goalEvidence is MISSING — i.e., the goal never
-              // ran through goal-pool evaluation (legacy cached task?) — to
-              // preserve the original "surface missing scorers" behaviour.
-              if (!goalEvidence && deliveryVerdict.checks.length === 0) {
-                evaluatorCheckResults.push({
-                  name: `${goal.id}.no_scorers`,
-                  status: "failed",
-                  evidence: deliveryVerdict.reasoning,
-                  mode: "strict",
-                })
-                evaluatorCriteriaSink.push({
-                  name: `${goal.id}.no_scorers`,
-                  status: "failed",
-                  family: "goal_eval",
-                  evidence: deliveryVerdict.reasoning,
-                  label: `${goal.title} · no acceptance scorers`,
-                  mode: "strict",
-                })
-                deliveryScopeChecks.push({
-                  name: `${goal.id}.no_scorers`,
-                  label: `${goal.title} · no acceptance scorers`,
-                  family: "goal_eval",
-                  status: "failed",
-                  evidence: deliveryVerdict.reasoning,
-                  mode: "strict",
-                })
-                strictFailedChecks.push({
-                  name: `${goal.id}.no_scorers`,
-                  evidence: deliveryVerdict.reasoning,
-                })
-              }
-            } catch (evalErr) {
-              const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-              log.warn("on_delivery evaluateGoal threw", { goalID: goal.id, error: msg })
-              const name = `${goal.id}.evaluator_error`
-              evaluatorCheckResults.push({ name, status: "failed", evidence: msg, mode: "strict" })
-              evaluatorCriteriaSink.push({
-                name,
-                status: "failed",
-                family: "goal_eval",
-                evidence: msg,
-                label: `${goal.title} · evaluator threw`,
-                mode: "strict",
-              })
-              deliveryScopeChecks.push({
-                name,
-                label: `${goal.title} · evaluator threw`,
-                family: "goal_eval",
-                status: "failed",
-                evidence: msg,
-                mode: "strict",
-                scorer_kind: "heuristic_shell",
-                trigger: "on_delivery",
-              })
-              if (!isDispatchableGoal(goal)) {
-                verificationGoalStatuses.set(goal.id, { status: "failed" })
-              }
-              strictFailedChecks.push({ name, evidence: msg })
-            }
-          }
-          if (verificationGoalStatuses.size > 0) {
-            const now = Date.now()
-            const { updateGoalVerificationOutcome } = await import("@/engine/persist")
-            for (const [goalID, result] of verificationGoalStatuses) {
-              updateGoalVerificationOutcome({
-                goalID,
-                outcome: result.status,
-                reason: "delivery-time evaluator verdict",
-                now,
-              })
-            }
-          }
-          if (evaluatorCriteriaSink.length > 0) {
-            await EngineService.upsertTaskCriteria(taskID, evaluatorCriteriaSink)
-          }
-        }
 
         const deliverySession = await Session.createNext({
           kind: "delivery",
@@ -2438,87 +2175,16 @@ export function createOrchestratorTools(input: {
           // Short-circuit: if the per-goal evaluator already flagged strict
           // checks as failed, the delivery LLM cannot rescue the outcome —
           // the post-hoc hard gate below would force-reject anyway. Skipping
-          // the 11-min verify run here saves wall time + tokens per iteration
-          // without losing any signal (strict failures ARE the signal; the
-          // LLM would just rephrase them). Defence in depth: the original
-          // post-hoc override still runs, so a strict-check that was flagged
-          // between this branch and the hard gate is still caught.
-          let verdict: import("@/delivery/agent").DeliveryVerdictType
-          if (strictFailedChecks.length > 0) {
-            log.info(
-              "deliver: strict evaluator checks failed — synthesising rejected verdict without invoking delivery LLM",
-              { taskID, strictFailedCount: strictFailedChecks.length },
-            )
-            const names = strictFailedChecks.map(c => c.name).join(", ")
-            // Write a visible summary into deliverySession so the overlay's
-            // delivery card has content instead of being an empty shell.
-            // The overlay only creates the session card when the first
-            // `message.updated` SSE fires (tree-writer.ts ensureSessionCard);
-            // without this write, the short-circuit path produces a verdict
-            // artifact but zero messages, so the delivery agent is invisible
-            // in the UI. This is not a fabricated LLM transcript — it is a
-            // faithful record of the deterministic decision that delivery
-            // actually took.
-            const summaryLines: string[] = [
-              `# Delivery verdict: REJECTED (LLM skipped)`,
-              ``,
-              `${strictFailedChecks.length} strict evaluator check(s) failed — deterministic rejection without invoking delivery LLM.`,
-              ``,
-              `**Failed checks**: ${names}`,
-              ``,
-              `## Failure details`,
-              ``,
-            ]
-            for (const check of strictFailedChecks) {
-              summaryLines.push(`### ${check.name}`)
-              if (check.evidence) {
-                const trimmed = check.evidence.length > 800
-                  ? check.evidence.slice(0, 800) + "…"
-                  : check.evidence
-                summaryLines.push("```")
-                summaryLines.push(trimmed)
-                summaryLines.push("```")
-              } else {
-                summaryLines.push("_(no evidence captured)_")
-              }
-              summaryLines.push("")
-            }
-            const summaryText = summaryLines.join("\n")
-            if (hooks.onChunk) {
-              await hooks.onChunk({
-                chunk: { type: "text-delta", id: Identifier.ascending("part"), text: summaryText },
-              })
-            }
-            verdict = DeliveryVerdict.parse({
-              verdict: "rejected",
-              summary:
-                `${strictFailedChecks.length} strict evaluator check(s) failed: ${names}. ` +
-                `Delivery LLM skipped — strict failures are deterministic and non-overridable.`,
-              startup_verification: {
-                attempted: false,
-                success: false,
-                output: "skipped: strict evaluator checks failed before delivery verification ran",
-              },
-              frontend_check: { attempted: false },
-              issues_found: strictFailedChecks.map(
-                c => `Strict evaluator check failed: ${c.name}${c.evidence ? ` — ${c.evidence.slice(0, 500)}` : ""}`,
-              ),
-              rejection_details: strictFailedChecks.map(c => ({
-                category: "quality" as const,
-                error:
-                  `Strict evaluator check ${c.name} failed. This is a deterministic check ` +
-                  `that cannot be overridden by delivery LLM judgment.${c.evidence ? ` Evidence: ${c.evidence.slice(0, 500)}` : ""}`,
-                suggestion: c.name.includes(":build") || c.name.includes(":typecheck")
-                  ? "Run `npm run build` / `npx tsc --noEmit` locally to reproduce the failure, then fix each compiler / bundler error."
-                  : undefined,
-              })),
-            })
-          } else {
-            verdict = await DeliveryService.verify({
+          // Delivery agent runs unconditionally — no pre-flight evaluator gate,
+          // no strict-check short-circuit, no post-hoc verdict override. The
+          // agent reads acceptance_specs as INFORMATION and verifies them
+          // itself (Phase 2 / 2.5 in DELIVERY_AGENT_SYSTEM), including per-goal
+          // subagent dispatch for adversarial review at scale.
+          const verdict: import("@/delivery/agent").DeliveryVerdictType =
+            await DeliveryService.verify({
               task: { id: task.id, title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
               goals: goalInfos,
               delivery: deliveryInfo,
-              checkResults: evaluatorCheckResults.length > 0 ? evaluatorCheckResults : undefined,
               attachments: deliveryAttachments,
               signal: input.signal,
               stream: {
@@ -2533,34 +2199,7 @@ export function createOrchestratorTools(input: {
                 onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
               },
             })
-          }
           await hooks.flush()
-
-          // Hard gate: if the per-goal evaluator flagged any strict-mode
-          // check as failed, the delivery verdict MUST be rejected regardless
-          // of what the LLM decided. Strict checks (build / typecheck / test)
-          // are deterministic — the LLM cannot override them. Visual similarity
-          // is intentionally NOT a strict check; the LLM does the vision-based
-          // comparison using attached rendered.png + reference image(s).
-          // Applied BEFORE persisting the verdict artifact so all downstream
-          // consumers (criteria panel, evaluation record) see the true verdict.
-          if (verdict.verdict === "accepted" && strictFailedChecks.length > 0) {
-            const names = strictFailedChecks.map(c => c.name).join(", ")
-            log.warn("deliver: overriding LLM verdict to rejected — strict evaluator checks failed", {
-              taskID, strictFailedCount: strictFailedChecks.length, checks: names,
-            })
-            verdict.verdict = "rejected"
-            verdict.issues_found.push(
-              ...strictFailedChecks.map(c => `Strict evaluator check failed: ${c.name}${c.evidence ? ` — ${c.evidence.slice(0, 500)}` : ""}`),
-            )
-            const rejections = strictFailedChecks.map(c => ({
-              category: "quality" as const,
-              file: undefined,
-              error: `Strict evaluator check ${c.name} failed. The delivery agent accepted but this check is non-overridable.${c.evidence ? ` Evidence: ${c.evidence.slice(0, 500)}` : ""}`,
-              suggestion: undefined,
-            }))
-            verdict.rejection_details = [...(verdict.rejection_details ?? []), ...rejections]
-          }
 
           // Persist verdict as artifact
           const { EngineArtifactTable } = await import("@/engine/engine.sql")

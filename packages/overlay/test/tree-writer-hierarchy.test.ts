@@ -33,10 +33,11 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   // 2026-04-19 flatten: the goal-group wrapper card is gone. Each goal's
   // single goal-scope executor step is now a top-level card with goal
   // title / round / description / contracts stamped on it.
+  // 2026-04-20: per-goal evaluator removed; build step has plan + build
+  // phases only (`evaluate` phase dropped with the deterministic runner).
   const stepCardID = `step:${GOAL_ID}:build`;
   const planPhaseID = `${stepCardID}:phase:plan`;
   const buildPhaseID = `${stepCardID}:phase:build`;
-  const evaluatePhaseID = `${stepCardID}:phase:evaluate`;
 
   const executorCardID = `executor:session:${EXECUTOR_SID}`;
   const buildWorkerCardID = `build:session:${BUILD_SID}`;
@@ -46,16 +47,15 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   const architectCardID = `architect:session:${ARCHITECT_SID}`;
   const rootCardID = `assistant:session:${ROOT_SID}`;
 
-  // Step card exists and has the three phase cards in order — no session
+  // Step card exists and has the two phase cards in order — no session
   // cards between step and phase.
   expect(snapshot.nodes[stepCardID]).toBeDefined();
-  expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([planPhaseID, buildPhaseID, evaluatePhaseID]);
+  expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([planPhaseID, buildPhaseID]);
 
   // Each phase card exists with the declared kind + phase metadata.
   for (const [id, phaseID] of [
     [planPhaseID, "plan"],
     [buildPhaseID, "build"],
-    [evaluatePhaseID, "evaluate"],
   ] as const) {
     const node = snapshot.nodes[id];
     expect(node).toBeDefined();

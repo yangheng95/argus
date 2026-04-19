@@ -109,8 +109,7 @@
     "step:goal_fixture_g1:build": {
       "childIDs": [
         "step:goal_fixture_g1:build:phase:plan",
-        "step:goal_fixture_g1:build:phase:build",
-        "step:goal_fixture_g1:build:phase:evaluate"
+        "step:goal_fixture_g1:build:phase:build"
       ],
       "id": "step:goal_fixture_g1:build",
       "kind": "step",
@@ -149,17 +148,6 @@
       "stage": "build",
       "status": "completed",
       "title": "Build"
-    },
-    "step:goal_fixture_g1:build:phase:evaluate": {
-      "childIDs": [],
-      "id": "step:goal_fixture_g1:build:phase:evaluate",
-      "kind": "phase",
-      "parts": [],
-      "phaseID": "evaluate",
-      "phaseSessionKind": "evaluator",
-      "stage": "evaluator",
-      "status": "completed",
-      "title": "Evaluate"
     },
     "step:goal_fixture_g1:build:phase:plan": {
       "childIDs": [],
