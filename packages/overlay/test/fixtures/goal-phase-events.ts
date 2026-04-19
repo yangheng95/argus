@@ -163,7 +163,7 @@ export const EVENTS: FixtureEvent[] = [
         goalStatus: "running",
         steps: [{
           stepID: "build",
-          label: "Build",
+          label: "Executor",
           status: "running",
           phases: {
             plan: { status: "completed" },
@@ -368,7 +368,7 @@ export const EVENTS: FixtureEvent[] = [
         goalStatus: "passed",
         steps: [{
           stepID: "build",
-          label: "Build",
+          label: "Executor",
           status: "completed",
           phases: {
             plan: { status: "completed" },
@@ -413,7 +413,7 @@ export const INITIAL_BOARD = {
       { id: "architect",       label: "Architect", tool: "architect", scope: "task", skippable: true, status: "pending" },
       {
         id: "build",
-        label: "Build",
+        label: "Executor",
         tool: "execute_goal",
         scope: "goal",
         skippable: false,
