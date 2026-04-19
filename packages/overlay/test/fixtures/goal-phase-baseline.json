@@ -20,11 +20,7 @@
       "title": "chat.role.architect"
     },
     "assistant:session:ses_root_orch": {
-      "childIDs": [
-        "requirements:session:ses_requirements",
-        "design-analyst:session:ses_design",
-        "architect:session:ses_architect"
-      ],
+      "childIDs": [],
       "id": "assistant:session:ses_root_orch",
       "kind": "agent",
       "parts": [
@@ -44,13 +40,11 @@
       ],
       "round": 0,
       "stage": "assistant",
-      "status": "running",
+      "status": "completed",
       "title": "chat.role.assistant"
     },
     "build:session:ses_goal_build": {
-      "childIDs": [
-        "planner:session:ses_planner"
-      ],
+      "childIDs": [],
       "id": "build:session:ses_goal_build",
       "kind": "agent",
       "parts": [
@@ -102,7 +96,6 @@
     },
     "executor:session:ses_goal_exec": {
       "childIDs": [
-        "build:session:ses_goal_build",
         "interaction-card:synthetic:system:1776000004500:1pjr37f"
       ],
       "id": "executor:session:ses_goal_exec",
@@ -139,7 +132,9 @@
     },
     "goal-group:goal_fixture_g1:step:build": {
       "childIDs": [
-        "executor:session:ses_goal_exec"
+        "executor:session:ses_goal_exec",
+        "build:session:ses_goal_build",
+        "planner:session:ses_planner"
       ],
       "id": "goal-group:goal_fixture_g1:step:build",
       "kind": "step",
@@ -202,6 +197,9 @@
   "order": [
     "ctx:user-request",
     "assistant:session:ses_root_orch",
+    "requirements:session:ses_requirements",
+    "design-analyst:session:ses_design",
+    "architect:session:ses_architect",
     "goal-group:goal_fixture_g1"
   ]
 }

@@ -347,13 +347,15 @@ export function createOrchestratorTools(input: {
         // ProgressGuard (alive/progress/absolute tiers). No caller-level
         // inactivity guard here — that was the same "delta = activity"
         // hazard we just eliminated.
+        // Hoisted so the catch below can reference requirementsSession.id
+        // when emitting the error-path terminal event.
+        const requirementsSession = await Session.createNext({
+          kind: "requirements",
+          parentID: input.agentSessionID,
+          title: `Requirements: ${task.title}`,
+          directory: Instance.directory,
+        })
         try {
-          const requirementsSession = await Session.createNext({
-            kind: "requirements",
-            parentID: input.agentSessionID,
-            title: `Requirements: ${task.title}`,
-            directory: Instance.directory,
-          })
           const hooks = sessionStreamHooks({ sessionID: requirementsSession.id, taskID, stage: "requirements" })
 
 
@@ -504,10 +506,14 @@ export function createOrchestratorTools(input: {
 
           // Phase-level completion event — Panel uses this to refresh the
           // Requirements section without tracking individual workflow steps.
+          // `sessionID` + `status` drive the overlay's session-card terminal
+          // write (see specs/new-arch/07-panel-reactivity.md §session 终态).
           EngineProtocol.emit(
             EngineEvent.RequirementsCompleted,
             {
               taskID,
+              sessionID: requirementsSession.id,
+              status: "completed",
               requirementCount: result.requirements.length,
               goalCount: result.goals.length,
               decisionCount: result.decisions.length,
@@ -532,6 +538,23 @@ export function createOrchestratorTools(input: {
             ],
             pointer: `read_context scope=decisions, scope=goals (spec ${specSnapshotID})`,
           })
+        } catch (err) {
+          // Error-path terminal emission so the overlay's requirements
+          // session card flips out of `running`. Without this the card
+          // spins forever on any failure (LLM error, persistence error,
+          // signal abort). Re-throw preserves existing error propagation.
+          EngineProtocol.emit(
+            EngineEvent.RequirementsCompleted,
+            {
+              taskID,
+              sessionID: requirementsSession.id,
+              status: "error",
+              error: err instanceof Error ? err.message : String(err),
+              summary: "Requirements failed",
+            },
+            { source: "orchestrator.requirements" },
+          )
+          throw err
         } finally {
           // No caller-level guard: AgentRuntime enforces progress/absolute timeouts.
         }
@@ -853,6 +876,23 @@ export function createOrchestratorTools(input: {
             designSpecChars: designSpec.length,
           })
 
+          // Phase-level completion event — drives the overlay's
+          // design-analyst session-card terminal status write.
+          EngineProtocol.emit(
+            EngineEvent.DesignAnalysisCompleted,
+            {
+              taskID,
+              sessionID: designSession.id,
+              status: "completed",
+              layoutSections: analysis.layout.length,
+              styleTokens: analysis.tokens.length,
+              componentCount: analysis.components.length,
+              interactionCount: analysis.interactions.length,
+              summary: `Design analysis complete: ${analysis.layout.length} layout sections, ${analysis.components.length} components.`,
+            },
+            { source: "orchestrator.design_analysis" },
+          )
+
           return SubAgentProtocol.yieldResult({
             headline:
               "SUCCESS: Design analysis complete. The design spec is stored in task.metadata.design_spec " +
@@ -873,6 +913,17 @@ export function createOrchestratorTools(input: {
           await trackStepComplete("design_analysis", undefined, true)
           const msg = err instanceof Error ? err.message : String(err)
           log.error("design_analysis: failed", { taskID, error: msg })
+          EngineProtocol.emit(
+            EngineEvent.DesignAnalysisCompleted,
+            {
+              taskID,
+              sessionID: designSession.id,
+              status: "error",
+              error: msg,
+              summary: "Design analysis failed",
+            },
+            { source: "orchestrator.design_analysis" },
+          )
           return `Design analysis failed: ${msg}. Proceeding without design spec — call requirements directly.`
         }
       },
@@ -906,78 +957,100 @@ export function createOrchestratorTools(input: {
         })
         const hooks = sessionStreamHooks({ sessionID: architectSession.id, taskID, stage: "architect" })
 
+        // try/catch around the agent call so the overlay receives a
+        // terminal status event even when ArchitectAgent throws. Without
+        // this the architect session card spins forever on failure.
+        try {
+          const { createDecisionLog } = await import("@/decision-log")
+          const decisionLog = createDecisionLog(taskID)
 
-        const { createDecisionLog } = await import("@/decision-log")
-        const decisionLog = createDecisionLog(taskID)
+          const { ArchitectAgent } = await import("@/architect/agent")
 
-        const { ArchitectAgent } = await import("@/architect/agent")
-
-        const result = await ArchitectAgent.coordinate({
-          goals: targetGoals.map(g => ({
-            id: g.id,
-            title: g.title,
-            objective: g.objective,
-            acceptance_specs: (typeof g.acceptance_specs === "string" ? JSON.parse(g.acceptance_specs) : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
-            owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
-            depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
-            exports: typeof g.exports === "string" ? JSON.parse(g.exports) : (g.exports ?? []),
-            imports: typeof g.imports === "string" ? JSON.parse(g.imports) : (g.imports ?? []),
-            priority: g.priority as "blocking" | "advisory",
-            kind: g.kind,
-            requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
-          })),
-          taskRequest: task.request,
-          taskTitle: task.title,
-          taskID,
-          decisionLog,
-          signal: input.signal,
-          stream: {
-            onChunk: async (arg: any) => {
-              const chunk = (arg as any)?.chunk
-              if (chunk?.type === "text-delta") {
-                if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-              } else {
-                if (hooks.onChunk) await hooks.onChunk(arg)
-              }
-            },
-            onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
-          },
-          onStatus: () => {},
-        })
-
-        await hooks.flush()
-
-
-        // Sub-agent → caller boundary. Full blueprint prose is already
-        // persisted under the Decision Log (architect phase) and surfaces
-        // to per-goal executors via phasePromptSectionForGoal. The
-        // orchestrator only needs a structured short ack.
-        const summary = SubAgentProtocol.yieldResult({
-          headline: `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
-          summary: result.blueprint.summary,
-          fields: result.blueprint.contracts.length > 0
-            ? [["categories", [...new Set(result.blueprint.contracts.map((c) => c.category))]]]
-            : [],
-          pointer: "read_context scope=decisions (architect phase entries)",
-        })
-
-        await trackStepComplete("architect")
-
-        // Phase-level completion event — Panel uses this to refresh the
-        // Architect section without tracking individual workflow steps.
-        EngineProtocol.emit(
-          EngineEvent.ArchitectCompleted,
-          {
+          const result = await ArchitectAgent.coordinate({
+            goals: targetGoals.map(g => ({
+              id: g.id,
+              title: g.title,
+              objective: g.objective,
+              acceptance_specs: (typeof g.acceptance_specs === "string" ? JSON.parse(g.acceptance_specs) : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
+              owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
+              depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
+              exports: typeof g.exports === "string" ? JSON.parse(g.exports) : (g.exports ?? []),
+              imports: typeof g.imports === "string" ? JSON.parse(g.imports) : (g.imports ?? []),
+              priority: g.priority as "blocking" | "advisory",
+              kind: g.kind,
+              requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
+            })),
+            taskRequest: task.request,
+            taskTitle: task.title,
             taskID,
-            contractCount: result.blueprint.contracts.length,
-            categories: [...new Set(result.blueprint.contracts.map(c => c.category))],
-            blueprintSummary: result.blueprint.summary,
-            summary,
-          },
-          { source: "orchestrator.architect" },
-        )
+            decisionLog,
+            signal: input.signal,
+            stream: {
+              onChunk: async (arg: any) => {
+                const chunk = (arg as any)?.chunk
+                if (chunk?.type === "text-delta") {
+                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+                } else {
+                  if (hooks.onChunk) await hooks.onChunk(arg)
+                }
+              },
+              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
+            },
+            onStatus: () => {},
+          })
 
-        return summary
+          await hooks.flush()
+
+
+          // Sub-agent → caller boundary. Full blueprint prose is already
+          // persisted under the Decision Log (architect phase) and surfaces
+          // to per-goal executors via phasePromptSectionForGoal. The
+          // orchestrator only needs a structured short ack.
+          const summary = SubAgentProtocol.yieldResult({
+            headline: `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
+            summary: result.blueprint.summary,
+            fields: result.blueprint.contracts.length > 0
+              ? [["categories", [...new Set(result.blueprint.contracts.map((c) => c.category))]]]
+              : [],
+            pointer: "read_context scope=decisions (architect phase entries)",
+          })
+
+          await trackStepComplete("architect")
+
+          // Phase-level completion event — Panel uses this to refresh the
+          // Architect section without tracking individual workflow steps.
+          // `sessionID` + `status` drive the overlay's session-card terminal
+          // write.
+          EngineProtocol.emit(
+            EngineEvent.ArchitectCompleted,
+            {
+              taskID,
+              sessionID: architectSession.id,
+              status: "completed",
+              contractCount: result.blueprint.contracts.length,
+              categories: [...new Set(result.blueprint.contracts.map(c => c.category))],
+              blueprintSummary: result.blueprint.summary,
+              summary,
+            },
+            { source: "orchestrator.architect" },
+          )
+
+          return summary
+        } catch (err) {
+          await hooks.flush().catch(() => {})
+          EngineProtocol.emit(
+            EngineEvent.ArchitectCompleted,
+            {
+              taskID,
+              sessionID: architectSession.id,
+              status: "error",
+              error: err instanceof Error ? err.message : String(err),
+              summary: "Architect failed",
+            },
+            { source: "orchestrator.architect" },
+          )
+          throw err
+        }
       },
     }),
 

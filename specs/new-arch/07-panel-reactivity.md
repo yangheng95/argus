@@ -66,8 +66,16 @@ status, parts[], children[], ...`），类型定义挪到 `store/card-tree.ts`�
 | `agent.updated` (原 agentEvents) | 与 message.* 合并：作为同一 session 卡片上的 live part；删除独立 agentEvents 概念 |
 | `goal.status` 变化 | `setStore("cards", "goal:"+gid, "status", ...)` |
 | `goal.step.*` | `setStore("cards", "goal:"+gid, "steps", stepIdx, ...)` |
+| `requirements.completed` / `architect.completed` / `design_analysis.completed` | 按 payload.sessionID 定位 session 卡，`setStore("cards", cardID, "status", payload.status)`（`"completed"` / `"error"`）；session 未 materialize 时走 `pendingSubagentTerminal` 缓冲池，由 `ensureSessionCard` 在收到首个 message.updated 时 drain |
+| `task.completed` / `task.failed` / `task.cancelled` | 除了常规 `rebuildBoardDerivedCards`，还要把所有 root 身份的 session 卡（`parentSessionID` 空且 `goalID` 空）从 `running` 翻到 `completed` / `error`——orchestrator 根 session 没有 phase-completion 事件，终态只能绑 task |
 | `interaction.*` | 写入对应 session 卡片的 parts（不再走 partitionInteractions 后处理） |
 | `task.selected` / `transcript` 全量重载 | `setCardTreeStore("order",[])+("cards",{})` 后按序列写入 |
+
+**session 终态信号源（新增规范）**
+
+- Subagent session（`kind: requirements / architect / design-analyst / ...`）的终态 = backend 对应的 `<phase>.completed` 事件。schema 必带 `sessionID: z.string()` + `status: z.enum(["completed","error"])`。backend 在 subagent tool 返回之前必须发射（无论成功或 catch 分支），否则 overlay 卡永远 `running`。
+- Orchestrator 根 session（`parentSessionID` 空 + `goalID` 空）= `task.status` 终态（`completed/failed/cancelled`）。由 `handleTaskChanged` → `applyOrchestratorRootTerminal` 写入。
+- Goal 执行期 subagent（session 有 `goalID`）= 通过 goal-step 容器级联——step 卡 status 由 `rebuildGoalGroupCards` 从 board 写入；视觉上 session 卡作为 step 的 child 呈现，自身 status 目前保持 `running`（如后续需要独立显示终态，复用同样的 `<stage>.completed` 事件约定）。
 
 ### 身份规则（决定 id，保证唯一 & 稳定）
 

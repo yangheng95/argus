@@ -36,7 +36,11 @@ function roleTitleKey(name: string): string {
 }
 import { interactionToSyntheticMessages, partitionInteractions } from "../utils/interaction";
 import { goalStageStepID } from "../utils/workflow-step";
-import { isTreeWriterNoopEventType, isTreeWriterPassThroughEventType } from "./event-policy";
+import {
+  isSubagentPhaseCompletedEventType,
+  isTreeWriterNoopEventType,
+  isTreeWriterPassThroughEventType,
+} from "./event-policy";
 
 // ── Internal indices ──
 
@@ -103,6 +107,14 @@ interface PendingFidelityPayload {
 }
 const pendingFidelity = new Map<string, PendingFidelityPayload>();
 
+/** Subagent terminal status buffered until the owning session materializes.
+ *  Phase-completion events (requirements.completed, architect.completed,
+ *  design_analysis.completed) arrive AFTER the subagent runs, but on a
+ *  reconnect replay they may reach the writer before the session's first
+ *  `message.updated` in the normalized stream order. Same pattern as
+ *  `pendingFidelity` — held out-of-band, drained by `ensureSessionCard`. */
+const pendingSubagentTerminal = new Map<string, "completed" | "error">();
+
 // ── Entry point ──
 
 /** Reset all writer state + cardTreeStore. Called on task switch and in tests. */
@@ -112,6 +124,7 @@ export function resetWriter(): void {
   knownGoalIDs.clear();
   fidelityCardOwners.clear();
   pendingFidelity.clear();
+  pendingSubagentTerminal.clear();
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
   setCardTreeStore("order", []);
@@ -227,6 +240,16 @@ export function applyEvent(event: any): void {
   // card so the operator sees a verdict badge + diff list instead.
   if (type === "fidelity.review.completed") {
     return handleFidelityCompleted(event);
+  }
+
+  // ── Subagent phase completion ──
+  // requirements / architect / design_analysis emit a phase-completed event
+  // with `sessionID` + `status` at the exact moment their subagent returns.
+  // The writer flips the owning session card out of `running` — without this
+  // every subagent card spins forever (session cards have no other terminal
+  // signal; see specs/new-arch/07-panel-reactivity.md §session 终态).
+  if (isSubagentPhaseCompletedEventType(type)) {
+    return handleSubagentPhaseCompleted(event);
   }
 
   // ── No-op events (control plane / telemetry). Listed explicitly so the
@@ -384,6 +407,72 @@ function handleTaskChanged(event: any): void {
   // the replay harness. Tree-writer just projects the current boardStore view
   // into cardTreeStore; it does NOT read the event payload directly.
   rebuildBoardDerivedCards();
+  applyOrchestratorRootTerminal();
+}
+
+/** Orchestrator root sessions (no parentSessionID, no goalID) don't have a
+ *  phase-completion event — they can accumulate tool rounds for the whole
+ *  task lifetime. Their terminal signal is the task itself going terminal.
+ *  We read `boardStore.board.task.status` rather than the event payload so
+ *  late-arriving reconnect replays and HTTP refetches of the board both
+ *  trigger the same convergence. Idempotent: only writes when the card is
+ *  still `running`. */
+function applyOrchestratorRootTerminal(): void {
+  const task = (boardStore.board as any)?.task;
+  if (!task) return;
+  const raw = String(task?.status || "").toLowerCase();
+  const isTerminal = raw === "completed" || raw === "failed" || raw === "cancelled";
+  if (!isTerminal) return;
+  const target: CardStatus = raw === "completed" ? "completed" : "error";
+  setCardTreeStore(
+    "cards",
+    produce((cards: Record<string, CardNode>) => {
+      for (const info of sessions.values()) {
+        if (info.parentSessionID) continue;
+        if (info.goalID) continue;
+        const card = cards[info.cardID];
+        if (!card || card.status !== "running") continue;
+        card.status = target;
+      }
+    }),
+  );
+}
+
+function handleSubagentPhaseCompleted(event: any): void {
+  const type = String(event?.type || "");
+  const props = propsOf(event);
+  const sessionID = String(props.sessionID || "");
+  const status = String(props.status || "");
+  if (!sessionID) {
+    throw new Error(`${type} missing sessionID`);
+  }
+  if (status !== "completed" && status !== "error") {
+    throw new Error(`${type} invalid status "${status}"`);
+  }
+  const info = sessions.get(sessionID);
+  if (!info || !cardTreeStore.cards[info.cardID]) {
+    // Session card not yet materialized — hold until ensureSessionCard runs.
+    // Mirrors the pendingFidelity pattern; drained in ensureSessionCard.
+    pendingSubagentTerminal.set(sessionID, status);
+    return;
+  }
+  writeSessionTerminalStatus(info.cardID, status);
+}
+
+function writeSessionTerminalStatus(cardID: string, status: "completed" | "error"): void {
+  setCardTreeStore("cards", cardID, "status", status);
+}
+
+/** Drain any terminal status buffered for this session. Called from
+ *  ensureSessionCard after the session is committed, parallel to
+ *  drainPendingFidelity. */
+function drainPendingSubagentTerminal(sessionID: string): void {
+  const status = pendingSubagentTerminal.get(sessionID);
+  if (!status) return;
+  const session = sessions.get(sessionID);
+  if (!session || !cardTreeStore.cards[session.cardID]) return;
+  pendingSubagentTerminal.delete(sessionID);
+  writeSessionTerminalStatus(session.cardID, status);
 }
 
 function handleInteraction(event: any): void {
@@ -563,6 +652,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
     // message.updated (reconnect replay, SSE interleaving). Drain any held
     // payload now that the session card exists under its real stage id.
     drainPendingFidelity(sessionID);
+    drainPendingSubagentTerminal(sessionID);
     return existing;
   }
 
@@ -599,6 +689,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
 
   rebuildCardHierarchy();
   drainPendingFidelity(sessionID);
+  drainPendingSubagentTerminal(sessionID);
   return info;
 }
 
