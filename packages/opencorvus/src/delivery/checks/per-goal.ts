@@ -205,6 +205,36 @@ export async function evaluateGoal(input: {
 
   const results: CheckResult[] = []
 
+  // ── stream helper ──
+  // Emit a markdown-formatted block for each check as a reasoning-delta
+  // chunk. The attached sessionStreamHooks (if any) translates that into
+  // a `reasoning` part on the evaluator session, which the overlay
+  // renders inline under the `evaluate` phase card. Each check shows:
+  // kind icon + name + command + exit/output summary, so the operator can
+  // see what ran and why it passed/failed without opening the DB.
+  const emit = async (text: string) => {
+    if (!input.stream?.onChunk) return
+    try {
+      await input.stream.onChunk({ chunk: { type: "reasoning-delta", text } as any })
+    } catch (err) {
+      log.warn("eval stream emit failed (non-fatal)", { goalID: goal.id, error: String(err) })
+    }
+  }
+  const icon = (passed: boolean) => (passed ? "✓" : "✗")
+  const renderShellResult = (name: string, command: string, kind: string, run: Awaited<ReturnType<typeof Shell.run>>, passed: boolean): string => {
+    const head: string[] = [`\n${icon(passed)} ${kind} \`${name}\`\n`, `  $ ${command}\n`, `  exit ${run.exitCode}`]
+    if (run.timedOut) head.push(" · timed out")
+    if (run.idleTimedOut) head.push(" · idle-timed-out")
+    head.push("\n")
+    const stdout = run.stdout.trim().slice(-1500)
+    if (stdout) head.push(`  stdout:\n${stdout.split("\n").map(l => "    " + l).join("\n")}\n`)
+    const stderr = run.stderr.trim().slice(-800)
+    if (stderr) head.push(`  stderr:\n${stderr.split("\n").map(l => "    " + l).join("\n")}\n`)
+    return head.join("")
+  }
+
+  await emit(`# Evaluator · goal ${goal.id}\n  workDir: ${evalDir}\n  tier: ${tier}\n  heuristic specs: ${plan.heuristic.length} · rubric specs: ${plan.rubric.length} · discovered: ${supplement.length}\n`)
+
   // ── 3. Execute on_goal heuristic scorers ──
   for (const item of plan.heuristic) {
     if (signal?.aborted) throw new Error("eval aborted")
@@ -219,10 +249,12 @@ export async function evaluateGoal(input: {
         mode: item.mode,
         severity: item.severity,
       })
+      await emit(`\n⟳ heuristic \`${item.name}\` — deferred to delivery, skipping at goal stage\n`)
       continue
     }
 
     const cwd = item.cwd ? path.resolve(evalDir, item.cwd) : evalDir
+    await emit(`\n▶ heuristic \`${item.name}\` — running \`${item.command}\` in ${cwd}\n`)
     const run = await Shell.run(item.command, {
       cwd,
       env: process.env,
@@ -241,6 +273,7 @@ export async function evaluateGoal(input: {
       mode: item.mode,
       severity: item.severity,
     })
+    await emit(renderShellResult(item.name, item.command, `heuristic (${item.mode})`, run, passed))
 
     log.info("eval heuristic", {
       goalID: goal.id,
@@ -267,9 +300,11 @@ export async function evaluateGoal(input: {
         mode: item.mode,
         severity: item.severity,
       })
+      await emit(`\n⟳ rubric \`${item.name}\` (${item.kind}) — deferred to delivery, skipping at goal stage\n`)
       continue
     }
 
+    await emit(`\n▶ rubric \`${item.name}\` (${item.kind}) — calling LLM judge\n`)
     const out = await runRubric(item, {
       deliverySummary: delivery.summary,
       changedFiles,
@@ -288,11 +323,14 @@ export async function evaluateGoal(input: {
       mode: item.mode,
       severity: item.severity,
     })
+    const evidenceSnippet = out.evidence.split("\n").map(l => "    " + l).join("\n").slice(0, 2000)
+    await emit(`\n${icon(out.status === "passed")} rubric \`${item.name}\` (${item.mode}) — ${out.status}\n${evidenceSnippet}\n`)
   }
 
   // ── 5. Supplementary project commands ──
   for (const { name, command } of supplement) {
     if (signal?.aborted) throw new Error("eval aborted")
+    await emit(`\n▶ discovered \`${name}\` — running \`${command}\`\n`)
     const run = await Shell.run(command, {
       cwd: evalDir,
       env: process.env,
@@ -309,6 +347,7 @@ export async function evaluateGoal(input: {
       source: "project_discovery",
       mode: "soft",
     })
+    await emit(renderShellResult(name, command, "discovered (soft)", run, passed))
     log.info("eval discovery", { goalID: goal.id, name, command, exitCode: run.exitCode, passed })
   }
 
@@ -359,14 +398,16 @@ export async function evaluateGoal(input: {
   // found no fallback build/test command. Returning pass-by-default would
   // hide a configuration bug — explicitly reject so the operator notices.
   if (results.length === 0) {
+    const reasoning =
+      "Cannot evaluate this goal — its acceptance_specs are empty and project discovery found nothing to run. " +
+      "Re-run requirements (or add specs via add_goal/modify_goal) before retrying."
+    await emit(`\n✗ verdict: rejected — no scorers ran\n  ${reasoning}\n`)
     return {
       pass: false,
       verdict: "rejected",
       evidence: ["Goal has no acceptance scorers and no discoverable build/test commands."],
       evidenceStatus: ["failed"],
-      reasoning:
-        "Cannot evaluate this goal — its acceptance_specs are empty and project discovery found nothing to run. " +
-        "Re-run requirements (or add specs via add_goal/modify_goal) before retrying.",
+      reasoning,
       failureClass: "goal_wrong",
       checks: [],
     }
@@ -379,18 +420,21 @@ export async function evaluateGoal(input: {
   const evidence = results.map((r) => `[${r.source}${r.severity ? `:${r.severity}` : ""}] ${r.name}: ${r.command}`)
   const evidenceStatus: Array<"passed" | "failed" | undefined> = results.map((r) => (r.passed ? "passed" : "failed"))
 
+  const reasoning = passedAllStrict
+    ? `All ${results.length} check(s) passed${
+        softFailed.length > 0 ? `; ${softFailed.length} soft scorer(s) failed (annotated, non-blocking).` : "."
+      }`
+    : `${strictFailed.length} of ${results.length} strict check(s) failed:\n${strictFailed
+        .map((r) => `- [${r.source}] ${r.name}: ${r.output.slice(0, 500)}`)
+        .join("\n")}`
+  await emit(`\n${icon(passedAllStrict)} verdict: ${passedAllStrict ? "accepted" : "rejected"}\n  ${reasoning}\n`)
+
   return {
     pass: passedAllStrict,
     verdict: passedAllStrict ? "accepted" : "rejected",
     evidence,
     evidenceStatus,
-    reasoning: passedAllStrict
-      ? `All ${results.length} check(s) passed${
-          softFailed.length > 0 ? `; ${softFailed.length} soft scorer(s) failed (annotated, non-blocking).` : "."
-        }`
-      : `${strictFailed.length} of ${results.length} strict check(s) failed:\n${strictFailed
-          .map((r) => `- [${r.source}] ${r.name}: ${r.output.slice(0, 500)}`)
-          .join("\n")}`,
+    reasoning,
     failureClass: passedAllStrict ? undefined : "bug",
     checks: results,
   }
