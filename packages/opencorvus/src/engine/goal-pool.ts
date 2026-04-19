@@ -47,7 +47,7 @@ import {
 } from "./persist"
 import { EngineGoalTable, EnginePlanNodeTable } from "./engine.sql"
 import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
-import { buildGoalPrompt, createBuildSession, createGoalSession } from "@/goal/runner"
+import { buildGoalPrompt, createBuildSession, createExecutorSession } from "@/goal/runner"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
@@ -308,11 +308,19 @@ export class GoalPool {
       // Planning is NOT optional — failure propagates and the goal run fails.
       let planNodeBrief: string
       // Per-goal step identity: the only goal-scope step in the pipeline
-      // workflow is `build`. We create a kind="build" container session up
-      // front and nest planner + executor as its children — this matches
-      // the overlay's goalToNode lookup (step "build" → stage "build") and
-      // surfaces the plan/execute sub-phases beneath a single build card.
-      const buildSession = await createBuildSession(
+      // workflow is `build`, with three phases (plan / build / evaluate).
+      // We create a kind="executor" container session up front — the
+      // overlay maps this to the step card, and planner / build / evaluator
+      // child sessions claim under the matching phase sub-card. The
+      // container has no LLM of its own; the seeded dispatch header is
+      // surfaced through the step card's header row.
+      //
+      // Named `containerSession` rather than `executorSession` to avoid
+      // collision with `ensureExecutorSession`'s engine_executor_session
+      // row at line ~528 — a different domain (provider-level tracking
+      // of the external executor's own session) that happens to share
+      // the word "executor".
+      const containerSession = await createExecutorSession(
         task as any,
         entry.goal as any,
         worktreeDir!,
@@ -332,12 +340,12 @@ export class GoalPool {
             : [],
         }
         // Per-goal planner session: persisted via session.kind='planner' +
-        // session.goal_id with parentID=buildSession.id so it nests under
-        // the build container in the overlay.
+        // session.goal_id with parentID=containerSession.id so it nests
+        // under the executor container in the overlay (plan phase).
         const planSession = await Session.createNext({
           kind: "planner",
           goalID: entry.goal.id,
-          parentID: buildSession.id,
+          parentID: containerSession.id,
           title: `Plan: ${entry.goal.title}`,
           directory: Instance.directory,
         })
@@ -385,12 +393,13 @@ export class GoalPool {
         }
       }
 
-      // ── 3. Create goal session ──
-      // createGoalSession persists the session row with kind="executor" and
+      // ── 3. Create build worker session ──
+      // createBuildSession persists the session row with kind="build" and
       // goalID=entry.goal.id, so sessionRole/sessionGoalID resolve correctly
-      // before opencode emits its first message. parentSessionID=buildSession.id
-      // nests the executor card under the build container in the overlay.
-      const goalSession = await createGoalSession(task as any, entry.goal as any, worktreeDir, buildSession.id)
+      // before opencode emits its first message. parentSessionID is the
+      // executor container so the build worker nests under the executor
+      // card in the overlay (build phase within the step).
+      const buildSession = await createBuildSession(task as any, entry.goal as any, worktreeDir, containerSession.id)
 
       // ── 4. Create GoalRun record ──
       goalRun = createGoalRun({
@@ -398,7 +407,7 @@ export class GoalPool {
         goalID: entry.goal.id,
         planNodeID: entry.node.id,
         coordinatorRunID: run.id,
-        sessionID: goalSession.id,
+        sessionID: buildSession.id,
         workspaceDir: worktreeDir,
         metadata: { worktree_branch: worktreeInfo.branch },
       })
@@ -466,14 +475,14 @@ export class GoalPool {
         const sections: string[] = []
         const memory = await MemoryInjection.systemPromptSection({
           projectID: Instance.project.id,
-          sessionID: goalSession.id,
+          sessionID: buildSession.id,
           query: prompt.slice(0, 500),
         }).catch(err => {
           log.warn("memory injection failed, continuing without historical context", { error: String(err) })
           return null
         })
         if (memory) sections.push(memory)
-        const taskPlanSection = TaskPlan.toMarkdown(goalSession.id)
+        const taskPlanSection = TaskPlan.toMarkdown(buildSession.id)
         if (taskPlanSection) sections.push(taskPlanSection)
         if (sections.length > 0) systemOverride = sections.join("\n\n")
       }
@@ -504,7 +513,7 @@ export class GoalPool {
       // is a no-op but keeps the call site for parity with the failure paths.
       const executor = ExecutorRegistry.createInstance(run.executor)
       const submission = await executor.submit({
-        sessionID: goalSession.id,
+        sessionID: buildSession.id,
         prompt,
         priority: task.priority,
         source: "planner",
@@ -551,7 +560,7 @@ export class GoalPool {
       const pipeline = runGoalPipeline(contract, {
         executor,
         workDir: worktreeDir,
-        sessionID: goalSession.id,
+        sessionID: buildSession.id,
         executorSessionID: executorSession.id,
         queueTaskID: submission.queueTaskID,
         signal,
@@ -587,7 +596,7 @@ export class GoalPool {
         // that handles text, reasoning, tool calls/results, usage, and session lifecycle.
         // It skips opencode (which manages its own session natively).
         if (event.type === "executor_event") {
-          projectExecutorEventToSession(task.id, run, goalSession.id, event.event).catch((err) => {
+          projectExecutorEventToSession(task.id, run, buildSession.id, event.event).catch((err) => {
             log.warn("executor event session projection failed", {
               goalID: entry.goal.id, eventType: event.event?.type, error: String(err),
             })

@@ -230,9 +230,20 @@ export async function cleanupGoalWorkspace(directory?: string) {
   else log.warn("cleanupGoalWorkspace completed with failures", summary)
 }
 
-export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string, parentSessionID?: string) {
+/**
+ * Create the per-goal **build** worker session — the LLM that actually
+ * writes code inside the goal's worktree. Named by its role: this session
+ * does the build phase of the goal. Its parent is the executor container
+ * session (see createExecutorSession below), which groups plan + build +
+ * evaluate sessions under one overlay step card.
+ *
+ * (Renamed from createGoalSession + kind:"executor" — that naming had the
+ *  worker-vs-container wires crossed. See specs/new-arch/07-panel-reactivity
+ *  §session 终态 for the agreed vocabulary.)
+ */
+export async function createBuildSession(task: TaskRow, goal: GoalRow, directory?: string, parentSessionID?: string) {
   const session = await Session.createNext({
-    kind: "executor",
+    kind: "build",
     goalID: goal.id,
     parentID: parentSessionID ?? task.session_id ?? undefined,
     title: `${task.title}: ${goal.title}`,
@@ -250,17 +261,20 @@ export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?
 }
 
 /**
- * Create the per-goal `build` container session and seed it with one
+ * Create the per-goal **executor** container session and seed it with one
  * assistant-role header message describing the dispatch. The container has
  * no LLM of its own — its purpose is to carry the goal-scope step in the
- * overlay, with planner + executor child sessions nesting beneath it.
+ * overlay, grouping planner + build + evaluator child sessions under one
+ * parent for permission inheritance and transcript organisation.
  *
  * The header message is authentic content: it records what the build step
- * dispatched, the worktree branch, and the acceptance specs summary. Without
- * this seed message, `buildSessionBucketCard` drops empty sessions from
- * `messagesBySession` and the container vanishes from the overlay.
+ * dispatched, the worktree branch, and the acceptance specs summary.
+ *
+ * (Renamed from createBuildSession + kind:"build" — that naming confused
+ *  the container with the worker; "executor" = the thing that executes the
+ *  goal, "build" = the worker that writes code.)
  */
-export async function createBuildSession(
+export async function createExecutorSession(
   task: TaskRow,
   goal: GoalRow,
   worktreeDir: string,
@@ -268,15 +282,15 @@ export async function createBuildSession(
   parentSessionID: string,
 ) {
   const session = await Session.createNext({
-    kind: "build",
+    kind: "executor",
     goalID: goal.id,
     parentID: parentSessionID,
     title: `Build: ${goal.title}`,
     directory: worktreeDir,
   })
   // Build container session inherits the same permission contract as
-  // createGoalSession: fall through to PermissionNext + AutoPermission,
-  // don't hardcode allow-all. See createGoalSession for rationale.
+  // createBuildSession: fall through to PermissionNext + AutoPermission,
+  // don't hardcode allow-all. See createBuildSession for rationale.
 
   const specsText = renderSpecsAsText(goal.acceptance_specs ?? [])
   const ownedPaths = Array.isArray(goal.owned_paths) ? goal.owned_paths : []

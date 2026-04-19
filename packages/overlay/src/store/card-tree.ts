@@ -54,7 +54,7 @@ export interface BoundaryPart {
  *  the sidebar Goals panel shows. */
 export interface StepPayload {
   planNodes?: Array<{ id: string; title: string; brief: string; orderIndex: number }>;
-  executorSessionID?: string;
+  buildSessionID?: string;
   workspaceDir?: string;
   changedFiles?: string[];
   diffStats?: { files?: number; additions?: number; deletions?: number };

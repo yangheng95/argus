@@ -17,7 +17,7 @@ import { StepPayloadBody } from "./StepPayloadBody";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { orderedMessageParts } from "../utils/message";
-import { openExecutorSessionDialog } from "../services/dialog";
+import { openBuildSessionDialog } from "../services/dialog";
 import type { StepPayload } from "../store/card-tree";
 
 // ── Types ──
@@ -150,11 +150,12 @@ function StepRow(props: {
   const hasEvalBody = () =>
     hasChecks() || !!props.step.payload?.evalSummary || !!props.step.payload?.verdict;
   const hasMessages = () => !!props.messages && props.messages.length > 0;
-  // The pipeline workflow uses `build` as the single goal-scope step —
-  // surface its executor session link when the payload carries one.
+  // The pipeline workflow uses `build` as the single goal-scope step;
+  // the payload carries a pointer to the goal's build worker session
+  // (SessionTable kind="build"). Scope-based: any step whose payload
+  // ships a build session id surfaces the "open session" affordance.
   const hasOpenSession = () =>
-    props.step.stepID === "build" &&
-    !!props.step.payload?.executorSessionID;
+    !!props.step.payload?.buildSessionID;
   const hasContent = createMemo(() =>
     hasPlanNodes() || hasChangedFiles() || hasEvalBody() || hasMessages() || hasOpenSession(),
   );
@@ -190,9 +191,9 @@ function StepRow(props: {
         </summary>
         <div class="gwg-step-body">
           <StepPayloadBody payload={props.step.payload} stepID={props.step.stepID} />
-          {/* Sidebar-only affordance: jump to the executor session dialog.
-              The main-conversation Card already renders the session inline,
-              so it doesn't need this button. */}
+          {/* Sidebar-only affordance: jump to the goal's build session
+              dialog. The main-conversation Card already renders the session
+              inline, so it doesn't need this button. */}
           <Show when={hasOpenSession()}>
             <div class="gwg-open-session">
               <button
@@ -200,8 +201,8 @@ function StepRow(props: {
                 class="gwg-open-session-btn"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void openExecutorSessionDialog(
-                    props.step.payload!.executorSessionID!,
+                  void openBuildSessionDialog(
+                    props.step.payload!.buildSessionID!,
                     props.goalTitle ?? "",
                   );
                 }}
