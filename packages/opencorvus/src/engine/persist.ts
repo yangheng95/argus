@@ -354,13 +354,13 @@ export function resetTaskGoalsToPending(input: {
       clearedCascade++
     }
     const tip = findLatestTipGoalRun(goal.id)
-    // Both `failed` and `aborted` are terminal non-completed statuses that
-    // must be superseded so the goal is eligible for re-dispatch. Omitting
-    // `aborted` left signal-aborted / evaluator-aborted tips un-superseded;
-    // deriveGoalStatus then saw "no active tip, not completed" and flipped
-    // goal.status back to pending, re-dispatch reused the same aborted
-    // goal_run, and executor.ts:86 threw on the FSM transition forever.
-    if (tip && (tip.status === "failed" || tip.status === "aborted")) {
+    // Any terminal tip (failed / aborted / completed) must be superseded so
+    // the goal is eligible for re-dispatch. `completed` was added when
+    // abortLiveExecutionForTask stopped flipping completed→aborted
+    // (catalog.ts resettable=false): restart_from_stage needs a way to
+    // invalidate prior success under a new run, and the supersede marker
+    // is now the sole mechanism.
+    if (tip && (tip.status === "failed" || tip.status === "aborted" || tip.status === "completed")) {
       const existingMeta = (tip.metadata ?? {}) as Record<string, unknown>
       if (typeof existingMeta.superseded_reason !== "string" || !existingMeta.superseded_reason) {
         supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now })

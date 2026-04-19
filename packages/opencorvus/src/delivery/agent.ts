@@ -448,7 +448,7 @@ function buildUserPrompt(
     delivery: DeliveryInfo
     checkResults?: Array<{ name: string; status: string; evidence?: string; mode?: "strict" | "soft" }>
     analysis?: GoalJudgmentType
-    attachments?: Array<{ sha: string; mime: string; filename?: string }>
+    attachments?: Array<{ sha: string; mime: string; filename?: string; intent?: string }>
   },
   context?: string,
 ): string {
@@ -463,26 +463,37 @@ function buildUserPrompt(
   // visually instead of trying to read_file on the binary path.
   const images = (input.attachments ?? []).filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/"))
   if (images.length > 0) {
-    const list = images.map((a) => `- ${a.filename ?? a.sha} (${a.mime})`).join("\n")
+    const rendered = images.filter((a) => a.intent === "rendered_output")
+    const references = images.filter((a) => a.intent !== "rendered_output")
+    const renderedList = rendered.map((a) => `- ${a.filename ?? a.sha} (${a.mime})`).join("\n")
+    const referenceList = references.map((a) => `- ${a.filename ?? a.sha} (${a.mime})`).join("\n")
     sections.push(
-      `# Visual Reference\n\n` +
-      `The target design is attached to this message as image content (not as a project file).\n\n` +
-      `**You MUST perform visual comparison yourself.** Follow these steps:\n` +
-      `1. The reference image is attached above — study it carefully (layout, colors, spacing, typography, component structure).\n` +
-      `2. Use \`read_file\` on \`.opencorvus/visual-diff/rendered.png\` to see the actual rendered screenshot. ` +
-      `The read tool handles images correctly and returns them as visual content — do NOT skip this step.\n` +
-      `3. Compare the two images visually. Identify EVERY concrete difference:\n` +
-      `   - Layout mismatches (element positions, alignment, proportions)\n` +
-      `   - Color differences (background, text, progress bars, borders)\n` +
-      `   - Typography issues (font size, weight, family, line-height)\n` +
-      `   - Spacing/padding errors (margins between sections, inner padding)\n` +
-      `   - Missing or extra elements\n` +
-      `   - Interaction elements (buttons, toggles, links) that look wrong\n` +
-      `4. If visual_diff failed in query_criteria, you MUST reject with specific visual feedback — ` +
-      `listing each difference so the executor knows exactly what to fix. ` +
-      `A generic "visual diff failed" is NOT acceptable feedback.\n` +
-      `5. The SSIM score from query_criteria is a supporting metric, not a substitute for your visual judgment.\n\n` +
-      `Attached reference images:\n${list}`,
+      `# Visual Comparison\n\n` +
+      `This task ships with multimodal image attachments. Both the reference(s) AND the ` +
+      `just-rendered screenshot of the delivered output are attached to this message as ` +
+      `image content — you can see them directly, you do NOT need read_file.\n\n` +
+      (rendered.length > 0
+        ? `**Rendered output** (the actual delivery, puppeteer-screenshot of the built merged worktree):\n${renderedList}\n\n`
+        : `**Rendered output**: no rendered.png was produced for this delivery — either the build failed or no index.html was found. Treat this as a visual failure: the user cannot see any output.\n\n`) +
+      (references.length > 0
+        ? `**Reference(s)** (what the delivery was supposed to look like):\n${referenceList}\n\n`
+        : ``) +
+      `**You MUST perform the visual comparison yourself, adversarially.** There is no ` +
+      `SSIM gate anymore — a single similarity number was a lazy proxy that let delivery ` +
+      `rubber-stamp "close enough" without really looking. Your job is to look at the two ` +
+      `images and name every concrete difference the executor can act on:\n\n` +
+      `- **Layout**: element positions, alignment, proportions, grid/flex direction\n` +
+      `- **Spacing**: margins between sections, inner padding, gaps between components\n` +
+      `- **Colors**: background, text, accents, borders, hover/active states — name the ` +
+      `  semantic role, not just "this is lighter"\n` +
+      `- **Typography**: font size, weight, family, line-height, letter-spacing\n` +
+      `- **Components**: missing or extra elements (buttons, toggles, icons, badges, ` +
+      `  progress bars, sidebar sections)\n` +
+      `- **Text**: wrong labels, missing headings, placeholder text not replaced\n\n` +
+      `Write each difference in rejection_details with enough specificity that an ` +
+      `executor reading only your feedback can fix it. "Sidebar is slightly off" is ` +
+      `useless; "Sidebar width should be 240px not 320px, and the 'Billing' row is ` +
+      `missing the info icon on its right" is actionable.`,
     )
   }
 
@@ -510,7 +521,8 @@ function buildUserPrompt(
       blocks.push(
         `## Strict Failures (BINDING — verdict MUST be "rejected")\n\n` +
         `${strictFailed.length} strict check(s) failed. These are deterministic gates ` +
-        `(build / typecheck / test / visual_diff with severity=essential|important). ` +
+        `(build / typecheck / test with severity=essential|important — visual similarity ` +
+        `is NOT a gate; the LLM does the comparison above). ` +
         `You CANNOT accept while any strict check is failing — the orchestrator ` +
         `will force-reject any "accepted" verdict emitted under these conditions. ` +
         `List each failure in rejection_details with a concrete suggestion for the executor.\n\n` +
@@ -736,7 +748,7 @@ Do NOT re-run build/test/lint commands the Evaluator already ran — the results
 - **read_file**, **find_files**, **search_code**, **list_directory**: Inspect codebase
 
 ### Quality criteria
-- **query_criteria**: Read every quality criterion already recorded for this task — per-goal evaluator outcomes (build / test / lint / visual_diff), prior delivery checks, external quality gates. ALWAYS call this BEFORE deciding the verdict.
+- **query_criteria**: Read every quality criterion already recorded for this task — per-goal evaluator outcomes (build / test / lint), prior delivery checks, external quality gates. ALWAYS call this BEFORE deciding the verdict. Visual similarity is NOT recorded as a criterion; compare the attached rendered image vs reference image yourself.
 
 ### Rework (use when you find fixable issues)
 - **write_file**: Write or overwrite a file
@@ -763,7 +775,7 @@ The Evaluator already ran the deterministic part. Look at the "Core Check Result
 1. For each FAILED check — open the cited evidence, decide whether you can fix it (small targeted patch) or whether it needs a full executor re-run (call submit_next_task with priority="critical" + failed_criteria)
 2. For PASSED checks — accept them, do NOT re-run the same commands
 3. If a check you believe should exist is missing entirely (e.g. project has tests but no test entry), run it once with run_command and record it under deferred_checks (the evaluator did not detect it; this is gap coverage, not duplication)
-4. **visual_diff failed** — this is a STRICT check. You MUST read_file on \`.opencorvus/visual-diff/rendered.png\` to see the rendered output, visually compare it against the attached reference image, and list every concrete difference in your rejection. Do NOT accept when visual_diff is failed.
+4. **Visual comparison** — when rendered.png + reference image(s) are attached, you MUST compare them yourself (see the "Visual Comparison" section of the user prompt). Name every concrete difference — layout, spacing, colors, typography, missing/extra components — with enough specificity that an executor reading only your rejection_details can fix each one. "Layout is off" is not acceptable; "sidebar width should be 240px not 320px, Billing row missing info icon" is.
 
 ### Phase 2: PER-GOAL CRITERIA VERIFICATION (rubric / semantic)
 For EACH goal in the goals list below, evaluator covered the heuristic-shaped (executable command) part of its acceptance_specs. You handle the rest:
@@ -858,7 +870,7 @@ Output your decision as plain markdown with these sections:
 - **rejected**: Issues remain that require executor-level rework (not fixable by delivery agent). Rejection loops back to the executor with your structured feedback — be specific so the rework is targeted.
 
 ## Rules
-- ALWAYS call query_criteria first — it shows every check already recorded for this task (Evaluator's deterministic outcomes including build/test/lint/visual_diff, prior delivery work). Do NOT duplicate work that already passed; do confront every failed criterion before deciding.
+- ALWAYS call query_criteria first — it shows every check already recorded for this task (Evaluator's deterministic outcomes: build / test / lint, prior delivery work). Visual similarity is NOT in query_criteria (SSIM gate was removed) — do the comparison yourself against the attached rendered+reference images. Do NOT duplicate work that already passed; do confront every failed criterion before deciding.
 - Do NOT re-run build/test/lint commands the Evaluator already ran. Trust their outcome; re-run only after applying a fix to confirm it landed.
 - ALWAYS verify each goal's acceptance criteria explicitly — for the rubric/semantic parts the Evaluator could not run deterministically — this is mandatory, not optional
 - ALWAYS start the application to verify runtime behavior — reading code alone is NOT sufficient (Evaluator does not start the app)

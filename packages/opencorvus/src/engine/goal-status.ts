@@ -107,12 +107,15 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   const supersededReason = meta && typeof meta === "object" && !Array.isArray(meta)
     ? (meta as Record<string, unknown>).superseded_reason
     : undefined
-  // Both `failed` and `aborted` tips can be superseded for retry intent —
-  // see engine/persist.ts supersedeGoalRun caller. Deriving `pending` only
-  // when head is `failed` left aborted retries stranded (goal.status stayed
-  // at aborted, task loop never re-dispatched, goal never completed).
+  // Terminal tips annotated with `superseded_reason` project as `pending`
+  // regardless of which terminal state they landed in:
+  //   - `failed` / `aborted` — retry intent from retry_failed_goals.
+  //   - `completed`          — contract modified via modify_goal; the old
+  //     success record is preserved but a new goal_run must run under the
+  //     new contract. Without this projection the completed tip would keep
+  //     projecting `passed` and dispatch would never pick it up.
   if (
-    (head.status === "failed" || head.status === "aborted") &&
+    (head.status === "failed" || head.status === "aborted" || head.status === "completed") &&
     typeof supersededReason === "string" &&
     supersededReason.length > 0
   ) {

@@ -411,51 +411,15 @@ export async function evaluateGoal(input: {
     log.info("eval discovery", { goalID: goal.id, name, command, exitCode: run.exitCode, passed })
   }
 
-  // ── 6. Visual diff (unchanged from old evaluator — orthogonal to specs) ──
-  const visualRef = resolveVisualReference(goal)
-  if (visualRef) {
-    if (signal?.aborted) throw new Error("eval aborted")
-    const { findRenderedIndex, runVisualDiff, summarizeVisualReport } = await import("./visual")
-    const renderedHtml = await findRenderedIndex(evalDir)
-    if (!renderedHtml) {
-      results.push({
-        name: "visual_diff",
-        command: `visual-diff against ${visualRef}`,
-        passed: false,
-        output: `no index.html found under ${evalDir} — executor must produce a renderable entry point`,
-        source: "visual",
-        mode: "strict",
-        scorer_kind: "visual_diff",
-        trigger: "on_goal",
-      })
-    } else {
-      const visualOut = path.join(evalDir, ".opencorvus", "visual-diff")
-      try {
-        const report = await runVisualDiff({ rendered: renderedHtml, reference: visualRef, outDir: visualOut })
-        results.push({
-          name: "visual_diff",
-          command: `visual-diff rendered=${renderedHtml} reference=${visualRef}`,
-          passed: report.passed,
-          output: summarizeVisualReport(report),
-          source: "visual",
-          mode: "strict",
-          scorer_kind: "visual_diff",
-          trigger: "on_goal",
-        })
-      } catch (err) {
-        results.push({
-          name: "visual_diff",
-          command: `visual-diff rendered=${renderedHtml} reference=${visualRef}`,
-          passed: false,
-          output: `visual-diff failed to run: ${err instanceof Error ? err.message : String(err)}`,
-          source: "visual",
-          mode: "strict",
-          scorer_kind: "visual_diff",
-          trigger: "on_goal",
-        })
-      }
-    }
-  }
+  // Visual comparison is no longer a per-goal strict check. A single SSIM
+  // number ("mean=0.72") was the only feedback the executor received on
+  // rework, which is not actionable — it tells you "different" but not
+  // "different where". The pipeline now renders the delivery output to
+  // rendered.png (tools.ts task-level gate) and feeds it to the delivery
+  // agent as a multimodal attachment alongside the reference, so the LLM
+  // can produce specific spatial/visual feedback ("header missing N
+  // button, sidebar 20px too wide, primary color too dark") that the
+  // executor can act on.
 
   // ── 7. Verdict aggregation by mode (severity) ──
   // If no scorers ran at all, the goal contract is malformed: the schema
@@ -517,14 +481,6 @@ function requirementTextFor(_contract: GoalContract, _item: TranslatedRubric): s
   return undefined
 }
 
-function resolveVisualReference(goal: GoalContract["goal"]): string | undefined {
-  const meta = (goal.metadata as Record<string, unknown> | undefined) ?? {}
-  const direct = typeof meta.visual === "string" ? meta.visual : undefined
-  if (direct) return direct
-  const ref = typeof meta.visual_reference === "string" ? meta.visual_reference : undefined
-  if (ref) return ref
-  return undefined
-}
 
 function scorerPassed(run: Shell.RunResult, expectedExitCode?: number): boolean {
   const wanted = expectedExitCode ?? 0

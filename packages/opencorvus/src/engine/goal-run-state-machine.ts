@@ -9,7 +9,12 @@ const VALID_TRANSITIONS: Record<GoalRunStatus, readonly GoalRunStatus[]> = {
   running: ["evaluating", "blocked", "completed", "failed", "aborted"],
   evaluating: ["blocked", "completed", "failed", "aborted"],
   blocked: ["accepted", "planning", "running", "evaluating", "completed", "failed", "aborted"],
-  completed: ["aborted"],
+  // `completed` is terminal-successful. Retry under a changed contract
+  // (modify_goal) or full restart (restart_from_stage) must create a NEW
+  // goal_run and mark this one superseded via metadata — never flip it to
+  // aborted, which erases the success record and causes parent goal.status
+  // to regress from passed → pending. See engine/catalog.ts resettable=false.
+  completed: [],
   failed: [],
   aborted: [],
 }

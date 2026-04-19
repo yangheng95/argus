@@ -331,11 +331,13 @@ async function decodePNG(filePath: string): Promise<PNG> {
 
 const DISCOVERY_SKIP_DIRS = new Set([
   ".git",
+  // `.opencorvus` covers both our scratch (attachments, visual-diff) AND
+  // goal worktrees (now at `<primary>/.opencorvus/worktrees/`). One entry
+  // replaces the prior pair of `.opencorvus` + `.opencorvus-worktrees`.
   ".opencorvus",
   "node_modules",
   "references",
   "visual-diff-out",
-  ".opencorvus-worktrees",
   // `dist` / `build` / `.next` are the compiled outputs — those are what we
   // actually want to screenshot for Vite / CRA / Next projects. Keeping them
   // in the skip list caused findRenderedIndex to pick up the pre-build
@@ -413,30 +415,42 @@ export async function findRenderedIndex(rootDir: string): Promise<string | undef
   return candidates[0].path
 }
 
-export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiffReport> {
-  const threshold = opts.threshold ?? 0.85
-  const worstThreshold = opts.worstThreshold ?? 0.55
-  for (const [name, value] of [["threshold", threshold], ["worstThreshold", worstThreshold]] as const) {
-    if (!Number.isFinite(value) || value <= 0 || value > 1) {
-      throw new Error(`runVisualDiff: invalid ${name} (expected 0..1): ${value}`)
+/** Pure-render API — renders an HTML/URL target into `<outDir>/rendered.png`
+ *  and returns the absolute path. No SSIM / no comparison. The delivery
+ *  pipeline uses this to hand the LLM a screenshot of the actual built
+ *  artifact; the LLM then compares it against the reference image via its
+ *  vision capability (far more actionable than a single SSIM number).
+ *
+ *  `referenceForViewport` lets callers match the reference image's native
+ *  size when known — otherwise callers must supply an explicit `viewport`.
+ *  One of the two MUST be provided; this helper throws otherwise so we
+ *  don't silently render at an arbitrary default. */
+export async function renderPage(opts: {
+  rendered: string
+  outDir: string
+  viewport?: { width: number; height: number }
+  referenceForViewport?: string
+  browserExecutable?: string
+}): Promise<{ renderedPath: string; viewport: { width: number; height: number }; size: { width: number; height: number } }> {
+  let viewport = opts.viewport
+  if (!viewport) {
+    if (!opts.referenceForViewport) {
+      throw new Error("renderPage: one of `viewport` or `referenceForViewport` is required")
     }
+    await fs.access(opts.referenceForViewport).catch(() => {
+      throw new Error(`renderPage: reference image not found: ${opts.referenceForViewport}`)
+    })
+    const refImg = await decodePNG(opts.referenceForViewport)
+    viewport = { width: refImg.width, height: refImg.height }
   }
-  await fs.access(opts.reference).catch(() => {
-    throw new Error(`runVisualDiff: reference image not found: ${opts.reference}`)
-  })
   await fs.mkdir(opts.outDir, { recursive: true })
-
-  const refImgProbe = await decodePNG(opts.reference)
-  const viewport = opts.viewport ?? { width: refImgProbe.width, height: refImgProbe.height }
 
   const executablePath = await findBrowserExecutable(opts.browserExecutable)
   // Decide how to serve the rendered target:
   //   - http(s) / existing file:// URL → use as-is
   //   - local file path → spawn a static HTTP server rooted at the file's
   //     parent directory. `file://` breaks ES-module script tags that Vite /
-  //     CRA / Next builds emit, which was the entire reason bench7's
-  //     usage-replica-vague render came back blank and SSIM rejected a
-  //     correctly-built app.
+  //     CRA / Next builds emit, which made pre-dist index.html render blank.
   let staticServer: { url: string; close: () => Promise<void> } | undefined
   let target: string
   if (/^https?:\/\//i.test(opts.rendered) || /^file:\/\//i.test(opts.rendered)) {
@@ -446,9 +460,9 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     const serveRoot = path.dirname(absFile)
     // Delivered apps often ship a backend (Express/bun) that serves both the
     // built SPA *and* its own `/api/*` endpoints. A static file server would
-    // 404 every data fetch and leave the UI stuck on loading states, which
-    // tanks SSIM. Try the project's own launch script first; fall back to
-    // the static file server only when no launch script is available.
+    // 404 every data fetch and leave the UI stuck on loading states — try
+    // the project's own launch script first; fall back to static serving
+    // when no launch script is available.
     const projectRoot = await findProjectRoot(serveRoot)
     const launchScript = projectRoot ? await pickProjectLaunchScript(projectRoot) : undefined
     if (projectRoot && launchScript) {
@@ -456,10 +470,8 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
         staticServer = await startProjectServer(projectRoot, launchScript)
         target = `${staticServer.url}/`
       } catch (err) {
-        // Project server refused to start — fall through to static serving
-        // the dist output. Logged so the operator can spot backend issues.
         console.error(
-          `[visual-diff] project launch script "${launchScript.script}" failed: ${
+          `[render-page] project launch script "${launchScript.script}" failed: ${
             err instanceof Error ? err.message : String(err)
           }. Falling back to static serve.`,
         )
@@ -472,14 +484,12 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     } else {
       staticServer = await startStaticServer(serveRoot)
       const fileName = path.basename(absFile)
-      // If the file itself is index.html, visit the root URL (matches how a
-      // static preview would load the SPA entrypoint). Otherwise append the
-      // filename so callers can still point at arbitrary pages.
       target = fileName.toLowerCase() === "index.html"
         ? `${staticServer.url}/`
         : `${staticServer.url}/${encodeURIComponent(fileName)}`
     }
   }
+
   const browser = await puppeteer.launch({
     executablePath,
     headless: true,
@@ -499,6 +509,35 @@ export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiff
     await browser.close()
     if (staticServer) await staticServer.close()
   }
+  const rendered = await decodePNG(renderedPath)
+  return { renderedPath, viewport, size: { width: rendered.width, height: rendered.height } }
+}
+
+/** SSIM visual diff — retained for the external benchmark CLI and operator
+ *  verification workflows only. The delivery pipeline no longer gates on
+ *  SSIM: the LLM compares rendered vs reference via vision (see `renderPage`
+ *  + delivery agent multimodal attachments), which produces actionable
+ *  "header is missing N button, sidebar 20px too wide" feedback instead of
+ *  a single opaque similarity number. */
+export async function runVisualDiff(opts: VisualDiffOptions): Promise<VisualDiffReport> {
+  const threshold = opts.threshold ?? 0.85
+  const worstThreshold = opts.worstThreshold ?? 0.55
+  for (const [name, value] of [["threshold", threshold], ["worstThreshold", worstThreshold]] as const) {
+    if (!Number.isFinite(value) || value <= 0 || value > 1) {
+      throw new Error(`runVisualDiff: invalid ${name} (expected 0..1): ${value}`)
+    }
+  }
+  await fs.access(opts.reference).catch(() => {
+    throw new Error(`runVisualDiff: reference image not found: ${opts.reference}`)
+  })
+
+  const refImgProbe = await decodePNG(opts.reference)
+  const { renderedPath, viewport } = await renderPage({
+    rendered: opts.rendered,
+    outDir: opts.outDir,
+    viewport: opts.viewport ?? { width: refImgProbe.width, height: refImgProbe.height },
+    browserExecutable: opts.browserExecutable,
+  })
 
   const rendImg = await decodePNG(renderedPath)
   const refImg = refImgProbe

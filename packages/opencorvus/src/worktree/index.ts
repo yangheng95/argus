@@ -475,11 +475,19 @@ export namespace Worktree {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 
-    // Resolve the PRIMARY worktree (main repo root) to avoid nested worktree paths.
-    // When Instance.directory points to a child worktree, path.dirname would create
-    // .opencorvus-worktrees inside the child — causing recursive nesting.
+    // Resolve the PRIMARY worktree (main repo root) first so a dispatched
+    // goal session (whose Instance.directory IS itself a child worktree)
+    // doesn't cause nested `.opencorvus/worktrees/.opencorvus/worktrees/...`
+    // recursion. `primaryWorktreeDir()` always returns the main repo root.
+    //
+    // Worktrees live UNDER `<primary>/.opencorvus/worktrees/` — co-located
+    // with other runtime scratch (attachments, visual-diff output). Previous
+    // design placed them in the PARENT of the project root, which leaked
+    // scratch dirs into the user's workspace for real projects and piled
+    // hundreds of zombie dirs into %TEMP% for benchmarks. One `.gitignore`
+    // entry (`/.opencorvus/`) covers the entire tree now.
     const primaryDir = await primaryWorktreeDir()
-    const root = path.join(path.dirname(primaryDir), ".opencorvus-worktrees")
+    const root = path.join(primaryDir, ".opencorvus", "worktrees")
     await fs.mkdir(root, { recursive: true })
 
     const base = input?.name ? slug(input.name) : ""

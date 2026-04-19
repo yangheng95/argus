@@ -569,3 +569,67 @@ body[data-theme="light"] .card__round {
   flex-direction: column;
   gap: var(--card-gap);
 }
+
+/* ── CardParts aggregator group ────────────────────────────
+ * Render-time collapse for runs of sibling tool parts (architect's
+ * register_contract). Not a CardNode — just a <details> wrapper with a
+ * header styled to match `.card__head` so nested promoted tool cards read
+ * as children without any card-tree store change.
+ */
+.card__aggregator {
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--card-border-strong);
+  border-radius: 6px;
+  background: var(--card-bg);
+  overflow: hidden;
+}
+.card__aggregator > .card__aggregator-head {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale, 1));
+  padding: calc(var(--card-pad-y) - 2px) calc(var(--card-pad-x) - 2px) calc(var(--card-pad-y) - 2px) 12px;
+  font-size: var(--card-title-size);
+  color: var(--text-strong);
+  user-select: none;
+  cursor: pointer;
+  line-height: 1.35;
+  min-height: calc(28px * var(--ui-scale, 1));
+  list-style: none;
+}
+.card__aggregator > .card__aggregator-head::-webkit-details-marker {
+  display: none;
+}
+.card__aggregator > .card__aggregator-head:hover {
+  background-color: var(--card-bg-hover);
+}
+.card__aggregator-chevron {
+  display: inline-block;
+  width: 14px;
+  transition: transform 120ms ease;
+  color: var(--text-subtle, var(--text-strong));
+  font-size: 0.85em;
+}
+.card__aggregator[open] > .card__aggregator-head > .card__aggregator-chevron {
+  transform: rotate(90deg);
+}
+.card__aggregator-title {
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+.card__aggregator-count {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--card-border, var(--card-border-strong));
+  color: var(--text-subtle, var(--text-strong));
+  font-size: 0.85em;
+  font-weight: 500;
+}
+.card__aggregator-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+  padding: calc(var(--card-pad-y) - 2px) calc(var(--card-pad-x) - 2px) calc(var(--card-pad-y) - 2px) 16px;
+  border-top: 1px solid var(--card-border, var(--card-border-strong));
+}
