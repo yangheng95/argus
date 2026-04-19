@@ -617,30 +617,99 @@ interface EnsureSessionOpts {
   time: number;
 }
 
+/** Resolve the cardID a session should write its parts to. For goal-scope
+ *  sessions whose stage maps to a declared phase (planner → plan,
+ *  build → build, evaluator → evaluate), this IS the phase card — the
+ *  session does NOT get its own card. Parts accumulate directly on the
+ *  phase card, which eliminates the parent-child label mirror (phase
+ *  "Build" + nested session "构建") that confused users.
+ *
+ *  Non-phase sessions (assistant orchestrator, requirements, architect,
+ *  design-analyst, delivery, and the executor container) fall through to
+ *  the standard `<stage>:session:<sid>` id. The executor container still
+ *  gets its own id but is filtered out of rendering in rebuildTopLevelOrder.
+ *
+ *  When the phase card doesn't yet exist (reconnect replay arriving
+ *  before the board's goalWorkflows lands), a minimal stub is created
+ *  here so part writes don't throw; `rebuildGoalGroupCards` later
+ *  overlays the real title / status / phase metadata without clobbering
+ *  the accumulated parts. */
+function resolvePhaseOrSessionCardID(sessionID: string, stage: string, goalID: string): {
+  cardID: string;
+  isPhase: boolean;
+} {
+  if (goalID && stage) {
+    const phase = goalStagePhaseID(stage);
+    if (phase) {
+      const phaseCardID = goalPhaseCardID(goalID, phase.stepID, phase.phaseID);
+      // Stub the phase card if it hasn't been materialized yet (SSE
+      // ordering: message.updated can arrive before the board refetch
+      // that carries goalWorkflows[].steps[].phases). The stub's
+      // fields get overlaid by rebuildGoalGroupCards on the next
+      // board tick.
+      if (!cardTreeStore.cards[phaseCardID]) {
+        setCardTreeStore("cards", phaseCardID, {
+          id: phaseCardID,
+          kind: "phase",
+          stage,
+          accent: stageAccent(stage),
+          status: "running",
+          title: phase.phaseID,
+          parts: [],
+          childIDs: [],
+          phaseID: phase.phaseID,
+          phaseSessionKind: stage,
+        });
+      }
+      return { cardID: phaseCardID, isPhase: true };
+    }
+  }
+  if (stage) return { cardID: sessionCardID(stage, sessionID), isPhase: false };
+  return { cardID: `pending:session:${sessionID}`, isPhase: false };
+}
+
 function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionInfo {
   const existing = sessions.get(sessionID);
   if (existing) {
     // Backfill stage on first real message.updated (defensive path-updated-first path).
     if (!existing.stage && opts.stage) {
-      const newCardID = sessionCardID(opts.stage, sessionID);
+      const { cardID: newCardID, isPhase } = resolvePhaseOrSessionCardID(
+        sessionID, opts.stage, opts.goalID || existing.goalID,
+      );
       if (newCardID !== existing.cardID) {
-        // Rename the card: move from placeholder to real id.
-        setCardTreeStore(
-          "cards",
-          produce((cards: Record<string, CardNode>) => {
-            const node = cards[existing.cardID];
-            if (node) {
-              cards[newCardID] = {
-                ...node,
-                id: newCardID,
-                stage: opts.stage,
-                accent: stageAccent(opts.stage),
-                title: roleTitleKey(opts.stage),
-              };
-              delete cards[existing.cardID];
-            }
-          }),
-        );
+        if (isPhase) {
+          // Session graduates to a phase card. Move any parts accumulated
+          // on the placeholder card onto the phase card, then drop the
+          // placeholder. Phase card header is managed by rebuildGoalGroupCards.
+          setCardTreeStore(
+            "cards",
+            produce((cards: Record<string, CardNode>) => {
+              const placeholder = cards[existing.cardID];
+              const phase = cards[newCardID];
+              if (placeholder && phase) {
+                for (const p of placeholder.parts || []) phase.parts.push(p);
+                delete cards[existing.cardID];
+              }
+            }),
+          );
+        } else {
+          setCardTreeStore(
+            "cards",
+            produce((cards: Record<string, CardNode>) => {
+              const node = cards[existing.cardID];
+              if (node) {
+                cards[newCardID] = {
+                  ...node,
+                  id: newCardID,
+                  stage: opts.stage,
+                  accent: stageAccent(opts.stage),
+                  title: roleTitleKey(opts.stage),
+                };
+                delete cards[existing.cardID];
+              }
+            }),
+          );
+        }
         existing.cardID = newCardID;
       }
       existing.stage = opts.stage;
@@ -661,22 +730,27 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
   }
 
   const stage = opts.stage || "";
-  const cardID = stage ? sessionCardID(stage, sessionID) : `pending:session:${sessionID}`;
-  const node: CardNode = {
-    id: cardID,
-    kind: "agent",
-    stage,
-    accent: stage ? stageAccent(stage) : undefined,
-    status: "running",
-    title: stage ? roleTitleKey(stage) : "chat.role.assistant",
-    round: 0,
-    goalID: opts.goalID || undefined,
-    parts: [],
-    childIDs: [],
-    time: opts.time > 0 ? opts.time : undefined,
-  };
+  const { cardID, isPhase } = resolvePhaseOrSessionCardID(sessionID, stage, opts.goalID || "");
 
-  setCardTreeStore("cards", cardID, node);
+  // Only non-phase sessions create their own card. For phase-absorbed
+  // sessions the phase card already exists (resolvePhaseOrSessionCardID
+  // stubbed it if necessary) and we route all subsequent parts to it.
+  if (!isPhase) {
+    const node: CardNode = {
+      id: cardID,
+      kind: "agent",
+      stage,
+      accent: stage ? stageAccent(stage) : undefined,
+      status: "running",
+      title: stage ? roleTitleKey(stage) : "chat.role.assistant",
+      round: 0,
+      goalID: opts.goalID || undefined,
+      parts: [],
+      childIDs: [],
+      time: opts.time > 0 ? opts.time : undefined,
+    };
+    setCardTreeStore("cards", cardID, node);
+  }
 
   // Top-level placement is decided by rebuildTopLevelOrder() which is called
   // lazily; for now we register the session and let order rebuild handle it.
@@ -811,18 +885,25 @@ function findWorkflowStepDefinition(
 function rebuildGoalGroupCards(board: any): void {
   const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : [];
 
-  // Drop stale goal cards first (goals removed from board). Step + phase
-  // subcards are keyed by prefix under the goal card id, so they clean up
-  // with the parent.
+  // Drop stale goal cards first (goals removed from board). Only TOP-LEVEL
+  // goal card ids (`goal-group:<gid>`) are iterated here — step and phase
+  // descendants get reaped by the prefix sweep inside the loop.
+  //
+  // The id-shape check is critical: without it, every step/phase card
+  // (which also starts with `goal-group:`) would fail the alive-set
+  // membership test and be deleted on every board tick, wiping any
+  // session parts the phase card had absorbed.
   const aliveGoalCardIDs = new Set<string>();
   for (let i = 0; i < goalWorkflows.length; i++) {
     aliveGoalCardIDs.add(`goal-group:${goalWorkflows[i].goalID}`);
   }
+  const isTopLevelGoalCardID = (id: string) =>
+    id.startsWith("goal-group:") && !id.includes(":step:");
   setCardTreeStore(
     "cards",
     produce((c: Record<string, CardNode>) => {
       for (const id of Object.keys(c)) {
-        if (!id.startsWith("goal-group:")) continue;
+        if (!isTopLevelGoalCardID(id)) continue;
         if (aliveGoalCardIDs.has(id)) continue;
         // Drop any step + phase descendants of this goal.
         for (const childID of Object.keys(c)) {
@@ -848,10 +929,50 @@ function rebuildGoalGroupCards(board: any): void {
         ? (step.phases as Record<string, { status?: string; startedAt?: number; completedAt?: number }>)
         : null;
 
-      // Create phase subcards (if the step declares phases via the board
-      // workflow payload). Phase status comes from the per-goal step
-      // payload's `phases` record — each phase_id → {status, startedAt}.
+      // Create phase subcards. Phase cards ABSORB their claimed session's
+      // parts: once `ensureSessionCard` routes a goal-scope phase-mapped
+      // session to a phase card, subsequent `message.part.*` events
+      // accumulate `parts` on THIS card. Rebuilds therefore must NOT
+      // clobber parts — only overlay the metadata from the board
+      // (status/title/phaseID/sessionKind).
       const phaseChildIDs: string[] = [];
+      const writePhaseCard = (
+        phaseCardID: string,
+        pid: string,
+        label: string,
+        sessionKind: string,
+        status: CardStatus,
+      ) => {
+        setCardTreeStore(
+          "cards",
+          produce((cards: Record<string, CardNode>) => {
+            const prev = cards[phaseCardID];
+            if (prev) {
+              prev.stage = sessionKind || pid;
+              prev.accent = stageAccent(sessionKind || pid);
+              prev.status = status;
+              prev.title = label;
+              prev.phaseID = pid;
+              prev.phaseSessionKind = sessionKind;
+              // parts / childIDs intentionally preserved.
+            } else {
+              cards[phaseCardID] = {
+                id: phaseCardID,
+                kind: "phase",
+                stage: sessionKind || pid,
+                accent: stageAccent(sessionKind || pid),
+                status,
+                title: label,
+                parts: [],
+                childIDs: [],
+                phaseID: pid,
+                phaseSessionKind: sessionKind,
+              };
+            }
+          }),
+        );
+      };
+
       if (phaseEntries) {
         // Look up the workflow-level step definition to get phase id ORDER
         // and labels (the per-goal payload is a record, not ordered).
@@ -863,41 +984,21 @@ function rebuildGoalGroupCards(board: any): void {
           const phaseCardID = goalPhaseCardID(gid, stepID, pid);
           const phaseStatusRaw = phaseEntries[pid]?.status;
           const phaseStatus = normalizeStepStatus(phaseStatusRaw);
-          setCardTreeStore("cards", phaseCardID, {
-            id: phaseCardID,
-            kind: "phase",
-            stage: String(pdef.sessionKind || pid),
-            accent: stageAccent(String(pdef.sessionKind || pid)),
-            status: phaseStatus,
-            title: String(pdef.label || pid),
-            parts: [],
-            childIDs: [],
-            phaseID: pid,
-            phaseSessionKind: String(pdef.sessionKind || ""),
-          });
+          writePhaseCard(phaseCardID, pid, String(pdef.label || pid), String(pdef.sessionKind || ""), phaseStatus);
           phaseChildIDs.push(phaseCardID);
         }
       } else if (phases) {
-        // Defensive path: older board payloads might ship step.phases as
-        // an array of phase defs without per-phase status. Render them
-        // with pending status so the hierarchy shape stays consistent
-        // even before the first goal_run row lands.
+        // Older / stub board payloads ship step.phases as an array of phase
+        // defs without per-phase status. Render them with pending so the
+        // hierarchy shape stays consistent even before the first goal_run
+        // row lands.
         for (const pdef of phases) {
           const pid = String((pdef as { id?: string }).id || "");
           if (!pid) continue;
           const phaseCardID = goalPhaseCardID(gid, stepID, pid);
-          setCardTreeStore("cards", phaseCardID, {
-            id: phaseCardID,
-            kind: "phase",
-            stage: String((pdef as { sessionKind?: string }).sessionKind || pid),
-            accent: stageAccent(String((pdef as { sessionKind?: string }).sessionKind || pid)),
-            status: "pending",
-            title: String((pdef as { label?: string }).label || pid),
-            parts: [],
-            childIDs: [],
-            phaseID: pid,
-            phaseSessionKind: String((pdef as { sessionKind?: string }).sessionKind || ""),
-          });
+          const sk = String((pdef as { sessionKind?: string }).sessionKind || "");
+          const lbl = String((pdef as { label?: string }).label || pid);
+          writePhaseCard(phaseCardID, pid, lbl, sk, "pending");
           phaseChildIDs.push(phaseCardID);
         }
       }
@@ -1107,6 +1208,10 @@ function rebuildCardHierarchy(): void {
     nextChildIDs.set(info.cardID, nextChildIDs.get(info.cardID) || []);
     const containerID = resolveSessionContainerCardID(info);
     if (!containerID) continue;
+    // Phase-absorbed session: info.cardID IS the phase card (ensureSessionCard
+    // routed the session directly onto it). No claim needed — adding the
+    // phase card as its own child would cycle.
+    if (containerID === info.cardID) continue;
     const bucket = nextChildIDs.get(containerID) || [];
     pushUniqueChild(bucket, info.cardID);
     nextChildIDs.set(containerID, bucket);

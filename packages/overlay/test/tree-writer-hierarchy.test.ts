@@ -17,17 +17,17 @@ import {
   TASK_ID,
 } from "./fixtures/goal-phase-events";
 
-test("tree-writer nests goal-scoped sessions under their phase card (4-level: goal → step → phase → session)", async () => {
-  // New architecture (正本清源 pass):
-  //   - session.kind="executor" is a CONTAINER (no LLM); overlay filters
-  //     it out so it never renders as its own card. Its step card in the
-  //     overlay represents it visually.
-  //   - session.kind="planner" claims phase "plan"
-  //   - session.kind="build" claims phase "build"
-  //   - session.kind="evaluator" claims phase "evaluate"
+test("phase cards absorb goal-scoped session parts — no nested session cards", async () => {
+  // 正本清源 pass:
+  //   - session.kind="executor" is a CONTAINER (no LLM), filtered from UI.
+  //   - session.kind="planner" / "build" / "evaluator" all routed DIRECTLY
+  //     to their phase card (ensureSessionCard → resolvePhaseOrSessionCardID).
+  //     No separate `<stage>:session:<sid>` card is created; the phase card
+  //     owns the session's parts. This eliminates the "Build (phase) / 构建
+  //     (session)" label mirror that existed when phases had nested agent
+  //     children.
   //   - Non-goal sub-agents (requirements / design-analyst / architect)
-  //     surface as top-level siblings of the root assistant card
-  //     (session ↔ session nesting is forbidden).
+  //     surface as top-level siblings of the root assistant card.
   const snapshot = await replay(EVENTS, INITIAL_BOARD);
 
   const goalCardID = `goal-group:${GOAL_ID}`;
@@ -44,7 +44,8 @@ test("tree-writer nests goal-scoped sessions under their phase card (4-level: go
   const architectCardID = `architect:session:${ARCHITECT_SID}`;
   const rootCardID = `assistant:session:${ROOT_SID}`;
 
-  // Step card exists and has the three phase cards in order.
+  // Step card exists and has the three phase cards in order — no session
+  // cards between step and phase.
   expect(snapshot.nodes[stepCardID]).toBeDefined();
   expect(snapshot.nodes[stepCardID]!.childIDs).toEqual([planPhaseID, buildPhaseID, evaluatePhaseID]);
 
@@ -58,12 +59,28 @@ test("tree-writer nests goal-scoped sessions under their phase card (4-level: go
     expect(node).toBeDefined();
     expect(node!.kind).toBe("phase");
     expect(node!.phaseID).toBe(phaseID);
+    // Phase cards never nest session cards as children (the session's
+    // parts live directly on the phase card). Interaction cards are a
+    // separate concern — they can appear as phase children when their
+    // sessionID resolves to a phase-absorbed session.
+    for (const childID of node!.childIDs || []) {
+      expect(childID).not.toMatch(/:session:/);
+    }
   }
 
-  // Planner session nests under plan phase.
-  expect(snapshot.nodes[planPhaseID]!.childIDs).toContain(plannerCardID);
-  // Build worker nests under build phase.
-  expect(snapshot.nodes[buildPhaseID]!.childIDs).toContain(buildWorkerCardID);
+  // The phase-absorbed session cards DO NOT exist as independent cards.
+  // Their parts live on the phase card they were routed to.
+  expect(snapshot.nodes[buildWorkerCardID]).toBeUndefined();
+  expect(snapshot.nodes[plannerCardID]).toBeUndefined();
+
+  // Build phase's parts include the tool call + text from the build worker
+  // session (msg_build_1). Planner phase's parts include the planner's text.
+  const buildParts = snapshot.nodes[buildPhaseID]!.parts;
+  expect(buildParts.some((p) => p.type === "tool" && p.tool === "bash")).toBe(true);
+  expect(buildParts.some((p) => p.type === "text" && p.text === "Build passed.")).toBe(true);
+
+  const planParts = snapshot.nodes[planPhaseID]!.parts;
+  expect(planParts.some((p) => p.type === "text" && p.text === "Planned the build sequence.")).toBe(true);
 
   // Executor container is NOT rendered as its own card and NOT in top-level.
   expect(snapshot.order).not.toContain(executorCardID);
@@ -75,10 +92,6 @@ test("tree-writer nests goal-scoped sessions under their phase card (4-level: go
     expect(snapshot.order).toContain(cardID);
   }
   expect(snapshot.order).toContain(rootCardID);
-
-  // Goal-scoped sessions do NOT nest session-under-session — each claims
-  // its phase directly, not its parent session.
-  expect(snapshot.nodes[buildWorkerCardID]!.childIDs || []).not.toContain(plannerCardID);
 });
 
 test("non-goal sub-agent sessions surface at top level, not under their parent session", () => {

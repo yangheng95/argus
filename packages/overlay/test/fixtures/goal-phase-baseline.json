@@ -43,34 +43,6 @@
       "status": "completed",
       "title": "chat.role.assistant"
     },
-    "build:session:ses_goal_build": {
-      "childIDs": [
-        "interaction-card:synthetic:system:1776000004500:1pjr37f"
-      ],
-      "id": "build:session:ses_goal_build",
-      "kind": "agent",
-      "parts": [
-        {
-          "type": "boundary"
-        },
-        {
-          "id": "part_build_tool_1",
-          "output": "added 42 packages",
-          "tool": "bash",
-          "toolStatus": "completed",
-          "type": "tool"
-        },
-        {
-          "id": "part_build_text",
-          "text": "Build passed.",
-          "type": "text"
-        }
-      ],
-      "round": 0,
-      "stage": "build",
-      "status": "running",
-      "title": "chat.role.build"
-    },
     "ctx:user-request": {
       "childIDs": [],
       "id": "ctx:user-request",
@@ -131,11 +103,27 @@
     },
     "goal-group:goal_fixture_g1:step:build:phase:build": {
       "childIDs": [
-        "build:session:ses_goal_build"
+        "interaction-card:synthetic:system:1776000004500:1pjr37f"
       ],
       "id": "goal-group:goal_fixture_g1:step:build:phase:build",
       "kind": "phase",
-      "parts": [],
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_build_tool_1",
+          "output": "added 42 packages",
+          "tool": "bash",
+          "toolStatus": "completed",
+          "type": "tool"
+        },
+        {
+          "id": "part_build_text",
+          "text": "Build passed.",
+          "type": "text"
+        }
+      ],
       "phaseID": "build",
       "phaseSessionKind": "build",
       "stage": "build",
@@ -154,12 +142,19 @@
       "title": "Evaluate"
     },
     "goal-group:goal_fixture_g1:step:build:phase:plan": {
-      "childIDs": [
-        "planner:session:ses_goal_planner"
-      ],
+      "childIDs": [],
       "id": "goal-group:goal_fixture_g1:step:build:phase:plan",
       "kind": "phase",
-      "parts": [],
+      "parts": [
+        {
+          "type": "boundary"
+        },
+        {
+          "id": "part_planner_text",
+          "text": "Planned the build sequence.",
+          "type": "text"
+        }
+      ],
       "phaseID": "plan",
       "phaseSessionKind": "planner",
       "stage": "planner",
@@ -177,25 +172,6 @@
         }
       ],
       "title": "chat.role.system"
-    },
-    "planner:session:ses_goal_planner": {
-      "childIDs": [],
-      "id": "planner:session:ses_goal_planner",
-      "kind": "agent",
-      "parts": [
-        {
-          "type": "boundary"
-        },
-        {
-          "id": "part_planner_text",
-          "text": "Planned the build sequence.",
-          "type": "text"
-        }
-      ],
-      "round": 0,
-      "stage": "planner",
-      "status": "running",
-      "title": "chat.role.planner"
     },
     "requirements:session:ses_requirements": {
       "childIDs": [],
