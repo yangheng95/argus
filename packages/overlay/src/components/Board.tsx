@@ -10,7 +10,7 @@ import { boardStore } from "../store/board";
 import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
-import { goalStageStepID } from "../utils/workflow-step";
+import { goalStagePhaseID } from "../utils/workflow-step";
 import { deliveryGoalProgress } from "../utils/goal-workflow";
 import { WorkflowProgressBar } from "./WorkflowProgressBar";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
@@ -381,8 +381,11 @@ export function Board(props: BoardProps) {
   });
 
   // Bucket goal-step session messages by goalID + stepID. Pipeline workflow
-  // has ONE goal-scope step (`build`) — planner / executor / build /
-  // evaluator stages all collapse into `build` via goalStageStepID().
+  // has ONE goal-scope step (`build`) with three phases (plan / build /
+  // evaluate); planner / build / evaluator stages each map to a phase
+  // within that step via goalStagePhaseID(). Messages are bucketed by
+  // stepID for the GoalWorkflowGroup renderer (stepMessages prop), which
+  // groups by step not phase.
   const goalStepMessages = createMemo(() => {
     const result: Record<string, Record<string, any[]>> = {};
     const ids = Object.keys(cardTreeStore.cards);
@@ -395,12 +398,12 @@ export function Board(props: BoardProps) {
     }
     agentCards.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
     for (const card of agentCards) {
-      const stepID = goalStageStepID(card.stage || "");
-      if (!stepID) continue;
+      const phase = goalStagePhaseID(card.stage || "");
+      if (!phase) continue;
       const goalID = String(card.goalID);
       if (!goalID) continue;
       const bucketMap = (result[goalID] ??= {});
-      (bucketMap[stepID] ??= []).push(...cardToSyntheticMessages(card));
+      (bucketMap[phase.stepID] ??= []).push(...cardToSyntheticMessages(card));
     }
     return result;
   });

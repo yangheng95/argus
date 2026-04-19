@@ -9,14 +9,15 @@
 // targeted writes update `cardTreeStore.cards[id].parts[idx].<field>`.
 //
 // ID conventions (deterministic, construction-time):
-//   ctx:user-request                              — task request bubble
-//   ctx:user-request:text                         — the text part of that bubble
-//   ctx:user-request:file:<url|idx>               — an attachment part
-//   <stage>:session:<sid>                         — per-session agent card
-//   part:<messageID>:<partID>                     — part inside a session card
-//   goal-group:<goalID>                           — goal container
-//   goal-group:<goalID>:step:<stepID>             — step row inside a goal
-//   interaction:<interactionID>                   — synthetic interaction card
+//   ctx:user-request                                       — task request bubble
+//   ctx:user-request:text                                  — the text part of that bubble
+//   ctx:user-request:file:<url|idx>                        — an attachment part
+//   <stage>:session:<sid>                                  — per-session agent card
+//   part:<messageID>:<partID>                              — part inside a session card
+//   goal-group:<goalID>                                    — goal container
+//   goal-group:<goalID>:step:<stepID>                      — step row inside a goal
+//   goal-group:<goalID>:step:<stepID>:phase:<phaseID>      — phase row inside a step
+//   interaction:<interactionID>                            — synthetic interaction card
 //
 // The writer (services/tree-writer.ts) is the only module that mutates
 // this store. Components read only. No memos, no derivations — components
@@ -26,9 +27,10 @@
 import { createStore } from "solid-js/store";
 
 export type CardKind =
-  | "agent"     // per-session agent card (orchestrator, executor, build, ...)
+  | "agent"     // per-session agent card (orchestrator, build worker, planner, ...)
   | "goal"      // goal-group container
   | "step"      // step row inside a goal
+  | "phase"     // phase row inside a step (plan / build / evaluate inside pipeline.build)
   | "tool"      // promoted tool call (nested card for task/subagent)
   | "message"   // user / system synthetic bubble
   | "fidelity"; // requirements fidelity review verdict
@@ -88,6 +90,14 @@ export interface CardNode {
   steps?: Array<{ stepID: string; label: string; status: string; summary?: string }>;
   stepPayload?: StepPayload;
   stepID?: string;
+  /** Phase identifier for kind="phase" nodes. Matches the phase.id declared
+   *  on the backend workflow step (see
+   *  packages/opencorvus/src/engine/workflow.ts PIPELINE.build.phases). */
+  phaseID?: string;
+  /** Session kind this phase claims — the stage value used by
+   *  resolveSessionContainerCardID to route incoming session cards. Only
+   *  set for kind="phase" nodes. */
+  phaseSessionKind?: string;
   /** Inline leaves — text / reasoning / tool / patch / file / subtask / boundary /
    *  interaction-question / interaction-permission. Tool parts that are "promoted"
    *  become their own CardNode instead (with `toolPart` populated). */

@@ -15,7 +15,7 @@ import { toolNameKey } from "./tool";
 
 export type { StepPayload } from "../store/card-tree";
 
-export type CardKind = "agent" | "goal" | "step" | "tool" | "message" | "fidelity";
+export type CardKind = "agent" | "goal" | "step" | "phase" | "tool" | "message" | "fidelity";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
 
 /** A synthetic "part" inserted between messages when flattening multiple
