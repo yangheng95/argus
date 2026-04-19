@@ -2158,8 +2158,25 @@ export function createOrchestratorTools(input: {
         // checkResults (so it does not duplicate work) and are sunk into
         // task.metadata.criteria_results under family="goal_eval" so the
         // overlay panel reflects what was actually verified deterministically.
-        const evaluatorCheckResults: Array<{ name: string; status: "passed" | "failed" | "skipped"; evidence?: string }> = []
-        const evaluatorCriteriaSink: Array<{ name: string; status: "passed" | "failed" | "skipped"; family: string; evidence?: string; label?: string }> = []
+        // `mode` tags each check strict|soft so downstream consumers (delivery
+        // agent prompt, query_criteria) can treat strict failures as binding.
+        // Without this the delivery LLM saw only pass/fail and would "accept"
+        // despite a strict failure, forcing the post-hoc override to kick in —
+        // wasting the full 11-min LLM verify run each iteration.
+        const evaluatorCheckResults: Array<{
+          name: string
+          status: "passed" | "failed" | "skipped"
+          evidence?: string
+          mode?: "strict" | "soft"
+        }> = []
+        const evaluatorCriteriaSink: Array<{
+          name: string
+          status: "passed" | "failed" | "skipped"
+          family: string
+          evidence?: string
+          label?: string
+          mode?: "strict" | "soft"
+        }> = []
         const verificationGoalStatuses = new Map<string, { status: "passed" | "failed" }>()
         // Track strict-mode failures from per-goal evaluator. If any strict
         // check failed, the delivery agent's verdict MUST be rejected — the
@@ -2188,6 +2205,7 @@ export function createOrchestratorTools(input: {
                   name: namespaced,
                   status: check.passed ? "passed" : "failed",
                   evidence: check.output,
+                  mode: check.mode,
                 })
                 evaluatorCriteriaSink.push({
                   name: namespaced,
@@ -2195,6 +2213,7 @@ export function createOrchestratorTools(input: {
                   family: "goal_eval",
                   evidence: check.output,
                   label: `${goal.title} · ${check.name}`,
+                  mode: check.mode,
                 })
                 if (!check.passed && check.mode === "strict") {
                   strictFailedChecks.push({ name: namespaced, evidence: check.output })
@@ -2215,6 +2234,7 @@ export function createOrchestratorTools(input: {
                   name: `${goal.id}.no_scorers`,
                   status: "failed",
                   evidence: verdict.reasoning,
+                  mode: "strict",
                 })
                 evaluatorCriteriaSink.push({
                   name: `${goal.id}.no_scorers`,
@@ -2222,19 +2242,21 @@ export function createOrchestratorTools(input: {
                   family: "goal_eval",
                   evidence: verdict.reasoning,
                   label: `${goal.title} · no acceptance scorers`,
+                  mode: "strict",
                 })
               }
             } catch (evalErr) {
               const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
               log.warn("evaluateGoal threw at delivery time", { goalID: goal.id, error: msg })
               const name = `${goal.id}.evaluator_error`
-              evaluatorCheckResults.push({ name, status: "failed", evidence: msg })
+              evaluatorCheckResults.push({ name, status: "failed", evidence: msg, mode: "strict" })
               evaluatorCriteriaSink.push({
                 name,
                 status: "failed",
                 family: "goal_eval",
                 evidence: msg,
                 label: `${goal.title} · evaluator threw`,
+                mode: "strict",
               })
               if (!isDispatchableGoal(goal)) {
                 verificationGoalStatuses.set(goal.id, {
@@ -2272,6 +2294,7 @@ export function createOrchestratorTools(input: {
 
         try {
           const { DeliveryService } = await import("@/delivery/service")
+          const { DeliveryVerdict } = await import("@/delivery/agent")
           // Re-read the task row to pick up attachments that may have been
           // materialized during design_analysis (Figma frames, URL screenshots).
           const taskForDelivery = requireTask(taskID)
@@ -2280,25 +2303,69 @@ export function createOrchestratorTools(input: {
                 (a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
               )
             : []
-          const verdict = await DeliveryService.verify({
-            task: { id: task.id, title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
-            goals: goalInfos,
-            delivery: deliveryInfo,
-            checkResults: evaluatorCheckResults.length > 0 ? evaluatorCheckResults : undefined,
-            attachments: deliveryAttachments,
-            signal: input.signal,
-            stream: {
-              onChunk: async (arg: any) => {
-                const chunk = (arg as any)?.chunk
-                if (chunk?.type === "text-delta") {
-                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-                } else {
-                  if (hooks.onChunk) await hooks.onChunk(arg)
-                }
+
+          // Short-circuit: if the per-goal evaluator already flagged strict
+          // checks as failed, the delivery LLM cannot rescue the outcome —
+          // the post-hoc hard gate below would force-reject anyway. Skipping
+          // the 11-min verify run here saves wall time + tokens per iteration
+          // without losing any signal (strict failures ARE the signal; the
+          // LLM would just rephrase them). Defence in depth: the original
+          // post-hoc override still runs, so a strict-check that was flagged
+          // between this branch and the hard gate is still caught.
+          let verdict: import("@/delivery/agent").DeliveryVerdictType
+          if (strictFailedChecks.length > 0) {
+            log.info(
+              "deliver: strict evaluator checks failed — synthesising rejected verdict without invoking delivery LLM",
+              { taskID, strictFailedCount: strictFailedChecks.length },
+            )
+            const names = strictFailedChecks.map(c => c.name).join(", ")
+            verdict = DeliveryVerdict.parse({
+              verdict: "rejected",
+              summary:
+                `${strictFailedChecks.length} strict evaluator check(s) failed: ${names}. ` +
+                `Delivery LLM skipped — strict failures are deterministic and non-overridable.`,
+              startup_verification: {
+                attempted: false,
+                success: false,
+                output: "skipped: strict evaluator checks failed before delivery verification ran",
               },
-              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
-            },
-          })
+              frontend_check: { attempted: false },
+              issues_found: strictFailedChecks.map(
+                c => `Strict evaluator check failed: ${c.name}${c.evidence ? ` — ${c.evidence.slice(0, 500)}` : ""}`,
+              ),
+              rejection_details: strictFailedChecks.map(c => ({
+                category: "quality" as const,
+                error:
+                  `Strict evaluator check ${c.name} failed. This is a deterministic check ` +
+                  `that cannot be overridden by delivery LLM judgment.${c.evidence ? ` Evidence: ${c.evidence.slice(0, 500)}` : ""}`,
+                suggestion: c.name.includes("visual_diff")
+                  ? "Read .opencorvus/visual-diff/rendered.png and the reference image to identify specific visual differences (layout, colors, spacing, typography). Fix each difference in the source HTML/CSS."
+                  : c.name.includes(":build") || c.name.includes(":typecheck")
+                  ? "Run `npm run build` / `npx tsc --noEmit` locally to reproduce the failure, then fix each compiler / bundler error."
+                  : undefined,
+              })),
+            })
+          } else {
+            verdict = await DeliveryService.verify({
+              task: { id: task.id, title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
+              goals: goalInfos,
+              delivery: deliveryInfo,
+              checkResults: evaluatorCheckResults.length > 0 ? evaluatorCheckResults : undefined,
+              attachments: deliveryAttachments,
+              signal: input.signal,
+              stream: {
+                onChunk: async (arg: any) => {
+                  const chunk = (arg as any)?.chunk
+                  if (chunk?.type === "text-delta") {
+                    if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
+                  } else {
+                    if (hooks.onChunk) await hooks.onChunk(arg)
+                  }
+                },
+                onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
+              },
+            })
+          }
           await hooks.flush()
 
           // Hard gate: if the per-goal evaluator flagged any strict-mode

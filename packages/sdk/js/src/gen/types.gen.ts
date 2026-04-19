@@ -297,10 +297,13 @@ export type EventRequirementsCompleted = {
   type: "requirements.completed"
   properties: {
     taskID: string
-    requirementCount: number
-    goalCount: number
-    decisionCount: number
-    traceabilityCount: number
+    sessionID: string
+    status: "completed" | "error"
+    error?: string
+    requirementCount?: number
+    goalCount?: number
+    decisionCount?: number
+    traceabilityCount?: number
     fidelityScore?: number
     summary: string
   }
@@ -310,10 +313,46 @@ export type EventArchitectCompleted = {
   type: "architect.completed"
   properties: {
     taskID: string
-    contractCount: number
-    categories: Array<string>
+    sessionID: string
+    status: "completed" | "error"
+    error?: string
+    contractCount?: number
+    categories?: Array<string>
     blueprintSummary?: string
     summary: string
+  }
+}
+
+export type EventDesignAnalysisCompleted = {
+  type: "design_analysis.completed"
+  properties: {
+    taskID: string
+    sessionID: string
+    status: "completed" | "error"
+    error?: string
+    layoutSections?: number
+    styleTokens?: number
+    componentCount?: number
+    interactionCount?: number
+    summary: string
+  }
+}
+
+export type EventFidelityReviewStarted = {
+  type: "fidelity.review.started"
+  properties: {
+    taskID: string
+    sessionID: string
+  }
+}
+
+export type EventFidelityReviewProgress = {
+  type: "fidelity.review.progress"
+  properties: {
+    taskID: string
+    sessionID: string
+    attempt: number
+    elapsedMs: number
   }
 }
 
@@ -1455,6 +1494,9 @@ export type Event =
   | EventGoalWorkflowProgress
   | EventRequirementsCompleted
   | EventArchitectCompleted
+  | EventDesignAnalysisCompleted
+  | EventFidelityReviewStarted
+  | EventFidelityReviewProgress
   | EventFidelityReviewCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
@@ -8003,6 +8045,11 @@ export type TaskBoardResponses = {
         scope: "task" | "goal"
         skippable: boolean
         status: "pending" | "running" | "completed" | "skipped" | "failed"
+        phases?: Array<{
+          id: string
+          label: string
+          sessionKind: string
+        }>
       }>
       goalLoopStepIDs: Array<string>
     }
@@ -8036,7 +8083,7 @@ export type TaskBoardResponses = {
             brief: string
             orderIndex: number
           }>
-          executorSessionID?: string
+          buildSessionID?: string
           workspaceDir?: string
           changedFiles?: Array<string>
           diffStats?: {
@@ -8052,6 +8099,13 @@ export type TaskBoardResponses = {
           }>
           evalSummary?: string
           verdict?: string
+        }
+        phases?: {
+          [key: string]: {
+            status: "pending" | "running" | "completed" | "skipped" | "failed"
+            startedAt?: number
+            completedAt?: number
+          }
         }
       }>
       contracts?: Array<{

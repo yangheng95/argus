@@ -13979,6 +13979,28 @@
                                   "skipped",
                                   "failed"
                                 ]
+                              },
+                              "phases": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "sessionKind": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "sessionKind"
+                                  ]
+                                }
                               }
                             },
                             "required": [
@@ -14142,7 +14164,7 @@
                                         ]
                                       }
                                     },
-                                    "executorSessionID": {
+                                    "buildSessionID": {
                                       "type": "string"
                                     },
                                     "workspaceDir": {
@@ -14198,6 +14220,36 @@
                                     "verdict": {
                                       "type": "string"
                                     }
+                                  }
+                                },
+                                "phases": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "pending",
+                                          "running",
+                                          "completed",
+                                          "skipped",
+                                          "failed"
+                                        ]
+                                      },
+                                      "startedAt": {
+                                        "type": "number"
+                                      },
+                                      "completedAt": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "status"
+                                    ]
                                   }
                                 }
                               },
@@ -21218,6 +21270,19 @@
                 "type": "string",
                 "pattern": "^tsk.*"
               },
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "error"
+                ]
+              },
+              "error": {
+                "type": "string"
+              },
               "requirementCount": {
                 "type": "number"
               },
@@ -21239,10 +21304,8 @@
             },
             "required": [
               "taskID",
-              "requirementCount",
-              "goalCount",
-              "decisionCount",
-              "traceabilityCount",
+              "sessionID",
+              "status",
               "summary"
             ]
           }
@@ -21266,6 +21329,19 @@
                 "type": "string",
                 "pattern": "^tsk.*"
               },
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "error"
+                ]
+              },
+              "error": {
+                "type": "string"
+              },
               "contractCount": {
                 "type": "number"
               },
@@ -21284,9 +21360,131 @@
             },
             "required": [
               "taskID",
-              "contractCount",
-              "categories",
+              "sessionID",
+              "status",
               "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.design_analysis.completed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "design_analysis.completed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "error"
+                ]
+              },
+              "error": {
+                "type": "string"
+              },
+              "layoutSections": {
+                "type": "number"
+              },
+              "styleTokens": {
+                "type": "number"
+              },
+              "componentCount": {
+                "type": "number"
+              },
+              "interactionCount": {
+                "type": "number"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.fidelity.review.started": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "fidelity.review.started"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.fidelity.review.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "fidelity.review.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "sessionID": {
+                "type": "string"
+              },
+              "attempt": {
+                "type": "number"
+              },
+              "elapsedMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "taskID",
+              "sessionID",
+              "attempt",
+              "elapsedMs"
             ]
           }
         },
@@ -25038,6 +25236,15 @@
           },
           {
             "$ref": "#/components/schemas/Event.architect.completed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.design_analysis.completed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.fidelity.review.started"
+          },
+          {
+            "$ref": "#/components/schemas/Event.fidelity.review.progress"
           },
           {
             "$ref": "#/components/schemas/Event.fidelity.review.completed"
