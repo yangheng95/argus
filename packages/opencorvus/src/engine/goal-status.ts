@@ -107,7 +107,15 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   const supersededReason = meta && typeof meta === "object" && !Array.isArray(meta)
     ? (meta as Record<string, unknown>).superseded_reason
     : undefined
-  if (head.status === "failed" && typeof supersededReason === "string" && supersededReason.length > 0) {
+  // Both `failed` and `aborted` tips can be superseded for retry intent —
+  // see engine/persist.ts supersedeGoalRun caller. Deriving `pending` only
+  // when head is `failed` left aborted retries stranded (goal.status stayed
+  // at aborted, task loop never re-dispatched, goal never completed).
+  if (
+    (head.status === "failed" || head.status === "aborted") &&
+    typeof supersededReason === "string" &&
+    supersededReason.length > 0
+  ) {
     return "pending"
   }
   return mapRunStatus(head.status as EngineGoalRunStatus)

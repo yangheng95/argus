@@ -1383,6 +1383,22 @@ export function createOrchestratorTools(input: {
           // case (modify_goal on a passed goal) where tip.satisfiesGoal=true
           // would otherwise keep readiness filtered forever.
           supersedeGoalRun({ oldGoalRunID: priorTip.id, reason, now })
+          // Increment engine_goal.retry_count so the per-goal budget check at
+          // the top of this handler observes the retry. The column existed
+          // with a documented "incremented each time retry_failed_goals resets
+          // this goal" comment but nothing wrote it, which made goalRetries
+          // always 0 and exhausted[] always empty — goals were infinitely
+          // retryable on paper, and in the aborted-loop case (fix 1+2 above)
+          // this compounded into a wedged task that never terminated.
+          Database.use((db) =>
+            db.update(EngineGoalTable)
+              .set({
+                retry_count: ((goal as any).retry_count ?? 0) + 1,
+                time_updated: now,
+              })
+              .where(eq(EngineGoalTable.id, goal.id))
+              .run(),
+          )
         }
 
         // Cascade: goals blocked by permanently-failed deps never get a

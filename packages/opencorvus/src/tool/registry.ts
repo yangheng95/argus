@@ -35,6 +35,14 @@ import { PanelTool } from "./panel"
 import { TuiTool } from "./tui"
 import { TaskReportTool } from "./task-report"
 import { GoalReportTool } from "./goal-report"
+import {
+  WebpageExtractTool,
+  WebpageCompileTool,
+  WebpageAnalyzeTool,
+  WebpageRenderTool,
+  WebpageEvaluateTool,
+  WebpageTextDiffTool,
+} from "../mirror/tools"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -136,6 +144,12 @@ export namespace ToolRegistry {
       TaskReportTool,
       GoalReportTool,
       AnalyticsTool,
+      WebpageExtractTool,
+      WebpageCompileTool,
+      WebpageAnalyzeTool,
+      WebpageRenderTool,
+      WebpageEvaluateTool,
+      WebpageTextDiffTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,

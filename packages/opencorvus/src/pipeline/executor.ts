@@ -429,7 +429,20 @@ async function extractDelivery(
 async function findGoalRunByGoalAndRun(goalID: string, runID: string): Promise<string | undefined> {
   const { listGoalRunsForRun } = await import("@/engine/store")
   const runs = listGoalRunsForRun(runID) as Array<{ id: string; goal_id: string; status: string }>
-  const active = runs.find((gr) => gr.goal_id === goalID && gr.status !== "completed" && gr.status !== "failed")
+  // `aborted` must be excluded alongside `completed`/`failed` — goal_run FSM
+  // treats all three as terminal (see engine/goal-run-state-machine.ts). Without
+  // excluding aborted, a retry after signal-aborted or evaluator-aborted goal_run
+  // re-enters with the same ID and the downstream `updateGoalRun(status:"running")`
+  // throws `Invalid goal_run transition: aborted -> running`. Observed in
+  // usage-replica-vague bench6: one goal stuck in pending↔failed oscillation
+  // across 4+ retry cycles because dispatch kept handing back the same
+  // aborted goal_run instead of triggering supersede → createGoalRun.
+  const active = runs.find((gr) =>
+    gr.goal_id === goalID &&
+    gr.status !== "completed" &&
+    gr.status !== "failed" &&
+    gr.status !== "aborted",
+  )
   return active?.id
 }
 
