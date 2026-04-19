@@ -193,8 +193,8 @@ const PIPELINE: MiniWorkflow = {
       // 看到的仍是一个 step。见 specs/new-arch/07-panel-reactivity §phase 规则。
       id: "build",
       tool: "execute_goal",
-      label: "Build",
-      hint: "每个 goal 在隔离 worktree 中由 build agent 实现（内部 plan → build → evaluate）。GoalPool 自动调度。",
+      label: "Executor",
+      hint: "执行器在隔离 worktree 中调度 plan → build → evaluate 三个 phase 跑完一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
       scope: "goal",
       skippable: false,
       after: ["architect"],

@@ -155,7 +155,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
         steps: [
           {
             stepID: "build",
-            label: "Build",
+            label: "Executor",
             status: "running",
             summary: "3 planned steps",
             payload: {

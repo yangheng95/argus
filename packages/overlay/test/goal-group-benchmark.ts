@@ -112,7 +112,7 @@ const boardData = {
       goalStatus: "running",
       priority: "blocking",
       steps: [
-        { stepID: "build", label: "Build", status: "running" },
+        { stepID: "build", label: "Executor", status: "running" },
       ],
     },
     {
@@ -121,7 +121,7 @@ const boardData = {
       goalStatus: "running",
       priority: "blocking",
       steps: [
-        { stepID: "build", label: "Build", status: "running" },
+        { stepID: "build", label: "Executor", status: "running" },
       ],
     },
     {
@@ -130,7 +130,7 @@ const boardData = {
       goalStatus: "running",
       priority: "blocking",
       steps: [
-        { stepID: "build", label: "Build", status: "running" },
+        { stepID: "build", label: "Executor", status: "running" },
       ],
     },
   ],

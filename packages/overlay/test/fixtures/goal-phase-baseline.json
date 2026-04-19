@@ -127,7 +127,7 @@
       "parts": [],
       "stage": "build",
       "status": "completed",
-      "title": "Build"
+      "title": "Executor"
     },
     "goal-group:goal_fixture_g1:step:build:phase:build": {
       "childIDs": [
