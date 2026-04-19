@@ -87,7 +87,7 @@ type TranscriptState = {
 
 const transcript = new Map<string, TranscriptState>()
 
-export async function projectExecutorEventToSession(taskID: string, run: RunRow, goalSessionID: string, event: {
+export async function projectExecutorEventToSession(taskID: string, run: RunRow, buildSessionID: string, event: {
   type: string
   summary?: string
   payload?: Record<string, unknown>
@@ -97,11 +97,11 @@ export async function projectExecutorEventToSession(taskID: string, run: RunRow,
   // opencode session messages reach the panel via task-message-protocol-bridge,
   // which resolves role/goal directly from session.kind / session.goal_id.
   if (run.executor === "opencode") return
-  if (!goalSessionID) return
+  if (!buildSessionID) return
   if (event.type === "executor.progress") return
 
   const payload = event.payload ?? {}
-  const sessionID = goalSessionID
+  const sessionID = buildSessionID
 
   // Normalize event type: CodingEventInfo uses underscores (tool_call, text_delta)
   // while the session protocol uses dots (tool.call, message.part.delta).

@@ -11,7 +11,7 @@ import { Timestamps } from "@/storage/schema.sql"
  * Authoritative source for "what is this session for" — sessionRole(sid)
  * reads this column. Do NOT re-derive role from message.agent, title
  * prefixes, or in-memory registries: that's how we got the transcript-reseed
- * bug that silently turned assistant sessions into executor sessions.
+ * bug that silently turned assistant sessions into build worker sessions.
  *
  *   root           root session of an engine_task; holds the user's request
  *   assistant      generic assistant dialog — orchestrator's own reasoning session,
@@ -21,15 +21,22 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  naturally; no separate "standalone" kind is needed.
  *   requirements   requirements sub-agent (goal decomposition)
  *   design-analyst design-analyst sub-agent (vision → layout/style/component spec)
- *   planner        per-goal planning session
+ *   planner        per-goal plan phase session (writes plan brief)
  *   goal           legacy catch-all for sub-agents that predate the dedicated
  *                  `requirements` / `design-analyst` kinds — still accepted so
  *                  historical task rows render, but new code must use the
  *                  specific kind above.
  *   architect      architect sub-agent
  *   delivery       delivery sub-agent
- *   executor       goal executor session (runs in worktree)
- *   build          build sub-agent
+ *   executor       per-goal container session — empty parent that groups
+ *                  planner + build + evaluator children for permission
+ *                  inheritance and overlay step-card nesting. No LLM.
+ *                  (In the direct workflow there is no executor container;
+ *                  the direct build session is top-level.)
+ *   build          build worker session — the LLM that writes code.
+ *                  Direct workflow: task-level worker under the orchestrator
+ *                  root. Pipeline workflow: per-goal worker under the
+ *                  executor container (build phase).
  *   evaluator      LLM judge / evaluator sessions
  *   system         internal maintenance (compaction, summary, title generation)
  */
@@ -64,9 +71,10 @@ export const SessionTable = sqliteTable(
     version: text().notNull(),
     /** Session's role/purpose, fixed at creation time. See SessionKind above. */
     kind: text().notNull().$type<SessionKind>(),
-    /** Optional goal this session belongs to (kind="planner"|"executor"|"build").
-     *  Used by overlay to nest the session's messages under the goal card.
-     *  Null for root/assistant/requirements/design-analyst/goal/architect/delivery/evaluator/system sessions. */
+    /** Optional goal this session belongs to (kind="planner"|"executor"|"build"|"evaluator"
+     *  when goal-scoped). Used by overlay to nest the session's messages under
+     *  the goal card. Null for root/assistant/requirements/design-analyst/goal/
+     *  architect/delivery/system sessions. */
     goal_id: text(),
     share_url: text(),
     summary_additions: integer(),

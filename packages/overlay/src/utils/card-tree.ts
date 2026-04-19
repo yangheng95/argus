@@ -56,8 +56,8 @@ export interface CardNode {
    *  checks, etc.) so the main conversation shows the same detail as the
    *  sidebar Goals panel. */
   stepPayload?: StepPayload;
-  /** For kind="step" with stepPayload.executorSessionID — exposed so the
-   *  Card renderer can wire an "Open session" button without re-reading
+  /** For kind="step" with stepPayload.buildSessionID — exposed so the
+   *  Card renderer can wire an "Open build session" button without re-reading
    *  board state. */
   stepID?: string;
   /** Flattened leaf parts (text / reasoning / tool / patch / file / subtask / boundary). */

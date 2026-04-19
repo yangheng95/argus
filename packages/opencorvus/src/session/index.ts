@@ -162,8 +162,9 @@ export namespace Session {
         "evaluator",
         "system",
       ]),
-      /** Goal this session belongs to (planner/executor/build only); drives
-       *  overlay card nesting. Fixed at creation. */
+      /** Goal this session belongs to (planner / executor container / build
+       *  worker / evaluator only); drives overlay card nesting. Fixed at
+       *  creation. */
       goalID: Identifier.schema("goal").optional(),
       /** Free-form per-session state. */
       metadata: z.record(z.string(), z.any()).optional(),
@@ -272,7 +273,7 @@ export namespace Session {
       const title = getForkedTitle(original.title)
       // fork = clone: inherits the original session's kind and goal. This
       // is the session's identity, not a default — forking a "delivery"
-      // session into an "executor" would be semantically broken.
+      // session into an "executor" container would be semantically broken.
       const session = await createNext({
         directory: Instance.directory,
         parentID: input.sessionID,

@@ -246,7 +246,7 @@ export function installSettingsFormHandlers(): void {
  * and the main conversation (Card step body) so the render logic isn't
  * duplicated across surfaces.
  */
-export async function openExecutorSessionDialog(
+export async function openBuildSessionDialog(
   sessionID: string,
   title: string,
 ): Promise<void> {
@@ -254,7 +254,7 @@ export async function openExecutorSessionDialog(
   const titleEl = document.getElementById("sessionDialogTitle");
   const bodyEl = document.getElementById("sessionDialogBody");
   if (!dialog || !titleEl || !bodyEl) return;
-  titleEl.textContent = title || "Executor Session";
+  titleEl.textContent = title || "Build Session";
   bodyEl.innerHTML = '<p class="empty-hint">Loading…</p>';
   dialog.showModal();
   try {

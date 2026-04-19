@@ -948,12 +948,12 @@ function buildStepPayload(goalID: string, stepID: string, status?: string): Goal
         .sort((a, b) => a.orderIndex - b.orderIndex)
     : undefined
 
-  let executorSessionID: string | undefined
+  let buildSessionID: string | undefined
   let workspaceDir: string | undefined
   let changedFiles: string[] | undefined
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
   if (goalRun) {
-    executorSessionID = goalRun.session_id ?? undefined
+    buildSessionID = goalRun.session_id ?? undefined
     workspaceDir = goalRun.workspace_dir ?? undefined
     const delivery = Database.use((db) =>
       db.select().from(EngineDeliveryTable)
@@ -988,14 +988,14 @@ function buildStepPayload(goalID: string, stepID: string, status?: string): Goal
 
   if (
     planNodes === undefined &&
-    executorSessionID === undefined &&
+    buildSessionID === undefined &&
     workspaceDir === undefined &&
     changedFiles === undefined &&
     checks === undefined
   ) {
     return undefined
   }
-  return { planNodes, executorSessionID, workspaceDir, changedFiles, diffStats, checks, evalSummary, verdict }
+  return { planNodes, buildSessionID, workspaceDir, changedFiles, diffStats, checks, evalSummary, verdict }
 }
 
 /** Read all architect decision entries for per-goal distribution */
