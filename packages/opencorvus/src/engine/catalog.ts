@@ -44,7 +44,13 @@ export const GOAL_RUN_STATUS_CATALOG = {
   running: { liveness: "live", satisfiesGoal: false, resettable: true },
   evaluating: { liveness: "live", satisfiesGoal: false, resettable: true },
   blocked: { liveness: "live", satisfiesGoal: false, resettable: true },
-  completed: { liveness: "terminal", satisfiesGoal: true, resettable: true },
+  // `completed` is truly terminal: the goal_run succeeded under its contract
+  // and its verification evidence is load-bearing for delivery replay + the
+  // overlay timeline. Retry under a new contract (modify_goal) or a full
+  // restart (restart_from_stage) must create a NEW goal_run and supersede
+  // the old one via metadata — never mutate the completed row into aborted,
+  // which erases the success record and reverts parent goal.status.
+  completed: { liveness: "terminal", satisfiesGoal: true, resettable: false },
   failed: { liveness: "retriable", satisfiesGoal: false, resettable: false },
   aborted: { liveness: "retriable", satisfiesGoal: false, resettable: false },
 } as const satisfies Record<EngineGoalRunStatus, GoalRunStatusMeta>

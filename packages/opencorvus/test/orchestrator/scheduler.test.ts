@@ -20,7 +20,11 @@ describe("orchestrator scheduler invariants", () => {
     expect(LIVE_RUN_STATUSES.includes("aborted" as never)).toBe(false)
   })
 
-  test("resettable goal-run statuses include completed work that must be retired for rework", () => {
+  test("resettable goal-run statuses exclude completed — retry goes through supersede", () => {
+    // `completed` is intentionally excluded: its verification evidence is
+    // load-bearing and its parent goal.status should stay `passed` until a
+    // fresh goal_run under the new contract transitions. Rework routes
+    // through supersedeGoalRun metadata annotation, not an FSM flip.
     expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual([
       "queued",
       "accepted",
@@ -28,7 +32,6 @@ describe("orchestrator scheduler invariants", () => {
       "running",
       "evaluating",
       "blocked",
-      "completed",
     ])
   })
 

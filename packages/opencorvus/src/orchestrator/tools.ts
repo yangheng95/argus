@@ -57,7 +57,7 @@ import { updateRun, updateTask } from "@/engine/state"
 import { findStepByTool, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
 import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
-import { GOAL_RUN_RESETTABLE_STATUSES, isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
+import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -1149,23 +1149,30 @@ export function createOrchestratorTools(input: {
         if (statusReset) {
           const { listGoalRunsForTask, findLatestTipGoalRun } = await import("@/engine/store")
           const { supersedeGoalRun } = await import("@/engine/persist")
-          // 1. Abort every resettable goal_run (live + completed). After this
-          //    the tip is either an aborted row (completed → aborted) or a
-          //    failed/aborted tip that was already retriable.
+          const { LIVE_GOAL_RUN_STATUSES } = await import("@/engine/catalog")
+          // 1. Abort only LIVE goal_runs (queued/accepted/planning/running/
+          //    evaluating/blocked). `completed` is never reset — its
+          //    verification evidence is load-bearing, and the parent goal
+          //    should not regress from passed → pending via a
+          //    completed→aborted flip. Retry proceeds by creating a new
+          //    goal_run (step 2 supersedes the tip so dispatchability kicks
+          //    in; GoalPool is the authoritative creator).
           const toAbort = listGoalRunsForTask(taskID)
-            .filter((row) => row.goal_id === goalID && GOAL_RUN_RESETTABLE_STATUSES.includes(row.status))
+            .filter((row) => row.goal_id === goalID && LIVE_GOAL_RUN_STATUSES.includes(row.status))
           for (const row of toAbort) {
             updateGoalRun(row.id, { status: "aborted", error: "contract modified" })
           }
           abortedRuns = toAbort.length
-          // 2. If the tip is still a failed/aborted terminal without a
-          //    superseded_reason marker, annotate it so deriveGoalStatus
-          //    projects "pending" (same contract as execute_goal /
-          //    retry_failed_goals). `aborted` rows already project as
-          //    "pending" via mapRunStatus, so supersede is only needed when
-          //    the tip is `failed` pre-modify.
+          // 2. Supersede any terminal tip (failed / aborted / completed) so
+          //    deriveGoalStatus projects "pending" and the task loop routes
+          //    the goal back through pool.submit → readyGoalNodes →
+          //    pool.dispatchGoal, which creates a fresh goal_run under the
+          //    new contract. Completed tips especially: their success record
+          //    is preserved, and the NEW run is the one that proves the
+          //    modified contract (the old completion was under the old
+          //    contract, which is now stale).
           const tip = findLatestTipGoalRun(goalID)
-          if (tip && tip.status === "failed") {
+          if (tip && (tip.status === "failed" || tip.status === "aborted" || tip.status === "completed")) {
             const existingMeta = (tip.metadata ?? {}) as Record<string, unknown>
             if (typeof existingMeta.superseded_reason !== "string" || !existingMeta.superseded_reason) {
               supersedeGoalRun({ oldGoalRunID: tip.id, reason: "[modify_goal] contract modified" })
@@ -2073,20 +2080,24 @@ export function createOrchestratorTools(input: {
           goalReports: aggregatedGoalReports,
         }
 
-        // Visual gate: if the task carried any image attachments, run an
-        // SSIM check against the rendered output and record the result on
-        // task.metadata.criteria_results so the delivery agent's
-        // `query_criteria` tool sees it before it forms a verdict. We do
-        // this in-process (no benchmark dependency, no shell) and only when
-        // there's an actual reference to compare against.
+        // Render the merged delivery output to a screenshot and register it
+        // as a task attachment with intent="rendered_output". The delivery
+        // agent consumes both the reference image(s) AND this rendered PNG
+        // as multimodal attachments, and produces actionable spatial
+        // feedback ("sidebar 20px wider than reference, primary color too
+        // dark, hero CTA missing") that the executor can act on during
+        // rework. No SSIM gate: a single similarity number told the
+        // executor "different" but never "different where" — the metric
+        // also made delivery lazy, rubber-stamping "visual_diff passed"
+        // without really comparing. Rendering lives here rather than in
+        // per-goal evaluator because only the merged worktree represents
+        // the final artifact users see.
+        let renderedAttachment:
+          | { sha: string; url: string; mime: string; size: number; filename?: string; intent: "rendered_output"; source: "puppeteer" }
+          | undefined
         try {
-          // Re-read task to pick up references materialized during
-          // design_analysis (e.g. Figma frames).
           const liveTask = requireTask(taskID)
           const taskAttachments = Array.isArray(liveTask.attachments) ? liveTask.attachments as any[] : []
-          // Prefer attachments explicitly tagged as visual_reference. Fall
-          // back to any image-MIME attachment for older tasks created
-          // before the intent field existed.
           const tagged = taskAttachments.filter((a) =>
             a?.intent === "visual_reference" && typeof a?.url === "string",
           )
@@ -2096,59 +2107,75 @@ export function createOrchestratorTools(input: {
                 typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
               )
           if (imageAttachments.length > 0) {
-            const { findRenderedIndex, runVisualDiff, summarizeVisualReport } = await import("@/delivery/checks/visual")
+            const { findRenderedIndex, renderPage } = await import("@/delivery/checks/visual")
             const { AttachmentStore } = await import("@/storage/attachment-store")
             const renderedHtml = await findRenderedIndex(Instance.directory)
             if (!renderedHtml) {
-              await EngineService.upsertTaskCriteria(taskID, [{
-                name: "visual_diff",
-                family: "runtime",
-                status: "skipped",
-                evidence: `no index.html found under ${Instance.directory} — visual gate cannot run`,
-              }])
+              log.warn("deliver: no index.html found under merged worktree — skipping render", {
+                taskID, dir: Instance.directory,
+              })
             } else {
-              // Reference: first image attachment. Resolve its on-disk path
-              // through the attachment store rather than fetching the URL
-              // (delivery runs in-process so the file is already local).
+              // Pick the first image attachment to size the viewport. All
+              // references are later shown to the delivery LLM multimodally
+              // so the choice here is purely about matching the rendered
+              // viewport to the primary reference's native size.
               const ref = imageAttachments[0]
               const located = AttachmentStore.nameFromUrl(String(ref.url))
               const refPath = located
                 ? AttachmentStore.resolveAbsolute(located.projectID, located.name)
                 : undefined
               if (!refPath) {
-                await EngineService.upsertTaskCriteria(taskID, [{
-                  name: "visual_diff",
-                  family: "runtime",
-                  status: "skipped",
-                  evidence: `attachment ${ref.url} could not be resolved to a local path`,
-                }])
-              } else {
-                const visualOut = path.join(Instance.directory, ".opencorvus", "visual-diff")
-                const report = await runVisualDiff({
-                  rendered: renderedHtml,
-                  reference: refPath,
-                  outDir: visualOut,
+                log.warn("deliver: reference attachment could not be resolved — rendering at default viewport", {
+                  taskID, url: ref.url,
                 })
-                await EngineService.upsertTaskCriteria(taskID, [{
-                  name: "visual_diff",
-                  family: "runtime",
-                  status: report.passed ? "passed" : "failed",
-                  evidence: `${summarizeVisualReport(report)} | rendered=${renderedHtml} reference=${refPath}`,
-                }])
               }
+              const visualOut = path.join(Instance.directory, ".opencorvus", "visual-diff")
+              const { renderedPath, size } = await renderPage({
+                rendered: renderedHtml,
+                outDir: visualOut,
+                referenceForViewport: refPath,
+                viewport: refPath ? undefined : { width: 1440, height: 900 },
+              })
+              // Persist the rendered screenshot to the attachment store so
+              // the delivery agent's multimodal prompt can inline it the
+              // same way it inlines user-provided references.
+              const bytes = await (await import("node:fs/promises")).readFile(renderedPath)
+              const written = await AttachmentStore.write(
+                liveTask.project_id,
+                Instance.directory,
+                bytes,
+                "image/png",
+                "rendered.png",
+              )
+              renderedAttachment = {
+                sha: written.sha,
+                url: written.url,
+                mime: written.mime,
+                size: written.size,
+                filename: written.filename,
+                intent: "rendered_output",
+                source: "puppeteer",
+              }
+              // Register it on the task so the overlay / downstream
+              // code path sees it alongside the reference attachments.
+              const nextAttachments = Array.isArray(liveTask.attachments)
+                ? [...(liveTask.attachments as any[]), renderedAttachment]
+                : [renderedAttachment]
+              // Strip any stale prior rendered_output before appending so
+              // reworks don't accumulate N rendered PNGs.
+              const deduped = nextAttachments.filter(
+                (a) => !(a?.intent === "rendered_output" && a.sha !== renderedAttachment!.sha),
+              )
+              await updateTask(liveTask, { attachments: deduped }, "delivery render produced rendered.png")
+              log.info("deliver: rendered merged worktree", {
+                taskID, renderedPath, size, sha: renderedAttachment.sha,
+              })
             }
           }
-        } catch (visualErr) {
-          // Recording the failure is more useful than swallowing it — the
-          // delivery agent will see "visual_diff failed" via query_criteria
-          // and can decide whether that's a hard fail or an environment
-          // issue (e.g. headless Chrome unavailable).
-          await EngineService.upsertTaskCriteria(taskID, [{
-            name: "visual_diff",
-            family: "runtime",
-            status: "failed",
-            evidence: `visual gate threw: ${visualErr instanceof Error ? visualErr.message : String(visualErr)}`,
-          }])
+        } catch (renderErr) {
+          log.warn("deliver: render step failed — delivery agent will see reference only", {
+            taskID, error: renderErr instanceof Error ? renderErr.message : String(renderErr),
+          })
         }
 
         // ── Deterministic per-goal evaluator (per specs/new-arch/01-agents.md L111
@@ -2413,6 +2440,45 @@ export function createOrchestratorTools(input: {
               { taskID, strictFailedCount: strictFailedChecks.length },
             )
             const names = strictFailedChecks.map(c => c.name).join(", ")
+            // Write a visible summary into deliverySession so the overlay's
+            // delivery card has content instead of being an empty shell.
+            // The overlay only creates the session card when the first
+            // `message.updated` SSE fires (tree-writer.ts ensureSessionCard);
+            // without this write, the short-circuit path produces a verdict
+            // artifact but zero messages, so the delivery agent is invisible
+            // in the UI. This is not a fabricated LLM transcript — it is a
+            // faithful record of the deterministic decision that delivery
+            // actually took.
+            const summaryLines: string[] = [
+              `# Delivery verdict: REJECTED (LLM skipped)`,
+              ``,
+              `${strictFailedChecks.length} strict evaluator check(s) failed — deterministic rejection without invoking delivery LLM.`,
+              ``,
+              `**Failed checks**: ${names}`,
+              ``,
+              `## Failure details`,
+              ``,
+            ]
+            for (const check of strictFailedChecks) {
+              summaryLines.push(`### ${check.name}`)
+              if (check.evidence) {
+                const trimmed = check.evidence.length > 800
+                  ? check.evidence.slice(0, 800) + "…"
+                  : check.evidence
+                summaryLines.push("```")
+                summaryLines.push(trimmed)
+                summaryLines.push("```")
+              } else {
+                summaryLines.push("_(no evidence captured)_")
+              }
+              summaryLines.push("")
+            }
+            const summaryText = summaryLines.join("\n")
+            if (hooks.onChunk) {
+              await hooks.onChunk({
+                chunk: { type: "text-delta", id: Identifier.ascending("part"), text: summaryText },
+              })
+            }
             verdict = DeliveryVerdict.parse({
               verdict: "rejected",
               summary:
@@ -2432,9 +2498,7 @@ export function createOrchestratorTools(input: {
                 error:
                   `Strict evaluator check ${c.name} failed. This is a deterministic check ` +
                   `that cannot be overridden by delivery LLM judgment.${c.evidence ? ` Evidence: ${c.evidence.slice(0, 500)}` : ""}`,
-                suggestion: c.name.includes("visual_diff")
-                  ? "Read .opencorvus/visual-diff/rendered.png and the reference image to identify specific visual differences (layout, colors, spacing, typography). Fix each difference in the source HTML/CSS."
-                  : c.name.includes(":build") || c.name.includes(":typecheck")
+                suggestion: c.name.includes(":build") || c.name.includes(":typecheck")
                   ? "Run `npm run build` / `npx tsc --noEmit` locally to reproduce the failure, then fix each compiler / bundler error."
                   : undefined,
               })),
@@ -2464,8 +2528,10 @@ export function createOrchestratorTools(input: {
 
           // Hard gate: if the per-goal evaluator flagged any strict-mode
           // check as failed, the delivery verdict MUST be rejected regardless
-          // of what the LLM decided. Strict checks (visual_diff, build, test)
-          // are deterministic — the LLM cannot override them.
+          // of what the LLM decided. Strict checks (build / typecheck / test)
+          // are deterministic — the LLM cannot override them. Visual similarity
+          // is intentionally NOT a strict check; the LLM does the vision-based
+          // comparison using attached rendered.png + reference image(s).
           // Applied BEFORE persisting the verdict artifact so all downstream
           // consumers (criteria panel, evaluation record) see the true verdict.
           if (verdict.verdict === "accepted" && strictFailedChecks.length > 0) {
@@ -2481,9 +2547,7 @@ export function createOrchestratorTools(input: {
               category: "quality" as const,
               file: undefined,
               error: `Strict evaluator check ${c.name} failed. The delivery agent accepted but this check is non-overridable.${c.evidence ? ` Evidence: ${c.evidence.slice(0, 500)}` : ""}`,
-              suggestion: c.name.includes("visual_diff")
-                ? "Read .opencorvus/visual-diff/rendered.png and the reference image to identify specific visual differences (layout, colors, spacing, typography). Fix each difference in the source HTML/CSS."
-                : undefined,
+              suggestion: undefined,
             }))
             verdict.rejection_details = [...(verdict.rejection_details ?? []), ...rejections]
           }

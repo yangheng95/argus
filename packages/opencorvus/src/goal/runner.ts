@@ -40,8 +40,10 @@ function summary(prefix: string, files: string[]) {
 }
 
 function includeDeliveryFile(file: string) {
+  // `.opencorvus/` covers scratch + `.opencorvus/worktrees/`, so the old
+  // standalone `.opencorvus-worktrees/` check is redundant (and its legacy
+  // path is no longer produced by Worktree.create).
   return !file.startsWith(".opencorvus/")
-    && !file.startsWith(".opencorvus-worktrees/")
     && file !== ".opencorvus-meta.json"
 }
 

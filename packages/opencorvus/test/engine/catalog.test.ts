@@ -34,6 +34,9 @@ describe("engine status catalog", () => {
       "blocked",
     ])
     expect(GOAL_RUN_SUCCESS_STATUSES).toEqual(["completed"])
+    // `completed` is intentionally NOT resettable: the success record +
+    // verification evidence are preserved across contract changes; retry
+    // proceeds by creating a new goal_run and supersede-annotating the old.
     expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual([
       "queued",
       "accepted",
@@ -41,7 +44,6 @@ describe("engine status catalog", () => {
       "running",
       "evaluating",
       "blocked",
-      "completed",
     ])
 
     expect(isLiveGoalRunStatus("planning")).toBe(true)
@@ -49,7 +51,7 @@ describe("engine status catalog", () => {
     expect(isLiveGoalRunStatus("failed")).toBe(false)
     expect(isRetriableGoalRunStatus("aborted")).toBe(true)
     expect(isRetriableGoalRunStatus("completed")).toBe(false)
-    expect(isResettableGoalRunStatus("completed")).toBe(true)
+    expect(isResettableGoalRunStatus("completed")).toBe(false)
     expect(doesGoalRunSatisfyGoal("completed")).toBe(true)
     expect(doesGoalRunSatisfyGoal("running")).toBe(false)
   })

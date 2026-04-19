@@ -134,7 +134,12 @@ const DEFAULTS: EngineConfigType = {
   },
   evaluator: {
     tier: "standard",
-    per_goal_enabled: false, // debug gate — per-goal eval is implemented in goal-pool but off until the path is stabilized
+    // Per-goal evaluator is now the goal-exit gate (spec-09 Phase B). Path is
+    // load-bearing: produces `scope="goal_run"` verification-evidence rows that
+    // retry prompts (Phase C), delivery short-circuit (Phase D), and rework
+    // no-progress detection (Phase E) all depend on. The original "debug gate,
+    // off until stabilized" note is resolved — spec-09 is the stabilization.
+    per_goal_enabled: true,
   },
   delivery: {
     // Vision-driven fig2code delivery loops compare rendered output against
