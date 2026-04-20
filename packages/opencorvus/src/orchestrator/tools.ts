@@ -356,9 +356,10 @@ export function createOrchestratorTools(input: {
           await hooks.flush()
 
 
-          // Persist spec snapshot, requirements, and goals
+          // Persist spec snapshot, requirements, goals, and metric ruler
           const { insertGoalRows, insertRequirements } = await import("@/engine/persist")
           const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
+          const { persistArchitectMetrics } = await import("@/metrics/store")
           const now = Date.now()
           const specSnapshotID = Identifier.ascending("spec")
 
@@ -443,8 +444,29 @@ export function createOrchestratorTools(input: {
               })),
               now,
             })
+
+            // Persist Architect-emitted metric ruler as immutable baselines.
+            // Must run inside the same transaction so an abort leaves no
+            // half-registered ruler behind. Seeds are stashed on task.metadata
+            // for Phase 4's Prosecutor to read on first pass.
+            persistArchitectMetrics({
+              task_id: taskID,
+              goal_id_map: llmToDBID,
+              goal_metric_specs: result.goalMetricSpecs,
+              global_metric_specs: result.globalMetricSpecs,
+            })
+
+            const existingMeta = (task.metadata as Record<string, unknown> | null) ?? {}
+            const updatedMeta = {
+              ...existingMeta,
+              _architect_challenge_seeds: result.challengeSeeds,
+            }
             db.update(EngineTaskTable)
-              .set({ active_spec_version_id: specSnapshotID, time_updated: now })
+              .set({
+                active_spec_version_id: specSnapshotID,
+                metadata: updatedMeta,
+                time_updated: now,
+              })
               .where(eq(EngineTaskTable.id, taskID))
               .run()
             Database.effect(() =>
@@ -2141,18 +2163,6 @@ export function createOrchestratorTools(input: {
           })
         }
 
-        // ── Delivery-scope evidence carrier (2026-04-20 per-goal evaluator removal) ──
-        // The deterministic per-goal evaluator is gone. The delivery agent reads
-        // each goal's acceptance_specs as INFORMATION and verifies them itself
-        // (Phase 2 / 2.5 in DELIVERY_AGENT_SYSTEM), including parallel per-goal
-        // subagent dispatch for adversarial review at scale. No pre-scored
-        // checks, no pre-flight gate, no criteria_results sink. The empty
-        // `deliveryScopeChecks` below preserves the downstream payload shape
-        // (updateEvaluationFromDeliveryVerdict / signature / short-circuit) —
-        // the delivery-scope evaluation row can still carry delivery-agent
-        // findings once the agent populates them post-verdict.
-        const deliveryScopeChecks: import("@/engine/engine.sql").EngineEvaluationCheck[] = []
-
         const deliverySession = await Session.createNext({
           kind: "delivery",
           parentID: input.agentSessionID,
@@ -2228,9 +2238,133 @@ export function createOrchestratorTools(input: {
 
           const passedCount = goals.filter(g => g.status === "passed").length
           const failedCount = goals.filter(g => g.status === "failed").length
-          if (verdict.verdict === "accepted") {
+          // ── DAM: run metric executor + Arbiter ─────────────────────────
+          // The delivery-agent's verdict is an advisory signal; the Arbiter
+          // is the authoritative verdict source. Even an "accepted" agent
+          // verdict must pass the Arbiter's blocking-metric gate.
+          const {
+            executeMetrics,
+          } = await import("@/metrics/executor")
+          const { computeIterationSnapshot } = await import("@/metrics/score")
+          const {
+            arbitrate,
+            ARBITER_DEFAULTS,
+          } = await import("@/metrics/arbiter")
+          const {
+            readCounterexamplesForTask,
+            readIterationHistory,
+            readPreviousAggregateScore,
+            readResultsForIteration,
+            readSpecsForTask,
+            writeIterationSnapshot,
+          } = await import("@/metrics/store")
+
+          const priorIterations = readIterationHistory(taskID)
+          const iteration = priorIterations.length
+          await executeMetrics({
+            task_id: taskID,
+            iteration,
+            delivery: {
+              summary: verdict.summary,
+              changed_files: Array.isArray((deliveryInfo as any)?.changed_files)
+                ? ((deliveryInfo as any).changed_files as string[])
+                : undefined,
+              requirement_text: task.request,
+            },
+          })
+
+          // Prosecutor — adversarial probe AFTER metrics, BEFORE snapshot.
+          // Its tool calls (mark_counterexample, propose_challenge_metric)
+          // write directly to DB, so the snapshot we build next sees the new
+          // counterexamples and challenges.
+          try {
+            const { runProsecutor } = await import("@/delivery/prosecutor")
+            const taskMetaRaw = (task.metadata as Record<string, unknown> | null) ?? {}
+            const rawSeeds = Array.isArray(taskMetaRaw._architect_challenge_seeds)
+              ? (taskMetaRaw._architect_challenge_seeds as Array<Record<string, unknown>>)
+              : []
+            const architectSeeds = rawSeeds
+              .filter(
+                (s) =>
+                  typeof s.id === "string" &&
+                  (s.scope === "goal" || s.scope === "global") &&
+                  typeof s.target_ref === "string" &&
+                  typeof s.claim === "string" &&
+                  typeof s.rationale === "string" &&
+                  (s.priority_hint === "high" ||
+                    s.priority_hint === "medium" ||
+                    s.priority_hint === "low"),
+              )
+              .map((s) => ({
+                id: s.id as string,
+                scope: s.scope as "goal" | "global",
+                target_ref: s.target_ref as string,
+                claim: s.claim as string,
+                rationale: s.rationale as string,
+                priority_hint: s.priority_hint as "high" | "medium" | "low",
+              }))
+            const pRes = await runProsecutor({
+              task: {
+                id: task.id,
+                title: task.title,
+                request: task.request,
+                sessionID: task.session_id ?? undefined,
+              },
+              iteration,
+              defenderVerdict: verdict,
+              architectSeeds,
+              signal: input.signal,
+            })
+            log.info("deliver: prosecutor done", {
+              taskID,
+              iteration,
+              filed: pRes.counterexamples_filed,
+              proposed: pRes.challenges_proposed,
+              resolved: pRes.counterexamples_resolved,
+            })
+          } catch (err) {
+            log.warn("deliver: prosecutor failed — continuing without adversarial pass", {
+              taskID,
+              iteration,
+              err: err instanceof Error ? err.message : String(err),
+            })
+          }
+
+          const specs = readSpecsForTask(taskID)
+          const currentResults = readResultsForIteration(taskID, iteration)
+          const previousResults =
+            iteration > 0 ? readResultsForIteration(taskID, iteration - 1) : []
+          const counterexamples = readCounterexamplesForTask(taskID)
+          const previousAggregateScore = readPreviousAggregateScore(taskID, iteration)
+          const snapshot = computeIterationSnapshot({
+            task_id: taskID,
+            iteration,
+            specs,
+            currentResults,
+            previousResults,
+            counterexamples,
+            previousAggregateScore,
+          })
+          const orchCfgForArbiter = await EngineConfig.get()
+          const arbiterConfig = {
+            ...ARBITER_DEFAULTS,
+            maxIterations: orchCfgForArbiter.max_delivery_iterations,
+          }
+          const decision = arbitrate([...priorIterations, snapshot], arbiterConfig)
+          writeIterationSnapshot({ ...snapshot, arbiter_verdict: decision.verdict })
+          log.info("deliver: arbiter decided", {
+            taskID,
+            iteration,
+            agentVerdict: verdict.verdict,
+            arbiterVerdict: decision.verdict,
+            reason: decision.reason,
+            aggregate_score: snapshot.aggregate_score.toFixed(3),
+            blocking_unmet: snapshot.blocking_unmet_count,
+          })
+
+          if (decision.verdict === "accept") {
             await trackStepComplete("deliver")
-            log.info("deliver: verdict accepted, auto-publishing", { taskID, runID: run.id, deliveryID })
+            log.info("deliver: arbiter accepted, auto-publishing", { taskID, runID: run.id, deliveryID })
             // Auto-publish: verification passed → immediately complete task.
             // No second LLM turn needed — avoids infinite loop where LLM ends turn
             // without calling publish_delivery.
@@ -2257,18 +2391,22 @@ export function createOrchestratorTools(input: {
                 const published = findDeliveryByRun(run.id) ?? delivery
                 const verdictPayload = verdictArtifact?.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
                 if (verdictPayload?.verdict) {
+                  const issues = Array.isArray(verdictPayload.issues_found)
+                    ? verdictPayload.issues_found
+                    : []
                   updateEvaluationFromDeliveryVerdict({
                     deliveryID: delivery.id,
                     verdict: verdictPayload.verdict as "accepted" | "rejected" | "inconclusive",
                     summary: verdictPayload.summary ?? "Delivery agent verification",
-                    issues: verdictPayload.issues_found,
-                    // spec-09 Phase D: full structured check set for the
-                    // delivery-scope evaluation row. updateEvaluationFrom...
-                    // computes signature from checks when verdict=rejected.
-                    // On accept the set contains only passed rows so the
-                    // signature is empty, which is correct — nothing to
-                    // converge on.
-                    checks: deliveryScopeChecks,
+                    // Record agent-reported issues as structured failed-check
+                    // rows for operator-facing drill-down. Convergence lives
+                    // in engine_iteration, not these rows.
+                    checks: issues.map((evidence, i) => ({
+                      name: `issue-${i + 1}`,
+                      status: "failed" as const,
+                      evidence,
+                      scorer_kind: "delivery_verdict" as const,
+                    })),
                     now: completed,
                   })
                 }
@@ -2299,65 +2437,38 @@ export function createOrchestratorTools(input: {
             }
           }
           await trackStepComplete("deliver", undefined, true)
-          // ── Adversarial rework: delivery rejected → reset goals → continue loop ──
-          // Instead of failing the task, record rejection feedback and reset
-          // goals to pending so the executor can rework them.
-          // The task loop detects the _delivery_rework metadata signal and
-          // re-triggers the orchestrator with a delivery_rejected trigger.
-          const orchCfg = await EngineConfig.get()
-          const taskMeta = (task.metadata ?? {}) as Record<string, unknown>
-          const reworkHistory = Array.isArray(taskMeta._delivery_rework_history)
-            ? [...(taskMeta._delivery_rework_history as Array<Record<string, unknown>>)]
-            : []
-          const iterationCount = reworkHistory.length + 1
-          const maxIterations = orchCfg.max_delivery_iterations
 
-          // spec-09 Phase D: whatever happens next (fail-fast, rework,
-          // fail-at-budget), we need the delivery-scope evaluation row
-          // updated with the actual verdict/checks/signature. Without this
-          // update the row stays at status="pending" which the rework
-          // convergence detector (Phase E) cannot read. The 1:1 invariant
-          // (persist.ts:465) guarantees the row exists.
-          const deliveryRejectedNow = Date.now()
+          // Persist the delivery-agent's advisory verdict into the evaluation
+          // row for operator-facing drill-down. Convergence lives in
+          // engine_iteration — this row is for audit only.
           updateEvaluationFromDeliveryVerdict({
             deliveryID,
             verdict: verdict.verdict,
             summary: verdict.summary,
-            issues: verdict.issues_found,
-            checks: deliveryScopeChecks,
-            now: deliveryRejectedNow,
+            checks: verdict.issues_found.map((evidence, i) => ({
+              name: `issue-${i + 1}`,
+              status: "failed" as const,
+              evidence,
+              scorer_kind: "delivery_verdict" as const,
+            })),
+            now: Date.now(),
           })
 
-          // spec-09 Phase E: convergence detection. If the previous delivery
-          // rejection had the SAME signature (same failed checks, same
-          // exit codes, same output digests), retrying a third time is
-          // pointless — the rework isn't moving the system. Fail fast before
-          // burning the iteration budget on known-no-progress work.
-          const { findLatestDeliveryEvidence, findPreviousDeliveryEvidence, signaturesConverge } = await import("@/verification")
-          const currentDeliveryEvidence = findLatestDeliveryEvidence(taskID)
-          const priorDeliveryEvidence = currentDeliveryEvidence
-            ? findPreviousDeliveryEvidence(taskID, currentDeliveryEvidence.id)
-            : undefined
-          if (
-            currentDeliveryEvidence &&
-            priorDeliveryEvidence &&
-            signaturesConverge(currentDeliveryEvidence.signature, priorDeliveryEvidence.signature)
-          ) {
+          const taskMeta = (task.metadata ?? {}) as Record<string, unknown>
+
+          // Arbiter verdict routing. The metric trajectory lives in
+          // engine_iteration — the assistant reads it via query_metric_trajectory
+          // on the next turn. We set a lightweight one-shot `_delivery_rework`
+          // marker so the orchestrator loop wakes and re-triggers.
+          if (decision.verdict === "stalled") {
             const failMsg = SubAgentProtocol.yieldResult({
-              headline:
-                `Delivery rejected with identical failure signature across two iterations — ` +
-                `rework is not converging. Fast-failing at iteration ${iterationCount}/${maxIterations} ` +
-                `instead of burning the remaining budget.`,
+              headline: `Delivery stalled — ${decision.reason}. Agent summary: ${verdict.summary}`,
               fields: [
-                ["signature", currentDeliveryEvidence.signature.slice(0, 16) + "…"],
                 ["issues_found", verdict.issues_found],
+                ["iteration", String(iteration)],
+                ["aggregate_score", snapshot.aggregate_score.toFixed(3)],
               ],
-              pointer: `verdict artifact ${verdictArtifactId} (full evidence + logs)`,
-            })
-            log.warn("deliver: fast-fail on convergence", {
-              taskID,
-              iteration: iterationCount,
-              signaturePrefix: currentDeliveryEvidence.signature.slice(0, 16),
+              pointer: `verdict artifact ${verdictArtifactId}`,
             })
             const currentTaskR = requireTask(taskID)
             if (currentTaskR.status === "active") {
@@ -2367,29 +2478,42 @@ export function createOrchestratorTools(input: {
                 failMsg,
               )
             }
-            stopAfterDispatch.abort("deliver_rejected_no_progress")
+            stopAfterDispatch.abort("deliver_stalled")
             return failMsg
           }
 
-          if (iterationCount > maxIterations) {
-            // Exhausted iteration budget — fail the task (original behavior)
+          if (decision.verdict === "abort") {
             const failMsg = SubAgentProtocol.yieldResult({
-              headline: `Delivery rejected after ${maxIterations} rework iterations: ${verdict.summary}`,
-              fields: [["issues_found", verdict.issues_found]],
-              pointer: `verdict artifact ${verdictArtifactId} (full evidence + logs)`,
+              headline: `Delivery aborted — ${decision.reason}`,
+              fields: [
+                ["issues_found", verdict.issues_found],
+                ["iteration", String(iteration)],
+                ["aggregate_score", snapshot.aggregate_score.toFixed(3)],
+              ],
+              pointer: `verdict artifact ${verdictArtifactId}`,
             })
             const currentTaskR = requireTask(taskID)
             if (currentTaskR.status === "active") {
-              await updateTask(currentTaskR, { status: "failed", error: failMsg, time_completed: Date.now() }, failMsg)
+              await updateTask(
+                currentTaskR,
+                { status: "failed", error: failMsg, time_completed: Date.now() },
+                failMsg,
+              )
             }
-            stopAfterDispatch.abort("deliver_rejected")
+            stopAfterDispatch.abort("deliver_abort")
             return failMsg
           }
 
-          // Build structured rejection feedback
-          const rejectionFeedback: Record<string, unknown> = {
-            iteration: iterationCount,
-            max_iterations: maxIterations,
+          // decision.verdict === "continue": the orchestrator assistant
+          // reads the engine_iteration trajectory and open counterexamples
+          // on its next turn (via query_metric_trajectory) and decides what
+          // to do next — patch code, reshape goals, whatever. No
+          // _delivery_rework_history accumulation: engine_iteration is the
+          // single source of truth.
+          const reworkSignal: Record<string, unknown> = {
+            iteration,
+            arbiter_verdict: decision.verdict,
+            arbiter_reason: decision.reason,
             verdict_summary: verdict.summary,
             issues_found: verdict.issues_found,
             rejection_details: verdict.rejection_details ?? [],
@@ -2397,98 +2521,124 @@ export function createOrchestratorTools(input: {
             startup_verification: verdict.startup_verification,
             frontend_check: verdict.frontend_check,
             verdict_artifact_id: verdictArtifactId,
+            aggregate_score: snapshot.aggregate_score,
+            blocking_unmet: snapshot.blocking_unmet_count,
+            open_counterexamples: snapshot.open_counterexamples,
             timestamp: Date.now(),
           }
-          reworkHistory.push(rejectionFeedback)
-
-          // Write rework signal + history into task metadata.
-          // The assistant (orchestrator) will receive the delivery_rejected trigger
-          // and RE-PLAN — it decides whether to modify goals, restart from a stage,
-          // or add new goals. The deliver tool does NOT unilaterally reset goal
-          // state — that's the assistant's responsibility based on rejection details.
           const currentTaskR = requireTask(taskID)
-          await updateTask(currentTaskR, {
-            metadata: {
-              ...taskMeta,
-              _delivery_rework: rejectionFeedback,
-              _delivery_rework_history: reworkHistory,
+          await updateTask(
+            currentTaskR,
+            {
+              metadata: { ...taskMeta, _delivery_rework: reworkSignal },
             },
-          }, `Delivery rejected (iteration ${iterationCount}/${maxIterations}) — assistant will re-plan`)
+            `Delivery rejected (iteration ${iteration}) — arbiter=${decision.verdict}, assistant will re-plan`,
+          )
 
-          // Record in decision log for executor visibility
           try {
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
             decisionLog.append({
               phase: "delivery",
-              key: `delivery_rejection_${iterationCount}`,
+              key: `delivery_rejection_${iteration}`,
               value: verdict.summary,
               reason: verdict.issues_found.join("; "),
             })
-          } catch { /* best effort */ }
+          } catch {
+            /* best effort */
+          }
 
-          log.info("deliver: adversarial rework triggered", {
+          log.info("deliver: continue-loop triggered", {
             taskID,
-            iteration: iterationCount,
-            maxIterations,
+            iteration,
             issues: verdict.issues_found.length,
           })
 
           stopAfterDispatch.abort("delivery_rework")
           return SubAgentProtocol.yieldResult({
-            headline: `Delivery rejected — iteration ${iterationCount}/${maxIterations}, assistant must re-plan`,
+            headline: `Delivery rejected — iteration ${iteration}, arbiter=${decision.verdict}, assistant must re-plan`,
             fields: [
               ["issues_found", verdict.issues_found],
-              ["iteration", `${iterationCount}/${maxIterations}`],
+              ["iteration", String(iteration)],
+              ["arbiter_reason", decision.reason],
             ],
-            pointer: `verdict artifact ${verdictArtifactId}; task.metadata._delivery_rework for feedback`,
+            pointer: `verdict artifact ${verdictArtifactId}; call query_metric_trajectory for full trajectory`,
           })
         } catch (err) {
           await trackStepComplete("deliver", undefined, true)
 
           const msg = err instanceof Error ? err.message : String(err)
           log.error("deliver: verification failed", { taskID, error: msg })
-          // Delivery verification threw — enter rework path if within budget,
-          // otherwise fail the task.
-          const orchCfg = await EngineConfig.get()
-          const taskMeta = (task.metadata ?? {}) as Record<string, unknown>
-          const reworkHistory = Array.isArray(taskMeta._delivery_rework_history)
-            ? [...(taskMeta._delivery_rework_history as Array<Record<string, unknown>>)]
-            : []
-          const iterationCount = reworkHistory.length + 1
+          // Delivery verification threw. Write a stale-result iteration snapshot
+          // so the Arbiter can see the attempt, then let the arbiter decide
+          // whether this is an abort (e.g. two consecutive failures).
+          const {
+            computeIterationSnapshot: computeSnapshotErr,
+          } = await import("@/metrics/score")
+          const {
+            arbitrate: arbitrateErr,
+            ARBITER_DEFAULTS: ARBITER_DEFAULTS_ERR,
+          } = await import("@/metrics/arbiter")
+          const {
+            readCounterexamplesForTask: readCeErr,
+            readIterationHistory: readHistErr,
+            readPreviousAggregateScore: readPrevErr,
+            readResultsForIteration: readResErr,
+            readSpecsForTask: readSpecsErr,
+            writeIterationSnapshot: writeSnapshotErr,
+          } = await import("@/metrics/store")
+          const priorItersErr = readHistErr(taskID)
+          const iterationErr = priorItersErr.length
+          const snapshotErr = computeSnapshotErr({
+            task_id: taskID,
+            iteration: iterationErr,
+            specs: readSpecsErr(taskID),
+            currentResults: readResErr(taskID, iterationErr),
+            previousResults:
+              iterationErr > 0 ? readResErr(taskID, iterationErr - 1) : [],
+            counterexamples: readCeErr(taskID),
+            previousAggregateScore: readPrevErr(taskID, iterationErr),
+          })
+          const orchCfgErr = await EngineConfig.get()
+          const decisionErr = arbitrateErr([...priorItersErr, snapshotErr], {
+            ...ARBITER_DEFAULTS_ERR,
+            maxIterations: orchCfgErr.max_delivery_iterations,
+          })
+          writeSnapshotErr({ ...snapshotErr, arbiter_verdict: decisionErr.verdict })
 
-          if (iterationCount > orchCfg.max_delivery_iterations) {
-            const failMsg = `Delivery verification failed after ${orchCfg.max_delivery_iterations} iterations: ${msg}`
+          if (decisionErr.verdict === "abort" || decisionErr.verdict === "stalled") {
+            const failMsg = `Delivery verification threw (${msg}). Arbiter verdict=${decisionErr.verdict}: ${decisionErr.reason}`
             const currentTaskE = requireTask(taskID)
             if (currentTaskE.status === "active") {
-              await updateTask(currentTaskE, { status: "failed", error: failMsg, time_completed: Date.now() }, failMsg)
+              await updateTask(
+                currentTaskE,
+                { status: "failed", error: failMsg, time_completed: Date.now() },
+                failMsg,
+              )
             }
             stopAfterDispatch.abort("deliver_rejected")
             return failMsg
           }
 
-          // Treat verification error as a rejection with synthetic feedback
-          const syntheticFeedback: Record<string, unknown> = {
-            iteration: iterationCount,
-            max_iterations: orchCfg.max_delivery_iterations,
+          const syntheticSignal: Record<string, unknown> = {
+            iteration: iterationErr,
+            arbiter_verdict: decisionErr.verdict,
+            arbiter_reason: decisionErr.reason,
             verdict_summary: `Delivery verification threw: ${msg}`,
             issues_found: [`Delivery verification error: ${msg}`],
             rejection_details: [{ category: "runtime", error: msg }],
             timestamp: Date.now(),
           }
-          reworkHistory.push(syntheticFeedback)
-
+          const taskMetaErr = (task.metadata ?? {}) as Record<string, unknown>
           const currentTaskE = requireTask(taskID)
-          await updateTask(currentTaskE, {
-            metadata: {
-              ...taskMeta,
-              _delivery_rework: syntheticFeedback,
-              _delivery_rework_history: reworkHistory,
-            },
-          }, `Delivery verification error (iteration ${iterationCount}) — assistant will re-plan`)
+          await updateTask(
+            currentTaskE,
+            { metadata: { ...taskMetaErr, _delivery_rework: syntheticSignal } },
+            `Delivery verification error (iteration ${iterationErr}) — assistant will re-plan`,
+          )
 
           stopAfterDispatch.abort("delivery_rework")
-          return `Delivery verification failed: ${msg}. Rework iteration ${iterationCount}/${orchCfg.max_delivery_iterations} triggered.`
+          return `Delivery verification failed: ${msg}. Iteration ${iterationErr}, arbiter=${decisionErr.verdict} triggered.`
         }
       },
     }),
@@ -2549,7 +2699,7 @@ export function createOrchestratorTools(input: {
           // 1:1 delivery↔evaluation invariant: the row always exists here.
           // No `checks` argument: the `deliver` tool already wrote the full
           // structured check set; updateEvaluationFromDeliveryVerdict
-          // preserves existing checks when none are supplied (spec-09 Phase D).
+          // preserves existing checks when none are supplied.
           const verdictPayload = verdictArtifact.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
           if (verdictPayload?.verdict) {
             updateEvaluationFromDeliveryVerdict({
@@ -2803,7 +2953,7 @@ export function createOrchestratorTools(input: {
         "build does the work end-to-end. " +
         "After build returns, you MUST call `deliver` next: build does NOT auto-complete the task; the only " +
         "way to mark a task accepted is through delivery's adversarial verification. Build → deliver loops " +
-        "until deliver accepts (or max_delivery_iterations exhausts). On rejection, call build again with " +
+        "until Arbiter accepts (or hits stalled/abort). On rejection, call build again with " +
         "the rejection feedback in the prompt, then deliver again. " +
         "DO NOT USE FOR: multi-file features, UI replication from designs, anything with explicit acceptance " +
         "criteria, cross-module refactors, new subsystems — those go through requirements → architect → " +
@@ -2863,7 +3013,7 @@ export function createOrchestratorTools(input: {
           // Earlier behavior auto-completed the task here, which made the
           // direct path a fire-and-forget escape hatch — incompatible with the
           // workflow's mandatory verification step.
-          return `Build agent completed (session ${buildSession.id}). Now call \`deliver\` to verify and accept/reject the result. If deliver rejects, call \`build\` again with the rejection feedback, then deliver again — loop until accepted or max_delivery_iterations exhausts.`
+          return `Build agent completed (session ${buildSession.id}). Now call \`deliver\` to run the metric executor + Arbiter. If the Arbiter returns \`continue\`, call \`build\` again with the rejection feedback, then deliver again — loop until accepted / stalled / aborted.`
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })

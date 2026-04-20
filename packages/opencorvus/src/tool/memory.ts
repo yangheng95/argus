@@ -34,13 +34,13 @@ export const MemoryTool = Tool.define("memory", {
       scope: z
         .enum(["all", "global", "session"])
         .optional()
-        .describe("Which memory scope to search (default: all)"),
+        .describe("Which memory scope to search"),
       maxResults: z
         .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1).max(50).optional())
-        .describe("Max results (default: 6)"),
+        .describe("Max results"),
       minScore: z
         .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(0).max(1).optional())
-        .describe("Min relevance score 0-1 (default: 0.1)"),
+        .describe("Min relevance score 0-1"),
     }),
     z.object({
       action: z.literal("get"),
@@ -53,11 +53,11 @@ export const MemoryTool = Tool.define("memory", {
       kind: z
         .enum(MemoryKinds)
         .optional()
-        .describe("Memory kind (default: note). Use lesson/fact/profile for atomic long-term memory and episode for summaries."),
+        .describe("Memory kind. Use lesson/fact/profile for atomic long-term memory and episode for summaries."),
       scope: z
         .enum(["global", "session"])
         .optional()
-        .describe("Storage scope (default: global)"),
+        .describe("Storage scope"),
       key: z
         .string()
         .optional()
@@ -68,7 +68,7 @@ export const MemoryTool = Tool.define("memory", {
       scope: z
         .enum(["all", "global", "session"])
         .optional()
-        .describe("Which memory scope to list (default: all)"),
+        .describe("Which memory scope to list"),
     }),
     z.object({
       action: z.literal("delete"),

@@ -40,64 +40,80 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
   return {
     ...codebase,
 
-    query_criteria: tool({
+    query_metric_trajectory: tool({
       description:
-        "Read every quality criterion that has been recorded for the current task — " +
-        "per-goal evaluator outcomes, delivery checks already submitted, and external " +
-        "quality gates such as visual-diff. Call this BEFORE deciding the verdict so " +
-        "you have a full picture of which criteria passed, failed, or were skipped, " +
-        "with their evidence. Output marks each entry [STRICT] or [soft]: a failing " +
-        "STRICT check is a binding gate — the orchestrator will force-reject any " +
-        "accepted verdict that coexists with one, so the only correct verdict in " +
-        "that state is rejected with rejection_details for every strict failure.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        if (!taskID) return "query_criteria: no task context available"
-        const task = findTask(taskID)
-        if (!task) return `query_criteria: task ${taskID} not found`
-        const meta = (task.metadata as Record<string, unknown> | null) ?? {}
-        const list = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
-        if (list.length === 0) {
-          return "query_criteria: no criteria recorded yet for this task"
+        "Read the adversarial metric trajectory and the current iteration's metric results. " +
+        "Use this BEFORE deciding the verdict so you see which blocking metrics are unmet, " +
+        "which counterexamples are open, and whether the loop is making progress. The output " +
+        "lists per-iteration aggregate scores, deltas, open counterexample counts, and the " +
+        "current iteration's per-metric results with freshness flags. There is no strict/soft " +
+        "gating here — the Arbiter consumes this same data to choose continue / accept / " +
+        "stalled / abort. Your job is to ground your verdict in this signal rather than " +
+        "guessing from the diff alone.",
+      inputSchema: z.object({
+        window: z.number().int().min(1).max(20).default(5).describe("Number of recent iterations to surface."),
+      }),
+      execute: async ({ window }) => {
+        if (!taskID) return "query_metric_trajectory: no task context available"
+        const {
+          readIterationHistory,
+          readResultsForIteration,
+          readSpecsForTask,
+          readCounterexamplesForTask,
+        } = await import("@/metrics/store")
+        const history = readIterationHistory(taskID)
+        const tail = history.slice(-window)
+        const currentIter = history.length > 0 ? history[history.length - 1].iteration : 0
+        const results = readResultsForIteration(taskID, currentIter)
+        const specs = new Map(readSpecsForTask(taskID).map((s) => [s.id, s]))
+        const ces = readCounterexamplesForTask(taskID)
+        const open = ces.filter((c) => c.iteration_resolved === null)
+
+        const lines: string[] = []
+        lines.push(`## Trajectory (last ${tail.length} iterations)`)
+        if (tail.length === 0) {
+          lines.push("(no iterations recorded yet)")
         }
-        const counts = list.reduce(
-          (acc, c) => {
-            const s = String(c?.status ?? "unknown")
-            acc[s] = (acc[s] ?? 0) + 1
-            return acc
-          },
-          {} as Record<string, number>,
-        )
-        let strictFailed = 0
-        const lines = list.map((c) => {
-          const family = c?.family ? `[${c.family}] ` : ""
-          const mode = c?.mode === "strict" ? "[STRICT] " : c?.mode === "soft" ? "[soft] " : ""
-          const ev = c?.evidence ? ` — ${String(c.evidence).slice(0, 400)}` : ""
-          if (c?.mode === "strict" && c?.status === "failed") strictFailed++
-          return `${family}${mode}${c?.name ?? "?"} = ${c?.status ?? "?"}${ev}`
-        })
-        const strictGate = strictFailed > 0
-          ? `\n\nGATE: ${strictFailed} strict check(s) failed. Verdict MUST be "rejected" with one rejection_details entry per strict failure.`
-          : ""
-        return `criteria summary: ${JSON.stringify(counts)}\n${lines.join("\n")}${strictGate}`
+        for (const it of tail) {
+          lines.push(
+            `iter=${it.iteration} verdict=${it.arbiter_verdict} S_k=${it.aggregate_score.toFixed(3)} ΔS=${it.delta_vs_prev.toFixed(3)} blocking_unmet=${it.blocking_unmet_count} open_ce=${it.open_counterexamples} novelty=${it.novelty_score} regressed=${it.regressed_blocking}`,
+          )
+        }
+        lines.push("")
+        lines.push(`## Current iteration (${currentIter}) metric results`)
+        if (results.length === 0) {
+          lines.push("(no metric results for this iteration — executor may not have run yet)")
+        }
+        for (const r of results) {
+          const spec = specs.get(r.metric_spec_id)
+          if (!spec) continue
+          const scope = spec.scope === "goal" ? `goal=${spec.goal_id}` : "global"
+          lines.push(
+            `- ${spec.name} [${scope}, ${spec.gate_class}, ${spec.evaluator_kind}] raw=${r.raw_value.toFixed(3)} norm=${r.normalized_value.toFixed(3)} met_target=${r.met_target} met_floor=${r.met_floor} fresh=${r.evidence_fresh}`,
+          )
+        }
+        if (open.length > 0) {
+          lines.push("")
+          lines.push(`## Open counterexamples (${open.length})`)
+          for (const c of open) {
+            lines.push(`- ${c.id} [${c.target_scope}/${c.target_ref}, ${c.severity}] ${c.claim.slice(0, 140)}`)
+          }
+        }
+        void findTask
+        return lines.join("\n")
       },
     }),
 
-    /** spec-09: structured drill-down into a single evidence row.
-     *  `query_criteria` above is the task-wide aggregate (a projection); this
-     *  tool returns the structured per-goal or per-delivery evaluation row
-     *  with full scorer_kind / exit_code / output_digest fields. Use it when
-     *  `query_criteria` shows a strict failure and you need specifics to
-     *  write a concrete rejection_details entry. */
+    /** Drill-down into a single evaluation-evidence row. Use when
+     *  query_metric_trajectory flags a stuck metric or open counterexample
+     *  and you need the raw scorer detail for rejection_details. */
     query_evidence: tool({
       description:
-        "Drill down into a single verification-evidence row. `query_criteria` " +
-        "is the task-wide aggregate for a quick overview; this tool returns the " +
-        "rich per-check detail (spec_id, scorer_kind, exit_code, output digest) " +
-        "for one goal's latest goal_run evidence, a specific goal_run, or the " +
-        "latest delivery-scope evidence. Call this when you need to cite a " +
-        "specific failing scorer in rejection_details, or when the summary " +
-        "doesn't tell you WHY a check failed.",
+        "Drill down into a single verification-evidence row — raw scorer detail " +
+        "(spec_id, scorer_kind, exit_code, output digest) for one goal's latest " +
+        "goal_run evidence, a specific goal_run, or the latest delivery-scope " +
+        "evidence. Use this after query_metric_trajectory when you need to cite " +
+        "a specific failing scorer in rejection_details.",
       inputSchema: z.object({
         scope: z
           .enum(["goal_run", "delivery"])
@@ -149,9 +165,8 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         "priority; it waits for the user (or queue) to promote it.\n" +
         "The new task links back via `metadata.parent_task`, and chain depth " +
         "is bounded to " + TASK_CHAIN_DEPTH_LIMIT + " to prevent runaway chains. " +
-        "When `failed_criteria` is provided, the matching evidence from " +
-        "query_criteria is appended to the new task's request so the " +
-        "downstream agent sees exactly what must be fixed.",
+        "When `failing_metrics` is provided, the latest iteration's metric " +
+        "results for those names are auto-attached to the new task's request.",
       inputSchema: z.object({
         title: z.string().describe(
           "Short task title, e.g. 'Repair sidebar layout' or 'Add filter chip to feed'.",
@@ -165,15 +180,16 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
           "reserve it for repairing verification failures. 'high'/'normal'/'low' " +
           "for iteration and recommendation tasks, matching urgency.",
         ),
-        failed_criteria: z.array(z.string()).optional().describe(
-          "Optional: names of failed criteria from query_criteria. When " +
-          "provided, the criterion evidence is auto-attached to the request.",
+        failing_metrics: z.array(z.string()).optional().describe(
+          "Optional: canonical names of metrics currently failing (e.g. " +
+          "'functional_correctness', 'user_intent_fidelity'). The latest " +
+          "iteration's result rows are attached to the new task request.",
         ),
         scope_files: z.array(z.string()).optional().describe(
           "Optional list of files the next task should focus on (relative to project root).",
         ),
       }),
-      execute: async ({ title, request, priority, failed_criteria, scope_files }) => {
+      execute: async ({ title, request, priority, failing_metrics, scope_files }) => {
         if (!taskID) return "submit_next_task: no task context available"
         const original = findTask(taskID)
         if (!original) return `submit_next_task: original task ${taskID} not found`
@@ -183,16 +199,28 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
           return `submit_next_task: task chain depth ${depth} reached limit ${TASK_CHAIN_DEPTH_LIMIT}; refusing to spawn another follow-up task`
         }
         let evidenceBlock = ""
-        if (failed_criteria && failed_criteria.length > 0) {
-          const allCriteria = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
-          const wantedNames = new Set(failed_criteria)
-          const matched = allCriteria.filter((c) => wantedNames.has(String(c?.name ?? "")))
+        if (failing_metrics && failing_metrics.length > 0) {
+          const {
+            readIterationHistory,
+            readResultsForIteration,
+            readSpecsForTask,
+          } = await import("@/metrics/store")
+          const history = readIterationHistory(taskID)
+          const currentIter = history.length > 0 ? history[history.length - 1].iteration : 0
+          const results = readResultsForIteration(taskID, currentIter)
+          const specs = new Map(readSpecsForTask(taskID).map((s) => [s.id, s]))
+          const wanted = new Set(failing_metrics)
+          const matched = results
+            .map((r) => ({ r, spec: specs.get(r.metric_spec_id) }))
+            .filter((x) => x.spec && wanted.has(x.spec.name))
           evidenceBlock = matched.length > 0
-            ? "\n\n## Failed criteria from previous verification\n" + matched
-                .map((c) => `- **${c.name}** (${c.family ?? "custom"}): ${c.status}\n  evidence: ${String(c.evidence ?? "(none)").slice(0, 600)}`)
-                .join("\n") + "\n\nAddress every failed criterion above. Do not regress passing criteria."
-            : "\n\n## Failed criteria (no recorded evidence — query_criteria first)\n" +
-              failed_criteria.map((n) => `- **${n}**`).join("\n")
+            ? "\n\n## Failing metrics from previous iteration\n" + matched
+                .map(({ r, spec }) =>
+                  `- **${spec!.name}** [${spec!.gate_class}]: raw=${r.raw_value.toFixed(3)} met_target=${r.met_target} met_floor=${r.met_floor} fresh=${r.evidence_fresh}\n  evidence_ref: ${String(r.evidence_ref).slice(0, 400)}`,
+                )
+                .join("\n") + "\n\nAddress every failing metric above. Do not regress metrics that currently pass."
+            : "\n\n## Failing metrics (no matching results in current iteration — query_metric_trajectory first)\n" +
+              failing_metrics.map((n) => `- **${n}**`).join("\n")
         }
         const scopeBlock = scope_files && scope_files.length > 0
           ? `\n\n## Scope (focus area)\n${scope_files.map((f) => `- ${f}`).join("\n")}`
@@ -207,9 +235,6 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
           evidenceBlock,
           scopeBlock,
         ].join("\n")
-        // We don't carry an executor field on the original task row; the new
-        // task picks the configured default at create time, which matches how
-        // user-initiated tasks are dispatched.
         const newTaskID = await EngineService.createTask({
           title: title.slice(0, 80),
           request: fullRequest,
@@ -218,7 +243,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
             ...meta,
             parent_task: original.id,
             task_chain_depth: depth + 1,
-            ...(failed_criteria && failed_criteria.length > 0 ? { failed_criteria } : {}),
+            ...(failing_metrics && failing_metrics.length > 0 ? { failing_metrics } : {}),
             ...(scope_files && scope_files.length > 0 ? { next_task_scope_files: scope_files } : {}),
           },
         })
@@ -232,7 +257,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         "Use when investigating why the application fails to start or render correctly.",
       inputSchema: z.object({
         query: z.string().describe("Search query — keywords about the failure or pattern"),
-        max_results: z.number().optional().describe("Max results (default: 5)"),
+        max_results: z.number().default(5).describe("Max results"),
       }),
       execute: async ({ query, max_results }) => {
         try {
@@ -241,7 +266,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
             projectId,
             sessionID: input?.sessionID,
             scope: "all",
-            limit: max_results ?? 5,
+            limit: max_results,
             minScore: 0.1,
           })
           if (results.length === 0) return "No relevant memories found."
@@ -265,7 +290,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
       inputSchema: z.object({
         title: z.string().describe("Short descriptive title"),
         content: z.string().describe("Markdown content to save"),
-        kind: z.enum(["fact", "lesson", "episode"]).optional().describe("Memory kind (default: lesson)"),
+        kind: z.enum(["fact", "lesson", "episode"]).default("lesson").describe("Memory kind"),
       }),
       execute: async ({ title, content, kind }) => {
         try {
@@ -275,7 +300,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
             source: "agent",
             projectId,
             scope: "global",
-            kind: kind ?? "lesson",
+            kind,
           })
           return `Saved: ${title} (id: ${file.id})`
         } catch (err) {
@@ -350,18 +375,17 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         "the server starts without crashing — do NOT keep servers running indefinitely.",
       inputSchema: z.object({
         command: z.string().describe("Shell command to run (runs in project root)"),
-        timeout_ms: z.number().optional().describe("Max execution time ms (default: 120000)"),
+        timeout_ms: z.number().default(120_000).describe("Max execution time ms"),
       }),
       execute: async ({ command, timeout_ms }) => {
-        const timeout = timeout_ms ?? 120_000
         try {
           const result = await Shell.run(command, {
             cwd: projectDir,
             env: process.env,
-            timeoutMs: timeout,
+            timeoutMs: timeout_ms,
           })
           const parts = [`exit_code: ${result.exitCode}`]
-          if (result.timedOut) parts.push(`timeout_ms: ${timeout}`)
+          if (result.timedOut) parts.push(`timeout_ms: ${timeout_ms}`)
           if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8000)}`)
           if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)
           return parts.join("\n") || `exit_code: ${result.exitCode} (no output)`

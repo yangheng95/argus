@@ -33,6 +33,11 @@ export {
 export {
   ProtocolEventTable,
   ProtocolInboxTable,
-  ProtocolStreamChunkTable,
 } from "../protocol/protocol.sql"
 export { DecisionLogTable } from "../decision-log/schema"
+export {
+  EngineMetricSpecTable,
+  EngineMetricResultTable,
+  EngineCounterexampleTable,
+  EngineIterationTable,
+} from "../metrics/metrics.sql"

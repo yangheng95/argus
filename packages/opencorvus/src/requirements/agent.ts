@@ -25,7 +25,16 @@ import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
-import type { RequirementsOutput, ParsedGoalContract, RequirementsDecision, ParsedRequirement, TraceabilityEntry } from "./types"
+import type {
+  ArchitectChallengeSeed,
+  ArchitectGlobalMetricSpec,
+  ArchitectGoalMetricSpec,
+  ParsedGoalContract,
+  ParsedRequirement,
+  RequirementsDecision,
+  RequirementsOutput,
+  TraceabilityEntry,
+} from "./types"
 import { createRequirementsOutputTools, type RequirementsCollector, type RegisteredGoal } from "./output-tools"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
@@ -46,6 +55,12 @@ export interface RequirementsResult {
   decisions: RequirementsDecision[]
   /** Requirement → Goal traceability matrix */
   traceability: TraceabilityEntry[]
+  /** Per-goal metric specs keyed by Architect-level goal id (not DB id). */
+  goalMetricSpecs: ArchitectGoalMetricSpec[]
+  /** Task-scope global metric specs. */
+  globalMetricSpecs: ArchitectGlobalMetricSpec[]
+  /** Prosecutor priors. */
+  challengeSeeds: ArchitectChallengeSeed[]
 }
 
 // ---------------------------------------------------------------------------
@@ -309,6 +324,9 @@ function toResult(parsed: RequirementsOutput): RequirementsResult {
     goals: parsed.goals.map(goalToContract),
     decisions: parsed.decisions,
     traceability: parsed.traceability,
+    goalMetricSpecs: parsed.goal_metric_specs,
+    globalMetricSpecs: parsed.global_metric_specs,
+    challengeSeeds: parsed.challenge_seeds,
   }
 }
 
@@ -347,6 +365,9 @@ function collectorToOutput(collector: RequirementsCollector): RequirementsOutput
       requirementID: t.requirementID,
       goalIDs: t.goalIDs,
     })),
+    goal_metric_specs: collector.goal_metric_specs,
+    global_metric_specs: collector.global_metric_specs,
+    challenge_seeds: collector.challenge_seeds,
   }
 }
 

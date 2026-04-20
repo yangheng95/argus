@@ -25,7 +25,7 @@ export namespace SessionWake {
     sessionID?: string
     /** The prompt to inject as a synthetic user message. */
     prompt: string
-    /** Agent name (default: "default"). */
+    /** Agent name. If omitted, uses Agent.defaultAgent(). */
     agent?: string
     /** Model override. If omitted, uses the configured default model. */
     model?: { providerID: string; modelID: string }

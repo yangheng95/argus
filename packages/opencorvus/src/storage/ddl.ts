@@ -454,6 +454,7 @@ CREATE TABLE IF NOT EXISTS engine_goal (
   spec_snapshot_id text,
   milestone_id     text,
   title            text NOT NULL,
+  slug             text NOT NULL,
   objective        text NOT NULL,
   acceptance_specs text NOT NULL DEFAULT '[]',
   owned_paths      text NOT NULL DEFAULT '[]',
@@ -673,13 +674,9 @@ CREATE TABLE IF NOT EXISTS engine_evaluation (
   run_id         text NOT NULL,
   goal_run_id    text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
   delivery_id    text,
-  -- Scope marker, see specs/new-arch/09-verification-evidence.md.
-  -- Invariant (app-layer): scope='goal_run' ⇒ goal_run_id NOT NULL;
-  -- scope='delivery' ⇒ delivery_id NOT NULL. Historical rows default to
-  -- 'delivery' since they were all written from persistDelivery().
+  -- Scope marker. App-layer invariant: scope='goal_run' ⇒ goal_run_id NOT NULL;
+  -- scope='delivery' ⇒ delivery_id NOT NULL.
   scope          text NOT NULL DEFAULT 'delivery',
-  -- Stable hash over failed-check set — powers rework no-progress detection.
-  signature      text NOT NULL DEFAULT '',
   status         text NOT NULL DEFAULT 'pending',
   verdict        text NOT NULL DEFAULT 'inconclusive',
   summary        text NOT NULL,
@@ -754,6 +751,109 @@ WHERE rowid NOT IN (
 );
 CREATE INDEX IF NOT EXISTS engine_channel_task_idx ON engine_channel_binding (task_id);
 CREATE UNIQUE INDEX IF NOT EXISTS engine_channel_binding_thread_idx ON engine_channel_binding (platform, channel, thread);
+
+-- ===== dynamic adversarial metrics =====
+
+CREATE TABLE IF NOT EXISTS engine_metric_spec (
+  id                     text PRIMARY KEY,
+  task_id                text NOT NULL,
+  scope                  text NOT NULL,                 -- 'goal' | 'global'
+  goal_id                text,                          -- NULL iff scope='global'
+  name                   text NOT NULL,
+  description            text NOT NULL,
+  unit                   text NOT NULL,
+  direction              text NOT NULL,                 -- 'higher_better' | 'lower_better'
+  target                 real NOT NULL,
+  floor                  real NOT NULL,
+  weight                 real NOT NULL,
+  gate_class             text NOT NULL,                 -- 'blocking' | 'diagnostic' | 'efficiency'
+  evaluator_kind         text NOT NULL,                 -- 'shell' | 'judge' | 'query' | 'aggregator'
+  evaluator_config       text NOT NULL,                 -- JSON
+  source_requirement_ids text NOT NULL DEFAULT '[]',
+  source                 text NOT NULL,                 -- 'baseline' | 'challenge'
+  frozen_at              integer NOT NULL,
+  created_by             text NOT NULL,                 -- 'architect' | 'prosecutor'
+  time_created           integer NOT NULL,
+  time_updated           integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE,
+  FOREIGN KEY (goal_id) REFERENCES engine_goal(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_task_idx   ON engine_metric_spec (task_id);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_scope_idx  ON engine_metric_spec (task_id, scope);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_source_idx ON engine_metric_spec (task_id, source);
+CREATE INDEX IF NOT EXISTS engine_metric_spec_goal_idx   ON engine_metric_spec (goal_id);
+
+CREATE TABLE IF NOT EXISTS engine_metric_result (
+  id               text PRIMARY KEY,
+  metric_spec_id   text NOT NULL,
+  task_id          text NOT NULL,
+  iteration        integer NOT NULL,
+  goal_run_id      text,
+  raw_value        real NOT NULL,
+  normalized_value real NOT NULL,
+  met_target       integer NOT NULL,
+  met_floor        integer NOT NULL,
+  evidence_ref     text NOT NULL,
+  evidence_fresh   integer NOT NULL,
+  computed_at      integer NOT NULL,
+  time_created     integer NOT NULL,
+  time_updated     integer NOT NULL,
+  FOREIGN KEY (metric_spec_id) REFERENCES engine_metric_spec(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id)        REFERENCES engine_task(id)        ON DELETE CASCADE,
+  FOREIGN KEY (goal_run_id)    REFERENCES engine_goal_run(id)    ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS engine_metric_result_task_iter_idx ON engine_metric_result (task_id, iteration);
+CREATE INDEX IF NOT EXISTS engine_metric_result_spec_idx      ON engine_metric_result (metric_spec_id);
+
+CREATE TABLE IF NOT EXISTS engine_counterexample (
+  id                    text PRIMARY KEY,
+  task_id               text NOT NULL,
+  iteration_found       integer NOT NULL,
+  iteration_resolved    integer,
+  novelty_hash          text NOT NULL,
+  target_scope          text NOT NULL,                  -- 'goal' | 'global'
+  target_ref            text NOT NULL,
+  claim                 text NOT NULL,
+  reproducer            text NOT NULL,
+  severity              text NOT NULL,                  -- 'blocking' | 'diagnostic'
+  linked_metric_spec_id text,
+  time_created          integer NOT NULL,
+  time_updated          integer NOT NULL,
+  FOREIGN KEY (task_id)               REFERENCES engine_task(id)        ON DELETE CASCADE,
+  FOREIGN KEY (linked_metric_spec_id) REFERENCES engine_metric_spec(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS engine_counterexample_task_idx    ON engine_counterexample (task_id);
+CREATE INDEX IF NOT EXISTS engine_counterexample_open_idx    ON engine_counterexample (task_id, iteration_resolved);
+CREATE INDEX IF NOT EXISTS engine_counterexample_novelty_idx ON engine_counterexample (task_id, novelty_hash);
+
+CREATE TABLE IF NOT EXISTS engine_iteration (
+  task_id              text NOT NULL,
+  iteration            integer NOT NULL,
+  aggregate_score      real NOT NULL,
+  per_goal_score_json  text NOT NULL,
+  global_score         real NOT NULL,
+  delta_vs_prev        real NOT NULL,
+  novelty_score        real NOT NULL,
+  blocking_unmet_count integer NOT NULL,
+  open_counterexamples integer NOT NULL,
+  regressed_blocking   integer NOT NULL,
+  arbiter_verdict      text NOT NULL,                   -- 'continue' | 'accept' | 'stalled' | 'abort'
+  time_created         integer NOT NULL,
+  time_updated         integer NOT NULL,
+  PRIMARY KEY (task_id, iteration),
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
+);
+
+-- Frozen-ruler enforcement. Baseline metric specs are immutable once written;
+-- the Prosecutor may only INSERT new challenge rows. Raising at the SQL layer
+-- catches bugs that bypass src/metrics/store.ts.
+CREATE TRIGGER IF NOT EXISTS engine_metric_spec_baseline_no_update
+BEFORE UPDATE ON engine_metric_spec
+FOR EACH ROW
+WHEN OLD.source = 'baseline'
+BEGIN
+  SELECT RAISE(ABORT, 'engine_metric_spec: baseline row is frozen (no UPDATE)');
+END;
 
 -- ===== decision log =====
 
@@ -875,25 +975,5 @@ CREATE TABLE IF NOT EXISTS protocol_inbox (
 CREATE UNIQUE INDEX IF NOT EXISTS protocol_inbox_envelope_actor_idx ON protocol_inbox (envelope_id, actor, actor_id);
 CREATE INDEX IF NOT EXISTS protocol_inbox_visible_idx              ON protocol_inbox (actor, status, visible_at);
 CREATE INDEX IF NOT EXISTS protocol_inbox_lease_idx                ON protocol_inbox (actor, lease_until);
-
-CREATE TABLE IF NOT EXISTS protocol_stream_chunk (
-  id          text PRIMARY KEY,
-  stream_id   text NOT NULL,
-  task_id     text REFERENCES engine_task(id) ON DELETE CASCADE,
-  run_id      text REFERENCES engine_run(id) ON DELETE SET NULL,
-  goal_run_id text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
-  session_id  text REFERENCES session(id) ON DELETE SET NULL,
-  kind        text NOT NULL,
-  chunk_seq   integer NOT NULL,
-  text        text NOT NULL,
-  payload     text,
-  emitted_at  integer NOT NULL,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS protocol_stream_chunk_stream_seq_idx ON protocol_stream_chunk (stream_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_task_idx              ON protocol_stream_chunk (task_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_run_idx               ON protocol_stream_chunk (run_id, chunk_seq);
-CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx           ON protocol_stream_chunk (session_id, chunk_seq);
 
 `

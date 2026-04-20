@@ -88,8 +88,20 @@ async function acquireGoalWorkspace(goal: GoalRow) {
     return reused
   }
 
+  // Worktree name = `goal-<slug>-<id-suffix>`. `goal.slug` is already the
+  // content-derived identifier persisted on the engine_goal row (see
+  // `EngineGoalTable.slug`) — use it verbatim so logs / `ls` / task-debug
+  // clipboard all show the same human-readable name. The id suffix guarantees
+  // uniqueness across goals that share a slug and keeps `Worktree.create`'s
+  // reclaim path deterministic. Slug is capped at 40 chars to stay well under
+  // Windows MAX_PATH once nested `node_modules/<deep>/<paths>` are written
+  // inside the worktree; Worktree.create slug-normalises the final string.
+  const cappedSlug = goal.slug.slice(0, 40).replace(/-+$/, "")
+  const workspaceName = cappedSlug
+    ? `goal-${cappedSlug}-${goal.id.slice(-8)}`
+    : `goal-${goal.id.slice(-8)}`
   const created = await Worktree.create({
-    name: `goal-${goal.id.slice(-8)}`,
+    name: workspaceName,
     checkout: "sync",
   })
   updateGoalWorkspace({

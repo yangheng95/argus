@@ -19,11 +19,11 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "milestone.activated",
   "milestone.passed",
   "milestone.failed",
-  // Fidelity `started` / `progress` / `chunk` / `completed` are NOT noop —
-  // started/progress promote a running fidelity card, chunk streams reasoning
-  // tokens into that card, and completed upserts it with the structured
-  // verdict. Handled by tree-writer's `handleFidelity*` family; the same card
-  // id (`fidelity:<taskID>`) is upserted across all four events.
+  // Fidelity `started` / `progress` / `completed` are NOT noop —
+  // started/progress promote a running fidelity card, and completed upserts
+  // it with the structured verdict. Handled by tree-writer's `handleFidelity*`
+  // family; the same card id (`fidelity:<taskID>`) is upserted across all
+  // three events.
 ])
 
 /** Subagent phase-completion events. Each carries `sessionID` + `status`
@@ -41,6 +41,7 @@ const TREE_WRITER_PASS_THROUGH_PREFIXES = [
   "run.",
   "plan.",
   "goal.",
+  "goal_run.",
   "delivery.",
   "evaluation.",
   "workflow.",
@@ -63,6 +64,7 @@ const BOARD_INVALIDATING_PREFIXES = [
   "milestone.",
   "plan.",
   "goal.",
+  "goal_run.",
   "delivery.",
   "evaluation.",
   "interaction.",

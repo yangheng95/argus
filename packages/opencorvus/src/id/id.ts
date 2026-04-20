@@ -40,9 +40,11 @@ export namespace Identifier {
     call: "cal",
     protocol_event: "pev",
     protocol_inbox: "pib",
-    protocol_stream_chunk: "psc",
     goal_group: "glg",
     decision_log: "dlog",
+    metric_spec: "mts",
+    metric_result: "mtr",
+    counterexample: "cex",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

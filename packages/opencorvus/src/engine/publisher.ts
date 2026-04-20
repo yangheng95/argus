@@ -1,9 +1,6 @@
 import path from "path"
 import { createTwoFilesPatch } from "diff"
-import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { Global } from "@/global"
-import { Trace } from "@/trace"
-import { Session } from "@/session"
 import { Vcs } from "@/project/vcs"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
@@ -16,7 +13,7 @@ const log = Log.create({ service: "engine-delivery" })
 // ---------------------------------------------------------------------------
 
 export type DeliveryArtifact = {
-  kind: "patch" | "report" | "html_trace" | "link" | "git_ref" | "pr"
+  kind: "patch" | "report" | "link" | "git_ref" | "pr"
   label: string
   payload: Record<string, unknown>
 }
@@ -121,32 +118,6 @@ const workspaceExportAdapter: DeliveryAdapter = {
   },
 }
 
-const artifactExportAdapter: DeliveryAdapter = {
-  id: "artifact_export",
-  async execute(ctx) {
-    if (!ctx.run.session_id) {
-      return { id: "artifact_export", status: "skipped", summary: "No session for HTML trace.", artifacts: [] }
-    }
-    const session = await Session.get(ctx.run.session_id)
-    const messages = await Session.messages({ sessionID: ctx.run.session_id })
-    const traceTaskID = Trace.taskIDForSession(ctx.run.session_id)
-    const events = traceTaskID ? await Trace.read(traceTaskID) : []
-    const report = await buildSessionTraceHtml({
-      session: { id: session.id, title: session.title, time: session.time },
-      messages,
-      events,
-    })
-    const out = path.join(Global.Path.data, "delivery", `${ctx.delivery.id}.html`)
-    await Filesystem.write(out, report)
-    return {
-      id: "artifact_export",
-      status: "delivered",
-      summary: "HTML trace report exported.",
-      artifacts: [{ kind: "html_trace" as const, label: "delivery.trace", payload: { file: out } }],
-    }
-  },
-}
-
 const gitPreviewAdapter: DeliveryAdapter = {
   id: "git_publish",
   async execute() {
@@ -181,7 +152,6 @@ const gitPreviewAdapter: DeliveryAdapter = {
 
 function registerDefaults() {
   DeliveryPipeline.register(workspaceExportAdapter)
-  DeliveryPipeline.register(artifactExportAdapter)
   DeliveryPipeline.register(gitPreviewAdapter)
 }
 

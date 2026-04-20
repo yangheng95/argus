@@ -50,11 +50,18 @@ export namespace Database {
     const sqlite = new BunDatabase(dbPath, { create: true })
     state.sqlite = sqlite
 
+    // auto_vacuum must be set before any table is created. For existing DBs
+    // opened with auto_vacuum=NONE this pragma is silently ignored — delete
+    // opencorvus.db to adopt the new mode (project rule: no DB migration).
+    sqlite.run("PRAGMA auto_vacuum = INCREMENTAL")
     sqlite.run("PRAGMA journal_mode = WAL")
     sqlite.run("PRAGMA synchronous = NORMAL")
     sqlite.run("PRAGMA busy_timeout = 5000")
     sqlite.run("PRAGMA cache_size = -64000")
     sqlite.run("PRAGMA foreign_keys = ON")
+    // Cap WAL file size on disk — anything above the limit is truncated at
+    // the next checkpoint instead of staying resident.
+    sqlite.run("PRAGMA journal_size_limit = 67108864")
     sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
 
     sqlite.exec(SCHEMA_DDL)
@@ -98,6 +105,19 @@ export namespace Database {
     const sqlite = state.sqlite
     if (!sqlite) return
     sqlite.run("VACUUM")
+  }
+
+  /**
+   * Reclaim up to `pages` freelist pages back to the OS. Only effective when
+   * the DB was created with `auto_vacuum = INCREMENTAL`. Cheap — O(pages) —
+   * so safe to call after every cascading delete. Must run outside a
+   * transaction.
+   */
+  export function incrementalVacuum(pages = 1000) {
+    Client()
+    const sqlite = state.sqlite
+    if (!sqlite) return
+    sqlite.run(`PRAGMA incremental_vacuum(${pages})`)
   }
 
   export type TxOrDb = Transaction | Client

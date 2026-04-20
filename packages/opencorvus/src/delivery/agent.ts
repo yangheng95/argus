@@ -515,7 +515,13 @@ function buildUserPrompt(
     `Nobody has run them yet — no deterministic evaluator gate exists anymore. ` +
     `YOU execute every heuristic scorer with \`run_command\`, judge every rubric / ` +
     `llm_judge scorer by reading + reasoning, and record PASS or FAIL with concrete ` +
-    `evidence. A goal with an essential-severity spec failing is a rejection.\n\n` +
+    `evidence.\n\n` +
+    `Your verdict is ADVISORY. A separate Arbiter runs after you — it reads the ` +
+    `metric ruler (engine_metric_result rows produced by the Metric Executor) and ` +
+    `decides the authoritative outcome. What matters is that your \`issues_found\` ` +
+    `and \`rejection_details\` are concrete and evidence-backed: if the Arbiter hands ` +
+    `control back to the orchestrator, the assistant reads your findings to decide ` +
+    `what to change next.\n\n` +
       input.goals
         .map(
           (g, i) =>
@@ -695,7 +701,7 @@ Your rejections drive improvement — they loop back to the executor for rework.
 - Evidence from actual tool output (not assumptions)
 - Clear distinction between "I can fix this myself" (use write_file/edit_file) vs "this needs executor rework" (reject)
 
-When query_criteria shows prior delivery rejections (rework iteration > 1), RAISE THE BAR: the executor had your feedback and should have addressed every cited issue. If the same issue persists after a rework cycle, escalate its severity.
+When \`query_metric_trajectory\` shows prior iterations with blocking-unmet metrics or open counterexamples, RAISE THE BAR: the executor had your feedback and should have addressed every cited issue. A reproducer that survives a rework cycle is stronger evidence than a first-pass observation — weight your rejection accordingly.
 
 There is no "don't duplicate the evaluator" rule anymore — the evaluator is gone. You ARE the one running build / test / lint / rubric checks. Run what you need. The only commands you can skip are ones an earlier rework cycle already recorded under \`query_criteria\` that you trust (and even then, re-run after applying any fix).
 
@@ -719,7 +725,7 @@ There is no "don't duplicate the evaluator" rule anymore — the evaluator is go
 
 ### Follow-up pipeline
 - **submit_next_task**: Spawn any follow-up task in the same project. Three shapes to pick between:
-  1. **Fix** — verification surfaced failed criteria the executor needs to repair. Pass \`priority="critical"\` + \`failed_criteria\` so the next task jumps the queue and inherits the evidence.
+  1. **Fix** — verification surfaced failing metrics the executor needs to repair. Pass \`priority="critical"\` + \`failing_metrics\` so the next task jumps the queue and inherits the evidence.
   2. **Iterate** — the delivered work is solid but opens an obvious next step (next milestone, hardening pass, follow-up feature). Pass \`priority="normal"\` (or "high" if time-sensitive).
   3. **Recommend** — something the user should probably do next but does not block acceptance. Pass \`priority="low"\` so it queues without competing with live work.
   Every new task links back via \`metadata.parent_task\` and the orchestrator sees a "Follow-up Context" section in its next prompt.
@@ -745,7 +751,7 @@ For EACH goal in the goals list below, acceptance_specs is INFORMATION — what 
 2. For **heuristic-shell** scorers — execute the proposed command with \`run_command\` against the merged tree. Exit-code semantics: 0 = passed unless \`expect.exit_code\` says otherwise; anything else = failed with the stderr/stdout captured as evidence.
 3. For **heuristic-script-ref** scorers — run the referenced script; capture stdout as evidence.
 4. For **llm_judge** / **rubric** / **scenario** scorers — judge yourself by reading the code and reasoning against the stated criterion. Cite the file and lines you inspected.
-5. Record PASS or FAIL with specific evidence for each spec. A goal with ANY essential-severity spec failing is a rejection; \`important\` failures also reject unless you can articulate why the gap is acceptable; \`optional\` / \`pitfall\` failures can accept with a noted concern.
+5. Record PASS or FAIL with specific evidence for each spec. Severity labels (essential/important/optional/pitfall) are hints for where to focus your attention — they do NOT auto-decide your verdict. The ADVISORY verdict you submit is then weighed by the Arbiter against the metric ruler; your job is to surface every concrete failure with reproducible evidence, not to guess which severity level justifies rejection.
 
 The \`scorers\` arrays are suggestions from requirements, not contracts — you can run a BETTER check than the one proposed (and should when the proposal is weak). Evidence is what matters; specifics trump spec text.
 
@@ -860,7 +866,7 @@ When Required:
    - Fix the implementation (write_file / edit_file) if the test caught
      a real bug.
    - Re-run until green or, if the issue requires executor-level rework,
-     call submit_next_task with priority="critical" and failed_criteria so
+     call submit_next_task with priority="critical" and failing_metrics so
      the failing test output is attached as evidence.
 5. Record the e2e test path and last-run result in Phase 7's verdict.
 

@@ -301,67 +301,6 @@ body[data-theme="light"] .card__round {
   color: var(--text-soft);
 }
 
-/* Collapsible architect-contract group. Rendered as a native <details>
- * inside the executor step card body — contracts default-collapse so a
- * goal with dozens of key/value pairs doesn't bury the phase children
- * below. Expanded state: rotates the chevron + reveals the body. */
-.card__contracts {
-  margin-bottom: 8px;
-  border: 1px solid var(--card-line-dim);
-  border-radius: 6px;
-  background: var(--card-bg-1);
-}
-.card__contracts-summary {
-  list-style: none;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: var(--ui-font-small);
-  color: var(--text-muted);
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  letter-spacing: 0.02em;
-}
-.card__contracts-summary::-webkit-details-marker { display: none; }
-.card__contracts-summary::before {
-  content: "\25B8"; /* ▸ */
-  font-size: 10px;
-  color: var(--text-soft);
-  transition: transform 120ms ease;
-  display: inline-block;
-}
-.card__contracts[open] > .card__contracts-summary::before {
-  transform: rotate(90deg);
-}
-.card__contracts:hover > .card__contracts-summary {
-  color: var(--text-strong);
-}
-.card__contracts-body {
-  padding: 4px 8px 8px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.card__contract {
-  padding: 5px 8px;
-  background: var(--card-bg-0, rgba(255, 255, 255, 0.02));
-  border-radius: 6px;
-  border-left: 2px solid var(--card-stage-architect);
-}
-.card__contract-key {
-  display: block;
-  font-size: var(--ui-font-tiny);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin-bottom: 2px;
-}
-.card__contract-value {
-  font-size: var(--ui-font-small);
-  color: var(--text-strong);
-}
-
 /* ── Boundary separator between flattened messages ──────── */
 
 .card-boundary {

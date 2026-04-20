@@ -21,7 +21,7 @@
 // Note: the legacy `goal-group:*` container layer was removed in the
 // 2026-04-19 flatten. Each goal now surfaces its single goal-scope step
 // directly at the top level, with goal title / decomposition index
-// (`#orderIndex+1`) / description / contracts stamped onto the step card.
+// (`#orderIndex+1`) / description stamped onto the step card.
 //
 // The writer (services/tree-writer.ts) is the only module that mutates
 // this store. Components read only. No memos, no derivations — components
@@ -95,9 +95,6 @@ export interface CardNode {
   /** Goal objective prose — rendered at the top of the step card body. Set
    *  only on executor step cards (kind="step"). */
   goalDescription?: string;
-  /** Architect contracts for this goal — rendered as a collapsible section
-   *  under goalDescription. Set only on executor step cards. */
-  contracts?: Array<{ key: string; value: string; reason?: string }>;
   stepPayload?: StepPayload;
   stepID?: string;
   /** Phase identifier for kind="phase" nodes. Matches the phase.id declared

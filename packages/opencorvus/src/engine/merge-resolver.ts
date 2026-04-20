@@ -1,5 +1,5 @@
 /**
- * P2 merge-conflict resolution path (2026-04-20).
+ * Merge-conflict resolution path.
  *
  * When cherry-picking a goal's delivery commit into the main worktree fails
  * with a textual conflict, the orchestrator does NOT throw outright. Instead
@@ -7,7 +7,15 @@
  * goals' intent and can reconcile the conflict semantically — the same
  * adversarial-merge motion a human reviewer performs during a PR rebase.
  *
- * Design guarantees (must stay true for the path to be safe):
+ * Scope: THIS MODULE ONLY handles textual merge reconciliation. It does not
+ * validate the merged result by running any build / test / lint command. That
+ * responsibility belongs to the delivery agent and task-declared verify
+ * contracts — see `orchestrator/tools.ts` DELIVERY_AGENT_SYSTEM. Embedding a
+ * language-specific build gate here (e.g. `bun run build`) was removed because
+ * it coupled merge semantics to one toolchain and only fired on the conflict
+ * path, creating an asymmetric check that clean cherry-picks never saw.
+ *
+ * Design guarantees:
  *
  *   • Main is NEVER left half-merged. Every early-exit path resets the
  *     primary worktree to `mainTip` (the HEAD captured before cherry-pick).
@@ -19,9 +27,8 @@
  *
  *   • The goal worktree shares its `.git` with the primary — we merge
  *     `mainTip` INTO the goal branch there (in-place), executor edits the
- *     conflict markers via existing edit_file / write_file tools, then we
- *     fast-forward main to the new goal-branch tip. No file copying, no
- *     rebase, no external fetch.
+ *     conflict markers, then we fast-forward main to the new goal-branch
+ *     tip. No file copying, no rebase, no external fetch.
  *
  *   • On cap exhaustion we hard-fail the goal and emit a
  *     `merge_conflict_cap_reached` decision-log entry so retry_failed_goals
@@ -67,22 +74,29 @@ export interface ResolveMergeConflictResult {
   error?: string
 }
 
+export interface MergeResolverState {
+  head: string
+  stillMerging: boolean
+  conflictingFiles: string[]
+  ancestryOK: boolean
+  dirtyEntries: string[]
+}
+
 /**
  * Attempt to resolve a cherry-pick conflict by handing the goal worktree to
  * the executor agent. Caller MUST hold the Worktree merge lock.
  *
  * Behaviour per attempt (up to `delivery.merge_conflict_max_retries`):
- *   1. Reset the goal worktree to goal-branch tip, abort any prior merge.
- *   2. `git merge --no-commit --no-ff <mainTip>` → conflict markers appear.
- *   3. Write `.opencorvus/merge-conflict/<goalID>.md` with context.
- *   4. Dispatch a build-kind session with a resolver prompt.
- *   5. Executor edits files + `git add -A && git commit` itself.
- *   6. Verify the worktree is clean and HEAD descends from mainTip.
+ *   1. Inspect the goal worktree state.
+ *   2. If it already has a clean merged tip that descends from `mainTip`,
+ *      fast-forward primary directly — no executor session needed.
+ *   3. Otherwise rewind to `goalBranchTip` and replay
+ *      `git merge --no-commit --no-ff <mainTip>` to reproduce the conflict.
+ *   4. Write `.opencorvus/merge-conflict/<goalID>.md` with context.
+ *   5. Dispatch a build-kind session with a resolver prompt.
+ *   6. Verify the resolver actually produced a committed merged tip.
  *   7. `git merge --ff-only <new-tip>` in primary.
- *   8. Post-merge build verification (`bun run build` / discovered).
- *   9. Build fail → reset primary to mainTip and retry with build error
- *      attached to the next conflict note.
- *  10. Cap exhausted → reset primary, write decision_log, return failure.
+ *   8. Cap exhausted → reset primary, write decision_log, return failure.
  */
 export async function resolveMergeConflict(
   input: ResolveMergeConflictInput,
@@ -107,7 +121,6 @@ export async function resolveMergeConflict(
   }
 
   let lastError: string | undefined
-  let lastBuildFailure: string | undefined
 
   for (let attempt = 1; attempt <= cap; attempt++) {
     log.info("merge-conflict resolver attempt", {
@@ -119,19 +132,40 @@ export async function resolveMergeConflict(
       goalBranchTip,
     })
 
-    // 1. Reset the goal worktree to its pure goal-branch state.
+    let conflictingFiles: string[] = []
+    let state = await inspectMergeResolverState(goalWorkDir, mainTip)
+
+    if (canReuseMergedGoalState(state, mainTip)) {
+      log.info("merge-conflict resolver: reusing already-merged goal state", {
+        goalRunID: goalRun.id,
+        attempt,
+        head: state.head,
+        dirtyEntries: state.dirtyEntries,
+      })
+      const ff = await fastForwardPrimary({
+        goalRunID: goalRun.id,
+        attempt,
+        newTip: state.head,
+        goalWorkDir,
+        primaryWorkDir,
+        mainTip,
+      })
+      if (ff.ok) {
+        return { resolved: true, newGoalBranchTip: state.head }
+      }
+      lastError = ff.error
+      continue
+    }
+
+    // Rebuild a fresh merge only when the worktree is not already at a
+    // valid merged tip. This preserves successful resolver commits across
+    // retries instead of erasing them on every loop.
     await $`git merge --abort`.cwd(goalWorkDir).quiet().nothrow()
     await $`git reset --hard ${goalBranchTip}`.cwd(goalWorkDir).quiet().nothrow()
 
-    // 2. Merge main tip into goal branch WITHOUT committing — creates markers.
-    //    Non-zero exit is expected (that's why we're here). We check
-    //    afterwards whether the merge actually left a mergeable-with-conflicts
-    //    state (MERGE_HEAD present) vs an outright failure (e.g. empty repo).
     const merge = await $`git merge --no-commit --no-ff ${mainTip}`.cwd(goalWorkDir).quiet().nothrow()
     const mergeHeadCheck = await $`git rev-parse --verify MERGE_HEAD`.cwd(goalWorkDir).quiet().nothrow()
     if (mergeHeadCheck.exitCode !== 0) {
-      // No MERGE_HEAD means the merge command failed before even entering
-      // conflict state — e.g. `mainTip` unreachable, detached HEAD, disk issue.
       lastError =
         `git merge ${mainTip} did not leave a MERGE_HEAD in ${goalWorkDir} ` +
         `(exit=${merge.exitCode}, stderr=${merge.stderr.toString().trim() || "(none)"})`
@@ -139,10 +173,11 @@ export async function resolveMergeConflict(
       break
     }
 
-    // 3. Write conflict context note inside the goal worktree so the executor
-    //    can read it as `.opencorvus/merge-conflict/<goalID>.md`.
-    const conflictingFilesResult = await $`git diff --name-only --diff-filter=U`.cwd(goalWorkDir).quiet().nothrow()
-    const conflictingFiles = conflictingFilesResult.stdout.toString().trim().split("\n").filter((s) => s.length > 0)
+    state = await inspectMergeResolverState(goalWorkDir, mainTip)
+    conflictingFiles = state.conflictingFiles
+
+    // Write conflict context note inside the goal worktree so the executor
+    // can read it as `.opencorvus/merge-conflict/<goalID>.md`.
     const notePath = path.join(goalWorkDir, ".opencorvus", "merge-conflict", `${goal.id}.md`)
     await mkdir(path.dirname(notePath), { recursive: true })
     const noteBody = buildConflictNote({
@@ -153,13 +188,12 @@ export async function resolveMergeConflict(
       initialStderr: input.initialStderr,
       attempt,
       cap,
-      priorBuildFailure: lastBuildFailure,
     })
     await writeFile(notePath, noteBody, "utf8")
 
-    // 4. Dispatch resolver session. Reuses the `build` agent — same tool
-    //    set (edit_file / write_file / run_command / read_file) is exactly
-    //    what reconciling conflict markers needs.
+    // Dispatch resolver session. Reuses the `build` agent — same tool set
+    // (edit_file / write_file / run_command / read_file) is exactly what
+    // reconciling conflict markers needs.
     const resolverSession = await createBuildSession(
       task,
       goal as any,
@@ -194,74 +228,41 @@ export async function resolveMergeConflict(
       resolverError = err instanceof Error ? err.message : String(err)
     }
 
-    // 5. Verify the resolver actually committed a clean merge.
-    const statusPorcelain = await $`git status --porcelain`.cwd(goalWorkDir).quiet().nothrow()
-    const worktreeDirty = statusPorcelain.stdout.toString().trim().length > 0
-    const headAfter = await $`git rev-parse HEAD`.cwd(goalWorkDir).quiet().nothrow()
-    const newTip = headAfter.stdout.toString().trim()
-    const stillMerging = (await $`git rev-parse --verify MERGE_HEAD`.cwd(goalWorkDir).quiet().nothrow()).exitCode === 0
-
-    if (resolverError || worktreeDirty || stillMerging || !newTip || newTip === goalBranchTip) {
+    // Verify the resolver actually produced a committed merged tip.
+    state = await inspectMergeResolverState(goalWorkDir, mainTip)
+    if (resolverError || !canReuseMergedGoalState(state, mainTip)) {
       lastError =
-        `resolver session ${resolverSession.id} did not finish the merge cleanly ` +
-        `(resolverError=${resolverError ?? "none"}, dirty=${worktreeDirty}, ` +
-        `stillMerging=${stillMerging}, head=${newTip || "(empty)"})`
-      log.warn("merge-conflict resolver: dirty worktree after resolver run", {
-        goalRunID: goalRun.id, attempt, lastError,
+        `resolver session ${resolverSession.id} did not produce a reusable merged tip ` +
+        `(resolverError=${resolverError ?? "none"}, stillMerging=${state.stillMerging}, ` +
+        `conflicts=${state.conflictingFiles.length}, head=${state.head || "(empty)"}, ` +
+        `ancestryOK=${state.ancestryOK}, beyondMainTip=${state.head !== "" && state.head !== mainTip})`
+      log.warn("merge-conflict resolver: attempt did not produce a reusable merged tip", {
+        goalRunID: goalRun.id,
+        attempt,
+        lastError,
+        dirtyEntries: state.dirtyEntries,
+        conflictingFiles: state.conflictingFiles,
       })
       continue
     }
 
-    // 6. Sanity-check: the new tip MUST descend from mainTip; otherwise
-    //    the executor did not actually merge main in, just committed changes.
-    const ancestor = await $`git merge-base --is-ancestor ${mainTip} ${newTip}`.cwd(goalWorkDir).quiet().nothrow()
-    if (ancestor.exitCode !== 0) {
-      lastError = `new goal-branch tip ${newTip} does not descend from mainTip ${mainTip}`
-      log.warn("merge-conflict resolver: resolver commit does not include mainTip", {
-        goalRunID: goalRun.id, attempt, lastError,
-      })
-      continue
-    }
-
-    // 7. Fast-forward primary. `--ff-only` will error (not silently create a
-    //    merge commit) if primary moved — but it cannot have moved because
-    //    we hold the lock. If this ever fails it's a real invariant break.
-    const ff = await $`git merge --ff-only ${newTip}`.cwd(primaryWorkDir).quiet().nothrow()
-    if (ff.exitCode !== 0) {
-      lastError =
-        `git merge --ff-only ${newTip} on primary failed: ` +
-        (ff.stderr.toString().trim() || ff.stdout.toString().trim())
-      log.error("merge-conflict resolver: ff-only failed (invariant break?)", {
-        goalRunID: goalRun.id, attempt, lastError,
-      })
-      await $`git reset --hard ${mainTip}`.cwd(primaryWorkDir).quiet().nothrow()
-      continue
-    }
-
-    // 8. Post-merge build verification in the primary worktree.
-    const build = await runPostMergeBuild(primaryWorkDir)
-    if (build.ok) {
-      log.info("merge-conflict resolved + build passed", {
-        goalRunID: goalRun.id, attempt, newTip,
-      })
-      // Success. Clean up the conflict note so a subsequent read_file from
-      // executor on a later retry doesn't pick up this stale record.
-      await $`git rm -rf --ignore-unmatch .opencorvus/merge-conflict`.cwd(goalWorkDir).quiet().nothrow()
-      return { resolved: true, newGoalBranchTip: newTip }
-    }
-
-    // 9. Build failed — roll primary back, carry the output into the next
-    //    conflict note so executor sees the build error verbatim.
-    await $`git reset --hard ${mainTip}`.cwd(primaryWorkDir).quiet().nothrow()
-    lastBuildFailure = build.output
-    lastError = `post-merge build failed on attempt ${attempt}: ${build.summary}`
-    log.warn("merge-conflict resolver: post-merge build failed; retrying", {
-      goalRunID: goalRun.id, attempt, summary: build.summary,
+    // Fast-forward primary.
+    const merged = await fastForwardPrimary({
+      goalRunID: goalRun.id,
+      attempt,
+      newTip: state.head,
+      goalWorkDir,
+      primaryWorkDir,
+      mainTip,
     })
+    if (merged.ok) {
+      return { resolved: true, newGoalBranchTip: state.head }
+    }
+    lastError = merged.error
   }
 
-  // 10. Cap exhausted. Primary is already at mainTip (either it never
-  //     moved, or we reset it above). Write decision log + return.
+  // Cap exhausted. Primary is already at mainTip (either it never moved, or
+  // we reset it above). Write decision log + return.
   try {
     const decisionLog = createDecisionLog(task.id)
     decisionLog.append({
@@ -287,46 +288,93 @@ export async function resolveMergeConflict(
 // Helpers
 // ---------------------------------------------------------------------------
 
-interface BuildResult {
+interface FastForwardResult {
   ok: boolean
-  summary: string
-  output: string
+  error?: string
 }
 
-/** Try to detect and run a project-level build. Returns ok=true when the
- *  project has no obvious build entry (we cannot block merge on absent
- *  config). `summary` is a short one-liner for logs; `output` is the full
- *  stderr+stdout for the next conflict note. */
-async function runPostMergeBuild(workDir: string): Promise<BuildResult> {
+/**
+ * A goal-worktree state is "reusable" when we can fast-forward the primary
+ * worktree to `state.head` directly, without running any more merge machinery.
+ *
+ * The four invariants:
+ *   1. `!stillMerging`     — no MERGE_HEAD lingering; there is a real commit at HEAD.
+ *   2. `conflictingFiles=0`— no `UU` entries; nothing half-resolved.
+ *   3. `ancestryOK`        — HEAD descends from `mainTip`, so `git merge --ff-only`
+ *                            on primary is guaranteed to fast-forward.
+ *   4. `head !== mainTip`  — HEAD carries delta beyond main; otherwise the
+ *                            "merge" would deliver nothing and a fast-forward
+ *                            would be a no-op.
+ */
+export function canReuseMergedGoalState(state: MergeResolverState, mainTip: string): boolean {
+  return !state.stillMerging
+    && state.conflictingFiles.length === 0
+    && state.ancestryOK
+    && state.head !== mainTip
+}
+
+export async function inspectMergeResolverState(
+  workDir: string,
+  mainTip: string,
+): Promise<MergeResolverState> {
   const { $ } = await import("bun")
-  const { existsSync } = await import("fs")
-  const pkgPath = path.join(workDir, "package.json")
-  if (!existsSync(pkgPath)) {
-    // Non-JS project — skip. Python / shell / docs tasks reach here and we
-    // defer verification to delivery agent's Phase 1.
-    return { ok: true, summary: "no package.json — skipped", output: "" }
+  const headResult = await $`git rev-parse HEAD`.cwd(workDir).quiet().nothrow()
+  const head = headResult.exitCode === 0 ? headResult.stdout.toString().trim() : ""
+
+  const conflictResult = await $`git diff --name-only --diff-filter=U`.cwd(workDir).quiet().nothrow()
+  const conflictingFiles = conflictResult.stdout.toString().trim().split("\n").filter((s) => s.length > 0)
+
+  const statusResult = await $`git status --porcelain`.cwd(workDir).quiet().nothrow()
+  const dirtyEntries = statusResult.stdout.toString().split("\n").map((line) => line.trim()).filter((line) => line.length > 0)
+
+  const stillMerging = (await $`git rev-parse --verify MERGE_HEAD`.cwd(workDir).quiet().nothrow()).exitCode === 0
+  const ancestryOK = head.length > 0
+    && (await $`git merge-base --is-ancestor ${mainTip} ${head}`.cwd(workDir).quiet().nothrow()).exitCode === 0
+
+  return {
+    head,
+    stillMerging,
+    conflictingFiles,
+    ancestryOK,
+    dirtyEntries,
   }
-  let pkg: { scripts?: Record<string, string> } = {}
-  try {
-    pkg = (await (await import("fs/promises")).readFile(pkgPath, "utf8")).length > 0
-      ? JSON.parse(await (await import("fs/promises")).readFile(pkgPath, "utf8"))
-      : {}
-  } catch {
-    return { ok: true, summary: "package.json unreadable — skipped", output: "" }
+}
+
+async function fastForwardPrimary(input: {
+  goalRunID: string
+  attempt: number
+  newTip: string
+  goalWorkDir: string
+  primaryWorkDir: string
+  mainTip: string
+}): Promise<FastForwardResult> {
+  const { $ } = await import("bun")
+  const ff = await $`git merge --ff-only ${input.newTip}`.cwd(input.primaryWorkDir).quiet().nothrow()
+  if (ff.exitCode !== 0) {
+    const error =
+      `git merge --ff-only ${input.newTip} on primary failed: ` +
+      (ff.stderr.toString().trim() || ff.stdout.toString().trim())
+    log.error("merge-conflict resolver: ff-only failed (invariant break?)", {
+      goalRunID: input.goalRunID,
+      attempt: input.attempt,
+      error,
+    })
+    await $`git reset --hard ${input.mainTip}`.cwd(input.primaryWorkDir).quiet().nothrow()
+    return { ok: false, error }
   }
-  const scripts = pkg.scripts ?? {}
-  if (!scripts.build) {
-    return { ok: true, summary: "no build script — skipped", output: "" }
-  }
-  const res = await $`bun run build`.cwd(workDir).quiet().nothrow()
-  const stderr = res.stderr.toString()
-  const stdout = res.stdout.toString()
-  const output = [stdout, stderr].filter((s) => s.trim().length > 0).join("\n").slice(-8000)
-  if (res.exitCode === 0) {
-    return { ok: true, summary: "build passed", output }
-  }
-  const firstLine = stderr.split("\n").find((l) => l.trim().length > 0) ?? "(no stderr)"
-  return { ok: false, summary: `build exit=${res.exitCode}: ${firstLine.slice(0, 200)}`, output }
+
+  log.info("merge-conflict resolved; primary fast-forwarded", {
+    goalRunID: input.goalRunID,
+    attempt: input.attempt,
+    newTip: input.newTip,
+  })
+  await cleanupConflictNote(input.goalWorkDir)
+  return { ok: true }
+}
+
+async function cleanupConflictNote(goalWorkDir: string): Promise<void> {
+  const { $ } = await import("bun")
+  await $`git rm -rf --ignore-unmatch .opencorvus/merge-conflict`.cwd(goalWorkDir).quiet().nothrow()
 }
 
 function buildConflictNote(input: {
@@ -337,7 +385,6 @@ function buildConflictNote(input: {
   initialStderr: string
   attempt: number
   cap: number
-  priorBuildFailure?: string
 }): string {
   const lines: string[] = []
   lines.push(`# Merge Conflict — goal \`${input.goal.id}\``)
@@ -373,14 +420,6 @@ function buildConflictNote(input: {
   lines.push("```")
   lines.push(input.initialStderr.trim() || "(empty)")
   lines.push("```")
-  if (input.priorBuildFailure && input.priorBuildFailure.trim().length > 0) {
-    lines.push("")
-    lines.push("## Prior attempt FAILED the post-merge build — address this too")
-    lines.push("")
-    lines.push("```")
-    lines.push(input.priorBuildFailure.slice(-4000))
-    lines.push("```")
-  }
   lines.push("")
   lines.push(
     "When you finish, `git add -A && git commit -m \"merge main: resolve conflict for goal " +
@@ -411,8 +450,7 @@ function buildMergeResolverPrompt(input: {
   lines.push("")
   lines.push(
     `A detailed context note is at \`${input.notePath}\` — READ IT FIRST. It lists ` +
-      `the main tip, your own commit ref, every conflicting file, and (if this is a ` +
-      `retry attempt) the build error from the previous attempt.`,
+      `the main tip, your own commit ref, and the current conflict state.`,
   )
   lines.push("")
   lines.push("## How to resolve")
@@ -420,16 +458,15 @@ function buildMergeResolverPrompt(input: {
   lines.push("1. For every conflicting file, open it and read both sides of each `<<<<<<<` / `>>>>>>>` block.")
   lines.push("   - The \"HEAD\" side is YOUR goal's code.")
   lines.push("   - The incoming side (after `=======`) is main's code — the other goals' work.")
-  lines.push("   - Reconcile so BOTH goals' intents are preserved. If they conflict on the same line, prefer the resolution that keeps the project compiling and does not drop either feature.")
+  lines.push("   - Reconcile so BOTH goals' intents are preserved. If they conflict on the same line, prefer the resolution that keeps both features working.")
   lines.push("2. Remove every conflict marker. Do not leave any `<<<<<<<` / `=======` / `>>>>>>>` in the tree.")
-  lines.push("3. Run `bun run build` (or the project's build command from package.json) to verify. If it fails, fix the failure using edit_file / write_file, then re-run.")
-  lines.push("4. When the build is green, commit: `git add -A && git commit -m \"merge main: resolve conflict for goal " + input.goal.id + "\"`.")
+  lines.push("3. When all markers are resolved, commit: `git add -A && git commit -m \"merge main: resolve conflict for goal " + input.goal.id + "\"`.")
   lines.push("")
   lines.push("## Rules")
   lines.push("")
   lines.push("- Do NOT invent new features. Do NOT extend either goal's scope.")
   lines.push("- Do NOT rewrite code that was not in conflict — touch only the lines you must.")
-  lines.push("- Do NOT skip the commit step. The orchestrator verifies the merge is committed; an un-committed worktree counts as failure.")
+  lines.push("- Do NOT skip the commit step. The orchestrator verifies that HEAD advances to a reusable merged tip; uncommitted fixes do not count.")
   lines.push("- If the two goals truly want opposite behaviour on the same API, pick the union that preserves both (e.g. add a config switch) and document it briefly in the commit message.")
   if (input.conflictingFiles.length > 0) {
     lines.push("")

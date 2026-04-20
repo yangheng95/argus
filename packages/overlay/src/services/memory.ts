@@ -1,7 +1,6 @@
 // ── Memory Service ──
 // TypeScript port of knowledge/memory functions:
-// loadMemory, searchMemory, deleteMemory, clearWorkspaceMemory,
-// openMemoryDetail.
+// loadMemory, searchMemory, deleteMemory, openMemoryDetail.
 // DOM-rendering functions (renderMemory) are intentionally
 // NOT ported here — they are superseded by declarative Solid.js components
 // (MemoryPanel.tsx).
@@ -87,20 +86,6 @@ export async function deleteMemory(fileId: string): Promise<void> {
   } catch (e) {
     AppLog.error("ui", "Failed to delete memory", { error: String(e) });
   }
-}
-
-/**
- * Clears the workspace-scoped task/directory memory held in the settings store.
- * Mirrors clearWorkspaceMemory.
- * NOTE:.workspaceTaskID and state.workspaceDirectory.
- * In the Solid world those fields live in settingsStore; this function resets
- * the equivalent app-store fields that track workspace identity.
- */
-export function clearWorkspaceMemory(): void {
- // : state.workspaceTaskID = ""; state.workspaceDirectory = "";
- // These are settings-store fields — we simply record the intent here.
- // Callers that own the settingsStore should call setSettingsStore directly
- // if they need to clear the persisted workspace identity.
 }
 
 // ── Memory detail ──

@@ -139,19 +139,15 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
  //
  // Bounds mirror what the backend validates against — max_runs and
  // max_executor_groups are plain numbers on `assistant` config (see
- // opencorvus/src/engine/config.ts). Bounds chosen from the defaults
- // documented in docs/product/zh-CN/opencorvus/configuration.md:
- //   max_runs default 15, practical ceiling ~30 before cost dominates
- //   max_executor_groups default 5, backend uses 1-10 for parallel dispatch
- // Keeping the range narrow forces the slider to be a cost-conscious dial,
- // not a free-form input — the old number fields let users type 999 and
- // burn tokens.
+ // opencorvus/src/engine/config.ts). Effective values come from server config
+ // (single source of truth — DEFAULTS in engine/config.ts). The slider is
+ // disabled until config has loaded; we deliberately do NOT carry a local
+ // fallback default, because that would silently mask a missing-config bug
+ // and let the user "save" a value the server never advertised.
   const MAX_RUNS_MIN = 1;
   const MAX_RUNS_MAX = 30;
-  const MAX_RUNS_DEFAULT = 15;
   const MAX_GROUPS_MIN = 1;
   const MAX_GROUPS_MAX = 10;
-  const MAX_GROUPS_DEFAULT = 5;
 
   const clamp = (v: number, lo: number, hi: number): number =>
     Math.min(Math.max(Math.round(v), lo), hi);
@@ -171,25 +167,28 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     () => !!boardStore.selectedTaskID && taskLockedMaxRuns() !== null,
   );
 
-  const configMaxRuns = createMemo<number>(() => {
-    const n = Number((appStore.config as any)?.assistant?.max_runs);
-    return Number.isFinite(n) && n > 0 ? n : MAX_RUNS_DEFAULT;
+  // Returns null until server config has loaded — UI must reflect "unknown",
+  // not a guessed default. Slider is disabled while null; nothing here invents
+  // a number the server never sent.
+  const configMaxRuns = createMemo<number | null>(() => {
+    const raw = (appStore.config as any)?.assistant?.max_runs;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
   });
-  const configMaxGroups = createMemo<number>(() => {
-    const n = Number((appStore.config as any)?.assistant?.max_executor_groups);
-    return Number.isFinite(n) && n > 0 ? n : MAX_GROUPS_DEFAULT;
+  const configMaxGroups = createMemo<number | null>(() => {
+    const raw = (appStore.config as any)?.assistant?.max_executor_groups;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
   });
 
-  const displayMaxRuns = createMemo(() =>
-    clamp(taskLockedMaxRuns() ?? configMaxRuns(), MAX_RUNS_MIN, MAX_RUNS_MAX),
-  );
-  const displayMaxGroups = createMemo(() =>
-    clamp(
-      taskLockedMaxGroups() ?? configMaxGroups(),
-      MAX_GROUPS_MIN,
-      MAX_GROUPS_MAX,
-    ),
-  );
+  const displayMaxRuns = createMemo<number | null>(() => {
+    const v = taskLockedMaxRuns() ?? configMaxRuns();
+    return v === null ? null : clamp(v, MAX_RUNS_MIN, MAX_RUNS_MAX);
+  });
+  const displayMaxGroups = createMemo<number | null>(() => {
+    const v = taskLockedMaxGroups() ?? configMaxGroups();
+    return v === null ? null : clamp(v, MAX_GROUPS_MIN, MAX_GROUPS_MAX);
+  });
 
  // ── Menu open / close helpers ──
 
@@ -302,6 +301,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
  // response and the memo re-renders.
   async function handleMaxRunsChange(rawValue: string) {
     if (budgetLocked()) return;
+    if (configMaxRuns() === null) return; // config not loaded — nothing to compare against
     const next = clamp(Number(rawValue), MAX_RUNS_MIN, MAX_RUNS_MAX);
     if (next === configMaxRuns()) return;
     try {
@@ -313,6 +313,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
 
   async function handleMaxGroupsChange(rawValue: string) {
     if (budgetLocked()) return;
+    if (configMaxGroups() === null) return;
     const next = clamp(Number(rawValue), MAX_GROUPS_MIN, MAX_GROUPS_MAX);
     if (next === configMaxGroups()) return;
     try {
@@ -680,13 +681,13 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
               min={String(MAX_RUNS_MIN)}
               max={String(MAX_RUNS_MAX)}
               step="1"
-              value={String(displayMaxRuns())}
-              disabled={budgetLocked()}
+              value={String(displayMaxRuns() ?? MAX_RUNS_MIN)}
+              disabled={budgetLocked() || displayMaxRuns() === null}
               onChange={(e) =>
                 void handleMaxRunsChange((e.target as HTMLInputElement).value)
               }
             />
-            <span class="titlebar-menu-value">{displayMaxRuns()}</span>
+            <span class="titlebar-menu-value">{displayMaxRuns() ?? "—"}</span>
           </span>
         </label>
 
@@ -710,13 +711,13 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
               min={String(MAX_GROUPS_MIN)}
               max={String(MAX_GROUPS_MAX)}
               step="1"
-              value={String(displayMaxGroups())}
-              disabled={budgetLocked()}
+              value={String(displayMaxGroups() ?? MAX_GROUPS_MIN)}
+              disabled={budgetLocked() || displayMaxGroups() === null}
               onChange={(e) =>
                 void handleMaxGroupsChange((e.target as HTMLInputElement).value)
               }
             />
-            <span class="titlebar-menu-value">{displayMaxGroups()}</span>
+            <span class="titlebar-menu-value">{displayMaxGroups() ?? "—"}</span>
           </span>
         </label>
 

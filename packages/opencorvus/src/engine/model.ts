@@ -418,7 +418,7 @@ export const Artifact = z.object({
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
   deliveryID: Identifier.schema("delivery").nullable().optional(),
-  kind: z.enum(["patch", "changed_file", "log", "report", "image", "diff", "html_trace", "link", "git_ref", "pr"]),
+  kind: z.enum(["patch", "changed_file", "log", "report", "image", "diff", "link", "git_ref", "pr"]),
   label: z.string(),
   payload: z.record(z.string(), z.any()).optional(),
   time: z.object({
@@ -881,6 +881,14 @@ export const Event = {
   PlanCreated: BusEvent.define("plan.created", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   PlanActivated: BusEvent.define("plan.activated", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   GoalProgress: BusEvent.define("goal.progress", z.object({ taskID: Identifier.schema("task"), goalRunID: z.string(), summary: z.string() })),
+  GoalRunUpdated: BusEvent.define("goal_run.updated", z.object({
+    taskID: Identifier.schema("task"),
+    goalRunID: Identifier.schema("goal_run"),
+    goalID: Identifier.schema("goal"),
+    status: z.string(),
+    previousStatus: z.string(),
+    summary: z.string(),
+  })),
   GoalPassed: BusEvent.define("goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
   GoalFailed: BusEvent.define("goal.failed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
   MilestoneActivated: BusEvent.define("milestone.activated", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
@@ -976,29 +984,28 @@ export const Event = {
       elapsedMs: z.number(),
     }),
   ),
-  /** Streamed reasoning delta for the fidelity review LLM call. The JSON
-   *  contract the reviewer emits is still structured-parsed at the end
-   *  (FidelityReviewCompleted), but we forward the raw token stream into a
-   *  collapsible reasoning part on the fidelity card itself — that card is
-   *  already a separate card from the requirements agent session, so the
-   *  token noise no longer pollutes the agent card. `attempt` allows the
-   *  overlay to open a fresh reasoning part when the retry loop rolls over;
-   *  `textDelta` carries only the increment since the last emit (the emitter
-   *  throttles at ~500ms). */
+  /** Fidelity review streaming chunk. Forwarded from the LLM stream while
+   *  the tool-use loop is in flight. ONLY `reasoning-delta` is forwarded —
+   *  the `submit_fidelity_verdict` tool-input JSON is protocol payload and
+   *  must never surface as visible text (that would defeat the point of
+   *  the tool-call architecture; verdict is delivered structurally via
+   *  FidelityReviewCompleted). Non-reasoning models emit no reasoning
+   *  chunks; their sub-15s tool call needs no streaming. Throttled to
+   *  ~2 events/s to keep protocol_event row counts sane. */
   FidelityReviewChunk: BusEvent.define(
     "fidelity.review.chunk",
     z.object({
       taskID: Identifier.schema("task"),
       sessionID: z.string(),
+      kind: z.literal("reasoning"),
+      delta: z.string(),
       attempt: z.number(),
-      textDelta: z.string(),
     }),
   ),
   /** Fidelity review verdict with the full structured result. Emitted once
-   *  per reviewFidelity() call after the LLM's JSON output has been parsed
-   *  and validated. Carries the same shape as FidelityResult so the overlay
-   *  can render a native verdict card (badge + issues + corrections) instead
-   *  of the raw JSON that used to appear in the reasoning stream. */
+   *  per reviewFidelity() call after the LLM submits its tool-call verdict.
+   *  Carries the same shape as FidelityResult so the overlay can render a
+   *  native verdict card (badge + issues + corrections). */
   FidelityReviewCompleted: BusEvent.define(
     "fidelity.review.completed",
     z.object({

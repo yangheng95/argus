@@ -466,7 +466,7 @@ if (chatScroll) {
   render(() => <Conversation container={chatScroll} />, chatScroll);
 }
 
-// ── Mount: WorkspacePanel (Diff / File / Trace) ──
+// ── Mount: WorkspacePanel (Diff / File) ──
 
 const workspaceMountEl = document.getElementById("solidWorkspaceMount");
 if (workspaceMountEl) {

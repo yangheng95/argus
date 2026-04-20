@@ -39,11 +39,7 @@ function toolToCardNode(part: any): CardNode {
 /** Render the parts list of a card body. Handles boundary separators,
  *  inline text / reasoning, and tool promotion (promoted tools are rendered
  *  as nested <Card>s so they fold independently). Each part renders as its
- *  own sibling — the short-lived register_contract aggregator that used to
- *  collapse runs of contracts under a "架构契约 [N]" summary was removed
- *  on 2026-04-19: contract folding belongs on the per-goal executor step
- *  card (see Card.tsx .card__contracts), not buried inside the architect
- *  session's tool stream. */
+ *  own sibling. */
 export function CardParts(props: { parts: any[]; depth: number }) {
   return (
     <For each={props.parts}>

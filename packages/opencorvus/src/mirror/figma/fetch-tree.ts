@@ -687,13 +687,13 @@ export interface FetchFigmaTreeInput {
   nodeId?: string
   /** Figma Personal Access Token. Defaults to `FIGMA_API_TOKEN`. */
   token?: string
-  /** Max compression depth (default: 15). */
+  /** Max compression depth. */
   depth?: number
-  /** Skip image export (default: false). */
+  /** Skip image export. */
   noImages?: boolean
-  /** Max image exports (default: 60). */
+  /** Max image exports. */
   maxImages?: number
-  /** PNG render scale 1-4 (default: 2). */
+  /** PNG render scale 1-4. */
   imageScale?: number
   /** Progress hook. */
   onProgress?: (msg: string) => void

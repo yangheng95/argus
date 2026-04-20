@@ -26,7 +26,12 @@ import {
   setOrphanedSelectionHandler,
   taskByID,
 } from "../store/board";
-import { settingsStore } from "../store/settings";
+import {
+  settingsStore,
+  setSettingsStore,
+  saveSettings,
+  workspaceRestoreDirectory,
+} from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
 import { applyDirectory } from "./workspace";
 import { resetWriter } from "./tree-writer";
@@ -240,6 +245,11 @@ export async function selectTask(
     // Deselection has no async work; make sure any lingering progress UI
     // from a superseded switch is cleared.
     setBoardStore("taskSwitching", false);
+    // Clear persisted workspace identity so next launch does not resume a
+    // task the user just deselected.
+    setSettingsStore("workspaceTaskID", "");
+    setSettingsStore("workspaceDirectory", "");
+    saveSettings();
     return;
   }
 
@@ -273,6 +283,16 @@ export async function selectTask(
     if (stale()) return;
 
     startSSE(nextTaskID);
+
+    // Persist the active task so initApp -> restoreInitialWorkspace() can
+    // resume it on the next launch. Without this write the localStorage key
+    // stays empty and the overlay always boots into an empty workspace.
+    const restoreDir = workspaceRestoreDirectory(
+      taskDirectory || settingsStore.directory || "",
+    );
+    setSettingsStore("workspaceTaskID", nextTaskID);
+    setSettingsStore("workspaceDirectory", restoreDir);
+    saveSettings();
   } finally {
     // Only clear the progress flag if we are still the active selection.
     // A newer selectTask() call has taken over and will manage its own flag.

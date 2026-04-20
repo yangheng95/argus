@@ -7,7 +7,6 @@
 // - Clear project-scope data (tasks, path, vcs, memory files)
 // - Directory pick / browse / create (Tauri-backed)
 // - Recent directories persistence (localStorage)
-// - Workspace memory (rememberWorkspace / workspaceRestoreDirectory)
 // This module operates on Solid stores (settingsStore, boardStore) and
 // delegates timers / loading to callers via callbacks.
 

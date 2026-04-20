@@ -114,7 +114,7 @@ export namespace Message {
     text: z.string(),
     synthetic: z.boolean().optional(),
     ignored: z.boolean().optional(),
-    kind: z.enum(["user_content", "control", "context", "trace"]).optional(),
+    kind: z.enum(["user_content", "control", "context"]).optional(),
     source: z.enum(["user", "system", "evaluator", "planner", "goal_gate", "task_tool"]).optional(),
     audience: z
       .object({

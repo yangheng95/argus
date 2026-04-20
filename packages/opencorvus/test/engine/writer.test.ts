@@ -60,6 +60,7 @@ describe("engine writer goal workspace cleanup", () => {
             id: goalID,
             task_id: taskID,
             title: "cleanup goal",
+            slug: "cleanup-goal",
             objective: "verify terminal cleanup",
             acceptance_specs: [],
             owned_paths: [],

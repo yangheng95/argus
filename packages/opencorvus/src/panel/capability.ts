@@ -246,15 +246,6 @@ export const PanelCapabilityRegistry = list(
     local_action_surfaces: panel,
   }),
   item({
-    action: "export_session_html",
-    description: "Export a session transcript as HTML.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      sessionID: z.string(),
-    },
-  }),
-  item({
     action: "update_goal",
     description: "Update a goal description and acceptance specs.",
     kind: "mutation",

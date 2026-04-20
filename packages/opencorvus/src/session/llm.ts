@@ -19,8 +19,6 @@ import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
-import { LLMTrace } from "./llm-trace"
-import { ulid } from "ulid"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -196,34 +194,6 @@ export namespace LLM {
     resetInactivityTimer()
     input.abort.addEventListener("abort", clearInactivityTimer, { once: true })
 
-    const trace = LLMTrace.begin({
-      callID: ulid(),
-      sessionID: input.sessionID,
-      userMessageID: input.user.id,
-      model: {
-        providerID: input.model.providerID,
-        modelID: input.model.id,
-      },
-      agent: {
-        name: input.agent.name,
-        mode: input.agent.mode,
-      },
-      small: input.small ?? false,
-      request: {
-        system,
-        messages: requestMessages,
-        tools: Object.keys(tools),
-        toolChoice: input.toolChoice ?? null,
-        maxRetries: input.retries ?? 0,
-        maxOutputTokens: maxOutputTokens ?? null,
-        temperature: params.temperature ?? null,
-        topP: params.topP ?? null,
-        topK: params.topK ?? null,
-        headers: requestHeaders,
-        providerOptions,
-      },
-    })
-
     const result = streamText({
       onChunk() {
         resetInactivityTimer()
@@ -233,18 +203,12 @@ export namespace LLM {
         l.error("stream error", {
           error: event.error,
         })
-        trace.error(event.error)
       },
-      onStepFinish(step) {
-        trace.step(step)
-      },
-      onAbort(event) {
+      onAbort() {
         clearInactivityTimer()
-        trace.abort(event)
       },
-      onFinish(event) {
+      onFinish() {
         clearInactivityTimer()
-        trace.finish(event)
       },
       async experimental_repairToolCall(failed) {
         const lower = failed.toolCall.toolName.toLowerCase()

@@ -183,8 +183,6 @@ import type {
   SessionDeleteMessageResponses,
   SessionDeleteResponses,
   SessionDiffResponses,
-  SessionExportHtmlErrors,
-  SessionExportHtmlResponses,
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
@@ -263,9 +261,6 @@ import type {
   ToolIdsResponses,
   ToolListErrors,
   ToolListResponses,
-  TraceListResponses,
-  TraceReadResponses,
-  TraceStreamResponses,
   TuiControlNextResponses,
   TuiControlResponseResponses,
   TuiExecuteCommandErrors,
@@ -2273,43 +2268,6 @@ export class Session2 extends HeyApiClient {
       url: "/session/{sessionID}/diff",
       ...options,
       ...params,
-    })
-  }
-
-  /**
-   * Export session HTML
-   *
-   * Export a session as HTML trace report and return generated file path.
-   */
-  public exportHtml<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-      out?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "out" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionExportHtmlResponses, SessionExportHtmlErrors, ThrowOnError>({
-      url: "/session/{sessionID}/export-html",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 
@@ -5566,83 +5524,6 @@ export class Attachment2 extends HeyApiClient {
   }
 }
 
-export class Trace extends HeyApiClient {
-  /**
-   * List recent traced tasks
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<TraceListResponses, unknown, ThrowOnError>({
-      url: "/trace",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Read all trace events for a task
-   */
-  public read<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<TraceReadResponses, unknown, ThrowOnError>({
-      url: "/trace/{taskID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Subscribe to trace events for a task (SSE)
-   *
-   * Replays existing events first, then pushes new events as they happen. Client should consume until the SSE connection closes.
-   */
-  public stream<ThrowOnError extends boolean = false>(
-    parameters: {
-      taskID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "taskID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<TraceStreamResponses, unknown, ThrowOnError>({
-      url: "/trace/{taskID}/stream",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Auth3 extends HeyApiClient {
   /**
    * Remove MCP OAuth
@@ -6930,11 +6811,6 @@ export class OpencodeClient extends HeyApiClient {
   private _attachment?: Attachment2
   get attachment(): Attachment2 {
     return (this._attachment ??= new Attachment2({ client: this.client }))
-  }
-
-  private _trace?: Trace
-  get trace(): Trace {
-    return (this._trace ??= new Trace({ client: this.client }))
   }
 
   private _mcp?: Mcp

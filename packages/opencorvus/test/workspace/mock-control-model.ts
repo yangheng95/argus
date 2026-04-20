@@ -226,12 +226,6 @@ function action(prompt: LanguageModelV2Prompt) {
       sessionID,
     }
   }
-  if (sessionID && /export session|export .*html/i.test(input.text)) {
-    return {
-      action: "export_session_html",
-      sessionID,
-    }
-  }
   if (sessionID && /delete session|delete task session/i.test(input.text)) {
     return {
       action: "delete_session",

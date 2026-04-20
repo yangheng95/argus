@@ -771,9 +771,10 @@ export namespace EngineService {
       await Session.remove(task.session_id)
     }
     // Delete the task row itself (CASCADE handles plans, goals, runs, artifacts, etc.)
-    Database.use((db) =>
-      db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run(),
-    )
+    Database.use((db) => {
+      db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
+      Database.effect(() => Database.incrementalVacuum())
+    })
     // Fire-and-forget snapshot prune: every tree object written by this task's
     // `Snapshot.track()` calls is dangling (no ref) so `git gc --prune=now`
     // reclaims its disk footprint. Running detached keeps the caller's
@@ -982,7 +983,7 @@ export namespace EngineService {
         if (["completed", "failed", "cancelled"].includes(item.status)) continue
         await cancelTask(item.id)
       }
-      Database.use((db) =>
+      Database.use((db) => {
         db
           .delete(EngineTaskTable)
           .where(
@@ -991,8 +992,9 @@ export namespace EngineService {
               inArray(EngineTaskTable.session_id, ids),
             ),
           )
-          .run(),
-      )
+          .run()
+        Database.effect(() => Database.incrementalVacuum())
+      })
     }
     await Session.remove(sessionID)
     return true

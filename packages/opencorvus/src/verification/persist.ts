@@ -1,23 +1,10 @@
 /**
  * Verification evidence persistence — reads & writes on `engine_evaluation`.
  *
- * See specs/new-arch/09-verification-evidence.md. The spec forbids adding a
- * new table; every write here must land on the existing `engine_evaluation`
- * row. Two write paths exist:
- *
- *   - `persistEvidence` — for scope="goal_run" rows, created from scratch by
- *     `goal-pool.ts` right after `evaluateGoal`. Never touches a delivery row.
- *
- *   - The delivery scope is still owned by `engine/persist.ts`'s
- *     `persistDelivery` + `updateEvaluationFromDeliveryVerdict` — that path
- *     was already the exclusive writer for delivery rows, and the spec
- *     explicitly says not to fork it. Phase D will extend THOSE call sites
- *     to populate scope/signature/checks; this module only exposes readers
- *     and the helper that pure-functions the check array into a signature.
- *
- * The DB layer (Database.use, drizzle eq/and/desc) is isolated here so higher
- * layers (goal-pool, orchestrator tools, delivery tools) don't reach into the
- * evaluation table shape directly.
+ * Post-DAM Phase 5: this table carries the delivery-agent verdict summary
+ * only. Signature-based convergence detection has been removed —
+ * convergence now lives in the metric trajectory (src/metrics/arbiter.ts).
+ * The `engine_evaluation` row is just a verdict wrapper.
  */
 import { and, desc, eq } from "drizzle-orm"
 import { Database } from "@/storage/db"
@@ -30,10 +17,8 @@ import {
   type EngineEvaluationStatus,
   type EngineEvaluationVerdict,
 } from "@/engine/engine.sql"
-import { computeSignature } from "./signature"
 
-/** A "verification evidence" — the domain name for an `engine_evaluation` row
- *  after the spec-09 shape extension. Plain DTO, safe to serialise. */
+/** A "verification evidence" — the domain name for an `engine_evaluation` row. */
 export interface VerificationEvidence {
   id: string
   taskID: string
@@ -41,7 +26,6 @@ export interface VerificationEvidence {
   goalRunID?: string
   deliveryID?: string
   scope: EngineEvaluationScope
-  signature: string
   status: EngineEvaluationStatus
   verdict: EngineEvaluationVerdict
   summary: string
@@ -58,7 +42,6 @@ function rowToEvidence(row: {
   goal_run_id: string | null
   delivery_id: string | null
   scope: EngineEvaluationScope
-  signature: string
   status: EngineEvaluationStatus
   verdict: EngineEvaluationVerdict
   summary: string
@@ -73,11 +56,7 @@ function rowToEvidence(row: {
     runID: row.run_id,
     goalRunID: row.goal_run_id ?? undefined,
     deliveryID: row.delivery_id ?? undefined,
-    // Historical rows predate the scope column → DDL default backfilled them
-    // to "delivery". We also defensively infer scope when the column is
-    // missing at the JS level (older row shapes from replay tests).
-    scope: row.scope ?? (row.delivery_id ? "delivery" : "goal_run"),
-    signature: row.signature ?? "",
+    scope: row.scope,
     status: row.status,
     verdict: row.verdict,
     summary: row.summary,
@@ -101,10 +80,6 @@ export interface PersistEvidenceInput {
   summary: string
   checks: EngineEvaluationCheck[]
   timeCompleted?: number
-  /** Optional pre-computed signature override. Normally leave undefined and
-   *  let this function derive it from `checks`. Supplied by callers that
-   *  already computed the signature for logging before the insert. */
-  signature?: string
   now?: number
 }
 
@@ -120,7 +95,6 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
   }
   const now = input.now ?? Date.now()
   const id = Identifier.ascending("evaluation")
-  const signature = input.signature ?? computeSignature(input.scope, input.checks)
   const row = {
     id,
     task_id: input.taskID,
@@ -128,7 +102,6 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
     goal_run_id: input.goalRunID ?? null,
     delivery_id: input.deliveryID ?? null,
     scope: input.scope,
-    signature,
     status: input.status,
     verdict: input.verdict,
     summary: input.summary,
@@ -154,7 +127,6 @@ export function findLatestGoalRunEvidence(goalID: string): VerificationEvidence 
         goal_run_id: EngineEvaluationTable.goal_run_id,
         delivery_id: EngineEvaluationTable.delivery_id,
         scope: EngineEvaluationTable.scope,
-        signature: EngineEvaluationTable.signature,
         status: EngineEvaluationTable.status,
         verdict: EngineEvaluationTable.verdict,
         summary: EngineEvaluationTable.summary,
@@ -200,9 +172,7 @@ export function findGoalRunEvidence(goalRunID: string): VerificationEvidence | u
   return rowToEvidence(row as any)
 }
 
-/** Latest delivery-scope evidence for a task. Used by the rework loop to
- *  compare signatures across iterations. Returns undefined when no delivery
- *  has produced evidence yet. */
+/** Latest delivery-scope evidence for a task. */
 export function findLatestDeliveryEvidence(taskID: string): VerificationEvidence | undefined {
   const row = Database.use((db) =>
     db
@@ -222,8 +192,7 @@ export function findLatestDeliveryEvidence(taskID: string): VerificationEvidence
   return rowToEvidence(row as any)
 }
 
-/** Second-most-recent delivery-scope evidence for a task. The rework loop
- *  compares "latest" vs "previous" signatures to detect convergence. */
+/** Second-most-recent delivery-scope evidence for a task. */
 export function findPreviousDeliveryEvidence(
   taskID: string,
   excludeEvidenceID: string,
@@ -247,16 +216,3 @@ export function findPreviousDeliveryEvidence(
   return rowToEvidence(prior as any)
 }
 
-/** Is there at least one failed strict check in this evidence? */
-export function hasStrictFailure(evidence: VerificationEvidence | undefined): boolean {
-  if (!evidence) return false
-  return evidence.checks.some((c) => c.status === "failed" && c.mode === "strict")
-}
-
-/** Enumerate strict failures for prompt injection / rejection_details. */
-export function strictFailures(
-  evidence: VerificationEvidence | undefined,
-): EngineEvaluationCheck[] {
-  if (!evidence) return []
-  return evidence.checks.filter((c) => c.status === "failed" && c.mode === "strict")
-}

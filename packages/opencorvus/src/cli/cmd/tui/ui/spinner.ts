@@ -193,7 +193,7 @@ function createKnightRiderTrail(options: AdvancedGradientOptions): ColorGenerato
 /**
  * Derives a gradient of tail colors from a single bright color using alpha falloff
  * @param brightColor The brightest color (center/head of the scanner)
- * @param steps Number of gradient steps (default: 6)
+ * @param steps Number of gradient steps
  * @returns Array of RGBA colors with alpha-based trail fade (background-independent)
  */
 export function deriveTrailColors(brightColor: ColorInput, steps: number = 6): RGBA[] {
@@ -233,7 +233,7 @@ export function deriveTrailColors(brightColor: ColorInput, steps: number = 6): R
 /**
  * Derives the inactive/default color from a bright color using alpha
  * @param brightColor The brightest color (center/head of the scanner)
- * @param factor Alpha factor for inactive color (default: 0.2, range: 0-1)
+ * @param factor Alpha factor for inactive color (range: 0-1)
  * @returns The same color with reduced alpha for background-independent dimming
  */
 export function deriveInactiveColor(brightColor: ColorInput, factor: number = 0.2): RGBA {
@@ -253,14 +253,14 @@ export interface KnightRiderOptions {
   colors?: ColorInput[]
   /** Single color to derive trail from (alternative to providing colors array) */
   color?: ColorInput
-  /** Number of trail steps when using single color (default: 6) */
+  /** Number of trail steps when using single color */
   trailSteps?: number
   defaultColor?: ColorInput
-  /** Alpha factor for inactive color when using single color (default: 0.2, range: 0-1) */
+  /** Alpha factor for inactive color when using single color (range: 0-1) */
   inactiveFactor?: number
-  /** Enable fading of inactive dots during hold and movement (default: true) */
+  /** Enable fading of inactive dots during hold and movement */
   enableFading?: boolean
-  /** Minimum alpha value when fading (default: 0, range: 0-1) */
+  /** Minimum alpha value when fading (range: 0-1) */
   minAlpha?: number
 }
 
