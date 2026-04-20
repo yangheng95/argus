@@ -24,7 +24,7 @@ export const AnalyticsTool = Tool.define("analytics", {
         .enum(["queued", "active", "completed", "failed", "cancelled"])
         .optional()
         .describe("Filter by task status"),
-      limit: z.number().int().positive().optional().describe("Max results (default: 20)"),
+      limit: z.number().int().positive().default(20).describe("Max results"),
     }),
     z.object({
       action: z.literal("goal_stats"),
@@ -81,7 +81,7 @@ export const AnalyticsTool = Tool.define("analytics", {
     }
 
     if (args.action === "search") {
-      const limit = args.limit ?? 20
+      const limit = args.limit
       const conditions = [eq(EngineTaskTable.project_id, projectID)]
       if (args.status) conditions.push(eq(EngineTaskTable.status, args.status))
       if (args.query) conditions.push(like(EngineTaskTable.title, `%${args.query}%`))

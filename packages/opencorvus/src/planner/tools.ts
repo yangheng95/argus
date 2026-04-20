@@ -53,16 +53,16 @@ export function createPlannerTools(taskWorkDir?: string) {
         "Try 1-2 searches with different phrasings for better coverage.",
       inputSchema: z.object({
         query: z.string().describe("Search query — keywords, phrases, or question about past knowledge"),
-        scope: z.enum(["all", "global"]).optional().describe("Memory scope to search (default: all)"),
-        max_results: z.number().optional().describe("Max results to return (default: 8)"),
+        scope: z.enum(["all", "global"]).default("all").describe("Memory scope to search"),
+        max_results: z.number().default(8).describe("Max results to return"),
       }),
       execute: async ({ query, scope, max_results }) => {
         try {
           const results = Memory.search({
             query,
             projectId,
-            scope: scope ?? "all",
-            limit: max_results ?? 8,
+            scope,
+            limit: max_results,
             minScore: 0.1,
           })
           if (results.length === 0) return "No memories found for this query."
@@ -109,7 +109,7 @@ export function createPlannerTools(taskWorkDir?: string) {
           "or when choosing frameworks/libraries. Do NOT assume — verify what is current and recommended.",
         inputSchema: z.object({
           query: z.string().describe("Web search query"),
-          num_results: z.number().optional().describe("Number of results (default: 5)"),
+          num_results: z.number().default(5).describe("Number of results"),
         }),
         execute: async ({ query, num_results }, options) => {
           const exaKey = process.env.EXA_API_KEY
@@ -132,7 +132,7 @@ export function createPlannerTools(taskWorkDir?: string) {
                 arguments: {
                   query,
                   type: "auto",
-                  numResults: num_results ?? 5,
+                  numResults: num_results,
                   livecrawl: "fallback",
                 },
               },

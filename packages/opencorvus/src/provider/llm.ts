@@ -174,7 +174,14 @@ export namespace ProviderLLM {
       providerOptions,
       maxOutputTokens,
       headers,
-      maxRetries: input.maxRetries ?? 0,
+      // AI SDK `maxRetries` retries the initial request on transient HTTP
+      // errors (ECONNRESET, 5xx, 429 without Retry-After, etc.) using built-in
+      // exponential backoff (2s × 2^n, per @ai-sdk/core). This only covers
+      // request-setup failures — once the stream has started emitting chunks,
+      // a mid-stream drop is NOT retried here (the caller has already
+      // committed to consuming chunks). Default 3 gives us ~14s of backoff
+      // before giving up, which absorbs most provider hiccups.
+      maxRetries: input.maxRetries ?? 3,
       messages: [...systemMessages, ...input.messages],
       tools: input.tools,
       toolChoice: input.toolChoice,

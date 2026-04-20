@@ -107,6 +107,18 @@ export type EventGoalProgress = {
   }
 }
 
+export type EventGoalRunUpdated = {
+  type: "goal_run.updated"
+  properties: {
+    taskID: string
+    goalRunID: string
+    goalID: string
+    status: string
+    previousStatus: string
+    summary: string
+  }
+}
+
 export type EventGoalPassed = {
   type: "goal.passed"
   properties: {
@@ -361,8 +373,9 @@ export type EventFidelityReviewChunk = {
   properties: {
     taskID: string
     sessionID: string
+    kind: "reasoning"
+    delta: string
     attempt: number
-    textDelta: string
   }
 }
 
@@ -667,7 +680,7 @@ export type TextPart = {
   text: string
   synthetic?: boolean
   ignored?: boolean
-  kind?: "user_content" | "control" | "context" | "trace"
+  kind?: "user_content" | "control" | "context"
   source?: "user" | "system" | "evaluator" | "planner" | "goal_gate" | "task_tool"
   audience?: {
     model?: boolean
@@ -1065,20 +1078,6 @@ export type EventSessionIdle = {
   }
 }
 
-export type EventTraceEvent = {
-  type: "trace.event"
-  properties: {
-    ts: number
-    seq: number
-    taskID: string
-    sessionID?: string
-    agent?: string
-    round?: number
-    category: string
-    payload?: unknown
-  }
-}
-
 export type QuestionOption = {
   /**
    * Display text (1-5 words, concise)
@@ -1108,7 +1107,7 @@ export type QuestionInfo = {
    */
   multiple?: boolean
   /**
-   * Allow typing a custom answer (default: true)
+   * Allow typing a custom answer
    */
   custom?: boolean
 }
@@ -1484,6 +1483,7 @@ export type Event =
   | EventPlanCreated
   | EventPlanActivated
   | EventGoalProgress
+  | EventGoalRunUpdated
   | EventGoalPassed
   | EventGoalFailed
   | EventMilestoneActivated
@@ -1532,7 +1532,6 @@ export type Event =
   | EventMcpResourcesChanged
   | EventSessionStatus
   | EventSessionIdle
-  | EventTraceEvent
   | EventQuestionAsked
   | EventQuestionReplied
   | EventQuestionRejected
@@ -1591,7 +1590,7 @@ export type ServerConfig = {
    */
   mdns?: boolean
   /**
-   * Custom domain name for mDNS service (default: opencorvus.local)
+   * Custom domain name for mDNS service
    */
   mdnsDomain?: string
   /**
@@ -2001,7 +2000,7 @@ export type AgentConfig = {
   description?: string
   mode?: "subagent" | "primary" | "all"
   /**
-   * Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)
+   * Hide this subagent from the @ autocomplete menu (only applies to mode: subagent)
    */
   hidden?: boolean
   options?: {
@@ -2359,11 +2358,11 @@ export type Config = {
   }
   compaction?: {
     /**
-     * Enable automatic compaction when context is full (default: true)
+     * Enable automatic compaction when context is full
      */
     auto?: boolean
     /**
-     * Enable pruning of old tool outputs (default: true)
+     * Enable pruning of old tool outputs
      */
     prune?: boolean
     /**
@@ -2380,19 +2379,19 @@ export type Config = {
      */
     requirements?: {
       /**
-       * Maximum agentic steps for requirements agent (default: 30)
+       * Maximum agentic steps for requirements agent
        */
       max_steps?: number
       /**
-       * Requirements agent timeout in milliseconds (default: 300000)
+       * Requirements agent timeout in milliseconds
        */
       timeout_ms?: number
       /**
-       * Quality score threshold for retry (0.0-1.0, default: 0.5)
+       * Quality score threshold for retry (0.0-1.0)
        */
       quality_threshold?: number
       /**
-       * Maximum requirements analysis attempts (default: 3)
+       * Maximum requirements analysis attempts
        */
       max_attempts?: number
       /**
@@ -2405,11 +2404,11 @@ export type Config = {
      */
     architect?: {
       /**
-       * Maximum agentic steps for architect agent (default: 20)
+       * Maximum agentic steps for architect agent
        */
       max_steps?: number
       /**
-       * Architect agent timeout in milliseconds (default: 180000)
+       * Architect agent timeout in milliseconds
        */
       timeout_ms?: number
       /**
@@ -2422,19 +2421,19 @@ export type Config = {
      */
     planner?: {
       /**
-       * Maximum agentic steps for planner agent (default: 30)
+       * Maximum agentic steps for planner agent
        */
       max_steps?: number
       /**
-       * Planner agent timeout in milliseconds (default: 300000)
+       * Planner agent timeout in milliseconds
        */
       timeout_ms?: number
       /**
-       * Quality score threshold for retry (0.0-1.0, default: 0.5)
+       * Quality score threshold for retry (0.0-1.0)
        */
       quality_threshold?: number
       /**
-       * Maximum plan generation attempts (default: 3)
+       * Maximum plan generation attempts
        */
       max_attempts?: number
       /**
@@ -2460,19 +2459,19 @@ export type Config = {
      */
     delivery?: {
       /**
-       * Maximum agentic steps for delivery agent (default: 40)
+       * Maximum agentic steps for delivery agent
        */
       max_steps?: number
       /**
-       * Delivery agent timeout in milliseconds (default: 600000)
+       * Delivery agent timeout in milliseconds
        */
       timeout_ms?: number
       /**
-       * Maximum delivery generation retries (default: 2)
+       * Maximum delivery generation retries
        */
       max_retries?: number
       /**
-       * Maximum merge-resolver retry attempts per conflicted file before aborting (default: 2)
+       * Maximum merge-resolver retry attempts per conflicted file before aborting
        */
       merge_conflict_max_retries?: number
       /**
@@ -2485,11 +2484,11 @@ export type Config = {
      */
     design_analyst?: {
       /**
-       * Maximum agentic steps for design analyst agent (default: 50)
+       * Maximum agentic steps for design analyst agent
        */
       max_steps?: number
       /**
-       * Design analyst agent timeout in milliseconds (default: 300000)
+       * Design analyst agent timeout in milliseconds
        */
       timeout_ms?: number
       /**
@@ -2502,11 +2501,11 @@ export type Config = {
      */
     intent_analysis?: {
       /**
-       * Maximum agentic steps for intent-analysis agent (default: 20)
+       * Maximum agentic steps for intent-analysis agent
        */
       max_steps?: number
       /**
-       * Intent-analysis agent timeout in milliseconds (default: 120000)
+       * Intent-analysis agent timeout in milliseconds
        */
       timeout_ms?: number
       /**
@@ -2515,31 +2514,31 @@ export type Config = {
       skills?: Array<string>
     }
     /**
-     * Maximum total task runs (default: 10)
+     * Maximum total task runs
      */
     max_runs?: number
     /**
-     * Maximum fix runs after failure (default: 5)
+     * Maximum fix runs after failure
      */
     max_fix_runs?: number
     /**
-     * Maximum retries per individual goal before permanently failing it (default: 5)
+     * Maximum retries per individual goal before permanently failing it
      */
     max_goal_retries?: number
     /**
-     * After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time. (default: 3)
+     * After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.
      */
     goal_escalation_threshold?: number
     /**
-     * Maximum delivery reject → rework → re-deliver cycles before failing the task (default: 3)
+     * Hard ceiling on adversarial iteration count; Arbiter returns 'abort' at this iteration regardless of other signals.
      */
     max_delivery_iterations?: number
     /**
-     * Maximum parallel executor groups (default: 5)
+     * Maximum parallel executor groups
      */
     max_executor_groups?: number
     /**
-     * Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID (default: 'pipeline')
+     * Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID
      */
     default_workflow?: string
     /**
@@ -2613,11 +2612,11 @@ export type Config = {
      */
     continue_loop_on_deny?: boolean
     /**
-     * Auto-approve PermissionNext requests (default: true). Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.
+     * Auto-approve PermissionNext requests. Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.
      */
     auto_permission?: boolean
     /**
-     * Auto-reject unanswered question interactions after the stale timeout (default: true). Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
+     * Auto-reject unanswered question interactions after the stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
      */
     auto_question?: boolean
     /**
@@ -2629,15 +2628,15 @@ export type Config = {
      */
     memory?: {
       /**
-       * Enable persistent memory store (default: true)
+       * Enable persistent memory store
        */
       enabled?: boolean
       /**
-       * Auto-inject relevant memories into system prompt (default: true)
+       * Auto-inject relevant memories into system prompt
        */
       auto_inject?: boolean
       /**
-       * Max tokens for auto-injected memory context (default: 2000)
+       * Max tokens for auto-injected memory context
        */
       token_budget?: number
     }
@@ -2886,7 +2885,7 @@ export type TextPartInput = {
   text: string
   synthetic?: boolean
   ignored?: boolean
-  kind?: "user_content" | "control" | "context" | "trace"
+  kind?: "user_content" | "control" | "context"
   source?: "user" | "system" | "evaluator" | "planner" | "goal_gate" | "task_tool"
   audience?: {
     model?: boolean
@@ -4880,43 +4879,6 @@ export type SessionDiffResponses = {
 }
 
 export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
-
-export type SessionExportHtmlData = {
-  body?: {
-    out?: string
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/export-html"
-}
-
-export type SessionExportHtmlErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type SessionExportHtmlError = SessionExportHtmlErrors[keyof SessionExportHtmlErrors]
-
-export type SessionExportHtmlResponses = {
-  /**
-   * Exported HTML file path
-   */
-  200: {
-    file: string
-  }
-}
-
-export type SessionExportHtmlResponse = SessionExportHtmlResponses[keyof SessionExportHtmlResponses]
 
 export type SessionSummarizeData = {
   body?: {
@@ -8014,7 +7976,7 @@ export type TaskBoardResponses = {
       taskID: string
       runID: string
       deliveryID?: string | null
-      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link" | "git_ref" | "pr"
+      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
       label: string
       payload?: {
         [key: string]: unknown
@@ -8833,7 +8795,7 @@ export type RunArtifactsResponses = {
     taskID: string
     runID: string
     deliveryID?: string | null
-    kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link" | "git_ref" | "pr"
+    kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
     label: string
     payload?: {
       [key: string]: unknown
@@ -9241,7 +9203,6 @@ export type ExportSessionResponses = {
   200: {
     session: unknown
     messages: Array<unknown>
-    llm_calls: number
   }
 }
 
@@ -9401,75 +9362,6 @@ export type AttachmentGetErrors = {
 export type AttachmentGetResponses = {
   /**
    * Attachment bytes
-   */
-  200: unknown
-}
-
-export type TraceListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/trace"
-}
-
-export type TraceListResponses = {
-  /**
-   * Task IDs newest first
-   */
-  200: {
-    tasks: Array<string>
-  }
-}
-
-export type TraceListResponse = TraceListResponses[keyof TraceListResponses]
-
-export type TraceReadData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/trace/{taskID}"
-}
-
-export type TraceReadResponses = {
-  /**
-   * Events array (empty if file does not exist)
-   */
-  200: {
-    events: Array<{
-      ts: number
-      seq: number
-      taskID: string
-      sessionID?: string
-      agent?: string
-      round?: number
-      category: string
-      payload?: unknown
-    }>
-  }
-}
-
-export type TraceReadResponse = TraceReadResponses[keyof TraceReadResponses]
-
-export type TraceStreamData = {
-  body?: never
-  path: {
-    taskID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/trace/{taskID}/stream"
-}
-
-export type TraceStreamResponses = {
-  /**
-   * Server-sent event stream of TraceEvent
    */
   200: unknown
 }

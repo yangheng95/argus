@@ -23,11 +23,11 @@ import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { Trace } from "@/trace"
 import { sessionStreamHooks } from "@/agent/runtime"
 import { createOrchestratorTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
   clarificationTranscriptSection,
   operatorNotesSection,
@@ -70,10 +70,6 @@ export type OrchestratorTrigger =
 // ---------------------------------------------------------------------------
 
 const running = new Map<string, AbortController>()
-// Tracks tasks that have already emitted Trace.event("task.finish"); the
-// orchestrator can be re-triggered after a task reaches terminal status, and
-// without dedupe each re-trigger would emit a redundant finish event.
-const finishEmitted = new Set<string>()
 // Cooldown: when the Orchestrator last finished for each task.
 // Orphan recovery checks this to avoid re-triggering immediately.
 const lastFinished = new Map<string, number>()
@@ -151,13 +147,6 @@ export namespace Orchestrator {
       let workflow: MiniWorkflow | undefined
       let workflowState: WorkflowState | undefined
       if (trigger.kind === "created") {
-        finishEmitted.delete(taskID)
-        Trace.event({
-          taskID,
-          sessionID: task.session_id,
-          category: "task.start",
-          payload: { kind: task.kind, request: task.request },
-        })
         const requestedID = (task.metadata as any)?._workflow?.workflowID
         const workflowID = requestedID ?? await WorkflowRegistry.defaultID()
         workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
@@ -371,18 +360,6 @@ export namespace Orchestrator {
       } catch { /* task may have been deleted */ }
     } finally {
       running.delete(taskID)
-      const finalTask = findTask(taskID)
-      const isTerminal = !!finalTask && (finalTask.status === "completed" || finalTask.status === "failed" || finalTask.status === "cancelled")
-      if (isTerminal && !finishEmitted.has(taskID)) {
-        finishEmitted.add(taskID)
-        const sid = finalTask?.session_id ?? undefined
-        Trace.event({
-          taskID,
-          sessionID: sid,
-          category: "task.finish",
-          payload: { status: finalTask?.status, error: finalTask?.error ?? null },
-        })
-      }
     }
   }
 }
@@ -493,8 +470,8 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "## Workflow Choice (FIRST, exactly once)",
   "",
   "**(1) Direct workflow** — `build → deliver` (adversarial loop):",
-  "  Call `build` with the user's request, then `deliver`. If deliver rejects, call `build` again with the",
-  "  rejection feedback, then `deliver` again. Loop until accepted or max_delivery_iterations exhausts.",
+  "  Call `build` with the user's request, then `deliver`. If the Arbiter returns `continue`, call `build`",
+  "  again with the rejection feedback, then `deliver` again. Loop until Arbiter accepts / stalls / aborts.",
   "  USE WHEN: single-file edit, bug fix, small refactor in place, typo/comment/config tweak, short debug-and-fix.",
   "  No requirements, no architect, no goals — `build` does the work in-process.",
   "",
@@ -597,8 +574,8 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "  - Two consecutive pipeline iterations rejected on the same root cause.",
   "  - Call `build` once with the rejection feedback in the prompt; goals stay in place; then `deliver` again.",
   "",
-  "After re-execution completes you will be re-triggered — call **deliver** again. Loop until accepted",
-  "or max_delivery_iterations exhausts. Focus on the SPECIFIC issues cited; do NOT rework everything",
+  "After re-execution completes you will be re-triggered — call **deliver** again. Loop until the Arbiter",
+  "accepts / stalls / aborts. Focus on the SPECIFIC issues cited; do NOT rework everything",
   "blindly; do NOT re-run requirements or architect unless the rejection indicates a fundamental contract problem.",
   "",
   "## Post-completion iteration (re-triggered on completed task)",
@@ -657,60 +634,52 @@ function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?
   const meta = (task.metadata as Record<string, unknown> | null) ?? {}
   const parentTask = typeof meta.parent_task === "string" ? meta.parent_task : undefined
   if (parentTask) {
-    const failed = Array.isArray(meta.failed_criteria) ? (meta.failed_criteria as string[]) : []
+    const failing = Array.isArray(meta.failing_metrics) ? (meta.failing_metrics as string[]) : []
     const scope = Array.isArray(meta.next_task_scope_files) ? (meta.next_task_scope_files as string[]) : []
     const depth = typeof meta.task_chain_depth === "number" ? meta.task_chain_depth : undefined
     ctx.push("## Follow-up Context")
     ctx.push(`- Predecessor task: ${parentTask}`)
     if (depth !== undefined) ctx.push(`- Task chain depth: ${depth}`)
-    if (failed.length > 0) {
-      ctx.push(`- Failed criteria from previous verification: ${failed.join(", ")}`)
-      ctx.push(`- Address every failed criterion. Do not regress passing criteria.`)
+    if (failing.length > 0) {
+      ctx.push(`- Failing metrics from previous iteration: ${failing.join(", ")}`)
+      ctx.push(`- Address every failing metric. Do not regress metrics that currently pass.`)
     }
     if (scope.length > 0) ctx.push(`- Suggested scope (focus area): ${scope.join(", ")}`)
     ctx.push("")
   }
 
-  // ── Delivery rework history ──
-  // This is the adversarial loop's only growing source of LLM context
-  // (each rework iteration appends verdict_summary + issues + details).
-  // Bound the rendered size so system-prompt growth is sub-linear in
-  // iteration count: the latest RENDER_DETAIL_RECENT iterations are
-  // rendered in full; earlier iterations collapse to one-line summaries.
-  // Raw history in task.metadata is preserved for audit; this only
-  // controls what the LLM sees.
-  const reworkHistory = Array.isArray(meta._delivery_rework_history)
-    ? (meta._delivery_rework_history as Array<Record<string, unknown>>)
-    : []
-  if (reworkHistory.length > 0) {
-    const RENDER_DETAIL_RECENT = 2
-    ctx.push("## Delivery Rework History")
-    ctx.push(`${reworkHistory.length} prior delivery rejection(s).`)
-
-    const recent = reworkHistory.slice(-RENDER_DETAIL_RECENT)
-    const older = reworkHistory.slice(0, -RENDER_DETAIL_RECENT)
-
-    if (older.length > 0) {
-      ctx.push("", `### Earlier iterations (${older.length}, summarized):`)
-      for (const entry of older) {
-        const iter = entry.iteration ?? "?"
-        const summary = entry.verdict_summary ?? "(no summary)"
-        const issueCount = Array.isArray(entry.issues_found) ? (entry.issues_found as unknown[]).length : 0
-        ctx.push(`  - iter ${iter}: ${summary} (${issueCount} issues)`)
-      }
+  // ── Delivery trajectory ──
+  // Source of truth for iteration history is engine_iteration (Arbiter-owned).
+  // We render the last few iterations' snapshots + the latest rework signal
+  // (verdict summary + issues) so the assistant sees both the aggregated
+  // signal AND the concrete delivery-agent feedback for the most recent round.
+  // Call `query_metric_trajectory` for the full detail including per-metric
+  // results and open counterexamples.
+  const iterationHistory = readHistForPrompt(task.id)
+  if (iterationHistory.length > 0) {
+    const RENDER_RECENT = 3
+    const tail = iterationHistory.slice(-RENDER_RECENT)
+    ctx.push("## Delivery Trajectory")
+    ctx.push(`${iterationHistory.length} prior iteration(s). Last ${tail.length}:`)
+    for (const it of tail) {
+      ctx.push(
+        `  - iter ${it.iteration}: arbiter=${it.arbiter_verdict}, S_k=${it.aggregate_score.toFixed(3)} (Δ=${it.delta_vs_prev.toFixed(3)}), blocking_unmet=${it.blocking_unmet_count}, open_ce=${it.open_counterexamples}, novelty=${it.novelty_score}`,
+      )
     }
-
-    for (const entry of recent) {
-      const iter = entry.iteration ?? "?"
-      ctx.push("", `### Iteration ${iter} (detailed)`)
-      const summary = entry.verdict_summary
-      if (typeof summary === "string" && summary) ctx.push(`Summary: ${summary}`)
-      const issues = Array.isArray(entry.issues_found) ? entry.issues_found as string[] : []
+    const latest = meta._delivery_rework as Record<string, unknown> | undefined
+    if (latest) {
+      ctx.push("")
+      ctx.push("### Latest delivery-agent feedback")
+      const summary = typeof latest.verdict_summary === "string" ? latest.verdict_summary : ""
+      if (summary) ctx.push(`Summary: ${summary}`)
+      const issues = Array.isArray(latest.issues_found) ? (latest.issues_found as string[]) : []
       if (issues.length > 0) {
         ctx.push("Issues found:")
         for (const issue of issues) ctx.push(`  - ${issue}`)
       }
-      const details = Array.isArray(entry.rejection_details) ? entry.rejection_details as Array<Record<string, string>> : []
+      const details = Array.isArray(latest.rejection_details)
+        ? (latest.rejection_details as Array<Record<string, string>>)
+        : []
       if (details.length > 0) {
         ctx.push("Rejection details:")
         for (const d of details) {
@@ -720,6 +689,11 @@ function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?
         }
       }
     }
+    ctx.push("")
+    ctx.push(
+      "Call `query_metric_trajectory` for full per-metric results + counterexamples. " +
+      "You decide what to do: patch code, modify/add goals, adjust scope — based on where the trajectory is stuck.",
+    )
     ctx.push("")
   }
 

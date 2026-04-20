@@ -675,7 +675,7 @@ export namespace Config {
       hidden: z
         .boolean()
         .optional()
-        .describe("Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)"),
+        .describe("Hide this subagent from the @ autocomplete menu (only applies to mode: subagent)"),
       options: z.record(z.string(), z.any()).optional(),
       color: z
         .union([
@@ -902,7 +902,7 @@ export namespace Config {
       hostname: z.string().optional().describe("Hostname to listen on"),
       publicUrl: z.string().optional().describe("Public base URL used for externally visible attachment links"),
       mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
-      mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: opencorvus.local)"),
+      mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service"),
       cors: z.array(z.string()).optional().describe("Additional domains to allow for CORS"),
     })
     .strict()
@@ -1155,8 +1155,8 @@ export namespace Config {
         ),
       compaction: z
         .object({
-          auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),
-          prune: z.boolean().optional().describe("Enable pruning of old tool outputs (default: true)"),
+          auto: z.boolean().optional().describe("Enable automatic compaction when context is full"),
+          prune: z.boolean().optional().describe("Enable pruning of old tool outputs"),
           reserved: z
             .number()
             .int()
@@ -1169,28 +1169,28 @@ export namespace Config {
         .object({
           requirements: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent (default: 30)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Requirements agent timeout in milliseconds (default: 300000)"),
-              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.5)"),
-              max_attempts: z.number().int().min(1).optional().describe("Maximum requirements analysis attempts (default: 3)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Requirements agent timeout in milliseconds"),
+              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0)"),
+              max_attempts: z.number().int().min(1).optional().describe("Maximum requirements analysis attempts"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for requirements agent"),
             })
             .optional()
             .describe("Requirements agent configuration — analyzes input, extracts requirements, decomposes into goal contracts"),
           architect: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent (default: 20)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Architect agent timeout in milliseconds (default: 180000)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Architect agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for architect agent"),
             })
             .optional()
             .describe("Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model."),
           planner: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent (default: 30)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Planner agent timeout in milliseconds (default: 300000)"),
-              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0, default: 0.5)"),
-              max_attempts: z.number().int().min(1).optional().describe("Maximum plan generation attempts (default: 3)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Planner agent timeout in milliseconds"),
+              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0)"),
+              max_attempts: z.number().int().min(1).optional().describe("Maximum plan generation attempts"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for planner agent"),
             })
             .optional()
@@ -1204,37 +1204,37 @@ export namespace Config {
             .describe("Deterministic evaluator runner config (build / test / lint / spec heuristics in delivery/checks/per-goal.ts). The evaluator LLM agent was collapsed into the delivery agent — these fields control only the deterministic pipeline."),
           delivery: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds (default: 600000)"),
-              max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries (default: 2)"),
-              merge_conflict_max_retries: z.number().int().min(1).optional().describe("Maximum merge-resolver retry attempts per conflicted file before aborting (default: 2)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds"),
+              max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries"),
+              merge_conflict_max_retries: z.number().int().min(1).optional().describe("Maximum merge-resolver retry attempts per conflicted file before aborting"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
             })
             .optional()
             .describe("Delivery agent configuration"),
           design_analyst: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent (default: 50)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Design analyst agent timeout in milliseconds (default: 300000)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Design analyst agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for design analyst agent"),
             })
             .optional()
             .describe("Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent.\"design-analyst\".model."),
           intent_analysis: z
             .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for intent-analysis agent (default: 20)"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Intent-analysis agent timeout in milliseconds (default: 120000)"),
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for intent-analysis agent"),
+              timeout_ms: z.number().int().min(1000).optional().describe("Intent-analysis agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for intent-analysis agent"),
             })
             .optional()
             .describe("Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model."),
-          max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
-          max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
-          max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 5)"),
-          goal_escalation_threshold: z.number().int().min(1).optional().describe("After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time. (default: 3)"),
-          max_delivery_iterations: z.number().int().min(1).max(10).optional().describe("Maximum delivery reject → rework → re-deliver cycles before failing the task (default: 3)"),
-          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 5)"),
-          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID (default: 'pipeline')"),
+          max_runs: z.number().int().min(1).optional().describe("Maximum total task runs"),
+          max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure"),
+          max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it"),
+          goal_escalation_threshold: z.number().int().min(1).optional().describe("After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time."),
+          max_delivery_iterations: z.number().int().min(1).max(10).optional().describe("Hard ceiling on adversarial iteration count; Arbiter returns 'abort' at this iteration regardless of other signals."),
+          max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
+          default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID"),
           workflows: z
             .array(
               z.object({
@@ -1278,14 +1278,14 @@ export namespace Config {
             .optional()
             .default(true)
             .describe(
-              "Auto-approve PermissionNext requests (default: true). Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
+              "Auto-approve PermissionNext requests. Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
             ),
           auto_question: z
             .boolean()
             .optional()
             .default(true)
             .describe(
-              "Auto-reject unanswered question interactions after the stale timeout (default: true). Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
+              "Auto-reject unanswered question interactions after the stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
             ),
           mcp_timeout: z
             .number()
@@ -1295,17 +1295,17 @@ export namespace Config {
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
           memory: z
             .object({
-              enabled: z.boolean().optional().describe("Enable persistent memory store (default: true)"),
+              enabled: z.boolean().optional().describe("Enable persistent memory store"),
               auto_inject: z
                 .boolean()
                 .optional()
-                .describe("Auto-inject relevant memories into system prompt (default: true)"),
+                .describe("Auto-inject relevant memories into system prompt"),
               token_budget: z
                 .number()
                 .int()
                 .min(100)
                 .optional()
-                .describe("Max tokens for auto-injected memory context (default: 2000)"),
+                .describe("Max tokens for auto-injected memory context"),
             })
             .optional()
             .describe("Persistent memory configuration"),

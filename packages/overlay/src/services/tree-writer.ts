@@ -294,8 +294,8 @@ function sessionCardID(stage: string, sid: string): string {
  *  (see workflow.ts — the `build` step, labelled "Executor", is the only
  *  `scope: "goal"` entry in the pipeline). The step card surfaces at the
  *  top level of the conversation — there is no intermediate goal-group
- *  container. Goal title, decomposition index (#N), description, and
- *  architect contracts all live on this card. */
+ *  container. Goal title, decomposition index (#N), and description all
+ *  live on this card. */
 function goalStepCardID(goalID: string, stepID: string): string {
   return `step:${goalID}:${stepID}`;
 }
@@ -583,12 +583,19 @@ function handleFidelityProgress(event: any): void {
   materializeRunningFidelity(payload);
 }
 
-/** Append a text-delta chunk from the fidelity LLM stream onto the running
- *  fidelity card as a reasoning part. One reasoning part per attempt — when
- *  the engine rolls to a new attempt (retry on JSON parse / schema drop), a
- *  fresh reasoning part is opened so the retry trail stays visible. Parts use
- *  stable ids (`fidelity-reasoning:<taskID>:<attempt>`) so repeated appends
- *  in the same attempt mutate the same part rather than stacking N parts. */
+/** Append a reasoning delta onto the running fidelity card. The backend
+ *  (`requirements/fidelity.ts` createFidelityChunkForwarder) emits
+ *  FidelityReviewChunk at ~2 Hz with accumulated 500ms batches. One stable
+ *  part per attempt — a Zod-retry boundary opens a fresh reasoning part,
+ *  same-attempt chunks append to the existing part.
+ *
+ *  Only `kind: "reasoning"` is valid. tool-input deltas are intentionally
+ *  NOT forwarded by the backend (they're protocol payload — the verdict
+ *  lands structured via FidelityReviewCompleted).
+ *
+ *  Silently skips when the card has already upgraded to the completed
+ *  verdict state (card.fidelity populated) — late chunks after Completed
+ *  lands would otherwise pollute the verdict render. */
 function handleFidelityChunk(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
@@ -599,37 +606,41 @@ function handleFidelityChunk(event: any): void {
       `fidelity.review.chunk missing sessionID (taskID=${taskID})`,
     );
   }
-  const attempt = Number(props.attempt || 0);
-  const textDelta = String(props.textDelta || "");
-  if (!textDelta) return;
+  const kind = String(props.kind || "");
+  const delta = String(props.delta || "");
+  const attempt = Number(props.attempt || 1);
+  if (kind !== "reasoning") {
+    throw new Error(`fidelity.review.chunk unexpected kind: ${kind}`);
+  }
+  if (!delta) return;
 
   const cardID = fidelityCardID(taskID);
   const existing = cardTreeStore.cards[cardID];
-  // Chunk can arrive before Started on SSE reorder. Materialize a minimal
-  // running card so the first flushed delta has a home — the Started event
-  // will upsert over it with startedAt / subtitle in the next tick.
+  // Completed event already upserted the verdict — ignore trailing chunks.
+  if (existing?.fidelity) return;
+  // Started must fire before Chunk. If the card is missing, this is a
+  // backend ordering bug (chunk before started) — loud-fail per rule 1.
   if (!existing) {
-    materializeRunningFidelity({
-      taskID,
-      sessionID,
-      startedAt: Date.now(),
-      attempt,
-      elapsedMs: 0,
-    });
+    throw new Error(
+      `fidelity.review.chunk arrived before started (taskID=${taskID})`,
+    );
   }
 
-  const partID = `fidelity-reasoning:${taskID}:${attempt}`;
-  const card = cardTreeStore.cards[cardID];
-  const parts = Array.isArray(card?.parts) ? card!.parts.slice() : [];
-  const idx = parts.findIndex((p) => p && p.id === partID);
-  if (idx >= 0) {
-    const prev = parts[idx];
-    parts[idx] = { ...prev, text: String(prev?.text || "") + textDelta };
-  } else {
-    parts.push({ id: partID, type: "reasoning", text: textDelta });
-  }
-  setCardTreeStore("cards", cardID, "parts", parts);
-  fidelityCardOwners.set(cardID, sessionID);
+  const partID = `fidelity:${taskID}:reasoning:${attempt}`;
+
+  setCardTreeStore(
+    "cards",
+    cardID,
+    "parts",
+    produce((parts: any[]) => {
+      const idx = parts.findIndex((p) => p?.partID === partID);
+      if (idx >= 0) {
+        parts[idx] = { ...parts[idx], text: (parts[idx].text || "") + delta };
+      } else {
+        parts.push({ type: "reasoning", partID, text: delta });
+      }
+    }),
+  );
 }
 
 /** Upsert the running-phase fidelity card. If the owning requirements session
@@ -649,12 +660,18 @@ function materializeRunningFidelity(p: RunningFidelityPayload): void {
   const subtitle = p.attempt > 0
     ? `attempt ${p.attempt} · ${formatElapsed(elapsedSec)}`
     : formatElapsed(elapsedSec);
-  // Preserve any streamed reasoning parts that may already have landed —
-  // SSE can deliver `chunk` before `started` on reconnect, and we don't
-  // want the running upsert to wipe them. Idle state (no chunks yet) is
-  // an empty parts array; the header + subtitle carry the "fidelity in
-  // flight" signal, no placeholder body needed.
-  const existingParts = Array.isArray(existing?.parts) ? existing!.parts : [];
+  // Progress ticks every 20s. If the card already exists, patch only the
+  // volatile fields (status + subtitle) — writing a fresh card with
+  // `parts: []` would wipe any reasoning/tool_input chunks that have
+  // streamed in between two Progress events.
+  if (existing) {
+    setCardTreeStore("cards", cardID, {
+      status: "running",
+      subtitle,
+    });
+    fidelityCardOwners.set(cardID, p.sessionID);
+    return;
+  }
   setCardTreeStore("cards", cardID, {
     id: cardID,
     kind: "fidelity",
@@ -663,7 +680,7 @@ function materializeRunningFidelity(p: RunningFidelityPayload): void {
     status: "running",
     title: roleTitleKey("fidelity"),
     subtitle,
-    parts: existingParts,
+    parts: [],
     childIDs: [],
     time: p.startedAt,
   });
@@ -747,13 +764,8 @@ function handleFidelityCompleted(event: any): void {
 function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): void {
   const cardID = fidelityCardID(p.taskID);
   const status: CardStatus = p.verdict === "faithful" ? "completed" : "error";
-  // Preserve reasoning parts accumulated from the fidelity.review.chunk
-  // stream. The verdict (structured `fidelity` block) is rendered above
-  // them by FidelityBody; the stream stays visible as collapsed reasoning
-  // so operators can inspect the LLM's raw JSON output when debugging a
-  // verdict they disagree with.
-  const existing = cardTreeStore.cards[cardID];
-  const existingParts = Array.isArray(existing?.parts) ? existing!.parts : [];
+  // FidelityBody renders the structured verdict block from `fidelity`;
+  // the parts array stays empty.
   setCardTreeStore("cards", cardID, {
     id: cardID,
     kind: "fidelity",
@@ -762,7 +774,7 @@ function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): v
     status,
     title: roleTitleKey("fidelity"),
     subtitle: undefined,
-    parts: existingParts,
+    parts: [],
     childIDs: [],
     time: p.emittedAt > 0 ? p.emittedAt : undefined,
     fidelity: {
@@ -1214,8 +1226,7 @@ function rebuildGoalStepCards(board: any): void {
       // goal-scope step per goal (workflow.ts: `build` with scope="goal"),
       // so we stamp every goal field onto the step card. The header reads
       // `#N  <goal title>  <goalID tail> · <step summary>`; the body (see
-      // Card.tsx `kind === "step"`) renders the goal description followed
-      // by the collapsible architect contracts block.
+      // Card.tsx `kind === "step"`) renders the goal description.
       const gidTail = gid.length > 8 ? gid.slice(-8) : gid;
       const subtitle = [gidTail, step.summary]
         .map((s) => (s ? String(s).trim() : ""))
@@ -1236,7 +1247,6 @@ function rebuildGoalStepCards(board: any): void {
         stepID,
         goalID: gid,
         goalDescription: gw.goalDescription || undefined,
-        contracts: Array.isArray(gw.contracts) ? gw.contracts : undefined,
       });
     }
   }
@@ -1505,7 +1515,7 @@ function rebuildTopLevelOrder(): void {
   // Per-goal executor step cards in board order. Each goal contributes one
   // `step:<gid>:<stepID>` card (the goal-scope executor); the goal-group
   // wrapper layer was removed in the 2026-04-19 flatten — the step card
-  // itself now carries the goal title / round / description / contracts.
+  // itself now carries the goal title / round / description.
   const goalCards: string[] = [];
   const goalWorkflows: any[] = Array.isArray(boardStore.board?.goalWorkflows)
     ? boardStore.board.goalWorkflows

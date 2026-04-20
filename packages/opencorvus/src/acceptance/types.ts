@@ -130,14 +130,6 @@ export function resolveTrigger(spec: AcceptanceSpec, scorer: AcceptanceScorer): 
 }
 
 /**
- * Is this scorer a hard gate (fails the goal) vs a soft annotation?
- * Aligns with CheckConfig soft/strict semantics.
- */
-export function scorerMode(spec: AcceptanceSpec): "soft" | "strict" {
-  return spec.severity === "essential" || spec.severity === "important" ? "strict" : "soft"
-}
-
-/**
  * Render a spec list as a single human-readable block for prompts, logs and
  * operator-facing docs. Deterministic, stable ordering.
  */

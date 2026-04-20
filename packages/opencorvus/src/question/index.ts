@@ -28,7 +28,7 @@ export namespace Question {
       header: z.string().describe("Very short label (max 30 chars)"),
       options: z.array(Option).describe("Available choices"),
       multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
-      custom: z.boolean().optional().describe("Allow typing a custom answer (default: true)"),
+      custom: z.boolean().optional().describe("Allow typing a custom answer"),
     })
     .meta({
       ref: "QuestionInfo",

@@ -52,7 +52,6 @@ export interface CardNode {
   goalID?: string;
   /** Goal description (markdown) — only set on executor step cards. */
   goalDescription?: string;
-  contracts?: Array<{ key: string; value: string; reason?: string }>;
   /** Structured per-step content. Only set for kind="step" nodes — drives
    *  the step body render path (changed files, diff stats, plan nodes, eval
    *  checks, etc.) so the main conversation shows the same detail as the
@@ -212,7 +211,7 @@ export function defaultExpandedForNode(node: CardNode): boolean {
 
 // ── Text collection (for copy-to-clipboard) ──
 // Walks a card node and its descendants, emitting the human-readable prose
-// parts: text / reasoning, plus goal description and contracts on executor
+// parts: text / reasoning, plus goal description on executor
 // step cards. Tool input/output and binary parts (patch/file) are skipped —
 // they rarely belong in a pasted transcript.
 
@@ -229,13 +228,6 @@ export function collectCardText(node: CardNode): string {
   const chunks: string[] = [];
   if (node.kind === "step" && node.goalDescription) {
     chunks.push(String(node.goalDescription).trim());
-  }
-  if (node.kind === "step" && node.contracts?.length) {
-    for (const c of node.contracts) {
-      const key = String(c.key || "").trim();
-      const value = String(c.value || "").trim();
-      if (key || value) chunks.push(key ? `${key}: ${value}` : value);
-    }
   }
   for (const part of node.parts || []) {
     const text = partText(part);

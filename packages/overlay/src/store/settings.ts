@@ -389,30 +389,6 @@ export function workspaceRestoreDirectory(value: any): string {
   return text;
 }
 
-export function rememberWorkspace(
-  input: { taskID?: string; directory?: string; selectedTaskID?: string } = {},
-): void {
-  const taskID =
-    typeof input.taskID === "string"
-      ? input.taskID.trim()
-      : (input.selectedTaskID || settingsStore.workspaceTaskID || "").trim();
-
-  const directory =
-    workspaceRestoreDirectory(
-      typeof input.directory === "string"
-        ? input.directory.trim()
-        : (settingsStore.savedDirectory || settingsStore.directory || "").trim(),
-    ) || workspaceRestoreDirectory(settingsStore.savedDirectory || "") || "";
-
-  setSettingsStore("workspaceTaskID", taskID);
-  setSettingsStore("workspaceDirectory", taskID ? directory : "");
-}
-
-export function clearWorkspaceMemory(): void {
-  setSettingsStore("workspaceTaskID", "");
-  setSettingsStore("workspaceDirectory", "");
-}
-
 // ── Test / timing helpers ──
 
 export function overlayTestConfig(): Record<string, unknown> | null {

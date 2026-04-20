@@ -2,10 +2,6 @@ import z from "zod"
 import { Tool } from "./tool"
 import { EngineService } from "@/task-api"
 import { Session } from "@/session"
-import { Filesystem } from "@/util/filesystem"
-import { Global } from "@/global"
-import { Trace } from "@/trace"
-import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
 import { isDecodableText, decodeDataUrlText } from "@/session/text-mime"
@@ -298,18 +294,6 @@ export const PanelTool = Tool.define("panel", {
           metadata: {},
         }
       }
-      case "export_session_html": {
-        const file = await exportSessionHtml(params.sessionID)
-        return {
-          title: "Session exported",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: params.sessionID,
-            message: `Session HTML exported to ${file}`,
-          }),
-          metadata: {},
-        }
-      }
       case "update_goal":
         await EngineService.updateGoal(params.goalID, {
           description: params.description,
@@ -323,21 +307,3 @@ export const PanelTool = Tool.define("panel", {
   },
 })
 
-async function exportSessionHtml(sessionID: string) {
-  const session = await Session.get(sessionID)
-  const messages = await Session.messages({ sessionID })
-  const traceTaskID = Trace.taskIDForSession(sessionID)
-  const events = traceTaskID ? await Trace.read(traceTaskID) : []
-  const report = await buildSessionTraceHtml({
-    session: {
-      id: session.id,
-      title: session.title,
-      time: session.time,
-    },
-    messages,
-    events,
-  })
-  const out = `${Global.Path.data}/panel-${sessionID}.html`
-  await Filesystem.write(out, report)
-  return out
-}

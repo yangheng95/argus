@@ -55,6 +55,7 @@ function seedActiveExecution() {
       id: goalID,
       task_id: activeTaskID,
       title: "goal",
+      slug: "goal",
       objective: "do work",
       acceptance_specs: [],
       owned_paths: [],

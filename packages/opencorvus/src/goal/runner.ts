@@ -461,11 +461,10 @@ function extractPlanSection(prompt: string, heading: string) {
 /**
  * Compose the "Prior Attempt Failed" section that retries see in their prompt.
  *
- * spec-09 change (Phase C): reads the structured `VerificationEvidence` row
- * written by goal-pool.ts right after `evaluateGoal`. Strict failures surface
- * `spec_id`, `scorer_kind`, `exit_code`, and truncated `evidence` body so the
- * executor has specific mechanical signals — not just a natural-language
- * "retry analysis" fragment.
+ * Reads the structured `VerificationEvidence` row written by goal-pool.ts
+ * right after `evaluateGoal`. Failed checks surface `spec_id`, `scorer_kind`,
+ * `exit_code`, and truncated `evidence` body so the executor has specific
+ * mechanical signals — not just a natural-language "retry analysis" fragment.
  *
  * The coordinator's decision-log retry entries stay as auxiliary context.
  *

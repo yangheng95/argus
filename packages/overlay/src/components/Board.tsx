@@ -425,6 +425,11 @@ export function Board(props: BoardProps) {
 
       <WorkflowProgressBar workflow={workflow()} />
 
+      {/* TODO(2026-04-20): 需求分析 / 架构检查 / 评估指标 / 交付 / interactions
+          五个板块整体下线等重做。当前仅保留 workflow 进度条 + goals + ChangesPanel
+          (独立挂载点不受影响)。重做时重新评估：每个板块是否承载与 goals 正交的
+          信息、还是该 inline 到 goal step 卡。不要无脑恢复。 */}
+      <Show when={false}>
       <SectionFrame
         id="requirementsSection"
         title={t("workflow.requirements")}
@@ -464,23 +469,12 @@ export function Board(props: BoardProps) {
         bodyId="architectBody"
         badgeId="architectBadge"
         phaseState={phaseFor("architect")}
-        badgeText={(() => {
-          const gs = goalWorkflows();
-          if (gs.length === 0) {
-            return architect() ? String(architect()!.contractCount) : "";
-          }
-          const bound = gs.filter((g: any) => (g.contracts?.length ?? 0) > 0).length;
-          return `${bound}/${gs.length}`;
-        })()}
-        badgeTone={(() => {
-          const gs = goalWorkflows();
-          if (gs.length === 0) return architect() ? "accent" : "";
-          const bound = gs.filter((g: any) => (g.contracts?.length ?? 0) > 0).length;
-          return bound === gs.length ? "good" : bound > 0 ? "accent" : "";
-        })()}
+        badgeText={architect() ? String(architect()!.contractCount) : ""}
+        badgeTone={architect() ? "accent" : ""}
       >
         <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
       </SectionFrame>
+      </Show>
 
       <SectionFrame
         id="goalWorkflowsSection"
@@ -513,6 +507,10 @@ export function Board(props: BoardProps) {
         />
       </SectionFrame>
 
+      {/* TODO(2026-04-20): 评估指标 / 交付 / interactions 三个板块同步下线待重做。
+          理由同上——避免与 goal 卡片信息重复；重做时评估每块是否该独立 section
+          还是内嵌 goal step payload。不要无脑恢复。 */}
+      <Show when={false}>
       <Show when={taskKind() !== "build"}>
         <SectionFrame
           id="evaluationCriteriaSection"
@@ -599,6 +597,7 @@ export function Board(props: BoardProps) {
           interactions={interactions() as InteractionData[]}
         />
       </SectionFrame>
+      </Show>
     </>
   );
 }

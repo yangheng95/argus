@@ -25,7 +25,7 @@ import {
   EngineTaskTable,
   type EngineBudget,
   type EngineExecutorRef,
-  type EngineGoalCheck,
+  type EngineEvaluationCheck,
 } from "./engine.sql"
 import { DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
 
@@ -1096,7 +1096,7 @@ function arrayOfDiffs(input: unknown) {
   })
 }
 
-function arrayOfChecks(input: unknown): EngineGoalCheck[] {
+function arrayOfChecks(input: unknown): EngineEvaluationCheck[] {
   if (!Array.isArray(input)) return []
   return input.flatMap((item) => {
     const parsed = EvaluationCheck.safeParse(item)

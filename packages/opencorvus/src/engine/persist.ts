@@ -42,6 +42,14 @@ import { StaleRowError } from "./state"
 
 const log = Log.create({ service: "engine-transition" })
 
+/**
+ * Derive a human-readable slug from a goal title. Display-only — goal_id
+ * remains the sole identity. Immutable once set.
+ */
+export function goalSlug(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "goal"
+}
+
 export interface GoalRowInput {
   goalID?: string
   title: string
@@ -82,6 +90,7 @@ export function insertGoalRows(
         plan_version_id: input.planVersionID ?? null,
         spec_snapshot_id: input.specSnapshotID,
         title: goal.title,
+        slug: goalSlug(goal.title),
         objective: goal.objective,
         acceptance_specs: goal.acceptance_specs,
         owned_paths: goal.owned_paths ?? [],
@@ -504,7 +513,25 @@ export function updateGoalRun(
       throw new StaleRowError("goal_run", goalRunID, row.status, nextStatus)
     }
   })
-  if (statusChanged) syncGoalStatus(row.goal_id, `updateGoalRun ${row.status}→${nextStatus}`)
+  if (statusChanged) {
+    syncGoalStatus(row.goal_id, `updateGoalRun ${row.status}→${nextStatus}`)
+    const taskID = row.task_id
+    const previousStatus = row.status
+    Database.effect(() =>
+      EngineProtocol.emit(
+        Event.GoalRunUpdated,
+        {
+          taskID,
+          goalRunID,
+          goalID: row.goal_id,
+          status: nextStatus,
+          previousStatus,
+          summary: `goal_run ${previousStatus}→${nextStatus}`,
+        },
+        { source: "persist.updateGoalRun" },
+      ),
+    )
+  }
   return updated ?? findGoalRun(goalRunID)
 }
 
@@ -574,14 +601,9 @@ export function persistDelivery(input: {
         run_id: input.run.id,
         goal_run_id: input.goalRunID,
         delivery_id: input.deliveryID,
-        // spec-09: this row belongs to the delivery scope. The invariant
-        // "scope='delivery' ⇒ delivery_id NOT NULL" holds trivially here
-        // because persistDelivery is the only inserter that sets
-        // delivery_id. signature stays empty until
-        // updateEvaluationFromDeliveryVerdict fills it in with the actual
-        // checks.
+        // Invariant: scope='delivery' ⇒ delivery_id NOT NULL, trivially held
+        // because persistDelivery is the only inserter that sets delivery_id.
         scope: "delivery",
-        signature: "",
         status: "pending",
         verdict: "inconclusive",
         summary: input.delivery.summary,
@@ -670,16 +692,13 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   deliveryID: string
   verdict: "accepted" | "rejected" | "inconclusive"
   summary: string
-  issues?: string[]
-  /** spec-09 Phase D: structured checks that made up the delivery-scope
-   *  verdict — on_delivery scorer results + delivery-agent judgement +
-   *  visual-diff outcome merged into one list. When supplied, these replace
-   *  the legacy `issues` → "delivery-agent" failure rows. When omitted,
-   *  legacy path is preserved so existing callers compile unchanged. */
+  /** Structured checks for the evaluation row. When supplied replaces the
+   *  existing array wholesale; when OMITTED the existing checks are
+   *  preserved (used by `publish_delivery` which runs after `deliver` has
+   *  already written the structured check set). Pass [] to explicitly
+   *  clear. No `issues` parameter exists — callers must either build their
+   *  own structured EngineEvaluationCheck[] or omit `checks` to preserve. */
   checks?: import("./engine.sql").EngineEvaluationCheck[]
-  /** Pre-computed signature over the failed-check subset. When omitted we
-   *  recompute from `checks`. Empty string when no failures to compare. */
-  signature?: string
   now?: number
 }) {
   const now = input.now ?? Date.now()
@@ -702,39 +721,10 @@ export function updateEvaluationFromDeliveryVerdict(input: {
       `persistDelivery() must have been bypassed — deliveries and evaluations are 1:1.`,
     )
   }
-  // Resolve which check array to persist.
-  //   - `checks` supplied explicitly ⇒ replace wholesale.
-  //   - only `issues` supplied ⇒ legacy path: synthesise "delivery-agent"
-  //     rows (pre-spec-09 behaviour for callers that never migrated).
-  //   - neither supplied ⇒ PRESERVE whatever the row already has. Used by
-  //     `publish_delivery` which runs after `deliver` already wrote the
-  //     structured check set; without preservation we'd overwrite it with
-  //     an empty fallback and kill the signature for the rework loop.
   const existingChecks: import("./engine.sql").EngineEvaluationCheck[] = Array.isArray(existing.checks)
     ? (existing.checks as import("./engine.sql").EngineEvaluationCheck[])
     : []
-  const checks: import("./engine.sql").EngineEvaluationCheck[] = input.checks
-    ? input.checks
-    : input.issues !== undefined
-      ? (input.issues ?? []).map((issue) => ({
-          name: "delivery-agent",
-          status: "failed" as const,
-          evidence: issue,
-          scorer_kind: "delivery_verdict" as const,
-          mode: "strict" as const,
-        }))
-      : existingChecks
-  // Compute signature unless caller supplied one. Done lazily (only on
-  // rejected outcomes) because an accepted delivery produces no failures and
-  // therefore no signature worth storing — keeps historical noise out of the
-  // rework convergence check.
-  let signature = input.signature ?? existing.signature ?? ""
-  if (!signature && input.verdict === "rejected") {
-    // Local import to dodge the circular (engine/persist.ts is pre-verification
-    // in the load order). Lazy import keeps the cycle one-way.
-    const { computeSignature } = require("@/verification/signature") as typeof import("@/verification/signature")
-    signature = computeSignature("delivery", checks)
-  }
+  const checks = input.checks ?? existingChecks
   Database.use((db) =>
     db
       .update(EngineEvaluationTable)
@@ -743,7 +733,6 @@ export function updateEvaluationFromDeliveryVerdict(input: {
         verdict: input.verdict,
         summary: input.summary,
         checks,
-        signature,
         time_completed: now,
         time_updated: now,
       })

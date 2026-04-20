@@ -56,8 +56,9 @@ export interface DeliveryConfig {
   skills: string[]
   /** How many merge-conflict resolution passes the orchestrator may hand to
    *  executor before failing the goal. Each pass dispatches a build-agent
-   *  session with conflict markers present in the goal's worktree and asks
-   *  it to reconcile both goals' intents. Hit the cap → decision_log
+   *  session against the goal worktree — either with conflict markers
+   *  present or with a retained merged tip that still fails post-merge
+   *  build — and asks it to reconcile both goals' intents. Hit the cap → decision_log
    *  `merge_conflict_cap_reached` + goal failed (`retry_failed_goals` can
    *  still re-dispatch the goal under a fresh baseRef on a later run). */
   merge_conflict_max_retries: number
@@ -93,8 +94,9 @@ export interface EngineConfigType {
    * Must be ≤ max_goal_retries (config merge clamps to that invariant).
    */
   goal_escalation_threshold: number
-  /** Max delivery reject → rework → re-deliver cycles before failing the task.
-   *  Prevents infinite adversarial loops. Default: 3. */
+  /** Hard ceiling on adversarial iteration count passed to the Arbiter's
+   *  maxIterations. Once iteration >= this, the Arbiter returns `abort`
+   *  regardless of other signals. Default: 3. */
   max_delivery_iterations: number
   max_executor_groups: number
   /** Default workflow ID for new tasks. Default: "pipeline". */
@@ -163,7 +165,7 @@ const DEFAULTS: EngineConfigType = {
   max_goal_retries: 5,     // hard ceiling
   goal_escalation_threshold: 3,  // advisory: force strategy change after 3 failures
   max_delivery_iterations: 3,
-  max_executor_groups: 5,
+  max_executor_groups: 1,
   default_workflow: "pipeline",
   workflows: [],
 }

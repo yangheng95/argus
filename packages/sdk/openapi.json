@@ -4001,91 +4001,6 @@
         ]
       }
     },
-    "/session/{sessionID}/export-html": {
-      "post": {
-        "operationId": "session.exportHtml",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "sessionID",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses.*"
-            },
-            "required": true
-          }
-        ],
-        "summary": "Export session HTML",
-        "description": "Export a session as HTML trace report and return generated file path.",
-        "responses": {
-          "200": {
-            "description": "Exported HTML file path",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "file": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "file"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadRequestError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotFoundError"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "out": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.session.exportHtml({\n  ...\n})"
-          }
-        ]
-      }
-    },
     "/session/{sessionID}/summarize": {
       "post": {
         "operationId": "session.summarize",
@@ -13761,7 +13676,6 @@
                               "report",
                               "image",
                               "diff",
-                              "html_trace",
                               "link",
                               "git_ref",
                               "pr"
@@ -16278,7 +16192,6 @@
                           "report",
                           "image",
                           "diff",
-                          "html_trace",
                           "link",
                           "git_ref",
                           "pr"
@@ -17441,17 +17354,11 @@
                     "messages": {
                       "type": "array",
                       "items": {}
-                    },
-                    "llm_calls": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
                     }
                   },
                   "required": [
                     "session",
-                    "messages",
-                    "llm_calls"
+                    "messages"
                   ]
                 }
               }
@@ -17874,167 +17781,6 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.attachment.get({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/trace": {
-      "get": {
-        "operationId": "trace.list",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "summary": "List recent traced tasks",
-        "responses": {
-          "200": {
-            "description": "Task IDs newest first",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "tasks": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "required": [
-                    "tasks"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.trace.list({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/trace/{taskID}": {
-      "get": {
-        "operationId": "trace.read",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "taskID",
-            "required": true
-          }
-        ],
-        "summary": "Read all trace events for a task",
-        "responses": {
-          "200": {
-            "description": "Events array (empty if file does not exist)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "events": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "ts": {
-                            "type": "number"
-                          },
-                          "seq": {
-                            "type": "number"
-                          },
-                          "taskID": {
-                            "type": "string"
-                          },
-                          "sessionID": {
-                            "type": "string"
-                          },
-                          "agent": {
-                            "type": "string"
-                          },
-                          "round": {
-                            "type": "number"
-                          },
-                          "category": {
-                            "type": "string"
-                          },
-                          "payload": {}
-                        },
-                        "required": [
-                          "ts",
-                          "seq",
-                          "taskID",
-                          "category"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "events"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.trace.read({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/trace/{taskID}/stream": {
-      "get": {
-        "operationId": "trace.stream",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "in": "path",
-            "name": "taskID",
-            "required": true
-          }
-        ],
-        "summary": "Subscribe to trace events for a task (SSE)",
-        "description": "Replays existing events first, then pushes new events as they happen. Client should consume until the SSE connection closes.",
-        "responses": {
-          "200": {
-            "description": "Server-sent event stream of TraceEvent"
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.trace.stream({\n  ...\n})"
           }
         ]
       }
@@ -20526,6 +20272,53 @@
           "properties"
         ]
       },
+      "Event.goal_run.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal_run.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalRunID": {
+                "type": "string",
+                "pattern": "^glr.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "status": {
+                "type": "string"
+              },
+              "previousStatus": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "goalRunID",
+              "goalID",
+              "status",
+              "previousStatus",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.goal.passed": {
         "type": "object",
         "properties": {
@@ -21528,18 +21321,23 @@
               "sessionID": {
                 "type": "string"
               },
+              "kind": {
+                "type": "string",
+                "const": "reasoning"
+              },
+              "delta": {
+                "type": "string"
+              },
               "attempt": {
                 "type": "number"
-              },
-              "textDelta": {
-                "type": "string"
               }
             },
             "required": [
               "taskID",
               "sessionID",
-              "attempt",
-              "textDelta"
+              "kind",
+              "delta",
+              "attempt"
             ]
           }
         },
@@ -22595,8 +22393,7 @@
             "enum": [
               "user_content",
               "control",
-              "context",
-              "trace"
+              "context"
             ]
           },
           "source": {
@@ -23943,52 +23740,6 @@
           "properties"
         ]
       },
-      "Event.trace.event": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "trace.event"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "ts": {
-                "type": "number"
-              },
-              "seq": {
-                "type": "number"
-              },
-              "taskID": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "agent": {
-                "type": "string"
-              },
-              "round": {
-                "type": "number"
-              },
-              "category": {
-                "type": "string"
-              },
-              "payload": {}
-            },
-            "required": [
-              "ts",
-              "seq",
-              "taskID",
-              "category"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "QuestionOption": {
         "type": "object",
         "properties": {
@@ -24029,7 +23780,7 @@
             "type": "boolean"
           },
           "custom": {
-            "description": "Allow typing a custom answer (default: true)",
+            "description": "Allow typing a custom answer",
             "type": "boolean"
           }
         },
@@ -25233,6 +24984,9 @@
             "$ref": "#/components/schemas/Event.goal.progress"
           },
           {
+            "$ref": "#/components/schemas/Event.goal_run.updated"
+          },
+          {
             "$ref": "#/components/schemas/Event.goal.passed"
           },
           {
@@ -25377,9 +25131,6 @@
             "$ref": "#/components/schemas/Event.session.idle"
           },
           {
-            "$ref": "#/components/schemas/Event.trace.event"
-          },
-          {
             "$ref": "#/components/schemas/Event.question.asked"
           },
           {
@@ -25507,7 +25258,7 @@
             "type": "boolean"
           },
           "mdnsDomain": {
-            "description": "Custom domain name for mDNS service (default: opencorvus.local)",
+            "description": "Custom domain name for mDNS service",
             "type": "string"
           },
           "cors": {
@@ -26073,7 +25824,7 @@
             ]
           },
           "hidden": {
-            "description": "Hide this subagent from the @ autocomplete menu (default: false, only applies to mode: subagent)",
+            "description": "Hide this subagent from the @ autocomplete menu (only applies to mode: subagent)",
             "type": "boolean"
           },
           "options": {
@@ -26889,11 +26640,11 @@
             "type": "object",
             "properties": {
               "auto": {
-                "description": "Enable automatic compaction when context is full (default: true)",
+                "description": "Enable automatic compaction when context is full",
                 "type": "boolean"
               },
               "prune": {
-                "description": "Enable pruning of old tool outputs (default: true)",
+                "description": "Enable pruning of old tool outputs",
                 "type": "boolean"
               },
               "reserved": {
@@ -26913,25 +26664,25 @@
                 "type": "object",
                 "properties": {
                   "max_steps": {
-                    "description": "Maximum agentic steps for requirements agent (default: 30)",
+                    "description": "Maximum agentic steps for requirements agent",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
                   "timeout_ms": {
-                    "description": "Requirements agent timeout in milliseconds (default: 300000)",
+                    "description": "Requirements agent timeout in milliseconds",
                     "type": "integer",
                     "minimum": 1000,
                     "maximum": 9007199254740991
                   },
                   "quality_threshold": {
-                    "description": "Quality score threshold for retry (0.0-1.0, default: 0.5)",
+                    "description": "Quality score threshold for retry (0.0-1.0)",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                   },
                   "max_attempts": {
-                    "description": "Maximum requirements analysis attempts (default: 3)",
+                    "description": "Maximum requirements analysis attempts",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
@@ -26950,13 +26701,13 @@
                 "type": "object",
                 "properties": {
                   "max_steps": {
-                    "description": "Maximum agentic steps for architect agent (default: 20)",
+                    "description": "Maximum agentic steps for architect agent",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
                   "timeout_ms": {
-                    "description": "Architect agent timeout in milliseconds (default: 180000)",
+                    "description": "Architect agent timeout in milliseconds",
                     "type": "integer",
                     "minimum": 1000,
                     "maximum": 9007199254740991
@@ -26975,25 +26726,25 @@
                 "type": "object",
                 "properties": {
                   "max_steps": {
-                    "description": "Maximum agentic steps for planner agent (default: 30)",
+                    "description": "Maximum agentic steps for planner agent",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
                   "timeout_ms": {
-                    "description": "Planner agent timeout in milliseconds (default: 300000)",
+                    "description": "Planner agent timeout in milliseconds",
                     "type": "integer",
                     "minimum": 1000,
                     "maximum": 9007199254740991
                   },
                   "quality_threshold": {
-                    "description": "Quality score threshold for retry (0.0-1.0, default: 0.5)",
+                    "description": "Quality score threshold for retry (0.0-1.0)",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                   },
                   "max_attempts": {
-                    "description": "Maximum plan generation attempts (default: 3)",
+                    "description": "Maximum plan generation attempts",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
@@ -27031,25 +26782,25 @@
                 "type": "object",
                 "properties": {
                   "max_steps": {
-                    "description": "Maximum agentic steps for delivery agent (default: 40)",
+                    "description": "Maximum agentic steps for delivery agent",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
                   "timeout_ms": {
-                    "description": "Delivery agent timeout in milliseconds (default: 600000)",
+                    "description": "Delivery agent timeout in milliseconds",
                     "type": "integer",
                     "minimum": 1000,
                     "maximum": 9007199254740991
                   },
                   "max_retries": {
-                    "description": "Maximum delivery generation retries (default: 2)",
+                    "description": "Maximum delivery generation retries",
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
                   },
                   "merge_conflict_max_retries": {
-                    "description": "Maximum merge-resolver retry attempts per conflicted file before aborting (default: 2)",
+                    "description": "Maximum merge-resolver retry attempts per conflicted file before aborting",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
@@ -27068,13 +26819,13 @@
                 "type": "object",
                 "properties": {
                   "max_steps": {
-                    "description": "Maximum agentic steps for design analyst agent (default: 50)",
+                    "description": "Maximum agentic steps for design analyst agent",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
                   "timeout_ms": {
-                    "description": "Design analyst agent timeout in milliseconds (default: 300000)",
+                    "description": "Design analyst agent timeout in milliseconds",
                     "type": "integer",
                     "minimum": 1000,
                     "maximum": 9007199254740991
@@ -27093,13 +26844,13 @@
                 "type": "object",
                 "properties": {
                   "max_steps": {
-                    "description": "Maximum agentic steps for intent-analysis agent (default: 20)",
+                    "description": "Maximum agentic steps for intent-analysis agent",
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
                   "timeout_ms": {
-                    "description": "Intent-analysis agent timeout in milliseconds (default: 120000)",
+                    "description": "Intent-analysis agent timeout in milliseconds",
                     "type": "integer",
                     "minimum": 1000,
                     "maximum": 9007199254740991
@@ -27114,43 +26865,43 @@
                 }
               },
               "max_runs": {
-                "description": "Maximum total task runs (default: 10)",
+                "description": "Maximum total task runs",
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 9007199254740991
               },
               "max_fix_runs": {
-                "description": "Maximum fix runs after failure (default: 5)",
+                "description": "Maximum fix runs after failure",
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
               },
               "max_goal_retries": {
-                "description": "Maximum retries per individual goal before permanently failing it (default: 5)",
+                "description": "Maximum retries per individual goal before permanently failing it",
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
               },
               "goal_escalation_threshold": {
-                "description": "After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time. (default: 3)",
+                "description": "After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.",
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 9007199254740991
               },
               "max_delivery_iterations": {
-                "description": "Maximum delivery reject → rework → re-deliver cycles before failing the task (default: 3)",
+                "description": "Hard ceiling on adversarial iteration count; Arbiter returns 'abort' at this iteration regardless of other signals.",
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 10
               },
               "max_executor_groups": {
-                "description": "Maximum parallel executor groups (default: 5)",
+                "description": "Maximum parallel executor groups",
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 9007199254740991
               },
               "default_workflow": {
-                "description": "Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID (default: 'pipeline')",
+                "description": "Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID",
                 "type": "string"
               },
               "workflows": {
@@ -27263,12 +27014,12 @@
                 "type": "boolean"
               },
               "auto_permission": {
-                "description": "Auto-approve PermissionNext requests (default: true). Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
+                "description": "Auto-approve PermissionNext requests. Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
                 "default": true,
                 "type": "boolean"
               },
               "auto_question": {
-                "description": "Auto-reject unanswered question interactions after the stale timeout (default: true). Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
+                "description": "Auto-reject unanswered question interactions after the stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
                 "default": true,
                 "type": "boolean"
               },
@@ -27283,15 +27034,15 @@
                 "type": "object",
                 "properties": {
                   "enabled": {
-                    "description": "Enable persistent memory store (default: true)",
+                    "description": "Enable persistent memory store",
                     "type": "boolean"
                   },
                   "auto_inject": {
-                    "description": "Auto-inject relevant memories into system prompt (default: true)",
+                    "description": "Auto-inject relevant memories into system prompt",
                     "type": "boolean"
                   },
                   "token_budget": {
-                    "description": "Max tokens for auto-injected memory context (default: 2000)",
+                    "description": "Max tokens for auto-injected memory context",
                     "type": "integer",
                     "minimum": 100,
                     "maximum": 9007199254740991
@@ -28126,8 +27877,7 @@
             "enum": [
               "user_content",
               "control",
-              "context",
-              "trace"
+              "context"
             ]
           },
           "source": {

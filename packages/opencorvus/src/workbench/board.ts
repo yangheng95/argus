@@ -751,7 +751,7 @@ function buildWorkflowFields(
       workflow: { id: "pipeline", name: "Pipeline", steps: [], goalLoopStepIDs: [] },
       goalWorkflows: [] as Array<unknown>,
       requirements: [] as Array<unknown>,
-      architect: { contracts: [] as Array<unknown>, summary: "" },
+      architect: undefined,
     }
   }
 
@@ -780,15 +780,8 @@ function buildWorkflowFields(
     goalLoopStepIDs: workflow.goalLoopStepIDs,
   }
 
-  // Read all architect decisions once, then distribute per goal
-  const architectEntries = buildArchitectEntries(task.id)
-
   const goalWorkflows = goals.map(goal => {
     const gws = projectedGoalSteps[goal.id]
-    // Contracts relevant to this goal: direct goalID match OR mentioned in reason
-    const contracts = architectEntries
-      .filter(e => e.goalID === goal.id || (e.reason && e.reason.includes(goal.id)))
-      .map(e => ({ key: e.key, value: e.value, reason: e.reason }))
     return {
       goalID: goal.id,
       goalTitle: goal.title,
@@ -817,7 +810,6 @@ function buildWorkflowFields(
               : {}),
           }
         }),
-      contracts,
     }
   })
 
@@ -1013,12 +1005,6 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
     return undefined
   }
   return { planNodes, buildSessionID, workspaceDir, changedFiles, diffStats, checks, evalSummary, verdict }
-}
-
-/** Read all architect decision entries for per-goal distribution */
-function buildArchitectEntries(taskID: string): Array<{ goalID: string | null; key: string; value: string; reason: string }> {
-  const log = createDecisionLog(taskID)
-  return log.readByPhase("architect")
 }
 
 /** Build architect summary from Decision Log */

@@ -87,7 +87,6 @@ export type EngineArtifactKind =
   | "report"
   | "image"
   | "diff"
-  | "html_trace"
   | "link"
   | "git_ref"
   | "verdict"
@@ -100,18 +99,7 @@ export type EngineProgressStatus = "created" | "active" | "completed" | "failed"
 export type EngineExecutorTransport = "inproc" | "stdio" | "ws" | "http"
 export type EngineExecutorSessionStatus = "active" | "completed" | "failed" | "aborted"
 
-/**
- * Verification evidence check — a structured result for one scorer evaluation.
- * See specs/new-arch/09-verification-evidence.md.
- *
- * All new fields are optional for backward compatibility with historical rows
- * written before this schema extension. The signature computation (see
- * `src/verification/signature.ts`) tolerates missing fields so historical rows
- * simply produce stable-but-uninformative signatures.
- *
- * Alias `EngineGoalCheck` preserved for call sites that only need the original
- * shape; new code should use `EngineEvaluationCheck`.
- */
+/** Kind tag on an EngineEvaluationCheck row. Drill-down only; not a gate. */
 export type EngineEvaluationCheckScorerKind =
   | "heuristic_shell"
   | "heuristic_script_ref"
@@ -120,34 +108,27 @@ export type EngineEvaluationCheckScorerKind =
   | "visual_diff"
   | "delivery_verdict"
 
-export type EngineEvaluationCheckMode = "strict" | "soft"
-export type EngineEvaluationCheckSeverity = "essential" | "important" | "optional" | "pitfall"
-export type EngineEvaluationCheckTrigger = "on_goal" | "on_delivery"
-
+/**
+ * Structured row inside engine_evaluation.checks[]. This is audit/drill-down
+ * data for operators — not gating signal. Gating lives in
+ * engine_metric_result + engine_iteration. Fields mode/severity/trigger were
+ * removed when the DAM cut-over replaced strict/soft gating with the Arbiter.
+ */
 export type EngineEvaluationCheck = {
   name: string
   label?: string
   family?: string
   status: "passed" | "failed" | "skipped"
   evidence?: string
-  // Spec-09 additions
   spec_id?: string
   scorer_kind?: EngineEvaluationCheckScorerKind
-  mode?: EngineEvaluationCheckMode
-  severity?: EngineEvaluationCheckSeverity
-  trigger?: EngineEvaluationCheckTrigger
   exit_code?: number
   idle_timed_out?: boolean
   matched_paths?: string[]
   output_digest?: string
 }
 
-/** Legacy alias — structural subset of `EngineEvaluationCheck`. Kept so call
- *  sites that only use {name,label,family,status,evidence} compile without
- *  churn during the Phase B–F rollout. */
-export type EngineGoalCheck = EngineEvaluationCheck
-
-/** Scope marker for an evaluation row. See spec-09 for invariants:
+/** Scope marker for an evaluation row (invariant enforced at app layer):
  *  - scope="goal_run" ⇒ goal_run_id NOT NULL
  *  - scope="delivery" ⇒ delivery_id NOT NULL */
 export type EngineEvaluationScope = "goal_run" | "delivery"
@@ -269,6 +250,13 @@ export const EngineGoalTable = sqliteTable(
     // --- GoalContractFields: each field is an independent column (no compression) ---
     /** Short goal title. */
     title: text().notNull(),
+    /**
+     * Content-derived human-readable identifier (e.g. "add-login-form"). Derived
+     * from title at insert, immutable thereafter. Display-only — never an FK,
+     * never referenced as identity. Used alongside goal_id in logs/UI so humans
+     * can tell goals apart without memorising `gol_<hex>` ids.
+     */
+    slug: text().notNull(),
     /** Full objective statement — what this goal accomplishes. */
     objective: text().notNull(),
     /** Typed acceptance specs (AcceptanceSpec[] JSON). Eval source of truth. */
@@ -564,19 +552,10 @@ export const EngineEvaluationTable = sqliteTable(
       .references(() => EngineRunTable.id, { onDelete: "cascade" }),
     goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
     delivery_id: text().references(() => EngineDeliveryTable.id, { onDelete: "set null" }),
-    /** Scope marker — see specs/new-arch/09-verification-evidence.md.
-     *  Physical invariant (enforced at application layer, not SQL):
+    /** Scope marker. App-layer invariant:
      *    scope="goal_run" ⇒ goal_run_id NOT NULL
-     *    scope="delivery" ⇒ delivery_id NOT NULL
-     *  Historical rows (written before spec-09) default to "delivery" when
-     *  delivery_id is set, else "goal_run" — the backfill is applied on read
-     *  for rows that predate the migration. */
+     *    scope="delivery" ⇒ delivery_id NOT NULL */
     scope: text().$type<EngineEvaluationScope>().notNull().default("delivery"),
-    /** Stable hash over the failed-check set. Used by delivery-rework loop
-     *  to detect no-progress (two consecutive deliveries with identical
-     *  signature → fail-fast). Empty string = "not computed yet / historical
-     *  row"; never participates in signature comparisons. */
-    signature: text().notNull().default(""),
     status: text().notNull().$type<EngineEvaluationStatus>().default("pending"),
     verdict: text().notNull().$type<EngineEvaluationVerdict>().default("inconclusive"),
     summary: text().notNull(),

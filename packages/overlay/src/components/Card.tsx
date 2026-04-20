@@ -9,7 +9,6 @@ import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
 import { StepPayloadBody } from "./StepPayloadBody";
 import { FidelityBody } from "./FidelityCard";
-import { t } from "../utils/i18n";
 
 /**
  * Unified recursive card primitive.
@@ -63,34 +62,10 @@ export function Card(props: { node: CardNode; depth: number }) {
       />
       <Show when={expanded()}>
         <div class="card__body">
-          {/* Executor step preamble: goal objective + (collapsed) architect
-              contracts. The step card absorbed the old goal-group layer — see
-              store/card-tree.ts ID conventions. Contracts default-collapsed
-              via <details> so a goal with dozens of key/value pairs doesn't
-              bury the phase children below. */}
           <Show when={props.node.kind === "step" && props.node.goalDescription}>
             <div class="card__goal-desc">
               <StaticTextPart text={props.node.goalDescription!} />
             </div>
-          </Show>
-          <Show when={props.node.kind === "step" && (props.node.contracts?.length ?? 0) > 0}>
-            <details class="card__contracts">
-              <summary class="card__contracts-summary">
-                {t("contracts.group_title")} ({props.node.contracts!.length})
-              </summary>
-              <div class="card__contracts-body">
-                <For each={props.node.contracts}>
-                  {(c) => (
-                    <div class="card__contract">
-                      <span class="card__contract-key">{c.key}</span>
-                      <div class="card__contract-value">
-                        <StaticTextPart text={c.value} />
-                      </div>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </details>
           </Show>
 
           {/* Tool card body: delegate to InlineToolPart body mode */}

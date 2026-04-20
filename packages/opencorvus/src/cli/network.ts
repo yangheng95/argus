@@ -19,7 +19,7 @@ const options = {
   },
   "mdns-domain": {
     type: "string" as const,
-    describe: "custom domain name for mDNS service (default: opencorvus.local)",
+    describe: "custom domain name for mDNS service",
     default: "opencorvus.local",
   },
   cors: {

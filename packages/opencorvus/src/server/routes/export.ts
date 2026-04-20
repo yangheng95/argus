@@ -2,7 +2,6 @@ import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Session } from "@/session"
-import { Trace } from "@/trace"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import {
@@ -112,7 +111,6 @@ export const ExportRoutes = lazy(() =>
                 schema: resolver(z.object({
                   session: z.any(),
                   messages: z.any().array(),
-                  llm_calls: z.number().int(),
                 })),
               },
             },
@@ -125,8 +123,6 @@ export const ExportRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const session = await Session.get(sessionID)
         const messages = await Session.messages({ sessionID })
-        const traceTaskID = Trace.taskIDForSession(sessionID)
-        const events = traceTaskID ? await Trace.read(traceTaskID).catch(() => []) : []
 
         return c.json({
           session: {
@@ -135,7 +131,6 @@ export const ExportRoutes = lazy(() =>
             time: session.time,
           },
           messages,
-          trace_events: events.length,
         })
       },
     ),

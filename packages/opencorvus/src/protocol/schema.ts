@@ -10,9 +10,6 @@ export type ProtocolAggregate = z.infer<typeof ProtocolAggregate>
 export const ProtocolInboxStatus = z.enum(["pending", "leased", "delivered", "dead_letter"])
 export type ProtocolInboxStatus = z.infer<typeof ProtocolInboxStatus>
 
-export const ProtocolStreamKind = z.enum(["text_delta", "reasoning_delta", "tool_delta", "status"])
-export type ProtocolStreamKind = z.infer<typeof ProtocolStreamKind>
-
 export const ProtocolEnvelope = z.object({
   id: Identifier.schema("protocol_event"),
   kind: ProtocolKind,
@@ -49,16 +46,3 @@ export const ProtocolInboxMessage = z.object({
   last_error: z.string().min(1).optional(),
 })
 
-export const ProtocolStreamChunk = z.object({
-  id: Identifier.schema("protocol_stream_chunk"),
-  stream_id: z.string().min(1),
-  task_id: Identifier.schema("task").optional(),
-  run_id: Identifier.schema("run").optional(),
-  goal_run_id: Identifier.schema("goal_run").optional(),
-  session_id: Identifier.schema("session").optional(),
-  kind: ProtocolStreamKind,
-  chunk_seq: z.number().int().nonnegative(),
-  text: z.string(),
-  payload: z.record(z.string(), z.unknown()).optional(),
-  emitted_at: z.number().int().positive(),
-})

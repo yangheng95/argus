@@ -42,7 +42,7 @@ export const ScheduleTool = Tool.define("schedule", {
       eventType: z.string().describe("Bus event type wildcard (for example: 'command.*' or 'session.updated')"),
       prompt: z.string().describe("The instruction to execute when the event matches"),
       match: MatchSchema.optional().describe("Optional event property matcher, e.g. {'properties.name':'init'}"),
-      oneShot: z.boolean().optional().describe("Execute only once (default: false)"),
+      oneShot: z.boolean().default(false).describe("Execute only once"),
       cooldownMs: z.number().int().min(0).optional().describe("Minimum ms between runs for this job"),
     }),
     z.object({
@@ -166,7 +166,7 @@ export const ScheduleTool = Tool.define("schedule", {
       case "create_event": {
         const id = Identifier.ascending("cron")
         const cooldownMs = params.cooldownMs ?? 0
-        const oneShot = params.oneShot ?? false
+        const oneShot = params.oneShot
 
         Database.use((db) =>
           db

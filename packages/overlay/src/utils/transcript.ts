@@ -68,7 +68,6 @@ function formatTranscriptText(part: any, role: string): string {
   let text: string = part?.text || "";
   if (!text.trim()) return "";
   if (part.audience && part.audience.ui === false) return "";
-  if (part.kind === "trace" && !part.audience?.ui) return "";
   const briefRoles = ["user", "planner", "evaluator", "system"];
   if (briefRoles.includes(role) && text.includes("<assistant-brief>")) {
     text = stripAssistantBrief(text);
@@ -557,13 +556,6 @@ function flattenCardToMessages(node: CardNode | undefined, out: any[]): void {
   const parts: any[] = [];
   if (node.kind === "step" && node.goalDescription) {
     parts.push({ type: "text", text: node.goalDescription });
-  }
-  if (node.kind === "step" && Array.isArray(node.contracts)) {
-    for (const c of node.contracts) {
-      const key = String(c.key || "").trim();
-      const value = String(c.value || "").trim();
-      if (key || value) parts.push({ type: "text", text: key ? `${key}: ${value}` : value });
-    }
   }
   if (Array.isArray(node.parts)) {
     for (const p of node.parts) parts.push(p);

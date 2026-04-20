@@ -263,7 +263,6 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
             sessionID,
             type: "text",
             text: event.summary,
-            kind: "trace",
           },
         },
       },

@@ -146,8 +146,8 @@ export namespace Session {
       title: z.string(),
       version: z.string(),
       /** Session's role/purpose, fixed at creation. Authoritative source of
-       *  "what is this session for"; UI channel and LLM-trace routing read
-       *  this column directly. See SessionKind in session.sql.ts. */
+       *  "what is this session for"; UI channel routing reads this column
+       *  directly. See SessionKind in session.sql.ts. */
       kind: z.enum([
         "root",
         "assistant",
@@ -327,8 +327,8 @@ export namespace Session {
 
   export async function createNext(input: {
     /** Required. The session's role/purpose — see SessionKind in session.sql.ts.
-     *  Authoritative for UI channel routing and trace resolution. There is
-     *  NO default: every caller must state what the session is for. */
+     *  Authoritative for UI channel routing. There is NO default: every
+     *  caller must state what the session is for. */
     kind: SessionKind
     /** Goal this session belongs to (planner/executor/build only). Pass it
      *  at creation so sessionGoalID() is a pure DB lookup — never inferred
@@ -694,6 +694,7 @@ export namespace Session {
     // CASCADE delete handles messages and parts automatically
     Database.use((db) => {
       db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
+      Database.effect(() => Database.incrementalVacuum())
       Database.effect(() =>
         Bus.publish(Event.Deleted, {
           info: session,

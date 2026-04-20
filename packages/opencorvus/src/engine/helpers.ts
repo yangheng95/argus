@@ -60,7 +60,7 @@ export function budgetRow(input?: z.infer<typeof Budget>): EngineBudget | undefi
 
 /**
  * Resolve the effective max executor groups for a task.
- * Priority: task budget > config (env + jsonc) > hardcoded default (2).
+ * Priority: task budget > config (env + jsonc) > DEFAULTS.max_executor_groups (see EngineConfig).
  */
 export function effectiveMaxExecutorGroups(task: TaskRow): number {
   const budgetMax = (task.budget as EngineBudget | null)?.max_executor_groups

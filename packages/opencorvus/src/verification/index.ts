@@ -1,20 +1,14 @@
 /**
- * Verification evidence module — spec-09 entry.
- * See specs/new-arch/09-verification-evidence.md.
+ * Verification evidence module — thin DB layer over `engine_evaluation`.
+ * Signature-based convergence detection was removed with DAM Phase 5 —
+ * convergence now lives in src/metrics/arbiter.ts.
  */
-export {
-  computeSignature,
-  outputDigest,
-  signaturesConverge,
-} from "./signature"
 export {
   persistEvidence,
   findLatestGoalRunEvidence,
   findGoalRunEvidence,
   findLatestDeliveryEvidence,
   findPreviousDeliveryEvidence,
-  hasStrictFailure,
-  strictFailures,
   type VerificationEvidence,
   type PersistEvidenceInput,
 } from "./persist"

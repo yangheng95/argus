@@ -183,7 +183,22 @@ coverage/
 .turbo/
 .DS_Store
 Thumbs.db
+.opencorvus/
+.opencorvus-worktrees/
+.opencorvus-meta.json
 `
+
+// Paths the orchestrator writes into each worktree for its own bookkeeping
+// (goal meta, intent bundle, merge-conflict notes, task trace dir). Once these
+// sneak into git via `git add -A` they propagate via ff-only merges into main
+// and poison every future goal worktree that checks out from it — so the
+// exclusion must be both declarative (.gitignore) and curative (untrack any
+// instance already in the index).
+const OPENCORVUS_SCRATCH_PATHS = [
+  ".opencorvus",
+  ".opencorvus-worktrees",
+  ".opencorvus-meta.json",
+]
 
 /** Ensure .gitignore exists so heavy directories (node_modules, dist) are never git-tracked. */
 export async function ensureGitignore() {
@@ -199,6 +214,31 @@ export async function ensureGitignore() {
     }
   } else {
     await Bun.write(`${dir}/.gitignore`, GITIGNORE_ESSENTIALS)
+  }
+
+  await untrackOpencorvusScratch(dir)
+}
+
+/**
+ * Remove orchestrator scratch paths from the git index if earlier runs
+ * committed them before the ignore rules existed. `git rm --cached` untracks
+ * without touching the working tree, so the on-disk files stay and only the
+ * tracked instance is purged; the next `git add -A` will then honor the
+ * ignore entries and leave them alone.
+ *
+ * Each path is attempted independently and failures (path not tracked,
+ * repo without history, etc.) are swallowed — this is a curative helper,
+ * not a gatekeeper.
+ */
+async function untrackOpencorvusScratch(dir: string) {
+  const { $ } = await import("bun")
+  for (const target of OPENCORVUS_SCRATCH_PATHS) {
+    // `git ls-files --error-unmatch` only exits 0 when at least one tracked
+    // entry matches, so we can skip the (noisier) `git rm` for paths that
+    // were never committed in the first place.
+    const tracked = await $`git ls-files --error-unmatch -- ${target}`.cwd(dir).quiet().nothrow()
+    if (tracked.exitCode !== 0) continue
+    await $`git rm -r --cached --ignore-unmatch -- ${target}`.cwd(dir).quiet().nothrow()
   }
 }
 

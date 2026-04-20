@@ -132,7 +132,7 @@ export async function runTaskLoop(input: {
         iteration: rework.iteration,
         issues: Array.isArray(rework.issues_found) ? (rework.issues_found as unknown[]).length : 0,
       })
-      // Clear the one-shot signal (full history preserved in _delivery_rework_history)
+      // Clear the one-shot signal (full iteration history lives in engine_iteration)
       const { updateTask } = await import("@/engine/state")
       const cleanMeta = { ...taskAfterMeta }
       delete cleanMeta._delivery_rework
