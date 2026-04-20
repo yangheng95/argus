@@ -43,6 +43,7 @@ export const ConfigRoutes = lazy(() =>
           max_runs: userAsst.max_runs ?? orch.max_runs,
           max_fix_runs: userAsst.max_fix_runs ?? orch.max_fix_runs,
           max_goal_retries: userAsst.max_goal_retries ?? orch.max_goal_retries,
+          goal_escalation_threshold: userAsst.goal_escalation_threshold ?? orch.goal_escalation_threshold,
           max_executor_groups: userAsst.max_executor_groups ?? orch.max_executor_groups,
         }
         return c.json({ ...raw, assistant })

@@ -723,8 +723,67 @@ export async function mergeGoalDelivery(
       const cherryPick = await $`git cherry-pick -x ${commitRef}`.quiet().cwd(Instance.directory).nothrow()
       if (cherryPick.exitCode !== 0) {
         const stderr = cherryPick.stderr.toString().trim() || cherryPick.stdout.toString().trim() || "git cherry-pick failed"
+
+        // Capture main tip BEFORE abort so the resolver has the exact ref
+        // executor needs to merge in. `git rev-parse HEAD` in the primary
+        // worktree — a --abort'd cherry-pick rewinds to this same HEAD,
+        // so we intentionally read it post-conflict for determinism even
+        // though in principle pre/post are equivalent here.
         await $`git cherry-pick --abort`.quiet().cwd(Instance.directory).nothrow()
-        throw new Error(`goal merge conflict for ${goalRun.id}: ${stderr}`)
+        const mainTipResult = await $`git rev-parse HEAD`.cwd(Instance.directory).quiet().nothrow()
+        const mainTip = mainTipResult.stdout.toString().trim()
+        if (mainTipResult.exitCode !== 0 || !mainTip) {
+          throw new Error(
+            `goal merge conflict for ${goalRun.id}: ${stderr} ` +
+              `(and failed to read primary worktree HEAD — cannot dispatch resolver)`,
+          )
+        }
+
+        if (!goalRow) {
+          throw new Error(
+            `goal merge conflict for ${goalRun.id}: ${stderr} ` +
+              `(no goal row found — cannot dispatch resolver)`,
+          )
+        }
+        const goalWorkDir = typeof goalRow.workspace_dir === "string" ? goalRow.workspace_dir : ""
+        if (!goalWorkDir) {
+          throw new Error(
+            `goal merge conflict for ${goalRun.id}: ${stderr} ` +
+              `(goal ${goalRow.id} has no workspace_dir — cannot dispatch resolver)`,
+          )
+        }
+
+        // P2 merge-conflict resolution: hand the goal worktree to executor.
+        // Must stay inside the Worktree.lock() window — the resolver does
+        // a `git merge --ff-only` back into primary that assumes no other
+        // goal has advanced main in the meantime.
+        const { resolveMergeConflict } = await import("./merge-resolver")
+        const resolved = await resolveMergeConflict({
+          task,
+          goalRun,
+          goal: {
+            id: goalRow.id,
+            title: goalRow.title ?? "(untitled)",
+            objective: goalRow.objective ?? undefined,
+            workspace_dir: goalWorkDir,
+          },
+          commitRef,
+          goalWorkDir,
+          primaryWorkDir: Instance.directory,
+          mainTip,
+          initialStderr: stderr,
+        })
+
+        if (!resolved.resolved) {
+          // Resolver already reset primary to mainTip + wrote decision_log on cap.
+          throw new Error(
+            `goal merge conflict for ${goalRun.id} unresolved: ${resolved.error ?? "unknown reason"}`,
+          )
+        }
+        log.info("merged goal delivery via conflict resolver", {
+          goalRunID: goalRun.id, commitRef, resolvedTip: resolved.newGoalBranchTip,
+        })
+        return
       }
       log.info("merged goal delivery by cherry-pick", { goalRunID: goalRun.id, commitRef, files: committedFiles.length })
     })

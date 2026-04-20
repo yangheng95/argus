@@ -29,6 +29,8 @@ const TraceCategory = z.enum([
   "task.finish",
   "agent.start",
   "agent.finish",
+  "llm.request",      // pre-transform outbound: full system + messages + providerOptions
+  "llm.outbound",     // post-transform: raw body handed to streamText per step
   "llm.step",
   "llm.finish",
   "llm.error",

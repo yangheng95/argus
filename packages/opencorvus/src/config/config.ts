@@ -1207,6 +1207,7 @@ export namespace Config {
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent (default: 40)"),
               timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds (default: 600000)"),
               max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries (default: 2)"),
+              merge_conflict_max_retries: z.number().int().min(1).optional().describe("Maximum merge-resolver retry attempts per conflicted file before aborting (default: 2)"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
             })
             .optional()
@@ -1229,7 +1230,8 @@ export namespace Config {
             .describe("Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model."),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs (default: 10)"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure (default: 5)"),
-          max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 3)"),
+          max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it (default: 5)"),
+          goal_escalation_threshold: z.number().int().min(1).optional().describe("After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time. (default: 3)"),
           max_delivery_iterations: z.number().int().min(1).max(10).optional().describe("Maximum delivery reject → rework → re-deliver cycles before failing the task (default: 3)"),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups (default: 5)"),
           default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID (default: 'pipeline')"),
