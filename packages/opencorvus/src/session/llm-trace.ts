@@ -10,6 +10,15 @@ const MAX_ARRAY = 120
 const MAX_KEYS = 120
 const MAX_TEXT = 8_000
 
+// Verbose limits — used only for `llm.request` / `llm.outbound` where the goal
+// is cache-hit byte-diffing, so we preserve far more of system prompts and
+// tool results.  Still bounded to stay under the 1MB per-event line cap even
+// with a ~5-turn tool loop and a ~150k-token system stack.
+const MAX_DEPTH_VERBOSE = 12
+const MAX_ARRAY_VERBOSE = 600
+const MAX_KEYS_VERBOSE = 400
+const MAX_TEXT_VERBOSE = 64_000
+
 type StepLike = {
   finishReason: string
   usage: unknown
@@ -74,31 +83,47 @@ export namespace LLMTrace {
     error(error: unknown): void
   }
 
-  function trimText(text: string) {
-    if (text.length <= MAX_TEXT) return text
-    return `${text.slice(0, MAX_TEXT)}\n...[truncated ${text.length - MAX_TEXT} chars]`
+  function trimText(text: string, maxText: number) {
+    if (text.length <= maxText) return text
+    return `${text.slice(0, maxText)}\n...[truncated ${text.length - maxText} chars]`
   }
 
-  function normalize(value: unknown, depth = 0, seen?: WeakSet<object>): unknown {
+  interface NormalizeLimits {
+    depth: number
+    array: number
+    keys: number
+    text: number
+  }
+
+  const NORMAL_LIMITS: NormalizeLimits = { depth: MAX_DEPTH, array: MAX_ARRAY, keys: MAX_KEYS, text: MAX_TEXT }
+  const VERBOSE_LIMITS: NormalizeLimits = {
+    depth: MAX_DEPTH_VERBOSE, array: MAX_ARRAY_VERBOSE, keys: MAX_KEYS_VERBOSE, text: MAX_TEXT_VERBOSE,
+  }
+
+  function normalizeWith(value: unknown, limits: NormalizeLimits, depth = 0, seen?: WeakSet<object>): unknown {
     if (value === null || value === undefined) return value
     if (typeof value === "number" || typeof value === "boolean") return value
     if (typeof value === "string") {
-      if (value.startsWith("data:") && value.length > MAX_TEXT) {
+      if (value.startsWith("data:") && value.length > limits.text) {
         const comma = value.indexOf(",")
         if (comma > 0) {
+          // For cache-diff purposes we keep a stable hash-substitute so that
+          // byte-identical base64 blobs yield byte-identical trace entries.
           const head = value.slice(0, comma + 1)
-          return `${head}...[base64 omitted ${value.length - comma - 1} chars]`
+          const bodyLen = value.length - comma - 1
+          const sample = value.slice(comma + 1, comma + 17) // first 16 base64 chars is enough to detect drift
+          return `${head}${sample}...[base64 omitted ${bodyLen} chars]`
         }
       }
-      return trimText(value)
+      return trimText(value, limits.text)
     }
     if (value instanceof Date) return value.toISOString()
     if (typeof value === "bigint") return value.toString()
-    if (depth >= MAX_DEPTH) return "[max-depth]"
+    if (depth >= limits.depth) return "[max-depth]"
 
     if (Array.isArray(value)) {
-      const list = value.slice(0, MAX_ARRAY).map((item) => normalize(item, depth + 1, seen))
-      if (value.length > MAX_ARRAY) list.push(`[+${value.length - MAX_ARRAY} items]`)
+      const list = value.slice(0, limits.array).map((item) => normalizeWith(item, limits, depth + 1, seen))
+      if (value.length > limits.array) list.push(`[+${value.length - limits.array} items]`)
       return list
     }
 
@@ -109,16 +134,35 @@ export namespace LLMTrace {
       const entries = Object.entries(value as Record<string, unknown>)
       const obj: Record<string, unknown> = {}
       for (const [index, [key, val]] of entries.entries()) {
-        if (index >= MAX_KEYS) {
-          obj["..."] = `[+${entries.length - MAX_KEYS} keys]`
+        if (index >= limits.keys) {
+          obj["..."] = `[+${entries.length - limits.keys} keys]`
           break
         }
-        obj[key] = normalize(val, depth + 1, set)
+        obj[key] = normalizeWith(val, limits, depth + 1, set)
       }
       return obj
     }
 
     return String(value)
+  }
+
+  function normalize(value: unknown, depth = 0, seen?: WeakSet<object>): unknown {
+    return normalizeWith(value, NORMAL_LIMITS, depth, seen)
+  }
+
+  function normalizeVerbose(value: unknown): unknown {
+    return normalizeWith(value, VERBOSE_LIMITS, 0)
+  }
+
+  /**
+   * Test-only: expose the two normalise profiles for unit tests without
+   * forcing them through the full `begin()` path (which depends on DB-backed
+   * session resolution).  Production code MUST NOT import this.
+   */
+  export const _internalsForTest = {
+    normalize: (v: unknown) => normalize(v),
+    normalizeVerbose: (v: unknown) => normalizeVerbose(v),
+    limits: { normal: NORMAL_LIMITS, verbose: VERBOSE_LIMITS },
   }
 
   function normalizeError(error: unknown) {
@@ -186,6 +230,34 @@ export namespace LLMTrace {
       },
     })
 
+    // Full pre-transform request — the authoritative input for cache-diffing.
+    // This is what LLMTrace.begin sees BEFORE wrapModel / applyCaching runs,
+    // so consumers can reason about divergence separately from provider-specific
+    // normalization. The post-transform body is captured per-step via
+    // step.request.body (see below).
+    Trace.event({
+      ...traceMeta,
+      category: "llm.request",
+      payload: {
+        call_id: input.callID,
+        model: { providerID: input.model.providerID, modelID: input.model.modelID },
+        small: input.small,
+        request: {
+          system: normalizeVerbose(input.request.system),
+          messages: normalizeVerbose(input.request.messages),
+          tools: input.request.tools,
+          toolChoice: input.request.toolChoice,
+          maxRetries: input.request.maxRetries,
+          maxOutputTokens: input.request.maxOutputTokens,
+          temperature: input.request.temperature,
+          topP: input.request.topP,
+          topK: input.request.topK,
+          headers: normalizeVerbose(input.request.headers),
+          providerOptions: normalizeVerbose(input.request.providerOptions),
+        },
+      },
+    })
+
     const finalize = (result: {
       status: "finished" | "aborted" | "error"
       finishReason: string | null
@@ -233,6 +305,27 @@ export namespace LLMTrace {
             usage: normalize(step.usage),
           },
         })
+        // Raw outbound body — what the AI SDK actually serialised and sent
+        // over the wire for this round (post transform / post cache_control).
+        // Captured here and not at begin() because the middleware mutates
+        // messages on each step, so a single request-at-start snapshot is
+        // stale by the time the model replies.  step.request.body is the
+        // vendor-neutral representation (JSON, already normalised by the AI
+        // SDK).  Fall back gracefully when a provider doesn't populate it.
+        if (step.request?.body !== undefined) {
+          Trace.event({
+            ...traceMeta,
+            category: "llm.outbound",
+            round: stepCount,
+            payload: {
+              call_id: input.callID,
+              response_id: step.response?.id,
+              response_model: step.response?.modelId,
+              body: normalizeVerbose(step.request.body),
+              response_headers: normalizeVerbose(step.response?.headers),
+            },
+          })
+        }
         for (const call of step.toolCalls ?? []) {
           const c = call as { toolCallId?: string; toolName?: string; input?: unknown }
           Trace.event({

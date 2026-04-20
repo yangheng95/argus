@@ -2472,6 +2472,10 @@ export type Config = {
        */
       max_retries?: number
       /**
+       * Maximum merge-resolver retry attempts per conflicted file before aborting (default: 2)
+       */
+      merge_conflict_max_retries?: number
+      /**
        * Additional skill paths for delivery agent
        */
       skills?: Array<string>
@@ -2519,9 +2523,13 @@ export type Config = {
      */
     max_fix_runs?: number
     /**
-     * Maximum retries per individual goal before permanently failing it (default: 3)
+     * Maximum retries per individual goal before permanently failing it (default: 5)
      */
     max_goal_retries?: number
+    /**
+     * After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time. (default: 3)
+     */
+    goal_escalation_threshold?: number
     /**
      * Maximum delivery reject → rework → re-deliver cycles before failing the task (default: 3)
      */

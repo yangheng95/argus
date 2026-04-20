@@ -1146,12 +1146,12 @@ export function createOrchestratorTools(input: {
     }),
 
     execute_goal: tool({
-      description: "Execute a pending or failed goal in an isolated git worktree. Creates worktree, submits to executor, returns asynchronously. Only valid for goals in pending or failed status — passed goals are terminal (use modify_goal to change the contract and reset to pending). You will be re-triggered when execution completes. STOP after calling this.",
+      description: "Dispatch a pending goal for execution in an isolated git worktree. Creates worktree, submits to executor, returns asynchronously. ONLY valid for goals in pending status — passed goals are terminal (use modify_goal to change the contract), failed goals must go through retry_failed_goals (which enforces the per-goal retry budget and writes audit trail). You will be re-triggered when execution completes. STOP after calling this.",
       inputSchema: z.object({
-        goalID: z.string().describe("The goal ID to execute (must be pending or failed status)"),
+        goalID: z.string().describe("The goal ID to execute (must be in pending status)"),
         reason: z.string().optional().describe("Why you decided to execute this goal now"),
       }),
-      execute: async ({ goalID, reason }) => {
+      execute: async ({ goalID, reason: _reason }) => {
         const task = requireTask(taskID)
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find(g => g.id === goalID)
@@ -1165,26 +1165,17 @@ export function createOrchestratorTools(input: {
                  `To change its contract (acceptance_specs, owned_paths), use modify_goal(${goalID}, ...) which will reset to pending automatically. ` +
                  `execute_goal does not re-run passed goals.`
         }
-
-        // goal.status === "pending" | "failed". For failed goals we supersede
-        // the prior tip goal_run: the tip stays in its failed state but gets
-        // a `superseded_reason` metadata marker, which deriveGoalStatus()
-        // projects as `pending` so GoalPool re-dispatches on the next task
-        // loop iteration. Same contract as retry_failed_goals — there is
-        // exactly one canonical retry path, not two.
         if (goal.status === "failed") {
-          const { findLatestTipGoalRun } = await import("@/engine/store")
-          const { supersedeGoalRun } = await import("@/engine/persist")
-          const priorTip = findLatestTipGoalRun(goalID)
-          if (!priorTip) {
-            throw new Error(
-              `execute_goal: goal ${goalID} is in status=failed but has no prior goal_run; ` +
-              `cannot retry without a row to supersede. This is a data inconsistency upstream of execute_goal.`,
-            )
-          }
-          const supersedeReason = reason ? `[execute_goal] ${reason}` : "execute_goal retry"
-          supersedeGoalRun({ oldGoalRunID: priorTip.id, reason: supersedeReason })
+          return `Goal ${goalID} is in status=failed. execute_goal is reserved for first-time dispatch of pending goals. ` +
+                 `Retry failed goals via retry_failed_goals — that path enforces the per-goal retry budget, writes a retry_analysis_ decision-log entry, ` +
+                 `and is the single canonical retry path. ` +
+                 `If the contract itself needs changing before another attempt, use modify_goal first (it resets the goal to pending via supersede), then call execute_goal.`
         }
+
+        // goal.status === "pending" — dispatch the first attempt. Retries for
+        // failed goals are the exclusive responsibility of retry_failed_goals
+        // so the retry budget (engine.max_goal_retries) and escalation gate
+        // see every attempt.
 
         ensureGoalInWorkflow(goalID, goal.title)
         await trackStepStart("execute_goal", goalID)
@@ -1299,45 +1290,56 @@ export function createOrchestratorTools(input: {
           return `Missing per_goal_analysis for failed goal(s): ${missing.join(", ")}. Call query_failed_goals first, then provide analysis for EVERY failed goal before retry. Retry rejected.`
         }
 
-        // ── Per-goal retry budget ──
-        // Each goal has its own retry_count. Goals that exceeded max_goal_retries
-        // are permanently failed and excluded from retry.
+        // ── Per-goal retry budget + escalation gate ──
+        // Two independent knobs, both on total failure count (NOT on LLM-chosen
+        // failure_class strings, which prior art showed the LLM re-labels the
+        // same root cause across retries and silently bypasses string-match
+        // gates):
+        //
+        //   escalation_threshold (advisory, fires first): when a goal has
+        //     failed this many times, retry_failed_goals returns an escalation
+        //     message instead of superseding. The orchestrator is forced to
+        //     change strategy (modify_goal / add_goal / fail_task) rather than
+        //     loop the same contract.
+        //
+        //   max_goal_retries (hard ceiling): absolute cap. Goals past this
+        //     are marked exhausted and cascade-propagate to pending deps.
+        //
+        // Invariant: escalation_threshold ≤ max_goal_retries. Config merge
+        // clamps the threshold, so we can read both here without re-validating.
         const orchCfg = await EngineConfig.get()
         const maxGoalRetries = orchCfg.max_goal_retries
+        const escalationThreshold = orchCfg.goal_escalation_threshold
 
-        // ── Repeated root cause detection ──
-        // If the same failure_class for a goal has been recorded 2+ times in
-        // Decision Log, a 3rd retry with the same class will not help. Force
-        // the Orchestrator to change strategy instead of looping.
-        {
-          const { createDecisionLog } = await import("@/decision-log")
-          const decisionLog = createDecisionLog(taskID)
-          const retryEntries = decisionLog.readByPhase("retry")
-          const repeatedGoals: string[] = []
-
-          for (const [goalID, analysis] of Object.entries(per_goal_analysis)) {
-            const priorSameClass = retryEntries.filter(e =>
-              e.goalID === goalID &&
-              typeof e.value === "string" &&
-              e.value.startsWith(`[${analysis.failure_class}]`)
-            )
-            if (priorSameClass.length >= 2) {
-              repeatedGoals.push(`"${goalID}" — failure_class="${analysis.failure_class}" repeated ${priorSameClass.length + 1} times`)
-            }
+        // retry_count is the number of prior retries (so the very first
+        // failure has retry_count = 0). A call to retry_failed_goals is a
+        // request to schedule attempt (retry_count + 2) — the +1 for the
+        // failure we're reacting to, +1 for the next attempt. Compare against
+        // escalationThreshold in terms of attempt count, NOT retry count.
+        const forceEscalate: typeof failed = []
+        for (const goal of failed) {
+          const attemptsSoFar = ((goal as any).retry_count ?? 0) + 1
+          if (attemptsSoFar >= escalationThreshold) {
+            forceEscalate.push(goal)
           }
+        }
 
-          if (repeatedGoals.length > 0) {
-            return [
-              `ESCALATION REQUIRED: ${repeatedGoals.length} goal(s) have the same failure class repeating 3+ times:`,
-              ...repeatedGoals.map(s => `  - ${s}`),
-              "",
-              "Retry with the same approach will not fix these. Choose a different strategy:",
-              "  - modify_goal to change acceptance_specs or owned_paths",
-              "  - add_goal to create a prerequisite",
-              "  - fail_task if the issue is fundamental",
-              "  - retry_failed_goals with a DIFFERENT failure_class + expected_fix (prove you changed approach)",
-            ].join("\n")
+        if (forceEscalate.length > 0) {
+          const lines = [
+            `ESCALATION REQUIRED: ${forceEscalate.length} goal(s) have failed ${escalationThreshold}+ times and cannot be retried with the current contract:`,
+          ]
+          for (const goal of forceEscalate) {
+            const attempts = ((goal as any).retry_count ?? 0) + 1
+            lines.push(`  - ${goal.id} "${goal.title}" — ${attempts} failed attempts`)
           }
+          lines.push(
+            "",
+            "Further retry_failed_goals on the same contract will not converge. Choose a different strategy:",
+            "  - modify_goal to change acceptance_specs / owned_paths (resets the goal to pending)",
+            "  - add_goal to insert a prerequisite goal",
+            "  - fail_task if the issue is fundamental and cannot be resolved",
+          )
+          return lines.join("\n")
         }
 
         const retryable: typeof failed = []

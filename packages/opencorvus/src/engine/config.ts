@@ -54,6 +54,13 @@ export interface DeliveryConfig {
   timeout_ms: number
   max_retries: number
   skills: string[]
+  /** How many merge-conflict resolution passes the orchestrator may hand to
+   *  executor before failing the goal. Each pass dispatches a build-agent
+   *  session with conflict markers present in the goal's worktree and asks
+   *  it to reconcile both goals' intents. Hit the cap → decision_log
+   *  `merge_conflict_cap_reached` + goal failed (`retry_failed_goals` can
+   *  still re-dispatch the goal under a fresh baseRef on a later run). */
+  merge_conflict_max_retries: number
 }
 
 export interface DesignAnalystConfig {
@@ -79,6 +86,13 @@ export interface EngineConfigType {
   max_fix_runs: number
   /** Max retries per individual goal. Goal permanently fails after this many retries. */
   max_goal_retries: number
+  /**
+   * Advisory escalation gate: when a goal has accumulated this many failed
+   * attempts, `retry_failed_goals` forces the orchestrator to change strategy
+   * (modify_goal / add_goal / fail_task) instead of retrying the same contract.
+   * Must be ≤ max_goal_retries (config merge clamps to that invariant).
+   */
+  goal_escalation_threshold: number
   /** Max delivery reject → rework → re-deliver cycles before failing the task.
    *  Prevents infinite adversarial loops. Default: 3. */
   max_delivery_iterations: number
@@ -129,6 +143,7 @@ const DEFAULTS: EngineConfigType = {
     timeout_ms: 1_200_000, // 20 min (was 10)
     max_retries: 2,
     skills: [],
+    merge_conflict_max_retries: 2,
   },
   design_analyst: {
     max_steps: 80,         // was 50
@@ -145,7 +160,8 @@ const DEFAULTS: EngineConfigType = {
   },
   max_runs: 15,            // was 10
   max_fix_runs: 20,
-  max_goal_retries: 5,     // was 3
+  max_goal_retries: 5,     // hard ceiling
+  goal_escalation_threshold: 3,  // advisory: force strategy change after 3 failures
   max_delivery_iterations: 3,
   max_executor_groups: 5,
   default_workflow: "pipeline",
@@ -181,6 +197,16 @@ export namespace EngineConfig {
 // 内部合并逻辑
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Escalation threshold must never exceed the hard retry ceiling — otherwise
+ * the escalation path can never fire before `exhausted` takes over, and the
+ * gate becomes dead code. Clamp once at merge time so downstream readers
+ * don't each have to remember the invariant.
+ */
+function clampEscalationThreshold(threshold: number, maxRetries: number): number {
+  return Math.min(threshold, maxRetries)
+}
+
 function merge(user?: Config.Info["assistant"]): EngineConfigType {
   return {
     requirements: {
@@ -207,6 +233,8 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       timeout_ms: user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
       skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
+      merge_conflict_max_retries:
+        user?.delivery?.merge_conflict_max_retries ?? DEFAULTS.delivery.merge_conflict_max_retries,
     },
     design_analyst: {
       max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,
@@ -221,6 +249,10 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
     max_goal_retries: user?.max_goal_retries ?? DEFAULTS.max_goal_retries,
+    goal_escalation_threshold: clampEscalationThreshold(
+      user?.goal_escalation_threshold ?? DEFAULTS.goal_escalation_threshold,
+      user?.max_goal_retries ?? DEFAULTS.max_goal_retries,
+    ),
     max_delivery_iterations: user?.max_delivery_iterations ?? DEFAULTS.max_delivery_iterations,
     max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
