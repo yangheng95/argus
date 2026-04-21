@@ -34,6 +34,20 @@ export type EngineGoalStatus = "pending" | "running" | "passed" | "failed"
 export type EngineMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type EngineRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
 export type EngineRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+
+/**
+ * Why a goal_run was superseded — i.e. what triggered the new attempt that
+ * sits at the supersede chain head. Promoted from `metadata.superseded_reason`
+ * to a first-class column so deriveGoalStatus / readiness / decision-log can
+ * branch on a typed enum instead of a free-form string. Each value names
+ * exactly one engine-level retry intent; the operator-facing detail (`why
+ * the human / LLM chose this`) lives in decision_log, not here.
+ */
+export type EngineGoalRunSupersededReason =
+  | "manual_retry"      // retry_failed_goals: explicit operator retry under per-goal budget
+  | "delivery_rework"   // delivery verdict=rejected: arbiter sent the goal back for rework
+  | "modify_contract"   // modify_goal: contract changed, prior run is stale under new contract
+  | "restart_stage"     // restart_from_stage / resetTaskGoalsToPending: bulk re-anchor
 export type EngineInteractionType = "permission" | "question"
 export type EngineInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 
@@ -456,6 +470,14 @@ export const EngineGoalRunTable = sqliteTable(
      *  tail (no successor) as authoritative — retries re-dispatch without
      *  mutating history and without resurrecting terminal states. */
     supersede_of: text(),
+    /** Why this row's tip was superseded (i.e. why a new attempt was opened).
+     *  Set on the OLD row by `Goal.startNewAttempt` / `supersedeGoalRun`
+     *  when the prior run is in a terminal state but the goal must re-dispatch.
+     *  `deriveGoalStatus` projects terminal tips with this column non-null
+     *  back to `pending` so the dispatch loop picks them up. NULL on rows
+     *  that were never superseded. */
+    superseded_reason: text().$type<EngineGoalRunSupersededReason>(),
+    superseded_at: integer(),
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),
     time_started: integer(),
     time_completed: integer(),
