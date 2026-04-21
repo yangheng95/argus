@@ -1195,13 +1195,6 @@ export namespace Config {
             })
             .optional()
             .describe("Planner agent configuration"),
-          evaluator: z
-            .object({
-              tier: z.enum(["core", "standard", "full"]).optional().describe("Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'."),
-              per_goal_enabled: z.boolean().optional().describe("When true, runs the deterministic per-goal evaluator inside the goal-pool loop after the executor returns — goal fails if acceptance_specs strict scorers reject. Default: false (debug gate, legacy 'executor OK → passed' path is used)."),
-            })
-            .optional()
-            .describe("Deterministic evaluator runner config (build / test / lint / spec heuristics in delivery/checks/per-goal.ts). The evaluator LLM agent was collapsed into the delivery agent — these fields control only the deterministic pipeline."),
           delivery: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),

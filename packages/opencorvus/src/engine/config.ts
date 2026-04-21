@@ -181,8 +181,13 @@ export namespace EngineConfig {
   /**
    * 加载完整配置：默认值 ← opencorvus.jsonc
    *
-   * 每次调用都会重新读取 Config（Config 内部有缓存），
-   * 因此运行时修改 opencorvus.jsonc 后下一次调用即生效。
+   * Contract: this namespace holds NO module-level cache of its own. Each
+   * call routes through `Config.get()`, which reacts to `Config.state.reset()`
+   * inside `Config.update()` (see `PATCH /config` in server/routes/config.ts).
+   * Consequence: UI-driven edits to opencorvus.jsonc take effect on the very
+   * next call — no restart, no explicit reset here. If a future change adds
+   * a memoized field to `EngineConfig`, add a matching reset and wire it
+   * into `PATCH /config`, otherwise the UI-live guarantee breaks silently.
    */
   export async function get(): Promise<EngineConfigType> {
     const cfg = await Config.get()

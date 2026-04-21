@@ -137,63 +137,6 @@ describe("overlay contract", () => {
     })
   })
 
-  test("Config schema parses configs that omit the deleted EvaluatorConfig fields", async () => {
-    // The Config schema dropped assistant.evaluator.{max_steps,timeout_ms,skills}
-    // when the evaluator agent was collapsed into delivery. A config file that
-    // sets ONLY the surviving fields (tier, per_goal_enabled) must still parse.
-    await using tmp = await tmpdir({
-      config: {
-        assistant: {
-          evaluator: {
-            tier: "core",
-            per_goal_enabled: true,
-          },
-        },
-      } as Partial<Config.Info>,
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const cfg = await Config.get()
-        expect(cfg.assistant?.evaluator?.tier).toBe("core")
-        expect(cfg.assistant?.evaluator?.per_goal_enabled).toBe(true)
-      },
-    })
-  })
-
-  test("Config schema STRIPS legacy assistant.evaluator.max_steps without erroring", async () => {
-    // Pre-existing user configs may still carry the deleted fields. Zod's
-    // default object behavior strips unknown keys. Verify this still holds —
-    // if a strict() snuck in, this would throw.
-    await using tmp = await tmpdir({
-      config: {
-        assistant: {
-          evaluator: {
-            // @ts-expect-error - legacy fields removed from schema
-            max_steps: 999,
-            // @ts-expect-error - legacy fields removed from schema
-            timeout_ms: 999_999,
-            // @ts-expect-error - legacy fields removed from schema
-            skills: ["legacy"],
-            tier: "standard",
-            per_goal_enabled: false,
-          },
-        },
-      } as Partial<Config.Info>,
-    })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        // Must not throw
-        const cfg = await Config.get()
-        // Surviving fields land
-        expect(cfg.assistant?.evaluator?.tier).toBe("standard")
-        // Stripped fields are absent
-        expect((cfg.assistant?.evaluator as any)?.max_steps).toBeUndefined()
-      },
-    })
-  })
-
   test("EngineConfig defaults workflow to pipeline (board fallback path)", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

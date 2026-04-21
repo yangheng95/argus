@@ -116,13 +116,12 @@ export async function* runGoalPipeline(
       now: Date.now(),
     })
 
-    // Executor finished — move to `evaluating`, not `completed`. goal-pool is
-    // the only caller; it either runs the per-goal evaluator and then settles
-    // the row to completed/failed, or (when per_goal_enabled=false) immediately
-    // marks completed after the empty-delivery guard. Keeping the row in
-    // `evaluating` at this point means engine_goal.status can be derived from
-    // goal_run alone (Phase 4 invariant) — a delivered-but-rejected goal no
-    // longer requires a separate UPDATE on engine_goal.
+    // Executor finished — move to `evaluating`, not `completed`. goal-pool
+    // is the only caller; it hands the delivery to the delivery agent which
+    // settles the row to completed/failed. Keeping the row in `evaluating`
+    // at this point means engine_goal.status can be derived from goal_run
+    // alone (Phase 4 invariant) — a delivered-but-rejected goal no longer
+    // requires a separate UPDATE on engine_goal.
     updateGoalRun(goalRunID, { status: "evaluating" })
     updateGoalRunExecutorSessionStatus(goalRunID, "completed")
 
