@@ -592,6 +592,14 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   -- LAST link as authoritative. This lets retry re-dispatch without mutating
   -- history and without collapsing the live/terminal/retriable catalog.
   supersede_of        text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
+  -- superseded_reason / superseded_at: typed columns naming why a terminal
+  -- goal_run was superseded (i.e. why a new attempt opens for the same goal).
+  -- Set on the OLD row by Goal.startNewAttempt / supersedeGoalRun. Enum values
+  -- match EngineGoalRunSupersededReason in engine.sql.ts. NULL on rows that
+  -- were never superseded. deriveGoalStatus projects terminal tips with
+  -- non-null superseded_reason back to `pending` so the loop re-dispatches.
+  superseded_reason   text,
+  superseded_at       integer,
   metadata            text,
   lease_until          integer,
   time_started        integer,
