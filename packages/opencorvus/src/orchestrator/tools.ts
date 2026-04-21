@@ -2834,20 +2834,45 @@ export function createOrchestratorTools(input: {
         })
 
         try {
-          await SessionPrompt.prompt({
+          // CRITICAL: capture the build agent's final message. Without this,
+          // the orchestrator sees only a hardcoded "Build agent completed"
+          // string and re-invokes build on the same broken state after each
+          // delivery rejection — the classic build/deliver death spiral
+          // ("助手 delivery 拒绝后试图用 build 解决问题，死循环"). The build
+          // agent's own summary lives in the last text part of its session
+          // reply; we forward it (capped) so the orchestrator can judge
+          // whether build actually addressed the prior rejection before
+          // re-dispatching.
+          const result = await SessionPrompt.prompt({
             sessionID: buildSession.id,
             agent: "build",
             parts: [{ type: "text", text: request, kind: "user_content" }],
           })
           await Session.touch(buildSession.id).catch(err => log.warn("Session.touch failed (non-fatal metadata update)", { sessionID: buildSession.id, error: String(err) }))
-          // Build does NOT mark the task complete — it returns control to the
-          // orchestrator so it can call `deliver` for adversarial verification.
-          // The direct-workflow contract is `build → deliver` (loop on reject),
-          // and only deliver's accepted verdict transitions task to completed.
-          // Earlier behavior auto-completed the task here, which made the
-          // direct path a fire-and-forget escape hatch — incompatible with the
-          // workflow's mandatory verification step.
-          return `Build agent completed (session ${buildSession.id}). Now call \`deliver\` to run the metric executor + Arbiter. If the Arbiter returns \`continue\`, call \`build\` again with the rejection feedback, then deliver again — loop until accepted / stalled / aborted.`
+
+          const resultParts = Array.isArray((result as any)?.parts) ? (result as any).parts : []
+          const lastText = [...resultParts].reverse().find((p) => p?.type === "text")?.text ?? ""
+          const toolCallCount = resultParts.filter((p: any) => p?.type === "tool" || p?.type === "tool_call").length
+          const summary = lastText.length > 0
+            ? (lastText.length > 2000 ? lastText.slice(0, 2000) + "…(truncated)" : lastText)
+            : "(build agent produced no text summary — check session for raw tool calls)"
+
+          // Build does NOT mark the task complete — deliver must accept.
+          // Returning the actual build output (not a hardcoded string) is
+          // what lets the orchestrator detect "build looped without fixing
+          // the rejected thing" and call fail_task or modify_goal instead
+          // of re-dispatching build indefinitely.
+          return (
+            `Build agent finished (session ${buildSession.id}, ${toolCallCount} tool calls).\n\n` +
+            `### Build agent's final summary\n${summary}\n\n` +
+            `### Next step\n` +
+            `Call \`deliver\` to run the metric executor + Arbiter.\n` +
+            `If the Arbiter rejects, COMPARE this summary against the rejection details — ` +
+            `did build actually address the cited issues? If yes but deliver still rejects, ` +
+            `the goal contract may need modify_goal. If no, call build again with *more specific* ` +
+            `instructions citing what was missed (re-invoking build with the same prompt is a ` +
+            `deadlock; iteration budget will terminate the task).`
+          )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })

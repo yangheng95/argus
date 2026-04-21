@@ -82,10 +82,19 @@ export async function runTaskLoop(input: {
   // ── Main loop: Decision → Pool → Decision ──
   let iteration = 0
   /** Stale-state circuit breaker: fail the task if goal state does not change
-   *  for MAX_STALE_ITERATIONS consecutive decision cycles. This prevents the
-   *  infinite loop where pending goals are blocked by failed deps and the
-   *  Orchestrator cannot (or refuses to) resolve the situation. */
+   *  for MAX_STALE_ITERATIONS consecutive decision cycles. Catches the case
+   *  where the LLM forgets to call dispatch_goal (no new goal_run rows). */
   const MAX_STALE_ITERATIONS = 5
+  /** Absolute task-level iteration budget. Independent of stale detection —
+   *  even if the LLM keeps producing small progress every cycle, it cannot
+   *  burn more than this many decision rounds before the task is forced to
+   *  fail. The LLM-autonomous redesign removed most FSM gates; this is the
+   *  one hard ceiling that guarantees convergence in bounded time. Override
+   *  via `OPENCORVUS_MAX_TASK_ITERATIONS` (e.g. 200 for a debug PRD run). */
+  const MAX_TASK_ITERATIONS = parseInt(
+    process.env.OPENCORVUS_MAX_TASK_ITERATIONS || "50",
+    10,
+  )
   let lastGoalSnapshot = ""
   let staleCount = 0
   /** Floor for `findRecentReworkAttempt` — only consider supersede events
@@ -101,6 +110,20 @@ export async function runTaskLoop(input: {
     if (!task) { log.error("task not found, exiting loop", { taskID }); break }
     if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
       log.info("task in terminal state, exiting loop", { taskID, status: task.status })
+      break
+    }
+    // Task-level iteration budget (hard ceiling). Prevents unbounded loops
+    // when the LLM produces small progress each cycle but never converges.
+    if (iteration > MAX_TASK_ITERATIONS) {
+      const { updateTask } = await import("@/engine/state")
+      log.error("task iteration budget exhausted — failing task", {
+        taskID, iteration, max: MAX_TASK_ITERATIONS,
+      })
+      await updateTask(task, {
+        status: "failed",
+        error: `Task iteration budget exhausted: ${iteration}/${MAX_TASK_ITERATIONS}. ` +
+          `Increase OPENCORVUS_MAX_TASK_ITERATIONS if the workload legitimately needs more rounds.`,
+      }, "task-iteration budget")
       break
     }
 
