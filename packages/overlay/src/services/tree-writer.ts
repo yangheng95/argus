@@ -905,42 +905,69 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
         sessionID, opts.stage, opts.goalID || existing.goalID, opts.time,
       );
       if (newCardID !== existing.cardID) {
-        if (isPhase) {
-          // Session graduates to a phase card. Move any parts accumulated
-          // on the placeholder card onto the phase card, then drop the
-          // placeholder. Phase card header is managed by rebuildGoalStepCards.
-          setCardTreeStore(
-            "cards",
-            produce((cards: Record<string, CardNode>) => {
-              const placeholder = cards[existing.cardID];
+        // Rename is an atomic invariant: after this produce commits, the
+        // placeholder MUST be gone and newCardID MUST exist with a proper
+        // CardNode shape (parts: []). Splitting stub + move across two
+        // setStore calls previously caused `ensureBoundaryPart` to crash
+        // with "Cannot read properties of undefined (reading 'parts')"
+        // when something between the stub call and this block removed or
+        // failed to create the phase card. Do everything in one produce.
+        setCardTreeStore(
+          "cards",
+          produce((cards: Record<string, CardNode>) => {
+            const placeholder = cards[existing.cardID];
+            if (isPhase) {
+              // Phase card: preserve parts/childIDs if a prior rebuild
+              // already materialized it; otherwise seed the full CardNode
+              // here so downstream writes never see undefined.
               const phase = cards[newCardID];
-              if (placeholder && phase) {
-                for (const p of placeholder.parts || []) phase.parts.push(p);
-                delete cards[existing.cardID];
+              const phaseParts = phase?.parts ?? [];
+              const phaseChildIDs = phase?.childIDs ?? [];
+              if (placeholder) {
+                for (const p of placeholder.parts || []) phaseParts.push(p);
               }
-            }),
-          );
-        } else {
-          setCardTreeStore(
-            "cards",
-            produce((cards: Record<string, CardNode>) => {
-              const node = cards[existing.cardID];
-              if (node) {
-                cards[newCardID] = {
-                  ...node,
-                  id: newCardID,
-                  stage: opts.stage,
-                  accent: stageAccent(opts.stage),
-                  title: roleTitleKey(opts.stage),
-                  // Stub was born at observation time; the real message's
-                  // server timestamp supersedes it now that stage is known.
-                  time: opts.time,
-                };
-                delete cards[existing.cardID];
-              }
-            }),
-          );
-        }
+              cards[newCardID] = {
+                id: newCardID,
+                kind: "phase",
+                stage: opts.stage,
+                accent: stageAccent(opts.stage),
+                status: phase?.status ?? "running",
+                title: phase?.title ?? opts.stage,
+                parts: phaseParts,
+                childIDs: phaseChildIDs,
+                phaseID: phase?.phaseID ?? opts.stage,
+                phaseSessionKind: phase?.phaseSessionKind ?? opts.stage,
+                time: phase?.time ?? opts.time,
+              };
+            } else {
+              // Non-phase session card: migrate the placeholder CardNode
+              // under its real id. Fall back to a fresh shell when no
+              // placeholder exists (part event never arrived first).
+              cards[newCardID] = placeholder
+                ? {
+                    ...placeholder,
+                    id: newCardID,
+                    stage: opts.stage,
+                    accent: stageAccent(opts.stage),
+                    title: roleTitleKey(opts.stage),
+                    time: opts.time,
+                  }
+                : {
+                    id: newCardID,
+                    kind: "agent",
+                    stage: opts.stage,
+                    accent: stageAccent(opts.stage),
+                    status: "running",
+                    title: roleTitleKey(opts.stage),
+                    round: 0,
+                    parts: [],
+                    childIDs: [],
+                    time: opts.time,
+                  };
+            }
+            if (placeholder) delete cards[existing.cardID];
+          }),
+        );
         existing.cardID = newCardID;
       }
       existing.stage = opts.stage;
