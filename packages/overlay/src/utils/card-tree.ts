@@ -71,8 +71,11 @@ export interface CardNode {
    *  renderer prefers `childIDs` when present so it can dereference through
    *  the cardTreeStore proxy and preserve fine-grained reactivity. */
   childIDs?: string[];
-  /** Sort key (ms); undefined = appended at the end. */
-  time?: number;
+  /** Sort key (ms). Required for structural parity with the store CardNode
+   *  (see `store/card-tree.ts`). Transient tool-promoted cards are always
+   *  nested (never top-level), so the value is observation time only —
+   *  the rebuildTopLevelOrder sort never sees these. */
+  time: number;
   /** Explicit default for the unified fold store; if omitted falls back to
    *  (status === "running" || kind in {agent,goal}) ? open : closed. */
   defaultExpanded?: boolean;

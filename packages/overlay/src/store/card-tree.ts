@@ -126,8 +126,16 @@ export interface CardNode {
    *  The renderer prefers `childIDs` when present — if a card has both,
    *  the store-backed children win. */
   children?: CardNode[];
-  /** Chronological sort key in ms; `undefined` = append at end. */
-  time?: number;
+  /** Chronological sort key in ms. Required: every card carries its birth
+   *  timestamp. Upstream sources (message.info.time.created, task.time.created,
+   *  goal_run.time_started) are all `Date.now()` on the server — this layer
+   *  does not tolerate missing values. A card without a real time must fall
+   *  back to `Date.now()` at observation (only the `pending:session:<sid>`
+   *  SSE-race stub needs this, and that stub is hidden until the real
+   *  `message.updated` overwrites `time`). If a consumer ever reads an
+   *  undefined `time`, the rebuild sort throws — we surface the bug rather
+   *  than silently park the card at an arbitrary position. */
+  time: number;
   defaultExpanded?: boolean;
   /** Raw tool part for kind="tool" nodes — rendered by <Card> via
    *  InlineToolPart mode="body". Always undefined for non-tool kinds. */
