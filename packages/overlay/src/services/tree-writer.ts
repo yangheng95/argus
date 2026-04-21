@@ -840,7 +840,12 @@ interface EnsureSessionOpts {
  *  here so part writes don't throw; `rebuildGoalStepCards` later
  *  overlays the real title / status / phase metadata without clobbering
  *  the accumulated parts. */
-function resolvePhaseOrSessionCardID(sessionID: string, stage: string, goalID: string): {
+function resolvePhaseOrSessionCardID(
+  sessionID: string,
+  stage: string,
+  goalID: string,
+  time: number,
+): {
   cardID: string;
   isPhase: boolean;
 } {
@@ -852,7 +857,9 @@ function resolvePhaseOrSessionCardID(sessionID: string, stage: string, goalID: s
       // ordering: message.updated can arrive before the board refetch
       // that carries goalWorkflows[].steps[].phases). The stub's
       // fields get overlaid by rebuildGoalStepCards on the next
-      // board tick.
+      // board tick — including an authoritative `time` from
+      // goal_run.time_started, which replaces the session-derived
+      // birth time we stamp here.
       if (!cardTreeStore.cards[phaseCardID]) {
         setCardTreeStore("cards", phaseCardID, {
           id: phaseCardID,
@@ -865,6 +872,7 @@ function resolvePhaseOrSessionCardID(sessionID: string, stage: string, goalID: s
           childIDs: [],
           phaseID: phase.phaseID,
           phaseSessionKind: stage,
+          time: time > 0 ? time : undefined,
         });
       }
       return { cardID: phaseCardID, isPhase: true };
@@ -880,7 +888,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
     // Backfill stage on first real message.updated (defensive path-updated-first path).
     if (!existing.stage && opts.stage) {
       const { cardID: newCardID, isPhase } = resolvePhaseOrSessionCardID(
-        sessionID, opts.stage, opts.goalID || existing.goalID,
+        sessionID, opts.stage, opts.goalID || existing.goalID, opts.time,
       );
       if (newCardID !== existing.cardID) {
         if (isPhase) {
@@ -936,7 +944,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
   }
 
   const stage = opts.stage || "";
-  const { cardID, isPhase } = resolvePhaseOrSessionCardID(sessionID, stage, opts.goalID || "");
+  const { cardID, isPhase } = resolvePhaseOrSessionCardID(sessionID, stage, opts.goalID || "", opts.time);
 
   // Only non-phase sessions create their own card. For phase-absorbed
   // sessions the phase card already exists (resolvePhaseOrSessionCardID
@@ -1094,15 +1102,19 @@ function findWorkflowStepDefinition(
 function rebuildGoalStepCards(board: any): void {
   const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : [];
 
-  // Compute the alive set of executor step card ids across every goal. Steps
-  // + phases share a `step:<gid>:<stepID>[:phase:<pid>]` prefix, so we reap
-  // stale siblings in one prefix sweep (whole-goal removal wipes all its
-  // descendants).
+  // Compute the alive set of executor step card ids across every goal. A
+  // step is alive only once the backend records its goal_run.time_started:
+  // pending steps are deliberately not materialized so the overlay never
+  // previews a pipeline that hasn't begun. Keeping the alive set in lock-
+  // step with the creation rule below means any stale card from a prior
+  // session (reconnect replay) gets GC'd the moment its step reverts to
+  // pending, instead of lingering as a ghost.
   const aliveStepCardIDs = new Set<string>();
   for (const gw of goalWorkflows) {
     const gid = String(gw.goalID);
     const steps: any[] = Array.isArray(gw.steps) ? gw.steps : [];
     for (const step of steps) {
+      if (!(Number(step.startedAt) > 0)) continue;
       aliveStepCardIDs.add(goalStepCardID(gid, String(step.stepID)));
     }
   }
@@ -1141,9 +1153,13 @@ function rebuildGoalStepCards(board: any): void {
       typeof gw.orderIndex === "number" ? gw.orderIndex : i;
     for (const step of steps) {
       const stepID = String(step.stepID);
+      const stepStartedAt = Number(step.startedAt || 0);
+      // Lazy materialization: a step card is born when the executor
+      // actually picks it up (goal_run.time_started is written). Before
+      // that, rendering it would advertise work that hasn't started.
+      if (!(stepStartedAt > 0)) continue;
       const stepCardID = goalStepCardID(gid, stepID);
       const stepStatus = normalizeStepStatus(step.status);
-      const phases = Array.isArray(step.phases) ? step.phases : null;
       const phaseEntries = step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
         ? (step.phases as Record<string, { status?: string; startedAt?: number; completedAt?: number }>)
         : null;
@@ -1161,6 +1177,7 @@ function rebuildGoalStepCards(board: any): void {
         label: string,
         sessionKind: string,
         status: CardStatus,
+        startedAt: number,
       ) => {
         setCardTreeStore(
           "cards",
@@ -1173,6 +1190,7 @@ function rebuildGoalStepCards(board: any): void {
               prev.title = label;
               prev.phaseID = pid;
               prev.phaseSessionKind = sessionKind;
+              if (startedAt > 0) prev.time = startedAt;
               // parts / childIDs intentionally preserved.
             } else {
               cards[phaseCardID] = {
@@ -1186,6 +1204,7 @@ function rebuildGoalStepCards(board: any): void {
                 childIDs: [],
                 phaseID: pid,
                 phaseSessionKind: sessionKind,
+                time: startedAt > 0 ? startedAt : undefined,
               };
             }
           }),
@@ -1200,24 +1219,22 @@ function rebuildGoalStepCards(board: any): void {
           workflowStep && Array.isArray(workflowStep.phases) ? workflowStep.phases : [];
         for (const pdef of phaseDefs) {
           const pid = String(pdef.id);
+          const entry = phaseEntries[pid];
+          const phaseStartedAt = Number(entry?.startedAt || 0);
+          // Lazy materialization: a phase surfaces only once the backend
+          // records its goal_run.time_started. Pending phases have no
+          // birth time and must not preview in the timeline.
+          if (!(phaseStartedAt > 0)) continue;
           const phaseCardID = goalPhaseCardID(gid, stepID, pid);
-          const phaseStatusRaw = phaseEntries[pid]?.status;
-          const phaseStatus = normalizeStepStatus(phaseStatusRaw);
-          writePhaseCard(phaseCardID, pid, String(pdef.label || pid), String(pdef.sessionKind || ""), phaseStatus);
-          phaseChildIDs.push(phaseCardID);
-        }
-      } else if (phases) {
-        // Older / stub board payloads ship step.phases as an array of phase
-        // defs without per-phase status. Render them with pending so the
-        // hierarchy shape stays consistent even before the first goal_run
-        // row lands.
-        for (const pdef of phases) {
-          const pid = String((pdef as { id?: string }).id || "");
-          if (!pid) continue;
-          const phaseCardID = goalPhaseCardID(gid, stepID, pid);
-          const sk = String((pdef as { sessionKind?: string }).sessionKind || "");
-          const lbl = String((pdef as { label?: string }).label || pid);
-          writePhaseCard(phaseCardID, pid, lbl, sk, "pending");
+          const phaseStatus = normalizeStepStatus(entry?.status);
+          writePhaseCard(
+            phaseCardID,
+            pid,
+            String(pdef.label || pid),
+            String(pdef.sessionKind || ""),
+            phaseStatus,
+            phaseStartedAt,
+          );
           phaseChildIDs.push(phaseCardID);
         }
       }
@@ -1247,6 +1264,7 @@ function rebuildGoalStepCards(board: any): void {
         stepID,
         goalID: gid,
         goalDescription: gw.goalDescription || undefined,
+        time: stepStartedAt,
       });
     }
   }
@@ -1472,102 +1490,66 @@ function normalizeStepStatus(raw: any): CardStatus {
 
 // ── Top-level ordering ──
 //
-// Every session that isn't claimed by a goal-step is a top-level card:
-// assistant orchestrator, design-analyst, requirements, architect, planner,
-// build, etc. are siblings in the main order (sorted chronologically by
-// `time`). Executor step cards are interleaved in their own board-defined
-// order. Session ↔ session nesting was removed in the fix that restored
-// the original design (see specs/new-arch/07-panel-reactivity.md §身份规则).
+// One rule: every top-level card sorts by its birth `time`. No grouping,
+// no per-kind priority lanes. User-request, session cards (orchestrator,
+// requirements, architect, planner, build, ...), goal-step cards, orphan
+// interactions (question / permission), and synthetic optimistic bubbles
+// all interleave on a single chronological axis. Card identity rules
+// (see specs/new-arch/07-panel-reactivity.md §身份规则) still decide
+// *whether* a card surfaces at the top level — not where.
+//
+// Invariants this function relies on, enforced by the writer elsewhere:
+//   • Every surfacing card carries `time` — session cards from
+//     `message.info.time.created`, step/phase from goal_run.time_started,
+//     interactions from their message time, synthetic from the optimistic
+//     message's time, user-request from `task.time.created - 2` (the -2ms
+//     is what pins it ahead of any message that shares the exact task
+//     timestamp; no special-case needed here).
+//   • Phase and fidelity cards are always claimed as childIDs of their
+//     parent (step / requirements session) before this runs, so they drop
+//     out via the `claimedChildIDs` filter instead of needing kind logic.
+//   • `stage === ""` session cards are `pending:session:<sid>` stubs whose
+//     id mutates the moment the real stage arrives — surfacing them would
+//     render an identity that changes mid-frame.
+//   • `stage === "executor"` sessions are the goal's executor container
+//     (empty, parentID anchor only); the step card is their visual proxy.
+//   • `resolveSessionContainerCardID(info)` sessions are goal-phase-routed;
+//     their parts live on the phase card, not a duplicate top-level card.
 
 function rebuildTopLevelOrder(): void {
-  const order: string[] = [];
   const claimedChildIDs = new Set<string>();
   for (const node of Object.values(cardTreeStore.cards)) {
     for (const childID of node.childIDs || []) claimedChildIDs.add(childID);
   }
 
-  // Collect every session card that isn't claimed by a goal phase. Three
-  // filters:
-  //   1. stage === "" → `pending:session:<sid>` placeholders created when a
-  //      message.part.updated arrives before its message.updated. They will
-  //      be renamed + surfaced once the real stage lands; showing them now
-  //      would render an identity that mutates mid-frame.
-  //   2. resolveSessionContainerCardID(info) → session has a goalID whose
-  //      phase card exists. In that case rebuildCardHierarchy nested it
-  //      under the phase; skip here to avoid duplicating.
-  //   3. stage === "executor" → the goal's executor container session
-  //      (SessionKind="executor", empty, no LLM). It exists only as a
-  //      parentID anchor for plan/build/evaluate sub-sessions. The step
-  //      card in the overlay represents it visually; rendering the
-  //      container as its own card is duplicate UI.
-  const rootSessions: string[] = [];
+  const hiddenSessionCardIDs = new Set<string>();
   for (const info of sessions.values()) {
-    if (info.stage === "") continue;
-    if (info.stage === "executor") continue;
-    if (resolveSessionContainerCardID(info)) continue;
-    if (!cardTreeStore.cards[info.cardID]) continue;
-    rootSessions.push(info.cardID);
-  }
-  rootSessions.sort(
-    (a, b) => (cardTreeStore.cards[a]?.time || 0) - (cardTreeStore.cards[b]?.time || 0),
-  );
-
-  // Per-goal executor step cards in board order. Each goal contributes one
-  // `step:<gid>:<stepID>` card (the goal-scope executor); the goal-group
-  // wrapper layer was removed in the 2026-04-19 flatten — the step card
-  // itself now carries the goal title / round / description.
-  const goalCards: string[] = [];
-  const goalWorkflows: any[] = Array.isArray(boardStore.board?.goalWorkflows)
-    ? boardStore.board.goalWorkflows
-    : [];
-  for (const gw of goalWorkflows) {
-    const gid = String(gw.goalID);
-    const steps: any[] = Array.isArray(gw.steps) ? gw.steps : [];
-    for (const step of steps) {
-      const cardID = goalStepCardID(gid, String(step.stepID));
-      if (cardTreeStore.cards[cardID]) goalCards.push(cardID);
+    if (info.stage === "" || info.stage === "executor" || resolveSessionContainerCardID(info)) {
+      if (info.cardID) hiddenSessionCardIDs.add(info.cardID);
     }
   }
 
-  // Synthetic cards (chat.ts pending / optimistic bubbles) mirrored from
-  // messageStore.messages — sorted chronologically by their time field.
-  const syntheticCards: string[] = [];
-  for (const id of syntheticMirrorIDs) {
-    const cardID = syntheticCardID(id);
-    if (cardTreeStore.cards[cardID]) syntheticCards.push(cardID);
-  }
-  syntheticCards.sort(
-    (a, b) => (cardTreeStore.cards[a]?.time || 0) - (cardTreeStore.cards[b]?.time || 0),
-  );
-  const orphanInteractionCards = Object.keys(cardTreeStore.cards)
-    .filter((id) => id.startsWith("interaction-card:") && !claimedChildIDs.has(id))
-    .sort((a, b) => (cardTreeStore.cards[a]?.time || 0) - (cardTreeStore.cards[b]?.time || 0));
-
-  // ctx:user-request if present.
-  if (cardTreeStore.cards["ctx:user-request"]) {
-    order.push("ctx:user-request");
+  const order: string[] = [];
+  for (const cardID of Object.keys(cardTreeStore.cards)) {
+    if (claimedChildIDs.has(cardID)) continue;
+    if (hiddenSessionCardIDs.has(cardID)) continue;
+    const card = cardTreeStore.cards[cardID];
+    if (!card) continue;
+    // Phase / fidelity / tool cards must never appear at top level. They
+    // belong under their container; reaching here unclaimed means the
+    // hierarchy is mid-rebuild, so we drop them rather than let them
+    // "escape" (身份规则 §card-escape).
+    if (card.kind === "phase" || card.kind === "fidelity" || card.kind === "tool") continue;
+    order.push(cardID);
   }
 
-  // All session cards (assistant + sub-agents), chronological.
-  for (const id of rootSessions) order.push(id);
-
-  // Executor step cards in board order — surfaced after sessions. (If one
-  // is active at the same time an independent sub-agent session is running,
-  // the executor still reads as a structured per-goal container, so it
-  // belongs after the free-form session stream.)
-  for (const id of goalCards) order.push(id);
-
-  // Orphan interaction cards: task-level prompts with no live session container.
-  for (const id of orphanInteractionCards) order.push(id);
-
-  // Fidelity verdict cards are NOT placed at the top level — they attach
-  // under their requirements session via rebuildCardHierarchy. Card escape
-  // (a non-root card appearing at top level) is explicitly forbidden.
-
-  // Synthetic pending / optimistic bubbles append at the end — they carry
-  // `Date.now()` timestamps so chronological sort places them after all
-  // server-driven cards.
-  for (const id of syntheticCards) order.push(id);
+  order.sort((a, b) => {
+    const ta = cardTreeStore.cards[a]?.time;
+    const tb = cardTreeStore.cards[b]?.time;
+    const na = typeof ta === "number" ? ta : Number.POSITIVE_INFINITY;
+    const nb = typeof tb === "number" ? tb : Number.POSITIVE_INFINITY;
+    return na - nb;
+  });
 
   setCardTreeStore("order", order);
 }
