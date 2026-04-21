@@ -13,6 +13,7 @@
 import { apiUrl } from "./api";
 import { clearEventQueue, syncTask, setSseConnected } from "../store/messages";
 import { boardStore, loadBoard } from "../store/board";
+import { cardTreeStore } from "../store/card-tree";
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events";
 
 let sseSource: EventSource | null = null;
@@ -22,7 +23,23 @@ export function startSSE(taskID: string) {
   stopSSE();
   setSseConnected(false);
 
-  const after = Number(boardStore.taskSequence || 0);
+  // `after` decides how far back the server replays. loadBoard() sets
+  // boardStore.taskSequence to the board endpoint's lastSequence, which
+  // was intended as "I already have state up to here, only send me
+  // deltas." But cardTreeStore is populated exclusively by writeToTree
+  // from SSE events — loadBoard doesn't touch it. So if we use
+  // taskSequence naïvely, a fresh task-switch (resetWriter() cleared the
+  // card tree) receives ZERO replayed events and the conversation panel
+  // shows only the goal cards that loadBoard drew directly, losing the
+  // entire assistant / tool / message history.
+  //
+  // Guard: when the card tree is empty (reset-after-switch, post-reload,
+  // any resetWriter path), force after=0 so the server replays the full
+  // per-task event log into writeToTree. writeToTree is idempotent by
+  // event id, so re-applying events that loadBoard already reflected
+  // is safe.
+  const hasExistingCards = cardTreeStore.order.length > 0;
+  const after = hasExistingCards ? Number(boardStore.taskSequence || 0) : 0;
   const path = after > 0
     ? `task/${encodeURIComponent(taskID)}/events?after=${after}`
     : `task/${encodeURIComponent(taskID)}/events`;
