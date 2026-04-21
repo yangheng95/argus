@@ -55,7 +55,23 @@ export const DeliveryVerdict = z.object({
   startup_verification: StartupVerification,
   frontend_check: FrontendCheck,
   issues_found: z.array(z.string()),
+  /** The set of goal IDs the rejection attributes the failure to. The
+   *  orchestrator uses this set directly to decide which goals to re-open
+   *  via startNewAttempt — no downstream string-matching. Rule: when
+   *  `verdict === "rejected"` this array MUST be non-empty; when
+   *  `verdict === "accepted"` it is ignored (and normalized to []).
+   *  Each id must also be referenced by at least one rejection_details
+   *  entry's `goal_id`, enforced in normalizeVerdict. */
+  affected_goal_ids: z.array(z.string()).describe(
+    "Goal IDs this rejection blames. Required (non-empty) when verdict is rejected; must be a superset of all rejection_details[].goal_id values.",
+  ),
   rejection_details: z.array(z.object({
+    /** The goal this specific rejection belongs to. Required when the
+     *  rejection_details array is present. The delivery agent, which
+     *  writes the verdict, is the authority for attribution — downstream
+     *  consumers must not second-guess this via owned_paths or similar
+     *  heuristics. */
+    goal_id: z.string().describe("The goal id (gol_...) this rejection is attributed to. Must appear in affected_goal_ids."),
     category: z.enum(["build", "test", "lint", "runtime", "quality", "startup"]).describe("Category of the issue"),
     file: z.string().optional().describe("Affected file path, if applicable"),
     error: z.string().describe("Description of the error or issue"),
@@ -313,6 +329,46 @@ function normalizeVerdict(input: unknown): DeliveryVerdictType {
     (item): item is string => typeof item === "string" && item.trim().length > 0,
   )
 
+  // Attribution contract (see DeliveryVerdict schema comment):
+  //   - accepted  → affected_goal_ids is normalized to [] and ignored
+  //   - rejected  → affected_goal_ids MUST be non-empty, and every
+  //                 rejection_details[].goal_id MUST appear in the set.
+  // Rejecting a verdict here triggers the outer MAX_RETRIES parse loop so
+  // the agent gets another turn to produce a compliant payload.
+  if (!Array.isArray(obj.affected_goal_ids)) obj.affected_goal_ids = []
+  obj.affected_goal_ids = Array.from(
+    new Set(
+      (obj.affected_goal_ids as unknown[]).filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      ),
+    ),
+  )
+
+  if (obj.verdict === "accepted") {
+    obj.affected_goal_ids = []
+  } else {
+    // verdict === "rejected"
+    if ((obj.affected_goal_ids as string[]).length === 0) {
+      throw new Error(
+        "Delivery agent rejected the delivery but produced no affected_goal_ids — the agent must cite which goal(s) the rejection is attributed to.",
+      )
+    }
+    const affectedSet = new Set(obj.affected_goal_ids as string[])
+    const details = Array.isArray(obj.rejection_details) ? (obj.rejection_details as Array<Record<string, unknown>>) : []
+    for (const d of details) {
+      if (typeof d.goal_id !== "string" || d.goal_id.trim().length === 0) {
+        throw new Error(
+          "Delivery agent produced a rejection_details entry without goal_id — every rejection must be attributed to a specific goal.",
+        )
+      }
+      if (!affectedSet.has(d.goal_id)) {
+        throw new Error(
+          `Delivery agent produced rejection_details with goal_id="${d.goal_id}" that is not listed in affected_goal_ids (${[...affectedSet].join(", ") || "empty"}).`,
+        )
+      }
+    }
+  }
+
   return DeliveryVerdict.parse(obj)
 }
 
@@ -525,7 +581,7 @@ function buildUserPrompt(
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.description}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
+            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id and affected_goal_ids when you reject)\n\n**Objective:** ${g.description}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
         )
         .join("\n\n---\n\n"),
   )
@@ -640,27 +696,30 @@ function buildUserPrompt(
   // whole stage fail extraction. Reserve the last step for the verdict.
   sections.push(
     "## Final Output (REQUIRED)\n\n" +
-    "Before you stop, you MUST emit the verdict in the structured format the " +
-    "extractor expects. Use these exact section headers (Markdown), in order:\n\n" +
-    "### Verdict\n" +
-    "accepted\n" +
-    "(or: rejected)\n\n" +
-    "### Summary\n" +
-    "<one paragraph: what works, what's left>\n\n" +
-    "### Launch Command\n" +
-    "`<the verified start command, e.g. bun dev>`\n\n" +
-    "### Startup Verification\n" +
-    "- attempted: true|false\n" +
-    "- success: true|false\n" +
-    "- output: <relevant log excerpt>\n\n" +
-    "### Frontend Check\n" +
-    "- attempted: true|false\n" +
-    "- renders_correctly: true|false\n" +
-    "- issues: <bullet list or 'none'>\n\n" +
-    "### Issues Found\n" +
-    "- <bullet list, or write 'none'>\n\n" +
-    "Do NOT skip any header. Do NOT wrap the verdict in JSON unless you " +
-    "have already finished all rework — plain Markdown sections are fine.",
+    "Before you stop, you MUST emit the verdict as a single JSON object. " +
+    "The extractor accepts either a bare ```json fenced block or a raw " +
+    "`{ ... }` body at the end of your message. Example shape (fields are " +
+    "all required; `launch_command`, `rejection_details`, `deferred_checks` " +
+    "may be omitted for accepted verdicts):\n\n" +
+    "```json\n" +
+    "{\n" +
+    "  \"verdict\": \"rejected\",\n" +
+    "  \"summary\": \"<one paragraph: what works, what's left>\",\n" +
+    "  \"launch_command\": \"<verified start command, e.g. bun dev>\",\n" +
+    "  \"startup_verification\": { \"attempted\": true, \"success\": false, \"output\": \"<log excerpt>\" },\n" +
+    "  \"frontend_check\": { \"attempted\": true, \"renders_correctly\": false, \"issues\": [\"…\"] },\n" +
+    "  \"issues_found\": [\"<bullet>\"],\n" +
+    "  \"affected_goal_ids\": [\"gol_xxx\", \"gol_yyy\"],\n" +
+    "  \"rejection_details\": [\n" +
+    "    { \"goal_id\": \"gol_xxx\", \"category\": \"build|test|lint|runtime|quality|startup\", \"file\": \"<path>\", \"error\": \"<what's wrong>\", \"suggestion\": \"<actionable fix>\" }\n" +
+    "  ]\n" +
+    "}\n" +
+    "```\n\n" +
+    "**Attribution contract (MANDATORY when `verdict` is `rejected`):**\n" +
+    "- `affected_goal_ids` MUST be non-empty — pick the goal IDs from the `# Goals` section above that this rejection blames. You are the authority; downstream code will not second-guess this.\n" +
+    "- Every entry in `rejection_details` MUST include a `goal_id` that also appears in `affected_goal_ids`.\n" +
+    "- If a rejection spans multiple goals, list every relevant goal id in `affected_goal_ids` and create one `rejection_details` entry per (goal, issue) pair.\n" +
+    "- A delivery that is merely \"bad overall\" with no specific goal attribution is NOT a valid rejection. If you cannot name the responsible goal, you have not investigated enough — go back and investigate. Your retry budget covers this.",
   )
 
   return sections.join("\n\n")
@@ -697,7 +756,8 @@ Rejection is the DEFAULT. The deliverable must EARN acceptance through evidence.
 6. **Executor claims vs. code**: When the prompt carries an "Executor Reports — ADVERSARIAL INPUT" section, treat every \`implementation_approach\` sentence and every \`design_decisions[].reason\` as a hypothesis to test, not a fact to accept. Open the relevant files and confirm the code matches the claim. Reject when the diff does not support the claim, when the stated reason merely restates the choice, or when the code contradicts the stated reason — record it under rejection_details with category="quality".
 
 Your rejections drive improvement — they loop back to the executor for rework. Each rejection MUST include:
-- Specific, actionable rejection_details with category, file, error, and suggestion
+- A non-empty \`affected_goal_ids\` at the top level, naming every goal this rejection blames. You are the single authority for attribution — the orchestrator will open a new attempt on exactly the goals you list here, nothing more, nothing less. A rejection with no goal attribution is invalid and will be retried.
+- Specific, actionable \`rejection_details\` entries. Every entry MUST carry a \`goal_id\` that also appears in \`affected_goal_ids\`. Category, file, error, and suggestion are required per entry.
 - Evidence from actual tool output (not assumptions)
 - Clear distinction between "I can fix this myself" (use write_file/edit_file) vs "this needs executor rework" (reject)
 
