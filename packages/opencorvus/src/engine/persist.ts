@@ -32,7 +32,6 @@ import {
   EngineTaskTable,
   type EngineDeliveryStatus,
   type EngineArtifactKind,
-  type EngineGoalRunSupersededReason,
 } from "./engine.sql"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
@@ -392,7 +391,7 @@ export function resetTaskGoalsToPending(input: {
  */
 function supersedeGoalRun(input: {
   oldGoalRunID: string
-  reason: EngineGoalRunSupersededReason
+  reason: string
   now?: number
 }) {
   const now = input.now ?? Date.now()
@@ -437,7 +436,7 @@ function supersedeGoalRun(input: {
  */
 export function startNewAttempt(input: {
   goalID: string
-  reason: EngineGoalRunSupersededReason
+  reason: string
   now?: number
   resetWorkspace?: boolean
   feedback?: Record<string, unknown>
@@ -474,7 +473,7 @@ export function startNewAttempt(input: {
   // superseded_reason column + superseded_at timestamp is the persistent
   // log of "a new attempt opened under reason X at time T." Loop-side
   // consumers track offset via `lastReworkSeenAt` and query via
-  // `findRecentReworkAttempt`. No separate Bus event needed; an in-memory
+  // `findRecentDeliveryRejection`. No separate Bus event needed; an in-memory
   // pub/sub would only duplicate what the goal_run chain already records.
   syncGoalStatus(input.goalID, `startNewAttempt:${input.reason}`)
   return { supersededTipID, resetWorkspace }

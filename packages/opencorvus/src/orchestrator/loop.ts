@@ -97,11 +97,11 @@ export async function runTaskLoop(input: {
   )
   let lastGoalSnapshot = ""
   let staleCount = 0
-  /** Floor for `findRecentReworkAttempt` — only consider supersede events
-   *  newer than this. Initialized to loop start so we don't react to
-   *  pre-existing rework markers from previous loop runs of the same task
-   *  (e.g. crash recovery), and bumped past every consumed event so a
-   *  single rework only fires the trigger once. */
+  /** Floor for `findRecentDeliveryRejection` — only consider verdict
+   *  artifacts newer than this. Initialized to loop start so we don't react
+   *  to pre-existing verdicts from previous loop runs of the same task
+   *  (e.g. crash recovery), and bumped past every consumed artifact so a
+   *  single rejection only fires the trigger once. */
   let lastReworkSeenAt = Date.now()
 
   while (!signal?.aborted) {
@@ -148,25 +148,25 @@ export async function runTaskLoop(input: {
     const taskAfter = findTask(taskID)
     if (!taskAfter) break
 
-    // ── Delivery rework detection ──
-    // When the deliver tool rejects within the iteration budget it calls
-    // startNewAttempt(reason="delivery_rework") on the goals the
-    // delivery agent itself attributed the rejection to (verdict.affected_goal_ids).
-    // No blanket reset — that was removed; the delivery agent is the sole
-    // attribution authority.
+    // ── Delivery rejection detection ──
+    // When the deliver tool rejects it writes a verdict artifact
+    // (label="delivery-agent-verdict", payload.verdict="rejected") and calls
+    // startNewAttempt on the goals the delivery agent attributed the rejection
+    // to (verdict.affected_goal_ids). This block watermarks the artifact
+    // stream so the orchestrator agent gets a `delivery_rejected` trigger
+    // with structured feedback on its next decision point. The orchestrator
+    // reads affected_goal_ids + rejection_details to decide strategy
+    // (modify_goal vs add_goal vs let-it-redispatch).
     //
-    // This block detects the supersede event so the orchestrator agent
-    // gets a `delivery_rejected` trigger (with structured feedback from
-    // the latest verdict artifact) on its next decision point. The
-    // orchestrator reads affected_goal_ids + rejection_details to decide
-    // strategy (modify_goal vs add_goal vs let-it-redispatch).
+    // Keyed on the verdict artifact — NOT on goal_run.superseded_reason
+    // string matching. Per rule 23 we do not branch on enum label values;
+    // the artifact is the first-class delivery output.
     if (taskAfter.status === "active") {
-      const { findRecentReworkAttempt, findLatestDeliveryVerdictArtifact } = await import("@/engine/store")
-      const reworkAttempt = findRecentReworkAttempt(taskID, lastReworkSeenAt)
-      if (reworkAttempt) {
-        lastReworkSeenAt = (reworkAttempt.superseded_at ?? Date.now()) + 1
-        const verdictArt = findLatestDeliveryVerdictArtifact(taskID)
-        const verdict = (verdictArt?.payload ?? {}) as Record<string, unknown>
+      const { findRecentDeliveryRejection } = await import("@/engine/store")
+      const verdictArt = findRecentDeliveryRejection(taskID, lastReworkSeenAt)
+      if (verdictArt) {
+        lastReworkSeenAt = (verdictArt.time_created ?? Date.now()) + 1
+        const verdict = (verdictArt.payload ?? {}) as Record<string, unknown>
         const feedback: Record<string, unknown> = {
           verdict_summary: verdict.summary,
           issues_found: Array.isArray(verdict.issues_found) ? verdict.issues_found : [],
@@ -174,15 +174,15 @@ export async function runTaskLoop(input: {
           rejection_details: Array.isArray(verdict.rejection_details) ? verdict.rejection_details : [],
           startup_verification: verdict.startup_verification,
           frontend_check: verdict.frontend_check,
-          verdict_artifact_id: verdictArt?.id,
+          verdict_artifact_id: verdictArt.id,
         }
-        log.info("delivery rework detected — re-triggering orchestrator", {
+        log.info("delivery rejection detected — re-triggering orchestrator", {
           taskID,
-          supersededTipID: reworkAttempt.id,
+          verdictArtifactID: verdictArt.id,
           issues: Array.isArray(feedback.issues_found) ? (feedback.issues_found as unknown[]).length : 0,
         })
 
-        // Reset stale counter — delivery rework is genuine progress
+        // Reset stale counter — delivery rejection is genuine progress
         lastGoalSnapshot = ""
         staleCount = 0
 

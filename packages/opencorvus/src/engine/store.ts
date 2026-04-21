@@ -348,24 +348,30 @@ export function findGoalRun(goalRunID: string) {
 }
 
 /**
- * Most recent goal_run within `taskID` whose tip was superseded under
- * reason="delivery_rework" at-or-after `sinceMs`. Used by the orchestrator
- * loop to detect "the deliver tool just opened a fresh attempt cycle for
- * this task" without polling task.metadata for one-shot soft signals.
+ * Most recent delivery-agent verdict artifact for `taskID` whose verdict is
+ * "rejected" and `time_created >= sinceMs`. Used by the orchestrator loop to
+ * detect "the delivery tool just rejected" and wake the orchestrator with
+ * structured feedback. Keyed on the artifact (first-class delivery output)
+ * rather than on `goal_run.superseded_reason = "delivery_rework"` string
+ * matching — per rule 23 (no state-machine enums / branching on enum labels).
  *
- * Returns undefined when no such row exists in the window.
+ * Returns undefined when no matching artifact exists in the window.
  */
-export function findRecentReworkAttempt(taskID: string, sinceMs: number) {
-  return Database.use((db) =>
-    db.select().from(EngineGoalRunTable)
+export function findRecentDeliveryRejection(taskID: string, sinceMs: number) {
+  const art = Database.use((db) =>
+    db.select().from(EngineArtifactTable)
       .where(and(
-        eq(EngineGoalRunTable.task_id, taskID),
-        eq(EngineGoalRunTable.superseded_reason, "delivery_rework"),
-        gte(EngineGoalRunTable.superseded_at, sinceMs),
+        eq(EngineArtifactTable.task_id, taskID),
+        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
+        gte(EngineArtifactTable.time_created, sinceMs),
       ))
-      .orderBy(desc(EngineGoalRunTable.superseded_at))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
+  if (!art) return undefined
+  const payload = (art.payload ?? {}) as Record<string, unknown>
+  if (payload.verdict !== "rejected") return undefined
+  return art
 }
 
 /**
