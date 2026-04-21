@@ -46,7 +46,7 @@ import {
   requireRun,
   requireTask,
 } from "@/engine/store"
-import { DEFAULT_MAX_RUNS, DEFAULT_MAX_FIX_RUNS } from "@/engine/helpers"
+import { effectiveMaxRuns } from "@/engine/helpers"
 import {
   GoalContractAddInputSchema,
   GoalContractUpdateSchema,
@@ -1514,7 +1514,7 @@ export function createOrchestratorTools(input: {
 
         // Budget enforcement: max_runs
         const totalRuns = findRuns(taskID).length
-        const maxRuns = (task.budget as EngineBudget | null)?.max_runs ?? DEFAULT_MAX_RUNS
+        const maxRuns = await effectiveMaxRuns(task)
         if (totalRuns >= maxRuns) {
           return `Budget exhausted: ${totalRuns}/${maxRuns} runs used. Cannot create more runs. Consider delivering current state or failing the task.`
         }

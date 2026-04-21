@@ -22,9 +22,10 @@
 
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
+import type { EngineGoalStatus } from "./engine.sql"
 import {
-  DEFAULT_MAX_FIX_RUNS,
-  DEFAULT_MAX_RUNS,
+  effectiveMaxFixRuns,
+  effectiveMaxRuns,
   clarificationTranscriptSection,
   operatorNotesSection,
 } from "./helpers"
@@ -203,6 +204,30 @@ export function describeGoal(goal: GoalRow): GoalDesc {
   }
 }
 
+/**
+ * Collapse a GoalDesc's derived boolean flags back into a single enum value
+ * compatible with the legacy `engine_goal.status` string. Kept so call-sites
+ * that used to filter `goals.filter(g => g.status === "pending")` can move to
+ * `goals.filter(g => statusOf(g) === "pending")` without touching their
+ * comparison logic. The mapping is a pure projection of the tip state:
+ *
+ *   is_running       → "running"
+ *   is_terminal_ok   → "passed"
+ *   is_terminal_fail → "failed"
+ *   never_dispatched | needs_redispatch | is_aborted → "pending"
+ *
+ * This is the same mapping `deriveGoalStatus` uses on the live chain, just
+ * expressed on the already-derived flags so callers don't re-hit the DB.
+ */
+export function statusOf(g: GoalDesc): EngineGoalStatus {
+  if (g.is_running) return "running"
+  if (g.is_terminal_ok) return "passed"
+  if (g.is_terminal_fail) return "failed"
+  // never_dispatched + needs_redispatch + is_aborted all project as
+  // "pending" — the goal may dispatch on the next turn.
+  return "pending"
+}
+
 // ---------------------------------------------------------------------------
 // Task description
 // ---------------------------------------------------------------------------
@@ -225,7 +250,7 @@ function describeVerdict(taskID: string): DeliveryVerdictDesc | undefined {
   }
 }
 
-export function describeTask(taskID: string): TaskDesc {
+export async function describeTask(taskID: string): Promise<TaskDesc> {
   const task = findTask(taskID)
   if (!task) {
     throw new Error(`describeTask: task ${taskID} not found`)
@@ -233,7 +258,7 @@ export function describeTask(taskID: string): TaskDesc {
   return describeTaskFromRow(task)
 }
 
-export function describeTaskFromRow(task: TaskRow): TaskDesc {
+export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const goals = listGoals(task.id).map(describeGoal)
 
   let specSummary: string | undefined
@@ -255,8 +280,10 @@ export function describeTaskFromRow(task: TaskRow): TaskDesc {
   }
 
   const totalRuns = findRuns(task.id).length
-  const maxRuns = (task.budget as { max_runs?: number } | null)?.max_runs ?? DEFAULT_MAX_RUNS
-  const maxFixRuns = (task.budget as { max_fix_runs?: number } | null)?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
+  const [maxRuns, maxFixRuns] = await Promise.all([
+    effectiveMaxRuns(task),
+    effectiveMaxFixRuns(task),
+  ])
   const activeRun = task.active_run_id ? findRun(task.active_run_id) : undefined
   const fixCount = activeRun?.retry_count ?? 0
 

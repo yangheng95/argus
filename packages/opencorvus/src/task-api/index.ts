@@ -51,8 +51,6 @@ import {
   UpdateTaskChecksInput,
 } from "@/engine/model"
 import {
-  DEFAULT_MAX_RUNS,
-  DEFAULT_MAX_FIX_RUNS,
   ORCHESTRATOR_POLL_INTERVAL_MS,
   budgetRow,
   deriveTitle,
