@@ -61,18 +61,9 @@ export function unregisterTaskAbort(taskID: string): void {
 // Types
 // ---------------------------------------------------------------------------
 
-type RoutingInput = z.infer<typeof CreateTaskInput>["routing"]
 type BudgetInput = z.infer<typeof CreateTaskInput>["budget"]
 type PriorityInput = z.infer<typeof CreateTaskInput>["priority"]
 type ChannelBindingInput = z.infer<typeof CreateTaskInput>["channelBinding"]
-
-export type PipelineMetadata = {
-  executor: RunRow["executor"]
-  goals?: z.infer<typeof CreateTaskInput>["goals"]
-  milestones?: z.infer<typeof CreateTaskInput>["milestones"]
-  routing?: RoutingInput
-  sessionID: string
-}
 
 // ---------------------------------------------------------------------------
 // persistQueuedTask — fast-path for POST /task (<10ms)
@@ -94,18 +85,8 @@ export function persistQueuedTask(input: {
   budget?: BudgetInput
   metadata: Record<string, unknown>
   channelBinding?: ChannelBindingInput
-  milestones?: z.infer<typeof CreateTaskInput>["milestones"]
-  goals?: z.infer<typeof CreateTaskInput>["goals"]
-  routing?: RoutingInput
   projectID: string
 }) {
-  const pipeline: PipelineMetadata = {
-    executor: input.executor,
-    goals: input.goals,
-    milestones: input.milestones,
-    routing: input.routing,
-    sessionID: input.sessionID,
-  }
   Database.transaction((db) => {
     db.insert(EngineTaskTable)
       .values({
@@ -117,11 +98,12 @@ export function persistQueuedTask(input: {
         title: input.title,
         request: input.request,
         attachments: input.attachments?.length ? input.attachments : undefined,
+        executor: input.executor,
         kind: input.kind ?? "workflow",
         status: "queued",
         priority: input.priority ?? "normal",
         budget: budgetRow(input.budget),
-        metadata: { ...input.metadata, _pipeline: pipeline },
+        metadata: input.metadata,
         time_created: input.now,
         time_updated: input.now,
         time_status_changed: input.now,

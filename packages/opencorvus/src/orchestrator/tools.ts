@@ -1491,7 +1491,7 @@ export function createOrchestratorTools(input: {
         }
 
         const now = Date.now()
-        const executor = (task.metadata?._pipeline as any)?.executor ?? "opencode"
+        const executor = task.executor
         const sessionID = task.session_id!
 
         // Create a lightweight plan version (goals as plan nodes, no global planner)
@@ -1698,7 +1698,7 @@ export function createOrchestratorTools(input: {
         })
 
         if (plan.queueFreshRun && task.active_plan_version_id) {
-          const executor = (task.metadata?._pipeline as any)?.executor ?? "opencode"
+          const executor = task.executor
           freshRun = createRun({
             taskID,
             planVersionID: task.active_plan_version_id,
