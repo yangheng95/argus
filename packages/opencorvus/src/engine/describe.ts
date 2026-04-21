@@ -22,8 +22,12 @@
 
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
-import type { EngineGoalStatus } from "./engine.sql"
 import { deriveGoalStatus } from "./goal-status"
+
+/** Derived goal status enum — returned by goalStatusByID / statusOf.
+ *  The column it used to shadow (engine_goal.status) is gone; this is
+ *  the function-return type for the live derivation. */
+export type EngineGoalStatus = "pending" | "running" | "passed" | "failed"
 import {
   effectiveMaxFixRuns,
   effectiveMaxRuns,

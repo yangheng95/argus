@@ -220,25 +220,6 @@ describe("Goal.startNewAttempt — idempotence", () => {
 })
 
 describe("Goal.startNewAttempt — options", () => {
-  test("clearCascade wipes goal.cascade_state", () => {
-    Database.use((db) =>
-      db.update(EngineGoalTable).set({ cascade_state: "failed" }).where(eq(EngineGoalTable.id, goalID)).run(),
-    )
-    expect(findGoal(goalID)?.cascade_state).toBe("failed")
-
-    const gr = `grun_cascade_${Date.now()}`
-    insertGoalRun({ id: gr, status: "failed" })
-
-    const result = startNewAttempt({
-      goalID,
-      reason: "restart_stage",
-      clearCascade: true,
-    })
-
-    expect(result.clearedCascade).toBe(true)
-    expect(findGoal(goalID)?.cascade_state).toBeNull()
-  })
-
   test("resetWorkspace nulls workspace_dir / workspace_branch / workspace_base_ref", () => {
     Database.use((db) =>
       db.update(EngineGoalTable)

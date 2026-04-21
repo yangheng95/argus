@@ -124,9 +124,9 @@ export const AnalyticsTool = Tool.define("analytics", {
           .all(),
       )
       const total = goals.length
-      const passed = goals.filter((g) => g.engine_goal.status === "passed").length
-      const failed = goals.filter((g) => g.engine_goal.status === "failed").length
-      const pending = goals.filter((g) => g.engine_goal.status === "pending").length
+      const passed = goals.filter((g) => goalStatusByID(g.engine_goal.id) === "passed").length
+      const failed = goals.filter((g) => goalStatusByID(g.engine_goal.id) === "failed").length
+      const pending = goals.filter((g) => goalStatusByID(g.engine_goal.id) === "pending").length
       const blocking = goals.filter((g) => g.engine_goal.priority === "blocking").length
       const advisory = goals.filter((g) => g.engine_goal.priority === "advisory").length
 

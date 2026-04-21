@@ -45,7 +45,6 @@ export type {
   EngineExecutor,
   EnginePlanStatus,
   EngineGoalPriority,
-  EngineGoalStatus,
   EngineMilestoneStatus,
   EngineRunStatus,
   EngineRunPhase,

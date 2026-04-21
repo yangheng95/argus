@@ -30,7 +30,13 @@ export type EngineTaskPriority = "critical" | "high" | "normal" | "low"
 export type EngineExecutor = "opencode" | "codex" | "claude-code"
 export type EnginePlanStatus = "active" | "superseded"
 export type EngineGoalPriority = "blocking" | "advisory"
-export type EngineGoalStatus = "pending" | "running" | "passed" | "failed"
+// engine_goal.status was retired in the LLM-autonomous redesign: it was a
+// cached projection of (cascade_state, goal_run chain tip) used as a
+// dispatch gate, and the FSM gate itself was the source of status-carousel
+// deadlocks. Call-sites read engine/describe.ts::goalStatusByID (live
+// derivation from goal_run chain) or engine/describe.ts::describeGoal
+// (structured view with is_running / is_terminal_ok / etc.). The column
+// is gone; no type alias for it.
 export type EngineMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type EngineRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
 export type EngineRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
@@ -291,25 +297,13 @@ export const EngineGoalTable = sqliteTable(
     // --- Orchestrator-managed fields ---
     priority: text().notNull().$type<EngineGoalPriority>().default("blocking"),
     source: text().notNull().default("spec"),
-    /**
-     * Cached projection of (cascade_state ?? goal_run chain tip).
-     * Authored by exactly two writers:
-     *  - `syncGoalStatus()` — derives from the latest goal_run tip
-     *  - `updateGoalCascadeFailed()` — sets cascade_state and then
-     *    projects via syncGoalStatus
-     * All other writes are a bug (they produce divergence).
-     */
-    status: text().notNull().$type<EngineGoalStatus>().default("pending"),
-    /**
-     * Explicit terminal outcome for goals that bypass the goal_run dispatch
-     * chain:
-     *   - "failed"  — deps permanently failed (cascade), OR verification goal
-     *                  evaluation rejected.
-     *   - "passed"  — verification goal evaluation accepted.
-     *   - NULL      — status projects from the goal_run chain (normal path).
-     * Written only by updateGoalCascadeFailed / updateGoalVerificationOutcome.
-     */
-    cascade_state: text().$type<"failed" | "passed">(),
+    // RETIRED: engine_goal.status + cascade_state columns.
+    // Both were cached projections serving dispatch-gate logic that the
+    // LLM-autonomous redesign deleted. Current state is always derived
+    // live from the goal_run chain via engine/describe.ts::goalStatusByID
+    // or engine/describe.ts::describeGoal. Dep-failure propagation is the
+    // LLM's decision (it reads depends_on + each dep's terminal flags in
+    // the describe snapshot), not a schema column.
     /** Per-goal retry counter. Incremented each time retry_goal resets this goal. */
     retry_count: integer().notNull().default(0),
     /** Goal-scoped live workspace directory reused across retries until terminal cleanup. */
