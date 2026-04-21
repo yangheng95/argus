@@ -140,13 +140,12 @@ export namespace Orchestrator {
       let workflow: MiniWorkflow | undefined
       let workflowState: WorkflowState | undefined
       if (trigger.kind === "created") {
-        const requestedID = (task.metadata as any)?._workflow?.workflowID
+        const requestedID = task.workflow_state?.workflowID
         const workflowID = requestedID ?? await WorkflowRegistry.defaultID()
         workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
         if (workflow) {
           workflowState = createWorkflowState(workflow)
-          const meta = { ...(task.metadata ?? {}), _workflow: workflowState }
-          await updateTask(task, { metadata: meta }, `Workflow selected: ${workflow.name}`)
+          await updateTask(task, { workflow_state: workflowState }, `Workflow selected: ${workflow.name}`)
           EngineProtocol.emit(EngineEvent.WorkflowSelected, {
             taskID,
             workflowID: workflow.id,
@@ -156,7 +155,7 @@ export namespace Orchestrator {
         }
       } else {
         // Load existing workflow state for re-triggers
-        const existingState = (task.metadata as any)?._workflow as WorkflowState | undefined
+        const existingState = task.workflow_state ?? undefined
         if (existingState) {
           workflow = await WorkflowRegistry.resolve(existingState.workflowID) ?? WorkflowRegistry.resolveSync(existingState.workflowID)
           workflowState = existingState

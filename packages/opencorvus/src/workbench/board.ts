@@ -198,7 +198,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
   )
 
   // Workflow-structured fields (workflow, goalWorkflows, requirements, architect).
-  // Returns empty object when task has no _workflow state.
+  // Returns empty object when task has no workflow_state.
   const workflowFields = buildWorkflowFields(task, goals)
 
   return {
@@ -733,14 +733,14 @@ function boardOverview(input: {
 // ═══════════════════════════════════════════════════════════════════
 // MiniWorkflow board fields — workflow state, per-goal workflows,
 // requirements list, and architect summary. Empty when task has no
-// _workflow metadata (e.g. simple tasks that skip requirements analysis).
+// workflow_state (e.g. simple tasks that skip requirements analysis).
 // ═══════════════════════════════════════════════════════════════════
 
 function buildWorkflowFields(
   task: typeof EngineTaskTable.$inferSelect,
   goals: Array<typeof EngineGoalTable.$inferSelect>,
 ) {
-  const ws = (task.metadata as any)?._workflow as WorkflowState | undefined
+  const ws = task.workflow_state ?? undefined
   const workflow = ws
     ? WorkflowRegistry.resolveSync(ws.workflowID)
     : WorkflowRegistry.resolveSync("pipeline")
@@ -759,10 +759,10 @@ function buildWorkflowFields(
 
   // Goal-scope step status is projected from engine_goal_run (see
   // engine/workflow.ts::projectGoalSteps). Task-scope steps remain persisted
-  // in task.metadata._workflow.taskSteps as before.
+  // in task.workflow_state.taskSteps as before.
   const projectedGoalSteps = projectGoalSteps(task.id, workflow)
 
-  // Simple tasks without _workflow metadata get reported with all steps "pending".
+  // Simple tasks without workflow_state get reported with all steps "pending".
   const workflowBoard = {
     id: workflow.id,
     name: workflow.name,

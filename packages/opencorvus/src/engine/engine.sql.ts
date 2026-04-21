@@ -191,6 +191,12 @@ export const EngineTaskTable = sqliteTable(
      *  carried several other fields that turned out to be dead). Read by the
      *  dispatch tool when creating runs. */
     executor: text().notNull().$type<EngineExecutor>().default("opencode"),
+    /** Task-level workflow tracking (which workflow / current step / per-step
+     *  status / per-goal step status). Promoted from task.metadata._workflow.
+     *  See `src/engine/workflow.ts` WorkflowState for the shape. Initialized
+     *  at task creation, updated by the orchestrator workflow-tracking tool,
+     *  read by overlay board rendering. */
+    workflow_state: text({ mode: "json" }).$type<import("@/engine/workflow").WorkflowState>(),
     /** "workflow" tasks go through requirements→design→architect→execute→deliver.
      *  "build" tasks bypass the pipeline and run the build agent directly —
      *  used for one-shot edits / Q&A / quick fixes. Both kinds share the same
