@@ -127,7 +127,7 @@ async function continueTaskMessage(
 ) {
   const task = requireTask(taskID)
   const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-  const { isTaskLoopActive, runTaskLoop } = await import("@/orchestrator/loop")
+  const { runTaskLoop } = await import("@/orchestrator/loop")
 
   // Inject fast path: a live executor is consuming a stream and the new
   // message can be injected mid-turn without restarting anything.
@@ -143,15 +143,10 @@ async function continueTaskMessage(
   // how the new message becomes visible to whatever runs next.
   await appendTaskSessionMessage(task, text, attachments)
 
-  // Single rule: if the task is not in a terminal state (completed / failed /
-  // cancelled) AND no task loop is currently running, a user message is the
-  // signal to start a fresh loop. `runTaskLoop` itself is idempotent
-  // (activeLoops guard), so the re-check is defense-in-depth; the real gate
-  // is "not terminal". Failed / cancelled tasks first transition to queued
-  // (re-activation) so the loop's terminal-state early exit doesn't fire.
+  // Terminal tasks (completed / failed / cancelled) re-activate: flip status
+  // to queued so the orchestrator loop's terminal early-exit doesn't fire
+  // before it sees the new message.
   const terminal = task.status === "completed" || task.status === "failed" || task.status === "cancelled"
-  const loopRunning = isTaskLoopActive(taskID)
-
   if (terminal) {
     await updateTask(
       task,
@@ -160,35 +155,25 @@ async function continueTaskMessage(
     )
   }
 
-  if (!loopRunning) {
-    const { hooks } = await import("@/engine/state")
-    // Fire-and-forget: the loop drains asynchronously. User only needs to
-    // know the message was accepted; the loop's progress streams back
-    // through events.
-    runTaskLoop({
-      taskID,
-      trigger: { kind: "retry" },
-      hooks: hooks(),
-    }).catch((err) => {
-      log.error("task loop failed on user-message resume", {
-        taskID, error: err instanceof Error ? err.message : String(err),
-      })
+  // Always call runTaskLoop. Per-taskID serial chain in loop.ts ensures a
+  // second call while a loop is in flight waits for the current pass to
+  // finish, then runs a fresh pass that reads the just-appended message.
+  // There is no "is running" in-memory flag and no operator-note bypass —
+  // every user message deterministically drives a decision pass.
+  const { hooks } = await import("@/engine/state")
+  runTaskLoop({
+    taskID,
+    trigger: { kind: "retry" },
+    hooks: hooks(),
+  }).catch((err) => {
+    log.error("task loop failed on user-message resume", {
+      taskID, error: err instanceof Error ? err.message : String(err),
     })
-    return {
-      mode: terminal ? ("agent_retry" as const) : ("resumed" as const),
-      resumed: true,
-      status: terminal ? ("queued" as const) : (task.status as string),
-    }
-  }
-
-  // Loop is already running; the message is in session history and will
-  // be picked up on the next decision point. Record an operator note as
-  // a visibility aid for describe-layer rendering.
-  await EngineService.recordOperatorNote(taskID, text)
+  })
   return {
-    mode: "queued" as const,
-    resumed: false,
-    status: task.status as string,
+    mode: terminal ? ("agent_retry" as const) : ("resumed" as const),
+    resumed: true,
+    status: terminal ? ("queued" as const) : (task.status as string),
   }
 }
 

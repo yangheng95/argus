@@ -29,27 +29,43 @@ import { isRunReadyForGoalDispatch } from "./scheduler"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
-// Guard: only one loop per task. Prevents orphan recovery from starting
-// a second loop while one is already running.
-const activeLoops = new Set<string>()
-
-/** Check if a task loop is actively running for the given task ID. */
-export function isTaskLoopActive(taskID: string): boolean {
-  return activeLoops.has(taskID)
-}
-
 /** Inactivity timeout for the Orchestrator Decision Point (no hard timeout). */
 const DECISION_INACTIVITY_MS = parseInt(
   process.env.OPENCORVUS_DECISION_INACTIVITY_MS || String(10 * 60 * 1000), 10,
 ) // 10 min default — if Orchestrator produces no streaming tokens for 10 min, abort
 
+// Per-taskID serial chain. A second runTaskLoop() call for the same task
+// waits for the in-flight loop to finish, then runs a fresh decision pass —
+// which reads the freshly-appended session message. Replaces the previous
+// in-memory "is running" Set that silently dropped user messages into
+// recordOperatorNote and was the root of the "queued, no resume" bug.
+const taskLoopChain = new Map<string, Promise<void>>()
+
+export async function runTaskLoop(input: {
+  taskID: string
+  trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
+  signal?: AbortSignal
+  hooks: RuntimeHooks
+}) {
+  const prev = taskLoopChain.get(input.taskID) ?? Promise.resolve()
+  const next = prev.catch(() => undefined).then(() => runTaskLoopInner(input))
+  taskLoopChain.set(input.taskID, next)
+  // Clean up only if we're still the tail — a later call may have chained
+  // on top of `next` before it resolved, and that one must stay in the map.
+  next.finally(() => {
+    if (taskLoopChain.get(input.taskID) === next) taskLoopChain.delete(input.taskID)
+  })
+  return next
+}
+
 /**
  * Run the full task lifecycle as a blocking loop.
  *
- * Called once per task. Returns when the task reaches a terminal state
- * (completed, failed) or when the signal is aborted.
+ * Returns when the task reaches a terminal state (completed, failed) or when
+ * the signal is aborted. Concurrent entries for the same task are serialised
+ * by `runTaskLoop` above.
  */
-export async function runTaskLoop(input: {
+async function runTaskLoopInner(input: {
   taskID: string
   trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
   signal?: AbortSignal
@@ -57,13 +73,6 @@ export async function runTaskLoop(input: {
 }) {
   const { taskID, signal, hooks } = input
   let trigger = input.trigger
-
-  // Prevent duplicate loops for the same task
-  if (activeLoops.has(taskID)) {
-    log.info("task loop already running, skipping", { taskID })
-    return
-  }
-  activeLoops.add(taskID)
 
   // Immediately mark the task as "active" so hasActiveTaskInProject() blocks
   // subsequent tasks from starting their loops concurrently. Without this,
@@ -425,14 +434,12 @@ export async function runTaskLoop(input: {
     }
   }
 
-  activeLoops.delete(taskID)
   log.info("task loop exited", { taskID, iteration })
-  // Loop-in-flight is a RUNTIME fact (activeLoops set), not a DB column.
   // When the loop exits without the task reaching terminal, the task stays
-  // at status="active" in DB but `isTaskLoopActive(id) === false`. The
-  // next user message will notice this and start a fresh loop via
-  // resumeTask(). No auto-restart, no new status enum.
-  // (continues below — serial queue dispatch)
+  // at status="active" in DB. The next user message will append to the
+  // session and call runTaskLoop() again — the per-taskID serial chain
+  // ensures it runs after this call returns. No auto-restart, no new
+  // status enum, no in-memory "is running" flag.
 
   // Serial queue: when this task's loop exits, start the next queued task in the project.
   const completedTask = findTask(taskID)

@@ -17,9 +17,10 @@ const RECOVERY_REASON = "Process restart: executor session lost during recovery"
  * On process restart: clean up physical resources that leaked (executor
  * sessions, live goal_runs, orphan runs). THE LOOP IS NOT AUTOMATICALLY
  * RESTARTED — the user-message-driven model says the next run requires
- * a user message (resumeTask). Tasks stay at status="active" in DB; the
- * "loop is in flight" fact lives in the in-memory `activeLoops` set and
- * is checked by continueTaskMessage / resumeTask when user input arrives.
+ * a user message. Tasks stay at status="active" in DB; whether a loop is
+ * currently in flight is not tracked — every user message unconditionally
+ * calls runTaskLoop, and the per-taskID serial chain in orchestrator/loop.ts
+ * ensures concurrent calls are linearised rather than dropped.
  */
 export async function recoverProjectExecution(input: {
   projectID: string

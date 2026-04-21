@@ -18,9 +18,9 @@
  *   - external side effects (channel messages, gh PRs) — unrecoverable
  *
  * Concurrency:
- *   - If activeLoops.has(taskID), rewind aborts the loop via isTaskLoopActive
- *     check in the caller; the orchestrator loop honours abort signals and
- *     exits cleanly. The rewind UPDATE itself is a single-row write.
+ *   - A rewind intent aborts any in-flight orchestrator loop for the task
+ *     through the caller-provided AbortSignal; the loop honours that signal
+ *     and exits cleanly. The rewind UPDATE itself is a single-row write.
  */
 import { Database, eq } from "@/storage/db"
 import { Log } from "@/util/log"
