@@ -104,7 +104,7 @@ export async function runTaskLoop(input: {
 
     // ── Phase 1: Decision Point ──
     // Call Orchestrator with current state. It decides what to do:
-    //   - dispatch goals → calls dispatch_ready_goals/submit_execution tool → self-aborts
+    //   - dispatch goals → calls dispatch_goal/submit_execution tool → self-aborts
     //   - complete/fail task → calls fail_task/deliver tool → exits
     //   - no action → finishReason=stop with no dispatch
     log.info("decision point", { taskID, iteration, trigger: trigger.kind })

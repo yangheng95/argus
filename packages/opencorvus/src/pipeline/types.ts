@@ -151,7 +151,7 @@ export interface PipelineDelivery {
 export type FailureClass = "bug" | "plan_wrong" | "goal_wrong"
 
 // ---------------------------------------------------------------------------
-// Execution Dependencies — what execute_goal needs to run
+// Execution Dependencies — what dispatch_goal needs to run
 // ---------------------------------------------------------------------------
 
 export interface PipelineDeps {

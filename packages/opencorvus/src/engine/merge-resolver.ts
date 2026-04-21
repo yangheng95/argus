@@ -31,7 +31,7 @@
  *     tip. No file copying, no rebase, no external fetch.
  *
  *   • On cap exhaustion we hard-fail the goal and emit a
- *     `merge_conflict_cap_reached` decision-log entry so retry_failed_goals
+ *     `merge_conflict_cap_reached` decision-log entry so retry_goal
  *     and future operators see the reason.
  */
 import path from "path"

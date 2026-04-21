@@ -728,7 +728,7 @@ export const TaskBoardGoalWorkflow = z.object({
   workspaceDir: z.string().optional(),
   /** Branch currently checked out inside `workspaceDir`. */
   workspaceBranch: z.string().optional(),
-  /** How many times `retry_failed_goals` has reset this goal. */
+  /** How many times `retry_goal` has reset this goal. */
   retryCount: z.number().int(),
   priority: z.enum(["blocking", "advisory"]),
   steps: TaskBoardGoalWorkflowStep.array(),

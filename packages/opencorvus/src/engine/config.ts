@@ -59,7 +59,7 @@ export interface DeliveryConfig {
    *  session against the goal worktree — either with conflict markers
    *  present or with a retained merged tip that still fails post-merge
    *  build — and asks it to reconcile both goals' intents. Hit the cap → decision_log
-   *  `merge_conflict_cap_reached` + goal failed (`retry_failed_goals` can
+   *  `merge_conflict_cap_reached` + goal failed (`retry_goal` can
    *  still re-dispatch the goal under a fresh baseRef on a later run). */
   merge_conflict_max_retries: number
 }
@@ -89,7 +89,7 @@ export interface EngineConfigType {
   max_goal_retries: number
   /**
    * Advisory escalation gate: when a goal has accumulated this many failed
-   * attempts, `retry_failed_goals` forces the orchestrator to change strategy
+   * attempts, `retry_goal` forces the orchestrator to change strategy
    * (modify_goal / add_goal / fail_task) instead of retrying the same contract.
    * Must be ≤ max_goal_retries (config merge clamps to that invariant).
    */

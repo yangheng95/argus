@@ -71,7 +71,7 @@ export interface CreateRunInput {
  * Callers used to do `db.insert(EngineRunTable).values({...})` directly with
  * their own `status`/`phase`/`metadata`, which (a) bypassed event emission
  * and (b) scattered initial-state conventions across three different tools
- * (execute_goal, create_run, restart_from_stage). Funnel everything through
+ * (dispatch_goal, create_run, restart_from_stage). Funnel everything through
  * here so "a new run exists" is one fact with one audit trail.
  *
  * Optional `linkAsActive=true` also sets `task.active_run_id` in the same
