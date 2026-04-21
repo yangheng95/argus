@@ -20387,12 +20387,12 @@
           "properties"
         ]
       },
-      "Event.goal.attempt.opened": {
+      "Event.task.rewound": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "goal.attempt.opened"
+            "const": "task.rewound"
           },
           "properties": {
             "type": "object",
@@ -20401,35 +20401,27 @@
                 "type": "string",
                 "pattern": "^tsk.*"
               },
-              "goalID": {
-                "type": "string",
-                "pattern": "^gol.*"
+              "cursorTime": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "anchorEventID": {
+                "type": "string"
               },
               "reason": {
-                "type": "string",
-                "enum": [
-                  "manual_retry",
-                  "delivery_rework",
-                  "modify_contract",
-                  "restart_stage"
-                ]
+                "type": "string"
               },
-              "supersededTipID": {
-                "type": "string",
-                "pattern": "^glr.*"
-              },
-              "feedback": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {}
+              "rewindCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
               }
             },
             "required": [
               "taskID",
-              "goalID",
-              "reason"
+              "cursorTime",
+              "rewindCount"
             ]
           }
         },
@@ -25044,7 +25036,7 @@
             "$ref": "#/components/schemas/Event.goal.failed"
           },
           {
-            "$ref": "#/components/schemas/Event.goal.attempt.opened"
+            "$ref": "#/components/schemas/Event.task.rewound"
           },
           {
             "$ref": "#/components/schemas/Event.milestone.activated"

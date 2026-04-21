@@ -137,16 +137,14 @@ export type EventGoalFailed = {
   }
 }
 
-export type EventGoalAttemptOpened = {
-  type: "goal.attempt.opened"
+export type EventTaskRewound = {
+  type: "task.rewound"
   properties: {
     taskID: string
-    goalID: string
-    reason: "manual_retry" | "delivery_rework" | "modify_contract" | "restart_stage"
-    supersededTipID?: string
-    feedback?: {
-      [key: string]: unknown
-    }
+    cursorTime: number
+    anchorEventID?: string
+    reason?: string
+    rewindCount: number
   }
 }
 
@@ -1499,7 +1497,7 @@ export type Event =
   | EventGoalRunUpdated
   | EventGoalPassed
   | EventGoalFailed
-  | EventGoalAttemptOpened
+  | EventTaskRewound
   | EventMilestoneActivated
   | EventMilestonePassed
   | EventMilestoneFailed
