@@ -51,7 +51,6 @@ function seed() {
       .values({
         id: projectID,
         worktree: os.tmpdir(),
-        vcs: "git",
         name: "dam-integration",
         sandboxes: "[]",
         time_created: now,

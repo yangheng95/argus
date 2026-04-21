@@ -50,7 +50,6 @@ describe("DecisionLog.toPromptSection truncation", () => {
       db.insert(ProjectTable).values({
         id: projectID,
         worktree: process.cwd(),
-        vcs: "git",
         name: "DecisionLog Truncation Test",
         sandboxes: "[]",
         time_created: now,
@@ -171,7 +170,6 @@ describe("DecisionLog.phasePromptSectionForGoal bounded", () => {
       db.insert(ProjectTable).values({
         id: projectID,
         worktree: process.cwd(),
-        vcs: "git",
         name: "DecisionLog Phase Test",
         sandboxes: "[]",
         time_created: now,

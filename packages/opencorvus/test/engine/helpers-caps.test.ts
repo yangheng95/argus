@@ -19,7 +19,6 @@ function seedProjectAndTask() {
     db.insert(ProjectTable).values({
       id: projectID,
       worktree: process.cwd(),
-      vcs: "git",
       name: "Helpers Caps Test",
       sandboxes: "[]",
       time_created: now,

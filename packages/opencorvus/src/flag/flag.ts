@@ -24,7 +24,6 @@ export namespace Flag {
   export declare const OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS: boolean
   export declare const OPENCORVUS_DISABLE_EXTERNAL_SKILLS: boolean
   export declare const OPENCORVUS_DISABLE_PROJECT_CONFIG: boolean
-  export const OPENCORVUS_FAKE_VCS = process.env["OPENCORVUS_FAKE_VCS"]
   export declare const OPENCORVUS_CLIENT: string
   export const OPENCORVUS_SERVER_PASSWORD = process.env["OPENCORVUS_SERVER_PASSWORD"]
   export const OPENCORVUS_SERVER_USERNAME = process.env["OPENCORVUS_SERVER_USERNAME"]

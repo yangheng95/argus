@@ -77,9 +77,10 @@ export const ProjectRoutes = lazy(() =>
           const { hasActiveSessions } = await import("@/engine/runtime")
           if (hasActiveSessions()) {
             // Active sessions prevent a full dispose.  Refresh the cached
-            // project in-place so Instance.project.vcs reflects "git", then
-            // discard the stale VCS state so the next GET /vcs re-initialises
+            // project in-place so downstream reads see the new worktree/sandboxes,
+            // then discard the stale VCS state so the next GET /vcs re-initialises
             // the branch tracker against the newly-created repo.
+            // (Project.isGitRepo probes disk directly — no cache to invalidate.)
             await Instance.refresh()
             Vcs.resetState()
           } else {

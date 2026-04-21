@@ -33,7 +33,6 @@ function seed() {
     db.insert(ProjectTable).values({
       id: projectID,
       worktree: process.cwd(),
-      vcs: "git",
       name: "Retry Feedback Test",
       sandboxes: "[]",
       time_created: now,

@@ -471,7 +471,7 @@ export namespace Worktree {
   }
 
   export const create = fn(CreateInput.optional(), async (input) => {
-    if (Instance.project.vcs !== "git") {
+    if (!Project.isGitRepo(Instance.directory)) {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 
@@ -587,7 +587,7 @@ export namespace Worktree {
   }
 
   export const remove = fn(RemoveInput, async (input) => {
-    if (Instance.project.vcs !== "git") {
+    if (!Project.isGitRepo(Instance.directory)) {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 
@@ -686,7 +686,7 @@ export namespace Worktree {
   })
 
   export const reset = fn(ResetInput, async (input) => {
-    if (Instance.project.vcs !== "git") {
+    if (!Project.isGitRepo(Instance.directory)) {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 

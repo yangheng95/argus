@@ -5,6 +5,7 @@ import z from "zod"
 import path from "path"
 import { Log } from "@/util/log"
 import { Instance, lazyInstanceState } from "./instance"
+import { Project } from "./project"
 import { Filesystem } from "@/util/filesystem"
 import { FileWatcher } from "@/file/watcher"
 
@@ -118,7 +119,7 @@ export namespace Vcs {
 
   const state = lazyInstanceState(
     async () => {
-      if (Instance.project.vcs !== "git") {
+      if (!Project.isGitRepo(Instance.directory)) {
         return { branch: async () => undefined, unsubscribe: undefined }
       }
       let current = await currentBranch()
@@ -151,9 +152,9 @@ export namespace Vcs {
   /**
    * Discard the cached VCS state for the current instance directory.
    * The next call to `info()` or `branch()` will re-initialize from scratch,
-   * picking up the latest `Instance.project.vcs` value and re-attaching the
-   * `.git/HEAD` file watcher.  Call this after `git init` completes while
-   * active sessions prevent a full `Instance.dispose()`.
+   * re-probing `.git` on disk and re-attaching the `.git/HEAD` file watcher.
+   * Call this after `git init` completes while active sessions prevent a full
+   * `Instance.dispose()`.
    */
   export function resetState() {
     state.reset()
@@ -164,10 +165,9 @@ export namespace Vcs {
   }
 
   export async function info() {
-    // Check .git directory directly (bypass Instance.project.vcs cache)
-    // so info() reflects the current filesystem state even if the Instance
-    // cache is stale (e.g. immediately after `git init`).
-    const initialized = Filesystem.stat(path.join(Instance.directory, ".git"))?.isDirectory() === true
+    // Single source of truth for "is this a git repo": disk probe via
+    // Project.isGitRepo. Never consult a cached column/field — rule 22.
+    const initialized = Project.isGitRepo(Instance.directory)
     if (!initialized) {
       return parse("", { initialized: false })
     }

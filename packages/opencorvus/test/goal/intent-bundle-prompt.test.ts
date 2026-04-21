@@ -26,7 +26,6 @@ function seedBase() {
     db.insert(ProjectTable).values({
       id: projectID,
       worktree: process.cwd(),
-      vcs: "git",
       name: "Intent Bundle Test",
       sandboxes: "[]",
       time_created: now,

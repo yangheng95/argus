@@ -20,6 +20,7 @@ import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { ModelsDev } from "../../provider/models"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { bootstrap } from "../bootstrap"
 import { Session } from "../../session"
 import { Identifier } from "../../id/id"
@@ -243,8 +244,7 @@ export const GithubInstallCommand = cmd({
           }
 
           async function getAppInfo() {
-            const project = Instance.project
-            if (project.vcs !== "git") {
+            if (!Project.isGitRepo(Instance.directory)) {
               prompts.log.error(`Could not find git repository. Please run this command from a git repository.`)
               throw new UI.CancelledError()
             }

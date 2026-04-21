@@ -72,11 +72,22 @@ export namespace Project {
     return next
   }
 
+  /**
+   * The single source of truth for "is this directory a git repository."
+   * Sync `.git` probe (file or directory — `.git` is a file in linked
+   * worktrees). No DB cache, no Instance cache: rule 22 forbids double-source,
+   * and the prior cached `Info.vcs` column silently lied whenever `.git` was
+   * deleted between Instance initializations, making auto-init never run and
+   * `Worktree.create` throw WorktreeCreateFailedError forever.
+   */
+  export function isGitRepo(directory: string): boolean {
+    return Filesystem.stat(path.join(directory, ".git")) !== undefined
+  }
+
   export const Info = z
     .object({
       id: z.string(),
       worktree: z.string(),
-      vcs: z.literal("git").optional(),
       name: z.string().optional(),
       icon: z
         .object({
@@ -124,7 +135,6 @@ export namespace Project {
     return {
       id: row.id,
       worktree: row.worktree,
-      vcs: row.vcs ? Info.shape.vcs.parse(row.vcs) : undefined,
       name: row.name ?? undefined,
       icon,
       time: {
@@ -151,7 +161,6 @@ export namespace Project {
             id: "global",
             worktree: "/",
             sandbox: "/",
-            vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
           }
         }
 
@@ -164,7 +173,6 @@ export namespace Project {
           id,
           sandbox: directory,
           worktree: directory,
-          vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
         }
       }
 
@@ -188,7 +196,6 @@ export namespace Project {
           id,
           sandbox,
           worktree,
-          vcs: "git",
         }
       }
 
@@ -196,7 +203,6 @@ export namespace Project {
         id: "global",
         worktree: "/",
         sandbox: "/",
-        vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
       }
     })
 
@@ -206,7 +212,6 @@ export namespace Project {
       const fresh: Info = {
         id: data.id,
         worktree: data.worktree,
-        vcs: data.vcs as Info["vcs"],
         sandboxes: [],
         time: {
           created: Date.now(),
@@ -221,7 +226,6 @@ export namespace Project {
     const result: Info = {
       ...existing,
       worktree: data.worktree,
-      vcs: data.vcs as Info["vcs"],
       time: {
         ...existing.time,
         updated: Date.now(),
@@ -233,7 +237,6 @@ export namespace Project {
     const insert = {
       id: result.id,
       worktree: result.worktree,
-      vcs: result.vcs ?? null,
       name: result.name,
       icon_url: result.icon?.url,
       icon_color: result.icon?.color,
@@ -245,7 +248,6 @@ export namespace Project {
     }
     const updateSet = {
       worktree: result.worktree,
-      vcs: result.vcs ?? null,
       name: result.name,
       icon_url: result.icon?.url,
       icon_color: result.icon?.color,
@@ -267,7 +269,7 @@ export namespace Project {
   }
 
   export async function discover(input: Info) {
-    if (input.vcs !== "git") return
+    if (!isGitRepo(input.worktree)) return
     if (input.icon?.override) return
     if (input.icon?.url) return
     const matches = await Glob.scan("**/favicon.{ico,png,svg,jpg,jpeg,webp}", {
@@ -319,8 +321,8 @@ export namespace Project {
   }
 
   export async function initGit(directory: string) {
-    const current = await fromDirectory(directory)
-    if (current.project.vcs === "git") {
+    if (isGitRepo(directory)) {
+      const current = await fromDirectory(directory)
       return InitGitResult.parse({
         created: false,
         project: current.project,
