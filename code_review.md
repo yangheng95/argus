@@ -407,3 +407,5 @@ type InteractionRequest = {
 8. Interaction 设计统一原则
 9. 职责分离设计原则
 10. 智能调度设计原则
+11. 删除合成消息，拆分助手/用户消息
+12. 删除drizzle，改用纯事件驱动设计
