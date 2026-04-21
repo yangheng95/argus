@@ -1,6 +1,30 @@
 ---
 name: webpage-clone
-description: Clone a live webpage as a static single-file HTML skeleton with visual similarity ≥ 95%. Uses headless-browser extraction, deterministic structure/token analysis, and an SSIM+pixel-match feedback loop. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage.
+description: Clone a live webpage as a static single-file HTML skeleton with visual similarity ≥ 95%. Uses headless-browser extraction, deterministic structure/token analysis, and an SSIM+pixel-match feedback loop. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (Apple HIG, macOS/iOS app, a specific site URL, a Figma/screenshot) and expects a visual match.
+stage: build
+auto_detect:
+  files:
+    - index.html
+    - public/index.html
+    - src/App.tsx
+    - src/App.vue
+    - src/main.tsx
+    - vite.config.ts
+    - vite.config.js
+    - next.config.js
+    - next.config.ts
+    - package.json
+  deps:
+    - react
+    - react-dom
+    - vue
+    - svelte
+    - next
+    - nuxt
+    - solid-js
+    - astro
+    - vite
+    - tailwindcss
 priority: 60
 ---
 

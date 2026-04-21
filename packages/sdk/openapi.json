@@ -20387,6 +20387,57 @@
           "properties"
         ]
       },
+      "Event.goal.attempt.opened": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "goal.attempt.opened"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "goalID": {
+                "type": "string",
+                "pattern": "^gol.*"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "manual_retry",
+                  "delivery_rework",
+                  "modify_contract",
+                  "restart_stage"
+                ]
+              },
+              "supersededTipID": {
+                "type": "string",
+                "pattern": "^glr.*"
+              },
+              "feedback": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "taskID",
+              "goalID",
+              "reason"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.milestone.activated": {
         "type": "object",
         "properties": {
@@ -24991,6 +25042,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.goal.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.goal.attempt.opened"
           },
           {
             "$ref": "#/components/schemas/Event.milestone.activated"
