@@ -71,6 +71,16 @@ const MATCHERS: Matcher[] = [
     },
   },
   // OpenAI GPT family
+  // Order matters: specific matchers (mini / nano / codex) first, then the
+  // vision-capable GPT-5.x full model, then the generic fallback.
+  //
+  // The vision capability of the `gpt-5.x` full model (here gpt-5.4) was
+  // verified against the hexin gateway on 2026-04-21 with a multimodal
+  // image_url payload — HTTP 200 and an accurate description came back, so
+  // `image_in: true` is evidence-backed. `pdf_in` and `reasoning` were
+  // NOT verified in that probe; keep them false until evidence arrives.
+  // mini / nano / codex branches stay conservative for the same reason —
+  // each one needs its own probe before flipping its flags.
   {
     test: (id) => /^gpt-5\.\d+-mini/i.test(id),
     profile: {
@@ -78,6 +88,23 @@ const MATCHERS: Matcher[] = [
       reasoning: false,
       attachment: false,
       image_in: false,
+      pdf_in: false,
+      toolcall: true,
+      context: 128_000,
+      output: 16_384,
+    },
+  },
+  {
+    // Only the bare `gpt-5.X` id — no `-chat`, `-preview`, `-2025-xx` etc.
+    // Variants were not probed individually and OpenAI has historically
+    // differed on chat vs. base vs. preview capability matrices, so leave
+    // them to the generic fallback until there is evidence for each.
+    test: (id) => /^gpt-5\.\d+$/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: false,
+      attachment: true,
+      image_in: true,
       pdf_in: false,
       toolcall: true,
       context: 128_000,
