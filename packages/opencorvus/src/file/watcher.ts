@@ -2,6 +2,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import z from "zod"
 import { Instance, lazyInstanceState } from "../project/instance"
+import { Project } from "../project/project"
 import { Log } from "../util/log"
 import { FileIgnore } from "./ignore"
 import { Config } from "../config/config"
@@ -93,7 +94,7 @@ export namespace FileWatcher {
         subs.push(await subscribe(Instance.directory, [...FileIgnore.PATTERNS, ...cfgIgnores]))
       }
 
-      if (Instance.project.vcs === "git") {
+      if (Project.isGitRepo(Instance.directory)) {
         const vcsDir = await $`git rev-parse --git-dir`
           .quiet()
           .nothrow()

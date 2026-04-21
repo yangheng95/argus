@@ -211,7 +211,7 @@ export async function cleanupGoalWorkspace(directory?: string) {
     }),
   )
 
-  if (Instance.project.vcs !== "git") {
+  if (!Project.isGitRepo(Instance.directory)) {
     await drop()
   } else {
     const removed = await timed("Worktree.remove", () => Worktree.remove({ directory }))

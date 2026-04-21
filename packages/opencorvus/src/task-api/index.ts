@@ -271,7 +271,12 @@ async function messageContext(_sessionID: string) {
 }
 
 async function prepareProject(project?: string) {
-  if (Instance.project.vcs !== "git") {
+  // Disk-truth guard: Project.isGitRepo probes `.git` every call, so an
+  // externally-deleted `.git` (e.g. a prior cleanup path, user rm -rf) is
+  // self-healed here before any Worktree.create downstream. The old guard
+  // consulted Instance.project.vcs — a cached DB column that silently went
+  // out of sync with disk and made this branch never run.
+  if (!Project.isGitRepo(Instance.directory)) {
     await Project.initGit(Instance.directory)
     await Instance.refresh()
   }

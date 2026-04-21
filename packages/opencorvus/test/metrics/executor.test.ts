@@ -30,7 +30,6 @@ function seedProjectAndTask() {
       .values({
         id: projectID,
         worktree: os.tmpdir(),
-        vcs: "git",
         name: "metrics-executor-test",
         sandboxes: "[]",
         time_created: now,

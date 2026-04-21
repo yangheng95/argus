@@ -32,7 +32,6 @@ function seedBaseline() {
     db.insert(ProjectTable).values({
       id: projectID,
       worktree: process.cwd(),
-      vcs: "git",
       name: "startNewAttempt test",
       sandboxes: [],
       time_created: now,

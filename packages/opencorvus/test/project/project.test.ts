@@ -75,7 +75,7 @@ describe("Project.fromDirectory", () => {
 
     expect(project).toBeDefined()
     expect(project.id).not.toBe("global")
-    expect(project.vcs).toBe("git")
+    expect(Project.isGitRepo(project.worktree)).toBe(true)
     expect(project.worktree).toBe(tmp.path)
 
     const opencorvusFile = path.join(tmp.path, ".git", "opencorvus")
@@ -91,7 +91,7 @@ describe("Project.fromDirectory", () => {
 
     expect(project).toBeDefined()
     expect(project.id).not.toBe("global")
-    expect(project.vcs).toBe("git")
+    expect(Project.isGitRepo(project.worktree)).toBe(true)
     expect(project.worktree).toBe(tmp.path)
 
     const opencorvusFile = path.join(tmp.path, ".git", "opencorvus")
@@ -106,7 +106,7 @@ describe("Project.fromDirectory", () => {
 
     await withMode("rev-list-fail", async () => {
       const { project } = await p.fromDirectory(tmp.path)
-      expect(project.vcs).toBe("git")
+      expect(Project.isGitRepo(project.worktree)).toBe(true)
       expect(project.id).not.toBe("global")
       expect(project.worktree).toBe(tmp.path)
     })
@@ -122,7 +122,7 @@ describe("Project.fromDirectory", () => {
     const nested = await p.fromDirectory(child)
 
     expect(await Filesystem.exists(path.join(child, ".git"))).toBe(true)
-    expect(nested.project.vcs).toBe("git")
+    expect(Project.isGitRepo(nested.project.worktree)).toBe(true)
     expect(nested.project.worktree).toBe(child)
     expect(nested.sandbox).toBe(child)
     expect(nested.project.id).not.toBe(parent.project.id)
@@ -135,7 +135,7 @@ describe("Project.fromDirectory", () => {
     const { project, sandbox } = await p.fromDirectory(tmp.path)
 
     expect(project.id).toBe("global")
-    expect(project.vcs).toBeUndefined()
+    expect(Project.isGitRepo(project.worktree)).toBe(false)
     expect(project.worktree).toBe("/")
     expect(sandbox).toBe("/")
     expect(await Filesystem.exists(path.join(tmp.path, ".git"))).toBe(false)
@@ -147,7 +147,7 @@ describe("Project.fromDirectory", () => {
 
     await withMode("top-fail", async () => {
       const { project, sandbox } = await p.fromDirectory(tmp.path)
-      expect(project.vcs).toBe("git")
+      expect(Project.isGitRepo(project.worktree)).toBe(true)
       expect(project.worktree).toBe(tmp.path)
       expect(sandbox).toBe(tmp.path)
     })
@@ -159,7 +159,7 @@ describe("Project.fromDirectory", () => {
 
     await withMode("common-dir-fail", async () => {
       const { project, sandbox } = await p.fromDirectory(tmp.path)
-      expect(project.vcs).toBe("git")
+      expect(Project.isGitRepo(project.worktree)).toBe(true)
       expect(project.worktree).toBe(tmp.path)
       expect(sandbox).toBe(tmp.path)
     })

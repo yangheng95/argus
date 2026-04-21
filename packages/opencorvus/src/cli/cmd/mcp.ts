@@ -9,6 +9,7 @@ import { McpAuth } from "../../mcp/auth"
 import { McpOAuthProvider } from "../../mcp/oauth-provider"
 import { Config } from "../../config/config"
 import { Instance } from "../../project/instance"
+import { Project } from "../../project/project"
 import { Installation } from "../../installation"
 import path from "path"
 import { Global } from "../../global"
@@ -427,8 +428,6 @@ export const McpAddCommand = cmd({
         UI.empty()
         prompts.intro("Add MCP server")
 
-        const project = Instance.project
-
         // Resolve config paths eagerly for hints
         const [projectConfigPath, globalConfigPath] = await Promise.all([
           resolveConfigPath(Instance.worktree),
@@ -437,7 +436,7 @@ export const McpAddCommand = cmd({
 
         // Determine scope
         let configPath = globalConfigPath
-        if (project.vcs === "git") {
+        if (Project.isGitRepo(Instance.directory)) {
           const scopeResult = await prompts.select({
             message: "Location",
             options: [

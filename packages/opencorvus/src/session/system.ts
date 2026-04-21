@@ -1,5 +1,6 @@
 import os from "os"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import { Shell } from "@/shell/shell"
 import { Config } from "@/config/config"
 import { Skill } from "@/skill"
@@ -66,7 +67,6 @@ export namespace SystemPrompt {
   }
 
   export async function environment(model: Provider.Model) {
-    const project = Instance.project
     const platform = platformName()
     const arch = process.arch
     const hostname = os.hostname()
@@ -82,7 +82,7 @@ export namespace SystemPrompt {
         `<env>`,
         `  Working directory: ${Instance.directory}`,
         `  Workspace root folder: ${Instance.worktree}`,
-        `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
+        `  Is directory a git repo: ${Project.isGitRepo(Instance.directory) ? "yes" : "no"}`,
         `  Platform: ${platform} (${arch})`,
         `  Hostname: ${hostname}`,
         `  Shell: ${shell}`,

@@ -1,6 +1,7 @@
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { $ } from "bun"
 
 export const PrCommand = cmd({
@@ -16,8 +17,7 @@ export const PrCommand = cmd({
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
-        const project = Instance.project
-        if (project.vcs !== "git") {
+        if (!Project.isGitRepo(Instance.directory)) {
           UI.error("Could not find git repository. Please run this command from a git repository.")
           process.exit(1)
         }

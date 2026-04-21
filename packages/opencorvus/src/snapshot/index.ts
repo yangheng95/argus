@@ -7,6 +7,7 @@ import { Global } from "../global"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
+import { Project } from "../project/project"
 import { Scheduler } from "../scheduler"
 import { FileDiff as _FileDiff, Patch as _Patch } from "./types"
 import type { FileDiff as _FileDiffType, Patch as _PatchType } from "./types"
@@ -33,7 +34,7 @@ export namespace Snapshot {
   }
 
   export async function cleanup() {
-    if (Instance.project.vcs !== "git" || Flag.OPENCORVUS_CLIENT === "acp") return
+    if (!Project.isGitRepo(Instance.directory) || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
     const git = gitdir()
@@ -58,7 +59,7 @@ export namespace Snapshot {
   }
 
   export async function track() {
-    if (Instance.project.vcs !== "git" || Flag.OPENCORVUS_CLIENT === "acp") return
+    if (!Project.isGitRepo(Instance.directory) || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
     const git = gitdir()

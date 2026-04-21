@@ -37,7 +37,6 @@ describe("engine writer goal workspace cleanup", () => {
           db.insert(ProjectTable).values({
             id: projectID,
             worktree: tmp.path,
-            vcs: "git",
             name: "Writer Test",
             sandboxes: [],
             time_created: now,

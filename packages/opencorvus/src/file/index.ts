@@ -8,6 +8,7 @@ import ignore from "ignore"
 import { Log } from "../util/log"
 import { Filesystem } from "../util/filesystem"
 import { Instance, lazyInstanceState } from "../project/instance"
+import { Project } from "../project/project"
 import { Ripgrep } from "./ripgrep"
 import fuzzysort from "fuzzysort"
 import { Global } from "../global"
@@ -454,8 +455,7 @@ export namespace File {
   }
 
   export async function status() {
-    const project = Instance.project
-    if (project.vcs !== "git") return []
+    if (!Project.isGitRepo(Instance.directory)) return []
 
     const diffOutput = await $`git -c core.fsmonitor=false -c core.quotepath=false diff --numstat HEAD`
       .cwd(Instance.directory)
@@ -532,7 +532,6 @@ export namespace File {
 
   export async function read(file: string): Promise<Content> {
     using _ = log.time("read", { file })
-    const project = Instance.project
     const full = path.join(Instance.directory, file)
 
     if (!(await isPathAllowed(full))) {
@@ -575,7 +574,7 @@ export namespace File {
 
     const content = (await Filesystem.readText(full).catch(() => "")).trim()
 
-    if (project.vcs === "git") {
+    if (Project.isGitRepo(Instance.directory)) {
       let diff = await $`git -c core.fsmonitor=false diff ${file}`.cwd(Instance.directory).quiet().nothrow().text()
       if (!diff.trim())
         diff = await $`git -c core.fsmonitor=false diff --staged ${file}`.cwd(Instance.directory).quiet().nothrow().text()
@@ -594,9 +593,8 @@ export namespace File {
 
   export async function list(dir?: string) {
     const exclude = [".git", ".DS_Store"]
-    const project = Instance.project
     let ignored = (_: string) => false
-    if (project.vcs === "git") {
+    if (Project.isGitRepo(Instance.directory)) {
       const ig = ignore()
       const gitignorePath = path.join(Instance.worktree, ".gitignore")
       if (await Filesystem.exists(gitignorePath)) {

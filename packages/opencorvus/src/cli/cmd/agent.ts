@@ -9,6 +9,7 @@ import fs from "fs/promises"
 import { Filesystem } from "../../util/filesystem"
 import matter from "gray-matter"
 import { Instance } from "../../project/instance"
+import { Project } from "../../project/project"
 import { EOL } from "os"
 import type { Argv } from "yargs"
 
@@ -71,15 +72,13 @@ const AgentCreateCommand = cmd({
           prompts.intro("Create agent")
         }
 
-        const project = Instance.project
-
         // Determine scope/path
         let targetPath: string
         if (cliPath) {
           targetPath = path.join(cliPath, "agent")
         } else {
           let scope: "global" | "project" = "global"
-          if (project.vcs === "git") {
+          if (Project.isGitRepo(Instance.directory)) {
             const scopeResult = await prompts.select({
               message: "Location",
               options: [

@@ -27,7 +27,6 @@ function seedProject() {
     db.insert(ProjectTable).values({
       id: projectID,
       worktree: process.cwd(),
-      vcs: "git",
       name: "Recovery Test",
       sandboxes: [],
       time_created: now,

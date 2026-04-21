@@ -27,12 +27,8 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as {
-      created: boolean
-      project: { vcs?: string }
-    }
+    const body = await response.json() as { created: boolean }
     expect(body.created).toBe(true)
-    expect(body.project.vcs).toBe("git")
     expect(await Filesystem.exists(path.join(tmp.path, ".git"))).toBe(true)
 
     const current = await app.request("/project/current", {
@@ -41,7 +37,6 @@ describe("project routes", () => {
       },
     })
     expect(current.status).toBe(200)
-    expect((await current.json() as { vcs?: string }).vcs).toBe("git")
   })
 
   // Same Question.ask cross-file pollution as the standalone-init test above.
@@ -57,11 +52,7 @@ describe("project routes", () => {
     })
 
     expect(response.status).toBe(200)
-    const body = await response.json() as {
-      created: boolean
-      project: { vcs?: string }
-    }
+    const body = await response.json() as { created: boolean }
     expect(body.created).toBe(false)
-    expect(body.project.vcs).toBe("git")
   })
 })

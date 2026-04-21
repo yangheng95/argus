@@ -26,7 +26,6 @@ function seedTask() {
     db.insert(ProjectTable).values({
       id: projectID,
       worktree: process.cwd(),
-      vcs: "git",
       name: "Protocol Test",
       sandboxes: "[]",
       time_created: now,

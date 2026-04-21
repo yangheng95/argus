@@ -33,7 +33,6 @@ describe("orchestrator dispatch gate", () => {
       db.insert(ProjectTable).values({
         id: projectID,
         worktree: process.cwd(),
-        vcs: "git",
         name: "Dispatch gate test",
         sandboxes: "[]",
         time_created: now,
