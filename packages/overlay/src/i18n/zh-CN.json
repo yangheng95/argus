@@ -132,6 +132,7 @@
   "chat.role.executor": "执行器",
   "chat.role.fidelity": "需求保真核查",
   "chat.role.goal": "目标",
+  "chat.role.orchestrator": "调度器",
   "chat.role.planner": "规划",
   "chat.role.requirements": "需求",
   "chat.role.spec": "规格",

@@ -9,6 +9,7 @@ import { t } from "./i18n";
 export type AgentRole =
   | "user"
   | "assistant"
+  | "orchestrator"
   | "spec"
   | "requirements"
   | "design-analyst"
@@ -25,6 +26,7 @@ export type AgentRole =
 /** Stages that get their own collapsible agent card in the conversation view. */
 export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "assistant",
+  "orchestrator",
   "spec",
   "requirements",
   "design-analyst",
@@ -45,7 +47,7 @@ export function normalizeAgentRole(name: string): AgentRole {
   const text = String(name || "").trim().toLowerCase();
   if (!text) return "assistant";
   if (text === "user") return "user";
-  if (text === "orchestrator") return "assistant";
+  if (text === "orchestrator") return "orchestrator";
   if (text === "spec") return "spec";
   if (text === "requirements") return "requirements";
   if (text === "design-analyst" || text === "design_analyst" || text === "design-analysis" || text === "design_analysis") return "design-analyst";
@@ -114,6 +116,7 @@ export function orderedMessageParts(message: any): any[] {
 export function roleLabel(role: string): string {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
+  if (role === "orchestrator") return t("chat.role.orchestrator");
   if (role === "requirements") return t("chat.role.requirements");
   if (role === "design-analyst" || role === "design_analyst") return t("chat.role.design-analyst");
   if (role === "architect") return t("chat.role.architect");

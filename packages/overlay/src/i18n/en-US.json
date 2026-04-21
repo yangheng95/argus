@@ -132,6 +132,7 @@
   "chat.role.executor": "Executor",
   "chat.role.fidelity": "Fidelity Review",
   "chat.role.goal": "Goal",
+  "chat.role.orchestrator": "Orchestrator",
   "chat.role.planner": "Plan",
   "chat.role.requirements": "Requirements",
   "chat.role.spec": "Spec",

@@ -393,9 +393,13 @@ function handleMessageUpdated(event: any): void {
     completed,
   });
 
-  // Ensure the session's card exists.
+  // Ensure the session's card exists. Channel-driven only; bridge stamps
+  // it on every event and an absent channel is a bridge bug, not a case
+  // we silently accommodate.
+  const stage = deriveSessionStage(info);
+  if (stage === "filtered") return;
   ensureSessionCard(sessionID, {
-    stage: deriveSessionStage(info, resolvedRole, agent, role),
+    stage,
     parentSessionID,
     goalID,
     time: timeCreated,
@@ -431,18 +435,27 @@ function handlePartUpdated(event: any): void {
     throw new Error("message.part.updated part missing id/messageID/sessionID");
   }
 
-  // Session card may not yet exist if the message.updated for this part
-  // hasn't been processed; create it defensively based on sessionID alone.
-  // The stub is hidden from top-level until its real stage lands (see
-  // rebuildTopLevelOrder's hiddenSessionCardIDs filter), but it still needs
-  // a numeric `time` because CardNode.time is required. We stamp the
-  // observation moment — once `message.updated` arrives, the rename path
-  // below overwrites `time` with the authoritative server timestamp.
+  // Bridge stamps channel/goalID/parentSessionID directly onto the part
+  // (task-message-protocol-bridge.enrichProperties). When a part arrives
+  // before its message.updated — possible because session/index.ts'
+  // saveMessage is silent and updatePart fires before updateMessage —
+  // we can still build the correctly-staged card on the spot instead of
+  // creating a `pending:session:...` stub and racing to rename it. The
+  // stub/rename path was a fallback for missing channel info and was
+  // responsible for the white 助手 card leak; now deleted entirely.
   if (!sessions.has(sessionID)) {
+    const stage = deriveSessionStage(part);
+    if (stage === "filtered") return;
     ensureSessionCard(sessionID, {
-      stage: "", // unknown until message.updated arrives; will be backfilled
-      parentSessionID: "",
-      goalID: "",
+      stage,
+      parentSessionID: String(part.parentSessionID || ""),
+      goalID: String(part.goalID || ""),
+      // Part events do not carry the message's server timestamp; stamp
+      // the observation moment. The subsequent message.updated for this
+      // message will call ensureSessionCard again with the authoritative
+      // `time.created`; ensureSessionCard's existing branch only updates
+      // parentSessionID/goalID, so the stamp stays — acceptable since
+      // parts land within milliseconds of the message row commit.
       time: Date.now(),
     });
   }
@@ -852,17 +865,32 @@ function drainPendingFidelity(sessionID: string): void {
 
 // ── Session & part bookkeeping ──
 
-function deriveSessionStage(info: any, resolvedRole: string, agent: string, role: string): string {
-  // Mirrors the old-pipeline choice order in `buildSessionBucketCard` —
-  // `info.channel` wins when set (bridge-stamped), then agent/resolvedRole.
-  // Root orchestrator sessions use the "assistant" stage fall-through.
-  const stage = String(info?.channel || "").trim();
-  if (stage && stage !== "main" && stage !== "filtered") return stage;
-  if (agent) return agent.trim();
-  if (resolvedRole && resolvedRole !== "user" && resolvedRole !== "system") {
-    return resolvedRole.trim();
+function deriveSessionStage(info: any): string {
+  // `channel` is the single authoritative signal stamped by the backend
+  // bridge (task-message-protocol-bridge.overlayMeta). It is derived from
+  // the session's DB `kind` plus the message role, so every semantically
+  // distinct bubble already has a correct stage at the source.
+  //
+  // Reading this as a fallback chain (channel → agent → resolvedRole →
+  // role) previously routed root-session user messages to stage="build"
+  // because `info.agent` on user rows is `Agent.defaultAgent()` (="build"
+  // under opencode config). That cascade turned a user bubble into an
+  // orange 「构建」 card — a classic rule-1 fallback bug.
+  //
+  // Channel values:
+  //   "main"      → root-session user bubble → stage "user"
+  //   "filtered"  → backend asked overlay to hide → caller skips the event
+  //   SessionKind → stage = kind (build / requirements / architect / ...)
+  //   missing     → bridge bug — fail loud, do not guess
+  const channel = String(info?.channel || "").trim();
+  if (!channel) {
+    throw new Error(
+      `tree-writer: message info is missing channel — bridge enrichment contract broken. info=${JSON.stringify(info)}`,
+    );
   }
-  return role.trim() || "assistant";
+  if (channel === "main") return "user";
+  if (channel === "filtered") return "filtered";
+  return channel;
 }
 
 interface EnsureSessionOpts {
@@ -930,8 +958,11 @@ function resolvePhaseOrSessionCardID(
       return { cardID: phaseCardID, isPhase: true };
     }
   }
-  if (stage) return { cardID: sessionCardID(stage, sessionID), isPhase: false };
-  return { cardID: `pending:session:${sessionID}`, isPhase: false };
+  // stage is guaranteed non-empty by ensureSessionCard's invariant check.
+  // No `pending:session:` stub path — that was the fallback for
+  // channel-unknown events we no longer accept (bridge stamps channel on
+  // every message.updated AND message.part.updated now).
+  return { cardID: sessionCardID(stage, sessionID), isPhase: false };
 }
 
 function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionInfo {
@@ -1605,9 +1636,6 @@ function normalizeStepStatus(raw: any): CardStatus {
 //   • Phase and fidelity cards are always claimed as childIDs of their
 //     parent (step / requirements session) before this runs, so they drop
 //     out via the `claimedChildIDs` filter instead of needing kind logic.
-//   • `stage === ""` session cards are `pending:session:<sid>` stubs whose
-//     id mutates the moment the real stage arrives — surfacing them would
-//     render an identity that changes mid-frame.
 //   • `stage === "executor"` sessions are the goal's executor container
 //     (empty, parentID anchor only); the step card is their visual proxy.
 //   • `resolveSessionContainerCardID(info)` sessions are goal-phase-routed;
@@ -1621,7 +1649,7 @@ function rebuildTopLevelOrder(): void {
 
   const hiddenSessionCardIDs = new Set<string>();
   for (const info of sessions.values()) {
-    if (info.stage === "" || info.stage === "executor" || resolveSessionContainerCardID(info)) {
+    if (info.stage === "executor" || resolveSessionContainerCardID(info)) {
       if (info.cardID) hiddenSessionCardIDs.add(info.cardID);
     }
   }
