@@ -546,20 +546,13 @@ export function startNewAttempt(input: {
     )
     resetWorkspace = true
   }
+  // Event sourcing: the goal_run row itself IS the event — tip's
+  // superseded_reason column + superseded_at timestamp is the persistent
+  // log of "a new attempt opened under reason X at time T." Loop-side
+  // consumers track offset via `lastReworkSeenAt` and query via
+  // `findRecentReworkAttempt`. No separate Bus event needed; an in-memory
+  // pub/sub would only duplicate what the goal_run chain already records.
   syncGoalStatus(input.goalID, `startNewAttempt:${input.reason}`)
-  Database.effect(() =>
-    EngineProtocol.emit(
-      Event.GoalAttemptOpened,
-      {
-        taskID: goal.task_id,
-        goalID: input.goalID,
-        reason: input.reason,
-        ...(supersededTipID ? { supersededTipID } : {}),
-        ...(input.feedback ? { feedback: input.feedback } : {}),
-      },
-      { source: "persist.startNewAttempt" },
-    ),
-  )
   return { supersededTipID, clearedCascade, resetWorkspace }
 }
 
