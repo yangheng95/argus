@@ -13,12 +13,6 @@ import type { GoalContractFields } from "@/pipeline/types"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 500
 
-// 同步默认值 — 用于无法 await 的场景（如模块级 export）
-const syncDefaults = EngineConfig.getDefaults()
-export const DEFAULT_MAX_RUNS = syncDefaults.max_runs
-export const DEFAULT_MAX_FIX_RUNS = syncDefaults.max_fix_runs
-export const MAX_EXECUTOR_GROUPS = syncDefaults.max_executor_groups
-
 // orchestratorState moved to ./orchestrator-state — see that file's header
 // for the cycle rationale. Helpers must not run `Instance.state(...)` at
 // module-init because helpers is re-exported through the engine barrel.
@@ -60,12 +54,32 @@ export function budgetRow(input?: z.infer<typeof Budget>): EngineBudget | undefi
 
 /**
  * Resolve the effective max executor groups for a task.
- * Priority: task budget > config (env + jsonc) > DEFAULTS.max_executor_groups (see EngineConfig).
+ * Priority: task budget > config (env + jsonc) > DEFAULTS.max_executor_groups.
+ *
+ * Reads the live `EngineConfig.get()` snapshot so UI-driven updates to
+ * opencorvus.jsonc take effect on the next orchestrator tick — no restart,
+ * no cache invalidation. Callers must be in async context; the three
+ * budget-class helpers here share that contract.
  */
-export function effectiveMaxExecutorGroups(task: TaskRow): number {
+export async function effectiveMaxExecutorGroups(task: TaskRow): Promise<number> {
   const budgetMax = (task.budget as EngineBudget | null)?.max_executor_groups
   if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
-  return MAX_EXECUTOR_GROUPS
+  const cfg = await EngineConfig.get()
+  return cfg.max_executor_groups
+}
+
+export async function effectiveMaxRuns(task: TaskRow): Promise<number> {
+  const budgetMax = (task.budget as EngineBudget | null)?.max_runs
+  if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
+  const cfg = await EngineConfig.get()
+  return cfg.max_runs
+}
+
+export async function effectiveMaxFixRuns(task: TaskRow): Promise<number> {
+  const budgetMax = (task.budget as EngineBudget | null)?.max_fix_runs
+  if (typeof budgetMax === "number" && budgetMax >= 1) return budgetMax
+  const cfg = await EngineConfig.get()
+  return cfg.max_fix_runs
 }
 
 /**

@@ -22,6 +22,8 @@ import { Orchestrator } from "@/orchestrator/agent"
 import { effectiveMaxExecutorGroups, findTask, findRun, findPlan, listGoalsByPlan, listPlanNodesByPlan, findNextQueuedTaskForProject } from "@/engine"
 import type { TaskRow, RunRow, PlanRow } from "@/engine"
 import { mergeGoalDelivery } from "@/engine/runtime"
+import { describeTaskFromRow, statusOf } from "@/engine/describe"
+import type { GoalDesc } from "@/engine/describe"
 import { Database, eq } from "@/storage/db"
 import { isRunReadyForGoalDispatch } from "./scheduler"
 
@@ -222,15 +224,19 @@ export async function runTaskLoop(input: {
       continue
     }
 
-    // Check if there are any active/pending goals to wait for
-    const goals = listGoalsByPlan(plan.id)
-    const hasActive = goals.some(g => g.status === "running")
-    const hasPending = goals.some(g => g.status === "pending")
+    // Check if there are any active/pending goals to wait for. Read from
+    // the describe layer (event-sourced projection) instead of engine_goal.status
+    // — the cache is going away in Phase 3, and this loop is where the
+    // "stale status cache → deadlock" class of bugs lived.
+    const snapshot = await describeTaskFromRow(taskAfter)
+    const goals: GoalDesc[] = snapshot.goals
+    const hasActive = goals.some((g) => g.is_running)
+    const hasPending = goals.some((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted)
 
     if (!hasActive && !hasPending) {
       // All goals are in terminal state. Feed results back to Orchestrator.
-      const passed = goals.filter(g => g.status === "passed").length
-      const failed = goals.filter(g => g.status === "failed").length
+      const passed = goals.filter((g) => g.is_terminal_ok).length
+      const failed = goals.filter((g) => g.is_terminal_fail).length
       log.info("all goals in terminal state", { taskID, passed, failed })
       trigger = {
         kind: "batch_complete",
@@ -251,7 +257,7 @@ export async function runTaskLoop(input: {
     const pendingDispatch = pullDispatch(taskID)
 
     if (pendingDispatch.length > 0) {
-      const concurrency = effectiveMaxExecutorGroups(taskAfter)
+      const concurrency = await effectiveMaxExecutorGroups(taskAfter)
       log.info("goal pool starting", {
         taskID, concurrency,
         dispatching: pendingDispatch.length,
@@ -305,14 +311,14 @@ export async function runTaskLoop(input: {
       // block injected from the loop.
       log.info("no dispatchable goals", { taskID, pending: hasPending })
       if (hasPending) {
-        const passed = goals.filter(g => g.status === "passed").length
-        const failed = goals.filter(g => g.status === "failed").length
+        const passed = goals.filter((g) => g.is_terminal_ok).length
+        const failed = goals.filter((g) => g.is_terminal_fail).length
         const { listGoalRunsForDispatch } = await import("@/engine/store")
         const goalRuns = listGoalRunsForDispatch(taskID)
 
         log.warn("pending goals present but none dispatched — feeding to Orchestrator", {
           taskID, passed, failed,
-          pending: goals.filter(g => g.status === "pending").length,
+          pending: goals.filter((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted).length,
         })
 
         // Stale-state detection on immutable goal_run history — the rule
@@ -326,7 +332,12 @@ export async function runTaskLoop(input: {
           staleCount++
           log.warn("stale state detected", { taskID, staleCount, maxStale: MAX_STALE_ITERATIONS })
           if (staleCount >= MAX_STALE_ITERATIONS) {
-            const breakdown = await classifyBreakerCause(taskID, goals, goalRuns, [])
+            const breakdown = await classifyBreakerCause(
+              taskID,
+              goals.map((g) => ({ id: g.id, title: g.title, status: statusOf(g) })),
+              goalRuns,
+              [],
+            )
             log.error("stale-state circuit breaker triggered — failing task", {
               taskID, staleCount, cause: breakdown.cause, detail: breakdown.detail,
             })
@@ -357,12 +368,13 @@ export async function runTaskLoop(input: {
     // Dependency cascade removed — Orchestrator decides whether to retry, skip,
     // or fail dependent goals. Automatic cascade masks the real failure and
     // prevents the agent from attempting recovery strategies.
-    const goalsAfter = listGoalsByPlan(plan.id)
+    const snapshotAfter = await describeTaskFromRow(taskAfter)
+    const goalsAfter: GoalDesc[] = snapshotAfter.goals
 
     // ── Phase 5: Collect results and loop back ──
-    const failedGoals = goalsAfter.filter(g => g.status === "failed")
-    const passedGoals = goalsAfter.filter(g => g.status === "passed")
-    const pendingGoals = goalsAfter.filter(g => g.status === "pending")
+    const failedGoals = goalsAfter.filter((g) => g.is_terminal_fail)
+    const passedGoals = goalsAfter.filter((g) => g.is_terminal_ok)
+    const pendingGoals = goalsAfter.filter((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted)
 
     log.info("goal batch complete", {
       taskID,
@@ -372,7 +384,7 @@ export async function runTaskLoop(input: {
     })
 
     // GoalPool executed goals → state changed → reset stale counter
-    const snapshotAfterPool = goalsAfter.map(g => `${g.id}:${g.status}`).sort().join(",")
+    const snapshotAfterPool = goalsAfter.map((g) => `${g.id}:${statusOf(g)}`).sort().join(",")
     if (snapshotAfterPool !== lastGoalSnapshot) {
       lastGoalSnapshot = snapshotAfterPool
       staleCount = 0
@@ -525,15 +537,19 @@ async function waitForGoalCompletion(
 
     // All goal_runs done?
     if (activeGoalRuns.length === 0) {
-      // Also check goal status
-      const goals = listGoalsByPlan(plan.id)
-      const runningGoals = goals.filter(g => g.status === "running")
+      // Cross-check: even without active goal_runs, the derive layer may
+      // still report a goal as running if its tip row is in a live state
+      // that the store query didn't return (transactional race). Treat
+      // that as "still settling" and keep polling instead of declaring
+      // completion prematurely.
+      const task = findTask(taskID)
+      if (!task) return
+      const descAfter = await describeTaskFromRow(task)
+      const runningGoals = descAfter.goals.filter((g) => g.is_running)
       if (runningGoals.length === 0) {
         log.info("all goals completed", { taskID })
         return
       }
-      // Goal_runs done but goals still "running" — pipeline may still be wrapping up.
-      // Give it some time (don't timeout yet).
       continue
     }
 

@@ -198,7 +198,7 @@ export namespace Orchestrator {
       // 4. Build prompt — use the user's original request as the user message
       // for "created" triggers (it IS the user's intent). For re-triggers
       // (batch_complete, retry) use a short event description.
-      const system = buildSystemParts(task, trigger, workflow, workflowState)
+      const system = await buildSystemParts(task, trigger, workflow, workflowState)
       const userText = trigger.kind === "created"
         ? task.request
         : describeTrigger(task, trigger)
@@ -620,7 +620,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
  *   [0] = static instructions (stable, benefits from 1h cache TTL)
  *   [1] = dynamic context (changes per trigger — task state, goals, budget, etc.)
  */
-function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): string[] {
+async function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): Promise<string[]> {
   const ctx: string[] = []
 
   // ── Follow-up task context ──
@@ -708,7 +708,7 @@ function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?
   // world-view event-sourced: if the cache diverges, the description still
   // reflects reality, and when Phase 3 retires the cache field entirely,
   // this block keeps working unchanged.
-  const snapshot = describeTask(task.id)
+  const snapshot = await describeTask(task.id)
   ctx.push(renderTaskDescription(snapshot))
 
   // ── Workflow guidance (injected as recommended path, not enforced) ──
