@@ -33,6 +33,10 @@ function toolToCardNode(part: any): CardNode {
     parts: [],
     children: [],
     toolPart: part,
+    // Transient tool cards are always nested; this value never enters the
+    // top-level sort (rebuildTopLevelOrder filters on card.kind === "tool").
+    // Observation time is sufficient for the required `time` field.
+    time: Date.now(),
   };
 }
 

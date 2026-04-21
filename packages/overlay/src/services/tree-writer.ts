@@ -187,6 +187,9 @@ function projectSyntheticMessages(allMessages: any[]): void {
     const cardID = syntheticCardID(id);
     const role = String(m?.info?.role || "assistant");
     const time = Number(m?.info?.time?.created || 0);
+    if (!(time > 0)) {
+      throw new Error(`synthetic message ${id} missing info.time.created; messageStore emitter is the single source of truth`);
+    }
     const parts = Array.isArray(m.parts) ? m.parts.slice() : [];
     setCardTreeStore("cards", cardID, {
       id: cardID,
@@ -195,7 +198,7 @@ function projectSyntheticMessages(allMessages: any[]): void {
       title: roleTitleKey(role),
       parts,
       childIDs: [],
-      time: time > 0 ? time : undefined,
+      time,
     });
     syntheticMirrorIDs.add(id);
   }
@@ -337,6 +340,9 @@ function handleMessageUpdated(event: any): void {
   const parentSessionID = String(info.parentSessionID || "");
   const goalID = String(info.goalID || "");
   const timeCreated = Number(info?.time?.created || 0);
+  if (!(timeCreated > 0)) {
+    throw new Error(`message.updated info.time.created must be positive (got ${info?.time?.created}); server emitter is the single source of truth`);
+  }
   const completed = Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
 
   // Index the message.
@@ -392,12 +398,17 @@ function handlePartUpdated(event: any): void {
 
   // Session card may not yet exist if the message.updated for this part
   // hasn't been processed; create it defensively based on sessionID alone.
+  // The stub is hidden from top-level until its real stage lands (see
+  // rebuildTopLevelOrder's hiddenSessionCardIDs filter), but it still needs
+  // a numeric `time` because CardNode.time is required. We stamp the
+  // observation moment — once `message.updated` arrives, the rename path
+  // below overwrites `time` with the authoritative server timestamp.
   if (!sessions.has(sessionID)) {
     ensureSessionCard(sessionID, {
       stage: "", // unknown until message.updated arrives; will be backfilled
       parentSessionID: "",
       goalID: "",
-      time: 0,
+      time: Date.now(),
     });
   }
 
@@ -711,6 +722,9 @@ function handleFidelityCompleted(event: any): void {
   }
 
   const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  if (!(emittedAt > 0)) {
+    throw new Error(`fidelity.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
+  }
   const issues = Array.isArray(props.issues) ? props.issues : [];
   const corrections = Array.isArray(props.corrections) ? props.corrections : [];
   const missingGoals = Array.isArray(props.missingGoals) ? props.missingGoals : [];
@@ -776,7 +790,7 @@ function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): v
     subtitle: undefined,
     parts: [],
     childIDs: [],
-    time: p.emittedAt > 0 ? p.emittedAt : undefined,
+    time: p.emittedAt,
     fidelity: {
       verdict: p.verdict,
       issues: p.issues,
@@ -872,7 +886,7 @@ function resolvePhaseOrSessionCardID(
           childIDs: [],
           phaseID: phase.phaseID,
           phaseSessionKind: stage,
-          time: time > 0 ? time : undefined,
+          time,
         });
       }
       return { cardID: phaseCardID, isPhase: true };
@@ -918,6 +932,9 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
                   stage: opts.stage,
                   accent: stageAccent(opts.stage),
                   title: roleTitleKey(opts.stage),
+                  // Stub was born at observation time; the real message's
+                  // server timestamp supersedes it now that stage is known.
+                  time: opts.time,
                 };
                 delete cards[existing.cardID];
               }
@@ -961,7 +978,7 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
       goalID: opts.goalID || undefined,
       parts: [],
       childIDs: [],
-      time: opts.time > 0 ? opts.time : undefined,
+      time: opts.time,
     };
     setCardTreeStore("cards", cardID, node);
   }
@@ -1057,6 +1074,9 @@ function rebuildTaskContextCard(board: any): void {
     return;
   }
   const taskCreated = Number(task?.time?.created || 0);
+  if (!(taskCreated > 0)) {
+    throw new Error(`task.time.created must be positive (got ${task?.time?.created}); server emitter is the single source of truth`);
+  }
   const parts: any[] = [
     { id: "ctx:user-request:text", type: "text", text: String(task.request) },
   ];
@@ -1079,7 +1099,7 @@ function rebuildTaskContextCard(board: any): void {
     title: t("chat.role.user"),
     parts,
     childIDs: [],
-    time: taskCreated > 0 ? taskCreated - 2 : undefined,
+    time: taskCreated - 2,
   });
 }
 
@@ -1190,7 +1210,8 @@ function rebuildGoalStepCards(board: any): void {
               prev.title = label;
               prev.phaseID = pid;
               prev.phaseSessionKind = sessionKind;
-              if (startedAt > 0) prev.time = startedAt;
+              // startedAt > 0 is invariant (caller filters pending phases).
+              prev.time = startedAt;
               // parts / childIDs intentionally preserved.
             } else {
               cards[phaseCardID] = {
@@ -1204,7 +1225,7 @@ function rebuildGoalStepCards(board: any): void {
                 childIDs: [],
                 phaseID: pid,
                 phaseSessionKind: sessionKind,
-                time: startedAt > 0 ? startedAt : undefined,
+                time: startedAt,
               };
             }
           }),
@@ -1280,6 +1301,9 @@ function upsertInteractionCard(message: any): string {
   const cardID = interactionCardID(messageID);
   const role = String(message?.info?.role || "system");
   const time = Number(message?.info?.time?.created || 0);
+  if (!(time > 0)) {
+    throw new Error(`interaction message ${messageID} missing info.time.created; server emitter is the single source of truth`);
+  }
   const parts = Array.isArray(message?.parts) ? message.parts.slice() : [];
   setCardTreeStore("cards", cardID, {
     id: cardID,
@@ -1288,7 +1312,7 @@ function upsertInteractionCard(message: any): string {
     title: roleTitleKey(role),
     parts,
     childIDs: [],
-    time: time > 0 ? time : undefined,
+    time,
   });
   return cardID;
 }
@@ -1544,11 +1568,16 @@ function rebuildTopLevelOrder(): void {
   }
 
   order.sort((a, b) => {
-    const ta = cardTreeStore.cards[a]?.time;
-    const tb = cardTreeStore.cards[b]?.time;
-    const na = typeof ta === "number" ? ta : Number.POSITIVE_INFINITY;
-    const nb = typeof tb === "number" ? tb : Number.POSITIVE_INFINITY;
-    return na - nb;
+    const ca = cardTreeStore.cards[a];
+    const cb = cardTreeStore.cards[b];
+    // Contract: every top-level card carries a numeric `time` (see
+    // CardNode.time in store/card-tree.ts). An undefined here means a
+    // creation path leaked through without stamping a birth time — that
+    // is a bug in the writer, not a condition to paper over with an
+    // end-of-list fallback.
+    if (typeof ca?.time !== "number") throw new Error(`rebuildTopLevelOrder: card ${a} missing numeric time`);
+    if (typeof cb?.time !== "number") throw new Error(`rebuildTopLevelOrder: card ${b} missing numeric time`);
+    return ca.time - cb.time;
   });
 
   setCardTreeStore("order", order);

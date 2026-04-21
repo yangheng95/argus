@@ -445,6 +445,7 @@ test("fidelity card attaches under requirements session when session is known", 
   });
   applyEvent({
     type: "fidelity.review.completed",
+    emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: REQUIREMENTS_SID,
@@ -486,6 +487,7 @@ test("fidelity event with unknown session holds payload out-of-band (no unreacha
   // unreachable), and NOT in order (would escape).
   applyEvent({
     type: "fidelity.review.completed",
+    emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: REQUIREMENTS_SID,
@@ -559,6 +561,7 @@ test("fidelity event missing sessionID throws (schema became required)", () => {
   expect(() =>
     applyEvent({
       type: "fidelity.review.completed",
+      emittedAt: 1_776_000_002_000,
       properties: {
         taskID: TASK_ID,
         verdict: "faithful",
@@ -589,6 +592,7 @@ test("resetWriter clears pendingFidelity so a later session does not resurrect a
 
   applyEvent({
     type: "fidelity.review.completed",
+    emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: REQUIREMENTS_SID,
