@@ -14,14 +14,25 @@
 //   ctx:user-request:file:<url|idx>                        — an attachment part
 //   <stage>:session:<sid>                                  — per-session agent card
 //   part:<messageID>:<partID>                              — part inside a session card
-//   step:<goalID>:<stepID>                                 — per-goal executor step (top-level)
-//   step:<goalID>:<stepID>:phase:<phaseID>                 — phase row inside an executor step
+//   step:<goalID>:<goalRunID|"pre">:<stepID>               — per-goal executor step (top-level),
+//                                                            scoped to one attempt (goal_run)
+//   step:<goalID>:<goalRunID|"pre">:<stepID>:phase:<phaseID>
+//                                                          — phase row inside an executor step
 //   interaction:<interactionID>                            — synthetic interaction card
 //
 // Note: the legacy `goal-group:*` container layer was removed in the
 // 2026-04-19 flatten. Each goal now surfaces its single goal-scope step
 // directly at the top level, with goal title / decomposition index
 // (`#orderIndex+1`) / description stamped onto the step card.
+//
+// 2026-04-21 per-attempt isolation: step / phase card ids carry the
+// current `goal_run.id` so each retry / delivery_rework / modify_contract
+// / restart_stage gets a fresh top-level card appended in time order.
+// Prior attempts survive as frozen history — the renderer shows them in
+// their original position; new activity lands on the new card. The
+// `"pre"` sentinel is used when no goal_run exists yet (pre-dispatch
+// stubs); it collapses into the real run id on the first rebuild after
+// dispatch.
 //
 // The writer (services/tree-writer.ts) is the only module that mutates
 // this store. Components read only. No memos, no derivations — components

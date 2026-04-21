@@ -1,6 +1,7 @@
 import z from "zod"
 import { createDecisionLog } from "@/decision-log"
 import { goalStatusByID } from "@/engine/describe"
+import { findLatestTipGoalRun } from "@/engine/store"
 import {
   findSpecSnapshot,
   viewSpecSnapshot,
@@ -783,8 +784,16 @@ function buildWorkflowFields(
 
   const goalWorkflows = goals.map(goal => {
     const gws = projectedGoalSteps[goal.id]
+    // Identify the current attempt by the tip goal_run id. Overlay uses
+    // this to scope per-attempt step cards — each new attempt gets its
+    // own cards instead of the prior attempt's cards being mutated
+    // in-place and time-sorted to the bottom. `undefined` when the goal
+    // has never dispatched (no goal_run yet) — overlay treats that as
+    // the "pre-attempt" bucket under a stable pseudo-id.
+    const tipRun = findLatestTipGoalRun(goal.id)
     return {
       goalID: goal.id,
+      goalRunID: tipRun?.id,
       goalTitle: goal.title,
       goalStatus: goalStatusByID(goal.id),
       orderIndex: goal.order_index,
