@@ -23,6 +23,7 @@
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
+import { taskRewindCursor } from "./rewind"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
  *  The column it used to shadow (engine_goal.status) is gone; this is
@@ -172,8 +173,14 @@ function tipFromChain(rows: GoalRunRow[]): GoalRunRow | undefined {
   return rows.find((r) => !supersededIDs.has(r.id))
 }
 
-export function describeGoal(goal: GoalRow): GoalDesc {
-  const rows = listGoalRunsByGoal(goal.id)
+export function describeGoal(goal: GoalRow, rewindCursor?: number | null): GoalDesc {
+  let rows = listGoalRunsByGoal(goal.id)
+  // Apply rewind cursor: events after the cursor are invisible to the UI /
+  // orchestrator view. The append-only chain is intact in DB; this is a
+  // projection filter.
+  if (rewindCursor != null) {
+    rows = rows.filter((r) => (r.time_created ?? 0) <= rewindCursor)
+  }
   const tip = tipFromChain(rows)
   // Render attempts oldest → newest so the LLM reads a natural timeline.
   const attempts = [...rows].reverse().map(describeAttempt)
@@ -280,7 +287,18 @@ export async function describeTask(taskID: string): Promise<TaskDesc> {
 }
 
 export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
-  const goals = listGoals(task.id).map(describeGoal)
+  // Rewind cursor: filters events with time_created > cursor from every
+  // derived view below (goal attempts, iterations, verdict). Goals
+  // themselves are kept regardless — a rewound task still has its goals
+  // visible, just with an empty attempt history if they were all created
+  // after the cursor. This matches the UX "go back to before I started."
+  const rewindCursor = task.rewind_cursor_time ?? null
+
+  let goalRows = listGoals(task.id)
+  if (rewindCursor != null) {
+    goalRows = goalRows.filter((g) => (g.time_created ?? 0) <= rewindCursor)
+  }
+  const goals = goalRows.map((g) => describeGoal(g, rewindCursor))
 
   let specSummary: string | undefined
   if (task.active_spec_version_id) {

@@ -922,6 +922,10 @@ export function viewPlan(row: PlanRow) {
   }
 }
 
+// Pure row → DTO mapping. The derived `status` field is NOT included here;
+// callers compose it in from describe.ts::goalStatusByID. Keeping this layer
+// free of describe/* imports avoids a circular dependency that broke
+// `bun build --compile` (require() cannot pull a transitive top-level await).
 export function viewGoal(row: GoalRow) {
   return {
     id: row.id,
