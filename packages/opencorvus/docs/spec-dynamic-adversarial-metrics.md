@@ -346,7 +346,9 @@ that had fewest open counterexamples.
 - Strict/soft gate text in `src/delivery/tools.ts::query_criteria`
   (tool itself is replaced by `query_metric_trajectory`).
 - `_delivery_rework_history` construction and prompt injection in
-  `src/orchestrator/agent.ts`.
+  `src/orchestrator/agent.ts`. (Fully retired in the Phase 2b LLM-autonomous
+  scheduling redesign — orchestrator reads rejection feedback via the
+  describe layer + verdict artifact, not via metadata soft signals.)
 - `max_delivery_iterations` as a primary decision input (retained only as
   `max_iterations` hard ceiling fed into `abort`).
 - `engine_evaluation.signature` column and every write site.
