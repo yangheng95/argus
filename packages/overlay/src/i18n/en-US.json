@@ -549,6 +549,8 @@
   "transcript.compaction": "[Compaction]",
   "card.context_tokens_tooltip": "~{value} prompt tokens at this turn (provider-reported; actual billing may differ)",
   "card.context_tokens_tooltip_estimated": "~{value} prompt tokens at this turn (local chars/token approximation — provider figure not yet available)",
+  "card.rewind": "Rewind timeline to before this card (filters events only; files are not touched)",
+  "card.rewind_confirm": "Rewind the timeline to before this card? Later events will be hidden; project files are not modified.",
   "transcript.file": "[File] {{value}}",
   "transcript.patch": "[Patch] {{value}}",
   "transcript.patch_empty": "[Patch]",
