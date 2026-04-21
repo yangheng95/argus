@@ -26812,25 +26812,6 @@
                   }
                 }
               },
-              "evaluator": {
-                "description": "Deterministic evaluator runner config (build / test / lint / spec heuristics in delivery/checks/per-goal.ts). The evaluator LLM agent was collapsed into the delivery agent — these fields control only the deterministic pipeline.",
-                "type": "object",
-                "properties": {
-                  "tier": {
-                    "description": "Evaluation tier: 'core' (build/test/lint only), 'standard' (+ judge/spec_check), 'full' (all checks). Default: 'standard'.",
-                    "type": "string",
-                    "enum": [
-                      "core",
-                      "standard",
-                      "full"
-                    ]
-                  },
-                  "per_goal_enabled": {
-                    "description": "When true, runs the deterministic per-goal evaluator inside the goal-pool loop after the executor returns — goal fails if acceptance_specs strict scorers reject. Default: false (debug gate, legacy 'executor OK → passed' path is used).",
-                    "type": "boolean"
-                  }
-                }
-              },
               "delivery": {
                 "description": "Delivery agent configuration",
                 "type": "object",
@@ -26937,7 +26918,7 @@
                 "maximum": 9007199254740991
               },
               "goal_escalation_threshold": {
-                "description": "After this many failed attempts on a goal, retry_failed_goals forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.",
+                "description": "After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.",
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 9007199254740991
