@@ -29,20 +29,12 @@ import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
-  clarificationTranscriptSection,
-  operatorNotesSection,
   findDeliveryByRun,
   findEvaluationByRun,
-  findPlan,
-  findRun,
-  findRuns,
-  findSpecSnapshot,
   findTask,
   listActiveGoalRunsForRun,
   listGoals,
   requireTask,
-  DEFAULT_MAX_RUNS,
-  DEFAULT_MAX_FIX_RUNS,
   updateTask,
   WorkflowRegistry,
   createWorkflowState,
@@ -50,6 +42,7 @@ import {
   EngineProtocol,
   Event as EngineEvent,
 } from "@/engine"
+import { describeTask, renderTaskDescription } from "@/engine/describe"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 
 const log = Log.create({ service: "orchestrator" })
@@ -706,50 +699,17 @@ function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?
     ctx.push("")
   }
 
-  // ── Current State (full context for reasoning) ──
-  ctx.push("## Current Task")
-  ctx.push(`- Title: ${task.title}`)
-  ctx.push(`- Status: ${task.status}`)
-  // For re-triggers the request is included here for context; for "created"
-  // triggers the user message IS the request so no duplication needed.
-  if (trigger.kind !== "created") {
-    ctx.push(`- Request: ${task.request}`)
-  }
-
-  if (task.active_spec_version_id) {
-    const spec = findSpecSnapshot(task.active_spec_version_id)
-    if (spec) ctx.push(`- Spec: ${spec.summary}`)
-  }
-
-  const goals = listGoals(task.id)
-  if (goals.length > 0) {
-    ctx.push(`\n## Goals (${goals.length})`)
-    for (const g of goals) {
-      ctx.push(`  - [${g.status}] ${g.title} [${g.priority}] — ${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 200)}`)
-    }
-  }
-
-  if (task.active_plan_version_id) {
-    const plan = findPlan(task.active_plan_version_id)
-    if (plan) ctx.push(`- Plan: ${plan.summary}`)
-  }
-  if (task.active_run_id) {
-    const run = findRun(task.active_run_id)
-    if (run) ctx.push(`- Active run: ${run.id} (${run.status})`)
-  }
-  if (task.error) ctx.push(`- Error: ${task.error}`)
-
-  const totalRuns = findRuns(task.id).length
-  const maxRuns = task.budget?.max_runs ?? DEFAULT_MAX_RUNS
-  const maxFixRuns = task.budget?.max_fix_runs ?? DEFAULT_MAX_FIX_RUNS
-  const activeRun = task.active_run_id ? findRun(task.active_run_id) : undefined
-  const fixCount = activeRun?.retry_count ?? 0
-  ctx.push(`- Budget: ${totalRuns}/${maxRuns} runs, ${fixCount}/${maxFixRuns} fixes`)
-
-  const clarifications = clarificationTranscriptSection(task.id)
-  if (clarifications) ctx.push(clarifications)
-  const notes = operatorNotesSection(task.id)
-  if (notes) ctx.push(notes)
+  // ── Current State ──
+  // The describe layer composes the task snapshot from the append-only event
+  // stream (engine_goal_run chain, engine_iteration, verdict artifact,
+  // decision_log, clarifications / operator notes). It does NOT read
+  // engine_goal.status — derived booleans like `needs_redispatch` /
+  // `is_running` come from the goal_run tip directly. This keeps the LLM's
+  // world-view event-sourced: if the cache diverges, the description still
+  // reflects reality, and when Phase 3 retires the cache field entirely,
+  // this block keeps working unchanged.
+  const snapshot = describeTask(task.id)
+  ctx.push(renderTaskDescription(snapshot))
 
   // ── Workflow guidance (injected as recommended path, not enforced) ──
   if (workflow && workflowState) {
