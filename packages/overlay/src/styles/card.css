@@ -23,7 +23,9 @@
   --card-sub-size: clamp(11px, calc(11px * var(--ui-scale, 1)), 12px);
   --card-meta-size: clamp(10px, calc(10px * var(--ui-scale, 1)), 11px);
 
+  --card-stage-user: #94a3b8;
   --card-stage-assistant: #6ea3ff;
+  --card-stage-orchestrator: #9b8cff;
   --card-stage-spec: #6ec1e4;
   --card-stage-requirements: #f59e0b;
   --card-stage-design-analyst: #ec4899;

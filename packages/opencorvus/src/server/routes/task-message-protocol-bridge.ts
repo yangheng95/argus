@@ -144,6 +144,19 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
       ...(parentSessionID ? { parentSessionID } : {}),
     }
   }
+  // Part events do not carry `info`. Stamp channel/goalID/parentSessionID
+  // onto `part` itself so the overlay's handlePartUpdated can build the
+  // correctly-staged card on the first event — no stub/backfill dance.
+  // The top-level copies below remain for non-info/non-part event shapes.
+  if (enriched.part && typeof enriched.part === "object") {
+    enriched.part = {
+      ...(enriched.part as any),
+      resolvedRole: meta.resolvedRole,
+      channel: meta.channel,
+      ...(goalID ? { goalID } : {}),
+      ...(parentSessionID ? { parentSessionID } : {}),
+    }
+  }
   enriched.resolvedRole = meta.resolvedRole
   enriched.channel = meta.channel
   if (goalID) enriched.goalID = goalID

@@ -5,7 +5,9 @@
 // stage stays the same colour across sessions.
 
 const KNOWN_STAGES = new Set([
+  "user",
   "assistant",
+  "orchestrator",
   "spec",
   "requirements",
   "design-analyst",
