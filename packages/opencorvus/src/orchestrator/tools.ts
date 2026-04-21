@@ -2516,10 +2516,35 @@ export function createOrchestratorTools(input: {
             rejection_details: verdict.rejection_details ?? [],
             verdict_artifact_id: verdictArtifactId,
           }
-          const passedOrCompleted = goals.filter(
-            (g) => g.status === "passed",
-          )
-          for (const g of passedOrCompleted) {
+          // Attempt attribution: map each rejection_detail.file to a goal
+          // via owned_paths prefix match. When every detail resolves to a
+          // known goal we reset only those goals — the passed goals outside
+          // the affected set keep their success and redispatch is scoped.
+          // If attribution is empty (no file info, or no owned_paths match)
+          // we fall through to the conservative default of resetting every
+          // passed goal, since a delivery rejection means the aggregate is
+          // unacceptable and we cannot prove any single goal is still valid.
+          // This is NOT a fallback in the rule-1 sense — it is the baseline
+          // correctness policy; attribution is an optimization on top.
+          const passedGoals = goals.filter((g) => g.status === "passed")
+          const affectedGoalIDs = new Set<string>()
+          const rejectionFiles: string[] = []
+          for (const d of (verdict.rejection_details ?? [])) {
+            if (d.file && typeof d.file === "string") rejectionFiles.push(d.file)
+          }
+          for (const file of rejectionFiles) {
+            for (const g of passedGoals) {
+              const owned = (g.owned_paths ?? []) as string[]
+              if (owned.some((op) => file === op || file.startsWith(op.endsWith("/") ? op : op + "/"))) {
+                affectedGoalIDs.add(g.id)
+              }
+            }
+          }
+          const attributed = affectedGoalIDs.size > 0 && affectedGoalIDs.size < passedGoals.length
+          const toReset = attributed
+            ? passedGoals.filter((g) => affectedGoalIDs.has(g.id))
+            : passedGoals
+          for (const g of toReset) {
             startNewAttempt({
               goalID: g.id,
               reason: "delivery_rework",
@@ -2544,7 +2569,9 @@ export function createOrchestratorTools(input: {
             taskID,
             iteration,
             issues: verdict.issues_found.length,
-            reset_goals: passedOrCompleted.length,
+            reset_goals: toReset.length,
+            attribution: attributed ? "precise" : "blanket",
+            passed_total: passedGoals.length,
           })
 
           stopAfterDispatch.abort("delivery_rework")
@@ -2621,10 +2648,10 @@ export function createOrchestratorTools(input: {
             issues_found: [`Delivery verification error: ${msg}`],
             rejection_details: [{ category: "runtime", error: msg }],
           }
-          // Synthetic-failure path mirrors the continue branch: open a fresh
-          // attempt cycle on every passed/completed goal so the loop redispatches
-          // them. No task.metadata signal — the loop reads engine_iteration
-          // and the verdict-artifact view (when present) to surface feedback.
+          // Synthetic-failure path: the deliver agent itself threw, so we
+          // have no structured rejection_details to attribute to specific
+          // goals. Blanket reset of every passed goal is correct here —
+          // the aggregate is unverifiable, so we treat it as invalid.
           const { startNewAttempt: startNewAttemptErr } = await import("@/engine/persist")
           const goalsErr = listGoals(taskID)
           const passedOrCompletedErr = goalsErr.filter((g) => g.status === "passed")
