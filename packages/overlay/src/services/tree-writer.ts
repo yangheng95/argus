@@ -75,6 +75,21 @@ const messages = new Map<string, MessageInfo>();
  *  not by `goal.created` events — we just remember existence here so session
  *  bucket claiming is deterministic. */
 const knownGoalIDs = new Set<string>();
+/** goalID → the current attempt's goal_run id. Refreshed from
+ *  board.goalWorkflows on every rebuild. Used to scope step/phase card
+ *  ids so each attempt (retry / delivery_rework / modify_contract /
+ *  restart_stage) gets its own cards instead of mutating the prior
+ *  attempt's cards in-place. A missing entry means the goal has no
+ *  dispatched run yet — we fall back to the pseudo-id `"pre"` so the
+ *  pre-dispatch stub cards (none today, but future-proof) still have a
+ *  stable home that collapses into the first real run once it starts.
+ *
+ *  The map is the single source of truth for "what's the live attempt?"
+ *  — session-side `resolveGoalContainerCardID` reads it when routing a
+ *  newly-arrived session's parts to the right phase card, so a session
+ *  created under attempt N never leaks its parts onto the attempt N+1
+ *  card after rebuild. */
+const goalCurrentRunID = new Map<string, string>();
 /** Fidelity cards that have been materialized into cardTreeStore → owning
  *  requirements session id. `rebuildCardHierarchy` reads this to attach the
  *  verdict card under the session card's childIDs. Entries are ONLY added
@@ -294,24 +309,44 @@ function sessionCardID(stage: string, sid: string): string {
 }
 
 /** Per-goal executor step card. Each goal has exactly one goal-scope step
- *  (see workflow.ts — the `build` step, labelled "Executor", is the only
- *  `scope: "goal"` entry in the pipeline). The step card surfaces at the
- *  top level of the conversation — there is no intermediate goal-group
- *  container. Goal title, decomposition index (#N), and description all
- *  live on this card. */
-function goalStepCardID(goalID: string, stepID: string): string {
-  return `step:${goalID}:${stepID}`;
+ *  per attempt (see workflow.ts — the `build` step, labelled "Executor",
+ *  is the only `scope: "goal"` entry in the pipeline). Every new attempt
+ *  (retry / delivery_rework / modify_contract / restart_stage) creates
+ *  a fresh goal_run; the run id is baked into the card id so the prior
+ *  attempt's cards survive as frozen history rather than being mutated
+ *  by new messages. Goal title, decomposition index (#N), and description
+ *  all live on this card.
+ *
+ *  Format: `step:<goalID>:<goalRunID | "pre">:<stepID>`.
+ *  The `"pre"` sentinel is used before the first dispatch (no goal_run
+ *  exists yet); it collapses into the real run id on the first rebuild
+ *  after the board emits a goalRunID. */
+function goalStepCardID(goalID: string, goalRunID: string | undefined, stepID: string): string {
+  return `step:${goalID}:${goalRunID ?? "pre"}:${stepID}`;
 }
 
-function goalPhaseCardID(goalID: string, stepID: string, phaseID: string): string {
-  return `${goalStepCardID(goalID, stepID)}:phase:${phaseID}`;
+function goalPhaseCardID(goalID: string, goalRunID: string | undefined, stepID: string, phaseID: string): string {
+  return `${goalStepCardID(goalID, goalRunID, stepID)}:phase:${phaseID}`;
 }
 
-/** A card ID is a top-level executor step iff it matches `step:<gid>:<stepID>`
- *  exactly — the phase variants add a `:phase:<pid>` suffix, and old
- *  `goal-group:` ids were removed entirely in the 2026-04-19 flatten. */
+/** A card ID is a top-level executor step iff it matches
+ *  `step:<gid>:<runID>:<stepID>` exactly — the phase variants add a
+ *  `:phase:<pid>` suffix. Old `goal-group:` ids were removed in the
+ *  2026-04-19 flatten, and the pre-attempt `step:<gid>:<stepID>` format
+ *  was upgraded to carry the run id on 2026-04-21 (per-attempt isolation). */
 function isTopLevelStepCardID(id: string): boolean {
   return id.startsWith("step:") && !id.includes(":phase:");
+}
+
+/** Extract the goalID segment from a step card id (top-level or phase).
+ *  Used by the GC pass to drop cards whose owning goal has been removed,
+ *  while preserving historical-attempt cards (same goalID, different
+ *  goalRunID) that the new alive-set no longer covers. */
+function goalIDFromStepCardID(id: string): string | null {
+  if (!id.startsWith("step:")) return null;
+  const parts = id.split(":");
+  // step:<goalID>:<runID>:<stepID>[...]
+  return parts.length >= 3 ? parts[1] : null;
 }
 
 function interactionCardID(messageID: string): string {
@@ -866,7 +901,10 @@ function resolvePhaseOrSessionCardID(
   if (goalID && stage) {
     const phase = goalStagePhaseID(stage);
     if (phase) {
-      const phaseCardID = goalPhaseCardID(goalID, phase.stepID, phase.phaseID);
+      // Same attempt-scoping rule as resolveGoalContainerCardID — read
+      // the live run id so the stub lands on the current attempt's card.
+      const runID = goalCurrentRunID.get(goalID);
+      const phaseCardID = goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID);
       // Stub the phase card if it hasn't been materialized yet (SSE
       // ordering: message.updated can arrive before the board refetch
       // that carries goalWorkflows[].steps[].phases). The stub's
@@ -1149,42 +1187,40 @@ function findWorkflowStepDefinition(
 function rebuildGoalStepCards(board: any): void {
   const goalWorkflows: any[] = Array.isArray(board?.goalWorkflows) ? board.goalWorkflows : [];
 
-  // Compute the alive set of executor step card ids across every goal. A
-  // step is alive only once the backend records its goal_run.time_started:
-  // pending steps are deliberately not materialized so the overlay never
-  // previews a pipeline that hasn't begun. Keeping the alive set in lock-
-  // step with the creation rule below means any stale card from a prior
-  // session (reconnect replay) gets GC'd the moment its step reverts to
-  // pending, instead of lingering as a ghost.
-  const aliveStepCardIDs = new Set<string>();
+  // Refresh the per-goal "current attempt" map so session routing reads
+  // the authoritative goalRunID. A goal whose tip has no id yet (pre-
+  // dispatch) is left un-mapped → `"pre"` sentinel is used by the id
+  // helpers, and the card flips to the real run id on the next rebuild
+  // after dispatch.
+  goalCurrentRunID.clear();
   for (const gw of goalWorkflows) {
-    const gid = String(gw.goalID);
-    const steps: any[] = Array.isArray(gw.steps) ? gw.steps : [];
-    for (const step of steps) {
-      if (!(Number(step.startedAt) > 0)) continue;
-      aliveStepCardIDs.add(goalStepCardID(gid, String(step.stepID)));
-    }
+    const gid = String(gw?.goalID || "");
+    if (!gid) continue;
+    const rid = typeof gw?.goalRunID === "string" && gw.goalRunID.length > 0 ? gw.goalRunID : undefined;
+    if (rid) goalCurrentRunID.set(gid, rid);
+  }
+
+  // GC policy (per-attempt isolation):
+  //   Historical attempt cards (same goalID, older goalRunID) MUST survive
+  //   across rebuilds — they are the frozen record of prior tries. The
+  //   only step cards we drop are those whose owning GOAL no longer
+  //   exists on the board (goal deleted by modify_goal / plan revision).
+  //   The prior policy ("drop any step card not in the current-tip alive
+  //   set") collapsed every retry onto the same card id and is what the
+  //   per-attempt isolation work is designed to remove.
+  const liveGoalIDs = new Set<string>();
+  for (const gw of goalWorkflows) {
+    const gid = String(gw?.goalID || "");
+    if (gid) liveGoalIDs.add(gid);
   }
   setCardTreeStore(
     "cards",
     produce((c: Record<string, CardNode>) => {
       for (const id of Object.keys(c)) {
         if (!id.startsWith("step:")) continue;
-        // Top-level executor step — drop if its goal is gone.
-        if (isTopLevelStepCardID(id)) {
-          if (aliveStepCardIDs.has(id)) continue;
-          for (const childID of Object.keys(c)) {
-            if (childID.startsWith(id + ":phase:")) delete c[childID];
-          }
-          delete c[id];
-          continue;
-        }
-        // Phase card — drop if its parent step is gone.
-        const parentEnd = id.indexOf(":phase:");
-        if (parentEnd > 0) {
-          const parentID = id.slice(0, parentEnd);
-          if (!aliveStepCardIDs.has(parentID)) delete c[id];
-        }
+        const owningGoal = goalIDFromStepCardID(id);
+        if (!owningGoal) { delete c[id]; continue; }
+        if (!liveGoalIDs.has(owningGoal)) delete c[id];
       }
     }),
   );
@@ -1192,6 +1228,9 @@ function rebuildGoalStepCards(board: any): void {
   for (let i = 0; i < goalWorkflows.length; i++) {
     const gw = goalWorkflows[i];
     const gid = String(gw.goalID);
+    const gRunID: string | undefined = typeof gw.goalRunID === "string" && gw.goalRunID.length > 0
+      ? gw.goalRunID
+      : undefined;
     const steps = Array.isArray(gw.steps) ? gw.steps : [];
     // Decomposition sequence: prefer the backend-authoritative orderIndex
     // (stable across later goal removals); fall back to the array position
@@ -1205,7 +1244,7 @@ function rebuildGoalStepCards(board: any): void {
       // actually picks it up (goal_run.time_started is written). Before
       // that, rendering it would advertise work that hasn't started.
       if (!(stepStartedAt > 0)) continue;
-      const stepCardID = goalStepCardID(gid, stepID);
+      const stepCardID = goalStepCardID(gid, gRunID, stepID);
       const stepStatus = normalizeStepStatus(step.status);
       const phaseEntries = step.phases && typeof step.phases === "object" && !Array.isArray(step.phases)
         ? (step.phases as Record<string, { status?: string; startedAt?: number; completedAt?: number }>)
@@ -1273,7 +1312,7 @@ function rebuildGoalStepCards(board: any): void {
           // records its goal_run.time_started. Pending phases have no
           // birth time and must not preview in the timeline.
           if (!(phaseStartedAt > 0)) continue;
-          const phaseCardID = goalPhaseCardID(gid, stepID, pid);
+          const phaseCardID = goalPhaseCardID(gid, gRunID, stepID, pid);
           const phaseStatus = normalizeStepStatus(entry?.status);
           writePhaseCard(
             phaseCardID,
@@ -1412,7 +1451,11 @@ function resolveGoalContainerCardID(goalID: string, stage: string): string | nul
   if (!goalID) return null;
   const phase = goalStagePhaseID(stage);
   if (!phase) return null;
-  const phaseCardID = goalPhaseCardID(goalID, phase.stepID, phase.phaseID);
+  // Route to the CURRENT attempt's phase card. goalCurrentRunID is
+  // refreshed on every rebuildGoalStepCards pass, so parts claimed by
+  // a session under attempt N never land on an attempt N+1 card.
+  const runID = goalCurrentRunID.get(goalID);
+  const phaseCardID = goalPhaseCardID(goalID, runID, phase.stepID, phase.phaseID);
   return cardTreeStore.cards[phaseCardID] ? phaseCardID : null;
 }
 
@@ -1444,11 +1487,14 @@ function rebuildCardHierarchy(): void {
   for (const gw of goalWorkflows) {
     const gid = String(gw?.goalID || "");
     if (!gid) continue;
+    const gRunID: string | undefined = typeof gw?.goalRunID === "string" && gw.goalRunID.length > 0
+      ? gw.goalRunID
+      : undefined;
     const steps = Array.isArray(gw?.steps) ? gw.steps : [];
     for (const step of steps) {
       const stepID = String(step?.stepID || "");
       if (!stepID) continue;
-      const stepCard = goalStepCardID(gid, stepID);
+      const stepCard = goalStepCardID(gid, gRunID, stepID);
       if (!cardTreeStore.cards[stepCard]) continue;
 
       // Step's children = phase cards (in declared order) when the step
@@ -1463,7 +1509,7 @@ function rebuildCardHierarchy(): void {
       for (const pdef of phaseDefs) {
         const pid = String(pdef?.id || "");
         if (!pid) continue;
-        const phaseCard = goalPhaseCardID(gid, stepID, pid);
+        const phaseCard = goalPhaseCardID(gid, gRunID, stepID, pid);
         if (!cardTreeStore.cards[phaseCard]) continue;
         pushUniqueChild(stepChildren, phaseCard);
         nextChildIDs.set(phaseCard, []);

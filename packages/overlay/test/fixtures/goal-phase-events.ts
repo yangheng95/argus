@@ -19,6 +19,11 @@ const T0 = 1_776_000_000_000;
 export const TASK_ID = "tsk_fixture_goal_phase";
 export const ROOT_SID = "ses_root_orch";
 export const GOAL_ID = "goal_fixture_g1";
+/** Tip goal_run id emitted by the backend on goalWorkflows[].goalRunID.
+ *  Drives the per-attempt step card scoping (2026-04-21). Held constant
+ *  through this fixture — only a retry/rework event would produce a new
+ *  value, which the fixture does not exercise. */
+export const GOAL_RUN_ID = "glr_fixture_attempt1";
 /** kind="executor" container session — empty parent that groups
  *  planner / build worker children. Does NOT render as a card; the
  *  step card in the overlay represents it. (2026-04-20: the per-goal
@@ -160,6 +165,7 @@ export const EVENTS: FixtureEvent[] = [
       status: "active",
       goalWorkflows: [{
         goalID: GOAL_ID,
+        goalRunID: GOAL_RUN_ID,
         goalTitle: "Scaffold project",
         goalStatus: "running",
         orderIndex: 0,
@@ -366,6 +372,7 @@ export const EVENTS: FixtureEvent[] = [
       status: "active",
       goalWorkflows: [{
         goalID: GOAL_ID,
+        goalRunID: GOAL_RUN_ID,
         goalTitle: "Scaffold project",
         goalStatus: "passed",
         orderIndex: 0,

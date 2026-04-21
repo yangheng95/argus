@@ -7,6 +7,7 @@ import {
   EVENTS,
   INITIAL_BOARD,
   GOAL_ID,
+  GOAL_RUN_ID,
   ROOT_SID,
   EXECUTOR_SID,
   BUILD_SID,
@@ -35,7 +36,7 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   // title / round / description / contracts stamped on it.
   // 2026-04-20: per-goal evaluator removed; build step has plan + build
   // phases only (`evaluate` phase dropped with the deterministic runner).
-  const stepCardID = `step:${GOAL_ID}:build`;
+  const stepCardID = `step:${GOAL_ID}:${GOAL_RUN_ID}:build`;
   const planPhaseID = `${stepCardID}:phase:plan`;
   const buildPhaseID = `${stepCardID}:phase:build`;
 
@@ -165,6 +166,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
     goalWorkflows: [
       {
         goalID: GOAL_ID,
+        goalRunID: GOAL_RUN_ID,
         goalTitle: "Scaffold project",
         goalStatus: "running",
         orderIndex: 0,
@@ -199,7 +201,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
     },
   });
 
-  const stepCardID = `step:${GOAL_ID}:build`;
+  const stepCardID = `step:${GOAL_ID}:${GOAL_RUN_ID}:build`;
   // Subtitle format: `${goalID tail} · ${step.summary}` — executor step
   // absorbed the old goal-group card, so both the stable identity (last
   // 8 of goalID) and the step's own summary live in the header.
