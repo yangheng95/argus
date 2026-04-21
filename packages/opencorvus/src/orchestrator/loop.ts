@@ -23,7 +23,6 @@ import { effectiveMaxExecutorGroups, findTask, findRun, findPlan, listGoalsByPla
 import type { TaskRow, RunRow, PlanRow } from "@/engine"
 import { mergeGoalDelivery } from "@/engine/runtime"
 import { Database, eq } from "@/storage/db"
-import { blockedGoalDiagnostics } from "@/goal/readiness"
 import { isRunReadyForGoalDispatch } from "./scheduler"
 
 const log = Log.create({ service: "orchestrator-loop" })
@@ -287,28 +286,28 @@ export async function runTaskLoop(input: {
       log.info("waiting for already-running goals", { taskID })
       await waitForGoalCompletion(taskID, run, plan, signal)
     } else {
-      // No ready goals, no running goals — deps not met or all done
+      // No active pool submissions, no running goals: pool returned no
+      // dispatchable IDs this iteration. Feed back to the Orchestrator —
+      // the describe layer shows WHY each goal isn't dispatchable (running /
+      // terminal_ok / never_dispatched / needs_redispatch / unsatisfied
+      // depends_on flags on each GoalDesc), so the LLM can decide whether
+      // to retry, modify, add, or give up without a per-goal diagnostics
+      // block injected from the loop.
       log.info("no dispatchable goals", { taskID, pending: hasPending })
       if (hasPending) {
-        // Pending goals exist but none are ready (deps not met or plan node mismatch).
-        // Feed back to Orchestrator as a batch_complete so it can decide to retry/fail/skip.
         const passed = goals.filter(g => g.status === "passed").length
         const failed = goals.filter(g => g.status === "failed").length
-        const nodes = listPlanNodesByPlan(plan.id)
         const { listGoalRunsForDispatch } = await import("@/engine/store")
         const goalRuns = listGoalRunsForDispatch(taskID)
-        const diag = blockedGoalDiagnostics(nodes, goals, goalRuns)
 
-        log.warn("pending goals blocked — feeding to Orchestrator", {
+        log.warn("pending goals present but none dispatched — feeding to Orchestrator", {
           taskID, passed, failed,
           pending: goals.filter(g => g.status === "pending").length,
-          blockedGoals: diag.map(d => d.goalTitle),
         })
 
-        // Stale-state detection based on goal_run (immutable history) rather
-        // than engine_goal.status (now derived, could appear unchanged while
-        // the underlying goal_run chain has grown). Any new goal_run row or
-        // status transition changes the snapshot and resets the counter.
+        // Stale-state detection on immutable goal_run history — the rule
+        // is unchanged: the task is stuck when the chain hasn't grown and
+        // no transitions happened for MAX_STALE_ITERATIONS decision cycles.
         const snapshot = goalRuns
           .map((r) => `${r.id}:${r.status}:${(r as { supersede_of?: string | null }).supersede_of ?? ""}`)
           .sort()
@@ -317,14 +316,7 @@ export async function runTaskLoop(input: {
           staleCount++
           log.warn("stale state detected", { taskID, staleCount, maxStale: MAX_STALE_ITERATIONS })
           if (staleCount >= MAX_STALE_ITERATIONS) {
-            // Classify WHY the loop is stuck. Four realistic shapes:
-            //   1. pending goals with unsatisfied deps — the dep tree has a gap
-            //   2. pending goals but no unmet deps and nothing ready — readiness
-            //      filter rejected them (supersede / live row leak / bug)
-            //   3. deliveries in candidate with no evaluation verdict — the
-            //      deliver tool or delivery agent is wedged
-            //   4. unknown — surface enough state for the operator to triage
-            const breakdown = await classifyBreakerCause(taskID, goals, goalRuns, diag)
+            const breakdown = await classifyBreakerCause(taskID, goals, goalRuns, [])
             log.error("stale-state circuit breaker triggered — failing task", {
               taskID, staleCount, cause: breakdown.cause, detail: breakdown.detail,
             })
@@ -342,18 +334,10 @@ export async function runTaskLoop(input: {
           staleCount = 0
         }
 
-        // Inject dep-blocked diagnostics into the trigger so the Orchestrator
-        // knows exactly which goals are blocked and why.
-        const depBlocked = diag.map(d => ({
-          goalTitle: d.goalTitle,
-          blockedBy: d.unsatisfiedDeps.map(dep => ({ title: dep.depGoalTitle, status: dep.depStatus })),
-        }))
-
         trigger = {
           kind: "batch_complete",
           runID: run.id,
           summary: { passed, failed, total: goals.length },
-          depBlocked: depBlocked.length > 0 ? depBlocked : undefined,
         }
         continue
       }

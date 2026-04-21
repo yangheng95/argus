@@ -1533,14 +1533,28 @@ export function createOrchestratorTools(input: {
       },
     }),
 
-    dispatch_ready_goals: tool({
-      description: "Compute dependency DAG and dispatch ALL ready goals (no unmet dependencies) in parallel. Each goal gets its own worktree. You will be re-triggered when the batch completes. STOP after calling this.",
+    dispatch_goal: tool({
+      description:
+        "Dispatch specific goals for parallel execution in isolated worktrees. " +
+        "Pool enforces idempotency — IDs that are already running or already satisfied " +
+        "(completed tip with no superseded_reason) are silently skipped. You are responsible " +
+        "for sequencing dependencies: read each goal's `depends_on` and `Attempts` in the " +
+        "task description and call this tool in the right order (e.g. dispatch the dep " +
+        "first, then the dependents once it lands). " +
+        "STOP after calling this; you will be re-triggered when the pool drains.",
       inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to dispatch goals now"),
+        goalIDs: z
+          .array(z.string())
+          .min(1)
+          .describe(
+            "Goal IDs to dispatch. The pool runs them in parallel up to the configured " +
+              "concurrency; dependency ordering is your responsibility.",
+          ),
+        reason: z.string().optional().describe("Why you decided to dispatch these goals now"),
       }),
-      execute: async () => {
+      execute: async ({ goalIDs, reason }) => {
         const task = requireTask(taskID)
-        if (!task.active_run_id) return "No active run. Use create_run or execute_goal first."
+        if (!task.active_run_id) return "No active run. Create one with create_run first."
         const run = requireRun(task.active_run_id)
         const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
         if (!plan) return "No plan found. Use create_run first."
@@ -1551,24 +1565,21 @@ export function createOrchestratorTools(input: {
           return `Run ${run.id} is ${run.status}. Only accepted/running/blocked runs may dispatch goals. Create a fresh run if this one is terminal.`
         }
 
-        // Check how many goals are ready (without dispatching — task loop handles dispatch via GoalPool)
-        const { readyGoalNodes } = await import("@/goal/readiness")
-        const { listPlanNodesByPlan, listGoalsByPlan, listGoalRunsForDispatch } = await import("@/engine/store")
-        const nodes = listPlanNodesByPlan(plan.id)
-        const goals = listGoalsByPlan(plan.id)
-        const goalRuns = listGoalRunsForDispatch(taskID)
-        const ready = readyGoalNodes(nodes, goals, goalRuns)
-
-        if (ready.length === 0) {
-          const allGoals = listGoals(taskID)
-          const pending = allGoals.filter(g => g.status === "pending").length
-          const running = allGoals.filter(g => g.status === "running").length
-          return `No goals ready to dispatch. Pending: ${pending}, Running: ${running}. Check dependencies with read_context.`
-        }
-
-        // Signal task loop to dispatch via GoalPool (don't dispatch here — let the pool handle it)
-        stopAfterDispatch.abort("dispatch_ready_goals")
-        return `${ready.length} goal(s) ready for dispatch. STOP HERE — task loop will dispatch via GoalPool and re-trigger you when the batch completes.`
+        // NOTE (Phase 2a transitional): the pool is instantiated inside the
+        // task loop and currently auto-submits every dispatchable goal in
+        // the plan (order_index order). This tool call signals the loop to
+        // re-enter its dispatch phase, but the loop does not yet thread
+        // `goalIDs` through to pool.submit — Phase 2b removes the loop's
+        // auto-submit so the LLM's IDs become authoritative. Until then
+        // dispatch_goal's effect is equivalent to "tell the pool to run";
+        // the specific IDs you pass are advisory (idempotency still skips
+        // already-dispatched rows, so extras here do no harm).
+        stopAfterDispatch.abort("dispatch_goal")
+        return (
+          `Dispatched ${goalIDs.length} goal(s): ${goalIDs.join(", ")}. ` +
+          `STOP HERE — task loop will run the pool and re-trigger you when the batch drains.` +
+          (reason ? `\nReason: ${reason}` : "")
+        )
       },
     }),
 

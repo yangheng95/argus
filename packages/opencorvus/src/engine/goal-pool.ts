@@ -25,7 +25,7 @@ import { ExecutorRegistry } from "@/executor/registry"
 import { runGoalPipeline } from "@/pipeline"
 import { EngineConfig } from "./config"
 import { createDecisionLog } from "@/decision-log"
-import { readyGoalNodes, type GoalNodeEntry } from "@/goal/readiness"
+import { isGoalDispatchable } from "@/goal/readiness"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { writeIntentBundle } from "@/goal/intent-bundle"
 import { Snapshot } from "@/snapshot"
@@ -168,6 +168,15 @@ export interface PoolHooks {
 // GoalPool
 // ---------------------------------------------------------------------------
 
+/** Internal: a goal entry queued for dispatch — paired with its plan_node
+ *  since the pipeline still needs the node reference for per-goal planning
+ *  artifacts. Previously exported from @/goal/readiness; now local since
+ *  the pool is the only consumer. */
+type GoalNodeEntry = {
+  node: import("./store").PlanNodeRow & { goal_id: string }
+  goal: GoalRow
+}
+
 export class GoalPool {
   private queue: GoalNodeEntry[] = []
   private active = new Map<string, { goalRunID: string; ctrl: AbortController; promise: Promise<GoalResult> }>()
@@ -181,33 +190,51 @@ export class GoalPool {
   }
 
   /**
-   * Submit goals for execution. Only dependency-ready goals are dispatched;
-   * the rest wait in the queue until their deps are satisfied.
+   * Submit goals for execution. The LLM decides which IDs to dispatch —
+   * the pool only enforces idempotency (skip IDs whose tip is already
+   * live or satisfied). There is no dependency-graph gate; the LLM sees
+   * each goal's `depends_on` in the describe layer and sequences dispatch
+   * accordingly.
+   *
+   * When `goalIDs` is omitted the pool auto-submits every currently-
+   * dispatchable goal in the plan (ordered by `order_index` for a
+   * deterministic queue). This is the transitional hook used by
+   * orchestrator/loop.ts until Phase 2b makes dispatch strictly
+   * LLM-driven; afterwards the argument will be required.
    */
   submit(goalIDs?: string[]) {
     const { plan, task } = this.opts
     const nodes = listPlanNodesByPlan(plan.id)
     const goals = listGoalsByPlan(plan.id) as GoalRow[]
-    // Task-scoped goal_run history: readiness must see COMPLETED runs from
-    // prior runs on the same task so goals that passed earlier are not
-    // re-dispatched when the orchestrator creates a second run. A run-scoped
-    // query hides that history, which is the bug that re-executed goal
-    // gol_d9bdd3508002x4iAK65I9apfNo on tsk_d9bc59062001xuMSbxYap8hY5t.
-    // modify_goal / restart_from_stage abort the old goal_runs when they
-    // reset a passed goal, so the retriable `aborted` status re-admits
-    // dispatch for intentional rework.
+    // Task-scoped goal_run history: idempotency must see COMPLETED runs
+    // from prior runs on the same task so goals that passed earlier are
+    // not re-dispatched when the orchestrator creates a second run.
     const goalRuns = listGoalRunsForDispatch(task.id)
 
-    const ready = readyGoalNodes(nodes, goals, goalRuns)
-    const filtered = goalIDs
-      ? ready.filter(e => goalIDs.includes(e.goal.id))
-      : ready
+    const effectiveIDs = goalIDs ?? [...goals]
+      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+      .map((g) => g.id)
 
-    for (const entry of filtered) {
-      // Don't double-queue
-      if (this.queue.some(q => q.goal.id === entry.goal.id)) continue
-      if (this.active.has(entry.goal.id)) continue
-      this.queue.push(entry)
+    for (const goalID of effectiveIDs) {
+      const goal = goals.find((g) => g.id === goalID)
+      if (!goal) {
+        log.warn("pool.submit: goal not found in plan", { goalID, planID: plan.id })
+        continue
+      }
+      if (!isGoalDispatchable(goal, goalRuns)) {
+        // Idempotency skip — normal when the LLM re-submits an already-
+        // dispatched ID or when the transitional auto-submit sees goals
+        // that are already running / satisfied.
+        continue
+      }
+      if (this.queue.some((q) => q.goal.id === goalID)) continue
+      if (this.active.has(goalID)) continue
+      const node = nodes.find((n) => n.kind === "goal" && n.goal_id === goalID)
+      if (!node) {
+        log.warn("pool.submit: no plan_node found for goal", { goalID, planID: plan.id })
+        continue
+      }
+      this.queue.push({ node: node as GoalNodeEntry["node"], goal })
     }
 
     this.fillSlots()
@@ -219,35 +246,19 @@ export class GoalPool {
    * from queue as goals complete (respecting dependencies).
    */
   async drain(): Promise<GoalResult[]> {
-    // If already empty, return immediately
     if (this.active.size === 0 && this.queue.length === 0) {
       return [...this.results]
     }
 
-    // Wait for all active + queued goals to complete
     while (this.active.size > 0 || this.queue.length > 0) {
       if (this.opts.signal?.aborted) break
 
-      // Wait for ANY active goal to finish
       if (this.active.size > 0) {
-        const promises = [...this.active.values()].map(a => a.promise)
-        await Promise.race([
-          Promise.race(promises),
-          this.abortPromise(),
-        ])
+        const promises = [...this.active.values()].map((a) => a.promise)
+        await Promise.race([Promise.race(promises), this.abortPromise()])
       } else if (this.queue.length > 0) {
-        // Queue has items but nothing active — deps not ready yet.
-        // Re-check after a short delay (a goal may have just completed,
-        // satisfying deps for queued goals).
+        // Concurrency slots opened up — fill them with queued FIFO entries.
         this.fillSlots()
-        if (this.active.size === 0) {
-          // Still nothing dispatchable — all queued goals have unsatisfied deps.
-          // This means remaining goals depend on failed goals — they'll never be ready.
-          log.warn("drain: queued goals have unsatisfied deps, breaking", {
-            queued: this.queue.map(q => q.goal.id),
-          })
-          break
-        }
       }
     }
 
@@ -274,22 +285,14 @@ export class GoalPool {
   // ---------------------------------------------------------------------------
 
   private fillSlots() {
-    const { plan, task, signal } = this.opts
+    const { signal } = this.opts
     if (signal?.aborted) return
 
+    // FIFO — the LLM's submit order is the dispatch order. Dependency
+    // sequencing is the LLM's responsibility (it reads describe output
+    // and calls dispatch_goal with the right IDs at the right time).
     while (this.active.size < this.opts.concurrency && this.queue.length > 0) {
-      // Re-evaluate readiness each iteration (a just-dispatched goal's dep resolution may change).
-      // Task-scoped goal_runs — see submit() for rationale.
-      const nodes = listPlanNodesByPlan(plan.id)
-      const goals = listGoalsByPlan(plan.id) as GoalRow[]
-      const goalRuns = listGoalRunsForDispatch(task.id)
-      const ready = readyGoalNodes(nodes, goals, goalRuns)
-      const readyIDs = new Set(ready.map(e => e.goal.id))
-
-      const idx = this.queue.findIndex(q => readyIDs.has(q.goal.id))
-      if (idx < 0) break // no ready goals in queue
-
-      const entry = this.queue.splice(idx, 1)[0]!
+      const entry = this.queue.shift()!
       this.dispatchGoal(entry)
     }
   }
