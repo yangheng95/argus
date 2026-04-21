@@ -84,6 +84,7 @@ export function persistQueuedTask(input: {
   kind?: "workflow" | "build"
   budget?: BudgetInput
   metadata: Record<string, unknown>
+  workflowState?: import("@/engine/workflow").WorkflowState
   channelBinding?: ChannelBindingInput
   projectID: string
 }) {
@@ -99,6 +100,7 @@ export function persistQueuedTask(input: {
         request: input.request,
         attachments: input.attachments?.length ? input.attachments : undefined,
         executor: input.executor,
+        workflow_state: input.workflowState,
         kind: input.kind ?? "workflow",
         status: "queued",
         priority: input.priority ?? "normal",

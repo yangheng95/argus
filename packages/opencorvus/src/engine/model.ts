@@ -760,7 +760,7 @@ export const TaskBoard = z.object({
   }),
 
   // ── New workflow-structured fields ──
-  /** Active workflow state (from task.metadata._workflow + WorkflowRegistry) */
+  /** Active workflow state (from task.workflow_state + WorkflowRegistry) */
   workflow: TaskBoardWorkflow.optional(),
   /** Structured requirements from Requirements Agent output */
   requirements: TaskBoardRequirement.array().optional(),

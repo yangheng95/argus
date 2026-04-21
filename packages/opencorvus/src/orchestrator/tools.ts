@@ -187,8 +187,7 @@ export function createOrchestratorTools(input: {
       ws.currentStepID = step.id
       try {
         const task = requireTask(taskID)
-        const meta = { ...(task.metadata ?? {}), _workflow: ws }
-        await updateTask(task, { metadata: meta }, `Workflow step started: ${step.label}`)
+        await updateTask(task, { workflow_state: ws }, `Workflow step started: ${step.label}`)
         EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
           taskID, stepID: step.id, goalID, status: "running",
           summary: `Step "${step.label}" started`,
@@ -239,8 +238,7 @@ export function createOrchestratorTools(input: {
 
     try {
       const task = requireTask(taskID)
-      const meta = { ...(task.metadata ?? {}), _workflow: ws }
-      await updateTask(task, { metadata: meta }, `Workflow step ${status}: ${step.label}`)
+      await updateTask(task, { workflow_state: ws }, `Workflow step ${status}: ${step.label}`)
       EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
         taskID, stepID: step.id, goalID, status,
         summary: `Step "${step.label}" ${status}`,
@@ -248,7 +246,7 @@ export function createOrchestratorTools(input: {
     } catch { /* best effort */ }
   }
 
-  /** ensureGoalInWorkflow was the _workflow.goalSteps pre-allocator. The
+  /** ensureGoalInWorkflow was the workflow_state.goalSteps pre-allocator. The
    *  shadow table is gone — goal step status is derived from engine_goal_run
    *  at read time. This remains as a no-op for callers still referencing it;
    *  those call sites will be removed as the architecture settles. */

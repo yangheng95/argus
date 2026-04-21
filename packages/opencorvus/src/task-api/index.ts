@@ -447,22 +447,23 @@ export namespace EngineService {
     // Initialize workflow state synchronously at task creation, not later in
     // the agent's trigger=created path. Without this, queued tasks (waiting
     // for the serial queue) and any task whose agent never reaches its
-    // created trigger end up with task.metadata._workflow=undefined, which
-    // makes board.ts buildWorkflowFields return {} and the entire new panel
-    // suite (WorkflowProgressBar / RequirementsPanel / ArchitectPanel /
+    // created trigger end up with workflow_state=NULL, which makes board.ts
+    // buildWorkflowFields return {} and the entire new panel suite
+    // (WorkflowProgressBar / RequirementsPanel / ArchitectPanel /
     // GoalWorkflowList) silently disappears for that task.
     //
-    // Honor caller-provided _workflow if present (e.g. tests, replay), else
-    // initialize to the configured default workflow's pending state. The
-    // orchestrator may still skip the pipeline by calling its `build` tool — the
-    // workflow state here is a scaffold that the agent chooses whether to use.
-    if (!metadata._workflow) {
+    // Initialized to the configured default workflow's pending state. The
+    // orchestrator may still skip the pipeline by calling its `build` tool —
+    // the workflow state here is a scaffold that the agent chooses whether
+    // to use.
+    let workflowState: import("@/engine/workflow").WorkflowState | undefined
+    {
       const defaultID = await WorkflowRegistry.defaultID()
       const defaultWorkflow =
         (await WorkflowRegistry.resolve(defaultID)) ??
         WorkflowRegistry.resolveSync("pipeline")
       if (defaultWorkflow) {
-        metadata._workflow = createWorkflowState(defaultWorkflow)
+        workflowState = createWorkflowState(defaultWorkflow)
       }
     }
 
@@ -514,6 +515,7 @@ export namespace EngineService {
         attachments: attachmentRefs.length ? attachmentRefs : undefined,
         requestID, source: input.source,
         priority: input.priority, kind: input.kind, budget: input.budget, metadata,
+        workflowState,
         channelBinding: input.channelBinding,
         projectID: Instance.project.id,
       })

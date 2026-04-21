@@ -96,7 +96,7 @@ export interface GoalWorkflowState {
   stepPhases?: Record<string, Record<string, GoalStepStatus>>
 }
 
-/** 任务级工作流追踪状态，存储在 task.metadata._workflow */
+/** 任务级工作流追踪状态，存储在 engine_task.workflow_state 列 */
 export interface WorkflowState {
   /** 当前使用的 workflow ID */
   workflowID: string
