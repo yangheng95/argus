@@ -150,6 +150,7 @@ export namespace Session {
        *  directly. See SessionKind in session.sql.ts. */
       kind: z.enum([
         "root",
+        "orchestrator",
         "assistant",
         "requirements",
         "design-analyst",

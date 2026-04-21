@@ -178,7 +178,7 @@ export namespace Orchestrator {
       //    decision log) via buildSystemParts on each invocation — the session
       //    is only for UI/audit persistence, not for LLM context accumulation.
       const agentSession = await Session.createNext({
-        kind: "assistant",
+        kind: "orchestrator",
         parentID: task.session_id,
         title: `Agent: ${task.title}`,
         directory: Instance.directory,
@@ -186,7 +186,7 @@ export namespace Orchestrator {
       contentHooks = sessionStreamHooks({
         sessionID: agentSession.id,
         taskID,
-        stage: "assistant",
+        stage: "orchestrator",
       })
 
 
@@ -250,7 +250,7 @@ export namespace Orchestrator {
         cacheKey: `task-${taskID}`,
         sessionID: agentSession.id,
         taskID,
-        stage: "assistant",
+        stage: "orchestrator",
         signal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
         onStepFinish: guard.onStepFinish,
         hooks: contentHooks,
