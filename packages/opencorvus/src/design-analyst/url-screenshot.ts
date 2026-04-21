@@ -59,7 +59,9 @@ export async function fetchUrlScreenshot(input: {
     throw new UrlScreenshotError(`url must start with http:// or https://: ${input.url}`)
   }
   const viewport = input.viewport ?? { width: 1440, height: 900 }
-  const timeoutMs = input.timeoutMs ?? 90_000
+  // Bumped from 90s to 120s so the 20s tail settle has headroom above the
+  // goto/font/readyState gates without bumping into the overall budget.
+  const timeoutMs = input.timeoutMs ?? 120_000
 
   let executablePath: string
   try {
@@ -95,8 +97,16 @@ export async function fetchUrlScreenshot(input: {
     //   1. document.fonts.ready   — resolves once FOUT/FOIT closes
     //   2. readyState === "complete" — defence against sub-resource races
     //                                  that slipped past networkidle2
-    //   3. 500 ms tail buffer     — absorbs IntersectionObserver-driven
+    //   3. 20 s tail buffer       — absorbs IntersectionObserver-driven
     //                              lazy loads + initial CSS animation frames
+    //                              + SPA hydration + WebSocket-driven canvas
+    //                              first paint on heavy finance dashboards.
+    //                              NOTE: this is a blunt time-based gate, not
+    //                              a content-paint gate. For high-fidelity
+    //                              reference capture a DOM/canvas-content gate
+    //                              is the correct design — this tail is the
+    //                              operator's deliberate trade-off until that
+    //                              lands.
     // Each gate is bounded by the overall timeout so a pathological page
     // still loud-fails instead of hanging (rule 1: let it crash).
     await Promise.race([
@@ -109,7 +119,7 @@ export async function fetchUrlScreenshot(input: {
       () => document.readyState === "complete",
       { timeout: timeoutMs },
     )
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 20_000))
 
     const title = (await page.title().catch(() => "")) || new URL(input.url).hostname
     const finalUrl = page.url()
