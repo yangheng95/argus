@@ -32,10 +32,11 @@ import {
   EngineTaskTable,
   type EngineDeliveryStatus,
   type EngineArtifactKind,
+  type EngineGoalRunSupersededReason,
 } from "./engine.sql"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findGoalRun, findLatestTipGoalRun, findPlan, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { findGoal, findGoalRun, findLatestTipGoalRun, findPlan, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
 import { syncGoalStatus } from "./goal-status"
 import { assertGoalRunTransition, type GoalRunStatus } from "./goal-run-state-machine"
 import { StaleRowError } from "./state"
@@ -420,14 +421,14 @@ export function resetTaskGoalsToPending(input: {
     // (catalog.ts resettable=false): restart_from_stage needs a way to
     // invalidate prior success under a new run, and the supersede marker
     // is now the sole mechanism.
-    if (tip && (tip.status === "failed" || tip.status === "aborted" || tip.status === "completed")) {
-      const existingMeta = (tip.metadata ?? {}) as Record<string, unknown>
-      if (typeof existingMeta.superseded_reason !== "string" || !existingMeta.superseded_reason) {
-        supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now })
-        supersededTips++
-      }
-    }
-    syncGoalStatus(goal.id, `resetTaskGoalsToPending: ${input.reason}`)
+    const result = startNewAttempt({
+      goalID: goal.id,
+      reason: "restart_stage",
+      now,
+      clearCascade: true,
+    })
+    if (result.supersededTipID) supersededTips++
+    if (result.clearedCascade) clearedCascade++
   }
   log.info("reset task goals to pending", {
     taskID: input.taskID, reason: input.reason,
@@ -436,9 +437,22 @@ export function resetTaskGoalsToPending(input: {
   return { total: goals.length, clearedCascade, supersededTips }
 }
 
-export function supersedeGoalRun(input: {
+/**
+ * Internal helper: mark a terminal goal_run as superseded and trigger
+ * status re-derivation. EXTERNAL CALLERS MUST USE startNewAttempt — it
+ * unifies supersede + workspace reset + cascade clear + event emission
+ * into one atomic intent. Direct supersedeGoalRun calls bypass the
+ * GoalAttemptOpened event and skip the resetWorkspace/clearCascade
+ * options that several upstream sites used to inline.
+ *
+ * Sets superseded_reason / superseded_at as first-class columns on the
+ * old row. The FSM-status of the old row stays in its terminal state
+ * (history is immutable). deriveGoalStatus reads the column and projects
+ * the goal back to `pending` so the dispatch loop can pick it up.
+ */
+function supersedeGoalRun(input: {
   oldGoalRunID: string
-  reason: string
+  reason: EngineGoalRunSupersededReason
   now?: number
 }) {
   const now = input.now ?? Date.now()
@@ -446,28 +460,107 @@ export function supersedeGoalRun(input: {
   if (!existing) {
     throw new Error(`supersedeGoalRun: goal_run ${input.oldGoalRunID} not found`)
   }
-  // No FSM mutation on the ancestor — it stays in its terminal state. We only
-  // annotate metadata with the supersede reason so the UI / decision log can
-  // render why the retry happened without reading decision_log separately.
-  const nextMeta = {
-    ...((existing.metadata ?? {}) as Record<string, unknown>),
-    superseded_reason: input.reason,
-    superseded_at: now,
-  }
   Database.use((db) =>
     db
       .update(EngineGoalRunTable)
-      .set({ metadata: nextMeta, time_updated: now })
+      .set({
+        superseded_reason: input.reason,
+        superseded_at: now,
+        time_updated: now,
+      })
       .where(eq(EngineGoalRunTable.id, input.oldGoalRunID))
       .run(),
   )
-  // deriveGoalStatus treats `failed` tip with `metadata.superseded_reason` as
-  // pending (retry intent marker) so the task loop's `hasPending` check picks
-  // the goal up and pool.submit → readyGoalNodes → pool.dispatchGoal creates
-  // a fresh goal_run. Without this sync the metadata change never reaches
-  // engine_goal.status and the loop stays in `batch_complete` retry-spin.
-  syncGoalStatus(existing.goal_id, "supersedeGoalRun")
+  syncGoalStatus(existing.goal_id, `supersedeGoalRun:${input.reason}`)
   return existing
+}
+
+/**
+ * Open a new attempt for a goal — single entry-point for "this goal must
+ * re-dispatch under a fresh attempt." Replaces the four ad-hoc paths
+ * (retry_failed_goals / modify_goal / restart_from_stage / delivery_rework)
+ * that all expanded to the same supersede + sync sequence and drifted apart
+ * over time.
+ *
+ * Atomic intent:
+ *   1. Supersede the terminal tip (if any) with `reason` as a typed enum.
+ *      Idempotent — already-superseded tips are a no-op.
+ *   2. Optionally clear `goal.cascade_state` (when reason invalidates
+ *      a prior cascade-failed marker — e.g. restart_from_stage).
+ *   3. Optionally reset `goal.workspace_dir` (when the new attempt must
+ *      not inherit the prior worktree — e.g. modify_contract on a
+ *      structurally different acceptance set).
+ *   4. syncGoalStatus → projects `pending` so the dispatch loop picks
+ *      the goal up via pool.submit → readyGoalNodes → pool.dispatchGoal,
+ *      which is the only authoritative creator of dispatchable goal_runs.
+ *   5. Emit Event.GoalAttemptOpened with `feedback` payload so loop /
+ *      overlay / decision-log observe attempt boundaries directly,
+ *      without polling task.metadata for one-shot soft signals.
+ *
+ * No-op when the tip is non-terminal — supersede has no meaning on a
+ * live row. The status field stays put; live runs converge naturally.
+ */
+export function startNewAttempt(input: {
+  goalID: string
+  reason: EngineGoalRunSupersededReason
+  now?: number
+  clearCascade?: boolean
+  resetWorkspace?: boolean
+  feedback?: Record<string, unknown>
+}): { supersededTipID?: string; clearedCascade: boolean; resetWorkspace: boolean } {
+  const now = input.now ?? Date.now()
+  const goal = findGoal(input.goalID)
+  if (!goal) {
+    throw new Error(`startNewAttempt: goal ${input.goalID} not found`)
+  }
+  let supersededTipID: string | undefined
+  const tip = findLatestTipGoalRun(input.goalID)
+  if (tip && (tip.status === "failed" || tip.status === "aborted" || tip.status === "completed")) {
+    if (!tip.superseded_reason) {
+      supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now })
+      supersededTipID = tip.id
+    }
+  }
+  let clearedCascade = false
+  if (input.clearCascade && goal.cascade_state !== null && goal.cascade_state !== undefined) {
+    Database.use((db) =>
+      db.update(EngineGoalTable)
+        .set({ cascade_state: null, time_updated: now })
+        .where(eq(EngineGoalTable.id, input.goalID))
+        .run(),
+    )
+    clearedCascade = true
+  }
+  let resetWorkspace = false
+  if (input.resetWorkspace && goal.workspace_dir) {
+    Database.use((db) =>
+      db.update(EngineGoalTable)
+        .set({
+          workspace_dir: null,
+          workspace_branch: null,
+          workspace_base_ref: null,
+          time_updated: now,
+        })
+        .where(eq(EngineGoalTable.id, input.goalID))
+        .run(),
+    )
+    resetWorkspace = true
+  }
+  syncGoalStatus(input.goalID, `startNewAttempt:${input.reason}`)
+  Database.effect(() =>
+    EngineProtocol.emit(
+      Event.GoalAttemptOpened,
+      {
+        taskID: goal.task_id,
+        goalID: input.goalID,
+        reason: input.reason,
+        ...(supersededTipID ? { supersededTipID } : {}),
+        ...(input.feedback ? { feedback: input.feedback } : {}),
+      },
+      { source: "persist.startNewAttempt" },
+    ),
+  )
+  return { supersededTipID, clearedCascade, resetWorkspace }
 }
 
 export function updateGoalRun(

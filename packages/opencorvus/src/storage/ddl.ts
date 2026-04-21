@@ -597,7 +597,7 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   -- Set on the OLD row by Goal.startNewAttempt / supersedeGoalRun. Enum values
   -- match EngineGoalRunSupersededReason in engine.sql.ts. NULL on rows that
   -- were never superseded. deriveGoalStatus projects terminal tips with
-  -- non-null superseded_reason back to `pending` so the loop re-dispatches.
+  -- non-null superseded_reason back to 'pending' so the loop re-dispatches.
   superseded_reason   text,
   superseded_at       integer,
   metadata            text,

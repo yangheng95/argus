@@ -24,7 +24,8 @@ describe("orchestrator scheduler invariants", () => {
     // `completed` is intentionally excluded: its verification evidence is
     // load-bearing and its parent goal.status should stay `passed` until a
     // fresh goal_run under the new contract transitions. Rework routes
-    // through supersedeGoalRun metadata annotation, not an FSM flip.
+    // through Goal.startNewAttempt (sets `superseded_reason` column on
+    // the old terminal row), not an FSM flip.
     expect(GOAL_RUN_RESETTABLE_STATUSES).toEqual([
       "queued",
       "accepted",

@@ -28,8 +28,8 @@ describe("goal_run state machine", () => {
 
     // `completed` is fully terminal: no outgoing transitions. Retry under
     // a modified contract must create a NEW goal_run and supersede the
-    // old one via metadata (engine/persist.ts supersedeGoalRun), never
-    // mutate the success record into aborted.
+    // old one via the `superseded_reason` column (engine/persist.ts
+    // Goal.startNewAttempt), never mutate the success record into aborted.
     expect(canGoalRunTransition("completed", "aborted")).toBe(false)
     expect(canGoalRunTransition("completed", "running")).toBe(false)
     expect(canGoalRunTransition("failed", "running")).toBe(false)
