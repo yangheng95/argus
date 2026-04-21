@@ -23,6 +23,7 @@
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import type { EngineGoalStatus } from "./engine.sql"
+import { deriveGoalStatus } from "./goal-status"
 import {
   effectiveMaxFixRuns,
   effectiveMaxRuns,
@@ -202,6 +203,22 @@ export function describeGoal(goal: GoalRow): GoalDesc {
     needs_redispatch: isTerminal && tipHasRedispatchIntent,
     never_dispatched: rows.length === 0,
   }
+}
+
+/**
+ * Drop-in replacement for reading `engine_goal.status` as a cache. Derives
+ * the status live from the goal_run chain (plus cascade_state) on each call.
+ * When the goal has never dispatched, returns "pending" — matching the
+ * initial cache value. Use this at every call-site that previously did
+ * `goal.status === X` / `g.status === X` so the cache field can be retired
+ * in Phase 4 without another sweep.
+ *
+ * Same sync semantics as `deriveGoalStatus` — it hits the DB via
+ * findGoal + listGoalRunsByGoal, both of which are primary-key / indexed
+ * queries. Acceptable in filter loops with small goal counts (≤100 per task).
+ */
+export function goalStatusByID(goalID: string): EngineGoalStatus {
+  return deriveGoalStatus(goalID) ?? "pending"
 }
 
 /**

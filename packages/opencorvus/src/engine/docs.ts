@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
 import type { GoalJudgmentType } from "@/delivery/checks"
+import { goalStatusByID } from "@/engine/describe"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -177,7 +178,7 @@ function goalText(input: {
     const meta = obj(goal.metadata)
     const checks = selectors(meta)
     const origin = text(meta?.origin)
-    lines.push(`${index + 1}. [${goal.status}] [${goal.priority}] ${goal.title}`)
+    lines.push(`${index + 1}. [${goalStatusByID(goal.id)}] [${goal.priority}] ${goal.title}`)
     lines.push(`   - Acceptance:\n${indent(renderSpecsAsText(goal.acceptance_specs ?? []), 5)}`)
     if (checks.length > 0) lines.push(`   - Checks: ${checks.join(", ")}`)
     if (origin) lines.push(`   - Origin: ${origin}`)

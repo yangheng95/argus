@@ -1,5 +1,6 @@
 import z from "zod"
 import { createDecisionLog } from "@/decision-log"
+import { goalStatusByID } from "@/engine/describe"
 import {
   findSpecSnapshot,
   viewSpecSnapshot,
@@ -363,7 +364,7 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
   )
   // goalRuns: include goal_run status transitions in the tag. Goal-scoped state
   // changes (queued → running → completed/failed) happen on goal_run rows BEFORE
-  // the parent goal.status is updated, so we need both tables in the tag or the
+  // the parent goalStatusByID(goal.id) is updated, so we need both tables in the tag or the
   // frontend will see stale "running" state during execution.
   const goalRuns = Database.use((db) =>
     db
@@ -785,7 +786,7 @@ function buildWorkflowFields(
     return {
       goalID: goal.id,
       goalTitle: goal.title,
-      goalStatus: goal.status,
+      goalStatus: goalStatusByID(goal.id),
       orderIndex: goal.order_index,
       workspaceDir: goal.workspace_dir ?? undefined,
       workspaceBranch: goal.workspace_branch ?? undefined,
