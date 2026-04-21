@@ -106,7 +106,6 @@ export function insertGoalRows(
         },
         priority: goal.priority ?? "blocking",
         source: goal.source ?? "spec",
-        status: "pending",
         order_index: index,
         time_created: input.now,
         time_updated: input.now,
@@ -274,64 +273,17 @@ export function createGoalRun(input: {
  * which know the old run id can keep the intent explicit; the actual
  * supersede link is set by createGoalRun via supersedeOf.
  */
-/**
- * Explicit cascade-failed marker for a goal.
- *
- * Sets `engine_goal.cascade_state = "failed"` and then calls syncGoalStatus
- * so the status projection picks up the new marker. Use when the goal's
- * deps are permanently failed (no goal_run will ever be dispatched) or the
- * goal is a verification-only goal that failed its checks.
- *
- * This is one of two canonical writers for engine_goal.status:
- *   - syncGoalStatus()         — derives from goal_run chain tip
- *   - updateGoalCascadeFailed  — sets cascade_state, then syncGoalStatus
- * All other direct writes to engine_goal.status are a bug.
- */
-function writeCascadeState(input: {
-  goalID: string
-  outcome: "failed" | "passed"
-  reason: string
-  writer: string
-  now?: number
-}) {
-  const now = input.now ?? Date.now()
-  const goal = Database.use((db) =>
-    db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, input.goalID)).get(),
-  )
-  if (!goal) {
-    throw new Error(`${input.writer}: goal ${input.goalID} not found`)
-  }
-  if (goal.cascade_state === input.outcome) return
-  Database.use((db) =>
-    db.update(EngineGoalTable)
-      .set({ cascade_state: input.outcome, time_updated: now })
-      .where(eq(EngineGoalTable.id, input.goalID))
-      .run(),
-  )
-  log.info("goal cascade_state set", {
-    goalID: input.goalID, outcome: input.outcome, reason: input.reason, writer: input.writer,
-  })
-  syncGoalStatus(input.goalID, `${input.writer}: ${input.reason}`)
-}
-
-/** Cascade: goal's deps are permanently failed, no goal_run will ever dispatch. */
-export function updateGoalCascadeFailed(input: {
-  goalID: string
-  reason: string
-  now?: number
-}) {
-  writeCascadeState({ ...input, outcome: "failed", writer: "updateGoalCascadeFailed" })
-}
-
-/** Verification goals (isDispatchableGoal === false): evaluation outcome recorded at delivery time. */
-export function updateGoalVerificationOutcome(input: {
-  goalID: string
-  outcome: "failed" | "passed"
-  reason: string
-  now?: number
-}) {
-  writeCascadeState({ ...input, writer: "updateGoalVerificationOutcome" })
-}
+// RETIRED in the LLM-autonomous redesign:
+//   - writeCascadeState()
+//   - updateGoalCascadeFailed()
+//   - updateGoalVerificationOutcome()
+//
+// These all wrote to engine_goal.cascade_state, a cached "deps permanently
+// failed / verification outcome" projection that was read by the dispatch
+// gate. Both the cache column and the dispatch gate are gone. Dep-failure
+// handling is the LLM's call (it reads each goal's depends_on + describe
+// layer flags and chooses retry_goal / modify_goal / fail_task).
+// Verification-goal outcome is recorded on the goal's goal_run chain.
 
 export function updateGoalWorkspace(input: {
   goalID: string
@@ -402,18 +354,8 @@ export function resetTaskGoalsToPending(input: {
 }) {
   const now = input.now ?? Date.now()
   const goals = listGoals(input.taskID)
-  let clearedCascade = 0
   let supersededTips = 0
   for (const goal of goals) {
-    if (goal.cascade_state !== null && goal.cascade_state !== undefined) {
-      Database.use((db) =>
-        db.update(EngineGoalTable)
-          .set({ cascade_state: null, time_updated: now })
-          .where(eq(EngineGoalTable.id, goal.id))
-          .run(),
-      )
-      clearedCascade++
-    }
     const tip = findLatestTipGoalRun(goal.id)
     // Any terminal tip (failed / aborted / completed) must be superseded so
     // the goal is eligible for re-dispatch. `completed` was added when
@@ -425,16 +367,14 @@ export function resetTaskGoalsToPending(input: {
       goalID: goal.id,
       reason: "restart_stage",
       now,
-      clearCascade: true,
     })
     if (result.supersededTipID) supersededTips++
-    if (result.clearedCascade) clearedCascade++
   }
   log.info("reset task goals to pending", {
     taskID: input.taskID, reason: input.reason,
-    total: goals.length, clearedCascade, supersededTips,
+    total: goals.length, supersededTips,
   })
-  return { total: goals.length, clearedCascade, supersededTips }
+  return { total: goals.length, supersededTips }
 }
 
 /**
@@ -485,29 +425,23 @@ function supersedeGoalRun(input: {
  * Atomic intent:
  *   1. Supersede the terminal tip (if any) with `reason` as a typed enum.
  *      Idempotent — already-superseded tips are a no-op.
- *   2. Optionally clear `goal.cascade_state` (when reason invalidates
- *      a prior cascade-failed marker — e.g. restart_from_stage).
- *   3. Optionally reset `goal.workspace_dir` (when the new attempt must
+ *   2. Optionally reset `goal.workspace_dir` (when the new attempt must
  *      not inherit the prior worktree — e.g. modify_contract on a
  *      structurally different acceptance set).
- *   4. syncGoalStatus → projects `pending` so the dispatch loop picks
- *      the goal up via pool.submit → readyGoalNodes → pool.dispatchGoal,
- *      which is the only authoritative creator of dispatchable goal_runs.
- *   5. Emit Event.GoalAttemptOpened with `feedback` payload so loop /
- *      overlay / decision-log observe attempt boundaries directly,
- *      without polling task.metadata for one-shot soft signals.
+ *   3. syncGoalStatus → emits transition events via the in-memory
+ *      lastEmittedStatus map. No cache write; current state is live-
+ *      derived by every reader via goalStatusByID.
  *
  * No-op when the tip is non-terminal — supersede has no meaning on a
- * live row. The status field stays put; live runs converge naturally.
+ * live row.
  */
 export function startNewAttempt(input: {
   goalID: string
   reason: EngineGoalRunSupersededReason
   now?: number
-  clearCascade?: boolean
   resetWorkspace?: boolean
   feedback?: Record<string, unknown>
-}): { supersededTipID?: string; clearedCascade: boolean; resetWorkspace: boolean } {
+}): { supersededTipID?: string; resetWorkspace: boolean } {
   const now = input.now ?? Date.now()
   const goal = findGoal(input.goalID)
   if (!goal) {
@@ -520,16 +454,6 @@ export function startNewAttempt(input: {
       supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now })
       supersededTipID = tip.id
     }
-  }
-  let clearedCascade = false
-  if (input.clearCascade && goal.cascade_state !== null && goal.cascade_state !== undefined) {
-    Database.use((db) =>
-      db.update(EngineGoalTable)
-        .set({ cascade_state: null, time_updated: now })
-        .where(eq(EngineGoalTable.id, input.goalID))
-        .run(),
-    )
-    clearedCascade = true
   }
   let resetWorkspace = false
   if (input.resetWorkspace && goal.workspace_dir) {
@@ -553,7 +477,7 @@ export function startNewAttempt(input: {
   // `findRecentReworkAttempt`. No separate Bus event needed; an in-memory
   // pub/sub would only duplicate what the goal_run chain already records.
   syncGoalStatus(input.goalID, `startNewAttempt:${input.reason}`)
-  return { supersededTipID, clearedCascade, resetWorkspace }
+  return { supersededTipID, resetWorkspace }
 }
 
 export function updateGoalRun(

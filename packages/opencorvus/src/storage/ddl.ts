@@ -465,14 +465,11 @@ CREATE TABLE IF NOT EXISTS engine_goal (
   requirement_ids  text NOT NULL DEFAULT '[]',
   priority         text NOT NULL DEFAULT 'blocking',
   source           text NOT NULL DEFAULT 'spec',
-  status           text NOT NULL DEFAULT 'pending',
-  -- cascade_state: explicit terminal outcome for goals that bypass the
-  -- goal_run dispatch chain (deps permanently failed, OR verification goals
-  -- whose evaluation is computed at delivery time without an executor).
-  -- Values: "failed" | "passed" | NULL. Written ONLY by
-  -- updateGoalCascadeFailed / updateGoalVerificationOutcome.
-  -- deriveGoalStatus() reads this before walking the goal_run chain.
-  cascade_state    text,
+  -- RETIRED columns (LLM-autonomous redesign): status, cascade_state.
+  -- Both were cached projections used as dispatch gates. Current state
+  -- is derived live from the goal_run chain via goalStatusByID /
+  -- describeGoal. Dep-failure propagation is an LLM decision, not a
+  -- schema column.
   retry_count      integer NOT NULL DEFAULT 0,
   workspace_dir    text,
   workspace_branch text,

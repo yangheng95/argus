@@ -44,7 +44,6 @@ import {
   createGoalRun,
   updateGoalRun,
   ensureExecutorSession,
-  updateGoalCascadeFailed,
   updateGoalWorkspace,
   updateGoalWorkspaceBaseRef,
 } from "./persist"
@@ -842,47 +841,39 @@ export class GoalPool {
       //      single-attempt transient errors.
       //
       //   B. Worktree could NOT be acquired (no worktreeDir, e.g. disk full,
-      //      git init failed, process crash during Worktree.create). This is
-      //      a genuine cascade: without a workspace, retries have no place
-      //      to run. Escalate to updateGoalCascadeFailed to mark the goal
-      //      permanently failed — we cannot salvage it with the same
-      //      infrastructure it already failed on.
-      //
-      // Prior behavior conflated A and B and clamped every pre-createGoalRun
-      // failure to cascade_failed, which meant a single provider stream blip
-      // nuked the worktree (wiping prior attempts' files + evidence) and
-      // forced the orchestrator to start the goal from scratch. That
-      // contradicts spec-10's "preserve on progress" invariant.
+      //      git init failed, process crash during Worktree.create). The
+      //      cascade_state column that used to mark "permanently failed —
+      //      no workspace" is retired; instead record the failure as a
+      //      shadow goal_run with workspaceDir=null so the event timeline
+      //      has a visible, LLM-readable "dispatch attempt failed pre-
+      //      worktree." The orchestrator reads this via the describe layer
+      //      and decides (retry_goal / modify_goal / fail_task).
       if (!goalRun) {
+        const goalRow = findGoal(entry.goal.id)
+        const branch = goalRow?.workspace_branch ?? undefined
+        const shadowRun = createGoalRun({
+          taskID: task.id,
+          goalID: entry.goal.id,
+          planNodeID: entry.node.id,
+          coordinatorRunID: run.id,
+          workspaceDir: worktreeDir ?? undefined,
+          metadata: {
+            worktree_branch: branch,
+            pre_create_failure: true,
+            worktree_acquired: !!worktreeDir,
+          },
+        })
+        updateGoalRun(shadowRun.id, {
+          status: "failed",
+          error,
+          blocking_reason: null,
+        })
         if (worktreeDir) {
-          const goalRow = findGoal(entry.goal.id)
-          const branch = goalRow?.workspace_branch ?? undefined
-          const shadowRun = createGoalRun({
-            taskID: task.id,
-            goalID: entry.goal.id,
-            planNodeID: entry.node.id,
-            coordinatorRunID: run.id,
-            workspaceDir: worktreeDir,
-            metadata: {
-              worktree_branch: branch,
-              pre_create_failure: true,
-            },
-          })
-          updateGoalRun(shadowRun.id, {
-            status: "failed",
-            error,
-            blocking_reason: null,
-          })
           logWorktreePreservedForRetry(
             entry.goal.id,
             worktreeDir,
             `pre-createGoalRun: ${error}`,
           )
-        } else {
-          updateGoalCascadeFailed({
-            goalID: entry.goal.id,
-            reason: `worktree acquire failed before dispatch: ${error}`,
-          })
         }
       }
 

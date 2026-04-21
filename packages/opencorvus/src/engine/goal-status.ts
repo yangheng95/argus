@@ -22,9 +22,9 @@
  * duplicate emit after process restart is harmless.
  */
 
-import { Database, eq } from "@/storage/db"
-import { EngineGoalTable } from "./engine.sql"
-import type { EngineGoalRunStatus, EngineGoalStatus } from "./engine.sql"
+import type { EngineGoalRunStatus } from "./engine.sql"
+import type { EngineGoalStatus } from "./describe"
+import { Database } from "@/storage/db"
 import { EngineProtocol } from "./protocol"
 import { Event } from "./model"
 import { listGoalRunsByGoal, findGoal } from "./store"
@@ -62,18 +62,16 @@ function mapRunStatus(runStatus: EngineGoalRunStatus): EngineGoalStatus {
 }
 
 /**
- * Pure function: compute what engine_goal.status should be from
- * (cascade_state, goal_run chain tip). Returns undefined only when neither
- * input is set — caller keeps the default "pending".
+ * Pure function: derive goal status from the goal_run chain tip alone.
+ * Returns undefined when the goal has no runs yet — caller defaults to
+ * "pending" (never_dispatched semantics live in describe.ts::describeGoal).
  *
- * Precedence: cascade_state=failed dominates any goal_run chain. This is
- * deliberate — cascade means deps permanently failed, so even a completed
- * goal_run (from a prior contract) must project as failed now.
+ * The cached column (engine_goal.status) and cascade_state override were
+ * retired in the LLM-autonomous redesign. Dep-failure propagation is
+ * now a decision the LLM makes after reading describeTask; there is no
+ * pre-computed "cascade failed" projection.
  */
 export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
-  const goal = findGoal(goalID)
-  if (goal?.cascade_state === "failed") return "failed"
-  if (goal?.cascade_state === "passed") return "passed"
   const rows = listGoalRunsByGoal(goalID)
   if (rows.length === 0) return undefined
   const supersededIDs = new Set(

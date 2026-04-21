@@ -938,7 +938,6 @@ export function viewGoal(row: GoalRow) {
     kind: row.kind,
     requirement_ids: row.requirement_ids,
     priority: row.priority,
-    status: row.status,
     retryCount: row.retry_count,
     workspaceDir: row.workspace_dir ?? undefined,
     workspaceBranch: row.workspace_branch ?? undefined,
