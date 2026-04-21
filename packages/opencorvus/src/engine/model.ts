@@ -891,6 +891,21 @@ export const Event = {
   })),
   GoalPassed: BusEvent.define("goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
   GoalFailed: BusEvent.define("goal.failed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
+  /**
+   * A new attempt was opened for a goal — i.e. its prior terminal goal_run
+   * was superseded and the engine will re-dispatch under the named reason.
+   * Subscribers (orchestrator loop, overlay UI, decision-log) read this
+   * instead of polling task.metadata for one-shot soft signals. Carries
+   * optional `feedback` payload (e.g. delivery arbiter issues, retry
+   * analysis) so subscribers don't need a back-channel to learn why.
+   */
+  GoalAttemptOpened: BusEvent.define("goal.attempt.opened", z.object({
+    taskID: Identifier.schema("task"),
+    goalID: Identifier.schema("goal"),
+    reason: z.enum(["manual_retry", "delivery_rework", "modify_contract", "restart_stage"]),
+    supersededTipID: Identifier.schema("goal_run").optional(),
+    feedback: z.record(z.string(), z.any()).optional(),
+  })),
   MilestoneActivated: BusEvent.define("milestone.activated", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
   MilestonePassed: BusEvent.define("milestone.passed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
   MilestoneFailed: BusEvent.define("milestone.failed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),

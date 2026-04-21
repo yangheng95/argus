@@ -1108,7 +1108,7 @@ export function createOrchestratorTools(input: {
         // We do NOT write engine_goal.status directly: every path goes through
         // the goal_run chain so syncGoalStatus() projects the new status. This
         // keeps engine_goal.status authored by exactly two writers
-        // (syncGoalStatus via updateGoalRun/supersedeGoalRun, and
+        // (syncGoalStatus via updateGoalRun / Goal.startNewAttempt, and
         // updateGoalCascadeFailed for no-goal_run cascades).
         const contractFields = ["title", "objective", "acceptance_specs", "owned_paths", "depends_on", "exports", "imports", "priority", "kind"]
         const contractChanged = contractFields.some(f => f in setValues)
@@ -1122,44 +1122,41 @@ export function createOrchestratorTools(input: {
             .run()
         })
 
+        const changed = Object.keys(setValues).filter(k => k !== "time_updated")
+
         let abortedRuns = 0
         let supersededTipID: string | undefined
         if (statusReset) {
-          const { listGoalRunsForTask, findLatestTipGoalRun } = await import("@/engine/store")
-          const { supersedeGoalRun } = await import("@/engine/persist")
+          const { listGoalRunsForTask } = await import("@/engine/store")
+          const { startNewAttempt } = await import("@/engine/persist")
           const { LIVE_GOAL_RUN_STATUSES } = await import("@/engine/catalog")
           // 1. Abort only LIVE goal_runs (queued/accepted/planning/running/
           //    evaluating/blocked). `completed` is never reset — its
           //    verification evidence is load-bearing, and the parent goal
           //    should not regress from passed → pending via a
-          //    completed→aborted flip. Retry proceeds by creating a new
-          //    goal_run (step 2 supersedes the tip so dispatchability kicks
-          //    in; GoalPool is the authoritative creator).
+          //    completed→aborted flip. The new attempt (step 2) supersedes
+          //    the tip so dispatchability kicks in; GoalPool is the
+          //    authoritative creator of the new goal_run.
           const toAbort = listGoalRunsForTask(taskID)
             .filter((row) => row.goal_id === goalID && LIVE_GOAL_RUN_STATUSES.includes(row.status))
           for (const row of toAbort) {
             updateGoalRun(row.id, { status: "aborted", error: "contract modified" })
           }
           abortedRuns = toAbort.length
-          // 2. Supersede any terminal tip (failed / aborted / completed) so
-          //    deriveGoalStatus projects "pending" and the task loop routes
-          //    the goal back through pool.submit → readyGoalNodes →
-          //    pool.dispatchGoal, which creates a fresh goal_run under the
-          //    new contract. Completed tips especially: their success record
-          //    is preserved, and the NEW run is the one that proves the
-          //    modified contract (the old completion was under the old
-          //    contract, which is now stale).
-          const tip = findLatestTipGoalRun(goalID)
-          if (tip && (tip.status === "failed" || tip.status === "aborted" || tip.status === "completed")) {
-            const existingMeta = (tip.metadata ?? {}) as Record<string, unknown>
-            if (typeof existingMeta.superseded_reason !== "string" || !existingMeta.superseded_reason) {
-              supersedeGoalRun({ oldGoalRunID: tip.id, reason: "[modify_goal] contract modified" })
-              supersededTipID = tip.id
-            }
-          }
+          // 2. Open a new attempt under reason=modify_contract. Internally:
+          //    supersedes any terminal tip → deriveGoalStatus projects
+          //    pending → loop routes through pool.submit → pool.dispatchGoal
+          //    → fresh goal_run under the new contract. Idempotent if the
+          //    tip is already superseded. Emits GoalAttemptOpened so the
+          //    overlay / decision-log observe the boundary.
+          const result = startNewAttempt({
+            goalID,
+            reason: "modify_contract",
+            feedback: { contract_changes: changed },
+          })
+          supersededTipID = result.supersededTipID
         }
 
-        const changed = Object.keys(setValues).filter(k => k !== "time_updated")
         const resetSuffix = statusReset ? ` (status reset: ${goal.status} → pending via goal_run chain)` : ""
         const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
         const supersedeSuffix = supersededTipID ? `, tip ${supersededTipID} superseded` : ""
@@ -1400,19 +1397,22 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Retry via supersede chain — the prior goal_run is terminal per the
-        // goal_run FSM; we create a fresh goal_run referencing it via
-        // supersede_of so readiness (goal/readiness.ts) sees the new row as
-        // the tip and re-dispatches the goal. engine_goal.status is NOT
-        // rewritten here — goal-pool.ts moves it to running on dispatch.
-        // This replaces the prior "mutate engine_goal back to pending" path
-        // that deadlocked against doesGoalRunSatisfyGoal("completed")=true.
+        // Retry via Goal.startNewAttempt(reason="manual_retry"). Internally
+        // it supersedes the prior terminal tip (set superseded_reason column),
+        // syncs goal.status → pending via deriveGoalStatus, and emits
+        // GoalAttemptOpened with this handler's per-goal analysis as feedback.
+        // GoalPool then picks the goal up on the next task-loop iteration via
+        // pool.submit → readyGoalNodes → pool.dispatchGoal — pool is the only
+        // authoritative creator of dispatchable goal_runs, so we deliberately
+        // do NOT createGoalRun here (a stray `queued` row would leak as a
+        // live-tip that readyGoalNodes filters out yet pool never picks up,
+        // which historically caused alive-stall hangs).
         const { findLatestTipGoalRun } = await import("@/engine/store")
-        const { supersedeGoalRun } = await import("@/engine/persist")
+        const { startNewAttempt } = await import("@/engine/persist")
         const now = Date.now()
         for (const goal of retryable) {
           const analysis = per_goal_analysis[goal.id]
-          const reason = analysis
+          const detail = analysis
             ? `[${analysis.failure_class}] ${analysis.expected_fix}`
             : "retry_failed_goals"
           const priorTip = findLatestTipGoalRun(goal.id)
@@ -1425,31 +1425,19 @@ export function createOrchestratorTools(input: {
               `cannot retry without a row to supersede. This is a data inconsistency upstream of retry.`,
             )
           }
-          // Only annotate the old row with the retry reason (metadata marker).
-          // DO NOT createGoalRun here. Creating a `queued` row out-of-band
-          // leaks a live-tip that isLiveGoalRunStatus("queued")=true filters
-          // out via readyGoalNodes, while GoalPool never picks it up because
-          // pool.dispatch only operates on pool-internal createGoalRun calls
-          // that wire session/worktree/baseRef. The iter-5 benchmark stalled
-          // exactly here: new queued row with no pipeline → alive-stall.
-          //
-          // The old tip stays in its failed/aborted state; readyGoalNodes
-          // sees "not live, not satisfy" → goal is released for re-dispatch;
-          // GoalPool.submit on the next task-loop iteration calls
-          // createGoalRun itself with the full executor/worktree payload
-          // and re-runs the pipeline. No external goal_run creation needed.
-          //
-          // supersede_of is reserved for the "completed tip needs re-dispatch"
-          // case (modify_goal on a passed goal) where tip.satisfiesGoal=true
-          // would otherwise keep readiness filtered forever.
-          supersedeGoalRun({ oldGoalRunID: priorTip.id, reason, now })
+          startNewAttempt({
+            goalID: goal.id,
+            reason: "manual_retry",
+            now,
+            feedback: { detail, analysis },
+          })
           // Increment engine_goal.retry_count so the per-goal budget check at
           // the top of this handler observes the retry. The column existed
           // with a documented "incremented each time retry_failed_goals resets
           // this goal" comment but nothing wrote it, which made goalRetries
           // always 0 and exhausted[] always empty — goals were infinitely
-          // retryable on paper, and in the aborted-loop case (fix 1+2 above)
-          // this compounded into a wedged task that never terminated.
+          // retryable on paper, and in the aborted-loop case this compounded
+          // into a wedged task that never terminated.
           Database.use((db) =>
             db.update(EngineGoalTable)
               .set({

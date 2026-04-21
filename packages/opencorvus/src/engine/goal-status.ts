@@ -93,31 +93,23 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
   // is the new tip, and an old terminal row that was not yet superseded is
   // the only tip if no retry happened.
   const head = tips[0]!
-  // `retry_failed_goals` calls supersedeGoalRun() on a failed tip without
-  // creating a new goal_run row (GoalPool is the only correct creator of
-  // dispatchable goal_runs — see orchestrator/tools.ts retry_failed_goals
-  // comment). The tip stays in status=failed but gets
-  // `metadata.superseded_reason` set. Derive `pending` in that case so the
-  // task loop's `hasPending` check picks the goal up and re-invokes
-  // pool.submit() → readyGoalNodes → pool.dispatchGoal → pool-internal
-  // createGoalRun. Without this derivation override the loop sees a failed
-  // engine_goal.status, doesn't call pool, and orchestrator keeps calling
-  // retry_failed_goals in a tight loop (retry_count explodes, no progress).
-  const meta = (head as { metadata?: Record<string, unknown> | null }).metadata
-  const supersededReason = meta && typeof meta === "object" && !Array.isArray(meta)
-    ? (meta as Record<string, unknown>).superseded_reason
-    : undefined
-  // Terminal tips annotated with `superseded_reason` project as `pending`
-  // regardless of which terminal state they landed in:
-  //   - `failed` / `aborted` — retry intent from retry_failed_goals.
-  //   - `completed`          — contract modified via modify_goal; the old
-  //     success record is preserved but a new goal_run must run under the
-  //     new contract. Without this projection the completed tip would keep
-  //     projecting `passed` and dispatch would never pick it up.
+  // Terminal tip with non-null `superseded_reason` column means
+  // `Goal.startNewAttempt` was invoked: the old tip stays in its terminal
+  // FSM state (history is immutable) and the goal must re-dispatch under
+  // a fresh attempt. Project `pending` so the task loop's `hasPending`
+  // check picks the goal up and re-invokes pool.submit() → readyGoalNodes
+  // → pool.dispatchGoal → pool-internal createGoalRun (the only authoritative
+  // creator of dispatchable goal_runs).
+  //
+  // Applies to all three terminal states:
+  //   - failed / aborted — retry intent (manual_retry, delivery_rework)
+  //   - completed        — contract changed (modify_contract); the prior
+  //     success record is preserved, but a new run under the new contract
+  //     must prove acceptance. Without this projection the completed tip
+  //     would keep projecting `passed` and dispatch would never pick it up.
   if (
     (head.status === "failed" || head.status === "aborted" || head.status === "completed") &&
-    typeof supersededReason === "string" &&
-    supersededReason.length > 0
+    head.superseded_reason
   ) {
     return "pending"
   }
@@ -132,7 +124,7 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
  * the previous ad-hoc UPDATE sites.
  *
  * Callers must invoke this after any goal_run lifecycle write
- * (createGoalRun, updateGoalRun, supersedeGoalRun).
+ * (createGoalRun, updateGoalRun, startNewAttempt).
  */
 export function syncGoalStatus(goalID: string, reason: string) {
   const goal = findGoal(goalID)
