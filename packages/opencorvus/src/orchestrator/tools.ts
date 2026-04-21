@@ -1848,6 +1848,8 @@ export function createOrchestratorTools(input: {
         // Run DeliveryAgent to verify build/test/startup
         const allGoals = listGoals(taskID)
         const goalInfos = allGoals.map(g => ({
+          id: g.id,
+          title: g.title,
           description: g.objective,
           criteria: renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]),
           priority: g.priority as "blocking" | "advisory",
@@ -2319,37 +2321,39 @@ export function createOrchestratorTools(input: {
             arbiter_reason: decision.reason,
             verdict_summary: verdict.summary,
             issues_found: verdict.issues_found,
+            affected_goal_ids: verdict.affected_goal_ids,
             rejection_details: verdict.rejection_details ?? [],
             verdict_artifact_id: verdictArtifactId,
           }
-          // Attempt attribution: map each rejection_detail.file to a goal
-          // via owned_paths prefix match. When every detail resolves to a
-          // known goal we reset only those goals — the passed goals outside
-          // the affected set keep their success and redispatch is scoped.
-          // If attribution is empty (no file info, or no owned_paths match)
-          // we fall through to the conservative default of resetting every
-          // passed goal, since a delivery rejection means the aggregate is
-          // unacceptable and we cannot prove any single goal is still valid.
-          // This is NOT a fallback in the rule-1 sense — it is the baseline
-          // correctness policy; attribution is an optimization on top.
-          const passedGoals = goals.filter((g) => goalStatusByID(g.id) === "passed")
-          const affectedGoalIDs = new Set<string>()
-          const rejectionFiles: string[] = []
-          for (const d of (verdict.rejection_details ?? [])) {
-            if (d.file && typeof d.file === "string") rejectionFiles.push(d.file)
+          // Attribution is the delivery agent's job. `verdict.affected_goal_ids`
+          // is a contract-required non-empty array on rejection (enforced in
+          // DeliveryAgent.normalizeVerdict). We open a fresh attempt on exactly
+          // those goals — no string-matching of rejection_details[].file vs
+          // owned_paths here, and no "if attribution is empty, reset every
+          // passed goal" blanket policy. That blanket reset was dressed up as
+          // "baseline correctness" but it reset goals the rejection never
+          // cited and wiped valid work on every ambiguous rejection —
+          // violating rule 1 (no fallback) and rule 23 (no hardcoded state
+          // machine; let the LLM — here, the delivery agent — decide).
+          const goalByID = new Map(goals.map((g) => [g.id, g]))
+          const unknownAffected: string[] = []
+          const toReset: typeof goals = []
+          for (const gid of verdict.affected_goal_ids) {
+            const g = goalByID.get(gid)
+            if (!g) { unknownAffected.push(gid); continue }
+            toReset.push(g)
           }
-          for (const file of rejectionFiles) {
-            for (const g of passedGoals) {
-              const owned = (g.owned_paths ?? []) as string[]
-              if (owned.some((op) => file === op || file.startsWith(op.endsWith("/") ? op : op + "/"))) {
-                affectedGoalIDs.add(g.id)
-              }
-            }
+          if (unknownAffected.length > 0) {
+            // Delivery agent cited a goal id that is not in this task's goal
+            // set. Surface loud — either the agent hallucinated an id, or the
+            // prompt forgot to list a real goal. Either way the rejection is
+            // not actionable as-is; fail the delivery so the orchestrator
+            // re-runs instead of silently dropping those ids.
+            throw new Error(
+              `Delivery verdict cites unknown affected_goal_ids: ${unknownAffected.join(", ")}. ` +
+              `Known goals for this task: ${[...goalByID.keys()].join(", ") || "(none)"}.`,
+            )
           }
-          const attributed = affectedGoalIDs.size > 0 && affectedGoalIDs.size < passedGoals.length
-          const toReset = attributed
-            ? passedGoals.filter((g) => affectedGoalIDs.has(g.id))
-            : passedGoals
           for (const g of toReset) {
             startNewAttempt({
               goalID: g.id,
@@ -2376,8 +2380,7 @@ export function createOrchestratorTools(input: {
             iteration,
             issues: verdict.issues_found.length,
             reset_goals: toReset.length,
-            attribution: attributed ? "precise" : "blanket",
-            passed_total: passedGoals.length,
+            affected_goal_ids: verdict.affected_goal_ids,
           })
 
           stopAfterDispatch.abort("delivery_rework")

@@ -456,10 +456,13 @@ function buildProsecutorBrief(input: {
     `summary: ${input.defenderVerdict.summary}`,
     issues.length > 0 ? `\nissues_found (${issues.length}):` : "",
     ...issues.map((i) => `- ${i}`),
+    (input.defenderVerdict.affected_goal_ids?.length ?? 0) > 0
+      ? `\naffected_goal_ids: ${input.defenderVerdict.affected_goal_ids.join(", ")}`
+      : "",
     rejectionDetails.length > 0 ? `\nrejection_details (${rejectionDetails.length}):` : "",
     ...rejectionDetails.map(
       (d) =>
-        `- [${d.category}${d.file ? ` ${d.file}` : ""}] ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`,
+        `- [${d.goal_id} ${d.category}${d.file ? ` ${d.file}` : ""}] ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`,
     ),
   ]
   if (seeds.length > 0) {

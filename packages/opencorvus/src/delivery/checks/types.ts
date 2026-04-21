@@ -58,6 +58,13 @@ export interface CheckResult {
 }
 
 export interface GoalInfo {
+  /** Goal DB id (e.g. `gol_...`). Required: the delivery agent must cite it
+   *  when writing rejection_details[].goal_id so the orchestrator can route
+   *  each rejection back to the correct goal without string-matching. */
+  id: string
+  /** Short human title — same as engine_goal.title. Shown alongside the id
+   *  in the prompt so the agent has a label, not just a random identifier. */
+  title: string
   description: string
   criteria: string
   priority: "blocking" | "advisory"
