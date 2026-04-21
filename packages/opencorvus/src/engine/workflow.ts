@@ -47,7 +47,7 @@ export interface MiniWorkflowStep {
 }
 
 /** Sub-phase inside a goal-scope step — reflects the internal structure
- *  of a single `execute_goal` dispatch. Phases are projected from
+ *  of a single `dispatch_goal` dispatch. Phases are projected from
  *  `goal_run.status` (planning / running / evaluating / ...), not driven
  *  by independent tool calls. Each phase maps to the SessionKind the
  *  overlay should claim under this phase. */
@@ -184,15 +184,15 @@ const PIPELINE: MiniWorkflow = {
     },
     {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
-      // 真实派发由 GoalPool 完成，工具入口是 `execute_goal`，但语义上每个
+      // 真实派发由 GoalPool 完成，工具入口是 `dispatch_goal`，但语义上每个
       // goal 就是一次"build"调用，UI label 与 direct 路径保持一致。
       //
-      // 单次 execute_goal 调用内部串联 plan → build → evaluate 三个 phase
+      // 单次 dispatch_goal 调用内部串联 plan → build → evaluate 三个 phase
       // （对应 session kind planner / build / evaluator）。phase 状态从
       // goal_run.status 投影，不是各自独立的 tool 调用 —— orchestrator
       // 看到的仍是一个 step。见 specs/new-arch/07-panel-reactivity §phase 规则。
       id: "build",
-      tool: "execute_goal",
+      tool: "dispatch_goal",
       label: "Executor",
       hint: "执行器在隔离 worktree 中调度 plan → build 两个 phase 跑完一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
       scope: "goal",
@@ -514,7 +514,7 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push("")
   lines.push(
     "NOTE: 这是推荐路径，不是固定 pipeline。允许的偏离：" +
-    "(a) pipeline 失败时优先 modify_goal/retry_failed_goals 重走 pipeline；" +
+    "(a) pipeline 失败时优先 modify_goal/retry_goal 重走 pipeline；" +
     "(b) 当 goal 级修复明显不够（跨 goal 整合、全局重构）时，回落 direct build 修复后再 deliver；" +
     "(c) direct build 中途发现需要分解时，调 requirements 切到 pipeline。" +
     "deliver rejection 必须循环回 build 修复，直到接受或耗尽 max_delivery_iterations。",

@@ -474,7 +474,7 @@ function extractPlanSection(prompt: string, heading: string) {
  * Retry feedback for a goal that was rejected on a prior attempt.
  *
  * Pulls from the decision log's "retry" entries (written by
- * `retry_failed_goals` after the delivery agent rejects) — that is the
+ * `retry_goal` after the delivery agent rejects) — that is the
  * single authoritative source now that the per-goal evaluator is gone
  * (2026-04-20). The orchestrator's retry tool writes a structured
  * `retry_analysis_<goalID>` entry containing the delivery agent's

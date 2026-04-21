@@ -835,7 +835,7 @@ export class GoalPool {
       //      during per-goal planning — typically a transient LLM/provider
       //      error (e.g. "No output generated" from a stream interruption).
       //      This is retryable: create a shadow failed goal_run so
-      //      Goal.startNewAttempt(reason="manual_retry") + retry_failed_goals
+      //      Goal.startNewAttempt(reason="manual_retry") + retry_goal
       //      route a fresh attempt through the same goal.workspace_dir. Preserve the
       //      workspace per spec-10 §2.4 — cleanup is reserved for terminal
       //      goal states (passed / cascade_failed / task cancel), not

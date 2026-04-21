@@ -44,7 +44,7 @@ export type EngineRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "disp
  * the human / LLM chose this`) lives in decision_log, not here.
  */
 export type EngineGoalRunSupersededReason =
-  | "manual_retry"      // retry_failed_goals: explicit operator retry under per-goal budget
+  | "manual_retry"      // retry_goal: explicit operator retry under per-goal budget
   | "delivery_rework"   // delivery verdict=rejected: arbiter sent the goal back for rework
   | "modify_contract"   // modify_goal: contract changed, prior run is stale under new contract
   | "restart_stage"     // restart_from_stage / resetTaskGoalsToPending: bulk re-anchor
@@ -310,7 +310,7 @@ export const EngineGoalTable = sqliteTable(
      * Written only by updateGoalCascadeFailed / updateGoalVerificationOutcome.
      */
     cascade_state: text().$type<"failed" | "passed">(),
-    /** Per-goal retry counter. Incremented each time retry_failed_goals resets this goal. */
+    /** Per-goal retry counter. Incremented each time retry_goal resets this goal. */
     retry_count: integer().notNull().default(0),
     /** Goal-scoped live workspace directory reused across retries until terminal cleanup. */
     workspace_dir: text(),

@@ -478,7 +478,7 @@ function supersedeGoalRun(input: {
 /**
  * Open a new attempt for a goal — single entry-point for "this goal must
  * re-dispatch under a fresh attempt." Replaces the four ad-hoc paths
- * (retry_failed_goals / modify_goal / restart_from_stage / delivery_rework)
+ * (retry_goal / modify_goal / restart_from_stage / delivery_rework)
  * that all expanded to the same supersede + sync sequence and drifted apart
  * over time.
  *

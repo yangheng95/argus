@@ -335,7 +335,7 @@ export namespace Orchestrator {
         log.info("orchestrator was aborted", { taskID })
         return
       }
-      // stopSignal abort is a normal termination (submit_execution/dispatch/execute_goal
+      // stopSignal abort is a normal termination (submit_execution/dispatch/dispatch_goal
       // dispatched work). NOT an error — the agent will be re-triggered on completion.
       if (stopSignal?.aborted) {
         log.info("orchestrator stopped after dispatch", { taskID, trigger: trigger.kind })
@@ -384,7 +384,7 @@ function describeTrigger(task: TaskRow, trigger: OrchestratorTrigger): string {
         lines.push(
           "",
           "ACTION REQUIRED: You MUST resolve the blocking goals before these can proceed.",
-          "Call query_failed_goals, then either retry_failed_goals (with root cause analysis) or fail_task.",
+          "Call query_failed_goals, then either retry_goal (with root cause analysis) or fail_task.",
           "Dispatching or waiting will NOT help — these goals will never become ready until the blockers are resolved.",
         )
       } else {
@@ -483,7 +483,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "that the chosen path won't converge:",
   "",
   "- **Pipeline → re-run pipeline (preferred)**: per-goal failures, contract gaps, missing dependencies →",
-  "  use `modify_goal` / `add_goal` / `retry_failed_goals` / `restart_from_stage` and dispatch again.",
+  "  use `modify_goal` / `add_goal` / `retry_goal` / `restart_from_stage` and dispatch again.",
   "  This is the FIRST response to any failure.",
   "- **Pipeline → fall back to direct (`build`)**: legitimate when the pipeline keeps rejecting on issues",
   "  that goal-scoped fixes can't address — e.g. integration glue between goals that no single goal owns,",
@@ -506,7 +506,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "- **requirements** — decompose task into goal contracts with acceptance criteria.",
   "- **architect** — coordinate cross-goal interface contracts. Required for 2+ goals; skip for single-goal.",
   "- **create_run + submit_execution** — start per-goal dispatch. GoalPool runs each goal's build in its worktree.",
-  "- **execute_goal / dispatch_ready_goals / retry_failed_goals / modify_goal / add_goal** — per-goal manipulation after the initial dispatch.",
+  "- **dispatch_goal / retry_goal / modify_goal / add_goal** — per-goal manipulation after the initial dispatch.",
   "- **query_failed_goals / read_context** — observation; call before any retry decision.",
   "- **deliver** — adversarial verification + fix + publish. The single verdict gate; always required.",
   "- **publish_delivery / fail_task / restart_from_stage / refine / question** — terminal / control / clarification.",
@@ -541,11 +541,11 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "- `verification` goals do not dispatch to an executor worktree; they stay pending until **deliver** runs merged-worktree verification.",
   "- Once ALL dispatchable goals are terminal (passed/failed):",
   "  - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).",
-  "  - Some failed → call **query_failed_goals** first, then **retry_failed_goals** with per-goal analysis (root_cause + failure_class + expected_fix). Reflexive retry without analysis is rejected by the tool.",
-  "  - Missing dependency discovered → **add_goal** then **retry_failed_goals**.",
-  "  - Wrong contract for a goal → **modify_goal** then **execute_goal**.",
+  "  - Some failed → call **query_failed_goals** first, then **retry_goal** with per-goal analysis (root_cause + failure_class + expected_fix). Reflexive retry without analysis is rejected by the tool.",
+  "  - Missing dependency discovered → **add_goal** then **retry_goal**.",
+  "  - Wrong contract for a goal → **modify_goal** then **dispatch_goal**.",
   "  - **fail_task** ONLY when the executor produced empty / garbled / fundamentally unusable output. Logic bugs, test failures, missing imports = fix and retry, never fail_task.",
-  "- **NEVER execute_goal on a passed goal** — passed is terminal. Use modify_goal to change contract.",
+  "- **NEVER dispatch_goal on a passed goal** — passed is terminal. Use modify_goal to change contract.",
   "",
   "## After delivery rejection (re-triggered with delivery_rejected)",
   "",
@@ -607,7 +607,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "## Rules",
   "",
   "- Explain your reasoning before each tool call.",
-  "- After submit_execution / execute_goal / dispatch_ready_goals → STOP. You'll be re-triggered.",
+  "- After submit_execution / dispatch_goal → STOP. You'll be re-triggered.",
   "- Both workflows END with deliver acceptance — never declare a task done without deliver accepting.",
   "- `build` (direct) does NOT auto-complete the task — you MUST call deliver after.",
   "- Terminal state (completed/failed/cancelled) → do nothing.",

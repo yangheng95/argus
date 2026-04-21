@@ -163,7 +163,7 @@ export function createOrchestratorTools(input: {
 }) {
   const { taskID } = input
 
-  // Blocking tools (submit_execution, execute_goal, dispatch_ready_goals) signal
+  // Blocking tools (submit_execution, dispatch_goal) signal
   // this controller on success. The agent loop is then forcefully terminated so
   // the model can't spin-wait with read_context calls. The agent gets re-triggered
   // when execution completes.
@@ -1164,66 +1164,8 @@ export function createOrchestratorTools(input: {
       },
     }),
 
-    execute_goal: tool({
-      description: "Dispatch a pending goal for execution in an isolated git worktree. Creates worktree, submits to executor, returns asynchronously. ONLY valid for goals in pending status — passed goals are terminal (use modify_goal to change the contract), failed goals must go through retry_failed_goals (which enforces the per-goal retry budget and writes audit trail). You will be re-triggered when execution completes. STOP after calling this.",
-      inputSchema: z.object({
-        goalID: z.string().describe("The goal ID to execute (must be in pending status)"),
-        reason: z.string().optional().describe("Why you decided to execute this goal now"),
-      }),
-      execute: async ({ goalID, reason: _reason }) => {
-        const task = requireTask(taskID)
-        const dbGoals = listGoals(taskID)
-        const goal = dbGoals.find(g => g.id === goalID)
-        if (!goal) return `Goal ${goalID} not found.`
-        if (!isDispatchableGoal(goal)) {
-          return `Goal ${goalID} is verification-only and does not dispatch to an executor. Re-run delivery to evaluate it on the merged worktree, or modify_goal to convert it into a dispatchable build goal.`
-        }
-        if (goal.status === "running") return `Goal ${goalID} is already running.`
-        if (goal.status === "passed") {
-          return `Goal ${goalID} is already passed (terminal success state). ` +
-                 `To change its contract (acceptance_specs, owned_paths), use modify_goal(${goalID}, ...) which will reset to pending automatically. ` +
-                 `execute_goal does not re-run passed goals.`
-        }
-        if (goal.status === "failed") {
-          return `Goal ${goalID} is in status=failed. execute_goal is reserved for first-time dispatch of pending goals. ` +
-                 `Retry failed goals via retry_failed_goals — that path enforces the per-goal retry budget, writes a retry_analysis_ decision-log entry, ` +
-                 `and is the single canonical retry path. ` +
-                 `If the contract itself needs changing before another attempt, use modify_goal first (it resets the goal to pending via supersede), then call execute_goal.`
-        }
-
-        // goal.status === "pending" — dispatch the first attempt. Retries for
-        // failed goals are the exclusive responsibility of retry_failed_goals
-        // so the retry budget (engine.max_goal_retries) and escalation gate
-        // see every attempt.
-
-        ensureGoalInWorkflow(goalID, goal.title)
-        await trackStepStart("execute_goal", goalID)
-
-        // Ensure run exists
-        let runID = task.active_run_id
-        if (!runID) {
-          const { createRun } = await import("@/engine/writer")
-          const created = createRun({
-            taskID,
-            planVersionID: task.active_plan_version_id ?? null,
-            sessionID: task.session_id ?? null,
-            executor: "opencode",
-            status: "running",
-            phase: "execute",
-            linkAsActive: true,
-            summary: `execute_goal(${goalID}): ad-hoc run created`,
-          })
-          runID = created.id
-        }
-
-        // Signal task loop to dispatch via GoalPool (goal is now "pending", pool will pick it up)
-        stopAfterDispatch.abort("execute_goal")
-        return `Goal "${goal.title}" (${goalID}) queued for execution. STOP HERE — task loop will dispatch via GoalPool and re-trigger you when it completes.`
-      },
-    }),
-
     query_failed_goals: tool({
-      description: "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE retry_failed_goals to understand per-goal failure reasons.",
+      description: "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE retry_goal to understand per-goal failure reasons.",
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
@@ -1265,271 +1207,123 @@ export function createOrchestratorTools(input: {
       },
     }),
 
-    retry_failed_goals: tool({
-      description: "Retry ALL currently failed goals in parallel. Each goal is reset to pending. You MUST first call query_failed_goals to understand each failure, then articulate per-goal root cause analysis in this tool's input. Schema enforces you demonstrate understanding before retry — reflexive retry without analysis is impossible. STOP after calling this.",
+    retry_goal: tool({
+      description:
+        "Retry a single failed goal by opening a new attempt cycle (superseded_reason=manual_retry). " +
+        "The old terminal goal_run stays immutable; the next dispatch_goal on this ID creates a fresh run. " +
+        "Call query_failed_goals first to understand the failure; the schema requires root-cause analysis " +
+        "so reflexive retry without understanding is impossible. " +
+        "Per-goal retry budget (max_goal_retries) is enforced as a hard ceiling — once exhausted, change " +
+        "strategy (modify_goal, add_goal, fail_task).",
       inputSchema: z.object({
-        reason: z.string().min(20).describe("Overall reason for batch retry (min 20 chars, e.g. 'eval caught integration bugs, retrying with fresh context + failure evidence appended')"),
-        per_goal_analysis: z.record(
-          z.string(),
-          z.object({
-            root_cause: z.string().min(30).describe("What went wrong in this specific goal (min 30 chars). Cite specific eval evidence."),
-            failure_class: z.string().describe(
-              "Short snake_case category of failure. Decision-log groups retries " +
-              "by this value — pick a stable label so repeated failures of the " +
-              "same kind get detected (2+ same class triggers a 'change strategy' " +
-              "gate). Recommended values: " +
-              "`code_bug` (executor finished but the code is wrong), " +
-              "`test_failure` (build passed but tests failed), " +
-              "`missing_dependency` (import/package resolution), " +
-              "`wrong_approach` (goal contract needs revision), " +
-              "`cross_goal_integration` (conflict with sibling goal's output), " +
-              "`flaky_environment` (transient network/disk/api), " +
-              "`executor_incomplete` (session ended without producing a " +
-              "deliverable — interrupted, stall, never finalized). " +
-              "Coin a new snake_case label only when none of the above fit.",
+        goalID: z.string().describe("The goal to retry. Must be currently failed or aborted."),
+        reason: z
+          .string()
+          .min(20)
+          .describe("Why you're retrying (min 20 chars, human-readable — shown in decision log)"),
+        analysis: z.object({
+          root_cause: z
+            .string()
+            .min(30)
+            .describe("What went wrong in this goal (min 30 chars). Cite specific eval / delivery evidence."),
+          failure_class: z
+            .string()
+            .describe(
+              "Short snake_case failure category (code_bug / test_failure / missing_dependency / " +
+                "wrong_approach / cross_goal_integration / flaky_environment / executor_incomplete). " +
+                "Used to group retries in the decision log — stable labels let repeated failures of " +
+                "the same kind become visible.",
             ),
-            expected_fix: z.string().min(20).describe("What should retry do differently (min 20 chars)"),
-          }),
-        ).describe("Per-goal analysis keyed by goalID. MUST include an entry for each currently-failed goal."),
+          expected_fix: z.string().min(20).describe("What the retry should do differently (min 20 chars)."),
+        }),
       }),
-      execute: async ({ reason, per_goal_analysis }) => {
+      execute: async ({ goalID, reason, analysis }) => {
         const task = requireTask(taskID)
         if (!task.active_run_id) return "No active run. Nothing to retry."
 
-        const run = requireRun(task.active_run_id)
-
         const dbGoals = listGoals(taskID)
-        const failed = dbGoals.filter(g => g.status === "failed")
-        if (failed.length === 0) return "No failed goals to retry."
-
-        // Enforce: per_goal_analysis MUST cover every failed goal
-        const analyzedIDs = new Set(Object.keys(per_goal_analysis))
-        const missing = failed.filter(g => !analyzedIDs.has(g.id)).map(g => g.id)
-        if (missing.length > 0) {
-          return `Missing per_goal_analysis for failed goal(s): ${missing.join(", ")}. Call query_failed_goals first, then provide analysis for EVERY failed goal before retry. Retry rejected.`
+        const goal = dbGoals.find((g) => g.id === goalID)
+        if (!goal) return `Goal ${goalID} not found.`
+        if (goal.status !== "failed") {
+          return (
+            `Goal ${goalID} is in status=${goal.status}; retry_goal only applies to failed goals. ` +
+            `To change the contract of a passed goal use modify_goal.`
+          )
         }
 
-        // ── Per-goal retry budget + escalation gate ──
-        // Two independent knobs, both on total failure count (NOT on LLM-chosen
-        // failure_class strings, which prior art showed the LLM re-labels the
-        // same root cause across retries and silently bypasses string-match
-        // gates):
-        //
-        //   escalation_threshold (advisory, fires first): when a goal has
-        //     failed this many times, retry_failed_goals returns an escalation
-        //     message instead of superseding. The orchestrator is forced to
-        //     change strategy (modify_goal / add_goal / fail_task) rather than
-        //     loop the same contract.
-        //
-        //   max_goal_retries (hard ceiling): absolute cap. Goals past this
-        //     are marked exhausted and cascade-propagate to pending deps.
-        //
-        // Invariant: escalation_threshold ≤ max_goal_retries. Config merge
-        // clamps the threshold, so we can read both here without re-validating.
+        // Hard per-goal retry budget. Not a status-machine gate — a runaway
+        // budget guardrail so a stuck LLM can't burn infinite iterations on
+        // the same contract. Once exhausted the LLM must change strategy
+        // (modify_goal / add_goal / fail_task) — the describe layer shows
+        // retry_count / max_goal_retries so it can see this coming.
         const orchCfg = await EngineConfig.get()
         const maxGoalRetries = orchCfg.max_goal_retries
-        const escalationThreshold = orchCfg.goal_escalation_threshold
-
-        // retry_count is the number of prior retries (so the very first
-        // failure has retry_count = 0). A call to retry_failed_goals is a
-        // request to schedule attempt (retry_count + 2) — the +1 for the
-        // failure we're reacting to, +1 for the next attempt. Compare against
-        // escalationThreshold in terms of attempt count, NOT retry count.
-        const forceEscalate: typeof failed = []
-        for (const goal of failed) {
-          const attemptsSoFar = ((goal as any).retry_count ?? 0) + 1
-          if (attemptsSoFar >= escalationThreshold) {
-            forceEscalate.push(goal)
-          }
-        }
-
-        if (forceEscalate.length > 0) {
-          const lines = [
-            `ESCALATION REQUIRED: ${forceEscalate.length} goal(s) have failed ${escalationThreshold}+ times and cannot be retried with the current contract:`,
-          ]
-          for (const goal of forceEscalate) {
-            const attempts = ((goal as any).retry_count ?? 0) + 1
-            lines.push(`  - ${goal.id} "${goal.title}" — ${attempts} failed attempts`)
-          }
-          lines.push(
-            "",
-            "Further retry_failed_goals on the same contract will not converge. Choose a different strategy:",
-            "  - modify_goal to change acceptance_specs / owned_paths (resets the goal to pending)",
-            "  - add_goal to insert a prerequisite goal",
-            "  - fail_task if the issue is fundamental and cannot be resolved",
+        const priorRetries = (goal as any).retry_count ?? 0
+        if (priorRetries >= maxGoalRetries) {
+          return (
+            `Goal ${goalID} "${goal.title}" has exhausted its retry budget ` +
+            `(${priorRetries}/${maxGoalRetries}). Change strategy:\n` +
+            `  - modify_goal to change acceptance_specs / owned_paths\n` +
+            `  - add_goal to insert a prerequisite\n` +
+            `  - fail_task if the issue is fundamental`
           )
-          return lines.join("\n")
         }
 
-        const retryable: typeof failed = []
-        const exhausted: typeof failed = []
-
-        for (const goal of failed) {
-          const goalRetries = (goal as any).retry_count ?? 0
-          if (goalRetries >= maxGoalRetries) {
-            exhausted.push(goal)
-          } else {
-            retryable.push(goal)
-          }
-        }
-
-        // ── Cascade: mark pending goals whose deps are all permanently failed ──
-        const permanentlyFailedIDs = new Set(exhausted.map(g => g.id))
-        const cascaded: typeof failed = []
-        let changed = true
-        while (changed) {
-          changed = false
-          for (const goal of dbGoals) {
-            if (goal.status !== "pending") continue
-            if (permanentlyFailedIDs.has(goal.id)) continue
-            const deps = goal.depends_on ?? []
-            if (deps.length === 0) continue
-            const allDepsFailed = deps.every(depID => {
-              const dep = dbGoals.find(g => g.id === depID)
-              if (!dep) return true // missing dep treated as failed
-              return permanentlyFailedIDs.has(depID) || (dep.status === "failed" && ((dep as any).retry_count ?? 0) >= maxGoalRetries)
-            })
-            if (allDepsFailed) {
-              permanentlyFailedIDs.add(goal.id)
-              cascaded.push(goal)
-              changed = true
-            }
-          }
-        }
-
-        // Retry via Goal.startNewAttempt(reason="manual_retry"). Internally
-        // it supersedes the prior terminal tip (set superseded_reason column),
-        // syncs goal.status → pending via deriveGoalStatus, and emits
-        // GoalAttemptOpened with this handler's per-goal analysis as feedback.
-        // GoalPool then picks the goal up on the next task-loop iteration via
-        // pool.submit → readyGoalNodes → pool.dispatchGoal — pool is the only
-        // authoritative creator of dispatchable goal_runs, so we deliberately
-        // do NOT createGoalRun here (a stray `queued` row would leak as a
-        // live-tip that readyGoalNodes filters out yet pool never picks up,
-        // which historically caused alive-stall hangs).
         const { findLatestTipGoalRun } = await import("@/engine/store")
         const { startNewAttempt } = await import("@/engine/persist")
-        const now = Date.now()
-        for (const goal of retryable) {
-          const analysis = per_goal_analysis[goal.id]
-          const detail = analysis
-            ? `[${analysis.failure_class}] ${analysis.expected_fix}`
-            : "retry_failed_goals"
-          const priorTip = findLatestTipGoalRun(goal.id)
-          if (!priorTip) {
-            // No prior goal_run but the goal is marked failed — data shape the
-            // rest of the pipeline does not produce. Surface instead of silent
-            // no-op so the bug source is visible.
-            throw new Error(
-              `retry_failed_goals: goal ${goal.id} is in status=failed but has no prior goal_run; ` +
+        const priorTip = findLatestTipGoalRun(goalID)
+        if (!priorTip) {
+          throw new Error(
+            `retry_goal: goal ${goalID} is in status=${goal.status} but has no prior goal_run; ` +
               `cannot retry without a row to supersede. This is a data inconsistency upstream of retry.`,
-            )
-          }
-          startNewAttempt({
-            goalID: goal.id,
-            reason: "manual_retry",
-            now,
-            feedback: { detail, analysis },
-          })
-          // Increment engine_goal.retry_count so the per-goal budget check at
-          // the top of this handler observes the retry. The column existed
-          // with a documented "incremented each time retry_failed_goals resets
-          // this goal" comment but nothing wrote it, which made goalRetries
-          // always 0 and exhausted[] always empty — goals were infinitely
-          // retryable on paper, and in the aborted-loop case this compounded
-          // into a wedged task that never terminated.
-          Database.use((db) =>
-            db.update(EngineGoalTable)
-              .set({
-                retry_count: ((goal as any).retry_count ?? 0) + 1,
-                time_updated: now,
-              })
-              .where(eq(EngineGoalTable.id, goal.id))
-              .run(),
           )
         }
 
-        // Cascade: goals blocked by permanently-failed deps never get a
-        // goal_run — route through updateGoalCascadeFailed, the only
-        // canonical writer for no-goal_run cascades. This keeps
-        // engine_goal.status authored by exactly two entry points.
-        const { updateGoalCascadeFailed } = await import("@/engine/persist")
-        const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
-        for (const goal of exhausted) {
-          await cleanupGoalWorkspaceForGoal(goal.id)
-        }
-        for (const goal of cascaded) {
-          await cleanupGoalWorkspaceForGoal(goal.id)
-          updateGoalCascadeFailed({
-            goalID: goal.id,
-            reason: "cascade: dependency permanently failed",
-            now,
-          })
-        }
-        Database.use((db) => {
-          const { EngineRunTable: RT } = require("@/engine/engine.sql")
-          // Run-level retry budget — unchanged.
-          db.update(RT)
-            .set({ retry_count: (run.retry_count ?? 0) + 1, time_updated: now })
-            .where(eq(RT.id, run.id))
-            .run()
+        const now = Date.now()
+        startNewAttempt({
+          goalID,
+          reason: "manual_retry",
+          now,
+          feedback: {
+            detail: `[${analysis.failure_class}] ${analysis.expected_fix}`,
+            analysis,
+          },
         })
 
-        // Record analysis in decision log for future retry context
+        Database.use((db) =>
+          db.update(EngineGoalTable)
+            .set({
+              retry_count: priorRetries + 1,
+              time_updated: now,
+            })
+            .where(eq(EngineGoalTable.id, goalID))
+            .run(),
+        )
+
         try {
           const { createDecisionLog } = await import("@/decision-log")
           const log = createDecisionLog(taskID)
-          for (const [goalID, analysis] of Object.entries(per_goal_analysis)) {
-            log.append({
-              goalID,
-              phase: "retry",
-              key: `retry_analysis_${goalID}`,
-              value: `[${analysis.failure_class}] ${analysis.expected_fix}`,
-              reason: analysis.root_cause,
-            })
-          }
-        } catch { /* best effort */ }
-
-        for (const goal of retryable) {
-          ensureGoalInWorkflow(goal.id, goal.title)
-          await trackStepStart("retry_failed_goals", goal.id)
+          log.append({
+            goalID,
+            phase: "retry",
+            key: `retry_analysis_${goalID}`,
+            value: `[${analysis.failure_class}] ${analysis.expected_fix}`,
+            reason: analysis.root_cause,
+          })
+        } catch {
+          /* best effort */
         }
 
-        // Build response
-        const lines: string[] = []
+        ensureGoalInWorkflow(goalID, goal.title)
+        await trackStepStart("retry_goal", goalID)
 
-        if (retryable.length > 0) {
-          stopAfterDispatch.abort("retry_failed_goals")
-          lines.push(`Retrying ${retryable.length} goal(s):`)
-          for (const g of retryable) {
-            const a = per_goal_analysis[g.id]
-            const retries = ((g as any).retry_count ?? 0) + 1
-            lines.push(`  - ${g.title} [${a?.failure_class}] (retry ${retries}/${maxGoalRetries}): ${a?.expected_fix.slice(0, 80)}`)
-          }
-        }
-
-        if (exhausted.length > 0) {
-          lines.push(`\nPermanently failed (${exhausted.length} goal(s) exhausted ${maxGoalRetries} retries):`)
-          for (const g of exhausted) {
-            lines.push(`  - ${g.title} (${(g as any).retry_count ?? 0}/${maxGoalRetries} retries used)`)
-          }
-        }
-
-        if (cascaded.length > 0) {
-          lines.push(`\nCascade-failed (${cascaded.length} pending goal(s) blocked by permanently failed deps):`)
-          for (const g of cascaded) {
-            lines.push(`  - ${g.title}`)
-          }
-        }
-
-        if (retryable.length === 0) {
-          lines.push(`\nNo goals left to retry. Consider delivering current state or calling fail_task.`)
-          return lines.join("\n")
-        }
-
-        lines.push(`\nReason: ${reason}`)
-        lines.push("STOP HERE — task loop dispatches via GoalPool and re-triggers you when batch completes.")
-        return lines.join("\n")
+        return (
+          `Opened new attempt for goal "${goal.title}" (${goalID}) — ` +
+          `retry ${priorRetries + 1}/${maxGoalRetries}, reason=manual_retry. ` +
+          `Call dispatch_goal(["${goalID}"]) next to actually run it.\n` +
+          `Analysis: [${analysis.failure_class}] ${analysis.expected_fix.slice(0, 120)}\n` +
+          `Context: ${reason}`
+        )
       },
     }),
 
@@ -1712,7 +1506,7 @@ export function createOrchestratorTools(input: {
           if (existing && isLiveRunStatus(existing.status)) {
             return (
               `Run ${existing.id} is still ${existing.status}. Cannot create a new run while a prior one is live. ` +
-              `Use dispatch_ready_goals (to continue with the current run's pending goals) or execute_goal (to kick off a specific goal). ` +
+              `Use dispatch_goal(goalIDs: [...]) to run specific goals. ` +
               `If you need rework, first modify_goal to update contracts, then this tool will permit a new run after the active one reaches terminal status.`
             )
           }
@@ -1816,7 +1610,7 @@ export function createOrchestratorTools(input: {
     }),
 
     submit_execution: tool({
-      description: "Activate a run and dispatch all dependency-ready goals in parallel. Equivalent to activating the run then calling dispatch_ready_goals. STOP after this call.",
+      description: "Activate a run and dispatch all dependency-ready goals in parallel. Equivalent to activating the run then calling dispatch_goal. STOP after this call.",
       inputSchema: z.object({
         runID: z.string().describe("The run ID from create_run output"),
       }),
@@ -2681,7 +2475,12 @@ export function createOrchestratorTools(input: {
     }),
 
     publish_delivery: tool({
-      description: "Publish the accepted delivery to git and mark the task as completed. Only call after delivery verification has passed.",
+      description:
+        "Publish the accepted delivery to git and mark the task as completed. " +
+        "You decide when it is safe to publish — the describe layer shows every goal's " +
+        "`is_terminal_ok` / `is_terminal_fail` / `needs_redispatch` flags and the latest " +
+        "delivery verdict. If a blocking goal is failing you must fix it first; no tool " +
+        "gate blocks a knowingly-incomplete publish, the decision is yours.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Confirmation that both verifications passed"),
       }),
@@ -2690,13 +2489,10 @@ export function createOrchestratorTools(input: {
         const run = task.active_run_id ? requireRun(task.active_run_id) : undefined
         if (!run) return "No active run."
 
-        // Gate: no blocking goals in "failed" state
-        const goals = listGoals(taskID)
-        const blockingFailed = goals.filter(g => g.priority === "blocking" && g.status === "failed")
-        if (blockingFailed.length > 0) {
-          return `Cannot publish: ${blockingFailed.length} blocking goal(s) failed. Fix them first.`
-        }
-
+        // No blocking-failed gate here — the LLM reads the describe layer and
+        // decides. Delivery existence is still required (we cannot publish
+        // what was never built); that's a physical precondition, not a status
+        // cache check.
         const delivery = findDeliveryByRun(run.id)
         if (!delivery) return "No delivery found."
 
