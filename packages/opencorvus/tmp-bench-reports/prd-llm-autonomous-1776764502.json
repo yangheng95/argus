@@ -1,0 +1,285 @@
+{
+  "generated_at": "2026-04-21T09:46:44.423Z",
+  "title": "prd-stock-trading-sim dee28ab3 llm-autonomous + build-return-capture",
+  "request_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\specs\\prd-stock-trading-sim.txt",
+  "executor": "opencode",
+  "model": "hexin/gpt-5.4-mini",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+  "server": "http://127.0.0.1:7878/",
+  "taskID": "tsk_daf6afe16001TcxsGqxdd8F8eh",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 480000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 480000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "failed",
+  "evaluation": "",
+  "changedFiles": [
+    ".gitignore",
+    "data/.gitkeep",
+    "opencorvus.json",
+    "package.json",
+    "prd-stock-trading-sim.txt",
+    "tsconfig.json"
+  ],
+  "transcriptCount": 252,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "暂无任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "该请求是一个全栈、多页面、多模块、带明确验收标准的商业级 MVP，且涉及前后端、SSE、数据库、测试和 Apple 风格 UI 复制，明显应走 pipeline 而非 direct。先做 requirements 分解。",
+    "liveRole": "agent",
+    "liveText": "该请求是一个全栈、多页面、多模块、带明确验收标准的商业级 MVP，且涉及前后端、SSE、数据库、测试和 Apple 风格 UI 复制，明显应走 pipeline 而非 direct。先做 requirements 分解。",
+    "reasoningVisible": false,
+    "assistantVisible": true,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_daf6afe16001TcxsGqxdd8F8eh",
+    "boardStatus": "active",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "architect": {
+    "summary": "13 architect decisions across 6 categories",
+    "contractCount": 13,
+    "categories": [
+      "directory_blueprint",
+      "shared_type",
+      "interface_contract",
+      "export_manifest",
+      "naming_convention",
+      "dependency_order"
+    ]
+  },
+  "plan": {
+    "id": "pln_daf6f2d28001fSRfluk3LbUOcl",
+    "version": 1,
+    "status": "active",
+    "summary": "8 goals"
+  },
+  "screenshot": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1776764801684.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 8276,
+    "resumeTaskID": null,
+    "resumeHomeDir": null
+  },
+  "timings_ms": {
+    "online": 948,
+    "submit": 1153,
+    "planning_visible": 1775,
+    "streaming_visible": 6676,
+    "task_created": 1784,
+    "task_selected": 1949,
+    "board_loaded": 1951,
+    "resumed": 8276,
+    "completed": 285325,
+    "execution": 284172
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_daf6afe16001TcxsGqxdd8F8eh"
+        ],
+        "taskList": "暂无任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+        "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+        "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+        "selectedTaskID": "tsk_daf6afe16001TcxsGqxdd8F8eh",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_daf6afe16001TcxsGqxdd8F8eh"
+        ],
+        "taskList": "mirrorcode-overlay-benchmark-project-UWjxgl.../Local/Temp进行中prd-stock-trading-sim dee28ab3 llm-autonomous + build-return-capture进行中17:41:58",
+        "reasoning": "",
+        "assistantText": "该请求是一个全栈、多页面、多模块、带明确验收标准的商业级 MVP，且涉及前后端、SSE、数据库、测试和 Apple 风格 UI 复制，明显应走 pipeline 而非 direct。先做 requirements 分解。",
+        "liveRole": "agent",
+        "liveText": "该请求是一个全栈、多页面、多模块、带明确验收标准的商业级 MVP，且涉及前后端、SSE、数据库、测试和 Apple 风格 UI 复制，明显应走 pipeline 而非 direct。先做 requirements 分解。",
+        "visibleTurns": [
+          {
+            "role": "agent",
+            "text": "该请求是一个全栈、多页面、多模块、带明确验收标准的商业级 MVP，且涉及前后端、SSE、数据库、测试和 Apple 风格 UI 复制，明显应走 pipeline 而非 direct。先做 requirements 分解。"
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+          "workspaceTaskID": "tsk_daf6afe16001TcxsGqxdd8F8eh"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_daf6afe16001TcxsGqxdd8F8eh",
+        "boardTaskID": "tsk_daf6afe16001TcxsGqxdd8F8eh",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "failed",
+        "verdict": "",
+        "localExit": 0,
+        "qualityVerdict": "rejected"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "artifact_audit": {
+    "source_files_added": 0,
+    "config_files_added": 2,
+    "doc_files_added": 1,
+    "source_file_count": 0,
+    "doc_file_count": 1,
+    "non_source_churn_ratio": 1,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 1,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [
+      "prd-stock-trading-sim.txt"
+    ],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 283755,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.9867674858223062,
+    "repeat_reasoning_similarity": 0.9867674858223062,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0,
+    "verification_edit_ratio": 0,
+    "feature_coverage_p0": 0.5,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 1
+  },
+  "failure_matrix": {
+    "verdict": "rejected",
+    "primary_failure": "delivery_gap",
+    "failures": [
+      {
+        "category": "delivery_gap",
+        "message": "Placeholder implementation detected",
+        "evidence": "prd-stock-trading-sim.txt"
+      },
+      {
+        "category": "verification_gap",
+        "message": "Core delivery acceptance checks did not all pass",
+        "evidence": "taskStatus=failed, evaluationVerdict=, localVerifyExitCode=0"
+      }
+    ]
+  },
+  "manual_review_summary": "delivery_gap: Placeholder implementation detected | verification_gap: Core delivery acceptance checks did not all pass",
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+    "selectedTaskID": "tsk_daf6afe16001TcxsGqxdd8F8eh",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_daf6afe16001TcxsGqxdd8F8eh"
+    ],
+    "taskList": "mirrorcode-overlay-benchmark-project-UWjxgl.../Local/Temp最近prd-stock-trading-sim dee28ab3 llm-autonomous + build-return-capture失败17:46:41",
+    "reasoning": "Checking project memory and repo layout first.",
+    "assistantText": "已生成 8 个 goals，属于多目标系统，下一步需要 architect 统一跨目标接口和目录契约，避免 worktree 并行实现时互相踩踏。",
+    "liveRole": "step",
+    "liveText": "·Plan▼·Build▼",
+    "visibleTurns": [
+      {
+        "role": "step",
+        "text": "·Plan▼·Build▼"
+      },
+      {
+        "role": "step",
+        "text": "·Plan▼·Build▼"
+      },
+      {
+        "role": "step",
+        "text": "·Plan▼·Build▼"
+      },
+      {
+        "role": "step",
+        "text": "·Plan▼·Build▼"
+      },
+      {
+        "role": "step",
+        "text": "·Plan▼·Build▼"
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+      "directoryMode": "custom",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-UWjxgl",
+      "workspaceTaskID": "tsk_daf6afe16001TcxsGqxdd8F8eh"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\tmp-bench-reports\\prd-llm-autonomous-1776764502.events.json",
+    "event_count": 1058,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 9,
+        "orchestrator.run.created": 1,
+        "orchestrator.run.updated": 1
+      },
+      "stages": {}
+    }
+  }
+}
