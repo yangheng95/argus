@@ -166,9 +166,51 @@ export interface CardTreeStore {
   order: string[];
   /** Every card by id, flat. Includes cards referenced from any `childIDs`. */
   cards: Record<string, CardNode>;
+  /** Rewind cursor (ms). When non-null, cards with time > cursor have been
+   *  pruned from `order` + `cards` by pruneCardsAfterCursor(). The backend
+   *  also filters its describe outputs, so any SSE event stream for this
+   *  task will not re-deliver the pruned slice unless the cursor is cleared. */
+  rewindCursor: number | null;
 }
 
 export const [cardTreeStore, setCardTreeStore] = createStore<CardTreeStore>({
   order: [],
   cards: {},
+  rewindCursor: null,
 });
+
+/**
+ * Prune all top-level cards (and their orphaned children) whose `time` is
+ * strictly greater than `cursorTime`. Called when the backend emits
+ * `task.rewound` — we do NOT full-refresh the overlay; instead we walk the
+ * store and remove the tail of the timeline that got filtered out on the
+ * server side.
+ *
+ * Idempotent: re-calling with the same cursor is a no-op.
+ */
+export function pruneCardsAfterCursor(cursorTime: number) {
+  setCardTreeStore("rewindCursor", cursorTime);
+  setCardTreeStore("order", (order) =>
+    order.filter((id) => {
+      const card = cardTreeStore.cards[id];
+      if (!card) return false;
+      return (card.time ?? 0) <= cursorTime;
+    }),
+  );
+  // Remove child cards whose time exceeds cursor as well. Keeping them
+  // orphaned in `cards` wastes memory and risks stale references if the
+  // renderer dereferences through childIDs.
+  const survivors: Record<string, CardNode> = {};
+  for (const [id, card] of Object.entries(cardTreeStore.cards)) {
+    if ((card.time ?? 0) <= cursorTime) survivors[id] = card;
+  }
+  setCardTreeStore("cards", survivors);
+}
+
+/** Clear the rewind cursor without re-fetching — used when the backend
+ *  emits `task.rewound` with cursorTime=0 (undo-the-undo). The pruned
+ *  cards are gone from memory; the caller may choose to reload timeline
+ *  from the server if full restoration is desired. */
+export function clearPruneCursor() {
+  setCardTreeStore("rewindCursor", null);
+}

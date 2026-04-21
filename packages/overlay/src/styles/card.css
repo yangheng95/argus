@@ -205,6 +205,41 @@ body[data-theme="light"] .card__round {
 .card__copy + .card__chevron {
   margin-left: 0;
 }
+
+.card__rewind {
+  flex: none;
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1;
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.card__head:hover .card__rewind,
+.card__rewind:focus-visible {
+  opacity: 1;
+}
+.card__rewind:hover {
+  color: var(--accent-warning, #f0b429);
+  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+}
+.card__rewind--pending {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.card__rewind + .card__chevron {
+  margin-left: 0;
+}
 .card--expanded > .card__head .card__chevron {
   transform: rotate(0deg);
 }
