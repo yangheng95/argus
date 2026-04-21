@@ -42,11 +42,17 @@ export function CardHeader(props: {
   expanded: boolean;
   collapsible: boolean;
   onToggle: () => void;
+  /** Invoked when the user clicks the rewind (↶) button. Receives the
+   *  card's `time` (ms — becomes cursorTime on the backend) and id
+   *  (anchorEventID for audit). Parent routes it to POST /task/:id/rewind. */
+  onRewind?: (cursorTime: number, anchorID: string) => void | Promise<void>;
 }) {
   const badge = () => statusBadge(props.node);
   const glyph = () => leadingGlyph(props.node);
   const [copied, setCopied] = createSignal(false);
+  const [rewinding, setRewinding] = createSignal(false);
   const canCopy = () => !!collectCardText(props.node);
+  const canRewind = () => !!props.onRewind && typeof props.node.time === "number" && props.node.time > 0;
 
   const onCopy = async (e: MouseEvent | KeyboardEvent) => {
     e.stopPropagation();
@@ -56,6 +62,25 @@ export function CardHeader(props: {
     if (!ok) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
+  };
+
+  const onRewind = async (e: MouseEvent | KeyboardEvent) => {
+    e.stopPropagation();
+    if (!props.onRewind || !canRewind()) return;
+    if (rewinding()) return;
+    const confirmed = typeof window !== "undefined" && typeof window.confirm === "function"
+      ? window.confirm(
+          t("card.rewind_confirm") ||
+            "撤回到这张卡片之前？此操作只过滤数据库视图，不改动项目代码。",
+        )
+      : true;
+    if (!confirmed) return;
+    setRewinding(true);
+    try {
+      await props.onRewind(props.node.time, props.node.id);
+    } finally {
+      setTimeout(() => setRewinding(false), 800);
+    }
   };
 
   return (
@@ -144,6 +169,26 @@ export function CardHeader(props: {
               <path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </Show>
+        </button>
+      </Show>
+      <Show when={canRewind()}>
+        <button
+          type="button"
+          class="card__rewind"
+          classList={{ "card__rewind--pending": rewinding() }}
+          title={t("card.rewind") || "撤回到这张卡片之前（仅过滤时间线，不改动代码）"}
+          aria-label={t("card.rewind") || "rewind to before this card"}
+          disabled={rewinding()}
+          onClick={onRewind}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              void onRewind(e);
+            }
+          }}
+        >
+          {/* counterclockwise arrow glyph — U+21BA */}
+          <span aria-hidden="true">{"\u21BA"}</span>
         </button>
       </Show>
       <Show when={props.collapsible}>

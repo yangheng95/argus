@@ -1,8 +1,9 @@
 import { For, Show } from "solid-js";
 import type { CardNode } from "../store/card-tree";
-import { cardTreeStore } from "../store/card-tree";
+import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree";
 import { defaultExpandedForNode } from "../utils/card-tree";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
+import { boardStore } from "../store/board";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
@@ -38,6 +39,37 @@ export function Card(props: { node: CardNode; depth: number }) {
     toggleCard(props.node.id, props.node.status, defaultExpanded());
   };
 
+  /**
+   * Rewind handler — issues POST /task/:id/rewind and immediately prunes
+   * the local card tree so the UI reflects the rollback without waiting
+   * for the server's task.rewound SSE event to arrive. The backend also
+   * emits that event so any other subscribers (sidebars, peers) stay in
+   * sync. No full-refresh — we walk the store incrementally.
+   */
+  const onRewind = async (cursorTime: number, anchorID: string) => {
+    const taskID = boardStore.selectedTaskID;
+    if (!taskID) return;
+    // Optimistic local prune — user feels instant feedback. If the HTTP
+    // call fails the cards are gone until a syncTask() reload, which is
+    // acceptable (worst case: user reloads). We avoid a full-refresh
+    // because that was the source of the "user message → overlay 卡顿"
+    // symptom the operator flagged.
+    pruneCardsAfterCursor(cursorTime);
+    try {
+      const resp = await fetch(`/task/${taskID}/rewind`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cursorTime, anchorEventID: anchorID, reason: "user ↶ card" }),
+      });
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        console.error("rewind request failed", resp.status, detail);
+      }
+    } catch (err) {
+      console.error("rewind request errored", err);
+    }
+  };
+
   // Tool-kind nodes render their body via InlineToolPart(mode="body"),
   // not via CardParts — header already summarises the tool call.
   const isTool = () => props.node.kind === "tool";
@@ -59,6 +91,7 @@ export function Card(props: { node: CardNode; depth: number }) {
         expanded={expanded()}
         collapsible={collapsible()}
         onToggle={toggle}
+        onRewind={onRewind}
       />
       <Show when={expanded()}>
         <div class="card__body">

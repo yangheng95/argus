@@ -307,6 +307,35 @@ export function routeSSEEvent(event: any): boolean {
     return true;
   }
 
+  // ── Task rewound → incremental prune of the card tree ──
+  // Backend emitted Event.TaskRewound after a rewindTask call. We prune
+  // the tail of the timeline locally (card-tree store) without a full
+  // refresh — the full-refresh path was the "user message → overlay
+  // 卡顿" symptom, and the server has already filtered its describe
+  // outputs to `time_created <= cursorTime`.
+  if (type === "task.rewound") {
+    const properties = record(event?.properties) ? event.properties : {};
+    const evtTaskID: string | undefined = typeof properties.taskID === "string" ? properties.taskID : undefined;
+    const cursorTime: number | undefined = typeof properties.cursorTime === "number" ? properties.cursorTime : undefined;
+    if (!evtTaskID || cursorTime === undefined) return true;
+    // Only prune when the event concerns the currently-selected task —
+    // other tasks' card trees are not loaded in this overlay instance.
+    if (evtTaskID === boardStore.selectedTaskID && cursorTime > 0) {
+      // Idempotent — pruneCardsAfterCursor is a no-op if the cards are
+      // already gone (e.g. the local initiator already pruned optimistically).
+      void (async () => {
+        const { pruneCardsAfterCursor, clearPruneCursor } = await import("../store/card-tree");
+        pruneCardsAfterCursor(cursorTime);
+        // cursorTime === 0 means "undo the undo"; reload to bring events back.
+        void clearPruneCursor;
+      })();
+    } else if (evtTaskID === boardStore.selectedTaskID && cursorTime === 0) {
+      // Rewind cleared by backend — full reload to restore the suppressed tail.
+      void syncTask(evtTaskID);
+    }
+    return true;
+  }
+
   const properties = record(event?.properties)
     ? event.properties
     : record(event?.payload)

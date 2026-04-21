@@ -572,6 +572,72 @@ export const EngineRoutes = lazy(() =>
       },
     )
     .post(
+      "/task/:taskID/rewind",
+      describeRoute({
+        summary: "Rewind task timeline to a specific event (projection cursor, history stays intact)",
+        operationId: "task.rewind",
+        responses: {
+          200: {
+            description: "Rewind applied",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({
+                  taskID: z.string(),
+                  cursorTime: z.number(),
+                  rewindCount: z.number(),
+                })),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator("json", z.object({
+        cursorTime: z.number().int().nonnegative().describe(
+          "Unix ms. Events with time_created > cursorTime are filtered from UI reads.",
+        ),
+        anchorEventID: z.string().optional().describe("The card's event id, for audit / UI highlighting"),
+        reason: z.string().optional(),
+      })),
+      async (c) => {
+        const { rewindTask } = await import("@/engine/rewind")
+        const { taskID } = c.req.valid("param")
+        const body = c.req.valid("json")
+        const result = await rewindTask({
+          taskID,
+          cursorTime: body.cursorTime,
+          anchorEventID: body.anchorEventID,
+          reason: body.reason,
+        })
+        return c.json(result)
+      },
+    )
+    .post(
+      "/task/:taskID/rewind/clear",
+      describeRoute({
+        summary: "Clear the rewind cursor (undo the rewind)",
+        operationId: "task.rewind.clear",
+        responses: {
+          200: {
+            description: "Cursor cleared",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        const { clearRewindCursor } = await import("@/engine/rewind")
+        await clearRewindCursor(c.req.valid("param").taskID)
+        return c.json(true)
+      },
+    )
+    .post(
       "/task/:taskID/retry",
       describeRoute({
         summary: "Retry task",
