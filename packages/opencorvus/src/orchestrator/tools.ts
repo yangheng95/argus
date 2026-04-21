@@ -2442,12 +2442,11 @@ export function createOrchestratorTools(input: {
             now: Date.now(),
           })
 
-          const taskMeta = (task.metadata ?? {}) as Record<string, unknown>
-
           // Arbiter verdict routing. The metric trajectory lives in
           // engine_iteration — the assistant reads it via query_metric_trajectory
-          // on the next turn. We set a lightweight one-shot `_delivery_rework`
-          // marker so the orchestrator loop wakes and re-triggers.
+          // on the next turn. On `continue` we open a fresh attempt cycle
+          // for every passed/completed goal under reason=delivery_rework
+          // so the dispatch loop picks them up without LLM intervention.
           if (decision.verdict === "stalled") {
             const failMsg = SubAgentProtocol.yieldResult({
               headline: `Delivery stalled — ${decision.reason}. Agent summary: ${verdict.summary}`,
@@ -2492,36 +2491,41 @@ export function createOrchestratorTools(input: {
             return failMsg
           }
 
-          // decision.verdict === "continue": the orchestrator assistant
-          // reads the engine_iteration trajectory and open counterexamples
-          // on its next turn (via query_metric_trajectory) and decides what
-          // to do next — patch code, reshape goals, whatever. No
-          // _delivery_rework_history accumulation: engine_iteration is the
-          // single source of truth.
-          const reworkSignal: Record<string, unknown> = {
+          // decision.verdict === "continue": rejection within the iteration
+          // budget. Open a fresh attempt cycle on every goal whose tip is
+          // currently passed/completed — Goal.startNewAttempt(reason=
+          // "delivery_rework") sets superseded_reason on the old terminal tip,
+          // syncGoalStatus projects pending, and the dispatch loop re-runs
+          // the goal under the new attempt. Mechanism is decoupled from LLM
+          // decision: state flips unconditionally; the orchestrator only
+          // chooses *strategy* (modify_goal / add_goal / let-it-redispatch)
+          // when it next runs.
+          //
+          // engine_iteration + the verdict artifact persisted above are the
+          // canonical source of truth for the rejection details — the
+          // orchestrator reads them via query_metric_trajectory and the
+          // loop reads the verdict artifact directly to populate the
+          // delivery_rejected trigger.feedback. No task.metadata signal.
+          const { startNewAttempt } = await import("@/engine/persist")
+          const rejectFeedback = {
             iteration,
             arbiter_verdict: decision.verdict,
             arbiter_reason: decision.reason,
             verdict_summary: verdict.summary,
             issues_found: verdict.issues_found,
             rejection_details: verdict.rejection_details ?? [],
-            deferred_checks: verdict.deferred_checks ?? [],
-            startup_verification: verdict.startup_verification,
-            frontend_check: verdict.frontend_check,
             verdict_artifact_id: verdictArtifactId,
-            aggregate_score: snapshot.aggregate_score,
-            blocking_unmet: snapshot.blocking_unmet_count,
-            open_counterexamples: snapshot.open_counterexamples,
-            timestamp: Date.now(),
           }
-          const currentTaskR = requireTask(taskID)
-          await updateTask(
-            currentTaskR,
-            {
-              metadata: { ...taskMeta, _delivery_rework: reworkSignal },
-            },
-            `Delivery rejected (iteration ${iteration}) — arbiter=${decision.verdict}, assistant will re-plan`,
+          const passedOrCompleted = goals.filter(
+            (g) => g.status === "passed",
           )
+          for (const g of passedOrCompleted) {
+            startNewAttempt({
+              goalID: g.id,
+              reason: "delivery_rework",
+              feedback: rejectFeedback,
+            })
+          }
 
           try {
             const { createDecisionLog } = await import("@/decision-log")
@@ -2536,10 +2540,11 @@ export function createOrchestratorTools(input: {
             /* best effort */
           }
 
-          log.info("deliver: continue-loop triggered", {
+          log.info("deliver: rejection opened new attempts", {
             taskID,
             iteration,
             issues: verdict.issues_found.length,
+            reset_goals: passedOrCompleted.length,
           })
 
           stopAfterDispatch.abort("delivery_rework")
@@ -2608,22 +2613,28 @@ export function createOrchestratorTools(input: {
             return failMsg
           }
 
-          const syntheticSignal: Record<string, unknown> = {
+          const errFeedback = {
             iteration: iterationErr,
             arbiter_verdict: decisionErr.verdict,
             arbiter_reason: decisionErr.reason,
             verdict_summary: `Delivery verification threw: ${msg}`,
             issues_found: [`Delivery verification error: ${msg}`],
             rejection_details: [{ category: "runtime", error: msg }],
-            timestamp: Date.now(),
           }
-          const taskMetaErr = (task.metadata ?? {}) as Record<string, unknown>
-          const currentTaskE = requireTask(taskID)
-          await updateTask(
-            currentTaskE,
-            { metadata: { ...taskMetaErr, _delivery_rework: syntheticSignal } },
-            `Delivery verification error (iteration ${iterationErr}) — assistant will re-plan`,
-          )
+          // Synthetic-failure path mirrors the continue branch: open a fresh
+          // attempt cycle on every passed/completed goal so the loop redispatches
+          // them. No task.metadata signal — the loop reads engine_iteration
+          // and the verdict-artifact view (when present) to surface feedback.
+          const { startNewAttempt: startNewAttemptErr } = await import("@/engine/persist")
+          const goalsErr = listGoals(taskID)
+          const passedOrCompletedErr = goalsErr.filter((g) => g.status === "passed")
+          for (const g of passedOrCompletedErr) {
+            startNewAttemptErr({
+              goalID: g.id,
+              reason: "delivery_rework",
+              feedback: errFeedback,
+            })
+          }
 
           stopAfterDispatch.abort("delivery_rework")
           return `Delivery verification failed: ${msg}. Iteration ${iterationErr}, arbiter=${decisionErr.verdict} triggered.`

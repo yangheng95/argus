@@ -407,16 +407,16 @@ function describeTrigger(task: TaskRow, trigger: OrchestratorTrigger): string {
 
     case "delivery_rejected": {
       const fb = trigger.feedback
-      const iteration = fb.iteration ?? "?"
-      const maxIter = fb.max_iterations ?? "?"
       const issues = Array.isArray(fb.issues_found) ? fb.issues_found as string[] : []
       const details = Array.isArray(fb.rejection_details) ? fb.rejection_details as Array<{ category?: string; file?: string; error?: string; suggestion?: string }> : []
 
       const lines = [
-        `## DELIVERY REJECTED (iteration ${iteration}/${maxIter})`,
+        `## DELIVERY REJECTED — passed goals auto-reset to pending`,
         "",
         "The delivery agent (adversarial evaluator) rejected the integrated deliverable.",
-        "Goals are NOT auto-reset — YOU must re-plan based on the feedback below.",
+        "Every passed goal in this task has been opened under a fresh attempt",
+        "(superseded_reason=delivery_rework). The dispatch loop will re-execute",
+        "them under the SAME contract unless you intervene.",
         "",
         `**Summary**: ${fb.verdict_summary ?? "No summary"}`,
         "",
@@ -435,16 +435,15 @@ function describeTrigger(task: TaskRow, trigger: OrchestratorTrigger): string {
 
       lines.push(
         "",
-        "## RE-PLAN REQUIRED",
+        "## STRATEGY DECISION",
         "",
-        "Analyze each rejection detail and decide the appropriate remediation:",
+        "Goals will redispatch automatically. Your job is to decide whether the",
+        "EXISTING contracts are sufficient, or if structural changes are needed:",
         "",
-        "- **Contract gap / missing criteria** → modify_goal on affected goals (auto-resets to pending)",
-        "- **Missing functionality** → add_goal to create the gap coverage",
-        "- **Wrong approach / architecture issue** → restart_from_stage(requirements) or (plan)",
-        "- **Implementation bug in a passed goal** → modify_goal with tightened criteria to force re-execution",
-        "",
-        "Then: create_run → submit_execution. After goals complete, call deliver again.",
+        "- **Contract is fine, just a transient/integration issue** → do nothing; the loop redispatches under the same contract.",
+        "- **Contract gap / missing criteria** → modify_goal (acceptance_specs, owned_paths) on affected goals before they redispatch.",
+        "- **Missing functionality** → add_goal to create the gap coverage.",
+        "- **Wrong approach / architecture issue** → restart_from_stage(requirements) or (plan).",
         "",
         "Focus on the SPECIFIC issues. Do NOT rework everything blindly.",
       )
@@ -557,16 +556,21 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "",
   "## After delivery rejection (re-triggered with delivery_rejected)",
   "",
+  "On rejection, every passed goal in the task has ALREADY been opened under",
+  "a fresh attempt cycle (superseded_reason=delivery_rework) by the deliver",
+  "tool itself. The dispatch loop will re-execute them under the SAME contract",
+  "automatically. Your job is strategy, not state-flipping.",
+  "",
   "Direct workflow:",
   "  - Call `build` again with the rejection feedback as part of the request. Then call `deliver` again.",
   "  - The rejection details are pre-loaded in your trigger context (do not re-fetch).",
   "",
-  "Pipeline workflow — DEFAULT response is to re-plan and re-dispatch within pipeline:",
-  "  - Specific goal contract gaps → **modify_goal** on affected goals (auto-resets to pending).",
+  "Pipeline workflow — DEFAULT is to do nothing and let the loop redispatch:",
+  "  - Transient or integration-only failure → no action; goals will redispatch under the same contract.",
+  "  - Specific goal contract gaps → **modify_goal** on affected goals BEFORE they redispatch.",
   "  - Missing functionality → **add_goal** for the gap.",
   "  - Wrong approach / architecture → **restart_from_stage(requirements)**.",
   "  - Implementation bugs in passed goals → **modify_goal** with tightened criteria.",
-  "  - Then **create_run** + **submit_execution**.",
   "",
   "Pipeline workflow — fall back to direct **build** when goal-level repair clearly won't fix the rejection:",
   "  - Cross-goal integration glue that no single goal owns.",
@@ -666,7 +670,12 @@ function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?
         `  - iter ${it.iteration}: arbiter=${it.arbiter_verdict}, S_k=${it.aggregate_score.toFixed(3)} (Δ=${it.delta_vs_prev.toFixed(3)}), blocking_unmet=${it.blocking_unmet_count}, open_ce=${it.open_counterexamples}, novelty=${it.novelty_score}`,
       )
     }
-    const latest = meta._delivery_rework as Record<string, unknown> | undefined
+    // Latest delivery feedback comes from trigger.feedback (loop reads it
+    // from the verdict artifact when it sees a recent delivery_rework
+    // supersede). Empty unless this very turn was triggered by a rejection.
+    const latest = trigger.kind === "delivery_rejected"
+      ? (trigger.feedback as Record<string, unknown> | undefined)
+      : undefined
     if (latest) {
       ctx.push("")
       ctx.push("### Latest delivery-agent feedback")

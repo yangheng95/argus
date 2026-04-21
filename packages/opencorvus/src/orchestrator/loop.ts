@@ -87,6 +87,12 @@ export async function runTaskLoop(input: {
   const MAX_STALE_ITERATIONS = 5
   let lastGoalSnapshot = ""
   let staleCount = 0
+  /** Floor for `findRecentReworkAttempt` — only consider supersede events
+   *  newer than this. Initialized to loop start so we don't react to
+   *  pre-existing rework markers from previous loop runs of the same task
+   *  (e.g. crash recovery), and bumped past every consumed event so a
+   *  single rework only fires the trigger once. */
+  let lastReworkSeenAt = Date.now()
 
   while (!signal?.aborted) {
     iteration++
@@ -119,35 +125,49 @@ export async function runTaskLoop(input: {
     if (!taskAfter) break
 
     // ── Delivery rework detection ──
-    // When the deliver tool rejects within the iteration budget, it writes
-    // _delivery_rework into metadata and aborts (WITHOUT failing the task).
-    // Detect this one-shot signal and re-trigger the orchestrator with a
-    // delivery_rejected trigger BEFORE entering Phase 2/3 — the agent
-    // needs to see the feedback and modify goals before re-execution.
-    const taskAfterMeta = (taskAfter.metadata ?? {}) as Record<string, unknown>
-    if (taskAfterMeta._delivery_rework && taskAfter.status === "active") {
-      const rework = taskAfterMeta._delivery_rework as Record<string, unknown>
-      log.info("delivery rework detected — re-triggering orchestrator", {
-        taskID,
-        iteration: rework.iteration,
-        issues: Array.isArray(rework.issues_found) ? (rework.issues_found as unknown[]).length : 0,
-      })
-      // Clear the one-shot signal (full iteration history lives in engine_iteration)
-      const { updateTask } = await import("@/engine/state")
-      const cleanMeta = { ...taskAfterMeta }
-      delete cleanMeta._delivery_rework
-      await updateTask(taskAfter, { metadata: cleanMeta }, "Consumed delivery rework signal")
+    // When the deliver tool rejects within the iteration budget, it calls
+    // Goal.startNewAttempt(reason="delivery_rework") on every passed goal
+    // and aborts dispatch (WITHOUT failing the task). The state machine
+    // alone now flips those goals back to pending — no metadata signal,
+    // no LLM cooperation needed.
+    //
+    // This block detects the supersede event so the orchestrator agent
+    // gets a `delivery_rejected` trigger (with structured feedback from
+    // the latest verdict artifact) on its next decision point — the
+    // mechanism is decoupled, but the LLM still needs the context to
+    // choose strategy (modify_goal vs add_goal vs let-it-redispatch).
+    if (taskAfter.status === "active") {
+      const { findRecentReworkAttempt, findLatestDeliveryVerdictArtifact } = await import("@/engine/store")
+      const reworkAttempt = findRecentReworkAttempt(taskID, lastReworkSeenAt)
+      if (reworkAttempt) {
+        lastReworkSeenAt = (reworkAttempt.superseded_at ?? Date.now()) + 1
+        const verdictArt = findLatestDeliveryVerdictArtifact(taskID)
+        const verdict = (verdictArt?.payload ?? {}) as Record<string, unknown>
+        const feedback: Record<string, unknown> = {
+          verdict_summary: verdict.summary,
+          issues_found: Array.isArray(verdict.issues_found) ? verdict.issues_found : [],
+          rejection_details: Array.isArray(verdict.rejection_details) ? verdict.rejection_details : [],
+          startup_verification: verdict.startup_verification,
+          frontend_check: verdict.frontend_check,
+          verdict_artifact_id: verdictArt?.id,
+        }
+        log.info("delivery rework detected — re-triggering orchestrator", {
+          taskID,
+          supersededTipID: reworkAttempt.id,
+          issues: Array.isArray(feedback.issues_found) ? (feedback.issues_found as unknown[]).length : 0,
+        })
 
-      // Reset stale counter — delivery rework is genuine progress
-      lastGoalSnapshot = ""
-      staleCount = 0
+        // Reset stale counter — delivery rework is genuine progress
+        lastGoalSnapshot = ""
+        staleCount = 0
 
-      trigger = {
-        kind: "delivery_rejected",
-        runID: taskAfter.active_run_id ?? "",
-        feedback: rework,
-      } as any
-      continue // Skip Phase 2/3, go straight back to Decision Point
+        trigger = {
+          kind: "delivery_rejected",
+          runID: taskAfter.active_run_id ?? "",
+          feedback,
+        } as any
+        continue // Skip Phase 2/3, go straight back to Decision Point
+      }
     }
 
     if (taskAfter.status === "completed" || taskAfter.status === "failed" || taskAfter.status === "cancelled") {

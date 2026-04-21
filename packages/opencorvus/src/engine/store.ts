@@ -1,7 +1,7 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
-import { Database, NotFoundError, and, asc, desc, eq, inArray, isNull, like, lt, sql } from "@/storage/db"
+import { Database, NotFoundError, and, asc, desc, eq, gte, inArray, isNull, like, lt, sql } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { EvaluationCheck } from "./model"
@@ -343,6 +343,46 @@ export function findGoalRun(goalRunID: string) {
       .select()
       .from(EngineGoalRunTable)
       .where(eq(EngineGoalRunTable.id, goalRunID))
+      .get(),
+  )
+}
+
+/**
+ * Most recent goal_run within `taskID` whose tip was superseded under
+ * reason="delivery_rework" at-or-after `sinceMs`. Used by the orchestrator
+ * loop to detect "the deliver tool just opened a fresh attempt cycle for
+ * this task" without polling task.metadata for one-shot soft signals.
+ *
+ * Returns undefined when no such row exists in the window.
+ */
+export function findRecentReworkAttempt(taskID: string, sinceMs: number) {
+  return Database.use((db) =>
+    db.select().from(EngineGoalRunTable)
+      .where(and(
+        eq(EngineGoalRunTable.task_id, taskID),
+        eq(EngineGoalRunTable.superseded_reason, "delivery_rework"),
+        gte(EngineGoalRunTable.superseded_at, sinceMs),
+      ))
+      .orderBy(desc(EngineGoalRunTable.superseded_at))
+      .get(),
+  )
+}
+
+/**
+ * Latest verdict artifact written by the deliver tool for `taskID`. The
+ * payload is the full DeliveryVerdict (summary, issues_found, rejection_details,
+ * startup_verification, frontend_check). The orchestrator loop reads this when
+ * a recent rework attempt is detected so it can hand structured feedback to
+ * the orchestrator agent without piggy-backing on task.metadata.
+ */
+export function findLatestDeliveryVerdictArtifact(taskID: string) {
+  return Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, taskID),
+        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
 }
