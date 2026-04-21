@@ -240,47 +240,57 @@ export async function runTaskLoop(input: {
       continue
     }
 
-    // ── Phase 3: GoalPool — queue-based execution ──
-    // GoalPool handles: worktree → executor → delivery → eval → cleanup.
-    // Pool auto-fills slots as goals complete (respecting dependency DAG).
-    const concurrency = effectiveMaxExecutorGroups(taskAfter)
-    log.info("goal pool starting", {
-      taskID, concurrency,
-      pending: goals.filter(g => g.status === "pending").length,
-      running: goals.filter(g => g.status === "running").length,
-    })
+    // ── Phase 3: GoalPool — execute the LLM's dispatch decision ──
+    // The pool runs whatever IDs the LLM just pushed onto the dispatch queue
+    // via dispatch_goal (orchestrator/dispatch-queue.ts). When the queue is
+    // empty — the LLM didn't dispatch anything this turn — the pool is not
+    // instantiated; the loop feeds a batch_complete trigger so the LLM can
+    // decide again from the latest describe snapshot. Stale-state detection
+    // is the hard backstop against "LLM never calls dispatch_goal."
+    const { pullDispatch } = await import("./dispatch-queue")
+    const pendingDispatch = pullDispatch(taskID)
 
-    const poolHooks: PoolHooks = {
-      mergeDelivery: (t, r, p, gr, delivery) => mergeGoalDelivery(t, r, p, gr, delivery, hooks),
-      updateRun: async (run, update, reason) => {
-        // RuntimeHooks.updateRun returns RunRow; PoolHooks.updateRun returns void.
-        // Pool doesn't need the returned row.
-        await hooks.updateRun(run, update as any, reason)
-      },
-      onGoalResult: (result) => {
-        log.info("goal result", { taskID, goalID: result.goalID, status: result.status, verdict: result.verdict })
-      },
-    }
-
-    const pool = new GoalPool({
-      task: taskAfter,
-      run,
-      plan,
-      concurrency,
-      signal,
-      hooks: poolHooks,
-    })
-
-    // Submit all ready goals — pool handles dependency ordering internally
-    pool.submit()
-
-    if (pool.activeCount > 0 || pool.queuedCount > 0) {
-      const results = await pool.drain()
-      log.info("goal pool drained", {
-        taskID, results: results.length,
-        passed: results.filter(r => r.status === "passed").length,
-        failed: results.filter(r => r.status === "failed").length,
+    if (pendingDispatch.length > 0) {
+      const concurrency = effectiveMaxExecutorGroups(taskAfter)
+      log.info("goal pool starting", {
+        taskID, concurrency,
+        dispatching: pendingDispatch.length,
+        ids: pendingDispatch,
       })
+
+      const poolHooks: PoolHooks = {
+        mergeDelivery: (t, r, p, gr, delivery) => mergeGoalDelivery(t, r, p, gr, delivery, hooks),
+        updateRun: async (run, update, reason) => {
+          await hooks.updateRun(run, update as any, reason)
+        },
+        onGoalResult: (result) => {
+          log.info("goal result", { taskID, goalID: result.goalID, status: result.status, verdict: result.verdict })
+        },
+      }
+
+      const pool = new GoalPool({
+        task: taskAfter,
+        run,
+        plan,
+        concurrency,
+        signal,
+        hooks: poolHooks,
+      })
+
+      pool.submit(pendingDispatch)
+
+      if (pool.activeCount > 0 || pool.queuedCount > 0) {
+        const results = await pool.drain()
+        log.info("goal pool drained", {
+          taskID, results: results.length,
+          passed: results.filter(r => r.status === "passed").length,
+          failed: results.filter(r => r.status === "failed").length,
+        })
+      } else {
+        log.info("pool had nothing to run — all requested IDs skipped by idempotency", {
+          taskID, requested: pendingDispatch,
+        })
+      }
     } else if (hasActive) {
       // Goals from a previous iteration are still running — wait via polling
       log.info("waiting for already-running goals", { taskID })

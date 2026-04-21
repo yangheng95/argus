@@ -1565,15 +1565,15 @@ export function createOrchestratorTools(input: {
           return `Run ${run.id} is ${run.status}. Only accepted/running/blocked runs may dispatch goals. Create a fresh run if this one is terminal.`
         }
 
-        // NOTE (Phase 2a transitional): the pool is instantiated inside the
-        // task loop and currently auto-submits every dispatchable goal in
-        // the plan (order_index order). This tool call signals the loop to
-        // re-enter its dispatch phase, but the loop does not yet thread
-        // `goalIDs` through to pool.submit — Phase 2b removes the loop's
-        // auto-submit so the LLM's IDs become authoritative. Until then
-        // dispatch_goal's effect is equivalent to "tell the pool to run";
-        // the specific IDs you pass are advisory (idempotency still skips
-        // already-dispatched rows, so extras here do no harm).
+        // Push the IDs onto the in-memory dispatch queue. The task loop
+        // pulls this queue and calls pool.submit(ids) — the LLM's decision
+        // is authoritative. Idempotency in the pool silently skips IDs
+        // that are already live/satisfied, so re-listing a goal does no
+        // harm, but without this tool the loop no longer auto-submits
+        // anything.
+        const { pushDispatch } = await import("./dispatch-queue")
+        pushDispatch(taskID, goalIDs)
+
         stopAfterDispatch.abort("dispatch_goal")
         return (
           `Dispatched ${goalIDs.length} goal(s): ${goalIDs.join(", ")}. ` +
