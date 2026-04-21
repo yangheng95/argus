@@ -1116,7 +1116,14 @@ export function createOrchestratorTools(input: {
           const result = startNewAttempt({
             goalID,
             reason: "modify_contract",
-            feedback: { contract_changes: changed },
+            feedback: {
+              value:
+                `Goal contract changed by modify_goal. Fields updated: ${changed.join(", ")}. ` +
+                `The prior attempt ran against an outdated contract — re-read acceptance_specs, ` +
+                `owned_paths, exports/imports, and the dependency context before re-implementing. ` +
+                `Do not assume prior code satisfies the new contract.`,
+              reason: `modify_goal: ${changed.length} contract field(s) updated (${changed.join(", ")})`,
+            },
           })
           supersededTipID = result.supersededTipID
         }
@@ -1244,13 +1251,15 @@ export function createOrchestratorTools(input: {
         }
 
         const now = Date.now()
+        // startNewAttempt is the single writer of `decision_log.phase="retry"`;
+        // the executor reads that on its next dispatch. No parallel append here.
         startNewAttempt({
           goalID,
           reason: "manual_retry",
           now,
           feedback: {
-            detail: `[${analysis.failure_class}] ${analysis.expected_fix}`,
-            analysis,
+            value: `[${analysis.failure_class}] ${analysis.expected_fix}`,
+            reason: analysis.root_cause,
           },
         })
 
@@ -1263,20 +1272,6 @@ export function createOrchestratorTools(input: {
             .where(eq(EngineGoalTable.id, goalID))
             .run(),
         )
-
-        try {
-          const { createDecisionLog } = await import("@/decision-log")
-          const log = createDecisionLog(taskID)
-          log.append({
-            goalID,
-            phase: "retry",
-            key: `retry_analysis_${goalID}`,
-            value: `[${analysis.failure_class}] ${analysis.expected_fix}`,
-            reason: analysis.root_cause,
-          })
-        } catch {
-          /* best effort */
-        }
 
         ensureGoalInWorkflow(goalID, goal.title)
         await trackStepStart("retry_goal", goalID)
@@ -2284,16 +2279,6 @@ export function createOrchestratorTools(input: {
           // loop reads the verdict artifact directly to populate the
           // delivery_rejected trigger.feedback. No task.metadata signal.
           const { startNewAttempt } = await import("@/engine/persist")
-          const rejectFeedback = {
-            iteration,
-            arbiter_verdict: decision.verdict,
-            arbiter_reason: decision.reason,
-            verdict_summary: verdict.summary,
-            issues_found: verdict.issues_found,
-            affected_goal_ids: verdict.affected_goal_ids,
-            rejection_details: verdict.rejection_details ?? [],
-            verdict_artifact_id: verdictArtifactId,
-          }
           // Attribution is the delivery agent's job. `verdict.affected_goal_ids`
           // is a contract-required non-empty array on rejection (enforced in
           // DeliveryAgent.normalizeVerdict). We open a fresh attempt on exactly
@@ -2323,11 +2308,38 @@ export function createOrchestratorTools(input: {
               `Known goals for this task: ${[...goalByID.keys()].join(", ") || "(none)"}.`,
             )
           }
+          // Per-goal rejection slice: the delivery agent already attributed
+          // each rejection_details[] entry to a specific goal_id; feed that
+          // subset (plus the task-level summary) into startNewAttempt so the
+          // executor's next prompt shows exactly what this goal must fix.
+          // Without this, delivery_rework reworks ran against an unchanged
+          // prompt (the root cause we're fixing here).
           for (const g of toReset) {
+            const ownDetails = (verdict.rejection_details ?? []).filter(
+              (d) => d.goal_id === g.id,
+            )
+            const detailLines = ownDetails.length > 0
+              ? ownDetails.map((d) => {
+                  const parts: string[] = [`[${d.category}] ${d.error}`]
+                  if (d.file) parts.push(`(file: ${d.file})`)
+                  if (d.suggestion) parts.push(`suggestion: ${d.suggestion}`)
+                  if (d.visual_spec_id) parts.push(`visual_spec: ${d.visual_spec_id}`)
+                  return `- ${parts.join(" ")}`
+                })
+              : [`- (delivery agent attributed this goal but wrote no per-goal details)`]
+            const value = [
+              `Delivery agent rejected the integrated deliverable (iteration ${iteration}, arbiter=${decision.verdict}).`,
+              `Task-level summary: ${verdict.summary}`,
+              `Issues attributed to this goal:`,
+              ...detailLines,
+            ].join("\n")
+            const reason = verdict.issues_found.length > 0
+              ? `Delivery rejection; ${verdict.issues_found.length} issue(s): ${verdict.issues_found.slice(0, 3).join("; ")}`
+              : `Delivery rejection; arbiter_verdict=${decision.verdict}; arbiter_reason=${decision.reason}`
             startNewAttempt({
               goalID: g.id,
               reason: "delivery_rework",
-              feedback: rejectFeedback,
+              feedback: { value, reason },
             })
           }
 

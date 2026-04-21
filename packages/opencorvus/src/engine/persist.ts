@@ -38,6 +38,7 @@ import { EngineProtocol } from "./protocol"
 import { findGoal, findGoalRun, findLatestTipGoalRun, findPlan, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
 import { syncGoalStatus } from "./goal-status"
 import { assertGoalRunTransition, type GoalRunStatus } from "./goal-run-state-machine"
+import { createDecisionLog } from "@/decision-log"
 import { StaleRowError } from "./state"
 
 const log = Log.create({ service: "engine-transition" })
@@ -439,7 +440,14 @@ export function startNewAttempt(input: {
   reason: string
   now?: number
   resetWorkspace?: boolean
-  feedback?: Record<string, unknown>
+  /** Retry analysis to persist for the executor's next prompt. When supplied,
+   *  writes a `decision_log.phase="retry"` entry scoped to this goal; the
+   *  executor's `buildRetryFeedbackSection` reads those entries on the next
+   *  run and surfaces them above the goal contract. `value` is the concrete
+   *  directive (what to change); `reason` is the root cause. Omit only when
+   *  the caller genuinely has no actionable analysis — the executor will then
+   *  re-run with the original prompt (uninformed retry). */
+  feedback?: { value: string; reason: string }
 }): { supersededTipID?: string; resetWorkspace: boolean } {
   const now = input.now ?? Date.now()
   const goal = findGoal(input.goalID)
@@ -468,6 +476,23 @@ export function startNewAttempt(input: {
         .run(),
     )
     resetWorkspace = true
+  }
+  // Single writer of retry feedback into decision_log. Every path that opens
+  // a new attempt (delivery_rework / manual_retry / modify_contract) routes
+  // its per-goal analysis through this one write — `buildRetryFeedbackSection`
+  // reads `phase="retry"` filtered by goalID. Previously the `feedback`
+  // parameter existed on the signature but was dropped silently; only the
+  // manual `retry_goal` tool duplicated a parallel decisionLog.append, so
+  // executors on delivery_rework/modify_contract rework cycles ran with no
+  // rejection context — i.e. blind retries.
+  if (input.feedback) {
+    createDecisionLog(goal.task_id).append({
+      goalID: input.goalID,
+      phase: "retry",
+      key: `retry_analysis_${input.goalID}`,
+      value: input.feedback.value,
+      reason: input.feedback.reason,
+    })
   }
   // Event sourcing: the goal_run row itself IS the event — tip's
   // superseded_reason column + superseded_at timestamp is the persistent
