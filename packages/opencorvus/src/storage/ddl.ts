@@ -598,7 +598,10 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   -- match EngineGoalRunSupersededReason in engine.sql.ts. NULL on rows that
   -- were never superseded. deriveGoalStatus projects terminal tips with
   -- non-null superseded_reason back to 'pending' so the loop re-dispatches.
-  superseded_reason   text,
+  -- CHECK enforces enum parity with EngineGoalRunSupersededReason in
+  -- engine.sql.ts — a drift-proof runtime guard since SQLite text columns
+  -- would otherwise accept any string silently.
+  superseded_reason   text CHECK (superseded_reason IS NULL OR superseded_reason IN ('manual_retry','delivery_rework','modify_contract','restart_stage')),
   superseded_at       integer,
   metadata            text,
   lease_until          integer,
