@@ -596,16 +596,12 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   -- LAST link as authoritative. This lets retry re-dispatch without mutating
   -- history and without collapsing the live/terminal/retriable catalog.
   supersede_of        text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
-  -- superseded_reason / superseded_at: typed columns naming why a terminal
-  -- goal_run was superseded (i.e. why a new attempt opens for the same goal).
-  -- Set on the OLD row by Goal.startNewAttempt / supersedeGoalRun. Enum values
-  -- match EngineGoalRunSupersededReason in engine.sql.ts. NULL on rows that
-  -- were never superseded. deriveGoalStatus projects terminal tips with
-  -- non-null superseded_reason back to 'pending' so the loop re-dispatches.
-  -- CHECK enforces enum parity with EngineGoalRunSupersededReason in
-  -- engine.sql.ts — a drift-proof runtime guard since SQLite text columns
-  -- would otherwise accept any string silently.
-  superseded_reason   text CHECK (superseded_reason IS NULL OR superseded_reason IN ('manual_retry','delivery_rework','modify_contract','restart_stage')),
+  -- superseded_reason: free-text label naming why a terminal goal_run was
+  -- superseded. Rendered into describe output for the orchestrator LLM; code
+  -- only reads its presence (NULL vs non-NULL) to project terminal tips back
+  -- to 'pending' for re-dispatch. Per rule 23 (no state-machine enums), no
+  -- CHECK constraint — the specific string is documentation, not a code gate.
+  superseded_reason   text,
   superseded_at       integer,
   metadata            text,
   lease_until          integer,

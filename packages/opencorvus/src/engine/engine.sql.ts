@@ -41,19 +41,15 @@ export type EngineMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type EngineRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
 export type EngineRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
 
-/**
- * Why a goal_run was superseded — i.e. what triggered the new attempt that
- * sits at the supersede chain head. Promoted from `metadata.superseded_reason`
- * to a first-class column so deriveGoalStatus / readiness / decision-log can
- * branch on a typed enum instead of a free-form string. Each value names
- * exactly one engine-level retry intent; the operator-facing detail (`why
- * the human / LLM chose this`) lives in decision_log, not here.
- */
-export type EngineGoalRunSupersededReason =
-  | "manual_retry"      // retry_goal: explicit operator retry under per-goal budget
-  | "delivery_rework"   // delivery verdict=rejected: arbiter sent the goal back for rework
-  | "modify_contract"   // modify_goal: contract changed, prior run is stale under new contract
-  | "restart_stage"     // restart_from_stage / resetTaskGoalsToPending: bulk re-anchor
+// Why a goal_run was superseded — free-text label for human / LLM consumption.
+// Rendered into describe output and surfaces to the orchestrator LLM as a
+// semantic hint. Not enumerated: per rule 23 (no state-machine enums), code
+// never branches on the specific value. The only boolean signal code reads
+// is `!!superseded_reason` ("was this tip superseded?"). When the orchestrator
+// loop needs to wake on a delivery rejection it reads the verdict artifact
+// directly (findRecentDeliveryRejection), not this column's string value.
+// Conventional labels callers write (documentation only, not enforced):
+//   manual_retry, delivery_rework, modify_contract, restart_stage
 export type EngineInteractionType = "permission" | "question"
 export type EngineInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 
@@ -493,7 +489,7 @@ export const EngineGoalRunTable = sqliteTable(
      *  `deriveGoalStatus` projects terminal tips with this column non-null
      *  back to `pending` so the dispatch loop picks them up. NULL on rows
      *  that were never superseded. */
-    superseded_reason: text().$type<EngineGoalRunSupersededReason>(),
+    superseded_reason: text(),
     superseded_at: integer(),
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),
     time_started: integer(),
