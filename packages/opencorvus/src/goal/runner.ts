@@ -695,27 +695,6 @@ ${compactPlanContext(input.plan)}`,
 }
 
 /**
- * Extract delivery diffs via the Snapshot subsystem.
- *
- * Snapshot uses a project-scoped git-dir at `data/snapshot/<project.id>/`,
- * completely decoupled from the user project's own `.git` and from the
- * per-goal worktree's HEAD. Each `Snapshot.track()` call uses a private
- * `GIT_INDEX_FILE=index-<ts>-<rand>` so concurrent goals cannot corrupt
- * each other's staging state.
- *
- * Caller contract: must wrap with `Instance.provide({ directory: worktreeDir, ... })`
- * so that `Snapshot.track()` reads files from the per-goal worktree. The
- * `baseRef` must have been captured (also inside `Instance.provide(worktreeDir)`)
- * immediately before the executor started — otherwise there is no stable
- * "before" tree to diff against, and the result is meaningless.
- *
- * Why not `git add -A; git diff --cached HEAD` on the worktree's own git?
- * Because it depends on the worktree's HEAD being the exact "pre-execution"
- * tree. If the executor (or any hook) advances HEAD, the diff collapses to
- * empty — silently producing a false-negative delivery. Snapshot tree-hash
- * diffs are immune: `baseRef` is a committed tree hash, immutable.
- */
-/**
  * Remove nested `.git` entries anywhere under `worktreeDir` except the
  * worktree's own `.git` at the root.
  *
@@ -760,25 +739,113 @@ export async function stripNestedGitDirs(worktreeDir: string): Promise<string[]>
   return stripped
 }
 
-export async function deliveryFromSnapshot(
+/**
+ * Extract goal delivery from the worktree's own git.
+ *
+ * The per-goal worktree is already a proper git worktree (see
+ * `Worktree.create`) with its own index + HEAD + branch
+ * `refs/heads/opencorvus/<goal-branch>`. We use it as the single source of
+ * truth for delivery extraction:
+ *
+ *   1. strip any nested `.git` dirs introduced by scaffolding tools
+ *   2. `git add -A`   — stages every executor-written file (tracked or not)
+ *   3. if anything is staged → `git commit`; else mergeRef == baseRef
+ *   4. diff `baseRef..mergeRef` via `git diff --name-status` / `--numstat`
+ *      / `git show <ref>:<file>` to build the FileDiff[] payload
+ *
+ * Rule 22: previously `Snapshot.track()` captured tree hashes into a
+ * separate git-dir at `data/snapshot/<project.id>/`. Those hashes were
+ * dangling, and the hourly `snapshot.cleanup` (running
+ * `git gc --prune=now`) collected them mid-task, so retries of long-lived
+ * goals diffed against a pruned baseRef and saw "zero file changes"
+ * forever (tsk_db1220dfa001J5fzmxG0Q9dIyX goal #4). The worktree branch
+ * keeps baseRef reachable — gc never prunes it — and removes the second
+ * diff mechanism entirely for the per-goal path. `Snapshot.patch/restore/
+ * revert` is still used by `session/processor.ts` and
+ * `executor/managed.ts` for standalone single-agent flows that have no
+ * worktree.
+ *
+ * Caller contract: must wrap with `Instance.provide({ directory: worktreeDir })`
+ * so `$.cwd(Instance.directory)` runs inside the worktree. `baseRef` is
+ * captured by goal-pool via `git rev-parse HEAD` in the worktree before
+ * the executor starts.
+ */
+export async function deliveryFromWorktree(
   baseRef: string | undefined,
   prefix: string,
 ): Promise<{ mergeRef: string | undefined; delivery: { summary: string; commitRef?: string; diffs: z.infer<typeof Snapshot.FileDiff>[] } }> {
   if (!baseRef) {
-    throw new Error("deliveryFromSnapshot: baseRef is required — it must be captured via Snapshot.track() BEFORE executor starts, inside Instance.provide({ directory: worktreeDir }). Missing baseRef means the upstream dispatch code forgot to snapshot the pre-execution tree.")
+    throw new Error("deliveryFromWorktree: baseRef is required — goal-pool must capture it via `git rev-parse HEAD` in the worktree before executor start.")
   }
   const stripped = await stripNestedGitDirs(Instance.worktree)
   if (stripped.length > 0) {
-    log.info("stripped nested .git before delivery snapshot", { count: stripped.length, paths: stripped })
+    log.info("stripped nested .git before delivery", { count: stripped.length, paths: stripped })
   }
-  const mergeRef = await Snapshot.track()
-  if (!mergeRef) {
-    throw new Error("deliveryFromSnapshot: Snapshot.track() returned empty — the project is not a git repo or snapshot is disabled in config, which is incompatible with per-goal worktree delivery extraction.")
+  const cwd = Instance.directory
+
+  // Stage EVERY change the executor made — tracked modifications AND
+  // untracked files. `-A` is deliberate: if we only staged modified, a
+  // file the executor created anew (common case) would never show up
+  // in the commit and silently become "zero file changes".
+  const addResult = await $`git add -A`.quiet().cwd(cwd).nothrow()
+  if (addResult.exitCode !== 0) {
+    const stderr = addResult.stderr.toString().trim() || addResult.stdout.toString().trim() || "git add failed"
+    throw new Error(`deliveryFromWorktree: git add -A failed: ${stderr}`)
   }
-  const rawDiffs = await Snapshot.diffFull(baseRef, mergeRef)
+
+  // Anything actually staged?
+  const status = (
+    await $`git status --porcelain`.quiet().cwd(cwd).nothrow().text()
+  ).trim()
+
+  let mergeRef: string = baseRef
+  let commitRef: string | undefined
+
+  if (status.length > 0) {
+    // Gitlink safety: a staged entry in mode 160000 is a submodule pointer,
+    // which captures a SHA only — not the underlying files. Reaching this
+    // with gitlinks present means `stripNestedGitDirs` missed a nested
+    // `.git` (e.g. a .git *file* pointer from `git worktree add` inside a
+    // scaffolded subdir). Fail loud: the scaffold path must be fixed, not
+    // silently shipped as an empty pointer.
+    const lsResult = await $`git ls-files --stage`.quiet().cwd(cwd).nothrow()
+    const gitlinks = lsResult.stdout
+      .toString()
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("160000 "))
+      .map((l) => l.split("\t")[1] ?? "")
+      .filter(Boolean)
+    if (gitlinks.length > 0) {
+      throw new Error(
+        `deliveryFromWorktree: delivery contains submodule pointer(s) instead of real files: ${gitlinks.join(", ")}. This happens when a nested .git survived stripNestedGitDirs(). Fix the stripping logic; do not commit gitlinks.`,
+      )
+    }
+
+    const commitMessage = `${prefix} delivery`
+    const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${commitMessage}`
+      .quiet()
+      .cwd(cwd)
+      .nothrow()
+    if (commitResult.exitCode !== 0) {
+      const stderr = commitResult.stderr.toString().trim() || commitResult.stdout.toString().trim() || "git commit failed"
+      throw new Error(`deliveryFromWorktree: git commit failed: ${stderr}`)
+    }
+    const head = (
+      await $`git rev-parse HEAD`.quiet().cwd(cwd).nothrow().text()
+    ).trim()
+    if (!head) {
+      throw new Error("deliveryFromWorktree: git rev-parse HEAD returned empty after commit")
+    }
+    mergeRef = head
+    commitRef = head
+  }
+
+  const rawDiffs = mergeRef !== baseRef
+    ? await collectWorktreeFileDiffs(cwd, baseRef, mergeRef)
+    : []
   const diffs = filterDeliveryDiffs(rawDiffs)
-  const commitRef = diffs.length > 0 ? await createGoalDeliveryCommit(diffs, prefix) : undefined
-  log.info("snapshot delivery extracted", { baseRef, mergeRef, files: diffs.length, fileNames: diffs.map((d) => d.file) })
+  log.info("worktree delivery extracted", { baseRef, mergeRef, files: diffs.length, fileNames: diffs.map((d) => d.file) })
   return {
     mergeRef,
     delivery: {
@@ -789,58 +856,66 @@ export async function deliveryFromSnapshot(
   }
 }
 
-export async function createGoalDeliveryCommit(
-  diffs: Array<{ file: string; status?: string }>,
-  prefix: string,
-): Promise<string> {
-  const files = [...new Set(diffs.map((item) => item.file).filter(Boolean))]
-  if (files.length === 0) {
-    throw new Error("createGoalDeliveryCommit: delivery has no files to commit")
+/**
+ * Build a FileDiff[] (same shape as Snapshot.diffFull returned) from
+ * `baseRef..mergeRef` in the worktree's own git. No separate git-dir,
+ * no temp index. Matches `Snapshot.diffFull`'s three-step pattern:
+ * name-status for the added/deleted/modified classification, numstat
+ * for line counts (and binary detection), `git show` per file for the
+ * before/after blobs.
+ */
+async function collectWorktreeFileDiffs(
+  cwd: string,
+  from: string,
+  to: string,
+): Promise<z.infer<typeof Snapshot.FileDiff>[]> {
+  const result: z.infer<typeof Snapshot.FileDiff>[] = []
+  const status = new Map<string, "added" | "deleted" | "modified">()
+
+  const statuses = (
+    await $`git -c core.quotepath=false diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
+      .quiet()
+      .cwd(cwd)
+      .nothrow()
+      .text()
+  ).trim()
+  for (const line of statuses.split("\n")) {
+    if (!line) continue
+    const [code, file] = line.split("\t")
+    if (!code || !file) continue
+    const kind = code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified"
+    status.set(file, kind)
   }
 
-  const addResult = await $`git add -A -- ${files}`.quiet().cwd(Instance.directory).nothrow()
-  if (addResult.exitCode !== 0) {
-    const stderr = addResult.stderr.toString().trim() || addResult.stdout.toString().trim() || "git add failed"
-    throw new Error(`createGoalDeliveryCommit: git add failed: ${stderr}`)
+  const numstat = (
+    await $`git -c core.quotepath=false diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
+      .quiet()
+      .cwd(cwd)
+      .nothrow()
+      .text()
+  ).trim()
+  for (const line of numstat.split("\n")) {
+    if (!line) continue
+    const [additions, deletions, file] = line.split("\t")
+    if (!file) continue
+    const isBinary = additions === "-" && deletions === "-"
+    const before = isBinary
+      ? ""
+      : (await $`git show ${from}:${file}`.quiet().cwd(cwd).nothrow().text())
+    const after = isBinary
+      ? ""
+      : (await $`git show ${to}:${file}`.quiet().cwd(cwd).nothrow().text())
+    const added = isBinary ? 0 : parseInt(additions)
+    const deleted = isBinary ? 0 : parseInt(deletions)
+    result.push({
+      file,
+      before,
+      after,
+      additions: Number.isFinite(added) ? added : 0,
+      deletions: Number.isFinite(deleted) ? deleted : 0,
+      status: status.get(file) ?? "modified",
+    })
   }
-
-  // Invariant: staged entries must be regular files, not gitlinks. Mode 160000
-  // is a submodule pointer — it captures only a SHA, never the underlying
-  // files. Reaching this branch means stripNestedGitDirs() missed a nested
-  // `.git` (e.g. a .git *file* pointer or a race); fail loud so the scaffold
-  // path is fixed rather than silently shipping an empty submodule pointer.
-  const lsResult = await $`git ls-files --stage -- ${files}`.quiet().cwd(Instance.directory).nothrow()
-  if (lsResult.exitCode !== 0) {
-    const stderr = lsResult.stderr.toString().trim() || lsResult.stdout.toString().trim() || "git ls-files failed"
-    throw new Error(`createGoalDeliveryCommit: git ls-files failed: ${stderr}`)
-  }
-  const gitlinks = lsResult.stdout
-    .toString()
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.startsWith("160000 "))
-    .map((l) => l.split("\t")[1] ?? "")
-    .filter(Boolean)
-  if (gitlinks.length > 0) {
-    throw new Error(
-      `createGoalDeliveryCommit: delivery contains submodule pointer(s) instead of real files: ${gitlinks.join(", ")}. This happens when a nested .git (from create-next-app, vite create, npm init, etc.) survived stripNestedGitDirs(). Fix the stripping logic; do not commit gitlinks.`,
-    )
-  }
-
-  const commitMessage = `${prefix} delivery`
-  const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${commitMessage}`
-    .quiet()
-    .cwd(Instance.directory)
-    .nothrow()
-  if (commitResult.exitCode !== 0) {
-    const stderr = commitResult.stderr.toString().trim() || commitResult.stdout.toString().trim() || "git commit failed"
-    throw new Error(`createGoalDeliveryCommit: git commit failed: ${stderr}`)
-  }
-
-  const revParse = await $`git rev-parse HEAD`.quiet().cwd(Instance.directory).nothrow().text()
-  const commitRef = revParse.trim()
-  if (!commitRef) {
-    throw new Error("createGoalDeliveryCommit: git rev-parse HEAD returned empty")
-  }
-  return commitRef
+  return result
 }
+
