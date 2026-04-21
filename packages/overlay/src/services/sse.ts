@@ -13,7 +13,6 @@
 import { apiUrl } from "./api";
 import { clearEventQueue, syncTask, setSseConnected } from "../store/messages";
 import { boardStore, loadBoard } from "../store/board";
-import { cardTreeStore } from "../store/card-tree";
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events";
 
 let sseSource: EventSource | null = null;
@@ -23,27 +22,17 @@ export function startSSE(taskID: string) {
   stopSSE();
   setSseConnected(false);
 
-  // `after` decides how far back the server replays. loadBoard() sets
-  // boardStore.taskSequence to the board endpoint's lastSequence, which
-  // was intended as "I already have state up to here, only send me
-  // deltas." But cardTreeStore is populated exclusively by writeToTree
-  // from SSE events — loadBoard doesn't touch it. So if we use
-  // taskSequence naïvely, a fresh task-switch (resetWriter() cleared the
-  // card tree) receives ZERO replayed events and the conversation panel
-  // shows only the goal cards that loadBoard drew directly, losing the
-  // entire assistant / tool / message history.
-  //
-  // Guard: when the card tree is empty (reset-after-switch, post-reload,
-  // any resetWriter path), force after=0 so the server replays the full
-  // per-task event log into writeToTree. writeToTree is idempotent by
-  // event id, so re-applying events that loadBoard already reflected
-  // is safe.
-  const hasExistingCards = cardTreeStore.order.length > 0;
-  const after = hasExistingCards ? Number(boardStore.taskSequence || 0) : 0;
-  const path = after > 0
-    ? `task/${encodeURIComponent(taskID)}/events?after=${after}`
-    : `task/${encodeURIComponent(taskID)}/events`;
-  const url = apiUrl(path);
+  // SSE is the single source of truth for step/part/message cards, which are
+  // built exclusively by tree-writer from these events. The server replays
+  // persisted protocol_event rows on connect, and writeToTree is idempotent
+  // by event id — so we always ask for the full history (after=0). The
+  // previous "resume from boardStore.taskSequence when cardTreeStore has
+  // entries" was double-sourcing with the /task/:id/board snapshot (a
+  // separate view for task header / interactions / vcs). They used the
+  // same sequence but populated different stores, and any race where the
+  // board populated first made SSE skip every persisted event — leaving
+  // only goal cards drawn by loadBoard. Single source, full replay.
+  const url = apiUrl(`task/${encodeURIComponent(taskID)}/events`);
 
   const source = new EventSource(url);
   sseSource = source;
