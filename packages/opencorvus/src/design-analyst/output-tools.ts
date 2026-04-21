@@ -1,111 +1,200 @@
 /**
  * Structured output tools for the Design Analyst Agent.
  *
- * Same pattern as requirements/output-tools.ts — the LLM registers each design
- * element via a Zod-validated tool call. Benefits:
+ * Every registered spec is advisory — it ends up as a `VisualSpec` row on
+ * `engine_task.design_specs`, read by delivery as a checklist. There is no
+ * scorer, no automatic verification, no gate. The tools exist to force the
+ * LLM to:
  *
- * ① Schema validation per call — required fields, enums, min lengths enforced
- * ② Incremental — LLM registers one section/token/component at a time
- * ③ Completeness checks — finalize validates coverage
- * ④ No text-parsing fallback (CLAUDE.md "no fallback" rule)
+ * ① Name a category up front (pick the right register_*_spec tool)
+ * ② Fill category-appropriate fields (hex value, font metric, px value, …)
+ * ③ Give a stable id + an actionable applies_to + severity
+ * ④ Enumerate every region/token/component (finalize gates coverage)
+ *
+ * Category splitting is a UX choice for the LLM, not a persistence choice —
+ * every tool writes the same `VisualSpec` shape.
  */
 import { tool } from "ai"
 import z from "zod"
-import type {
-  LayoutSection,
-  StyleToken,
-  UIComponent,
-  InteractionPattern,
-  ResponsiveRule,
-  DesignAnalysis,
-} from "./types"
+import type { VisualSpec, VisualSpecCategory } from "./types"
 
 // ---------------------------------------------------------------------------
-// Collector
+// Collector — private. Callers read through getSpecs() / getStats().
 // ---------------------------------------------------------------------------
 
-export interface DesignCollector {
-  layout: LayoutSection[]
-  tokens: StyleToken[]
-  components: UIComponent[]
-  interactions: InteractionPattern[]
-  responsive: ResponsiveRule[]
-  summary: string
-  sourceType: "image" | "url" | "both"
-  sourceUrl?: string
+interface Collector {
+  specs: VisualSpec[]
   designSystem: string
   techStack: string[]
   finalized: boolean
 }
 
-function emptyCollector(): DesignCollector {
-  return {
-    layout: [],
-    tokens: [],
-    components: [],
-    interactions: [],
-    responsive: [],
-    summary: "",
-    sourceType: "image",
-    sourceUrl: undefined,
-    designSystem: "",
-    techStack: [],
-    finalized: false,
-  }
+function emptyCollector(): Collector {
+  return { specs: [], designSystem: "", techStack: [], finalized: false }
 }
 
 // ---------------------------------------------------------------------------
-// Zod schemas for tool inputs
+// Common field pieces
 // ---------------------------------------------------------------------------
 
-const LayoutSectionSchema = z.object({
-  id: z.string().min(1).describe("Unique section ID, e.g., 'header', 'sidebar-left', 'main-content'"),
-  type: z.enum([
-    "header", "nav", "sidebar", "hero", "content", "card-grid", "list",
-    "form", "footer", "modal", "toolbar", "panel", "custom",
-  ]).describe("Semantic section type"),
-  position: z.string().min(1).describe("Position description, e.g., 'top fixed', 'left 280px'"),
-  dimensions: z.string().min(1).describe("Size description, e.g., 'full-width 64px height', '280px width 100vh'"),
-  layout_method: z.enum(["flex", "grid", "absolute", "fixed", "sticky", "flow"])
-    .describe("CSS layout method used"),
-  children: z.array(z.string()).default([]).describe("Child section IDs (for nested layout tree)"),
-  notes: z.string().default("").describe("Implementation notes — borders, backgrounds, overflow, z-index"),
+const IdField = z
+  .string()
+  .min(1)
+  .regex(/^vis-[a-z0-9][a-z0-9-]*$/, "id must start with 'vis-' and contain only [a-z0-9-]")
+  .describe("Stable spec id, e.g. 'vis-color-primary', 'vis-comp-nav-button'")
+
+const AppliesToField = z
+  .string()
+  .min(1)
+  .describe("Target description — component id, CSS selector, or section reference the constraint applies to")
+
+const SeverityField = z
+  .enum(["must", "should"])
+  .describe("'must' for hard design contracts (exact hex / precise layout); 'should' for soft preferences")
+
+const RationaleField = z
+  .string()
+  .optional()
+  .describe("Why this matters (include only when non-obvious from the constraint itself)")
+
+// ---------------------------------------------------------------------------
+// Per-category tool input schemas — each compiles to the same VisualSpec row
+// ---------------------------------------------------------------------------
+
+const ColorSchema = z.object({
+  id: IdField,
+  title: z.string().min(1).describe("Human label, e.g. 'Primary button background'"),
+  hex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{3,8}$/, "hex must be #rgb, #rgba, #rrggbb, or #rrggbbaa")
+    .describe("Exact color value in hex"),
+  role: z
+    .enum([
+      "primary", "secondary", "accent",
+      "background", "surface", "text", "border",
+      "error", "success", "warning", "other",
+    ])
+    .describe("Semantic role of the color"),
+  applies_to: AppliesToField,
+  severity: SeverityField,
+  rationale: RationaleField,
 })
 
-const StyleTokenSchema = z.object({
-  category: z.enum([
-    "color-primary", "color-secondary", "color-accent",
-    "color-background", "color-surface", "color-text", "color-border",
-    "color-error", "color-success", "color-warning",
-    "typography-heading", "typography-body", "typography-mono", "typography-caption",
-    "spacing", "border-radius", "shadow", "transition",
-  ]).describe("Token category"),
-  name: z.string().min(1).describe("Human-readable token name, e.g., 'primary-blue', 'heading-xl'"),
-  value: z.string().min(1).describe("CSS-ready value, e.g., '#3B82F6', 'Inter 24px/32px 700'"),
-  usage: z.string().min(1).describe("Where this token is used"),
+const TypographySchema = z.object({
+  id: IdField,
+  title: z.string().min(1).describe("Human label, e.g. 'Page heading', 'Body text'"),
+  font_family: z.string().min(1).describe("e.g. 'Inter', 'SF Pro Display'"),
+  font_size_px: z.number().positive().describe("Font size in px"),
+  font_weight: z.number().int().min(100).max(900).describe("Font weight, 100-900"),
+  line_height_px: z.number().positive().optional().describe("Line height in px, if discernible"),
+  letter_spacing: z.string().optional().describe("Letter spacing, e.g. '-0.01em', '0.5px'"),
+  applies_to: AppliesToField,
+  severity: SeverityField,
+  rationale: RationaleField,
 })
 
-const UIComponentSchema = z.object({
-  id: z.string().min(1).describe("Unique component ID, e.g., 'nav-button', 'user-card', 'search-input'"),
-  type: z.string().min(1).describe("Component type, e.g., 'button', 'card', 'data-table', 'chart'"),
-  variant: z.string().default("default").describe("Visual variant, e.g., 'primary', 'outlined', 'ghost'"),
-  props: z.string().min(1).describe("Key props, states, slots this component needs"),
-  section_id: z.string().min(1).describe("Layout section ID that contains this component"),
-  notes: z.string().default("").describe("Content, behavior, constraints, styling details"),
+const SpacingSchema = z.object({
+  id: IdField,
+  title: z.string().min(1).describe("Human label, e.g. 'Card inner padding', 'Section gap'"),
+  property: z.enum(["margin", "padding", "gap", "inset"]).describe("Which spacing property"),
+  value_px: z.number().nonnegative().describe("Value in px"),
+  side: z.enum(["all", "top", "right", "bottom", "left", "vertical", "horizontal"]).default("all"),
+  applies_to: AppliesToField,
+  severity: SeverityField,
+  rationale: RationaleField,
+})
+
+const LayoutSchema = z.object({
+  id: IdField,
+  title: z.string().min(1).describe("Human label, e.g. 'Header bar', 'Left sidebar'"),
+  section_role: z
+    .enum([
+      "header", "nav", "sidebar", "hero", "content", "card-grid", "list",
+      "form", "footer", "modal", "toolbar", "panel", "other",
+    ])
+    .describe("Semantic section role"),
+  position: z.string().min(1).describe("e.g. 'top fixed', 'left 280px', 'centered below hero'"),
+  dimensions: z.string().min(1).describe("e.g. 'full-width 64px height', '280px width 100vh'"),
+  layout_method: z.enum(["flex", "grid", "absolute", "fixed", "sticky", "flow"]),
+  parent_id: z.string().optional().describe("Parent layout spec id if this section nests inside another"),
+  applies_to: AppliesToField,
+  severity: SeverityField,
+  rationale: RationaleField,
+})
+
+const ComponentSchema = z.object({
+  id: IdField,
+  title: z.string().min(1).describe("Human label, e.g. 'Primary CTA button'"),
+  component_type: z.string().min(1).describe("e.g. 'button', 'card', 'data-table', 'search-input'"),
+  variant: z.string().default("default").describe("e.g. 'primary', 'ghost', 'outlined'"),
+  within_layout_id: z
+    .string()
+    .optional()
+    .describe("Layout spec id this component sits inside (should reference a register_layout_spec id)"),
+  visual_refs: z
+    .array(z.string().min(1))
+    .default([])
+    .describe("Other spec ids this component MUST satisfy — e.g. color/typography/spacing ids that style it"),
+  props: z.string().min(1).describe("Key props / states / slots this component needs"),
+  applies_to: AppliesToField,
+  severity: SeverityField,
+  rationale: RationaleField,
 })
 
 const InteractionSchema = z.object({
-  trigger: z.string().min(1).describe("What triggers it: hover, click, scroll, drag, focus, resize"),
-  effect: z.string().min(1).describe("Visual effect: dropdown, modal, tooltip, fade, slide, collapse"),
-  target_component_ids: z.array(z.string().min(1)).min(1).describe("Component IDs affected"),
-  description: z.string().min(1).describe("Full description of the interaction behavior"),
+  id: IdField,
+  title: z.string().min(1).describe("Human label, e.g. 'Card hover shadow', 'Dropdown on click'"),
+  trigger: z.enum(["hover", "click", "focus", "scroll", "drag", "resize", "keypress"]),
+  effect: z.string().min(1).describe("e.g. 'shadow lifts to md', 'dropdown expands 240px', 'card scales 1.02'"),
+  target_component_ids: z.array(z.string().min(1)).min(1).describe("Component spec ids affected"),
+  applies_to: AppliesToField,
+  severity: SeverityField,
+  rationale: RationaleField,
 })
 
 const ResponsiveSchema = z.object({
-  breakpoint: z.string().min(1).describe("Breakpoint expression, e.g., '< 768px', '768px-1024px'"),
-  layout_changes: z.string().min(1).describe("What changes at this breakpoint"),
-  affected_section_ids: z.array(z.string()).min(1).describe("Section IDs that change"),
+  id: IdField,
+  title: z.string().min(1).describe("Human label, e.g. 'Mobile sidebar collapse'"),
+  breakpoint: z.string().min(1).describe("e.g. '< 768px', '768px-1024px', '>= 1280px'"),
+  change: z.string().min(1).describe("What changes at this breakpoint"),
+  affected_layout_ids: z.array(z.string().min(1)).min(1).describe("Layout spec ids that change"),
+  applies_to: AppliesToField,
+  severity: SeverityField,
+  rationale: RationaleField,
 })
+
+// ---------------------------------------------------------------------------
+// Row builders — each flattens its category-specific schema into a VisualSpec
+// ---------------------------------------------------------------------------
+
+function buildRequirement(category: VisualSpecCategory, input: Record<string, unknown>): string {
+  switch (category) {
+    case "color":
+      return `${input.role} = ${input.hex}`
+    case "typography": {
+      const lh = input.line_height_px ? `/${input.line_height_px}px` : ""
+      const ls = input.letter_spacing ? ` ${input.letter_spacing}` : ""
+      return `${input.font_family} ${input.font_weight} ${input.font_size_px}px${lh}${ls}`
+    }
+    case "spacing":
+      return `${input.property}-${input.side} = ${input.value_px}px`
+    case "layout": {
+      const parent = input.parent_id ? ` inside ${input.parent_id}` : ""
+      return `${input.section_role} [${input.layout_method}] @ ${input.position}, ${input.dimensions}${parent}`
+    }
+    case "component": {
+      const refs = Array.isArray(input.visual_refs) && input.visual_refs.length > 0
+        ? ` · refs=[${(input.visual_refs as string[]).join(", ")}]`
+        : ""
+      const layout = input.within_layout_id ? ` · in=${input.within_layout_id}` : ""
+      return `${input.component_type}/${input.variant} — ${input.props}${layout}${refs}`
+    }
+    case "interaction":
+      return `${input.trigger} → ${input.effect} on [${(input.target_component_ids as string[]).join(", ")}]`
+    case "responsive":
+      return `${input.breakpoint}: ${input.change} (layouts=[${(input.affected_layout_ids as string[]).join(", ")}])`
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Tool factory
@@ -114,250 +203,199 @@ const ResponsiveSchema = z.object({
 export function createDesignOutputTools() {
   let collector = emptyCollector()
 
+  function assertIdFree(id: string): string | null {
+    if (collector.specs.some((s) => s.id === id)) return `Error: spec id "${id}" already registered`
+    return null
+  }
+
+  function assertIdsExist(ids: readonly string[], label: string): string | null {
+    const missing = ids.filter((id) => !collector.specs.some((s) => s.id === id))
+    if (missing.length === 0) return null
+    return `Error: ${label} not registered: [${missing.join(", ")}] — register them first`
+  }
+
+  function push(category: VisualSpecCategory, input: any): string {
+    const spec: VisualSpec = {
+      id: input.id,
+      category,
+      title: input.title,
+      requirement: buildRequirement(category, input),
+      applies_to: input.applies_to,
+      severity: input.severity,
+      rationale: input.rationale,
+    }
+    collector.specs.push(spec)
+    return `OK: ${category} spec "${input.id}" registered (${collector.specs.length} total)`
+  }
+
   const tools = {
-    register_layout_section: tool({
+    register_color_spec: tool({
       description:
-        "Register a layout section identified in the design. " +
-        "Build the layout tree top-down: register parent sections before children. " +
-        "Every visible region must be registered.",
-      inputSchema: LayoutSectionSchema,
+        "Register an exact color constraint from the visual input. Use EXACT hex values (eyedrop the image — no 'approximately blue'). Every distinct color surface must be registered.",
+      inputSchema: ColorSchema,
+      execute: async (input) => assertIdFree(input.id) ?? push("color", input),
+    }),
+
+    register_typography_spec: tool({
+      description:
+        "Register an exact typography constraint (font family + size + weight, plus line-height and letter-spacing when discernible). Every distinct typographic role — headings, body, captions, mono, labels — must be registered.",
+      inputSchema: TypographySchema,
+      execute: async (input) => assertIdFree(input.id) ?? push("typography", input),
+    }),
+
+    register_spacing_spec: tool({
+      description:
+        "Register an exact spacing constraint (margin / padding / gap / inset). Measure from the image; round to the underlying scale the design uses (often 4 / 8 px).",
+      inputSchema: SpacingSchema,
+      execute: async (input) => assertIdFree(input.id) ?? push("spacing", input),
+    }),
+
+    register_layout_spec: tool({
+      description:
+        "Register a layout section (header, sidebar, hero, etc.) with position + dimensions + layout method. Register parents before children and reference parents via parent_id to build the layout tree.",
+      inputSchema: LayoutSchema,
       execute: async (input) => {
-        if (collector.layout.some(s => s.id === input.id)) {
-          return `Error: section "${input.id}" already registered`
+        const existErr = assertIdFree(input.id)
+        if (existErr) return existErr
+        if (input.parent_id) {
+          const parentErr = assertIdsExist([input.parent_id], "parent layout")
+          if (parentErr) return parentErr
+          const parent = collector.specs.find((s) => s.id === input.parent_id)
+          if (parent && parent.category !== "layout") {
+            return `Error: parent_id "${input.parent_id}" is category "${parent.category}" — must be a layout spec`
+          }
         }
-        // Validate parent references in children
-        const missingChildren = input.children.filter(
-          c => !collector.layout.some(s => s.id === c),
-        )
-        const section: LayoutSection = {
-          id: input.id,
-          type: input.type,
-          position: input.position,
-          dimensions: input.dimensions,
-          layoutMethod: input.layout_method,
-          children: input.children,
-          notes: input.notes,
-        }
-        collector.layout.push(section)
-        let msg = `OK: section "${input.id}" registered (${collector.layout.length} total)`
-        if (missingChildren.length > 0) {
-          msg += `\nNote: children [${missingChildren.join(", ")}] not yet registered — register them next.`
-        }
-        return msg
+        return push("layout", input)
       },
     }),
 
-    register_style_token: tool({
+    register_component_spec: tool({
       description:
-        "Register a design token (color, typography, spacing, shadow, etc.). " +
-        "Use EXACT values extracted from the visual input. " +
-        "Register ALL tokens — a missed color means a wrong implementation.",
-      inputSchema: StyleTokenSchema,
+        "Register a UI component (button, card, nav item, input, badge, chart, etc.). Reference the layout it lives in via within_layout_id and list the color/typography/spacing spec ids that style it via visual_refs.",
+      inputSchema: ComponentSchema,
       execute: async (input) => {
-        const token: StyleToken = {
-          category: input.category,
-          name: input.name,
-          value: input.value,
-          usage: input.usage,
+        const existErr = assertIdFree(input.id)
+        if (existErr) return existErr
+        if (input.within_layout_id) {
+          const layoutErr = assertIdsExist([input.within_layout_id], "within_layout_id")
+          if (layoutErr) return layoutErr
+          const layout = collector.specs.find((s) => s.id === input.within_layout_id)
+          if (layout && layout.category !== "layout") {
+            return `Error: within_layout_id "${input.within_layout_id}" is category "${layout.category}" — must be a layout spec`
+          }
         }
-        collector.tokens.push(token)
-        return `OK: token "${input.name}" (${input.category}) registered (${collector.tokens.length} total)`
+        if (input.visual_refs.length > 0) {
+          const refErr = assertIdsExist(input.visual_refs, "visual_refs")
+          if (refErr) return refErr
+        }
+        return push("component", input)
       },
     }),
 
-    register_component: tool({
+    register_interaction_spec: tool({
       description:
-        "Register a UI component identified in the design. " +
-        "Every interactive element, content card, navigation item, form field, " +
-        "and data display must be registered as a component.",
-      inputSchema: UIComponentSchema,
-      execute: async (input) => {
-        if (collector.components.some(c => c.id === input.id)) {
-          return `Error: component "${input.id}" already registered`
-        }
-        if (!collector.layout.some(s => s.id === input.section_id)) {
-          return `Error: section_id "${input.section_id}" not registered — register the layout section first`
-        }
-        const component: UIComponent = {
-          id: input.id,
-          type: input.type,
-          variant: input.variant,
-          props: input.props,
-          sectionId: input.section_id,
-          notes: input.notes,
-        }
-        collector.components.push(component)
-        return `OK: component "${input.id}" (${input.type}) registered (${collector.components.length} total)`
-      },
-    }),
-
-    register_interaction: tool({
-      description:
-        "Register an interaction pattern (hover effect, click action, animation, etc.). " +
-        "Include both observed and inferred interactions.",
+        "Register an interaction pattern (hover / click / focus / scroll effect). target_component_ids must all reference registered component specs.",
       inputSchema: InteractionSchema,
       execute: async (input) => {
-        const missing = input.target_component_ids.filter(
-          id => !collector.components.some(c => c.id === id),
-        )
-        if (missing.length > 0) {
-          return `Error: target components not registered: ${missing.join(", ")} — register components first`
+        const existErr = assertIdFree(input.id)
+        if (existErr) return existErr
+        const refErr = assertIdsExist(input.target_component_ids, "target_component_ids")
+        if (refErr) return refErr
+        for (const cid of input.target_component_ids) {
+          const comp = collector.specs.find((s) => s.id === cid)
+          if (comp && comp.category !== "component") {
+            return `Error: target_component_id "${cid}" is category "${comp.category}" — must be a component spec`
+          }
         }
-        const interaction: InteractionPattern = {
-          trigger: input.trigger,
-          effect: input.effect,
-          targetComponentIds: input.target_component_ids,
-          description: input.description,
-        }
-        collector.interactions.push(interaction)
-        return `OK: interaction registered (${collector.interactions.length} total)`
+        return push("interaction", input)
       },
     }),
 
-    register_responsive_rule: tool({
+    register_responsive_spec: tool({
       description:
-        "Register a responsive breakpoint rule. " +
-        "Describe how the layout changes at each breakpoint.",
+        "Register a responsive rule — what changes at a given breakpoint. affected_layout_ids must reference registered layout specs.",
       inputSchema: ResponsiveSchema,
       execute: async (input) => {
-        const missing = input.affected_section_ids.filter(
-          id => !collector.layout.some(s => s.id === id),
-        )
-        if (missing.length > 0) {
-          return `Warning: sections not registered: ${missing.join(", ")}`
+        const existErr = assertIdFree(input.id)
+        if (existErr) return existErr
+        const refErr = assertIdsExist(input.affected_layout_ids, "affected_layout_ids")
+        if (refErr) return refErr
+        for (const lid of input.affected_layout_ids) {
+          const layout = collector.specs.find((s) => s.id === lid)
+          if (layout && layout.category !== "layout") {
+            return `Error: affected_layout_id "${lid}" is category "${layout.category}" — must be a layout spec`
+          }
         }
-        const rule: ResponsiveRule = {
-          breakpoint: input.breakpoint,
-          layoutChanges: input.layout_changes,
-          affectedSectionIds: input.affected_section_ids,
-        }
-        collector.responsive.push(rule)
-        return `OK: responsive rule for "${input.breakpoint}" registered (${collector.responsive.length} total)`
+        return push("responsive", input)
       },
     }),
 
-    finalize_design_analysis: tool({
+    finalize_design_requirements: tool({
       description:
-        "Validate design analysis completeness and finalize. " +
-        "Call AFTER registering all layout sections, tokens, components, interactions, and responsive rules.",
+        "Finalize the visual contract. Call AFTER registering every color, typography, spacing, layout, component, interaction, and responsive spec you identified in the design.",
       inputSchema: z.object({
-        summary: z.string().min(5).describe("One-line summary of the design"),
-        source_type: z.enum(["image", "url", "both"]).describe("Input source type"),
-        source_url: z.string().optional().describe("Source URL if applicable"),
-        design_system: z.string().min(1).describe("Detected design system or style description"),
-        tech_stack: z.array(z.string().min(1)).min(1).describe("Recommended tech stack: framework, CSS approach, component library"),
+        design_system: z.string().min(1).describe("Detected design system — e.g. 'Material 3', 'custom dark with teal accents'"),
+        tech_stack: z.array(z.string().min(1)).min(1).describe("Recommended stack: framework, CSS approach, component library"),
       }),
       execute: async (input) => {
-        collector.summary = input.summary
-        collector.sourceType = input.source_type
-        collector.sourceUrl = input.source_url
         collector.designSystem = input.design_system
         collector.techStack = input.tech_stack
 
         const issues: string[] = []
+        const byCat = (c: VisualSpecCategory) => collector.specs.filter((s) => s.category === c)
 
-        if (collector.layout.length === 0) {
-          issues.push("No layout sections registered — every visible region must be a section")
+        if (byCat("color").length < 2) {
+          issues.push(`Only ${byCat("color").length} color specs — register at least a primary + a background`)
         }
-        if (collector.tokens.length < 3) {
-          issues.push(`Only ${collector.tokens.length} style tokens — register at least colors + typography + spacing`)
+        if (byCat("typography").length === 0) {
+          issues.push("No typography specs — register at least one heading + body role")
         }
-        if (collector.components.length === 0) {
-          issues.push("No components registered — every interactive element must be a component")
+        if (byCat("layout").length === 0) {
+          issues.push("No layout specs — every distinct region must be a layout spec")
         }
-
-        // Validate layout tree integrity
-        const sectionIds = new Set(collector.layout.map(s => s.id))
-        for (const section of collector.layout) {
-          for (const childId of section.children) {
-            if (!sectionIds.has(childId)) {
-              issues.push(`Layout "${section.id}" references child "${childId}" which is not registered`)
-            }
-          }
+        if (byCat("component").length === 0) {
+          issues.push("No component specs — every interactive element / content surface must be a component spec")
         }
 
-        // Check that components reference valid sections
-        for (const comp of collector.components) {
-          if (!sectionIds.has(comp.sectionId)) {
-            issues.push(`Component "${comp.id}" references section "${comp.sectionId}" which is not registered`)
-          }
+        if (issues.length > 0) {
+          return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call finalize_design_requirements again.`
         }
 
-        // Check color token coverage
-        const colorTokens = collector.tokens.filter(t => t.category.startsWith("color-"))
-        if (colorTokens.length < 2) {
-          issues.push("Insufficient color tokens — register at least primary + background colors")
-        }
+        collector.finalized = true
+        const notes: string[] = []
+        if (byCat("interaction").length === 0) notes.push("Note: no interaction specs — consider hover/click/scroll if the design implies them.")
+        if (byCat("responsive").length === 0) notes.push("Note: no responsive specs — consider if the design has mobile/tablet rules.")
 
-        // Check typography coverage
-        const typoTokens = collector.tokens.filter(t => t.category.startsWith("typography-"))
-        if (typoTokens.length === 0) {
-          issues.push("No typography tokens — register at least heading + body font specifications")
-        }
-
-        // Validate interaction → component references
-        for (const inter of collector.interactions) {
-          for (const cid of inter.targetComponentIds) {
-            if (!collector.components.some(c => c.id === cid)) {
-              issues.push(`Interaction targeting "${cid}" — component not registered`)
-            }
-          }
-        }
-
-        if (issues.length === 0) {
-          collector.finalized = true
-          const warnings: string[] = []
-          if (collector.interactions.length === 0) {
-            warnings.push("Note: no interactions registered — consider if hover/click/scroll behaviors should be captured.")
-          }
-          if (collector.responsive.length === 0) {
-            warnings.push("Note: no responsive rules registered — consider if the design has mobile/tablet breakpoints.")
-          }
-          const result = [
-            "PASS: Design analysis complete.",
-            `  ${collector.layout.length} sections, ${collector.tokens.length} tokens,`,
-            `  ${collector.components.length} components, ${collector.interactions.length} interactions,`,
-            `  ${collector.responsive.length} responsive rules.`,
-            `  Design system: ${input.design_system}`,
-            `  Tech stack: ${input.tech_stack.join(", ")}`,
-          ]
-          if (warnings.length > 0) result.push("", ...warnings)
-          return result.join("\n")
-        }
-
-        return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call finalize_design_analysis again.`
+        const result = [
+          "PASS: Design contract ready.",
+          `  ${collector.specs.length} total specs — ` +
+            (["color","typography","spacing","layout","component","interaction","responsive"] as VisualSpecCategory[])
+              .map((c) => `${c}:${byCat(c).length}`).join(", "),
+          `  Design system: ${input.design_system}`,
+          `  Tech stack: ${input.tech_stack.join(", ")}`,
+        ]
+        if (notes.length > 0) result.push("", ...notes)
+        return result.join("\n")
       },
     }),
   }
 
   return {
     tools,
-    collector,
+    getSpecs(): VisualSpec[] {
+      return [...collector.specs]
+    },
+    isFinalized(): boolean {
+      return collector.finalized
+    },
+    getDesignSystem(): string {
+      return collector.designSystem
+    },
+    getTechStack(): string[] {
+      return [...collector.techStack]
+    },
     reset() {
       collector = emptyCollector()
-      return collector
     },
-    getCollector() {
-      return collector
-    },
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Convert collector → DesignAnalysis
-// ---------------------------------------------------------------------------
-
-export function collectorToAnalysis(collector: DesignCollector): DesignAnalysis {
-  return {
-    summary: collector.summary,
-    sourceType: collector.sourceType,
-    sourceUrl: collector.sourceUrl,
-    designSystem: collector.designSystem,
-    layout: [...collector.layout],
-    tokens: [...collector.tokens],
-    components: [...collector.components],
-    interactions: [...collector.interactions],
-    responsive: [...collector.responsive],
-    techStack: [...collector.techStack],
   }
 }

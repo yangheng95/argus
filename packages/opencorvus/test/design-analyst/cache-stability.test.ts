@@ -64,21 +64,24 @@ const dashscopeModel = {
 /** Call a register_* tool with a minimal but valid payload. */
 async function register(tools: any, kind: "section" | "token", i: number) {
   if (kind === "section") {
-    return await tools.register_layout_section.execute({
-      id: `sec-${i}`,
-      type: "content",
+    return await tools.register_layout_spec.execute({
+      id: `vis-sec-${i}`,
+      title: `section ${i}`,
+      section_role: "content",
       position: "top",
       dimensions: "100%",
       layout_method: "flex",
-      children: [],
-      notes: "",
+      applies_to: "body",
+      severity: "must",
     })
   }
-  return await tools.register_style_token.execute({
-    category: "color-background",
-    name: `tok-${i}`,
-    value: "#000000",
-    usage: "background",
+  return await tools.register_color_spec.execute({
+    id: `vis-tok-${i}`,
+    title: `token ${i}`,
+    hex: "#000000",
+    role: "background",
+    applies_to: "body",
+    severity: "must",
   })
 }
 
@@ -95,9 +98,9 @@ describe("H1: register_* tool results — counter determinism", () => {
     const out1 = await register(kit.tools, "section", 1)
     const out2 = await register(kit.tools, "section", 2)
     const out3 = await register(kit.tools, "token", 1)
-    expect(out1).toBe(`OK: section "sec-1" registered (1 total)`)
-    expect(out2).toBe(`OK: section "sec-2" registered (2 total)`)
-    expect(out3).toBe(`OK: token "tok-1" (color-background) registered (1 total)`)
+    expect(out1).toBe(`OK: layout spec "vis-sec-1" registered (1 total)`)
+    expect(out2).toBe(`OK: layout spec "vis-sec-2" registered (2 total)`)
+    expect(out3).toBe(`OK: color spec "vis-tok-1" registered (3 total)`)
   })
 
   test("FRESH collector restarts the counter — produces different history for the same call", async () => {
@@ -113,8 +116,8 @@ describe("H1: register_* tool results — counter determinism", () => {
     const kitB = createDesignOutputTools()
     const bFifth = await register(kitB.tools, "section", 5)
 
-    expect(aFifth).toBe(`OK: section "sec-5" registered (3 total)`)
-    expect(bFifth).toBe(`OK: section "sec-5" registered (1 total)`)
+    expect(aFifth).toBe(`OK: layout spec "vis-sec-5" registered (3 total)`)
+    expect(bFifth).toBe(`OK: layout spec "vis-sec-5" registered (1 total)`)
     // Same input, different output string → cache key differs at this turn
     // and downstream if tool-result text reaches the replay prefix.
     expect(aFifth).not.toBe(bFifth)

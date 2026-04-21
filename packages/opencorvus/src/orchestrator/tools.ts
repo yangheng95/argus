@@ -272,32 +272,11 @@ export function createOrchestratorTools(input: {
         if (existingGoals.length > 0) return `${existingGoals.length} goals already defined. Skipping. Proceed to architect (for multi-goal) or create_run + submit_execution.`
         if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Proceed to architect or create_run + submit_execution.`
 
-        // Design-analysis gate: if the task has image attachments, block
-        // requirements until design_analysis has produced a spec. This is a
-        // deterministic precondition, not an LLM hint — the orchestrator prompt
-        // already tells the model to call design_analysis first when vision
-        // input exists, but reasoning models skip it under load. Gating here
-        // keeps the autonomous loop closed: vision→design→requirements, not
-        // "LLM decides". Same idea for a Figma URL in task.metadata.
-        {
-          const attachments = Array.isArray(task.attachments)
-            ? task.attachments as Array<{ mime?: string }>
-            : []
-          const hasVisualAttachment = attachments.some(
-            (a) => typeof a?.mime === "string" && a.mime.startsWith("image/"),
-          )
-          const taskMeta = (task.metadata as Record<string, unknown> | null) ?? {}
-          const hasFigmaUrl = typeof taskMeta.figma_url === "string" && taskMeta.figma_url.trim().length > 0
-          const hasDesignSpec = typeof taskMeta.design_spec === "string" && taskMeta.design_spec.trim().length > 0
-          if ((hasVisualAttachment || hasFigmaUrl) && !hasDesignSpec) {
-            const reason = hasVisualAttachment
-              ? `${attachments.filter((a) => typeof a.mime === "string" && a.mime.startsWith("image/")).length} image attachment(s)`
-              : `figma URL`
-            log.info("requirements blocked — design_analysis required first", { taskID, reason })
-            return `Task has ${reason} but design_analysis has not produced a spec yet. Call \`design_analysis\` BEFORE \`requirements\` to extract layout / style / component spec from the visual input. Once design_analysis finishes, call \`requirements\` again.`
-          }
-        }
-
+        // No design-analysis gate here: per rule 23, phase ordering is an LLM
+        // decision (the orchestrator prompt explains when to call
+        // design_analysis). Requirements and design-analyst are decoupled —
+        // visual specs live on task.design_specs and are consumed by delivery
+        // directly as advisory guidance, not forwarded into requirements.
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
         // The RequirementsService runs inside AgentRuntime which owns its own
@@ -320,19 +299,11 @@ export function createOrchestratorTools(input: {
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
 
-          // Pick up a design spec produced by a prior `design_analysis` call.
-          // The spec is stored on task.metadata rather than concatenated into
-          // task.request so it only reaches agents that opt in — here, just
-          // Requirements (for decomposition accuracy) and nobody else.
-          const reqMeta = (task.metadata as Record<string, unknown> | null) ?? {}
-          const designSpec = typeof reqMeta.design_spec === "string" ? reqMeta.design_spec : undefined
-
           const result = await withStageRetry("goal", () =>
             RequirementsService.run({
               title: task.title,
               request: task.request,
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
-              designSpec,
               taskID,
               sessionID: requirementsSession.id,
               signal: input.signal,
@@ -828,31 +799,27 @@ export function createOrchestratorTools(input: {
 
           await hooks.flush()
 
-          // Store the design spec in task.metadata instead of mutating
-          // task.request. Rationale: task.request is the user's original
-          // intent and is replayed into every downstream sub-agent's prompt
-          // (architect, deliver, refine, per-goal runner). Previously
-          // appending the full design spec here meant a rich UI analysis
-          // (30-50K chars) permanently inflated every downstream prompt
-          // even though only the Requirements agent actually needs it.
-          // Now the spec lives in task.metadata.design_spec (capped via
-          // DesignAnalystAgent.toPromptSection), and the `requirements`
-          // tool forwards it as a dedicated `designSpec` arg — scoped to
-          // the one consumer that needs it.
-          const designSpec = DesignAnalystAgent.toPromptSection(analysis)
+          // Persist the visual contract on task.design_specs (dedicated JSON
+          // column, not metadata). Delivery reads it directly as advisory
+          // guidance — no other consumer, no forwarding, no markdown.
           const freshTask = requireTask(taskID)
-          const prevMeta = (freshTask.metadata as Record<string, unknown> | null) ?? {}
-          const nextMeta = { ...prevMeta, design_spec: designSpec }
-          await updateTask(freshTask, { metadata: nextMeta }, "Design spec stored in task.metadata")
+          await updateTask(
+            freshTask,
+            { design_specs: analysis.specs },
+            `Visual contract stored (${analysis.specs.length} specs)`,
+          )
 
           await trackStepComplete("design_analysis")
 
+          const countByCategory = analysis.specs.reduce<Record<string, number>>((acc, s) => {
+            acc[s.category] = (acc[s.category] ?? 0) + 1
+            return acc
+          }, {})
+
           log.info("design_analysis: complete", {
             taskID,
-            sections: analysis.layout.length,
-            tokens: analysis.tokens.length,
-            components: analysis.components.length,
-            designSpecChars: designSpec.length,
+            total: analysis.specs.length,
+            byCategory: countByCategory,
           })
 
           // Phase-level completion event — drives the overlay's
@@ -863,29 +830,32 @@ export function createOrchestratorTools(input: {
               taskID,
               sessionID: designSession.id,
               status: "completed",
-              layoutSections: analysis.layout.length,
-              styleTokens: analysis.tokens.length,
-              componentCount: analysis.components.length,
-              interactionCount: analysis.interactions.length,
-              summary: `Design analysis complete: ${analysis.layout.length} layout sections, ${analysis.components.length} components.`,
+              layoutSections: countByCategory.layout ?? 0,
+              styleTokens: (countByCategory.color ?? 0) + (countByCategory.typography ?? 0) + (countByCategory.spacing ?? 0),
+              componentCount: countByCategory.component ?? 0,
+              interactionCount: countByCategory.interaction ?? 0,
+              summary: `Visual contract ready: ${analysis.specs.length} specs (${(countByCategory.color ?? 0)}c/${(countByCategory.typography ?? 0)}t/${(countByCategory.layout ?? 0)}l/${(countByCategory.component ?? 0)}cp).`,
             },
             { source: "orchestrator.design_analysis" },
           )
 
           return SubAgentProtocol.yieldResult({
             headline:
-              "SUCCESS: Design analysis complete. The design spec is stored in task.metadata.design_spec " +
-              "and will be forwarded to the requirements agent. " +
-              "NEXT: call requirements — it picks up the design spec automatically.",
+              "SUCCESS: Visual contract persisted on task.design_specs. Delivery will consume " +
+              "it as advisory checklist. NEXT: call requirements for functional decomposition.",
             fields: [
-              ["layout_sections", String(analysis.layout.length)],
-              ["style_tokens", String(analysis.tokens.length)],
-              ["components", String(analysis.components.length)],
-              ["interactions", String(analysis.interactions.length)],
+              ["total_specs", String(analysis.specs.length)],
+              ["color", String(countByCategory.color ?? 0)],
+              ["typography", String(countByCategory.typography ?? 0)],
+              ["spacing", String(countByCategory.spacing ?? 0)],
+              ["layout", String(countByCategory.layout ?? 0)],
+              ["component", String(countByCategory.component ?? 0)],
+              ["interaction", String(countByCategory.interaction ?? 0)],
+              ["responsive", String(countByCategory.responsive ?? 0)],
               ["design_system", analysis.designSystem],
               ["recommended_stack", analysis.techStack],
             ],
-            pointer: "task.metadata.design_spec (full capped design spec); design analysis artifact for full object",
+            pointer: "task.design_specs (JSON column on engine_task)",
           })
         } catch (err) {
           await hooks.flush()
@@ -903,7 +873,7 @@ export function createOrchestratorTools(input: {
             },
             { source: "orchestrator.design_analysis" },
           )
-          return `Design analysis failed: ${msg}. Proceeding without design spec — call requirements directly.`
+          return `Design analysis failed: ${msg}. Proceeding without a visual contract — call requirements directly if appropriate.`
         }
       },
     }),
@@ -1990,7 +1960,14 @@ export function createOrchestratorTools(input: {
           // subagent dispatch for adversarial review at scale.
           const verdict: import("@/delivery/agent").DeliveryVerdictType =
             await DeliveryService.verify({
-              task: { id: task.id, title: task.title, request: task.request, sessionID: task.session_id ?? undefined, metadata: task.metadata ?? undefined },
+              task: {
+                id: task.id,
+                title: task.title,
+                request: task.request,
+                sessionID: task.session_id ?? undefined,
+                metadata: task.metadata ?? undefined,
+                design_specs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+              },
               goals: goalInfos,
               delivery: deliveryInfo,
               attachments: deliveryAttachments,

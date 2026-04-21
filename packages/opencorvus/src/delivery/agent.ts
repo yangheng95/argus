@@ -72,10 +72,11 @@ export const DeliveryVerdict = z.object({
      *  consumers must not second-guess this via owned_paths or similar
      *  heuristics. */
     goal_id: z.string().describe("The goal id (gol_...) this rejection is attributed to. Must appear in affected_goal_ids."),
-    category: z.enum(["build", "test", "lint", "runtime", "quality", "startup"]).describe("Category of the issue"),
+    category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).describe("Category of the issue. Use 'visual' when the rejection traces back to a design_spec on task.design_specs."),
     file: z.string().optional().describe("Affected file path, if applicable"),
     error: z.string().describe("Description of the error or issue"),
     suggestion: z.string().optional().describe("Suggested fix approach for the executor"),
+    visual_spec_id: z.string().optional().describe("Design-analyst spec id (vis-*) this rejection violates — cite when category='visual' and the violation maps to a specific design_spec entry on task.design_specs. Advisory: the spec list is a checklist, delivery is the authority for whether a spec was honored."),
   })).optional().describe("Structured rejection details for the executor to fix. Required when verdict is rejected."),
   deferred_checks: z.array(z.object({
     name: z.string().describe("Check name (e.g. code_review, dead_code_review)"),
@@ -91,7 +92,7 @@ export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
 // ---------------------------------------------------------------------------
 
 type VerifyInput = {
-  task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
+  task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
   analysis?: GoalJudgmentType
@@ -498,7 +499,7 @@ async function buildMultimodalPrompt(
 
 function buildUserPrompt(
   input: {
-    task: { title: string; request: string; metadata?: Record<string, unknown> }
+    task: { title: string; request: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     analysis?: GoalJudgmentType
@@ -511,6 +512,42 @@ function buildUserPrompt(
   sections.push(
     `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`,
   )
+
+  // Design Contract — advisory visual specs from design-analyst.
+  // Not auto-scored. Delivery treats them as a checklist during its own
+  // visual review and cites `visual_spec_id` in rejection_details when a
+  // specific spec is violated.
+  const designSpecs = input.task.design_specs ?? []
+  if (designSpecs.length > 0) {
+    const byCategory = new Map<string, typeof designSpecs>()
+    const order = ["color", "typography", "spacing", "layout", "component", "interaction", "responsive"]
+    for (const s of designSpecs) {
+      const group = byCategory.get(s.category) ?? []
+      group.push(s)
+      byCategory.set(s.category, group)
+    }
+    const lines: string[] = []
+    lines.push("# Design Contract (advisory — verify yourself during visual review)")
+    lines.push("")
+    lines.push(
+      "Design-analyst extracted these visual constraints from the reference(s). They are " +
+      "CHECKLIST guidance, not automated rules — look at the rendered output and judge each " +
+      "spec yourself. When you reject on a visual issue traceable to one of these specs, set " +
+      "`rejection_details[].category = 'visual'` and cite the spec id in `visual_spec_id`. " +
+      "Severity 'must' = hard design contract (exact hex / precise layout); 'should' = soft preference.",
+    )
+    for (const cat of order) {
+      const group = byCategory.get(cat)
+      if (!group || group.length === 0) continue
+      lines.push("")
+      lines.push(`## ${cat}`)
+      for (const s of group) {
+        const rat = s.rationale ? ` — ${s.rationale}` : ""
+        lines.push(`- \`${s.id}\` [${s.severity}] **${s.title}**: ${s.requirement} @ ${s.applies_to}${rat}`)
+      }
+    }
+    sections.push(lines.join("\n"))
+  }
 
   // Inline hint: when the user message carries image attachments (attached
   // as file parts alongside this text), steer the model to reason over them

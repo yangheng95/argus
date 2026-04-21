@@ -28,7 +28,7 @@ export class DeliveryFailureError extends Error {
 
 export namespace DeliveryService {
   export async function verify(input: {
-    task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
+    task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     analysis?: GoalJudgmentType
