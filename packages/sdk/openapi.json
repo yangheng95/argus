@@ -3294,6 +3294,7 @@
                     "type": "string",
                     "enum": [
                       "root",
+                      "orchestrator",
                       "assistant",
                       "requirements",
                       "design-analyst",
@@ -14955,6 +14956,153 @@
         ]
       }
     },
+    "/task/{taskID}/rewind": {
+      "post": {
+        "operationId": "task.rewind",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Rewind task timeline to a specific event (projection cursor, history stays intact)",
+        "responses": {
+          "200": {
+            "description": "Rewind applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "taskID": {
+                      "type": "string"
+                    },
+                    "cursorTime": {
+                      "type": "number"
+                    },
+                    "rewindCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "taskID",
+                    "cursorTime",
+                    "rewindCount"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cursorTime": {
+                    "description": "Unix ms. Events with time_created > cursorTime are filtered from UI reads.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "anchorEventID": {
+                    "description": "The card's event id, for audit / UI highlighting",
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "cursorTime"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.rewind({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/task/{taskID}/rewind/clear": {
+      "post": {
+        "operationId": "task.rewind.clear",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Clear the rewind cursor (undo the rewind)",
+        "responses": {
+          "200": {
+            "description": "Cursor cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.rewind.clear({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/retry": {
       "post": {
         "operationId": "task.retry",
@@ -24569,6 +24717,7 @@
             "type": "string",
             "enum": [
               "root",
+              "orchestrator",
               "assistant",
               "requirements",
               "design-analyst",
@@ -27764,6 +27913,7 @@
             "type": "string",
             "enum": [
               "root",
+              "orchestrator",
               "assistant",
               "requirements",
               "design-analyst",

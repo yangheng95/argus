@@ -1355,6 +1355,7 @@ export type Session = {
   version: string
   kind:
     | "root"
+    | "orchestrator"
     | "assistant"
     | "requirements"
     | "design-analyst"
@@ -2839,6 +2840,7 @@ export type GlobalSession = {
   version: string
   kind:
     | "root"
+    | "orchestrator"
     | "assistant"
     | "requirements"
     | "design-analyst"
@@ -4519,6 +4521,7 @@ export type SessionCreateData = {
   body?: {
     kind:
       | "root"
+      | "orchestrator"
       | "assistant"
       | "requirements"
       | "design-analyst"
@@ -8357,6 +8360,78 @@ export type TaskCancelResponses = {
 }
 
 export type TaskCancelResponse = TaskCancelResponses[keyof TaskCancelResponses]
+
+export type TaskRewindData = {
+  body?: {
+    /**
+     * Unix ms. Events with time_created > cursorTime are filtered from UI reads.
+     */
+    cursorTime: number
+    /**
+     * The card's event id, for audit / UI highlighting
+     */
+    anchorEventID?: string
+    reason?: string
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/rewind"
+}
+
+export type TaskRewindErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskRewindError = TaskRewindErrors[keyof TaskRewindErrors]
+
+export type TaskRewindResponses = {
+  /**
+   * Rewind applied
+   */
+  200: {
+    taskID: string
+    cursorTime: number
+    rewindCount: number
+  }
+}
+
+export type TaskRewindResponse = TaskRewindResponses[keyof TaskRewindResponses]
+
+export type TaskRewindClearData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/rewind/clear"
+}
+
+export type TaskRewindClearErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskRewindClearError = TaskRewindClearErrors[keyof TaskRewindClearErrors]
+
+export type TaskRewindClearResponses = {
+  /**
+   * Cursor cleared
+   */
+  200: boolean
+}
+
+export type TaskRewindClearResponse = TaskRewindClearResponses[keyof TaskRewindClearResponses]
 
 export type TaskRetryData = {
   body?: never

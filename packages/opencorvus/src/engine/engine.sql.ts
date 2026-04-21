@@ -184,6 +184,12 @@ export const EngineTaskTable = sqliteTable(
      *  "visual_reference" → deliver visual SSIM gate). `source` records where
      *  the attachment came from (user-upload / figma / url-screenshot). */
     attachments: text({ mode: "json" }).$type<Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>>(),
+    /** Design-analyst visual constraints (advisory only — delivery reads them as
+     *  checklist guidance for its own visual review, they are NOT auto-scored
+     *  and do NOT gate any phase). See `src/design-analyst/types.ts` for the
+     *  shape. Written by the orchestrator `design_analysis` tool, consumed by
+     *  delivery prompt rendering. */
+    design_specs: text({ mode: "json" }).$type<import("@/design-analyst/types").VisualSpec[]>().notNull().default([]),
     /** "workflow" tasks go through requirements→design→architect→execute→deliver.
      *  "build" tasks bypass the pipeline and run the build agent directly —
      *  used for one-shot edits / Q&A / quick fixes. Both kinds share the same

@@ -1,2 +1,3 @@
 export { DesignAnalystAgent } from "./agent"
-export type { DesignAnalysis, LayoutSection, StyleToken, UIComponent, InteractionPattern, ResponsiveRule } from "./types"
+export type { VisualSpec, VisualSpecCategory, VisualSpecSeverity } from "./types"
+export { VisualSpecSchema } from "./types"

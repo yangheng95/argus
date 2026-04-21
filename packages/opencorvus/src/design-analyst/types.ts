@@ -1,147 +1,44 @@
 /**
- * Design Analyst Agent — types and schemas.
+ * Design Analyst Agent — output type.
  *
- * Structured output types for layout/style analysis. Each type corresponds
- * to a registration tool call in output-tools.ts.
+ * A VisualSpec is an advisory constraint extracted from visual references.
+ * It is NOT an AcceptanceSpec — no scorer, no automatic verification, no
+ * hard gate. The delivery agent reads the list as guidance for its own
+ * visual review and may cite a spec id in `rejection_details.visual_spec_id`
+ * when a rejection traces back to a violated constraint. That's the entire
+ * enforcement model: delivery decides.
+ *
+ * Kept deliberately flat and free-form on the value side (`requirement`,
+ * `applies_to`) so a single type covers colors, typography, spacing,
+ * layout, component roles, interactions, responsive rules without per-
+ * category schema branching. The tool surface (output-tools.ts) splits
+ * registration into seven category-specific tools so the LLM is forced
+ * to name the category and fill category-appropriate fields — the
+ * persisted row stays uniform.
  */
+import z from "zod"
 
-// ---------------------------------------------------------------------------
-// Layout
-// ---------------------------------------------------------------------------
+export const VisualSpecCategory = z.enum([
+  "color",
+  "typography",
+  "spacing",
+  "layout",
+  "component",
+  "interaction",
+  "responsive",
+])
+export type VisualSpecCategory = z.infer<typeof VisualSpecCategory>
 
-export interface LayoutSection {
-  /** Unique ID within the analysis, e.g., "header", "sidebar-left", "hero" */
-  id: string
-  /** Semantic type of the section */
-  type:
-    | "header"
-    | "nav"
-    | "sidebar"
-    | "hero"
-    | "content"
-    | "card-grid"
-    | "list"
-    | "form"
-    | "footer"
-    | "modal"
-    | "toolbar"
-    | "panel"
-    | "custom"
-  /** Position description, e.g., "top fixed", "left 280px", "center below hero" */
-  position: string
-  /** Sizing description, e.g., "full-width 64px height", "280px width 100vh" */
-  dimensions: string
-  /** Layout method used: flex, grid, absolute, fixed, sticky */
-  layoutMethod: "flex" | "grid" | "absolute" | "fixed" | "sticky" | "flow"
-  /** Child section IDs (nested layout tree) */
-  children: string[]
-  /** Free-form notes about this section */
-  notes: string
-}
+export const VisualSpecSeverity = z.enum(["must", "should"])
+export type VisualSpecSeverity = z.infer<typeof VisualSpecSeverity>
 
-// ---------------------------------------------------------------------------
-// Style tokens
-// ---------------------------------------------------------------------------
-
-export interface StyleToken {
-  /** Token category */
-  category:
-    | "color-primary"
-    | "color-secondary"
-    | "color-accent"
-    | "color-background"
-    | "color-surface"
-    | "color-text"
-    | "color-border"
-    | "color-error"
-    | "color-success"
-    | "color-warning"
-    | "typography-heading"
-    | "typography-body"
-    | "typography-mono"
-    | "typography-caption"
-    | "spacing"
-    | "border-radius"
-    | "shadow"
-    | "transition"
-  /** Human-readable name, e.g., "primary-blue", "heading-xl", "card-shadow" */
-  name: string
-  /** CSS-ready value, e.g., "#3B82F6", "Inter 24px/32px 700", "0 4px 6px rgba(0,0,0,.1)" */
-  value: string
-  /** Where this token is used in the layout */
-  usage: string
-}
-
-// ---------------------------------------------------------------------------
-// UI components
-// ---------------------------------------------------------------------------
-
-export interface UIComponent {
-  /** Unique ID within the analysis */
-  id: string
-  /** Component type — maps to a real UI primitive or composite */
-  type: string
-  /** Visual variant, e.g., "primary", "outlined", "ghost", "filled" */
-  variant: string
-  /** Key props, states, and slots this component exposes */
-  props: string
-  /** Which layout section contains this component */
-  sectionId: string
-  /** Implementation notes (content, behavior, constraints) */
-  notes: string
-}
-
-// ---------------------------------------------------------------------------
-// Interaction patterns
-// ---------------------------------------------------------------------------
-
-export interface InteractionPattern {
-  /** What triggers the interaction: hover, click, scroll, drag, focus, resize */
-  trigger: string
-  /** Visual effect: dropdown, modal, tooltip, transition, animation, collapse */
-  effect: string
-  /** Which component(s) are affected */
-  targetComponentIds: string[]
-  /** Detailed description of the interaction */
-  description: string
-}
-
-// ---------------------------------------------------------------------------
-// Responsive rules
-// ---------------------------------------------------------------------------
-
-export interface ResponsiveRule {
-  /** Breakpoint expression, e.g., "< 768px", "768px–1024px", "> 1280px" */
-  breakpoint: string
-  /** What changes at this breakpoint */
-  layoutChanges: string
-  /** Which sections are affected */
-  affectedSectionIds: string[]
-}
-
-// ---------------------------------------------------------------------------
-// Complete analysis result
-// ---------------------------------------------------------------------------
-
-export interface DesignAnalysis {
-  /** One-line summary of the design */
-  summary: string
-  /** Input source type */
-  sourceType: "image" | "url" | "both"
-  /** Source URL if applicable */
-  sourceUrl?: string
-  /** Detected overall design style / system */
-  designSystem: string
-  /** Layout tree */
-  layout: LayoutSection[]
-  /** Visual design tokens */
-  tokens: StyleToken[]
-  /** Identified UI components */
-  components: UIComponent[]
-  /** Interaction/animation patterns */
-  interactions: InteractionPattern[]
-  /** Responsive breakpoint rules */
-  responsive: ResponsiveRule[]
-  /** Technical implementation recommendations */
-  techStack: string[]
-}
+export const VisualSpecSchema = z.object({
+  id: z.string().min(1).describe("Stable spec id, e.g. 'vis-color-primary', 'vis-comp-nav-button'"),
+  category: VisualSpecCategory,
+  title: z.string().min(1).describe("Short human label, e.g. 'Primary button background'"),
+  requirement: z.string().min(1).describe("Concrete constraint value — '#3B82F6', 'Inter 700 24px/32px', '64px header height'"),
+  applies_to: z.string().min(1).describe("Target description — component id, CSS selector, section reference"),
+  severity: VisualSpecSeverity,
+  rationale: z.string().optional().describe("Why this matters (only if non-obvious from the constraint itself)"),
+})
+export type VisualSpec = z.infer<typeof VisualSpecSchema>

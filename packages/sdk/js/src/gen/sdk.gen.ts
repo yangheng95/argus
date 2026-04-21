@@ -250,6 +250,10 @@ import type {
   TaskReplanResponses,
   TaskRetryErrors,
   TaskRetryResponses,
+  TaskRewindClearErrors,
+  TaskRewindClearResponses,
+  TaskRewindErrors,
+  TaskRewindResponses,
   TaskRunsErrors,
   TaskRunsResponses,
   TaskTranscriptErrors,
@@ -1904,6 +1908,7 @@ export class Session2 extends HeyApiClient {
       directory?: string
       kind?:
         | "root"
+        | "orchestrator"
         | "assistant"
         | "requirements"
         | "design-analyst"
@@ -4056,6 +4061,36 @@ export class List extends HeyApiClient {
   }
 }
 
+export class Rewind extends HeyApiClient {
+  /**
+   * Clear the rewind cursor (undo the rewind)
+   */
+  public clear<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskRewindClearResponses, TaskRewindClearErrors, ThrowOnError>({
+      url: "/task/{taskID}/rewind/clear",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Task extends HeyApiClient {
   /**
    * Create task
@@ -4844,6 +4879,45 @@ export class Task extends HeyApiClient {
   }
 
   /**
+   * Rewind task timeline to a specific event (projection cursor, history stays intact)
+   */
+  public rewind<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      cursorTime?: number
+      anchorEventID?: string
+      reason?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "cursorTime" },
+            { in: "body", key: "anchorEventID" },
+            { in: "body", key: "reason" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskRewindResponses, TaskRewindErrors, ThrowOnError>({
+      url: "/task/{taskID}/rewind",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Retry task
    */
   public retry<ThrowOnError extends boolean = false>(
@@ -4974,6 +5048,11 @@ export class Task extends HeyApiClient {
   private _list?: List
   get list2(): List {
     return (this._list ??= new List({ client: this.client }))
+  }
+
+  private _rewind?: Rewind
+  get rewind2(): Rewind {
+    return (this._rewind ??= new Rewind({ client: this.client }))
   }
 }
 

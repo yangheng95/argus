@@ -357,6 +357,7 @@ CREATE TABLE IF NOT EXISTS engine_task (
   title                  text NOT NULL,
   request                text NOT NULL,
   attachments            text,
+  design_specs           text NOT NULL DEFAULT '[]',
   kind                   text NOT NULL DEFAULT 'workflow',
   status                 text NOT NULL DEFAULT 'queued',
   priority               text NOT NULL DEFAULT 'normal',
