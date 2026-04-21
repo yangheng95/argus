@@ -14,11 +14,14 @@ import { Timestamps } from "@/storage/schema.sql"
  * bug that silently turned assistant sessions into build worker sessions.
  *
  *   root           root session of an engine_task; holds the user's request
- *   assistant      generic assistant dialog — orchestrator's own reasoning session,
- *                  refine sub-agent, AND externally-driven sessions (MCP, Debug,
- *                  Coding, Panel, scheduled wakes). Standalone callers are
- *                  filtered out at the bridge by `taskIDForSession` failing
- *                  naturally; no separate "standalone" kind is needed.
+ *   orchestrator   task-level orchestrator's own reasoning session (dispatches
+ *                  build/requirements/architect/etc.; never writes code itself).
+ *                  Distinct from "assistant" so overlay can label it as the
+ *                  scheduler rather than a generic assistant.
+ *   assistant      generic assistant dialog — refine sub-agent AND externally-driven
+ *                  sessions (MCP, Debug, Coding, Panel, scheduled wakes). Standalone
+ *                  callers are filtered out at the bridge by `taskIDForSession`
+ *                  failing naturally; no separate "standalone" kind is needed.
  *   requirements   requirements sub-agent (goal decomposition)
  *   design-analyst design-analyst sub-agent (vision → layout/style/component spec)
  *   planner        per-goal plan phase session (writes plan brief)
@@ -42,6 +45,7 @@ import { Timestamps } from "@/storage/schema.sql"
  */
 export type SessionKind =
   | "root"
+  | "orchestrator"
   | "assistant"
   | "requirements"
   | "design-analyst"
