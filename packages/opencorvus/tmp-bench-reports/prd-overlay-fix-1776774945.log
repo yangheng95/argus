@@ -1,0 +1,45 @@
+[2026-04-21T12:35:45.582Z] benchmark PID=27364 started
+[2026-04-21T12:35:45.583Z] diag_log=C:\Users\chuan\AppData\Local\Temp\benchmark-crash-diag.log
+[overlay-benchmark] unknown flag(s): --model
+Known flags:
+  --alive-stall-timeout-ms
+  --completion-hard-timeout-ms
+  --delivery-verify-cmd
+  --executor
+  --figma-url
+  --max-executor-groups
+  --max-fix-runs
+  --max-runs
+  --no-browser
+  --no-keep
+  --planner-max-steps
+  --planner-timeout-ms
+  --planning-stall-timeout-ms
+  --planning-timeout-ms
+  --project-dir
+  --reference-images
+  --report
+  --request-attachment
+  --request-file
+  --request-timeout-ms
+  --resume-home-dir
+  --resume-message
+  --resume-task-id
+  --skip-local-verify
+  --spec-max-steps
+  --spec-timeout-ms
+  --stall-timeout-ms
+  --standby-timeout-ms
+  --task-create-timeout-ms
+  --task-resume-timeout-ms
+  --title
+  --tool-timeout-ms
+Hint: use either --name=value or --name value; quote paths that contain spaces.
+[2026-04-21T12:35:45.583Z] process.exit event — code=2
+[2026-04-21T12:35:45.584Z] stack:
+Error: exit-trace
+    at <anonymous> (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\script\benchmark\overlay-web-benchmark.ts:24:28)
+    at exit (unknown)
+    at validateFlags (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\script\benchmark\overlay-web-benchmark.ts:150:13)
+    at C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\script\benchmark\overlay-web-benchmark.ts:153
+    at asyncModuleEvaluation (native:2)

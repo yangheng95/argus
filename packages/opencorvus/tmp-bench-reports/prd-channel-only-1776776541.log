@@ -1,0 +1,599 @@
+[2026-04-21T13:02:21.614Z] benchmark PID=15136 started
+[2026-04-21T13:02:21.615Z] diag_log=C:\Users\chuan\AppData\Local\Temp\benchmark-crash-diag.log
+INFO  2026-04-21T13:02:23 +1592ms service=default disposing all instances
+INFO  2026-04-21T13:02:23 +1ms service=default directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus creating instance
+INFO  2026-04-21T13:02:23 +204ms service=project directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus fromDirectory
+INFO  2026-04-21T13:02:23 +251ms service=db path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\data\opencorvus.db opening database
+INFO  2026-04-21T13:02:23 +31ms service=db schema applied
+INFO  2026-04-21T13:02:23 +169ms service=provider status=started state
+INFO  2026-04-21T13:02:23 +312ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\config.json loading
+INFO  2026-04-21T13:02:23 +0ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\opencorvus.json loading
+INFO  2026-04-21T13:02:23 +1ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:23 +20ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:23 +9ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus\opencorvus.json loading
+INFO  2026-04-21T13:02:23 +347ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus running
+INFO  2026-04-21T13:02:23 +11ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:23 +0ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.json loading
+INFO  2026-04-21T13:02:23 +14ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override running
+INFO  2026-04-21T13:02:23 +241ms service=provider init
+INFO  2026-04-21T13:02:23 +481ms service=hexin-discovery count=20 fetched hexin models
+INFO  2026-04-21T13:02:23 +536ms service=plugin name=gitlabAuthPlugin loading internal plugin
+INFO  2026-04-21T13:02:23 +0ms service=plugin path=opencode-anthropic-auth@0.0.13 loading plugin
+INFO  2026-04-21T13:02:23 +270ms service=bun pkg=opencode-anthropic-auth version=0.0.13 installing package using Bun's default registry resolution
+INFO  2026-04-21T13:02:23 +0ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","add","--force","--exact","--cwd","C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-7RNqB1\\cache","opencode-anthropic-auth@0.0.13"] cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\cache running
+INFO  2026-04-21T13:02:24 +747ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:24 +1022ms service=config dir=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+WARN  2026-04-21T13:02:24 +1659ms service=bun pkg=@opencorvus-ai/plugin field=version code=1 stderr= bun info failed
+WARN  2026-04-21T13:02:24 +0ms service=bun pkg=@opencorvus-ai/plugin cachedVersion=workspace:* Failed to resolve latest version, using cached
+INFO  2026-04-21T13:02:24 +281ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:24 +281ms service=config dir=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+INFO  2026-04-21T13:02:26 +1579ms service=bun code=0 stdout= stderr= done
+ERROR 2026-04-21T13:02:26 +2770ms service=provider Provider does not exist in model list opencorvus
+INFO  2026-04-21T13:02:26 +2ms service=provider providerID=alibaba-coding-plan found
+INFO  2026-04-21T13:02:26 +1ms service=provider providerID=moonshotai-cn found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=alibaba-coding-plan-cn found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=moonshotai found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=hexin found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=alibaba-cn found
+INFO  2026-04-21T13:02:26 +0ms service=provider status=completed duration=3014 state
+INFO  2026-04-21T13:02:26 +3105ms service=default disposing all instances
+INFO  2026-04-21T13:02:26 +0ms service=default directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus disposing instance
+INFO  2026-04-21T13:02:26 +3309ms service=state key=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus waiting for state disposal to complete
+INFO  2026-04-21T13:02:26 +0ms service=state key=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus state disposal completed
+INFO  2026-04-21T13:02:26 +1ms service=default directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus creating instance
+INFO  2026-04-21T13:02:26 +3106ms service=project directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus fromDirectory
+INFO  2026-04-21T13:02:26 +47ms service=provider status=started state
+INFO  2026-04-21T13:02:26 +1716ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\config.json loading
+INFO  2026-04-21T13:02:26 +1ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\opencorvus.json loading
+INFO  2026-04-21T13:02:26 +0ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:26 +8ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:26 +1ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus\opencorvus.json loading
+INFO  2026-04-21T13:02:26 +149ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus running
+INFO  2026-04-21T13:02:26 +8ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:26 +0ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.json loading
+INFO  2026-04-21T13:02:26 +8ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override running
+INFO  2026-04-21T13:02:26 +65ms service=provider init
+INFO  2026-04-21T13:02:26 +2815ms service=hexin-discovery count=20 age_ms=2816 using fresh hexin model cache
+INFO  2026-04-21T13:02:26 +2812ms service=plugin name=gitlabAuthPlugin loading internal plugin
+INFO  2026-04-21T13:02:26 +1ms service=plugin path=opencode-anthropic-auth@0.0.13 loading plugin
+ERROR 2026-04-21T13:02:26 +2ms service=provider Provider does not exist in model list opencorvus
+INFO  2026-04-21T13:02:26 +1ms service=provider providerID=alibaba-coding-plan found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=moonshotai-cn found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=alibaba-coding-plan-cn found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=moonshotai found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=hexin found
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=alibaba-cn found
+INFO  2026-04-21T13:02:26 +0ms service=provider status=completed duration=68 state
+INFO  2026-04-21T13:02:26 +1ms service=provider status=started providerID=hexin getSDK
+INFO  2026-04-21T13:02:26 +0ms service=provider providerID=hexin pkg=@ai-sdk/openai-compatible using bundled provider
+INFO  2026-04-21T13:02:26 +0ms service=provider status=completed duration=0 providerID=hexin getSDK
+[overlay-benchmark] config model=hexin/gpt-5.4-mini executor=opencode groups=config-default alive-stall=120s progress-stall=480s planning-progress-stall=720s tool=600s standby=∞ request=30s hard=none
+INFO  2026-04-21T13:02:26 +116ms service=default disposing all instances
+INFO  2026-04-21T13:02:26 +0ms service=default directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus disposing instance
+INFO  2026-04-21T13:02:26 +117ms service=state key=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus waiting for state disposal to complete
+INFO  2026-04-21T13:02:26 +0ms service=state key=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus state disposal completed
+INFO  2026-04-21T13:02:26 +7ms service=default directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw creating instance
+INFO  2026-04-21T13:02:26 +123ms service=project directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw fromDirectory
+INFO  2026-04-21T13:02:26 +3219ms service=db path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\data\opencorvus.db opening database
+INFO  2026-04-21T13:02:26 +23ms service=db schema applied
+INFO  2026-04-21T13:02:26 +92ms service=default directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw bootstrapping
+INFO  2026-04-21T13:02:26 +154ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw\opencorvus.json loading
+INFO  2026-04-21T13:02:26 +10ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw\.opencorvus\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:26 +1ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw\.opencorvus\opencorvus.json loading
+INFO  2026-04-21T13:02:26 +166ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw\.opencorvus running
+INFO  2026-04-21T13:02:26 +8ms service=config path=C:\.opencorvus\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:26 +1ms service=config path=C:\.opencorvus\opencorvus.json loading
+INFO  2026-04-21T13:02:26 +7ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\.opencorvus running
+INFO  2026-04-21T13:02:26 +9ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:26 +0ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.json loading
+INFO  2026-04-21T13:02:26 +11ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override running
+INFO  2026-04-21T13:02:26 +147ms service=plugin name=gitlabAuthPlugin loading internal plugin
+INFO  2026-04-21T13:02:26 +0ms service=plugin path=opencode-anthropic-auth@0.0.13 loading plugin
+INFO  2026-04-21T13:02:26 +3524ms service=format init
+INFO  2026-04-21T13:02:26 +3567ms service=lsp LSP server biome is disabled
+INFO  2026-04-21T13:02:26 +0ms service=lsp LSP server eslint is disabled
+INFO  2026-04-21T13:02:26 +0ms service=lsp serverIds=deno, typescript, vue, oxlint, gopls, ruby-lsp, pyright, elixir-ls, zls, csharp, fsharp, sourcekit-lsp, rust, clangd, svelte, astro, jdtls, kotlin-ls, yaml-ls, lua-ls, php intelephense, prisma, dart, ocaml-lsp, bash, terraform, texlab, dockerfile, gleam, clojure-lsp, nixd, tinymist, haskell-language-server, julials enabled LSP servers
+INFO  2026-04-21T13:02:26 +3526ms service=file.watcher init
+INFO  2026-04-21T13:02:26 +3586ms service=scheduler id=snapshot.cleanup run
+INFO  2026-04-21T13:02:26 +0ms service=scheduler id=project.gc run
+INFO  2026-04-21T13:02:26 +2ms service=scheduler id=tool.truncation.cleanup run
+INFO  2026-04-21T13:02:26 +1ms service=scheduler id=cron-service.poll run
+INFO  2026-04-21T13:02:26 +3549ms service=cron-service cron service initialized
+INFO  2026-04-21T13:02:26 +3549ms service=event-service event service initialized
+INFO  2026-04-21T13:02:26 +2ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:26 +3468ms service=task-queue-service task queue service initialized
+INFO  2026-04-21T13:02:26 +3550ms service=engine.auto-permission auto-permission subscriptions active
+INFO  2026-04-21T13:02:26 +4ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:26 +31ms service=file.watcher platform=win32 backend=windows watcher backend
+INFO  2026-04-21T13:02:27 +653ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:27 +656ms service=config dir=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+INFO  2026-04-21T13:02:27 +0ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:27 +0ms service=config dir=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+WARN  2026-04-21T13:02:27 +2574ms service=bun pkg=@opencorvus-ai/plugin field=version code=1 stderr= bun info failed
+WARN  2026-04-21T13:02:27 +0ms service=bun pkg=@opencorvus-ai/plugin cachedVersion=workspace:* Failed to resolve latest version, using cached
+WARN  2026-04-21T13:02:27 +0ms service=bun pkg=@opencorvus-ai/plugin field=version code=1 stderr= bun info failed
+WARN  2026-04-21T13:02:27 +0ms service=bun pkg=@opencorvus-ai/plugin cachedVersion=workspace:* Failed to resolve latest version, using cached
+INFO  2026-04-21T13:02:27 +613ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:27 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:27 +4221ms service=engine-recovery projectID=global abortedSessions=0 abortedGoalRuns=0 abortedRuns=0 project recovery complete
+[STT] Provider "groq" not registered, skipping
+[STT] Provider "openai-whisper" not registered, skipping
+[STT] Provider "deepgram" not registered, skipping
+[STT] Provider "google-gemini" not registered, skipping
+[STT] Provider "local-cli" not registered, skipping
+[STT] Pipeline initialized: (none)
+INFO  2026-04-21T13:02:27 +4192ms service=channel.supervisor channels=["slack"] channel runtime starting
+[ChannelRuntime] OpenCorvus server running at http://127.0.0.1:7878
+INFO  2026-04-21T13:02:27 +4195ms service=server method=GET path=/event request
+INFO  2026-04-21T13:02:27 +0ms service=server status=started method=GET path=/event request
+INFO  2026-04-21T13:02:27 +744ms service=default directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus creating instance
+INFO  2026-04-21T13:02:27 +836ms service=project directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus fromDirectory
+INFO  2026-04-21T13:02:27 +38ms service=default directory=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus bootstrapping
+INFO  2026-04-21T13:02:27 +104ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:27 +1ms service=config path=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus\opencorvus.json loading
+INFO  2026-04-21T13:02:27 +107ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus running
+INFO  2026-04-21T13:02:27 +8ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.jsonc loading
+INFO  2026-04-21T13:02:27 +0ms service=config path=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override\opencorvus.json loading
+INFO  2026-04-21T13:02:27 +8ms service=bun cmd=["C:\\Users\\chuan\\.bun\\bin\\bun.exe","install"] cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override running
+INFO  2026-04-21T13:02:27 +767ms service=plugin name=gitlabAuthPlugin loading internal plugin
+INFO  2026-04-21T13:02:27 +0ms service=plugin path=opencode-anthropic-auth@0.0.13 loading plugin
+INFO  2026-04-21T13:02:27 +767ms service=format init
+INFO  2026-04-21T13:02:27 +766ms service=lsp LSP server biome is disabled
+INFO  2026-04-21T13:02:27 +0ms service=lsp LSP server eslint is disabled
+INFO  2026-04-21T13:02:27 +0ms service=lsp serverIds=deno, typescript, vue, oxlint, gopls, ruby-lsp, pyright, elixir-ls, zls, csharp, fsharp, sourcekit-lsp, rust, clangd, svelte, astro, jdtls, kotlin-ls, yaml-ls, lua-ls, php intelephense, prisma, dart, ocaml-lsp, bash, terraform, texlab, dockerfile, gleam, clojure-lsp, nixd, tinymist, haskell-language-server, julials enabled LSP servers
+INFO  2026-04-21T13:02:27 +734ms service=file.watcher init
+INFO  2026-04-21T13:02:27 +123ms service=scheduler id=snapshot.cleanup run
+INFO  2026-04-21T13:02:27 +0ms service=scheduler id=cron-service.poll run
+INFO  2026-04-21T13:02:27 +743ms service=cron-service cron service initialized
+INFO  2026-04-21T13:02:27 +743ms service=event-service event service initialized
+INFO  2026-04-21T13:02:27 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:27 +741ms service=task-queue-service task queue service initialized
+INFO  2026-04-21T13:02:27 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:27 +9ms service=file.watcher platform=win32 backend=windows watcher backend
+INFO  2026-04-21T13:02:27 +4326ms service=vcs branch=HEAD initialized
+[STT] Provider "groq" not registered, skipping
+[STT] Provider "openai-whisper" not registered, skipping
+[STT] Provider "deepgram" not registered, skipping
+[STT] Provider "google-gemini" not registered, skipping
+[STT] Provider "local-cli" not registered, skipping
+[STT] Pipeline initialized: (none)
+INFO  2026-04-21T13:02:27 +137ms service=channel.supervisor channels=["slack"] channel runtime starting
+[ChannelRuntime] OpenCorvus server running at http://127.0.0.1:7878
+INFO  2026-04-21T13:02:27 +117ms service=server method=GET path=/event request
+INFO  2026-04-21T13:02:27 +0ms service=server status=started method=GET path=/event request
+INFO  2026-04-21T13:02:27 +65ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:27 +68ms service=config dir=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw\.opencorvus error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+INFO  2026-04-21T13:02:27 +1ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:27 +0ms service=config dir=C:\.opencorvus error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+INFO  2026-04-21T13:02:27 +60ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:27 +60ms service=config dir=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+INFO  2026-04-21T13:02:27 +384ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:27 +2ms service=scheduler id=engine.poll run
+[Slack] Bot user ID: U0AJC6JDA72
+INFO  2026-04-21T13:02:27 +389ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:27 +389ms service=config dir=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\.opencorvus error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+WARN  2026-04-21T13:02:27 +636ms service=bun pkg=@opencorvus-ai/plugin field=version code=1 stderr= bun info failed
+WARN  2026-04-21T13:02:27 +0ms service=bun pkg=@opencorvus-ai/plugin cachedVersion=workspace:* Failed to resolve latest version, using cached
+INFO  2026-04-21T13:02:27 +123ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:27 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:27 +633ms service=engine-recovery projectID=978ef208539a2627cce211991701ccda213b9e83 abortedSessions=0 abortedGoalRuns=0 abortedRuns=0 project recovery complete
+INFO  2026-04-21T13:02:28 +325ms service=bun code=1 stdout= stderr= done
+WARN  2026-04-21T13:02:28 +325ms service=config dir=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-7RNqB1\config-override error=Error: Command failed with exit code 1
+    at run (C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\src\bun\index.ts:40:17)
+    at processTicksAndRejections (native:7:39) failed to install dependencies
+INFO  2026-04-21T13:02:28 +368ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:28 +2ms service=scheduler id=engine.poll run
+[Slack] Bot user ID: U0AJC6JDA72
+INFO  2026-04-21T13:02:28 +138ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:28 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:28 +366ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:28 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:28 +148ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:28 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:29 +1665ms service=channel.supervisor channels=["slack"] channel runtime started
+INFO  2026-04-21T13:02:29 +347ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:29 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:29 +154ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:29 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:29 +373ms service=channel.supervisor channels=["slack"] channel runtime started
+INFO  2026-04-21T13:02:29 +6347ms service=server event connected
+INFO  2026-04-21T13:02:29 +2ms service=server event connected
+INFO  2026-04-21T13:02:29 +2039ms service=server status=completed duration=2156 method=GET path=/event request
+INFO  2026-04-21T13:02:29 +0ms service=server status=completed duration=2039 method=GET path=/event request
+INFO  2026-04-21T13:02:29 +6514ms service=executor.bootstrap executor=codex path=C:\Users\chuan\AppData\Roaming\npm\codex.cmd version=codex-cli 0.116.0 registered external executor
+INFO  2026-04-21T13:02:29 +0ms service=executor.bootstrap executor=claude-code path=C:\Users\chuan\AppData\Roaming\npm\claude version=2.1.108 (Claude Code) registered external executor
+INFO  2026-04-21T13:02:29 +348ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:29 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:29 +147ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:29 +6ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:30 +697ms service=server method=GET path=/ui/index.html request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/ui/index.html request
+INFO  2026-04-21T13:02:30 +2ms service=server status=completed duration=2 method=GET path=/ui/index.html request
+INFO  2026-04-21T13:02:30 +8ms service=server method=GET path=/ui/assets/index-BFnuoJa0.css request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/ui/assets/index-BFnuoJa0.css request
+INFO  2026-04-21T13:02:30 +1ms service=server method=GET path=/ui/assets/index-BqN9lJJZ.js request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/ui/assets/index-BqN9lJJZ.js request
+INFO  2026-04-21T13:02:30 +0ms service=server method=GET path=/ui/assets/opencorvus-logo-dark-DzLoBvHF.svg request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/ui/assets/opencorvus-logo-dark-DzLoBvHF.svg request
+INFO  2026-04-21T13:02:30 +1ms service=server status=completed duration=2 method=GET path=/ui/assets/index-BFnuoJa0.css request
+INFO  2026-04-21T13:02:30 +1ms service=server status=completed duration=2 method=GET path=/ui/assets/opencorvus-logo-dark-DzLoBvHF.svg request
+INFO  2026-04-21T13:02:30 +0ms service=server status=completed duration=2 method=GET path=/ui/assets/index-BqN9lJJZ.js request
+INFO  2026-04-21T13:02:30 +374ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:30 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:30 +161ms service=server method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:30 +1ms service=server status=completed duration=1 method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:30 +29ms service=server method=GET path=/ui/i18n/en-US.json request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/ui/i18n/en-US.json request
+INFO  2026-04-21T13:02:30 +1ms service=server method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:30 +2ms service=server status=completed duration=1 method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:30 +0ms service=server status=completed duration=3 method=GET path=/ui/i18n/en-US.json request
+[overlay-console:verbose] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o
+[overlay-console:verbose] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o
+[overlay-console:verbose] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o
+INFO  2026-04-21T13:02:30 +116ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:30 +3ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:30 +243ms service=server method=GET path=/global/health request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/global/health request
+INFO  2026-04-21T13:02:30 +1ms service=server status=completed duration=1 method=GET path=/global/health request
+INFO  2026-04-21T13:02:30 +1ms service=server method=GET path=/favicon.ico request
+INFO  2026-04-21T13:02:30 +1ms service=server status=started method=GET path=/favicon.ico request
+INFO  2026-04-21T13:02:30 +0ms service=server status=completed duration=0 method=GET path=/favicon.ico request
+INFO  2026-04-21T13:02:30 +4ms service=server method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:30 +4ms service=server status=completed duration=4 method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:30 +1ms service=server method=GET path=/path request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/path request
+INFO  2026-04-21T13:02:30 +1ms service=server status=completed duration=1 method=GET path=/path request
+[overlay-console:error] Failed to load resource: the server responded with a status of 404 (Not Found)
+INFO  2026-04-21T13:02:30 +6ms service=server method=GET path=/vcs request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/vcs request
+INFO  2026-04-21T13:02:30 +2ms service=server status=completed duration=2 method=GET path=/vcs request
+INFO  2026-04-21T13:02:30 +0ms service=server method=GET path=/skill/installed request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/skill/installed request
+INFO  2026-04-21T13:02:30 +14ms service=server method=GET path=/mcp request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/mcp request
+INFO  2026-04-21T13:02:30 +1ms service=server status=completed duration=1 method=GET path=/mcp request
+INFO  2026-04-21T13:02:30 +1ms service=server method=GET path=/provider request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-04-21T13:02:30 +4186ms service=provider status=started state
+INFO  2026-04-21T13:02:30 +21ms service=provider init
+INFO  2026-04-21T13:02:30 +24ms service=server method=GET path=/provider/auth request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/provider/auth request
+INFO  2026-04-21T13:02:30 +1ms service=server status=completed duration=1 method=GET path=/provider/auth request
+INFO  2026-04-21T13:02:30 +2ms service=server method=GET path=/channel request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/channel request
+INFO  2026-04-21T13:02:30 +4ms service=server status=completed duration=4 method=GET path=/channel request
+INFO  2026-04-21T13:02:30 +0ms service=server method=GET path=/config request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/config request
+INFO  2026-04-21T13:02:30 +2ms service=server status=completed duration=2 method=GET path=/config request
+INFO  2026-04-21T13:02:30 +4222ms service=hexin-discovery count=20 age_ms=7038 using fresh hexin model cache
+INFO  2026-04-21T13:02:30 +3ms service=server method=GET path=/config/prompt request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/config/prompt request
+INFO  2026-04-21T13:02:30 +11ms service=server method=GET path=/executor request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/executor request
+ERROR 2026-04-21T13:02:30 +127ms service=provider Provider does not exist in model list opencorvus
+INFO  2026-04-21T13:02:30 +382ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:30 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:30 +6ms service=provider providerID=alibaba-coding-plan found
+INFO  2026-04-21T13:02:30 +0ms service=provider providerID=moonshotai-cn found
+INFO  2026-04-21T13:02:30 +0ms service=provider providerID=alibaba-coding-plan-cn found
+INFO  2026-04-21T13:02:30 +0ms service=provider providerID=moonshotai found
+INFO  2026-04-21T13:02:30 +0ms service=provider providerID=hexin found
+INFO  2026-04-21T13:02:30 +1ms service=provider providerID=alibaba-cn found
+INFO  2026-04-21T13:02:30 +0ms service=provider status=completed duration=155 state
+INFO  2026-04-21T13:02:30 +225ms service=server status=completed duration=272 method=GET path=/provider request
+INFO  2026-04-21T13:02:30 +5ms service=server method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:30 +0ms service=server status=started method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:30 +3ms service=server status=completed duration=3 method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:30 +127ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:30 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:30 +7864ms service=permission permission=skill pattern=panel-control ruleset=[] evaluate
+INFO  2026-04-21T13:02:30 +0ms service=permission permission=skill pattern=spec-research ruleset=[] evaluate
+INFO  2026-04-21T13:02:30 +0ms service=permission permission=skill pattern=prd-spec ruleset=[] evaluate
+INFO  2026-04-21T13:02:30 +0ms service=permission permission=skill pattern=delivery-verify-web ruleset=[] evaluate
+INFO  2026-04-21T13:02:30 +0ms service=permission permission=skill pattern=delivery-verify-api ruleset=[] evaluate
+INFO  2026-04-21T13:02:30 +0ms service=permission permission=skill pattern=webpage-clone ruleset=[] evaluate
+INFO  2026-04-21T13:02:30 +24ms service=server status=completed duration=320 method=GET path=/skill/installed request
+INFO  2026-04-21T13:02:30 +0ms service=server status=completed duration=268 method=GET path=/config/prompt request
+[overlay-benchmark] directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw saved=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw
+INFO  2026-04-21T13:02:31 +221ms service=server method=POST path=/task request
+INFO  2026-04-21T13:02:31 +0ms service=server status=started method=POST path=/task request
+INFO  2026-04-21T13:02:31 +3869ms service=project directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw fromDirectory
+INFO  2026-04-21T13:02:31 +10ms service=server method=GET path=/skill/market request
+INFO  2026-04-21T13:02:31 +0ms service=server status=started method=GET path=/skill/market request
+INFO  2026-04-21T13:02:31 +3ms service=server status=completed duration=3 method=GET path=/skill/market request
+INFO  2026-04-21T13:02:31 +103ms service=project directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw fromDirectory
+INFO  2026-04-21T13:02:31 +438ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:31 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:31 +146ms service=project directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw fromDirectory
+INFO  2026-04-21T13:02:31 +80ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:31 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:31 +68ms service=project directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw fromDirectory
+INFO  2026-04-21T13:02:31 +437ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:31 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:31 +8744ms service=session id=ses_24fdd61fdffe4kkQ5DuXadlR4J slug=mighty-comet version=local projectID=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw title=prd-stock-trading-sim kind=root time={"created":1776776551938,"updated":1776776551938} created
+INFO  2026-04-21T13:02:31 +767ms service=server status=completed duration=780 method=POST path=/task request
+INFO  2026-04-21T13:02:31 +10ms service=orchestrator-loop taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz trigger=created task loop started
+INFO  2026-04-21T13:02:31 +1ms service=orchestrator-loop taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz iteration=1 trigger=created decision point
+INFO  2026-04-21T13:02:32 +65ms service=session id=ses_24fdd61bcffeyuy4HktJj86fzz slug=crisp-pixel version=local projectID=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw parentID=ses_24fdd61fdffe4kkQ5DuXadlR4J title=Agent: prd-stock-trading-sim kind=orchestrator time={"created":1776776552003,"updated":1776776552003} created
+INFO  2026-04-21T13:02:32 +8903ms service=orchestrator taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz trigger=created sessionID=ses_24fdd61bcffeyuy4HktJj86fzz model=hexin/gpt-5.4-mini toolCount=18 orchestrator starting
+INFO  2026-04-21T13:02:32 +1191ms service=provider status=started providerID=hexin getSDK
+INFO  2026-04-21T13:02:32 +0ms service=provider providerID=hexin pkg=@ai-sdk/openai-compatible using bundled provider
+INFO  2026-04-21T13:02:32 +0ms service=provider status=completed duration=0 providerID=hexin getSDK
+INFO  2026-04-21T13:02:32 +8908ms service=provider-llm providerID=hexin modelID=gpt-5.4-mini maxOutputTokens=16384 toolCount=18 providerOptionsKeys=["hexin"] headersKeys=["User-Agent","x-user"] systemPartCount=2 messageCount=1 stream
+INFO  2026-04-21T13:02:32 +69ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:32 +5ms service=server status=completed duration=5 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+[overlay-benchmark] event=task.created status=queued detail=Task queued
+[overlay-benchmark] event=task.updated status=active detail=Task loop started — marking active for serial queue
+[overlay-benchmark] event=task.updated status=active detail=Workflow selected: Pipeline
+INFO  2026-04-21T13:02:32 +140ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:32 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:32 +88ms service=server method=GET path=/tasks request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/tasks request
+INFO  2026-04-21T13:02:32 +4ms service=server status=completed duration=4 method=GET path=/tasks request
+INFO  2026-04-21T13:02:32 +12ms service=server method=GET path=/tasks request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/tasks request
+INFO  2026-04-21T13:02:32 +4ms service=server status=completed duration=4 method=GET path=/tasks request
+INFO  2026-04-21T13:02:32 +1ms service=server method=PATCH path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/budget request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=PATCH path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/budget request
+INFO  2026-04-21T13:02:32 +5ms service=server status=completed duration=5 method=PATCH path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/budget request
+INFO  2026-04-21T13:02:32 +2ms service=server method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:32 +3ms service=server status=completed duration=3 method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:32 +16ms service=server method=GET path=/panel/knowledge/memory request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/panel/knowledge/memory request
+INFO  2026-04-21T13:02:32 +2ms service=server status=completed duration=2 method=GET path=/panel/knowledge/memory request
+INFO  2026-04-21T13:02:32 +2ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:32 +9093ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "Web" "PRD" "交付一个接近成熟券商终端体验的商业级可运行" "MVP" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "Web" "PRD" "交付一个接近成熟券商终端体验的商业级可运行" "MVP" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +1ms service=memory.search query="prd" "stock" "trading" "sim" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="prd" "stock" "trading" "sim" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="prd" "stock" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="prd" "stock" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +1ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="股票交易" "Web" "应用" "PRD" "v2" "0" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="股票交易" "Web" "应用" "PRD" "v2" "0" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +0ms service=memory.search query="股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:32 +25ms service=server status=completed duration=25 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:32 +1ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:32 +5ms service=server status=completed duration=5 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:32 +0ms service=server method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:32 +2ms service=server status=completed duration=2 method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:32 +140ms service=server status=completed duration=1643 method=GET path=/executor request
+INFO  2026-04-21T13:02:32 +356ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:32 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:32 +132ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:32 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:32 +326ms service=server method=GET path=/agent request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/agent request
+INFO  2026-04-21T13:02:32 +3ms service=server status=completed duration=3 method=GET path=/agent request
+INFO  2026-04-21T13:02:32 +1ms service=server method=GET path=/config/providers request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/config/providers request
+INFO  2026-04-21T13:02:32 +9578ms service=server status=started providers
+INFO  2026-04-21T13:02:32 +3ms service=server status=completed duration=3 providers
+INFO  2026-04-21T13:02:32 +4ms service=server status=completed duration=4 method=GET path=/config/providers request
+INFO  2026-04-21T13:02:32 +3ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:32 +3ms service=server status=completed duration=3 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:32 +1ms service=server method=GET path=/task/events request
+INFO  2026-04-21T13:02:32 +0ms service=server status=started method=GET path=/task/events request
+INFO  2026-04-21T13:02:32 +3ms service=server status=completed duration=3 method=GET path=/task/events request
+INFO  2026-04-21T13:02:32 +369ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:32 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:33 +126ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:33 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:33 +391ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:33 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:33 +107ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:33 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:33 +384ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:33 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:34 +130ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:34 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:34 +381ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:34 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:34 +139ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:34 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:34 +358ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:34 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:35 +144ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:35 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:35 +369ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:35 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:35 +12427ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24fdd61bcffeyuy4HktJj86fzz taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz resolvedRole=orchestrator channel=orchestrator msgID=msg_db022ac15001QqMHVCYNwxUkDR bridge → protocol
+INFO  2026-04-21T13:02:35 +4ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24fdd61bcffeyuy4HktJj86fzz taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz resolvedRole=orchestrator channel=orchestrator msgID=msg_db022ac15001QqMHVCYNwxUkDR bridge → protocol
+INFO  2026-04-21T13:02:35 +80ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24fdd61bcffeyuy4HktJj86fzz taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz resolvedRole=orchestrator channel=orchestrator msgID=msg_db022ac15001QqMHVCYNwxUkDR bridge → protocol
+INFO  2026-04-21T13:02:35 +5ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24fdd61bcffeyuy4HktJj86fzz taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz resolvedRole=orchestrator channel=orchestrator msgID=msg_db022ac15001QqMHVCYNwxUkDR bridge → protocol
+INFO  2026-04-21T13:02:35 +12570ms service=task-tools taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz existingGoals=0 hasSpec=false requirements guard check
+INFO  2026-04-21T13:02:35 +3691ms service=session id=ses_24fdd5351ffejOpBsUlW6HYDnA slug=jolly-squid version=local projectID=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-jUvkQw parentID=ses_24fdd61bcffeyuy4HktJj86fzz title=Requirements: prd-stock-trading-sim kind=requirements time={"created":1776776555694,"updated":1776776555694} created
+INFO  2026-04-21T13:02:35 +64ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24fdd61bcffeyuy4HktJj86fzz taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz resolvedRole=orchestrator channel=orchestrator msgID=msg_db022ac15001QqMHVCYNwxUkDR bridge → protocol
+INFO  2026-04-21T13:02:35 +1ms service=requirements-service taskID=tsk_db0229e0d001YZ4VeY0AkcRnkz title=prd-stock-trading-sim hasDesignSpec=false requirements service starting
+INFO  2026-04-21T13:02:35 +3509ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "Web" "应用" "PRD" "v2" "交付一个接近成熟券商终端体验的商业级可运行" "MVP" "全栈实现行情" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +0ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "Web" "应用" "PRD" "v2" "交付一个接近成熟券商终端体验的商业级可运行" "MVP" "全栈实现行情" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +0ms service=memory.search query="prd" "stock" "trading" "sim" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +0ms service=memory.search query="prd" "stock" "trading" "sim" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +1ms service=memory.search query="prd" "stock" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +0ms service=memory.search query="prd" "stock" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +0ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +0ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:35 +13ms service=requirements-agent title=prd-stock-trading-sim model=gpt-5.4-mini attempt=1 requirements agent starting
+INFO  2026-04-21T13:02:35 +3699ms service=provider-llm providerID=hexin modelID=gpt-5.4-mini maxOutputTokens=16384 toolCount=14 providerOptionsKeys=["hexin"] headersKeys=["User-Agent","x-user"] systemPartCount=1 messageCount=1 stream
+[overlay-benchmark] event=task.updated status=active detail=Workflow step started: Requirements
+INFO  2026-04-21T13:02:35 +265ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:35 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:35 +235ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:35 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:36 +3384ms service=server method=GET path=/ui/index.html request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/ui/index.html request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/ui/index.html request
+INFO  2026-04-21T13:02:36 +9ms service=server method=GET path=/ui/assets/index-BqN9lJJZ.js request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/ui/assets/index-BqN9lJJZ.js request
+INFO  2026-04-21T13:02:36 +1ms service=server method=GET path=/ui/assets/index-BFnuoJa0.css request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/ui/assets/index-BFnuoJa0.css request
+INFO  2026-04-21T13:02:36 +0ms service=server method=GET path=/ui/assets/opencorvus-logo-dark-DzLoBvHF.svg request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/ui/assets/opencorvus-logo-dark-DzLoBvHF.svg request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/ui/assets/index-BFnuoJa0.css request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=3 method=GET path=/ui/assets/index-BqN9lJJZ.js request
+INFO  2026-04-21T13:02:36 +0ms service=server status=completed duration=2 method=GET path=/ui/assets/opencorvus-logo-dark-DzLoBvHF.svg request
+INFO  2026-04-21T13:02:36 +136ms service=server method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:36 +272ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:36 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:36 +3ms service=server status=completed duration=3 method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:36 +25ms service=server method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:36 +1ms service=server method=GET path=/ui/i18n/en-US.json request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/ui/i18n/en-US.json request
+INFO  2026-04-21T13:02:36 +2ms service=server status=completed duration=2 method=GET path=/ui/i18n/en-US.json request
+INFO  2026-04-21T13:02:36 +0ms service=server status=completed duration=3 method=GET path=/ui/i18n/zh-CN.json request
+INFO  2026-04-21T13:02:36 +25ms service=server method=GET path=/global/health request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/global/health request
+INFO  2026-04-21T13:02:36 +0ms service=server status=completed duration=0 method=GET path=/global/health request
+INFO  2026-04-21T13:02:36 +4ms service=server method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:36 +4ms service=server status=completed duration=4 method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:36 +1ms service=server method=GET path=/path request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/path request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/path request
+INFO  2026-04-21T13:02:36 +0ms service=server method=GET path=/vcs request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/vcs request
+INFO  2026-04-21T13:02:36 +20ms service=server method=GET path=/mcp request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/mcp request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/mcp request
+INFO  2026-04-21T13:02:36 +0ms service=server method=GET path=/config request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/config request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/config request
+INFO  2026-04-21T13:02:36 +0ms service=server method=GET path=/skill/installed request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/skill/installed request
+INFO  2026-04-21T13:02:36 +5363ms service=permission permission=skill pattern=panel-control ruleset=[] evaluate
+INFO  2026-04-21T13:02:36 +0ms service=permission permission=skill pattern=spec-research ruleset=[] evaluate
+INFO  2026-04-21T13:02:36 +0ms service=permission permission=skill pattern=prd-spec ruleset=[] evaluate
+INFO  2026-04-21T13:02:36 +0ms service=permission permission=skill pattern=delivery-verify-web ruleset=[] evaluate
+INFO  2026-04-21T13:02:36 +0ms service=permission permission=skill pattern=delivery-verify-api ruleset=[] evaluate
+INFO  2026-04-21T13:02:36 +0ms service=permission permission=skill pattern=webpage-clone ruleset=[] evaluate
+INFO  2026-04-21T13:02:36 +2ms service=server status=completed duration=2 method=GET path=/skill/installed request
+INFO  2026-04-21T13:02:36 +1ms service=server method=GET path=/provider request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/provider request
+INFO  2026-04-21T13:02:36 +92ms service=server status=completed duration=92 method=GET path=/provider request
+INFO  2026-04-21T13:02:36 +1ms service=server method=GET path=/provider/auth request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/provider/auth request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/provider/auth request
+INFO  2026-04-21T13:02:36 +1ms service=server method=GET path=/channel request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/channel request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/channel request
+INFO  2026-04-21T13:02:36 +14ms service=server method=GET path=/config/prompt request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/config/prompt request
+INFO  2026-04-21T13:02:36 +2ms service=server status=completed duration=2 method=GET path=/config/prompt request
+INFO  2026-04-21T13:02:36 +0ms service=server method=GET path=/executor request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/executor request
+INFO  2026-04-21T13:02:36 +137ms service=server method=GET path=/skill/market request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/skill/market request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=1 method=GET path=/skill/market request
+INFO  2026-04-21T13:02:36 +339ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:36 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:36 +2ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:36 +1ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:36 +880ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "Web" "PRD" "交付一个接近成熟券商终端体验的商业级可运行" "MVP" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +1ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "Web" "PRD" "交付一个接近成熟券商终端体验的商业级可运行" "MVP" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +0ms service=memory.search query="prd" "stock" "trading" "sim" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +0ms service=memory.search query="prd" "stock" "trading" "sim" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +1ms service=memory.search query="prd" "stock" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +0ms service=memory.search query="prd" "stock" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +0ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +1ms service=memory.search query="prd" "stock" "trading" "sim" "股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +1ms service=memory.search query="股票交易" "Web" "应用" "PRD" "v2" "0" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +0ms service=memory.search query="股票交易" "Web" "应用" "PRD" "v2" "0" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +0ms service=memory.search query="股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +1ms service=memory.search query="股票交易" "web" projectId=bfe57ad54049bdc5f1fb8b4c35de18955ea192b1 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-21T13:02:36 +26ms service=server status=completed duration=25 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:36 +0ms service=server method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:36 +0ms service=server status=started method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:36 +4ms service=server status=completed duration=4 method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:36 +1ms service=server status=completed duration=309 method=GET path=/vcs request
+INFO  2026-04-21T13:02:36 +149ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:36 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:37 +367ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:37 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:37 +137ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:37 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:37 +628ms service=server method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:37 +4ms service=server status=completed duration=4 method=GET path=/global/tasks request
+INFO  2026-04-21T13:02:37 +144ms service=server method=GET path=/panel/knowledge/memory request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/panel/knowledge/memory request
+INFO  2026-04-21T13:02:37 +1ms service=server status=completed duration=1 method=GET path=/panel/knowledge/memory request
+INFO  2026-04-21T13:02:37 +2ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:37 +4ms service=server status=completed duration=4 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:37 +0ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:37 +7ms service=server status=completed duration=7 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:37 +1ms service=server method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:37 +1ms service=server status=completed duration=1 method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:37 +110ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:37 +2ms service=server status=completed duration=2 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/events request
+INFO  2026-04-21T13:02:37 +6ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:37 +4ms service=server status=completed duration=4 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/transcript request
+INFO  2026-04-21T13:02:37 +3ms service=server method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:37 +2ms service=server status=completed duration=2 method=GET path=/control/timeline request
+INFO  2026-04-21T13:02:37 +14ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:37 +8ms service=server status=completed duration=8 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/board request
+INFO  2026-04-21T13:02:37 +8ms service=server method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/progress request
+INFO  2026-04-21T13:02:37 +0ms service=server status=started method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/progress request
+INFO  2026-04-21T13:02:37 +6ms service=server status=completed duration=6 method=GET path=/task/tsk_db0229e0d001YZ4VeY0AkcRnkz/progress request
+[overlay-benchmark] progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[]}
+[overlay-benchmark] status=active
+[overlay-benchmark] heartbeat status=active retry=0/? alive_age_ms=9 progress_age_ms=0 alive_cap_ms=120000 progress_cap_ms=720000 last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[]}
+INFO  2026-04-21T13:02:37 +359ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:37 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:37 +135ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:37 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:37 +423ms service=server status=completed duration=1550 method=GET path=/executor request
+INFO  2026-04-21T13:02:38 +406ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:38 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:38 +154ms service=server method=GET path=/agent request
+INFO  2026-04-21T13:02:38 +1ms service=server status=started method=GET path=/agent request
+INFO  2026-04-21T13:02:38 +1ms service=server status=completed duration=2 method=GET path=/agent request
+INFO  2026-04-21T13:02:38 +1ms service=server method=GET path=/config/providers request
+INFO  2026-04-21T13:02:38 +0ms service=server status=started method=GET path=/config/providers request
+INFO  2026-04-21T13:02:38 +5453ms service=server status=started providers
+INFO  2026-04-21T13:02:38 +3ms service=server status=completed duration=3 providers
+INFO  2026-04-21T13:02:38 +3ms service=server status=completed duration=3 method=GET path=/config/providers request
+INFO  2026-04-21T13:02:38 +0ms service=server method=GET path=/task/events request
+INFO  2026-04-21T13:02:38 +0ms service=server status=started method=GET path=/task/events request
+INFO  2026-04-21T13:02:38 +2ms service=server status=completed duration=2 method=GET path=/task/events request
+INFO  2026-04-21T13:02:38 +87ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:38 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:38 +415ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:38 +12ms service=scheduler id=engine.poll run
+INFO  2026-04-21T13:02:38 +89ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-21T13:02:38 +2ms service=scheduler id=engine.poll run
