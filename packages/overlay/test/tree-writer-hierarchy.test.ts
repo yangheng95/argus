@@ -173,14 +173,15 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
             stepID: "build",
             label: "Executor",
             status: "running",
+            startedAt: 1_776_000_001_000,
             summary: "3 planned steps",
             payload: {
               planNodes: [{ id: "pn_1", title: "Create shell", brief: "init app", orderIndex: 1 }],
               buildSessionID: BUILD_SID,
             },
             phases: {
-              plan:     { status: "completed" },
-              build:    { status: "running" },
+              plan:     { status: "completed", startedAt: 1_776_000_001_000, completedAt: 1_776_000_001_500 },
+              build:    { status: "running",   startedAt: 1_776_000_001_500 },
               evaluate: { status: "pending" },
             },
           },
