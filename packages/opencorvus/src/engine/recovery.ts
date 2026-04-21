@@ -4,22 +4,25 @@ import {
   abortRuns,
 } from "./writer"
 import {
-  findNextQueuedTaskForProject,
-  hasActiveTaskInProject,
   listLiveExecutorSessionsForProject,
   listLiveGoalRunsForProject,
   listLiveRunsForProject,
-  searchProjectTasks,
 } from "./store"
 
 const log = Log.create({ service: "engine-recovery" })
 
 const RECOVERY_REASON = "Process restart: executor session lost during recovery"
 
+/**
+ * On process restart: clean up physical resources that leaked (executor
+ * sessions, live goal_runs, orphan runs). THE LOOP IS NOT AUTOMATICALLY
+ * RESTARTED — the user-message-driven model says the next run requires
+ * a user message (resumeTask). Tasks stay at status="active" in DB; the
+ * "loop is in flight" fact lives in the in-memory `activeLoops` set and
+ * is checked by continueTaskMessage / resumeTask when user input arrives.
+ */
 export async function recoverProjectExecution(input: {
   projectID: string
-  isTaskLoopActive(taskID: string): boolean
-  startTaskLoop(taskID: string): Promise<void> | void
 }) {
   const { executorSessions: abortedSessions, goalRuns: abortedGoalRuns } =
     await abortLiveExecutionForProject({
@@ -28,25 +31,18 @@ export async function recoverProjectExecution(input: {
       cleanupGoalWorkspaces: false,
     })
   const abortedRuns = await recoverOrphanRuns(input.projectID)
-  const resumedTaskID = await resumeProjectQueue(
-    input.projectID,
-    input.isTaskLoopActive,
-    input.startTaskLoop,
-  )
 
   log.info("project recovery complete", {
     projectID: input.projectID,
     abortedSessions,
     abortedGoalRuns,
     abortedRuns,
-    resumedTaskID,
   })
 
   return {
     abortedSessions,
     abortedGoalRuns,
     abortedRuns,
-    resumedTaskID,
   }
 }
 
@@ -76,34 +72,3 @@ async function recoverOrphanRuns(projectID: string) {
   return abortRuns(orphans, "Process restart: run lost live executor state during recovery")
 }
 
-async function resumeProjectQueue(
-  projectID: string,
-  isTaskLoopActive: (taskID: string) => boolean,
-  startTaskLoop: (taskID: string) => Promise<void> | void,
-) {
-  const orphaned = searchProjectTasks(projectID, { status: "active", limit: 1000 })
-    .filter((task) => !isTaskLoopActive(task.id))
-    .sort((a, b) => a.time_created - b.time_created)
-
-  if (orphaned.length > 1) {
-    log.error("project recovery found multiple orphaned active tasks", {
-      projectID,
-      taskIDs: orphaned.map((task) => task.id),
-    })
-  }
-
-  const resume = orphaned[0]
-  if (resume) {
-    log.warn("project recovery resuming orphaned active task", { projectID, taskID: resume.id })
-    await startTaskLoop(resume.id)
-    return resume.id
-  }
-
-  if (hasActiveTaskInProject(projectID)) return undefined
-  const next = findNextQueuedTaskForProject(projectID)
-  if (!next || isTaskLoopActive(next.id)) return undefined
-
-  log.info("project recovery starting queued task", { projectID, taskID: next.id })
-  await startTaskLoop(next.id)
-  return next.id
-}

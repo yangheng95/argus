@@ -588,13 +588,11 @@ export namespace EngineRuntime {
         // updateRun → engine/state.ts detects the terminal transition and
         // calls PerRunState.finalize(run.id), so no manual cleanup here.
         await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
-        Promise.all([import("@/orchestrator/loop"), import("@/engine/state")]).then(([{ runTaskLoop }, { hooks: getHooks }]) => {
-          runTaskLoop({
-            taskID: task.id,
-            trigger: { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } },
-            hooks: getHooks(),
-          }).catch(err => log.error("task loop failed on completion", { taskID: task.id, error: String(err) }))
-        })
+        // No auto-restart of runTaskLoop here. If the task loop is already
+        // in flight it is awaiting pool.drain and will continue naturally.
+        // If it is not (rare race on crash recovery), the next user message
+        // will start a fresh loop via continueTaskMessage. Silent background
+        // restart contradicts the user-message-driven model.
       }
     }
   }
