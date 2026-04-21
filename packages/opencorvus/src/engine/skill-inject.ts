@@ -39,7 +39,7 @@ export async function loadStageSkills(explicitNames: string[], stage?: string): 
     loaded.push(skill)
   }
 
-  // 2. Auto-detect skills matching this stage + project characteristics
+  // 2. Auto-detect skills matching this stage + project characteristics.
   if (stage) {
     const candidates = all.filter((s) =>
       s.stage === stage &&

@@ -396,3 +396,14 @@ type InteractionRequest = {
 **回归 opencode 上游的 Session/Message/Part + RESTful + Bus 骨架；用 ACP 的 capability 协商 + OpenHands 的事件分类法补齐 argus 独有的 Task/Run/Interaction/Tool 扩展；删掉 tui-/experimental-/session-management- 三个失控前缀；建立单一 DTO 层 + 单一 Tool 注册 + 单一 Interaction 协议。**
 
 要不要我先动手 P0-1（起草命名、事件、capability 三份规范文档）？这个最便宜，而且后续所有 PR 都依赖它。
+
+1. 消息卡片 POJO OOP 统一设计原则。每个卡片必有创建时间。
+2. Agent设计 OOP 设计原则，
+3. 双源设计删除
+4. 双入口设计删除
+5. 事件命名空间设计原则
+6. API 设计统一原则
+7. Tool 设计统一原则
+8. Interaction 设计统一原则
+9. 职责分离设计原则
+10. 智能调度设计原则

@@ -33,7 +33,12 @@ export namespace Skill {
     builtin: z.boolean().optional().default(false),
     location: z.string(),
     content: z.string(),
-    /** Which pipeline stage this skill is for (e.g. "delivery", "spec", "planner"). */
+    /** Which pipeline stage this skill is for (e.g. "delivery", "spec",
+     *  "build"). Skills are instruction manuals for ONE stage at a time:
+     *  executors read implementation skills ("build"), validators read
+     *  verification skills ("delivery"), etc. Planning-stage agents
+     *  (requirements / architect / planner) must NOT see executor skills —
+     *  they plan goals, they don't implement. */
     stage: z.string().optional(),
     /** Auto-detect conditions — skill is loaded when any condition matches the project. */
     auto_detect: z.object({
