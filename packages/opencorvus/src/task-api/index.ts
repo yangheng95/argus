@@ -114,6 +114,7 @@ import {
   type RunRow,
   type InteractionRow,
 } from "@/engine/store"
+import { goalStatusByID } from "@/engine/describe"
 import { Identifier } from "@/id/id"
 import { AttachmentStore } from "@/storage/attachment-store"
 
@@ -604,7 +605,7 @@ export namespace EngineService {
     return {
       task: viewTask(task, { directory: item?.directory }),
       plan: plan ? viewPlan(plan) : undefined,
-      goals: (plan ? listGoalsByPlan(plan.id) : listGoals(taskID)).map(viewGoal),
+      goals: (plan ? listGoalsByPlan(plan.id) : listGoals(taskID)).map((g) => ({ ...viewGoal(g), status: goalStatusByID(g.id) })),
       milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
       run: run ? viewRun(run) : undefined,
       pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),

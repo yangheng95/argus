@@ -27,6 +27,7 @@ import {
   viewArtifact,
   Task,
 } from "@/engine"
+import { goalStatusByID } from "@/engine/describe"
 
 /**
  * Export routes — 提供任务和会话的完整导出接口，供外部工具消费。
@@ -87,7 +88,7 @@ export const ExportRoutes = lazy(() =>
         return c.json({
           task: viewTask(task),
           plan: plan ? viewPlan(plan) : undefined,
-          goals: goals.map(viewGoal),
+          goals: goals.map((g) => ({ ...viewGoal(g), status: goalStatusByID(g.id) })),
           milestones: milestones.map(viewMilestone),
           runs: runs.map(viewRun),
           interactions: interactions.map(viewInteraction),
