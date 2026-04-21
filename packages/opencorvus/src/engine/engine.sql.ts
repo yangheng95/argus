@@ -197,6 +197,17 @@ export const EngineTaskTable = sqliteTable(
      *  at task creation, updated by the orchestrator workflow-tracking tool,
      *  read by overlay board rendering. */
     workflow_state: text({ mode: "json" }).$type<import("@/engine/workflow").WorkflowState>(),
+    /** Architect-produced challenge seeds for the Prosecutor. Promoted from
+     *  task.metadata._architect_challenge_seeds. Written once by the
+     *  architect tool in orchestrator/tools.ts, read on each delivery
+     *  iteration by the Prosecutor. */
+    architect_challenge_seeds: text({ mode: "json" }).$type<Array<Record<string, unknown>>>(),
+    /** Delivery verdict criteria rollup — unified stream of
+     *  deferred_checks + rejection_details + startup/frontend checks, used
+     *  by the overlay Quality Gates panel. Promoted from
+     *  task.metadata.criteria_results. Written by state.ts::upsertTaskCriteria,
+     *  read by workbench/board.ts::buildBoardFields. */
+    criteria_results: text({ mode: "json" }).$type<Array<Record<string, unknown>>>().notNull().default([]),
     /** "workflow" tasks go through requirements→design→architect→execute→deliver.
      *  "build" tasks bypass the pipeline and run the build agent directly —
      *  used for one-shot edits / Q&A / quick fixes. Both kinds share the same
