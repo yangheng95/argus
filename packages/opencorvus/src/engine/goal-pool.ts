@@ -28,7 +28,6 @@ import { createDecisionLog } from "@/decision-log"
 import { isGoalDispatchable } from "@/goal/readiness"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { writeIntentBundle } from "@/goal/intent-bundle"
-import { Snapshot } from "@/snapshot"
 import {
   findGoal,
   listPlanNodesByPlan,
@@ -586,14 +585,28 @@ export class GoalPool {
           goalID: entry.goal.id, baseRef, goalRunID: goalRun.id,
         })
       } else {
-        const fresh = await Instance.provide({
-          directory: worktreeDir,
-          fn: () => Snapshot.track(),
-        })
-        if (!fresh) {
-          throw new Error(`goal-pool: Snapshot.track() returned empty for worktree ${worktreeDir}. Per-goal dispatch requires the project to be a git repo with snapshot enabled — current state is incompatible with delivery extraction.`)
+        // baseRef = the worktree branch's current HEAD commit. Reachable
+        // from `refs/heads/opencorvus/<goal-branch>`, so `git gc` never
+        // prunes it — unlike `Snapshot.track()` tree hashes which were
+        // dangling and got collected mid-task by the hourly snapshot.cleanup
+        // (root cause of goal #4's infinite "zero file changes" loop on
+        // task tsk_db1220dfa001J5fzmxG0Q9dIyX). Worktree already has a
+        // proper git index + HEAD via `Worktree.create`, so the separate
+        // snapshot git-dir was double-source (rule 22) for the per-goal path.
+        const { $: $bun } = await import("bun")
+        const headRev = (
+          await $bun`git rev-parse HEAD`
+            .quiet()
+            .cwd(worktreeDir)
+            .nothrow()
+            .text()
+        ).trim()
+        if (!headRev) {
+          throw new Error(
+            `goal-pool: git rev-parse HEAD returned empty for worktree ${worktreeDir}. Worktree must have at least one commit (Worktree.create creates an initial scaffold commit when the primary repo is empty).`,
+          )
         }
-        baseRef = fresh
+        baseRef = headRev
         updateGoalWorkspaceBaseRef(entry.goal.id, baseRef)
         log.info("captured goal-scoped baseRef", {
           goalID: entry.goal.id, baseRef, goalRunID: goalRun.id,

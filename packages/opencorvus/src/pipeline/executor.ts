@@ -21,7 +21,7 @@ import { Log } from "@/util/log"
 import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/engine"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
-import { deliveryFromSnapshot } from "@/goal/runner"
+import { deliveryFromWorktree } from "@/goal/runner"
 import { extractGoalReport } from "@/tool/goal-report"
 import { Instance } from "@/project/instance"
 
@@ -371,18 +371,14 @@ async function* streamExecutorEvents(
 }
 
 // ---------------------------------------------------------------------------
-// Extract delivery diffs via Snapshot subsystem
+// Extract delivery diffs via the worktree's own git.
 //
-// Snapshot keeps a project-scoped git-dir separate from the user project's
-// own `.git`. `Snapshot.track()` hashes the current worktree contents into
-// a tree-hash using a per-call temporary index (no cross-worktree index
-// corruption). `Snapshot.diffFull(baseRef, mergeRef)` returns the real
-// before/after FileDiff[] between the two tree hashes.
-//
-// The caller must have captured `baseRef` via `Snapshot.track()` inside
-// `Instance.provide({ directory: workDir })` immediately before the
-// executor started. Missing baseRef or missing workDir is a dispatch bug
-// and we fail loud (no silent empty-delivery fallback).
+// The per-goal worktree is already a proper git worktree with its own
+// index + HEAD + branch. baseRef is the worktree HEAD captured before the
+// executor starts (goal-pool.ts); after the executor finishes,
+// `deliveryFromWorktree` stages everything (`git add -A`), commits, and
+// diffs baseRef..HEAD for the FileDiff[] payload. Missing workDir/baseRef
+// is a dispatch bug — fail loud.
 // ---------------------------------------------------------------------------
 
 async function extractDelivery(
@@ -403,7 +399,7 @@ async function extractDelivery(
   }
   const result = await Instance.provide({
     directory: workDir,
-    fn: () => deliveryFromSnapshot(baseRef, `Goal ${goalID.slice(-8)}`),
+    fn: () => deliveryFromWorktree(baseRef, `Goal ${goalID.slice(-8)}`),
   })
   // Executor contract: goal_report is mandatory and terminal. extractGoalReport
   // throws on missing / duplicated / invalid — those are failures, not fallback
