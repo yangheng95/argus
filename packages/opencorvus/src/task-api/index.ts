@@ -126,46 +126,63 @@ async function continueTaskMessage(
 ) {
   const task = requireTask(taskID)
   const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+  const { isTaskLoopActive, runTaskLoop } = await import("@/orchestrator/loop")
 
-  // Inject fast path is text-only: executor.resume() has no attachment channel.
-  // When attachments are present we must write them to session first so the
-  // next Orchestrator turn sees the full user message (text + file parts), and
-  // fall through to the queued-note path to trigger that turn.
+  // Inject fast path: a live executor is consuming a stream and the new
+  // message can be injected mid-turn without restarting anything.
+  // Text-only; attachments must go through session.
   const injected =
     attachments.length === 0 && run ? await injectRunningTaskMessage(task, run, text) : false
   if (injected) {
-    return {
-      mode: "injected" as const,
-      resumed: true,
-      status: "active" as const,
-    }
+    return { mode: "injected" as const, resumed: true, status: "active" as const }
   }
 
-  // Always store the message in session history so Orchestrator can see it later
+  // Append the user message to session history — the describe layer and
+  // orchestrator prompt both read session messages, so appending here is
+  // how the new message becomes visible to whatever runs next.
   await appendTaskSessionMessage(task, text, attachments)
 
-  // If task is in a terminal/blocked state → wake up Orchestrator to handle the message
-  if (["failed", "cancelled"].includes(task.status)) {
-    await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "User message received, re-queuing")
-    import("@/orchestrator/loop").then(async ({ runTaskLoop }) => {
-      const { hooks } = await import("@/engine/state")
-      runTaskLoop({
-        taskID,
-        trigger: { kind: "retry" },
-        hooks: hooks(),
-      }).catch((err) => {
-        log.error("task loop failed on retry", { taskID, error: err instanceof Error ? err.message : String(err) })
+  // Single rule: if the task is not in a terminal state (completed / failed /
+  // cancelled) AND no task loop is currently running, a user message is the
+  // signal to start a fresh loop. `runTaskLoop` itself is idempotent
+  // (activeLoops guard), so the re-check is defense-in-depth; the real gate
+  // is "not terminal". Failed / cancelled tasks first transition to queued
+  // (re-activation) so the loop's terminal-state early exit doesn't fire.
+  const terminal = task.status === "completed" || task.status === "failed" || task.status === "cancelled"
+  const loopRunning = isTaskLoopActive(taskID)
+
+  if (terminal) {
+    await updateTask(
+      task,
+      { status: "queued", error: null, blocking_reason: null },
+      "User message received, re-activating task",
+    )
+  }
+
+  if (!loopRunning) {
+    const { hooks } = await import("@/engine/state")
+    // Fire-and-forget: the loop drains asynchronously. User only needs to
+    // know the message was accepted; the loop's progress streams back
+    // through events.
+    runTaskLoop({
+      taskID,
+      trigger: { kind: "retry" },
+      hooks: hooks(),
+    }).catch((err) => {
+      log.error("task loop failed on user-message resume", {
+        taskID, error: err instanceof Error ? err.message : String(err),
       })
     })
     return {
-      mode: "agent_retry" as const,
+      mode: terminal ? ("agent_retry" as const) : ("resumed" as const),
       resumed: true,
-      status: "queued" as const,
+      status: terminal ? ("queued" as const) : (task.status as string),
     }
   }
 
-  // Otherwise: executor is running but doesn't support inject, or task is in pipeline stages.
-  // Queue the message — Orchestrator will see it at the next decision point via operatorNotesSection.
+  // Loop is already running; the message is in session history and will
+  // be picked up on the next decision point. Record an operator note as
+  // a visibility aid for describe-layer rendering.
   await EngineService.recordOperatorNote(taskID, text)
   return {
     mode: "queued" as const,
@@ -384,18 +401,11 @@ export namespace EngineService {
     // live rows still block readiness.
     async function recoverProjectExecution() {
       const projectID = Instance.project.id
-      const [{ isTaskLoopActive, runTaskLoop }, { hooks: stateHooks }, { recoverProjectExecution }] = await Promise.all([
-        import("@/orchestrator/loop"),
-        import("@/engine/state"),
-        import("@/engine/recovery"),
-      ])
-      await recoverProjectExecution({
-        projectID,
-        isTaskLoopActive,
-        startTaskLoop: async (taskID) => {
-          await runTaskLoop({ taskID, trigger: { kind: "restart-recovery" }, hooks: stateHooks() })
-        },
-      })
+      const { recoverProjectExecution } = await import("@/engine/recovery")
+      // Recovery only cleans physical resources (sessions / goal_runs /
+      // orphan runs). Loop resumption is user-message-driven via the
+      // continueTaskMessage path — no auto-restart on process startup.
+      await recoverProjectExecution({ projectID })
     }
     setTimeout(() => {
       recoverProjectExecution().catch((err) => {

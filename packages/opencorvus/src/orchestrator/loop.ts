@@ -426,6 +426,11 @@ export async function runTaskLoop(input: {
 
   activeLoops.delete(taskID)
   log.info("task loop exited", { taskID, iteration })
+  // Loop-in-flight is a RUNTIME fact (activeLoops set), not a DB column.
+  // When the loop exits without the task reaching terminal, the task stays
+  // at status="active" in DB but `isTaskLoopActive(id) === false`. The
+  // next user message will notice this and start a fresh loop via
+  // resumeTask(). No auto-restart, no new status enum.
   // (continues below — serial queue dispatch)
 
   // Serial queue: when this task's loop exits, start the next queued task in the project.
