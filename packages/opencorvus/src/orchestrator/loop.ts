@@ -149,17 +149,17 @@ export async function runTaskLoop(input: {
     if (!taskAfter) break
 
     // ── Delivery rework detection ──
-    // When the deliver tool rejects within the iteration budget, it calls
-    // Goal.startNewAttempt(reason="delivery_rework") on every passed goal
-    // and aborts dispatch (WITHOUT failing the task). The state machine
-    // alone now flips those goals back to pending — no metadata signal,
-    // no LLM cooperation needed.
+    // When the deliver tool rejects within the iteration budget it calls
+    // startNewAttempt(reason="delivery_rework") on the goals the
+    // delivery agent itself attributed the rejection to (verdict.affected_goal_ids).
+    // No blanket reset — that was removed; the delivery agent is the sole
+    // attribution authority.
     //
     // This block detects the supersede event so the orchestrator agent
     // gets a `delivery_rejected` trigger (with structured feedback from
-    // the latest verdict artifact) on its next decision point — the
-    // mechanism is decoupled, but the LLM still needs the context to
-    // choose strategy (modify_goal vs add_goal vs let-it-redispatch).
+    // the latest verdict artifact) on its next decision point. The
+    // orchestrator reads affected_goal_ids + rejection_details to decide
+    // strategy (modify_goal vs add_goal vs let-it-redispatch).
     if (taskAfter.status === "active") {
       const { findRecentReworkAttempt, findLatestDeliveryVerdictArtifact } = await import("@/engine/store")
       const reworkAttempt = findRecentReworkAttempt(taskID, lastReworkSeenAt)
@@ -170,6 +170,7 @@ export async function runTaskLoop(input: {
         const feedback: Record<string, unknown> = {
           verdict_summary: verdict.summary,
           issues_found: Array.isArray(verdict.issues_found) ? verdict.issues_found : [],
+          affected_goal_ids: Array.isArray(verdict.affected_goal_ids) ? verdict.affected_goal_ids : [],
           rejection_details: Array.isArray(verdict.rejection_details) ? verdict.rejection_details : [],
           startup_verification: verdict.startup_verification,
           frontend_check: verdict.frontend_check,

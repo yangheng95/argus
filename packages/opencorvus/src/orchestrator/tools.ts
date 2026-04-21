@@ -2449,31 +2449,37 @@ export function createOrchestratorTools(input: {
             return failMsg
           }
 
-          const errFeedback = {
-            iteration: iterationErr,
-            arbiter_verdict: decisionErr.verdict,
-            arbiter_reason: decisionErr.reason,
-            verdict_summary: `Delivery verification threw: ${msg}`,
-            issues_found: [`Delivery verification error: ${msg}`],
-            rejection_details: [{ category: "runtime", error: msg }],
-          }
-          // Synthetic-failure path: the deliver agent itself threw, so we
-          // have no structured rejection_details to attribute to specific
-          // goals. Blanket reset of every passed goal is correct here —
-          // the aggregate is unverifiable, so we treat it as invalid.
-          const { startNewAttempt: startNewAttemptErr } = await import("@/engine/persist")
-          const goalsErr = listGoals(taskID)
-          const passedOrCompletedErr = goalsErr.filter((g) => goalStatusByID(g.id) === "passed")
-          for (const g of passedOrCompletedErr) {
-            startNewAttemptErr({
-              goalID: g.id,
-              reason: "delivery_rework",
-              feedback: errFeedback,
+          // Delivery agent THREW — this is an infrastructure fault
+          // (network, LLM parse retry exhaustion, tool crash), NOT a
+          // verdict that goals are unacceptable. Do NOT open new attempts
+          // on passed goals: a throw carries zero evidence that any
+          // specific goal is at fault. That was rule-1 / rule-23 violation
+          // — the same blanket-reset pattern we removed from the rejected
+          // path. Instead: record the failure, let the orchestrator (LLM)
+          // read it and decide on the next turn whether to retry_goal,
+          // fail_task, or modify a goal.
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            const decisionLog = createDecisionLog(taskID)
+            decisionLog.append({
+              phase: "delivery",
+              key: `delivery_verification_threw_${iterationErr}`,
+              value: `Delivery agent threw: ${msg}`,
+              reason: `arbiter_verdict=${decisionErr.verdict}; arbiter_reason=${decisionErr.reason}`,
             })
+          } catch {
+            /* best effort */
           }
 
-          stopAfterDispatch.abort("delivery_rework")
-          return `Delivery verification failed: ${msg}. Iteration ${iterationErr}, arbiter=${decisionErr.verdict} triggered.`
+          stopAfterDispatch.abort("delivery_threw")
+          return (
+            `Delivery verification threw (not a structured rejection): ${msg}. ` +
+            `Iteration ${iterationErr}, arbiter=${decisionErr.verdict} (reason: ${decisionErr.reason}). ` +
+            `No goals were reset — the throw is an infrastructure fault and carries no per-goal ` +
+            `attribution. Read the decision log entry delivery_verification_threw_${iterationErr} and ` +
+            `decide: retry_goal on a suspect goal, modify_goal if the contract looks wrong, or fail_task ` +
+            `if the failure is fundamental.`
+          )
         }
       },
     }),
