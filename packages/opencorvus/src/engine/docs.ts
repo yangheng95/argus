@@ -134,9 +134,9 @@ function selectors(input?: Record<string, unknown> | null) {
 function counts(goals: GoalRow[]) {
   return {
     total: goals.length,
-    passed: goals.filter((item) => item.status === "passed").length,
-    failed: goals.filter((item) => item.status === "failed").length,
-    pending: goals.filter((item) => item.status === "pending").length,
+    passed: goals.filter((item) => goalStatusByID(item.id) === "passed").length,
+    failed: goals.filter((item) => goalStatusByID(item.id) === "failed").length,
+    pending: goals.filter((item) => goalStatusByID(item.id) === "pending").length,
   }
 }
 

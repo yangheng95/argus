@@ -1,23 +1,25 @@
 /**
- * Derive `engine_goal.status` from (cascade_state, goal_run chain tip).
+ * Derive the current goal state from (cascade_state, goal_run chain tip).
  *
- * engine_goal.status is NOT an authored field — it's a cached projection of
- * two inputs:
- *   1. `engine_goal.cascade_state` — non-null only when the goal's deps
- *      are permanently failed and no goal_run will ever dispatch. Written
- *      only by `persist.ts::updateGoalCascadeFailed`.
- *   2. `engine_goal_run` chain — the supersede-tip goal_run row.
+ * After Phase 3, `engine_goal.status` is no longer authoritative — it is
+ * a stale INSERT-time placeholder that nobody reads. Call sites derive
+ * the live state via `describe.ts::goalStatusByID` (which wraps
+ * `deriveGoalStatus`). The engine_goal.status column remains in the
+ * schema only because a Phase 4 DB reset hasn't happened yet; it is not
+ * a cache, not a gate, and will be dropped when Phase 4 ships.
  *
- * There are exactly two legal writers for `engine_goal.status`:
- *   - `syncGoalStatus()`           — derives from the two inputs above
- *   - `updateGoalCascadeFailed()`  — writes cascade_state, then calls
- *                                    syncGoalStatus
+ * The legal signals remain:
+ *   1. `engine_goal.cascade_state` — non-null only when deps permanently
+ *      failed. Written by `persist.ts::updateGoalCascadeFailed`.
+ *   2. `engine_goal_run` chain — the supersede-tip row, plus its
+ *      `superseded_reason` first-class column.
  *
- * All other direct writes to engine_goal.status are a bug. They produce
- * divergence that the dispatch gate / readiness logic cannot reconcile,
- * which historically caused the "completed goal_run but pending goal"
- * stall (iter-6 / iter-7) and the "failed status silently re-derived"
- * stall (chgZ 2026-04-18).
+ * `syncGoalStatus()` no longer writes engine_goal.status. It re-derives
+ * on every call and emits GoalPassed / GoalFailed events on transition,
+ * using an in-memory last-emitted map as the baseline (the prior
+ * baseline was the cache field, now stale). Event subscribers
+ * (overlay, decision-log watchers, bus consumers) are idempotent, so a
+ * duplicate emit after process restart is harmless.
  */
 
 import { Database, eq } from "@/storage/db"
@@ -117,15 +119,22 @@ export function deriveGoalStatus(goalID: string): EngineGoalStatus | undefined {
 }
 
 /**
- * Recompute engine_goal.status from goal_run chain tip and write it back.
- * No-op when the derived value equals the current value. Emits GoalPassed /
- * GoalFailed events on transition so bus subscribers (overlay, board,
- * decision-log watchers) see the change — matches the events emitted by
- * the previous ad-hoc UPDATE sites.
+ * Re-derive goal state from the event stream (cascade_state + goal_run
+ * chain tip) and emit transition events when the derived value has
+ * changed since the last emission. Does NOT update engine_goal.status —
+ * that cache was retired in Phase 3. Callers still invoke this after
+ * goal_run lifecycle writes (createGoalRun, updateGoalRun,
+ * startNewAttempt) so event subscribers see the transition in real time.
  *
- * Callers must invoke this after any goal_run lifecycle write
- * (createGoalRun, updateGoalRun, startNewAttempt).
+ * Baseline for transition comparison is an in-memory map
+ * (`lastEmittedStatus`) keyed by goal ID. The baseline existed implicitly
+ * in the old cache field; now it is explicit and in-process. On process
+ * restart the map is empty and the first derive re-emits — event
+ * subscribers are idempotent (overlay projections, decision-log
+ * watchers), so duplicate emits after restart are harmless.
  */
+const lastEmittedStatus = new Map<string, EngineGoalStatus>()
+
 export function syncGoalStatus(goalID: string, reason: string) {
   const goal = findGoal(goalID)
   if (!goal) {
@@ -133,18 +142,12 @@ export function syncGoalStatus(goalID: string, reason: string) {
     return
   }
   const derived = deriveGoalStatus(goalID)
-  if (!derived) return // no goal_run yet; keep whatever engine_goal started with
-  if (goal.status === derived) return
-  const now = Date.now()
-  Database.use((db) =>
-    db
-      .update(EngineGoalTable)
-      .set({ status: derived, time_updated: now })
-      .where(eq(EngineGoalTable.id, goalID))
-      .run(),
-  )
-  log.info("goal status synced from goal_run chain", {
-    goalID, from: goal.status, to: derived, reason,
+  if (!derived) return // no goal_run yet — nothing to emit
+  const prev = lastEmittedStatus.get(goalID)
+  if (prev === derived) return
+  lastEmittedStatus.set(goalID, derived)
+  log.info("goal status transition (derived, no cache write)", {
+    goalID, from: prev ?? "(initial)", to: derived, reason,
   })
   if (derived === "passed") {
     Database.effect(() =>

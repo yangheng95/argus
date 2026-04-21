@@ -8,6 +8,7 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { startNewAttempt } from "../../src/engine/persist"
+import { goalStatusByID } from "../../src/engine/describe"
 import { findGoal, findGoalRun } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
 
@@ -126,7 +127,7 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     const gr = `grun_completed_${Date.now()}`
     insertGoalRun({ id: gr, status: "completed" })
     // Sanity: starting status is the seeded passed.
-    expect(findGoal(goalID)?.status).toBe("passed")
+    expect(goalStatusByID(goalID)).toBe("passed")
 
     const result = startNewAttempt({ goalID, reason: "delivery_rework" })
 
@@ -138,7 +139,7 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     expect(tip?.status).toBe("completed")
     // engine_goal.status is reprojected via syncGoalStatus — readiness picks
     // it up on the next pool.submit.
-    expect(findGoal(goalID)?.status).toBe("pending")
+    expect(goalStatusByID(goalID)).toBe("pending")
   })
 
   test("failed tip → pending (manual_retry reason)", () => {
@@ -149,12 +150,12 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
     Database.use((db) =>
       db.update(EngineGoalTable).set({ status: "failed" }).where(eq(EngineGoalTable.id, goalID)).run(),
     )
-    expect(findGoal(goalID)?.status).toBe("failed")
+    expect(goalStatusByID(goalID)).toBe("failed")
 
     startNewAttempt({ goalID, reason: "manual_retry" })
 
     expect(findGoalRun(gr)?.superseded_reason).toBe("manual_retry")
-    expect(findGoal(goalID)?.status).toBe("pending")
+    expect(goalStatusByID(goalID)).toBe("pending")
   })
 
   test("aborted tip → pending (restart_stage reason)", () => {
@@ -173,12 +174,12 @@ describe("Goal.startNewAttempt — terminal-tip supersede", () => {
 describe("Goal.startNewAttempt — no-op branches", () => {
   test("no goal_run at all → no supersede, status unchanged", () => {
     // No insertGoalRun call — goal has zero runs in history.
-    const before = findGoal(goalID)?.status
+    const before = goalStatusByID(goalID)
     const result = startNewAttempt({ goalID, reason: "delivery_rework" })
     expect(result.supersededTipID).toBeUndefined()
     // With no goal_run, deriveGoalStatus returns undefined and
     // syncGoalStatus keeps whatever engine_goal started with.
-    expect(findGoal(goalID)?.status).toBe(before!)
+    expect(goalStatusByID(goalID)).toBe(before!)
   })
 
   test("live (running) tip → no supersede — supersede has no meaning on live rows", () => {
@@ -194,7 +195,7 @@ describe("Goal.startNewAttempt — no-op branches", () => {
     expect(findGoalRun(gr)?.superseded_reason).toBeFalsy()
     // Goal stays running — live converges naturally; mechanism doesn't
     // short-circuit the executor.
-    expect(findGoal(goalID)?.status).toBe("running")
+    expect(goalStatusByID(goalID)).toBe("running")
   })
 })
 
