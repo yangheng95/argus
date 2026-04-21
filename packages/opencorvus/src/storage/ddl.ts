@@ -367,6 +367,12 @@ CREATE TABLE IF NOT EXISTS engine_task (
   time_started           integer,
   time_completed         integer,
   time_status_changed    integer,
+  -- rewind_cursor_time: when set, UI-facing event queries filter out rows
+  -- with time_created > cursor. Append-only history stays intact; this is
+  -- a projection cursor, not a delete marker. Written by rewindTask API.
+  rewind_cursor_time     integer,
+  rewind_cursor_event_id text,
+  rewind_count           integer NOT NULL DEFAULT 0,
   time_created           integer NOT NULL,
   time_updated           integer NOT NULL,
   FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,

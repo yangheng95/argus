@@ -891,6 +891,16 @@ export const Event = {
   })),
   GoalPassed: BusEvent.define("goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
   GoalFailed: BusEvent.define("goal.failed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
+  /** User rewound the task timeline to a specific anchor event. Events
+   *  with time_created > cursorTime are filtered from UI-facing queries.
+   *  Overlay subscribers reload their filtered view on receipt. */
+  TaskRewound: BusEvent.define("task.rewound", z.object({
+    taskID: Identifier.schema("task"),
+    cursorTime: z.number().int().nonnegative(),
+    anchorEventID: z.string().optional(),
+    reason: z.string().optional(),
+    rewindCount: z.number().int().nonnegative(),
+  })),
   MilestoneActivated: BusEvent.define("milestone.activated", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
   MilestonePassed: BusEvent.define("milestone.passed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
   MilestoneFailed: BusEvent.define("milestone.failed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),

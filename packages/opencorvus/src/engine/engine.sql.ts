@@ -200,6 +200,23 @@ export const EngineTaskTable = sqliteTable(
     /** Timestamp when the task's status last changed. Used by stranded-task recovery
      *  to measure time-in-current-status without being reset by incidental DB writes. */
     time_status_changed: integer(),
+    /** Rewind cursor: when non-null, all UI-facing event queries filter events
+     *  with `time_created > rewind_cursor_time` OUT. This is how "rewind to a
+     *  specific message card" works without deleting history — the filter is
+     *  a projection, the underlying append-only log stays intact. Written by
+     *  `rewindTask(taskID, eventID)` which also aborts any in-flight loop.
+     *  When a new user message arrives AFTER a rewind, its session-message
+     *  event is appended normally; the next loop sees "history up to cursor
+     *  + new message beyond cursor" as a merged view per describe layer. */
+    rewind_cursor_time: integer(),
+    /** The event id the user clicked to anchor the rewind. Audit only;
+     *  the cursor time is what actually filters queries. Kept for overlay
+     *  highlighting (which card the user rewound from). */
+    rewind_cursor_event_id: text(),
+    /** Monotonic counter of rewind operations on this task. Useful for
+     *  rate-limiting (overlay can warn on rapid re-rewind) and for
+     *  distinguishing "new events since rewind" in UI diffs. */
+    rewind_count: integer().notNull().default(0),
     ...Timestamps,
   },
   (table) => [
