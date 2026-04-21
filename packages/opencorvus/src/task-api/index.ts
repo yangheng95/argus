@@ -514,8 +514,7 @@ export namespace EngineService {
         attachments: attachmentRefs.length ? attachmentRefs : undefined,
         requestID, source: input.source,
         priority: input.priority, kind: input.kind, budget: input.budget, metadata,
-        channelBinding: input.channelBinding, milestones: input.milestones,
-        goals: input.goals, routing: input.routing,
+        channelBinding: input.channelBinding,
         projectID: Instance.project.id,
       })
     } catch (error) {

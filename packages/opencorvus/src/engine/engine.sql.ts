@@ -186,6 +186,11 @@ export const EngineTaskTable = sqliteTable(
      *  shape. Written by the orchestrator `design_analysis` tool, consumed by
      *  delivery prompt rendering. */
     design_specs: text({ mode: "json" }).$type<import("@/design-analyst/types").VisualSpec[]>().notNull().default([]),
+    /** Executor that runs this task's goal runs — "opencode" / "codex" /
+     *  "claude-code". Promoted from task.metadata._pipeline.executor (which
+     *  carried several other fields that turned out to be dead). Read by the
+     *  dispatch tool when creating runs. */
+    executor: text().notNull().$type<EngineExecutor>().default("opencode"),
     /** "workflow" tasks go through requirements→design→architect→execute→deliver.
      *  "build" tasks bypass the pipeline and run the build agent directly —
      *  used for one-shot edits / Q&A / quick fixes. Both kinds share the same
