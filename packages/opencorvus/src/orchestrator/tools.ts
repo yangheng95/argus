@@ -47,6 +47,7 @@ import {
   requireTask,
 } from "@/engine/store"
 import { effectiveMaxRuns } from "@/engine/helpers"
+import { goalStatusByID } from "@/engine/describe"
 import {
   GoalContractAddInputSchema,
   GoalContractUpdateSchema,
@@ -1112,7 +1113,7 @@ export function createOrchestratorTools(input: {
         // updateGoalCascadeFailed for no-goal_run cascades).
         const contractFields = ["title", "objective", "acceptance_specs", "owned_paths", "depends_on", "exports", "imports", "priority", "kind"]
         const contractChanged = contractFields.some(f => f in setValues)
-        const statusReset = contractChanged && (goal.status === "passed" || goal.status === "failed")
+        const statusReset = contractChanged && (goalStatusByID(goal.id) === "passed" || goalStatusByID(goal.id) === "failed")
 
         const { EngineGoalTable } = await import("@/engine/engine.sql")
         Database.use((db) => {
@@ -1157,7 +1158,7 @@ export function createOrchestratorTools(input: {
           supersededTipID = result.supersededTipID
         }
 
-        const resetSuffix = statusReset ? ` (status reset: ${goal.status} → pending via goal_run chain)` : ""
+        const resetSuffix = statusReset ? ` (status reset: ${goalStatusByID(goal.id)} → pending via goal_run chain)` : ""
         const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
         const supersedeSuffix = supersededTipID ? `, tip ${supersededTipID} superseded` : ""
         return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}${supersedeSuffix}`
@@ -1169,7 +1170,7 @@ export function createOrchestratorTools(input: {
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
-        const failed = dbGoals.filter(g => g.status === "failed")
+        const failed = dbGoals.filter(g => goalStatusByID(g.id) === "failed")
         if (failed.length === 0) return "No failed goals."
         const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForTask(taskID)
@@ -1244,9 +1245,9 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         const goal = dbGoals.find((g) => g.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
-        if (goal.status !== "failed") {
+        if (goalStatusByID(goal.id) !== "failed") {
           return (
-            `Goal ${goalID} is in status=${goal.status}; retry_goal only applies to failed goals. ` +
+            `Goal ${goalID} is in status=${goalStatusByID(goal.id)}; retry_goal only applies to failed goals. ` +
             `To change the contract of a passed goal use modify_goal.`
           )
         }
@@ -1274,7 +1275,7 @@ export function createOrchestratorTools(input: {
         const priorTip = findLatestTipGoalRun(goalID)
         if (!priorTip) {
           throw new Error(
-            `retry_goal: goal ${goalID} is in status=${goal.status} but has no prior goal_run; ` +
+            `retry_goal: goal ${goalID} is in status=${goalStatusByID(goal.id)} but has no prior goal_run; ` +
               `cannot retry without a row to supersede. This is a data inconsistency upstream of retry.`,
           )
         }
@@ -1398,7 +1399,7 @@ export function createOrchestratorTools(input: {
           const goals = listGoals(taskID)
           sections.push(`## Goals (${goals.length})`)
           for (const g of goals) {
-            sections.push(`- [${g.status}] ${g.id}: ${g.title} [${g.priority}]`)
+            sections.push(`- [${goalStatusByID(g.id)}] ${g.id}: ${g.title} [${g.priority}]`)
             sections.push(`  objective: ${g.objective.slice(0, 200)}`)
             sections.push(`  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`)
             if (g.owned_paths?.length) sections.push(`  owned_paths: ${g.owned_paths.join(", ")}`)
@@ -1786,14 +1787,14 @@ export function createOrchestratorTools(input: {
         const goals = listGoals(taskID)
 
         // Hard lock: refuse delivery while any goals are still running/pending
-        const notDone = goals.filter(g => isDispatchableGoal(g) && (g.status === "running" || g.status === "pending"))
+        const notDone = goals.filter(g => isDispatchableGoal(g) && (goalStatusByID(g.id) === "running" || goalStatusByID(g.id) === "pending"))
         if (notDone.length > 0) {
-          return `Cannot deliver: ${notDone.length} goal(s) still in progress (${notDone.map(g => `${g.title}:${g.status}`).join(", ")}). Wait for ALL goals to complete before delivering.`
+          return `Cannot deliver: ${notDone.length} goal(s) still in progress (${notDone.map(g => `${g.title}:${goalStatusByID(g.id)}`).join(", ")}). Wait for ALL goals to complete before delivering.`
         }
 
-        const blockingFailed = goals.filter(g => g.priority === "blocking" && g.status === "failed")
+        const blockingFailed = goals.filter(g => g.priority === "blocking" && goalStatusByID(g.id) === "failed")
         if (blockingFailed.length > 0) {
-          const summary = blockingFailed.map(g => `[${g.status}] ${g.title}`).join("; ")
+          const summary = blockingFailed.map(g => `[${goalStatusByID(g.id)}] ${g.title}`).join("; ")
           return `Cannot deliver: ${blockingFailed.length} blocking goal(s) failed. Fix them first: ${summary}`
         }
 
@@ -2029,8 +2030,8 @@ export function createOrchestratorTools(input: {
           // the agent actually verified, not just a single pass/fail bit.
           await sinkDeliveryVerdictToCriteria(taskID, verdict)
 
-          const passedCount = goals.filter(g => g.status === "passed").length
-          const failedCount = goals.filter(g => g.status === "failed").length
+          const passedCount = goals.filter(g => goalStatusByID(g.id) === "passed").length
+          const failedCount = goals.filter(g => goalStatusByID(g.id) === "failed").length
           // ── DAM: run metric executor + Arbiter ─────────────────────────
           // The delivery-agent's verdict is an advisory signal; the Arbiter
           // is the authoritative verdict source. Even an "accepted" agent
@@ -2331,7 +2332,7 @@ export function createOrchestratorTools(input: {
           // unacceptable and we cannot prove any single goal is still valid.
           // This is NOT a fallback in the rule-1 sense — it is the baseline
           // correctness policy; attribution is an optimization on top.
-          const passedGoals = goals.filter((g) => g.status === "passed")
+          const passedGoals = goals.filter((g) => goalStatusByID(g.id) === "passed")
           const affectedGoalIDs = new Set<string>()
           const rejectionFiles: string[] = []
           for (const d of (verdict.rejection_details ?? [])) {
@@ -2459,7 +2460,7 @@ export function createOrchestratorTools(input: {
           // the aggregate is unverifiable, so we treat it as invalid.
           const { startNewAttempt: startNewAttemptErr } = await import("@/engine/persist")
           const goalsErr = listGoals(taskID)
-          const passedOrCompletedErr = goalsErr.filter((g) => g.status === "passed")
+          const passedOrCompletedErr = goalsErr.filter((g) => goalStatusByID(g.id) === "passed")
           for (const g of passedOrCompletedErr) {
             startNewAttemptErr({
               goalID: g.id,
@@ -2610,7 +2611,7 @@ export function createOrchestratorTools(input: {
           const delivery = gr ? findDeliveryByGoalRun(gr.id) : undefined
           const files = (delivery?.result as any)?.diffs?.map((d: any) => d.file) ?? []
           allChangedFiles.push(...files)
-          goalSummaries.push(`- [${goal.status}] ${goal.title}: ${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300)}`)
+          goalSummaries.push(`- [${goalStatusByID(goal.id)}] ${goal.title}: ${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 300)}`)
           if (files.length > 0) goalSummaries.push(`  files: ${files.join(", ")}`)
         }
 

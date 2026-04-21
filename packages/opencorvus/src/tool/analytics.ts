@@ -1,6 +1,7 @@
 import { Instance } from "@/project/instance"
 import { Database, desc, eq, and, like } from "@/storage/db"
 import { EngineTaskTable, EngineEvaluationTable, EngineGoalTable } from "@/engine"
+import { goalStatusByID } from "@/engine/describe"
 import { Tool } from "./tool"
 import z from "zod"
 

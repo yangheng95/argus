@@ -14,6 +14,7 @@
  * "推荐路径 + 当前进度" 的形式注入。
  */
 import { EngineConfig } from "./config"
+import { goalStatusByID } from "./describe"
 import { listGoals, listGoalRunsForTask } from "./store"
 
 // ═══════════════════════════════════════════════════════════════════
@@ -344,7 +345,7 @@ export function projectGoalSteps(
     result[goal.id] = {
       goalID: goal.id,
       goalTitle: goal.title,
-      goalStatus: goal.status,
+      goalStatus: goalStatusByID(goal.id),
       steps,
       ...(Object.keys(stepPhases).length > 0 ? { stepPhases } : {}),
     }
