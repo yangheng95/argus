@@ -582,7 +582,7 @@ export namespace EngineService {
   }
 
   /**
-   * Merge a batch of evaluation checks into `task.metadata.criteria_results`.
+   * Merge a batch of evaluation checks into `engine_task.criteria_results`.
    * Upsert by `name` — the latest write for a given check name wins. Called
    * by the in-process visual-diff gate (orchestrator/tools.ts) and by the
    * delivery-verdict sink that flattens DeliveryVerdict.deferred_checks +

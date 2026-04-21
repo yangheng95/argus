@@ -499,7 +499,7 @@ async function buildMultimodalPrompt(
 
 function buildUserPrompt(
   input: {
-    task: { title: string; request: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
+    task: { id?: string; title: string; request: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     analysis?: GoalJudgmentType
@@ -594,11 +594,10 @@ function buildUserPrompt(
   // them itself via run_command + parallel per-goal subagents.
 
   // Operator notes — user messages sent during task execution
-  const taskID = input.task.metadata?.taskID as string | undefined
-  if (taskID) {
-    const clarifications = clarificationTranscriptSection(taskID)
+  if (input.task.id) {
+    const clarifications = clarificationTranscriptSection(input.task.id)
     if (clarifications) sections.push(clarifications)
-    const notes = operatorNotesSection(taskID)
+    const notes = operatorNotesSection(input.task.id)
     if (notes) sections.push(notes)
   }
 

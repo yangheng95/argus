@@ -218,7 +218,7 @@ export function hooks() {
 }
 
 /**
- * Merge new criteria check results into task.metadata.criteria_results.
+ * Merge new criteria check results into engine_task.criteria_results.
  *
  * Lives in the engine/state layer rather than the task-api facade because
  * every call path (goal-pool, orchestrator tools, per-goal evaluator) needs
@@ -236,15 +236,14 @@ export async function upsertTaskCriteria(
   }>,
 ) {
   const task = requireTask(taskID)
-  const meta = ((task.metadata as Record<string, unknown> | null) ?? {}) as Record<string, unknown>
-  const prev = Array.isArray(meta.criteria_results) ? (meta.criteria_results as any[]) : []
-  const byName = new Map<string, any>(prev.map((c) => [String(c?.name ?? ""), c]))
+  const prev = Array.isArray(task.criteria_results) ? task.criteria_results : []
+  const byName = new Map<string, any>(prev.map((c) => [String((c as any)?.name ?? ""), c]))
   for (const incoming of checks) {
     byName.set(incoming.name, { ...byName.get(incoming.name), ...incoming })
   }
   const merged = [...byName.values()].filter((c) => c && typeof c.name === "string" && c.name)
   await updateTask(task, {
-    metadata: { ...meta, criteria_results: merged },
+    criteria_results: merged,
   }, `criteria upsert: ${checks.map((c) => `${c.name}=${c.status}`).join(", ")}`)
   return merged
 }

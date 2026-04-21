@@ -770,7 +770,7 @@ export const TaskBoard = z.object({
   goalWorkflows: TaskBoardGoalWorkflow.array().optional(),
   /** Task-level rollup of every quality criterion that touched this task —
    *  per-goal evaluator outcomes, delivery agent verifications, and external
-   *  quality gates (e.g. visual-diff). Persisted in task.metadata.criteria_results
+   *  quality gates (e.g. visual-diff). Persisted in engine_task.criteria_results
    *  and exposed here so the overlay's EvaluationCriteriaPanel and the delivery
    *  agent's `query_criteria` tool both read from the same place. */
   criteriaResults: EvaluationCheck.array().optional(),

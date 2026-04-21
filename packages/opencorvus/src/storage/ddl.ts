@@ -360,6 +360,8 @@ CREATE TABLE IF NOT EXISTS engine_task (
   design_specs           text NOT NULL DEFAULT '[]',
   executor               text NOT NULL DEFAULT 'opencode',
   workflow_state         text,
+  architect_challenge_seeds text,
+  criteria_results       text NOT NULL DEFAULT '[]',
   kind                   text NOT NULL DEFAULT 'workflow',
   status                 text NOT NULL DEFAULT 'queued',
   priority               text NOT NULL DEFAULT 'normal',

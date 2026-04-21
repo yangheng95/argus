@@ -100,7 +100,7 @@ function guessMimeFromFilename(filename: string): string {
 
 // The delivery agent emits a structured DeliveryVerdict with three typed
 // surfaces (deferred_checks, rejection_details, the verdict itself). Each is
-// already per-check-shaped — flatten all three into task.metadata.criteria_results
+// already per-check-shaped — flatten all three into engine_task.criteria_results
 // so the panel reflects what was actually verified, not just an aggregate bit.
 async function sinkDeliveryVerdictToCriteria(
   taskID: string,
@@ -426,15 +426,10 @@ export function createOrchestratorTools(input: {
               global_metric_specs: result.globalMetricSpecs,
             })
 
-            const existingMeta = (task.metadata as Record<string, unknown> | null) ?? {}
-            const updatedMeta = {
-              ...existingMeta,
-              _architect_challenge_seeds: result.challengeSeeds,
-            }
             db.update(EngineTaskTable)
               .set({
                 active_spec_version_id: specSnapshotID,
-                metadata: updatedMeta,
+                architect_challenge_seeds: result.challengeSeeds,
                 time_updated: now,
               })
               .where(eq(EngineTaskTable.id, taskID))
@@ -2001,7 +1996,7 @@ export function createOrchestratorTools(input: {
             }).run()
           )
 
-          // Sink delivery agent's structured verdict into task.metadata.criteria_results.
+          // Sink delivery agent's structured verdict into engine_task.criteria_results.
           // The verdict carries three distinct typed surfaces — flatten them into the
           // unified criteria stream so the overlay's Quality Gates panel reflects what
           // the agent actually verified, not just a single pass/fail bit.
@@ -2050,9 +2045,8 @@ export function createOrchestratorTools(input: {
           // counterexamples and challenges.
           try {
             const { runProsecutor } = await import("@/delivery/prosecutor")
-            const taskMetaRaw = (task.metadata as Record<string, unknown> | null) ?? {}
-            const rawSeeds = Array.isArray(taskMetaRaw._architect_challenge_seeds)
-              ? (taskMetaRaw._architect_challenge_seeds as Array<Record<string, unknown>>)
+            const rawSeeds = Array.isArray(task.architect_challenge_seeds)
+              ? task.architect_challenge_seeds
               : []
             const architectSeeds = rawSeeds
               .filter(

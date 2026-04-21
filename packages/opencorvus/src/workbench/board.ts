@@ -334,7 +334,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
         content: brief.content,
         updated_at: brief.updatedAt ?? Date.now(),
       },
-      // Task-level criteria rollup. Sourced from `task.metadata.criteria_results`,
+      // Task-level criteria rollup. Sourced from engine_task.criteria_results,
       // populated by:
       //   - delivery agent verdict (deferred_checks + rejection_details + overall),
       //     sunk via orchestrator/tools.ts → sinkDeliveryVerdictToCriteria()
@@ -342,7 +342,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
       //     image attachments and a rendered index.html exists)
       // Hidden in the overlay for kind=build tasks (build self-verifies; this
       // panel only applies to workflow tasks running through delivery).
-      criteriaResults: boardChecks((task.metadata as any)?.criteria_results),
+      criteriaResults: boardChecks(task.criteria_results),
   }
 }
 
