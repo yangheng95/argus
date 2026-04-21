@@ -6,15 +6,17 @@
 ## 目录
 
 ### 总览（SVG 框图）
+
 | 文件 | 展示内容 |
-|---|---|
+| --- | --- |
 | [01-agents.svg](01-agents.svg) | 图 1 — Agent 家族调用链（Gateway → Loop → sub-agents → Executor） |
 | [02-data.svg](02-data.svg) | 图 2 — 数据面（orchestrator 18 表 + Trace/Bus 横切） |
 | [03-control.svg](03-control.svg) | 图 3 — 控制面与扩展入口 |
 
 ### 详细文档（MD）
+
 | 文件 | 主题 | 对应旧 SVG Section |
-|---|---|---|
+| --- | --- | --- |
 | [01-agents.md](01-agents.md) | Agent 家族、Task Control Loop、MiniWorkflow（direct/pipeline）、task kind | A · C · H · I |
 | [02-data.md](02-data.md) | `engine_*` 18 表、session 域、Trace/Bus 横切、Decision Log | C · D · K |
 | [03-control.md](03-control.md) | ChannelIngress · ControlMessage · Panel Capability 路由 | L + 新 |
@@ -22,11 +24,14 @@
 | [05-config.md](05-config.md) | Unified Config 三层分离 + PATCH 流程 | F |
 | [06-provider.md](06-provider.md) | LLM Provider 六层适配 | G |
 | [07-panel.md](07-panel.md) | Workbench / Panel 重设计 + SSE 事件 | J |
+| [11-agent-oop-protocol.md](11-agent-oop-protocol.md) | Agent OOP 协议：BaseAgent / CapabilityContract / Mailbox / Registry / Whitelist | 新 |
+| [12-overlay-card-system.md](12-overlay-card-system.md) | Overlay 统一卡片系统：Shell / Payload / Policy / Writer | 新 |
 | [99-principles.md](99-principles.md) | 核心原则、anti-patterns、非协商约束 | B · E |
 
 ### 归档与工作笔记
+
 | 文件 | 说明 |
-|---|---|
+| --- | --- |
 | [00-sync-notes.md](00-sync-notes.md) | 阶段 1 概念对齐笔记（三张 mental model 初稿） |
 | [_archive-old-arch.svg](_archive-old-arch.svg) | 原 `specs/new-arch.svg`（1336 行）归档 |
 
