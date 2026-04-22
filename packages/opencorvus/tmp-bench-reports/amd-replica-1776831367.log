@@ -100791,3 +100791,821 @@ INFO  2026-04-22T06:19:37 +237ms service=scheduler id=engine.poll run
 INFO  2026-04-22T06:19:38 +178ms service=scheduler id=task-queue-service.poll run
 INFO  2026-04-22T06:19:38 +1ms service=scheduler id=engine.poll run
 INFO  2026-04-22T06:19:38 +88ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:38 +240ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:38 +168ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:38 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:38 +100ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:38 +237ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:39 +164ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:39 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:39 +111ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:39 +2025ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:39 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:39 +9ms service=server status=completed duration=9 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:39 +230ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:39 +158ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:39 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:39 +118ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:39 +214ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:40 +164ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:40 +19ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:40 +110ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:40 +220ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:40 +148ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:40 +18ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:40 +121ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:40 +233ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:41 +130ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:41 +22ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:41 +121ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:41 +2004ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:41 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:41 +16ms service=server status=completed duration=16 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:41 +229ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:41 +133ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:41 +26ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:41 +125ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:41 +218ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:42 +148ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:42 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:42 +131ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:42 +237ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:42 +147ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:42 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:42 +115ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:42 +236ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:43 +150ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:43 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:43 +124ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:43 +2021ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:43 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:43 +7ms service=server status=completed duration=7 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:43 +240ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:43 +148ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:43 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:43 +118ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:43 +232ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:44 +167ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:44 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:44 +113ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:44 +221ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:44 +162ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:44 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:44 +125ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:44 +209ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:45 +171ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:45 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:45 +134ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:45 +2000ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:45 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:45 +7ms service=server status=completed duration=7 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:45 +194ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:45 +174ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:45 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:45 +127ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:45 +200ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:46 +182ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:46 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:46 +130ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:46 +194ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:46 +176ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:46 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:46 +130ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:46 +202ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:47 +186ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:47 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:47 +112ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:47 +2026ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:47 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:47 +15ms service=server status=completed duration=15 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:47 +199ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:47 +179ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:47 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:47 +10746ms service=snapshot hash=672efe81c9fd99610a4e9cd88142d26630a38242
+ cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-Vu3Jdi git=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-J4Ofow\data\snapshot\bc7d8fb5594803ba6128a962dbea15444af698b4 tracking
+INFO  2026-04-22T06:19:47 +10473ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:47 +2ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:47 +131ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:47 +193ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:48 +185ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:48 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:48 +117ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:48 +732ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:48 +209ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:48 +172ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:48 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:48 +130ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:48 +188ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:49 +178ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:49 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:49 +137ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:49 +2011ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:49 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:49 +7ms service=server status=completed duration=7 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:49 +196ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:49 +12450ms service=permission permission=bash pattern=bun run typecheck 2>&1 ruleset=[{"permission":"*","pattern":"*","action":"ask"},{"permission":"invalid","pattern":"*","action":"allow"},{"permission":"doom_loop","pattern":"*","action":"ask"},{"permission":"list","pattern":"*","action":"allow"},{"permission":"glob","pattern":"*","action":"allow"},{"permission":"grep","pattern":"*","action":"allow"},{"permission":"bash","pattern":"*","action":"allow"},{"permission":"edit","pattern":"*","action":"allow"},{"permission":"task","pattern":"*","action":"allow"},{"permission":"webfetch","pattern":"*","action":"allow"},{"permission":"websearch","pattern":"*","action":"deny"},{"permission":"webpage_extract","pattern":"*","action":"ask"},{"permission":"webpage_render","pattern":"*","action":"allow"},{"permission":"codesearch","pattern":"*","action":"allow"},{"permission":"lsp","pattern":"*","action":"allow"},{"permission":"memory","pattern":"*","action":"allow"},{"permission":"schedule","pattern":"*","action":"allow"},{"permission":"skill","pattern":"*","action":"allow"},{"permission":"panel","pattern":"*","action":"allow"},{"permission":"todoread","pattern":"*","action":"allow"},{"permission":"todowrite","pattern":"*","action":"allow"},{"permission":"screen","pattern":"*","action":"allow"},{"permission":"input","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","pattern":"*","action":"deny"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","pattern":"*","action":"allow"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:49 +0ms service=permission permission=bash pattern=bun run typecheck 2>&1 action={"permission":"bash","pattern":"*","action":"allow"} evaluated
+INFO  2026-04-22T06:19:49 +1185ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:49 +8ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:49 +3ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:49 +169ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:49 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:49 +132ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:49 +172ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:50 +217ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:50 +150ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:50 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:50 +131ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:50 +237ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:50 +131ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:50 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:50 +128ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:51 +239ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:51 +147ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:51 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:51 +136ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:51 +2038ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:51 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:51 +16ms service=server status=completed duration=16 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:51 +221ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:51 +144ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:51 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:51 +133ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:52 +213ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:52 +169ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:52 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:52 +120ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:52 +214ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:52 +172ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:52 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:52 +125ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:52 +3104ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:53 +201ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:53 +5339ms service=snapshot hash=672efe81c9fd99610a4e9cd88142d26630a38242
+ cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-Vu3Jdi git=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-J4Ofow\data\snapshot\bc7d8fb5594803ba6128a962dbea15444af698b4 tracking
+INFO  2026-04-22T06:19:53 +132ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:53 +5ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:53 +178ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:53 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:53 +175ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d81948001NxC5niEOGOm72m bridge → protocol
+INFO  2026-04-22T06:19:53 +16044ms service=session.prompt step=26 sessionID=ses_24c2f8515ffev6yml4UjptXHhv loop
+INFO  2026-04-22T06:19:53 +18ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:19:53 +19ms service=session.prompt status=started resolveTools
+INFO  2026-04-22T06:19:53 +16076ms service=tool.registry status=started invalid
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started question
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started bash
+INFO  2026-04-22T06:19:53 +16079ms service=bash-tool shell=C:\Program Files\Git\bin\bash.exe bash tool using shell
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started read
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started glob
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started grep
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started edit
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started write
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started task
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started webfetch
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started todowrite
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started todoread
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started websearch
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started codesearch
+INFO  2026-04-22T06:19:53 +1ms service=tool.registry status=started skill
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started memory
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started schedule
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started goal_report
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started webpage_extract
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started webpage_compile
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started webpage_analyze
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started webpage_render
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started webpage_evaluate
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=started webpage_text_diff
+INFO  2026-04-22T06:19:53 +3623ms service=permission permission=skill pattern=panel-control ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=spec-research ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=prd-spec ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=delivery-verify-web ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=delivery-verify-api ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=webpage-clone ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +1ms service=tool.registry status=completed duration=2 invalid
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 question
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 read
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 glob
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 grep
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 edit
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 write
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 webfetch
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 todowrite
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 todoread
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 codesearch
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 memory
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 schedule
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 goal_report
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 webpage_extract
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 webpage_compile
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 webpage_analyze
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 webpage_render
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 webpage_evaluate
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 webpage_text_diff
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 bash
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=2 websearch
+INFO  2026-04-22T06:19:53 +1ms service=permission permission=task pattern=general ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=task pattern=explore ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=tool.registry status=completed duration=1 skill
+INFO  2026-04-22T06:19:53 +1ms service=tool.registry status=completed duration=3 task
+INFO  2026-04-22T06:19:53 +1ms service=permission permission=invalid pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=question pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +1ms service=permission permission=bash pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=read pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=glob pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=grep pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=edit pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=write pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=task pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=webfetch pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=todowrite pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=todoread pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +1ms service=permission permission=websearch pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=codesearch pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=memory pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +1ms service=permission permission=schedule pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=goal_report pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=webpage_extract pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=webpage_compile pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=webpage_analyze pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=webpage_render pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=webpage_evaluate pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=webpage_text_diff pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:19:53 +8ms service=session.prompt status=completed duration=8 resolveTools
+INFO  2026-04-22T06:19:53 +1ms service=permission permission=skill pattern=panel-control ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=spec-research ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=prd-spec ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=delivery-verify-web ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=delivery-verify-api ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +0ms service=permission permission=skill pattern=webpage-clone ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:19:53 +16076ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "1" "主题颜色修复" "Critical" "将暗色主题改为浅色主题" "color" "bg" "primary" "从" "0d1117" "改为" "FFFFFF" "color" "bg" "secondary" "改为" "F9FAFB" "color" "text" "primary" "从" "ffffff" "改为" "111827" "color" "text" "secondary" "改为" "6B7280" "color" "border" "从" "30363d" "改为" "E5E7EB" "color" "positive" "改为" "10B981" "在index" "html中更新meta标签" "theme" "color改为" "FFFFFF" "color" "scheme改为light" "2" "测试修复" "修复Dropdown" "test" "tsx中的测试" "Dropdown只在" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +1ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "1" "主题颜色修复" "Critical" "将暗色主题改为浅色主题" "color" "bg" "primary" "从" "0d1117" "改为" "FFFFFF" "color" "bg" "secondary" "改为" "F9FAFB" "color" "text" "primary" "从" "ffffff" "改为" "111827" "color" "text" "secondary" "改为" "6B7280" "color" "border" "从" "30363d" "改为" "E5E7EB" "color" "positive" "改为" "10B981" "在index" "html中更新meta标签" "theme" "color改为" "FFFFFF" "color" "scheme改为light" "2" "测试修复" "修复Dropdown" "test" "tsx中的测试" "Dropdown只在" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +1ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +1ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" "将暗色主题改为浅色主题" "color" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" "将暗色主题改为浅色主题" "color" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:19:53 +16079ms service=memory.injection sessionID=ses_24c2f8515ffev6yml4UjptXHhv recalled=false memory prompt section assembled
+INFO  2026-04-22T06:19:53 +9ms service=session.prompt step=27 systemPromptParts=3 systemChars=3191 systemTokensEst=798 toolCount=23 toolNames=invalid,question,bash,read,glob,grep,edit,write,webfetch,todowrite,todoread,websearch,codesearch,skill,memory,schedule,goal_report,webpage_extract,webpage_compile,webpage_analyze,webpage_render,webpage_evaluate,webpage_text_diff messageCount=53 userMsgCount=1 assistantMsgCount=26 totalContentChars=5069 contentTokensEst=1267 imageCount=0 imageTokensEst=0 toolCallCount=37 totalTokensEst=2065 context-diagnostics
+INFO  2026-04-22T06:19:53 +16080ms service=session.processor process
+INFO  2026-04-22T06:19:53 +0ms service=llm providerID=alibaba-coding-plan-cn modelID=kimi-k2.5 sessionID=ses_24c2f8515ffev6yml4UjptXHhv small=false agent=build mode=primary stream
+INFO  2026-04-22T06:19:53 +52ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=user channel=build msgID=msg_db3d07af10013svTM2H2fbgKnE bridge → protocol
+INFO  2026-04-22T06:19:53 +127ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:53 +2007ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:53 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:53 +9ms service=server status=completed duration=9 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:53 +214ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:53 +166ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:53 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:53 +129ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:54 +200ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:54 +184ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:54 +3ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:54 +110ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:54 +203ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:54 +184ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:54 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:54 +116ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:55 +200ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:55 +185ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:55 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:55 +117ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:55 +2018ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:55 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:55 +13ms service=server status=completed duration=13 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:55 +206ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:55 +175ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:55 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:55 +128ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:56 +193ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:56 +173ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:56 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:56 +135ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:56 +204ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:56 +173ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:56 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:56 +139ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:57 +201ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:57 +172ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:57 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:57 +140ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:57 +2002ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:57 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:57 +13ms service=server status=completed duration=13 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:57 +186ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:57 +178ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:57 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:57 +156ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:58 +162ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:58 +205ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:58 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:58 +141ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:58 +168ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:58 +181ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:58 +25ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:58 +137ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:59 +163ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:59 +187ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:59 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:59 +147ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:59 +2018ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:59 +1ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:59 +11ms service=server status=completed duration=11 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:19:59 +170ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:59 +188ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:19:59 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:19:59 +153ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:00 +172ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:00 +186ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:00 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:00 +146ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:00 +175ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:00 +180ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:00 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:00 +136ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:01 +198ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:01 +177ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:01 +3ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:01 +132ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:01 +2006ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:01 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:01 +11ms service=server status=completed duration=11 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:01 +205ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:01 +171ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:01 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:01 +127ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:02 +200ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:02 +187ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:02 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:02 +121ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:02 +210ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:02 +165ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:02 +28ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:02 +100ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:03 +207ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:03 +164ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:03 +23ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:03 +107ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:03 +2012ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:03 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:03 +15ms service=server status=completed duration=15 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:03 +213ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:03 +169ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:03 +18ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:03 +118ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:04 +200ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:04 +162ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:04 +16ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:04 +118ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:04 +11650ms service=snapshot hash=672efe81c9fd99610a4e9cd88142d26630a38242
+ cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-Vu3Jdi git=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-J4Ofow\data\snapshot\bc7d8fb5594803ba6128a962dbea15444af698b4 tracking
+INFO  2026-04-22T06:20:04 +11401ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:04 +6ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:04 +211ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:04 +163ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:04 +12ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:05 +128ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:05 +205ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:05 +147ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:05 +21ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:05 +759ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:05 +113ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:05 +1999ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:05 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:05 +10ms service=server status=completed duration=10 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:05 +237ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:05 +146ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:05 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:06 +132ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:06 +233ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:06 +134ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:06 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:06 +136ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:06 +228ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:06 +132ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:06 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:07 +156ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:07 +200ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:07 +137ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:07 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:07 +156ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:07 +1996ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:07 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:07 +11ms service=server status=completed duration=11 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:07 +204ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:07 +144ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:07 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:08 +154ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:08 +209ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:08 +136ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:08 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:08 +166ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:08 +203ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:08 +140ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:08 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:09 +171ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:09 +202ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:09 +143ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:09 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:09 +155ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:09 +2005ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:09 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:09 +12ms service=server status=completed duration=12 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:09 +213ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:09 +145ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:09 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:10 +165ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:10 +192ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:10 +128ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:10 +23ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:10 +147ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:10 +215ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:10 +17540ms service=permission permission=todowrite pattern=* ruleset=[{"permission":"*","pattern":"*","action":"ask"},{"permission":"invalid","pattern":"*","action":"allow"},{"permission":"doom_loop","pattern":"*","action":"ask"},{"permission":"list","pattern":"*","action":"allow"},{"permission":"glob","pattern":"*","action":"allow"},{"permission":"grep","pattern":"*","action":"allow"},{"permission":"bash","pattern":"*","action":"allow"},{"permission":"edit","pattern":"*","action":"allow"},{"permission":"task","pattern":"*","action":"allow"},{"permission":"webfetch","pattern":"*","action":"allow"},{"permission":"websearch","pattern":"*","action":"deny"},{"permission":"webpage_extract","pattern":"*","action":"ask"},{"permission":"webpage_render","pattern":"*","action":"allow"},{"permission":"codesearch","pattern":"*","action":"allow"},{"permission":"lsp","pattern":"*","action":"allow"},{"permission":"memory","pattern":"*","action":"allow"},{"permission":"schedule","pattern":"*","action":"allow"},{"permission":"skill","pattern":"*","action":"allow"},{"permission":"panel","pattern":"*","action":"allow"},{"permission":"todoread","pattern":"*","action":"allow"},{"permission":"todowrite","pattern":"*","action":"allow"},{"permission":"screen","pattern":"*","action":"allow"},{"permission":"input","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","pattern":"*","action":"deny"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","pattern":"*","action":"allow"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:10 +0ms service=permission permission=todowrite pattern=* action={"permission":"todowrite","pattern":"*","action":"allow"} evaluated
+INFO  2026-04-22T06:20:10 +5337ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:10 +4ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:10 +16ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:10 +131ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:10 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:10 +6237ms service=snapshot hash=672efe81c9fd99610a4e9cd88142d26630a38242
+ cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-Vu3Jdi git=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-J4Ofow\data\snapshot\bc7d8fb5594803ba6128a962dbea15444af698b4 tracking
+INFO  2026-04-22T06:20:10 +114ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:10 +4ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:11 +118ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d85816001rvu2aXw2yp4mcl bridge → protocol
+INFO  2026-04-22T06:20:11 +17794ms service=session.prompt step=27 sessionID=ses_24c2f8515ffev6yml4UjptXHhv loop
+INFO  2026-04-22T06:20:11 +21ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d89dbe001QvSEx3Co5Mk5yq bridge → protocol
+INFO  2026-04-22T06:20:11 +20ms service=session.prompt status=started resolveTools
+INFO  2026-04-22T06:20:11 +17827ms service=tool.registry status=started invalid
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started question
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started bash
+INFO  2026-04-22T06:20:11 +17830ms service=bash-tool shell=C:\Program Files\Git\bin\bash.exe bash tool using shell
+INFO  2026-04-22T06:20:11 +1ms service=tool.registry status=started read
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started glob
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started grep
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started edit
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started write
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started task
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started webfetch
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started todowrite
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started todoread
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started websearch
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started codesearch
+INFO  2026-04-22T06:20:11 +1ms service=tool.registry status=started skill
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started memory
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started schedule
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started goal_report
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started webpage_extract
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started webpage_compile
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started webpage_analyze
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started webpage_render
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started webpage_evaluate
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=started webpage_text_diff
+INFO  2026-04-22T06:20:11 +285ms service=permission permission=skill pattern=panel-control ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=spec-research ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=prd-spec ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=delivery-verify-web ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=delivery-verify-api ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=webpage-clone ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +1ms service=tool.registry status=completed duration=3 invalid
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=3 question
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 read
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 glob
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 grep
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 edit
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 write
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 webfetch
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 todowrite
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 todoread
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 codesearch
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 memory
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 schedule
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 goal_report
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 webpage_extract
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 webpage_compile
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 webpage_analyze
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 webpage_render
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 webpage_evaluate
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=1 webpage_text_diff
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=3 bash
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=2 websearch
+INFO  2026-04-22T06:20:11 +1ms service=permission permission=task pattern=general ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +1ms service=permission permission=task pattern=explore ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +1ms service=tool.registry status=completed duration=2 skill
+INFO  2026-04-22T06:20:11 +0ms service=tool.registry status=completed duration=3 task
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=invalid pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=question pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=bash pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=read pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=glob pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +1ms service=permission permission=grep pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=edit pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=write pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=task pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=webfetch pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=todowrite pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=todoread pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=websearch pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=codesearch pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=memory pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +1ms service=permission permission=schedule pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=goal_report pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=webpage_extract pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=webpage_compile pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=webpage_analyze pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +1ms service=permission permission=webpage_render pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=webpage_evaluate pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=webpage_text_diff pattern=* ruleset=[{"permission":"task","pattern":"*","action":"deny"}] evaluate
+INFO  2026-04-22T06:20:11 +7ms service=session.prompt status=completed duration=7 resolveTools
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=panel-control ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=spec-research ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=prd-spec ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +1ms service=permission permission=skill pattern=delivery-verify-web ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=delivery-verify-api ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +0ms service=permission permission=skill pattern=webpage-clone ruleset=[{"permission":"*","action":"ask","pattern":"*"},{"permission":"invalid","action":"allow","pattern":"*"},{"permission":"doom_loop","action":"ask","pattern":"*"},{"permission":"list","action":"allow","pattern":"*"},{"permission":"glob","action":"allow","pattern":"*"},{"permission":"grep","action":"allow","pattern":"*"},{"permission":"bash","action":"allow","pattern":"*"},{"permission":"edit","action":"allow","pattern":"*"},{"permission":"task","action":"allow","pattern":"*"},{"permission":"webfetch","action":"allow","pattern":"*"},{"permission":"websearch","action":"deny","pattern":"*"},{"permission":"webpage_extract","action":"ask","pattern":"*"},{"permission":"webpage_render","action":"allow","pattern":"*"},{"permission":"codesearch","action":"allow","pattern":"*"},{"permission":"lsp","action":"allow","pattern":"*"},{"permission":"memory","action":"allow","pattern":"*"},{"permission":"schedule","action":"allow","pattern":"*"},{"permission":"skill","action":"allow","pattern":"*"},{"permission":"panel","action":"allow","pattern":"*"},{"permission":"todoread","action":"allow","pattern":"*"},{"permission":"todowrite","action":"allow","pattern":"*"},{"permission":"screen","action":"allow","pattern":"*"},{"permission":"input","action":"ask","pattern":"*"},{"permission":"external_directory","pattern":"*","action":"ask"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"},{"permission":"question","action":"deny","pattern":"*"},{"permission":"read","pattern":"*","action":"allow"},{"permission":"read","pattern":"*.env","action":"ask"},{"permission":"read","pattern":"*.env.*","action":"ask"},{"permission":"read","pattern":"*.env.example","action":"allow"},{"permission":"question","action":"allow","pattern":"*"},{"permission":"external_directory","pattern":"C:\\Users\\chuan\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-home-J4Ofow\\data\\tool-output\\*","action":"allow"}] evaluate
+INFO  2026-04-22T06:20:11 +170ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:11 +17841ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "1" "主题颜色修复" "Critical" "将暗色主题改为浅色主题" "color" "bg" "primary" "从" "0d1117" "改为" "FFFFFF" "color" "bg" "secondary" "改为" "F9FAFB" "color" "text" "primary" "从" "ffffff" "改为" "111827" "color" "text" "secondary" "改为" "6B7280" "color" "border" "从" "30363d" "改为" "E5E7EB" "color" "positive" "改为" "10B981" "在index" "html中更新meta标签" "theme" "color改为" "FFFFFF" "color" "scheme改为light" "2" "测试修复" "修复Dropdown" "test" "tsx中的测试" "Dropdown只在" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +1ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "1" "主题颜色修复" "Critical" "将暗色主题改为浅色主题" "color" "bg" "primary" "从" "0d1117" "改为" "FFFFFF" "color" "bg" "secondary" "改为" "F9FAFB" "color" "text" "primary" "从" "ffffff" "改为" "111827" "color" "text" "secondary" "改为" "6B7280" "color" "border" "从" "30363d" "改为" "E5E7EB" "color" "positive" "改为" "10B981" "在index" "html中更新meta标签" "theme" "color改为" "FFFFFF" "color" "scheme改为light" "2" "测试修复" "修复Dropdown" "test" "tsx中的测试" "Dropdown只在" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +1ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +0ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" "将暗色主题改为浅色主题" "color" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=profile,lesson,fact,note found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +1ms service=memory.search query="根据delivery" "rejection的反馈修复以下问题" "主题颜色修复" "critical" "将暗色主题改为浅色主题" "color" projectId=bc7d8fb5594803ba6128a962dbea15444af698b4 scope=all kinds=episode found=0 candidates=0 FTS search
+INFO  2026-04-22T06:20:11 +17844ms service=memory.injection sessionID=ses_24c2f8515ffev6yml4UjptXHhv recalled=false memory prompt section assembled
+INFO  2026-04-22T06:20:11 +21ms service=session.prompt step=28 systemPromptParts=3 systemChars=3191 systemTokensEst=798 toolCount=23 toolNames=invalid,question,bash,read,glob,grep,edit,write,webfetch,todowrite,todoread,websearch,codesearch,skill,memory,schedule,goal_report,webpage_extract,webpage_compile,webpage_analyze,webpage_render,webpage_evaluate,webpage_text_diff messageCount=55 userMsgCount=1 assistantMsgCount=27 totalContentChars=5100 contentTokensEst=1275 imageCount=0 imageTokensEst=0 toolCallCount=38 totalTokensEst=2073 context-diagnostics
+INFO  2026-04-22T06:20:11 +17842ms service=session.processor process
+INFO  2026-04-22T06:20:11 +0ms service=llm providerID=alibaba-coding-plan-cn modelID=kimi-k2.5 sessionID=ses_24c2f8515ffev6yml4UjptXHhv small=false agent=build mode=primary stream
+INFO  2026-04-22T06:20:11 +46ms service=task-message-protocol-bridge type=message.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=user channel=build msgID=msg_db3d07af10013svTM2H2fbgKnE bridge → protocol
+INFO  2026-04-22T06:20:11 +192ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:11 +137ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:11 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:11 +173ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:11 +2003ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:11 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:11 +11ms service=server status=completed duration=11 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:11 +205ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:11 +126ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:11 +2ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:12 +184ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:12 +196ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:12 +124ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:12 +1ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:12 +187ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:12 +205ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:12 +99ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:12 +31ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:13 +166ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:13 +159ms service=scheduler id=cron-service.poll run
+INFO  2026-04-22T06:20:13 +60ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:13 +82ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:13 +37ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:13 +173ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:13 +2010ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:13 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:13 +16ms service=server status=completed duration=16 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:13 +224ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:13 +69ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:13 +48ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:14 +162ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:14 +109ms service=scheduler id=cron-service.poll run
+INFO  2026-04-22T06:20:14 +132ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:14 +56ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:14 +62ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:14 +134ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:14 +263ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:14 +34ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:14 +66ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:15 +146ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:15 +254ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:15 +30ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:15 +73ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:15 +159ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:15 +2021ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:15 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:15 +18ms service=server status=completed duration=18 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:15 +234ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:15 +39ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:15 +67ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:16 +171ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:16 +246ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:16 +16ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:16 +78ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:16 +157ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:16 +254ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:16 +16ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:17 +78ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:17 +164ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:17 +235ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:17 +16ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:17 +87ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:17 +161ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:17 +2016ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:17 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:17 +12ms service=server status=completed duration=12 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+[overlay-benchmark] heartbeat status=active retry=0/? alive_age_ms=3875 progress_age_ms=571979 alive_cap_ms=120000 progress_cap_ms=720000 last_progress={"task":"active","run":"running","phase":"dispatch","retry_count":0,"verdict":"rejected","delivery":"candidate","goals":["gol_db377454c0014TY6AOcq7ScbYU:passed","gol_db377454c002x98ER3YbpTvX2o:passed","gol_db377454c003T1K0U942IKzpEY:passed","gol_db377454c004iQeTHV5SP3K7Zf:passed","gol_db377454c0053XZRcZ14ElhbEs:pending"],"pending":[]}
+INFO  2026-04-22T06:20:17 +250ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:17 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:18 +106ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:18 +150ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:18 +240ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:18 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:18 +122ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:18 +136ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:18 +251ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:18 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:19 +116ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:19 +142ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:19 +236ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:19 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:19 +8544ms service=snapshot hash=672efe81c9fd99610a4e9cd88142d26630a38242
+ cwd=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-Vu3Jdi git=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-J4Ofow\data\snapshot\bc7d8fb5594803ba6128a962dbea15444af698b4 tracking
+INFO  2026-04-22T06:20:19 +8356ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d89dbe001QvSEx3Co5Mk5yq bridge → protocol
+INFO  2026-04-22T06:20:19 +5ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d89dbe001QvSEx3Co5Mk5yq bridge → protocol
+INFO  2026-04-22T06:20:19 +121ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:19 +156ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:19 +2006ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:19 +1ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:19 +13ms service=server status=completed duration=13 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:19 +243ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:19 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:20 +118ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:20 +669ms service=task-message-protocol-bridge type=message.part.updated sessionID=ses_24c2f8515ffev6yml4UjptXHhv taskID=tsk_db36760da001wY96omQ3QhVvR8 resolvedRole=build channel=build msgID=msg_db3d89dbe001QvSEx3Co5Mk5yq bridge → protocol
+INFO  2026-04-22T06:20:20 +142ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:20 +247ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:20 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:20 +109ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:20 +157ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:20 +235ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:20 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:21 +126ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:21 +140ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:21 +249ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:21 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:21 +121ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:21 +124ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:21 +2012ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:21 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:21 +13ms service=server status=completed duration=13 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:21 +267ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:21 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:22 +115ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:22 +118ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:22 +273ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:22 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:22 +113ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:22 +124ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:22 +259ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:22 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:23 +120ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:23 +115ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:23 +276ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:23 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:23 +110ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:23 +107ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:23 +2009ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:23 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:23 +8ms service=server status=completed duration=8 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:24 +296ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:24 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:24 +102ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:24 +106ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:24 +304ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:24 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:24 +96ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:24 +108ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:25 +307ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:25 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:25 +81ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:25 +106ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:25 +313ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:25 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:25 +71ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:25 +122ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:25 +2003ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:25 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:25 +9ms service=server status=completed duration=9 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:26 +310ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:26 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:26 +76ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:26 +135ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:26 +274ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:26 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:26 +97ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:26 +139ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:27 +283ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:27 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:27 +87ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:27 +136ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:27 +285ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:27 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:27 +75ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:27 +142ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:27 +2009ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:27 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:27 +11ms service=server status=completed duration=11 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:28 +282ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:28 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:28 +68ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:28 +156ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:28 +284ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:28 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:28 +67ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:28 +156ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:29 +282ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:29 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:29 +61ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:29 +161ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:29 +292ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:29 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:29 +49ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:29 +171ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:29 +2001ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:29 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:29 +7ms service=server status=completed duration=7 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:30 +286ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:30 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:30 +47ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:30 +168ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:30 +302ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:30 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:30 +34ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:30 +160ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:31 +309ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:31 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:31 +47ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:31 +135ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:31 +314ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:31 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:31 +61ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:31 +125ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:31 +1995ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:31 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:31 +11ms service=server status=completed duration=11 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:32 +316ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:32 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:32 +71ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:32 +124ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:32 +303ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:32 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:32 +58ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:32 +131ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:33 +323ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:33 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:33 +54ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:33 +131ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:33 +315ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:33 +6ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:33 +51ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:33 +130ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:33 +2009ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:33 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:33 +11ms service=server status=completed duration=11 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:34 +326ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:34 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:34 +37ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:34 +144ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:34 +317ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:34 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:34 +48ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:34 +129ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:35 +312ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:35 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:35 +57ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:35 +149ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:35 +294ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:35 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:35 +44ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:35 +158ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:35 +2005ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:35 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:35 +8ms service=server status=completed duration=8 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:36 +300ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:36 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:36 +48ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:36 +170ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:36 +286ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:36 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:36 +38ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:36 +176ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:37 +283ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:37 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:37 +46ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:37 +168ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:37 +277ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:37 +0ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:37 +60ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:37 +167ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:37 +2009ms service=server method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:37 +0ms service=server status=started method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:37 +7ms service=server status=completed duration=7 method=GET path=/task/tsk_db36760da001wY96omQ3QhVvR8/progress request
+INFO  2026-04-22T06:20:38 +282ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:38 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:38 +45ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:38 +180ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:38 +290ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:38 +1ms service=scheduler id=task-queue-service.poll run
+INFO  2026-04-22T06:20:38 +40ms service=scheduler id=engine.poll run
+INFO  2026-04-22T06:20:38 +180ms service=scheduler id=task-queue-service.poll run
