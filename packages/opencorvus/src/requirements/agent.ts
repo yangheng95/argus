@@ -1,16 +1,14 @@
 /**
- * RequirementsAgent — the single entry point for task requirements analysis.
+ * RequirementsAgent — parses a user task into REQ-N requirements + foundational
+ * technical decisions (runtime / frameworks / test strategy). Seeds the
+ * Decision Log with the decisions under phase="requirements" so downstream
+ * agents build on the same foundation.
  *
- * Replaces the old Spec Agent + Goal Agent two-stage pipeline.
- * Takes a raw user request and produces GoalContractFields[] directly,
- * seeding the Decision Log with foundational technical decisions.
- *
- * Architecture invariants (from specs/new-arch.svg):
- * ① RequirementsAgent is the sole producer of GoalContractFields.
- * ② DB mapping is lossless: each field gets its own column.
- * ③ acceptance_specs are the typed source of truth (heuristic + rubric).
- * ④ owned_paths is the hard write boundary for Executor.
- * ⑤ Contract is immutable once created. Only re-running requirements analysis can change it.
+ * This agent deliberately does NOT produce goals, metric specs, challenge
+ * seeds, traceability, or cross-goal contracts — the Architect owns those.
+ * The narrow surface is enforced by the tool list (register_requirement +
+ * register_decision + finalize_requirements) and by the RequirementsResult
+ * type shape.
  */
 import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"

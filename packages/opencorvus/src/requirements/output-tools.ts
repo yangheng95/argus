@@ -12,29 +12,6 @@
 import { tool } from "ai"
 import z from "zod"
 
-/**
- * Mandatory blocking metric coverage. Architect must register a spec with each
- * of these names in order to finalize — these are the gates Arbiter reads when
- * deciding accept/stalled/abort. Gate class must be 'blocking'; diagnostic and
- * efficiency classes are additive signals that do not substitute for these.
- *
- * The constants live here (for now) because `@/architect/output-tools` imports
- * them; Phase 3 of the decompose migration relocates them under architect/.
- */
-export const MANDATORY_GOAL_BLOCKING_METRICS = [
-  "functional_correctness",
-  "scenario_coverage",
-  "contract_compliance",
-  "regression_count",
-] as const
-
-export const MANDATORY_GLOBAL_BLOCKING_METRICS = [
-  "cross_goal_contract_consistency",
-  "non_regression_surface",
-  "architecture_integrity",
-  "user_intent_fidelity",
-] as const
-
 // ---------------------------------------------------------------------------
 // Collector — accumulates registered items across tool calls
 // ---------------------------------------------------------------------------
