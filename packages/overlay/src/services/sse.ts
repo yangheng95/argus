@@ -11,28 +11,25 @@
 // and delivers events immediately regardless of runtime.
 
 import { apiUrl } from "./api";
-import { clearEventQueue, syncTask, setSseConnected } from "../store/messages";
-import { boardStore, loadBoard } from "../store/board";
+import { clearEventQueue, setSseConnected } from "../store/messages";
+import { boardStore } from "../store/board";
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events";
+import { hydrateTaskConversation } from "./conversation";
 
 let sseSource: EventSource | null = null;
 let sseRetryTimer: any = null;
 
-export function startSSE(taskID: string) {
+export function startSSE(taskID: string, after = 0) {
   stopSSE();
   setSseConnected(false);
 
-  // SSE is the single source of truth for step/part/message cards, which are
-  // built exclusively by tree-writer from these events. The server replays
-  // persisted protocol_event rows on connect, and writeToTree is idempotent
-  // by event id — so we always ask for the full history (after=0). The
-  // previous "resume from boardStore.taskSequence when cardTreeStore has
-  // entries" was double-sourcing with the /task/:id/board snapshot (a
-  // separate view for task header / interactions / vcs). They used the
-  // same sequence but populated different stores, and any race where the
-  // board populated first made SSE skip every persisted event — leaving
-  // only goal cards drawn by loadBoard. Single source, full replay.
-  const url = apiUrl(`task/${encodeURIComponent(taskID)}/events`);
+  // Initial task restore now hydrates board + messages + persisted task events
+  // through /task/:id/conversation before opening SSE. That means this stream
+  // can safely resume from the last persisted protocol_event sequence instead
+  // of replaying from zero on every reconnect.
+  const url = apiUrl(
+    `task/${encodeURIComponent(taskID)}/events${after > 0 ? `?after=${encodeURIComponent(String(after))}` : ""}`,
+  );
 
   const source = new EventSource(url);
   sseSource = source;
@@ -76,14 +73,14 @@ export function startSSE(taskID: string) {
     if (source.readyState === EventSource.CLOSED) {
       setSseConnected(false);
       sseSource = null;
-      // Reconnect after 3s with a full transcript reload
+      // Reconnect after 3s with a fresh conversation hydrate, then resume SSE
+      // from the hydrated sequence so we avoid a full replay after crashes.
       if (sseRetryTimer) clearTimeout(sseRetryTimer);
       sseRetryTimer = setTimeout(async () => {
         sseRetryTimer = null;
         if (boardStore.selectedTaskID !== taskID) return;
-        await syncTask(taskID);
-        await loadBoard();
-        startSSE(taskID);
+        const nextSequence = await hydrateTaskConversation(taskID);
+        startSSE(taskID, nextSequence);
       }, 3000);
     } else {
       // Transient error — EventSource will auto-reconnect.

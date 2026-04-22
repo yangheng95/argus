@@ -832,6 +832,14 @@ export const TaskEvent = z.object({
   payload: z.record(z.string(), z.any()),
 })
 
+export const TaskConversationHydration = z.object({
+  lastSequence: z.number().int().nonnegative(),
+  board: TaskBoard,
+  transcript: z.array(z.any()),
+  timeline: z.array(z.any()),
+  events: TaskEvent.array(),
+})
+
 export const ArtifactAudit = z.object({
   source_files_added: z.number(),
   config_files_added: z.number(),
