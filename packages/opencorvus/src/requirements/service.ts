@@ -9,7 +9,7 @@
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
 import { RequirementsAgent, type RequirementsResult, type RequirementsRetryContext } from "./agent"
-import { reviewFidelity, applyFidelityCorrections } from "./fidelity"
+import { reviewFidelity, applyFidelityCorrections } from "@/architect/fidelity"
 import type { DecisionLog } from "@/decision-log"
 
 const log = Log.create({ service: "requirements-service" })

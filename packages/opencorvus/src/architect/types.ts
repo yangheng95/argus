@@ -16,7 +16,7 @@ import type {
   RequirementsDecision,
   TraceabilityEntry,
 } from "@/requirements/types"
-import type { FidelityResult } from "@/requirements/fidelity"
+import type { FidelityResult } from "./fidelity"
 
 // ---------------------------------------------------------------------------
 // Architect Decision Log key categories

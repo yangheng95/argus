@@ -163,7 +163,7 @@ export async function reviewFidelity(input: {
       return result
     }
 
-    const model = await resolveAgentModel("requirements", { taskID: input.taskID }).catch(() => undefined)
+    const model = await resolveAgentModel("architect", { taskID: input.taskID }).catch(() => undefined)
     if (!model) {
       log.warn("no LLM available for fidelity review, skipping")
       const result: FidelityResult = { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
@@ -349,12 +349,12 @@ function emitFidelityEvent(
   if (!taskID) return
   if (!sessionID) {
     // sessionID is required for the overlay to attach the verdict card under
-    // the requirements session. A missing value would otherwise force the
+    // the architect session. A missing value would otherwise force the
     // overlay to either escape the card to the top level or silently drop
     // it — both violate project rule 1. Loud-fail here at the source.
     throw new Error(
       `fidelity.review.completed: sessionID required but missing (taskID=${taskID}). ` +
-        `Requirements agent must thread its sessionID through RequirementsService.run → reviewFidelity.`,
+        `Architect agent must thread its sessionID through ArchitectAgent.coordinate → reviewFidelity.`,
     )
   }
   const payload = {
@@ -376,7 +376,7 @@ function emitFidelityEvent(
     })),
     attempts,
   }
-  void EngineProtocol.emit(EngineEvent.FidelityReviewCompleted, payload, { source: "requirements.fidelity" })
+  void EngineProtocol.emit(EngineEvent.FidelityReviewCompleted, payload, { source: "architect.fidelity" })
 }
 
 /** Emit fidelity review lifecycle events — Started and Progress — while the
@@ -407,7 +407,7 @@ function emitFidelityLifecycle(
       ? { taskID, sessionID }
       : { taskID, sessionID, attempt, elapsedMs }
   log.info("fidelity lifecycle emit", { phase, taskID, sessionID, attempt, elapsedMs })
-  EngineProtocol.emit(def as any, properties as any, { source: "requirements.fidelity" }).catch(
+  EngineProtocol.emit(def as any, properties as any, { source: "architect.fidelity" }).catch(
     (err) => {
       log.error("fidelity lifecycle emit failed", {
         phase,
@@ -484,7 +484,7 @@ function createFidelityChunkForwarder(opts: {
           delta,
           attempt: Math.max(attempt, 1),
         },
-        { source: "requirements.fidelity" },
+        { source: "architect.fidelity" },
       )
     } catch (err) {
       log.error("fidelity chunk emit failed", {
