@@ -259,16 +259,19 @@ export function createOrchestratorTools(input: {
 
   const tools = {
     requirements: tool({
-      description: "Explore the codebase, analyze the task, extract requirements, and produce executable goal contracts with cross-goal interface declarations.",
+      description:
+        "Parse the user's task into REQ-N requirements plus foundational " +
+        "technical decisions (runtime, framework, test strategy). Goal " +
+        "decomposition, metric specs, challenge seeds, traceability, and " +
+        "cross-goal contracts are all produced by the Architect — do NOT " +
+        "expect them from this step.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
       execute: async () => {
         let task = requireTask(taskID)
-        const existingGoals = listGoals(taskID)
-        log.info("requirements guard check", { taskID, existingGoals: existingGoals.length, hasSpec: !!task.active_spec_version_id })
-        if (existingGoals.length > 0) return `${existingGoals.length} goals already defined. Skipping. Proceed to architect (for multi-goal) or create_run + submit_execution.`
-        if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Proceed to architect or create_run + submit_execution.`
+        log.info("requirements guard check", { taskID, hasSpec: !!task.active_spec_version_id })
+        if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Proceed to architect.`
 
         // No design-analysis gate here: per rule 23, phase ordering is an LLM
         // decision (the orchestrator prompt explains when to call
@@ -326,42 +329,26 @@ export function createOrchestratorTools(input: {
           await hooks.flush()
 
 
-          // Persist spec snapshot, requirements, goals, and metric ruler
-          const { insertGoalRows, insertRequirements } = await import("@/engine/persist")
+          // Persist spec snapshot v1 (requirements + decisions only; the
+          // Architect produces v2 with goals/traceability/contracts).
+          const { insertRequirements } = await import("@/engine/persist")
           const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
-          const { persistArchitectMetrics } = await import("@/metrics/store")
           const now = Date.now()
           const specSnapshotID = Identifier.ascending("spec")
 
-          // Build spec content from requirements output
           const specContent = [
             `# ${task.title}`,
             "",
             result.summary,
             "",
             "## Requirements",
-            ...result.requirements.map(r => `- **${r.id}** [${r.type}]: ${r.description}`),
+            ...result.requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`),
             "",
             "## Decisions",
-            ...result.decisions.map(d => `- **${d.key}** = ${d.value} — ${d.reason}`),
-            "",
-            "## Traceability",
-            ...result.traceability.map(t => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`),
+            ...result.decisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`),
           ].join("\n")
 
-          // Pre-generate DB IDs and build LLM-ID → DB-ID mapping so
-          // depends_on references resolve to actual DB goal IDs.
-          // The Requirements agent assigns internal IDs (e.g. "setup-db")
-          // in register_goal tool calls; depends_on references those IDs.
-          const llmToDBID = new Map<string, string>()
-          const dbGoalIDs = result.goals.map((goal) => {
-            const dbID = Identifier.ascending("goal")
-            if (goal.id) llmToDBID.set(goal.id, dbID)
-            return dbID
-          })
-
           try { Database.transaction((db) => {
-            // Spec snapshot — makes SPEC section visible in panel
             db.insert(EngineSpecSnapshotTable).values({
               id: specSnapshotID,
               task_id: taskID,
@@ -369,17 +356,16 @@ export function createOrchestratorTools(input: {
               status: "ready",
               summary: result.summary,
               content: specContent,
-              scope: result.requirements.map(r => r.description).join("; "),
+              scope: result.requirements.map((r) => r.description).join("; "),
               time_created: now,
               time_updated: now,
             }).run()
 
-            // Persist requirements for traceability
             if (result.requirements.length > 0) {
               insertRequirements(db, {
                 taskID,
                 specSnapshotID,
-                requirements: result.requirements.map(r => ({
+                requirements: result.requirements.map((r) => ({
                   id: r.id,
                   title: r.description,
                   description: r.description,
@@ -391,66 +377,33 @@ export function createOrchestratorTools(input: {
               })
             }
 
-            insertGoalRows(db, {
-              taskID,
-              specSnapshotID,
-              goals: result.goals.map((goal, index) => ({
-                goalID: dbGoalIDs[index],
-                title: goal.title,
-                objective: goal.objective,
-                acceptance_specs: goal.acceptance_specs,
-                owned_paths: goal.owned_paths,
-                depends_on: goal.depends_on.flatMap(dep => {
-                  const dbID = llmToDBID.get(dep)
-                  if (!dbID) log.warn("requirements: depends_on references unknown LLM goal ID — dropping", { goalTitle: goal.title, unknownDep: dep })
-                  return dbID ? [dbID] : []
-                }),
-                exports: goal.exports,
-                imports: goal.imports,
-                kind: goal.kind,
-                requirement_ids: goal.requirement_ids,
-                priority: goal.priority,
-                source: goal.requirement_ids.length > 0 ? "spec" as const : "system" as const,
-              })),
-              now,
-            })
-
-            // Persist Architect-emitted metric ruler as immutable baselines.
-            // Must run inside the same transaction so an abort leaves no
-            // half-registered ruler behind. Seeds are stashed on task.metadata
-            // for Phase 4's Prosecutor to read on first pass.
-            persistArchitectMetrics({
-              task_id: taskID,
-              goal_id_map: llmToDBID,
-              goal_metric_specs: result.goalMetricSpecs,
-              global_metric_specs: result.globalMetricSpecs,
-            })
-
             db.update(EngineTaskTable)
               .set({
                 active_spec_version_id: specSnapshotID,
-                architect_challenge_seeds: result.challengeSeeds,
                 time_updated: now,
               })
               .where(eq(EngineTaskTable.id, taskID))
               .run()
             Database.effect(() =>
-              EngineProtocol.emit(EngineEvent.TaskUpdated, { taskID, status: task.status, summary: "Goals defined" }, { source: "orchestrator.requirements" }),
+              EngineProtocol.emit(
+                EngineEvent.TaskUpdated,
+                { taskID, status: task.status, summary: "Requirements parsed" },
+                { source: "orchestrator.requirements" },
+              ),
             )
           }) } catch (dbErr) {
-            log.error("requirements: failed to persist goals to DB", { taskID, error: dbErr instanceof Error ? dbErr.message : String(dbErr), stack: dbErr instanceof Error ? dbErr.stack : undefined })
+            log.error("requirements: failed to persist to DB", {
+              taskID,
+              error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+              stack: dbErr instanceof Error ? dbErr.stack : undefined,
+            })
             throw dbErr
-          }
-          // Initialize workflow tracking for newly created goals (use DB IDs)
-          for (const [i, g] of result.goals.entries()) {
-            ensureGoalInWorkflow(dbGoalIDs[i], g.title)
           }
           await trackStepComplete("requirements")
 
           // Phase-level completion event — Panel uses this to refresh the
-          // Requirements section without tracking individual workflow steps.
-          // `sessionID` + `status` drive the overlay's session-card terminal
-          // write (see specs/new-arch/07-panel-reactivity.md §session 终态).
+          // Requirements section. goalCount/traceabilityCount are dropped
+          // (Architect emits those on its own completion event).
           EngineProtocol.emit(
             EngineEvent.RequirementsCompleted,
             {
@@ -458,28 +411,22 @@ export function createOrchestratorTools(input: {
               sessionID: requirementsSession.id,
               status: "completed",
               requirementCount: result.requirements.length,
-              goalCount: result.goals.length,
+              goalCount: 0,
               decisionCount: result.decisions.length,
-              traceabilityCount: result.traceability.length,
+              traceabilityCount: 0,
               summary: result.summary,
             },
             { source: "orchestrator.requirements" },
           )
 
-          const nextStep = result.goals.length > 1
-            ? "NEXT: call architect to coordinate cross-goal contracts, then create_run + submit_execution."
-            : "NEXT: call create_run then submit_execution to start goal execution."
-          // Sub-agent → caller boundary: yield a structured short conclusion.
-          // Full requirements / decisions live in the spec snapshot + decision
-          // log; the caller fetches them via read_context when needed.
           return SubAgentProtocol.yieldResult({
-            headline: `SUCCESS: ${result.goals.length} goals created. ${nextStep}`,
+            headline: `SUCCESS: ${result.requirements.length} requirements, ${result.decisions.length} decisions parsed. NEXT: call architect to decompose into goals.`,
             summary: result.summary,
             fields: [
               ["decisions", result.decisions.map((d) => `${d.key}=${d.value}`)],
-              ["traceability_links", String(result.traceability.length)],
+              ["requirements", String(result.requirements.length)],
             ],
-            pointer: `read_context scope=decisions, scope=goals (spec ${specSnapshotID})`,
+            pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
           })
         } catch (err) {
           // Error-path terminal emission so the overlay's requirements

@@ -26,17 +26,11 @@ import { resolveAgentModel } from "@/agent/model"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import type {
-  ArchitectChallengeSeed,
-  ArchitectGlobalMetricSpec,
-  ArchitectGoalMetricSpec,
-  ParsedGoalContract,
   ParsedRequirement,
   RequirementsDecision,
   RequirementsOutput,
-  TraceabilityEntry,
 } from "./types"
-import { createRequirementsOutputTools, type RequirementsCollector, type RegisteredGoal } from "./output-tools"
-import type { GoalContractFields } from "@/pipeline/types"
+import { createRequirementsOutputTools, type RequirementsCollector } from "./output-tools"
 import type { DecisionLog } from "@/decision-log"
 
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
@@ -51,36 +45,13 @@ export interface RequirementsResult {
   summary: string
   /** All requirements extracted from user input (explicit + implicit) */
   requirements: ParsedRequirement[]
-  goals: GoalContractFields[]
+  /** Foundational technical decisions (runtime, framework, test strategy, …). */
   decisions: RequirementsDecision[]
-  /** Requirement → Goal traceability matrix */
-  traceability: TraceabilityEntry[]
-  /** Per-goal metric specs keyed by Architect-level goal id (not DB id). */
-  goalMetricSpecs: ArchitectGoalMetricSpec[]
-  /** Task-scope global metric specs. */
-  globalMetricSpecs: ArchitectGlobalMetricSpec[]
-  /** Prosecutor priors. */
-  challengeSeeds: ArchitectChallengeSeed[]
 }
 
 // ---------------------------------------------------------------------------
 // Retry context — for re-running requirements analysis after failed execution
 // ---------------------------------------------------------------------------
-
-export interface RequirementsRetryContext {
-  previousGoals: Array<{
-    title: string
-    status: string
-    evidence: string
-  }>
-  failureAnalysis: {
-    classification: string
-    summary: string
-    rootCause: string
-    suggestedStrategy: string
-    avoidApproaches: string[]
-  }
-}
 
 // ---------------------------------------------------------------------------
 // RequirementsAgent public API
@@ -88,8 +59,8 @@ export interface RequirementsRetryContext {
 
 export namespace RequirementsAgent {
   /**
-   * Analyze a task request into executable goal contracts.
-   * Single entry point — replaces SpecAgent.initial() + GoalAgent.initial().
+   * Parse a task request into REQ-N requirements + foundational decisions.
+   * Goal decomposition happens downstream in the Architect, not here.
    */
   export async function run(input: {
     title: string
@@ -103,8 +74,6 @@ export namespace RequirementsAgent {
     onStatus?: (summary: string) => void | Promise<void>
     /** Optional Decision Log — seeded with foundational decisions. */
     decisionLog?: DecisionLog
-    /** Optional retry context for re-running requirements after failure. */
-    retryContext?: RequirementsRetryContext
   }): Promise<RequirementsResult> {
     return runInternal(input)
   }
@@ -124,7 +93,6 @@ async function runInternal(input: {
   stream?: TextHooks
   onStatus?: (summary: string) => void | Promise<void>
   decisionLog?: DecisionLog
-  retryContext?: RequirementsRetryContext
 }): Promise<RequirementsResult> {
   if (input.signal?.aborted) throw new Error("requirements agent aborted before model resolution")
 
@@ -150,10 +118,11 @@ async function runInternal(input: {
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 
-  // Merge planner tools (codebase exploration) + structured output tools (goal registration).
-  // Each registration tool call is small (~500 bytes) — no buffering risk.
+  // Planner tools (codebase exploration) + structured output tools (REQ-N +
+  // decisions). Each registration tool call is small (~500 bytes) — no
+  // buffering risk.
   const plannerTools = await filterAgentTools(createPlannerTools(taskWorkDir), "requirements")
-  const outputToolKit = createRequirementsOutputTools(taskWorkDir)
+  const outputToolKit = createRequirementsOutputTools()
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
   if (input.signal?.aborted) throw new Error("requirements agent aborted before context prefetch")
@@ -238,17 +207,15 @@ async function runInternal(input: {
     })
 
     // Structured tool-call output is the only supported path. If the LLM did
-    // not register any goals via register_goal, treat this attempt as a hard
-    // failure — no text-parsing fallback (see CLAUDE.md "no fallback" rule).
+    // not register any requirements via register_requirement, treat this
+    // attempt as a hard failure — no text-parsing fallback.
     const collector = outputToolKit.getCollector()
-    if (collector.goals.length === 0) {
-      log.warn("requirements agent: no goals registered via tool calls", {
+    if (collector.requirements.length === 0) {
+      log.warn("requirements agent: no requirements registered via tool calls", {
         attempt: attempt + 1,
         toolCalls: cumulativeToolCalls,
         finishReason: resultFinishReason,
       })
-      // Force a retry by setting an unusable parsed shape; the quality check
-      // below will reject it and the loop will reset for the next attempt.
       lastParsed = undefined
       messages = [{ role: "user" as const, content: initialPrompt }]
       outputToolKit.reset()
@@ -257,7 +224,6 @@ async function runInternal(input: {
 
     const parsed = collectorToOutput(collector)
     log.info("requirements agent: using structured output", {
-      goals: parsed.goals.length,
       requirements: parsed.requirements.length,
       decisions: parsed.decisions.length,
     })
@@ -267,7 +233,7 @@ async function runInternal(input: {
     lastQuality = quality
 
     log.info("requirements agent output", {
-      goals: parsed.goals.length,
+      requirements: parsed.requirements.length,
       decisions: parsed.decisions.length,
       toolCalls: cumulativeToolCalls,
       quality,
@@ -313,71 +279,29 @@ async function runInternal(input: {
 
 function toResult(parsed: RequirementsOutput): RequirementsResult {
   return {
-    summary: parsed.summary || "Task decomposition",
+    summary: parsed.summary || "Requirements parsed",
     requirements: parsed.requirements,
-    goals: parsed.goals.map(goalToContract),
     decisions: parsed.decisions,
-    traceability: parsed.traceability,
-    goalMetricSpecs: parsed.goal_metric_specs,
-    globalMetricSpecs: parsed.global_metric_specs,
-    challengeSeeds: parsed.challenge_seeds,
   }
 }
 
 // ---------------------------------------------------------------------------
-// Convert structured collector → RequirementsOutput (same shape as text parsing)
+// Convert structured collector → RequirementsOutput
 // ---------------------------------------------------------------------------
 
 function collectorToOutput(collector: RequirementsCollector): RequirementsOutput {
   return {
     summary: collector.summary,
-    requirements: collector.requirements.map(r => ({
+    requirements: collector.requirements.map((r) => ({
       id: r.id,
       type: r.type,
       description: r.description,
     })),
-    decisions: collector.decisions.map(d => ({
+    decisions: collector.decisions.map((d) => ({
       key: d.key,
       value: d.value,
       reason: d.reason,
     })),
-    goals: collector.goals.map((g): ParsedGoalContract => ({
-      id: g.id,
-      title: g.title,
-      objective: g.objective,
-      acceptance_specs: g.acceptance_specs,
-      owned_paths: g.owned_paths,
-      depends_on: g.depends_on,
-      exports: g.exports,
-      imports: g.imports,
-      priority: g.priority,
-      kind: g.kind,
-      requirement_ids: g.requirement_ids,
-      source: g.requirement_ids.length > 0 ? "explicit" : "implicit",
-    })),
-    traceability: collector.traceability.map(t => ({
-      requirementID: t.requirementID,
-      goalIDs: t.goalIDs,
-    })),
-    goal_metric_specs: collector.goal_metric_specs,
-    global_metric_specs: collector.global_metric_specs,
-    challenge_seeds: collector.challenge_seeds,
-  }
-}
-
-function goalToContract(g: ParsedGoalContract): GoalContractFields {
-  return {
-    id: g.id,
-    title: g.title,
-    objective: g.objective,
-    acceptance_specs: g.acceptance_specs,
-    owned_paths: g.owned_paths,
-    depends_on: g.depends_on,
-    exports: g.exports,
-    imports: g.imports,
-    priority: g.priority,
-    kind: g.kind,
-    requirement_ids: g.requirement_ids,
   }
 }
 
@@ -413,7 +337,6 @@ function buildUserPrompt(
     title: string
     request: string
     taskID?: string
-    retryContext?: RequirementsRetryContext
   },
   context: string,
 ): string {
@@ -430,35 +353,12 @@ function buildUserPrompt(
     sections.push(`# Project Context (Pre-fetched)\n\n${context}`)
   }
 
-  if (input.retryContext) {
-    const ctx = input.retryContext
-    sections.push(
-      [
-        "# Requirements Retry Context",
-        "",
-        "The previous execution FAILED. Restructure goals to address the failure.",
-        "",
-        "## Failure Analysis",
-        `Classification: ${ctx.failureAnalysis.classification}`,
-        `Summary: ${ctx.failureAnalysis.summary}`,
-        `Root Cause: ${ctx.failureAnalysis.rootCause}`,
-        `Strategy: ${ctx.failureAnalysis.suggestedStrategy}`,
-        "",
-        "## Approaches to AVOID",
-        ...ctx.failureAnalysis.avoidApproaches.map((a) => `- ${a}`),
-        "",
-        "## Previous Goal Results",
-        ...ctx.previousGoals.map(
-          (g) => `- ${g.title}: **${g.status}** — ${g.evidence}`,
-        ),
-      ].join("\n"),
-    )
-  }
-
   sections.push(
-    "Now recall memory, check preferences, explore the codebase thoroughly, " +
-    "record key technical decisions, then output your goal decomposition " +
-    "using section tags as described in your instructions.",
+    "Now parse every requirement in the user's request line by line " +
+    "(explicit and implicit), record foundational technical decisions " +
+    "(runtime, backend framework, test framework, …), then call " +
+    "finalize_requirements. Goal decomposition happens downstream — do NOT " +
+    "emit goals, metric specs, challenge seeds, or cross-goal contracts here.",
   )
 
   return sections.join("\n\n")
@@ -474,7 +374,7 @@ function buildRetryMessage(
   attempt: number,
 ): string {
   return [
-    "# QUALITY RETRY — Previous Requirements Analysis Was Insufficient",
+    "# QUALITY RETRY — Previous Requirements Parse Was Insufficient",
     "",
     `Score: ${lastQuality.score.toFixed(2)} / ${qualityThreshold}. Attempt ${attempt + 1}.`,
     "",
@@ -482,7 +382,7 @@ function buildRetryMessage(
     ...lastQuality.reasons.map((r) => `- ${r}`),
     "",
     "You already explored the codebase — use that knowledge. Do NOT repeat tool calls. " +
-    "Fix all issues and output improved goals with complete fields.",
+    "Fix all issues and re-submit requirements + decisions.",
   ].join("\n")
 }
 
@@ -497,67 +397,21 @@ function validateQuality(
   let score = 0
   const reasons: string[] = []
 
-  // Requirement extraction (0.15) — did the agent parse the input exhaustively?
-  if (parsed.requirements.length >= 3) score += 0.15
-  else if (parsed.requirements.length >= 1) score += 0.07
+  // Requirement extraction (0.5) — did the agent parse the input exhaustively?
+  if (parsed.requirements.length >= 3) score += 0.5
+  else if (parsed.requirements.length >= 1) score += 0.25
   else reasons.push("No requirements extracted from user input — requirements agent must parse input line by line")
 
-  // Traceability (0.15) — every requirement mapped to a goal?
-  if (parsed.requirements.length > 0 && parsed.traceability.length > 0) {
-    const coveredReqs = new Set(parsed.traceability.map(t => t.requirementID))
-    const uncovered = parsed.requirements.filter(r => !coveredReqs.has(r.id))
-    if (uncovered.length === 0) score += 0.15
-    else { score += 0.05; reasons.push(`${uncovered.length} requirement(s) not traced to goals: ${uncovered.map(r => r.id).join(", ")}`) }
-  } else if (parsed.requirements.length > 0) {
-    reasons.push("No traceability matrix — cannot verify requirement coverage")
-  } else {
-    score += 0.05 // no requirements = simple task, traceability less critical
-  }
+  // Tool usage (0.2) — grounded in codebase exploration
+  if (toolCallCount >= 5) score += 0.2
+  else if (toolCallCount >= 2) score += 0.1
+  else if (toolCallCount === 0) reasons.push("No tool calls — decisions not grounded in codebase")
 
-  // Tool usage (0.10)
-  if (toolCallCount >= 5) score += 0.10
-  else if (toolCallCount >= 2) score += 0.05
-  else if (toolCallCount === 0) reasons.push("No tool calls — goals not grounded in codebase")
-
-  // Goal count vs requirement count (0.05) — penalize both under-splitting and over-splitting
-  if (parsed.goals.length === 0) {
-    reasons.push("No goals produced")
-  } else if (parsed.requirements.length >= 20 && parsed.goals.length <= 2) {
-    reasons.push(`Under-split: ${parsed.goals.length} goal(s) for ${parsed.requirements.length} requirements — executor will fail on mega-goals. Need at least 4 goals for this scope.`)
-  } else if (parsed.requirements.length >= 10 && parsed.goals.length <= 1) {
-    reasons.push(`Under-split: 1 goal for ${parsed.requirements.length} requirements — split into at least 3 goals by subsystem.`)
-  } else if (parsed.goals.length > 12) {
-    score += 0.02
-    reasons.push(`Over-split: ${parsed.goals.length} goals is excessive — merge related goals to reduce orchestration overhead.`)
-  } else {
-    score += 0.05
-  }
-
-  // Owned paths (0.15)
-  const withPaths = parsed.goals.filter((g) => g.owned_paths.length > 0).length
-  if (withPaths === parsed.goals.length && parsed.goals.length > 0) score += 0.15
-  else if (withPaths > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withPaths} goal(s) missing owned_paths`) }
-  else if (parsed.goals.length > 0) reasons.push("No goals have owned_paths")
-
-  // Acceptance specs (0.15) — every goal must have at least one spec.
-  const withSpecs = parsed.goals.filter((g) => g.acceptance_specs.length > 0).length
-  if (withSpecs === parsed.goals.length && parsed.goals.length > 0) score += 0.15
-  else if (withSpecs > 0) { score += 0.07; reasons.push(`${parsed.goals.length - withSpecs} goal(s) missing acceptance_specs`) }
-  else if (parsed.goals.length > 0) reasons.push("No goals have acceptance_specs")
-
-  // Exports declared (0.10)
-  const withExports = parsed.goals.filter((g) => g.exports.length > 0).length
-  if (withExports >= parsed.goals.length * 0.5 && parsed.goals.length > 0) score += 0.10
-  else if (withExports > 0) { score += 0.05; reasons.push("Most goals missing exports declarations") }
-
-  // Decisions recorded (0.10)
-  if (parsed.decisions.length >= 2) score += 0.10
-  else if (parsed.decisions.length >= 1) score += 0.05
-
-  // Self-contained objectives (0.05) — each goal objective long enough to be actionable?
-  const withDetailedObj = parsed.goals.filter((g) => g.objective.length > 50).length
-  if (withDetailedObj === parsed.goals.length && parsed.goals.length > 0) score += 0.05
-  else if (parsed.goals.length > 0) reasons.push(`${parsed.goals.length - withDetailedObj} goal(s) have objectives too short to be self-contained`)
+  // Decisions recorded (0.3) — runtime/framework/test at minimum
+  if (parsed.decisions.length >= 3) score += 0.3
+  else if (parsed.decisions.length >= 2) score += 0.2
+  else if (parsed.decisions.length >= 1) score += 0.1
+  else reasons.push("No foundational decisions recorded — runtime + framework + test are the minimum")
 
   return { score: Math.min(score, 1), reasons }
 }
