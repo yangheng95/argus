@@ -486,10 +486,9 @@ export namespace EngineService {
     const attachmentRefs: AttachmentStore.Reference[] = []
     if (input.attachments?.length) {
       const projectID = Instance.project.id
-      const projectDir = Instance.project.worktree
       for (const att of input.attachments) {
         const bytes = Buffer.from(att.data, "base64")
-        const ref = await AttachmentStore.write(projectID, projectDir, bytes, att.mime, att.filename)
+        const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
         // Default intent: image MIMEs are visual references (SSIM gate
         // consumes them). Anything else is generic spec material until a
         // specific evaluator gate claims it.
@@ -1071,10 +1070,9 @@ export namespace EngineService {
     const attachmentRefs: AttachmentStore.Reference[] = []
     if (input.attachments?.length) {
       const projectID = Instance.project.id
-      const projectDir = Instance.project.worktree
       for (const att of input.attachments) {
         const bytes = Buffer.from(att.data, "base64")
-        const ref = await AttachmentStore.write(projectID, projectDir, bytes, att.mime, att.filename)
+        const ref = await AttachmentStore.write(projectID, bytes, att.mime, att.filename)
         const intent = att.mime.startsWith("image/") ? "visual_reference" : "spec_artifact"
         attachmentRefs.push({ ...ref, intent, source: "user-upload" })
       }
