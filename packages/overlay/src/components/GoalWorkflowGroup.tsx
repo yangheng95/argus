@@ -11,7 +11,7 @@
  *   - Step status comes from board.goalWorkflows[].steps[] (structured progress)
  *   - Step content comes from agentCards() (real-time message stream)
  */
-import { For, Show, createMemo, JSX } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { StepPayloadBody } from "./StepPayloadBody";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
@@ -84,8 +84,6 @@ function previewAcceptance(specs: AcceptanceSpecLike[] | undefined): string {
 
 interface GoalWorkflowGroupProps {
   goal: GoalWorkflow;
-  /** 1-based display index shown in the header (e.g. #3) */
-  goalIndex?: number;
   defaultOpen?: boolean;
   /** Optional: edit the goal (title + detail). */
   onEditGoal?: (goalID: string, title: string, detail: string) => void;
@@ -131,18 +129,6 @@ function goalStatusClass(status: string): string {
     case "running": return "gwg--running";
     default: return "gwg--pending";
   }
-}
-
-function goalChangedFileCount(goal: GoalWorkflow): number {
-  const files = new Set<string>();
-  for (const step of goal.steps) {
-    const changedFiles = step.payload?.changedFiles;
-    if (!Array.isArray(changedFiles)) continue;
-    for (const file of changedFiles) {
-      if (typeof file === "string" && file) files.add(file);
-    }
-  }
-  return files.size;
 }
 
 // ── Step Row (expandable when it has content) ──
@@ -247,17 +233,6 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
     props.defaultOpen ?? (status() === "running" || status() === "failed");
   const expanded = () => cardExpanded(cardKey(), status(), defaultOpen());
   const toggle = () => toggleCard(cardKey(), status(), defaultOpen());
-  const stepSummary = createMemo(() => {
-    const total = props.goal.steps.length;
-    if (total <= 0) return "";
-    const completed = props.goal.steps.filter((step) => step.status === "completed").length;
-    return `${completed}/${total} steps`;
-  });
-  const fileSummary = createMemo(() => {
-    const count = goalChangedFileCount(props.goal);
-    if (count <= 0) return "";
-    return `${count} ${count === 1 ? "file" : "files"}`;
-  });
 
   return (
     <div
@@ -275,34 +250,11 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
         }}
       >
         <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
-        <div class="gwg-header-copy">
-          <div class="gwg-title-row">
-            <Show when={props.goalIndex !== undefined}>
-              <span class="gwg-index">#{props.goalIndex}</span>
-            </Show>
-            <span class="gwg-title">{props.goal.goalTitle}</span>
-          </div>
-          <div class="gwg-meta-row">
-            <span
-              class="gwg-id"
-              title={props.goal.goalID}
-              onClick={(e) => {
-                e.stopPropagation();
-                navigator.clipboard.writeText(props.goal.goalID).catch(() => {});
-              }}
-            >
-              {props.goal.goalID.slice(-8)}
-            </span>
-            <Show when={stepSummary()}>
-              <span class="gwg-meta-pill">{stepSummary()}</span>
-            </Show>
-            <Show when={fileSummary()}>
-              <span class="gwg-meta-pill">{fileSummary()}</span>
-            </Show>
-            <Show when={props.goal.priority === "advisory"}>
-              <span class="gwg-priority-badge">advisory</span>
-            </Show>
-          </div>
+        <div class="gwg-title-row">
+          <span class="gwg-title">{props.goal.goalTitle}</span>
+          <Show when={props.goal.priority === "advisory"}>
+            <span class="gwg-priority-badge">advisory</span>
+          </Show>
         </div>
         <div class="gwg-header-actions">
           <Show when={props.onEditGoal}>
@@ -380,7 +332,6 @@ export function GoalWorkflowList(props: {
         {(goal, idx) => (
           <GoalWorkflowGroup
             goal={goal}
-            goalIndex={idx() + 1}
             onEditGoal={props.onEditGoal}
             onDeleteGoal={props.onDeleteGoal}
           />
