@@ -2340,7 +2340,7 @@ export function createOrchestratorTools(input: {
           const { startNewAttempt } = await import("@/engine/persist")
           // Attribution is the delivery agent's job. `verdict.affected_goal_ids`
           // is a contract-required non-empty array on rejection (enforced in
-          // DeliveryAgent.normalizeVerdict). We open a fresh attempt on exactly
+          // the submit_verdict tool in delivery/output-tools.ts). We open a fresh attempt on exactly
           // those goals — no string-matching of rejection_details[].file vs
           // owned_paths here, and no "if attribution is empty, reset every
           // passed goal" blanket policy. That blanket reset was dressed up as

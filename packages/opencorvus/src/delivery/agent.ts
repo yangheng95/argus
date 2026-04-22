@@ -11,81 +11,35 @@
  * 5. Make a final acceptance decision before publishing
  */
 import { stepCountIs } from "ai"
-import z from "zod"
-import { extractRawJSON, repairTruncatedJSON, sanitizeJSON, trimToLastComplete, tryParseJSON } from "@/llm/json-repair"
 import { resolveAgentModel } from "@/agent/model"
 import { AgentRuntime } from "@/agent/runtime"
 import { createDeliveryTools } from "./tools"
+import { createDeliveryOutputTools } from "./output-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { loadStageSkills } from "@/engine/skill-inject"
-import { collectText, countToolCalls, firstContentLine, sectionBody } from "@/util/agent-text"
 import { AttachmentStore } from "@/storage/attachment-store"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks"
+import {
+  DeliveryVerdict,
+  FrontendCheck,
+  StartupVerification,
+  type DeliveryVerdictType,
+} from "./verdict"
 
 const log = Log.create({ service: "delivery-agent" })
 
-// ---------------------------------------------------------------------------
-// Output schema
-// ---------------------------------------------------------------------------
-
-export const StartupVerification = z.object({
-  attempted: z.boolean().describe("Whether startup verification was attempted"),
-  command: z.string().optional().describe("Command used to start the application"),
-  success: z.boolean().describe("Whether the application started successfully"),
-  output: z.string().optional().describe("Relevant startup output or error messages"),
-})
-
-export const FrontendCheck = z.object({
-  attempted: z.boolean().describe("Whether frontend verification was attempted"),
-  renders_correctly: z.boolean().optional().describe("Whether the frontend renders without errors"),
-  issues: z.array(z.string()).optional().describe("Frontend issues found"),
-})
-
-export const DeliveryVerdict = z.object({
-  verdict: z.enum(["accepted", "rejected"]),
-  summary: z.string(),
-  launch_command: z.string().optional().describe("The exact verified command to start the application (only present when startup_verification.success is true). Will be used to auto-launch after publish."),
-  startup_verification: StartupVerification,
-  frontend_check: FrontendCheck,
-  issues_found: z.array(z.string()),
-  /** The set of goal IDs the rejection attributes the failure to. The
-   *  orchestrator uses this set directly to decide which goals to re-open
-   *  via startNewAttempt — no downstream string-matching. Rule: when
-   *  `verdict === "rejected"` this array MUST be non-empty; when
-   *  `verdict === "accepted"` it is ignored (and normalized to []).
-   *  Each id must also be referenced by at least one rejection_details
-   *  entry's `goal_id`, enforced in normalizeVerdict. */
-  affected_goal_ids: z.array(z.string()).describe(
-    "Goal IDs this rejection blames. Required (non-empty) when verdict is rejected; must be a superset of all rejection_details[].goal_id values.",
-  ),
-  rejection_details: z.array(z.object({
-    /** The goal this specific rejection belongs to. Required when the
-     *  rejection_details array is present. The delivery agent, which
-     *  writes the verdict, is the authority for attribution — downstream
-     *  consumers must not second-guess this via owned_paths or similar
-     *  heuristics. */
-    goal_id: z.string().describe("The goal id (gol_...) this rejection is attributed to. Must appear in affected_goal_ids."),
-    category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).describe("Category of the issue. Use 'visual' when the rejection traces back to a design_spec on task.design_specs."),
-    file: z.string().optional().describe("Affected file path, if applicable"),
-    error: z.string().describe("Description of the error or issue"),
-    suggestion: z.string().optional().describe("Suggested fix approach for the executor"),
-    visual_spec_id: z.string().optional().describe("Design-analyst spec id (vis-*) this rejection violates — cite when category='visual' and the violation maps to a specific design_spec entry on task.design_specs. Advisory: the spec list is a checklist, delivery is the authority for whether a spec was honored."),
-  })).optional().describe("Structured rejection details for the executor to fix. Required when verdict is rejected."),
-  deferred_checks: z.array(z.object({
-    name: z.string().describe("Check name (e.g. code_review, dead_code_review)"),
-    result: z.enum(["passed", "failed", "skipped"]),
-    evidence: z.string().describe("Brief evidence or reason"),
-  })).optional().describe("Extended checks that the evaluator deferred to delivery"),
-})
-
-export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
+export {
+  DeliveryVerdict,
+  FrontendCheck,
+  StartupVerification,
+  type DeliveryVerdictType,
+}
 
 // ---------------------------------------------------------------------------
 // DeliveryAgent
@@ -113,7 +67,9 @@ export namespace DeliveryAgent {
     const model = await resolveAgentModel("delivery", { sessionID: input.task.sessionID })
     const deliveryCfg = (await EngineConfig.get()).delivery
 
-    const guard = toolGuard(createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id }))
+    const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
+    const outputToolKit = createDeliveryOutputTools()
+    const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
     const context = prefetchDeliveryContext(input)
     const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
     const userPrompt = await buildMultimodalPrompt(textPrompt, input.attachments)
@@ -144,19 +100,19 @@ export namespace DeliveryAgent {
     if (externalSignal) abortSignals.push(externalSignal)
 
     const MAX_RETRIES = deliveryCfg.max_retries
-    let parsed: DeliveryVerdictType | undefined
+    let verdict: DeliveryVerdictType | undefined
     let lastError: Error | undefined
-    let toolCallCount = 0
 
-    // Retry loop here covers OUTPUT-PARSE failures (the agent ran, returned
-    // text, but the structured verdict wasn't extractable). Stream-level
-    // failures and timeouts are handled by AgentRuntime's failure tracker
-    // and progress guard — we propagate them as thrown errors and only retry
-    // the parse path.
+    // Retry loop covers missing-finalize failures — the agent ran but did not
+    // call submit_verdict before the step budget ended. Stream-level failures
+    // and timeouts are handled by AgentRuntime's failure tracker and progress
+    // guard — we propagate them as thrown errors and only retry the
+    // finalize-missed path.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         if (externalSignal?.aborted) break
         log.info("delivery agent retrying", { attempt, reason: lastError?.message })
+        outputToolKit.reset()
       }
 
       let runResult: Awaited<ReturnType<typeof AgentRuntime.run>>
@@ -188,238 +144,42 @@ export namespace DeliveryAgent {
         continue
       }
 
-      toolCallCount = runResult.toolCallCount
       log.info("delivery agent finished", {
         attempt,
         steps: runResult.steps.length,
-        toolCalls: toolCallCount,
+        toolCalls: runResult.toolCallCount,
         finishReason: runResult.finishReason,
-        textLength: collectText(runResult).length,
         timeoutTier: runResult.timeout?.tier,
         streamFailures: runResult.failures.count,
       })
 
-      try {
-        const allText = collectText(runResult)
-        if (!allText.trim()) {
-          throw new Error("delivery agent produced no output")
-        }
-        parsed = extractVerdictText(allText)
-      } catch (err) {
-        lastError = new Error(`Delivery agent returned invalid output: ${err instanceof Error ? err.message : String(err)}`)
-        log.warn("delivery: output extraction failed, will retry", {
-          attempt,
-          error: String(err),
-          textLength: collectText(runResult).length,
-        })
-        continue
+      const collector = outputToolKit.getCollector()
+      if (collector.finalized && collector.verdict) {
+        verdict = collector.verdict
+        break
       }
 
-      break
+      lastError = new Error(
+        "delivery agent did not call submit_verdict before the step budget ran out",
+      )
+      log.warn("delivery: submit_verdict not called, will retry", {
+        attempt,
+        finishReason: runResult.finishReason,
+      })
     }
 
-    if (!parsed) {
+    if (!verdict) {
       throw new Error(lastError?.message ?? "Delivery agent failed after retries")
     }
 
     log.info("delivery agent output", {
-      verdict: parsed.verdict,
-      issuesFound: parsed.issues_found.length,
-      startupSuccess: parsed.startup_verification.success,
+      verdict: verdict.verdict,
+      issuesFound: verdict.issues_found.length,
+      startupSuccess: verdict.startup_verification.success,
     })
 
-    return parsed
+    return verdict
   }
-}
-
-// ---------------------------------------------------------------------------
-// Output extraction
-// ---------------------------------------------------------------------------
-
-function extractVerdictJSON(text: string): DeliveryVerdictType {
-  let raw = extractRawJSON(text)
-  raw = sanitizeJSON(raw)
-
-  if (raw.startsWith("{") && !raw.endsWith("}")) {
-    log.warn("delivery: JSON appears truncated, attempting repair", { length: raw.length, tail: raw.slice(-100) })
-    raw = repairTruncatedJSON(raw)
-  }
-
-  let obj: any
-  const parseErr = tryParseJSON(raw)
-  if (parseErr.ok) {
-    obj = parseErr.value
-  } else {
-    const trimmed = trimToLastComplete(raw)
-    const retryErr = tryParseJSON(trimmed)
-    if (retryErr.ok) {
-      log.warn("delivery: repaired truncated JSON by trimming", {
-        originalLength: raw.length,
-        trimmedLength: trimmed.length,
-      })
-      obj = retryErr.value
-    } else {
-      log.error("delivery: JSON parse failed after all repair attempts", {
-        error: String(parseErr.error),
-        rawLength: raw.length,
-        rawHead: raw.slice(0, 500),
-        rawTail: raw.slice(-300),
-      })
-      throw parseErr.error
-    }
-  }
-
-  return normalizeVerdict(obj)
-}
-
-function extractVerdictText(text: string): DeliveryVerdictType {
-  const raw = text.trim()
-  if (!raw) throw new Error("delivery output empty")
-  if (raw.startsWith("{") || raw.includes("```json")) return extractVerdictJSON(raw)
-
-  const launchCmd = sectionBody(raw, ["Launch Command", "启动命令"]).trim().replace(/^`+|`+$/g, "").trim()
-  return normalizeVerdict({
-    verdict: sectionBody(raw, ["Verdict", "结论"]).split(/\r?\n/)[0]?.trim().toLowerCase(),
-    summary: sectionBody(raw, ["Summary", "摘要"]) || firstContentLine(raw),
-    launch_command: launchCmd || undefined,
-    startup_verification: parseStartupVerification(sectionBody(raw, ["Startup Verification", "启动验证"])),
-    frontend_check: parseFrontendCheck(sectionBody(raw, ["Frontend Check", "前端检查"])),
-    issues_found: parseIssuesFound(sectionBody(raw, ["Issues Found", "发现的问题"])),
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Normalization
-// ---------------------------------------------------------------------------
-
-function normalizeVerdict(input: unknown): DeliveryVerdictType {
-  if (!input || typeof input !== "object") {
-    throw new Error(`Delivery agent produced non-object output: ${typeof input}`)
-  }
-  const obj = { ...(input as Record<string, unknown>) }
-
-  const rawVerdict = typeof obj.verdict === "string" ? obj.verdict.trim().toLowerCase() : ""
-  if (rawVerdict.includes("accepted")) obj.verdict = "accepted"
-  else if (rawVerdict.includes("rejected")) obj.verdict = "rejected"
-  else throw new Error(`Delivery agent produced unrecognizable verdict: "${rawVerdict}"`)
-
-  if (!obj.summary || typeof obj.summary !== "string") {
-    throw new Error("Delivery agent produced no summary")
-  }
-
-  // launch_command is optional — strip if empty
-  if (typeof obj.launch_command === "string") {
-    obj.launch_command = obj.launch_command.trim().replace(/^`+|`+$/g, "").trim() || undefined
-  }
-
-  if (!obj.startup_verification || typeof obj.startup_verification !== "object") {
-    throw new Error("Delivery agent produced no startup_verification section")
-  }
-  const sv = obj.startup_verification as Record<string, unknown>
-  if (typeof sv.attempted !== "boolean") sv.attempted = false
-  if (typeof sv.success !== "boolean") sv.success = false
-
-  if (!obj.frontend_check || typeof obj.frontend_check !== "object") {
-    throw new Error("Delivery agent produced no frontend_check section")
-  }
-  const fc = obj.frontend_check as Record<string, unknown>
-  if (typeof fc.attempted !== "boolean") fc.attempted = false
-
-  if (!Array.isArray(obj.issues_found)) obj.issues_found = []
-  obj.issues_found = (obj.issues_found as unknown[]).filter(
-    (item): item is string => typeof item === "string" && item.trim().length > 0,
-  )
-
-  // Attribution contract (see DeliveryVerdict schema comment):
-  //   - accepted  → affected_goal_ids is normalized to [] and ignored
-  //   - rejected  → affected_goal_ids MUST be non-empty, and every
-  //                 rejection_details[].goal_id MUST appear in the set.
-  // Rejecting a verdict here triggers the outer MAX_RETRIES parse loop so
-  // the agent gets another turn to produce a compliant payload.
-  if (!Array.isArray(obj.affected_goal_ids)) obj.affected_goal_ids = []
-  obj.affected_goal_ids = Array.from(
-    new Set(
-      (obj.affected_goal_ids as unknown[]).filter(
-        (item): item is string => typeof item === "string" && item.trim().length > 0,
-      ),
-    ),
-  )
-
-  if (obj.verdict === "accepted") {
-    obj.affected_goal_ids = []
-  } else {
-    // verdict === "rejected"
-    if ((obj.affected_goal_ids as string[]).length === 0) {
-      throw new Error(
-        "Delivery agent rejected the delivery but produced no affected_goal_ids — the agent must cite which goal(s) the rejection is attributed to.",
-      )
-    }
-    const affectedSet = new Set(obj.affected_goal_ids as string[])
-    const details = Array.isArray(obj.rejection_details) ? (obj.rejection_details as Array<Record<string, unknown>>) : []
-    for (const d of details) {
-      if (typeof d.goal_id !== "string" || d.goal_id.trim().length === 0) {
-        throw new Error(
-          "Delivery agent produced a rejection_details entry without goal_id — every rejection must be attributed to a specific goal.",
-        )
-      }
-      if (!affectedSet.has(d.goal_id)) {
-        throw new Error(
-          `Delivery agent produced rejection_details with goal_id="${d.goal_id}" that is not listed in affected_goal_ids (${[...affectedSet].join(", ") || "empty"}).`,
-        )
-      }
-    }
-  }
-
-  return DeliveryVerdict.parse(obj)
-}
-
-// ---------------------------------------------------------------------------
-// Markdown section parsers
-// ---------------------------------------------------------------------------
-
-function parseRecordLines(lines: string[]) {
-  const record: Record<string, string> = {}
-  for (const line of lines) {
-    const value = line.trim().replace(/^[-*\u2022]\s+/, "")
-    const match = value.match(/^([a-zA-Z_ ]+|尝试|命令|成功|输出|渲染正常|问题)[:：]\s*(.+)$/)
-    if (!match) continue
-    record[match[1].trim().toLowerCase()] = match[2].trim()
-  }
-  return record
-}
-
-function parseStartupVerification(text: string) {
-  if (!text.trim()) return { attempted: false, success: false }
-  const record = parseRecordLines(text.split(/\r?\n/))
-  return {
-    attempted: (record["attempted"] || record["尝试"] || "false").toLowerCase() === "true",
-    command: record["command"] || record["命令"],
-    success: (record["success"] || record["成功"] || "false").toLowerCase() === "true",
-    output: record["output"] || record["输出"],
-  }
-}
-
-function parseFrontendCheck(text: string) {
-  if (!text.trim()) return { attempted: false }
-  const record = parseRecordLines(text.split(/\r?\n/))
-  const issues = (record["issues"] || record["问题"] || "")
-    .split(/[;\n,，；]+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-  return {
-    attempted: (record["attempted"] || record["尝试"] || "false").toLowerCase() === "true",
-    renders_correctly: record["renders_correctly"] || record["渲染正常"]
-      ? (record["renders_correctly"] || record["渲染正常"] || "false").toLowerCase() === "true"
-      : undefined,
-    issues: issues.length > 0 ? issues : undefined,
-  }
-}
-
-function parseIssuesFound(text: string) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[-*\u2022]\s+/, "").replace(/^\d+[.)\u3001]\s+/, ""))
-    .filter(Boolean)
 }
 
 // ---------------------------------------------------------------------------
@@ -731,34 +491,20 @@ function buildUserPrompt(
 
   // Step budget is finite — the agent is cut off after `delivery.max_steps`
   // tool calls. Without an explicit final-emission rule it can spend every
-  // step on rework and never write the structured verdict, which makes the
-  // whole stage fail extraction. Reserve the last step for the verdict.
+  // step on rework and never finalize, which makes the whole stage fail.
+  // Reserve the last step for submit_verdict.
   sections.push(
     "## Final Output (REQUIRED)\n\n" +
-    "Before you stop, you MUST emit the verdict as a single JSON object. " +
-    "The extractor accepts either a bare ```json fenced block or a raw " +
-    "`{ ... }` body at the end of your message. Example shape (fields are " +
-    "all required; `launch_command`, `rejection_details`, `deferred_checks` " +
-    "may be omitted for accepted verdicts):\n\n" +
-    "```json\n" +
-    "{\n" +
-    "  \"verdict\": \"rejected\",\n" +
-    "  \"summary\": \"<one paragraph: what works, what's left>\",\n" +
-    "  \"launch_command\": \"<verified start command, e.g. bun dev>\",\n" +
-    "  \"startup_verification\": { \"attempted\": true, \"success\": false, \"output\": \"<log excerpt>\" },\n" +
-    "  \"frontend_check\": { \"attempted\": true, \"renders_correctly\": false, \"issues\": [\"…\"] },\n" +
-    "  \"issues_found\": [\"<bullet>\"],\n" +
-    "  \"affected_goal_ids\": [\"gol_xxx\", \"gol_yyy\"],\n" +
-    "  \"rejection_details\": [\n" +
-    "    { \"goal_id\": \"gol_xxx\", \"category\": \"build|test|lint|runtime|quality|startup\", \"file\": \"<path>\", \"error\": \"<what's wrong>\", \"suggestion\": \"<actionable fix>\" }\n" +
-    "  ]\n" +
-    "}\n" +
-    "```\n\n" +
-    "**Attribution contract (MANDATORY when `verdict` is `rejected`):**\n" +
-    "- `affected_goal_ids` MUST be non-empty — pick the goal IDs from the `# Goals` section above that this rejection blames. You are the authority; downstream code will not second-guess this.\n" +
-    "- Every entry in `rejection_details` MUST include a `goal_id` that also appears in `affected_goal_ids`.\n" +
-    "- If a rejection spans multiple goals, list every relevant goal id in `affected_goal_ids` and create one `rejection_details` entry per (goal, issue) pair.\n" +
-    "- A delivery that is merely \"bad overall\" with no specific goal attribution is NOT a valid rejection. If you cannot name the responsible goal, you have not investigated enough — go back and investigate. Your retry budget covers this.",
+    "Before you stop, you MUST call the `submit_verdict` tool exactly once. " +
+    "Plain-text / markdown / ```json fenced output is IGNORED — only the tool " +
+    "call is read. The tool's schema is strict (Zod-validated); malformed " +
+    "payloads return an error and let you call again.\n\n" +
+    "**Attribution contract enforced by the tool:**\n" +
+    "- `verdict='rejected'` REQUIRES a non-empty `affected_goal_ids`. Pick goal IDs from the `# Goals` section above — you are the attribution authority, downstream code does not second-guess.\n" +
+    "- Every `rejection_details[].goal_id` MUST appear in `affected_goal_ids`.\n" +
+    "- If a rejection spans multiple goals, list every relevant goal id in `affected_goal_ids` and emit one `rejection_details` entry per (goal, issue) pair.\n" +
+    "- A delivery that is merely \"bad overall\" with no specific goal attribution is NOT a valid rejection. If you cannot name the responsible goal, investigate more — your retry budget covers it.\n\n" +
+    "If submit_verdict is not called before the step budget runs out, the run is treated as a failed finalize and retried.",
   )
 
   return sections.join("\n\n")
@@ -862,6 +608,9 @@ There is no "don't duplicate the evaluator" rule anymore — the evaluator is go
 ### Context
 - **memory_search**: Search past delivery issues
 - **memory_write**: Persist findings for future deliveries
+
+### Finalize (MANDATORY last tool call)
+- **submit_verdict**: The ONLY way the verdict leaves the agent. Call it exactly once, after Phase 0 adapt / Phase 1-4 checks / Phase 5 repairs. Plain-text / markdown / \`\`\`json output is IGNORED — only this tool call is read. Schema is Zod-validated; malformed payloads return an error so you can call again. See Phase 7 for the field list.
 
 ## Process
 
@@ -1050,18 +799,18 @@ Record every applied fix under \`# Fixes Applied\` in Phase 7 with the failing c
 Write runtime failure patterns and verification insights to memory.
 
 ### Phase 7: VERDICT
-Output your decision as plain markdown with these sections:
+Emit your decision by calling the **\`submit_verdict\`** tool. This is the ONLY way the verdict leaves the agent — any plain-text / markdown / \`\`\`json output is IGNORED. The tool's schema is Zod-validated: malformed payloads return an error and you call again.
 
-- \`# Verdict\` — accepted or rejected
-- \`# Summary\` — 1-3 sentences
-- \`# Goal Criteria Results\` — per-goal list: goal title, acceptance criteria, result (PASS/FAIL), evidence
-- \`# Launch Command\` — the exact command used to successfully start the application (e.g. \`bun run start\`, \`node dist/index.js\`). REQUIRED when startup_verification.success is true. This command will be used to auto-launch the deliverable after publish — make it runnable from the project root with no extra arguments.
-- \`# Startup Verification\` — attempted, command, success, output
-- \`# Frontend Check\` — attempted, renders_correctly, issues
-- \`# Issues Found\` — all issues discovered (empty if none)
-- \`# Fixes Applied\` — list of fixes you applied during verification (empty if none)
-- \`# Rejection Details\` — (required when rejecting) structured list: category (build/test/lint/runtime/quality/startup/criteria), file (if applicable), error description. Only include issues that remain after your fix attempts.
-- \`# Deferred Checks\` — extended checks results: name, result (passed/failed/skipped), evidence
+Fields (see tool schema for exact types):
+- \`verdict\`: "accepted" | "rejected"
+- \`summary\`: 1-3 sentences explaining the outcome
+- \`launch_command\` (optional, required when \`startup_verification.success\`): exact runnable-from-project-root command, e.g. \`bun run start\`, \`node dist/index.js\`
+- \`startup_verification\`: { attempted, command?, success, output? }
+- \`frontend_check\`: { attempted, renders_correctly?, issues? }
+- \`issues_found\`: bullet list of every issue you discovered (empty array if none)
+- \`affected_goal_ids\`: non-empty when \`verdict='rejected'\` — goal IDs the rejection is attributed to
+- \`rejection_details\`: required when rejecting — each entry carries { goal_id, category (build/test/lint/runtime/quality/startup/visual), file?, error, suggestion?, visual_spec_id? }
+- \`deferred_checks\`: extended checks results — each { name, result (passed/failed/skipped), evidence }
 
 ### Verdict Meanings (hard contract — no subjective wiggle room)
 
