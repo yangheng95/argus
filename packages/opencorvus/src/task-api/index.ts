@@ -550,49 +550,123 @@ export namespace EngineService {
     return viewTask(task, { directory: item?.directory })
   }
 
+  type FileRef = {
+    sha: string
+    url: string
+    mime: string
+    size: number
+    filename?: string
+    intent?: string
+    source?: string
+  }
+  type FileRefColumn = "attachments" | "system_artifacts"
+
   /**
-   * Append an attachment reference to a task's `attachments` array. Used by
-   * the design_analysis tool to register Figma-rendered frames so they
-   * become first-class task attachments — visible in the overlay, queryable
-   * by downstream agents, and picked up automatically by the deliver-time
-   * visual SSIM gate as the reference image.
+   * Validate that a FileRef points at a real on-disk attachment, then merge
+   * it into one of the task's two file-reference columns. The merge strategy
+   * (`append-dedup-by-sha` vs `replace-by-intent`) is supplied by the caller
+   * — keeping both behind one validator guarantees the on-disk-existence
+   * rule stays a single source of truth even as new merge modes are added.
    *
-   * Verifies the underlying file is on disk and non-empty before persisting.
-   * A registered-but-missing reference would cause downstream multimodal
-   * loading (requirements / design-analyst / delivery) to ENOENT-crash on
-   * every retry — fail at the registration boundary instead of letting the
-   * dangling state poison the task forever.
-   *
-   * No-op when the same sha is already attached (sha-based dedupe).
+   * Throws on a dangling URL: registered-but-missing files would cause
+   * downstream multimodal loading to ENOENT-crash on every retry. Failing
+   * at the registration boundary keeps the bad state out of the database.
    */
-  export async function appendTaskAttachment(
+  async function mergeTaskFileRef(
     taskID: string,
-    attachment: { sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string },
-  ) {
+    column: FileRefColumn,
+    file: FileRef,
+    merge: (prev: FileRef[]) => { next: FileRef[]; reason: string } | null,
+  ): Promise<FileRef[]> {
     const task = requireTask(taskID)
-    const located = AttachmentStore.nameFromUrl(attachment.url)
+    const located = AttachmentStore.nameFromUrl(file.url)
     if (!located) {
       throw new Error(
-        `appendTaskAttachment: attachment.url is not a valid /attachment/<projectID>/<name> reference: ${attachment.url}`,
+        `${column}: file.url is not a valid /attachment/<projectID>/<name> reference: ${file.url}`,
       )
     }
     const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
     if (!abs) {
       throw new Error(
-        `appendTaskAttachment: cannot resolve attachment path for project ${located.projectID}/${located.name}`,
+        `${column}: cannot resolve attachment path for project ${located.projectID}/${located.name}`,
       )
     }
     const stat = await fs.stat(abs).catch(() => null)
     if (!stat || stat.size === 0) {
       throw new Error(
-        `appendTaskAttachment: file missing or empty on disk — refusing to register dangling reference: ${abs}`,
+        `${column}: file missing or empty on disk — refusing to register dangling reference: ${abs}`,
       )
     }
-    const prev = Array.isArray(task.attachments) ? (task.attachments as any[]) : []
-    if (prev.some((a) => a?.sha === attachment.sha)) return prev
-    const next = [...prev, attachment]
-    await updateTask(task, { attachments: next as any }, `attachment appended: ${attachment.filename ?? attachment.sha}`)
-    return next
+    const prev = Array.isArray((task as any)[column]) ? ((task as any)[column] as FileRef[]) : []
+    const result = merge(prev)
+    if (!result) return prev
+    await updateTask(task, { [column]: result.next } as any, result.reason)
+    return result.next
+  }
+
+  /**
+   * Register a USER-CONTRACT attachment on a task. Use for files the user
+   * explicitly attached (user-upload) or for assets the user pointed the
+   * orchestrator at via a contract-level URL (figma frames). Read by
+   * requirements / design-analyst as user intent and by delivery for visual
+   * comparison.
+   *
+   * For orchestrator-generated evidence (URL screenshots, rendered.png,
+   * local material reads) use `appendTaskSystemArtifact` instead — those
+   * must not contaminate the user-intent stream.
+   *
+   * Idempotent on sha collision: same content → no-op.
+   */
+  export async function appendTaskAttachment(taskID: string, attachment: FileRef) {
+    return mergeTaskFileRef(taskID, "attachments", attachment, (prev) => {
+      if (prev.some((a) => a?.sha === attachment.sha)) return null
+      return {
+        next: [...prev, attachment],
+        reason: `attachments appended: ${attachment.filename ?? attachment.sha}`,
+      }
+    })
+  }
+
+  /**
+   * Register a SYSTEM-GENERATED artifact on a task. Use for evidence the
+   * orchestrator/agents produced on the user's behalf — URL screenshots,
+   * local material reads. Read only by delivery for visual diff against the
+   * user contract; never fed to requirements or design-analyst as user
+   * intent. Idempotent on sha collision.
+   */
+  export async function appendTaskSystemArtifact(taskID: string, artifact: FileRef) {
+    return mergeTaskFileRef(taskID, "system_artifacts", artifact, (prev) => {
+      if (prev.some((a) => a?.sha === artifact.sha)) return null
+      return {
+        next: [...prev, artifact],
+        reason: `system_artifacts appended: ${artifact.filename ?? artifact.sha}`,
+      }
+    })
+  }
+
+  /**
+   * Replace all system artifacts carrying a given `intent` with a single new
+   * artifact. Use when each rerun should supersede the previous output for
+   * that semantic slot (e.g. delivery rendered_output: keeping every prior
+   * rendered.png would balloon the task and confuse the visual diff).
+   */
+  export async function replaceTaskSystemArtifactByIntent(
+    taskID: string,
+    intent: string,
+    artifact: FileRef,
+  ): Promise<FileRef[]> {
+    if (artifact.intent !== intent) {
+      throw new Error(
+        `replaceTaskSystemArtifactByIntent: intent mismatch — slot=${intent} artifact.intent=${artifact.intent}`,
+      )
+    }
+    return mergeTaskFileRef(taskID, "system_artifacts", artifact, (prev) => {
+      const purged = prev.filter((a) => a?.intent !== intent)
+      return {
+        next: [...purged, artifact],
+        reason: `system_artifacts replaced [intent=${intent}]: ${artifact.filename ?? artifact.sha}`,
+      }
+    })
   }
 
   /**
