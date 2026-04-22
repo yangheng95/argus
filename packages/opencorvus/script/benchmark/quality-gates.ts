@@ -38,10 +38,11 @@ const CONFIG_BASENAMES = new Set([
   "package-lock.json",
   "bun.lock",
 ])
-// Case-sensitive: only uppercase TODO/FIXME count as action markers (avoids "todo item" in product JSDoc)
+// Case-sensitive: only uppercase TODO/FIXME count as action markers (avoids "todo item" in product JSDoc).
+// Restricted to source files only (see auditWorkspace) — keyword matches in artifact JSON/XML/CSS
+// and in JSX attributes / CSS pseudo-classes are structural, not implementation-completeness signals.
+// Semantic judgement of placeholder implementations is the LLM evaluator's job, per CLAUDE.md rule 11.
 const PLACEHOLDER_MARKER_RE = /\b(TODO|FIXME)\b/
-// Case-insensitive: implementation quality signals that indicate incomplete code
-const PLACEHOLDER_IMPL_RE = /\b(stub|placeholder|mock-only|not implemented)\b/i
 const VERIFY_RE = /\b(verify|verification|check|test|assert|readme|structure|scaffold|ls\s|find\s)\b/i
 function isInternalPath(file: string) {
   const normalized = file.replace(/\\/g, "/")
@@ -66,10 +67,10 @@ export async function auditWorkspace(input: {
     /(^|\/)(app\.json|babel\.config\.js|metro\.config\.js|package-lock\.json|src\/[^/]+\/README\.md)$/i.test(file.replace(/\\/g, "/")),
   )
 
-  const placeholderHits = (await Promise.all(files.map(async (file) => {
+  const placeholderHits = (await Promise.all(sourceFiles.map(async (file) => {
     const abs = path.join(input.rootDir, file)
     const content = await fs.readFile(abs, "utf8").catch(() => "")
-    return (PLACEHOLDER_MARKER_RE.test(content) || PLACEHOLDER_IMPL_RE.test(content)) ? [file] : []
+    return PLACEHOLDER_MARKER_RE.test(content) ? [file] : []
   }))).flat()
 
   // Frontend integration checks: detect hidden compatibility issues that backend tests won't catch.

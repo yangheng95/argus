@@ -39,6 +39,8 @@ import {
   createWorkflowState,
   renderWorkflowPrompt,
 } from "@/engine"
+import { EngineProtocol } from "@/engine/protocol"
+import { Event as EngineEvent } from "@/engine/model"
 import { describeTask, renderTaskDescription } from "@/engine/describe"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 
