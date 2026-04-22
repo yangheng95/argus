@@ -419,7 +419,6 @@ export type EventFidelityReviewCompleted = {
 export type Project = {
   id: string
   worktree: string
-  vcs?: "git"
   name?: string
   icon?: {
     url?: string
