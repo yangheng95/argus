@@ -1,11 +1,11 @@
 /**
- * Requirements data shapes — canonical types shared by the agent and its
- * structured tool collector.
+ * Requirements data shapes — narrow scope: REQ-N list + foundational decisions.
  *
- * These were previously co-located with a YAML-like text parser in
- * `requirements/parse.ts`. The parser has been removed (Zod tool calls are now
- * the only path); the types live here so multiple modules can import the
- * shape without dragging in dead parsing code.
+ * The Requirements Agent no longer produces goals, metric specs, challenge
+ * seeds, traceability, or cross-goal contracts. The Architect owns every
+ * part of decomposition. `Architect*` types below live here only because
+ * the Architect output-tools import them; Phase 3 of the decompose
+ * migration relocates them under `@/architect/types`.
  */
 
 export interface ParsedRequirement {
@@ -20,23 +20,6 @@ export interface RequirementsDecision {
   reason: string
 }
 
-import type { AcceptanceSpec } from "@/acceptance/types"
-
-export interface ParsedGoalContract {
-  id: string
-  title: string
-  objective: string
-  acceptance_specs: AcceptanceSpec[]
-  owned_paths: string[]
-  depends_on: string[]
-  exports: string[]
-  imports: string[]
-  priority: "blocking" | "advisory"
-  kind: string
-  requirement_ids: string[]
-  source: "explicit" | "implicit"
-}
-
 export interface TraceabilityEntry {
   requirementID: string
   goalIDs: string[]
@@ -46,11 +29,6 @@ export interface RequirementsOutput {
   summary: string
   requirements: ParsedRequirement[]
   decisions: RequirementsDecision[]
-  goals: ParsedGoalContract[]
-  traceability: TraceabilityEntry[]
-  goal_metric_specs: ArchitectGoalMetricSpec[]
-  global_metric_specs: ArchitectGlobalMetricSpec[]
-  challenge_seeds: ArchitectChallengeSeed[]
 }
 
 /**
@@ -58,7 +36,7 @@ export interface RequirementsOutput {
  *
  * These are LLM-facing — `goal_id` refers to the architect's own string ID
  * (e.g. "goal_api"), not the DB row. Mapping to DB goal IDs happens at
- * persistence time (see orchestrator/tools.ts requirements phase).
+ * persistence time.
  *
  * Field semantics match engine_metric_spec exactly except that `source` /
  * `created_by` / `frozen_at` / `id` are assigned by the store layer.
@@ -96,7 +74,8 @@ export interface ArchitectGlobalMetricSpec {
 
 /**
  * Prosecutor priors — candidate challenges the Architect thinks are worth
- * probing. Phase 4 consumes these when the Prosecutor runs its first pass.
+ * probing. Phase 4 (delivery) consumes these when the Prosecutor runs its
+ * first pass.
  */
 export interface ArchitectChallengeSeed {
   id: string
