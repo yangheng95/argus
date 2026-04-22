@@ -1063,12 +1063,23 @@ async function loadTaskTranscript(taskID: string) {
 }
 
 function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
+  // Schema (protocol/schema.ts) requires `emitted_at` to be a positive int.
+  // Reading `time.emitted || time.created || Date.now()` was a rule-1
+  // fallback chain that silently repaired schema-invalid rows — if we ever
+  // reach that branch the upstream writer is broken and the right answer
+  // is to crash loudly, not to stamp envelopes with a client-local clock.
+  const timestamp = event.time.emitted
+  if (!(typeof timestamp === "number" && timestamp > 0)) {
+    throw new Error(
+      `protocolTaskEvent: event ${event.id} missing time.emitted (schema-invariant violated)`,
+    )
+  }
   return {
     event_id: event.id,
     task_id: event.taskID,
     run_id: event.runID,
     type: event.type.replace("engine.", ""),
-    timestamp: event.time.emitted || event.time.created || Date.now(),
+    timestamp,
     sequence: event.sequence,
     summary: event.summary,
     payload: event.payload || {},
