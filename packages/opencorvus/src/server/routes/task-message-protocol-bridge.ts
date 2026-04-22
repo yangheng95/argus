@@ -23,9 +23,15 @@ let initialized = false
  *  (minus "root", which is the task container, not a card). */
 export type OverlayChannel = "main" | Exclude<SessionKind, "root">
 
-/** What the message is rendered as. "user" stays user-shaped regardless of
- *  which sub-agent's card it lives in (orchestrator prompts dispatched into
- *  a sub-agent are still user-authored from that sub-agent's perspective). */
+/** What the message is rendered as. "user" marks human-authored input (root
+ *  main channel only). Every other value aligns with a sub-agent kind and
+ *  drives the overlay's bubble styling for that speaker. Crucially, when a
+ *  child session records a `role: "user"` message, the author is NOT human
+ *  — it is the orchestrator dispatching a brief to that sub-agent (goal
+ *  contract, architect consensus, intent-bundle pointer, retry feedback,
+ *  …). We therefore resolve to `"orchestrator"`, so the overlay renders it
+ *  with orchestrator styling and does not mislead observers into thinking
+ *  a human spoke. */
 export type OverlayResolvedRole = "user" | OverlayChannel
 
 /**
@@ -33,8 +39,9 @@ export type OverlayResolvedRole = "user" | OverlayChannel
  *
  * Contract (driven by `session.kind`):
  * - User on root → resolvedRole="user", channel="main" (top-level user bubble)
- * - User on sub-agent session → resolvedRole="user", channel=that session.kind
- *   (orchestrator-dispatched prompt rendered inside the sub-agent's card)
+ * - User on sub-agent session → resolvedRole="orchestrator", channel=session.kind
+ *   (engine-synthesized dispatch brief — orchestrator authors it; the card
+ *    still lives under the sub-agent's phase/stage)
  * - Assistant on sub-agent session → resolvedRole=session.kind, channel=session.kind
  * - Assistant on root → invalid: root sessions only hold user-authored content
  *
@@ -76,7 +83,20 @@ export function overlayMeta(
       `call passed kind="root" with a parentID.`,
     )
   }
-  if (role === "user") return { resolvedRole: "user", channel: kind }
+  if (role === "user") {
+    // Non-root sessions only receive user-role messages that the engine
+    // synthesizes as a dispatch brief for the sub-agent — goal contract +
+    // architect consensus + intent-bundle pointer (goal/runner.ts), planner
+    // / build scaffolding, retry feedback, delivery seed prompts. The
+    // orchestrator is the author, not the human. Resolve role to
+    // "orchestrator" so the overlay renders the same full-featured card
+    // styling it already uses on the root main channel, while keeping
+    // channel=session.kind so the card still groups under the sub-agent's
+    // phase/stage. Previously this returned resolvedRole="user" which
+    // presented an orchestrator-authored briefing as if a human had typed
+    // it, producing the unreadable wall of small text in phase cards.
+    return { resolvedRole: "orchestrator", channel: kind }
+  }
   return { resolvedRole: kind, channel: kind }
 }
 

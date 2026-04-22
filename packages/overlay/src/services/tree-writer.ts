@@ -968,10 +968,24 @@ function resolvePhaseOrSessionCardID(
 function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionInfo {
   const existing = sessions.get(sessionID);
   if (existing) {
-    // Backfill stage on first real message.updated (defensive path-updated-first path).
-    if (!existing.stage && opts.stage) {
+    // Backfill on first real message.updated. Two arrivals matter for the
+    // cardID migration: `stage` (decides phase-vs-session class) and
+    // `goalID` (decides whether a goal-phase mapping even applies).
+    // `resolvePhaseOrSessionCardID` uses BOTH inputs, so whichever one
+    // arrives last can still flip the placeholder from a top-level
+    // `<stage>:session:<sid>` card to the real phase card. The previous
+    // guard `!existing.stage && opts.stage` only fired when stage was
+    // the latecomer — if goalID was late instead, the stale session
+    // card survived and `rebuildCardHierarchy` then pushed it as a child
+    // of the real phase card, producing a visible "phase → nested
+    // session" mirror. We now migrate on either transition.
+    const stageNewlyKnown = !existing.stage && Boolean(opts.stage);
+    const goalNewlyKnown = !existing.goalID && Boolean(opts.goalID);
+    const stageForResolve = existing.stage || opts.stage || "";
+    const goalForResolve = opts.goalID || existing.goalID || "";
+    if ((stageNewlyKnown || goalNewlyKnown) && stageForResolve) {
       const { cardID: newCardID, isPhase } = resolvePhaseOrSessionCardID(
-        sessionID, opts.stage, opts.goalID || existing.goalID, opts.time,
+        sessionID, stageForResolve, goalForResolve, opts.time,
       );
       if (newCardID !== existing.cardID) {
         // Rename is an atomic invariant: after this produce commits, the
@@ -998,14 +1012,14 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
               cards[newCardID] = {
                 id: newCardID,
                 kind: "phase",
-                stage: opts.stage,
-                accent: stageAccent(opts.stage),
+                stage: stageForResolve,
+                accent: stageAccent(stageForResolve),
                 status: phase?.status ?? "running",
-                title: phase?.title ?? opts.stage,
+                title: phase?.title ?? stageForResolve,
                 parts: phaseParts,
                 childIDs: phaseChildIDs,
-                phaseID: phase?.phaseID ?? opts.stage,
-                phaseSessionKind: phase?.phaseSessionKind ?? opts.stage,
+                phaseID: phase?.phaseID ?? stageForResolve,
+                phaseSessionKind: phase?.phaseSessionKind ?? stageForResolve,
                 time: phase?.time ?? opts.time,
               };
             } else {
@@ -1016,30 +1030,31 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
                 ? {
                     ...placeholder,
                     id: newCardID,
-                    stage: opts.stage,
-                    accent: stageAccent(opts.stage),
-                    title: roleTitleKey(opts.stage),
+                    stage: stageForResolve,
+                    accent: stageAccent(stageForResolve),
+                    title: roleTitleKey(stageForResolve),
                     time: opts.time,
                   }
                 : {
                     id: newCardID,
                     kind: "agent",
-                    stage: opts.stage,
-                    accent: stageAccent(opts.stage),
+                    stage: stageForResolve,
+                    accent: stageAccent(stageForResolve),
                     status: "running",
-                    title: roleTitleKey(opts.stage),
+                    title: roleTitleKey(stageForResolve),
                     round: 0,
                     parts: [],
                     childIDs: [],
                     time: opts.time,
                   };
             }
-            if (placeholder) delete cards[existing.cardID];
+            if (placeholder && existing.cardID !== newCardID) delete cards[existing.cardID];
           }),
         );
         existing.cardID = newCardID;
       }
-      existing.stage = opts.stage;
+      if (stageNewlyKnown) existing.stage = opts.stage;
+      if (goalNewlyKnown) existing.goalID = opts.goalID;
     }
     if (opts.parentSessionID && !existing.parentSessionID) {
       existing.parentSessionID = opts.parentSessionID;
