@@ -18,7 +18,7 @@
  */
 
 import { Log } from "@/util/log"
-import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistDelivery } from "@/engine"
+import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistGoalDelivery } from "@/engine"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromWorktree } from "@/goal/runner"
@@ -108,9 +108,10 @@ export async function* runGoalPipeline(
 
     yield { type: "executed", delivery }
 
-    // Persist delivery to DB
+    // Persist delivery to DB — goal-scoped variant, does NOT create an
+    // evaluation row (see persist.ts: per-goal evals have no updater).
     const deliveryID = Identifier.ascending("delivery")
-    persistDelivery({
+    persistGoalDelivery({
       task, run, goalRunID, deliveryID,
       delivery: { summary: delivery.summary, commitRef: delivery.commitRef, diffs: delivery.diffs, report: delivery.report },
       now: Date.now(),

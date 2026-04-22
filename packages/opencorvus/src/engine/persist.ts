@@ -574,24 +574,34 @@ type EvaluationVerdict = "accepted" | "rejected"
 
 // `beginEvaluation` and `persistEvaluation` were part of the old `transition.ts`
 // pipeline. With per-goal dispatch + delivery/checks they have no callers; the
-// evaluation row is now created by `persistDelivery()` (1:1 with delivery) and
-// updated by `updateEvaluationFromDeliveryVerdict()`. Do not re-add conditional
-// evaluation inserts — they break the delivery↔evaluation invariant.
+// evaluation row is now created by `persistTaskDelivery()` (1:1 with the
+// task-level delivery) and updated by `updateEvaluationFromDeliveryVerdict()`.
+// Do not re-add conditional evaluation inserts — they break the
+// task-delivery↔evaluation invariant. Per-goal deliveries do NOT create an
+// evaluation row: goal_run status is driven by the executor directly, and the
+// delivery-agent's checks cover per-goal verdicts — a per-goal evaluation row
+// would be a dummy with no consumer.
 
+type DeliveryInput = {
+  summary: string
+  commitRef?: string
+  diffs: Array<{ file: string; [key: string]: unknown }>
+  report?: import("@/delivery/checks").GoalReportClaim
+}
 
-export function persistDelivery(input: {
-  task: TaskRow
-  run: RunRow
-  goalRunID?: string
-  deliveryID: string
-  delivery: {
-    summary: string
-    commitRef?: string
-    diffs: Array<{ file: string; [key: string]: unknown }>
-    report?: import("@/delivery/checks").GoalReportClaim
-  }
-  now: number
-}) {
+// Shared diff-stat reduction + artifact inserts. Never writes the evaluation
+// row — that's the split between persistGoalDelivery and persistTaskDelivery.
+function writeDeliveryRow(
+  db: Parameters<Parameters<typeof Database.transaction>[0]>[0],
+  input: {
+    task: TaskRow
+    run: RunRow
+    goalRunID?: string
+    deliveryID: string
+    delivery: DeliveryInput
+    now: number
+  },
+) {
   const stats = input.delivery.diffs.reduce(
     (acc, d) => {
       const a = typeof (d as any).additions === "number" ? (d as any).additions : 0
@@ -602,41 +612,139 @@ export function persistDelivery(input: {
     },
     { additions: 0, deletions: 0 },
   )
-  // 1:1 delivery↔evaluation invariant — the row is created here pending, and
-  // update-in-place is the only allowed path afterwards. Never conditional-insert
-  // an evaluation elsewhere; doing so breaks the invariant and reintroduces the
-  // "delivery candidate + no evaluation" stall that the 006/007 benchmark hit.
-  const evaluationID = Identifier.ascending("evaluation")
-  Database.transaction((db) => {
-    db.insert(EngineDeliveryTable)
+  db.insert(EngineDeliveryTable)
+    .values({
+      id: input.deliveryID,
+      task_id: input.task.id,
+      run_id: input.run.id,
+      goal_run_id: input.goalRunID,
+      status: "candidate",
+      summary: input.delivery.summary,
+      result: {
+        summary: input.delivery.summary,
+        commit_ref: input.delivery.commitRef,
+        changed_files: input.delivery.diffs.map((item) => item.file),
+        diffs: input.delivery.diffs,
+        stats,
+        report: input.delivery.report,
+      },
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  db.insert(EngineArtifactTable)
+    .values({
+      id: Identifier.ascending("artifact"),
+      task_id: input.task.id,
+      run_id: input.run.id,
+      goal_run_id: input.goalRunID,
+      delivery_id: input.deliveryID,
+      kind: "report",
+      label: "assistant-summary",
+      payload: { summary: input.delivery.summary },
+      time_created: input.now,
+      time_updated: input.now,
+    })
+    .run()
+  if (input.delivery.diffs.length > 0) {
+    db.insert(EngineArtifactTable)
       .values({
-        id: input.deliveryID,
+        id: Identifier.ascending("artifact"),
         task_id: input.task.id,
         run_id: input.run.id,
         goal_run_id: input.goalRunID,
-        status: "candidate",
-        summary: input.delivery.summary,
-        result: {
-          summary: input.delivery.summary,
-          commit_ref: input.delivery.commitRef,
-          changed_files: input.delivery.diffs.map((item) => item.file),
-          diffs: input.delivery.diffs,
-          stats,
-          report: input.delivery.report,
-        },
+        delivery_id: input.deliveryID,
+        kind: "diff",
+        label: "workspace-diff",
+        payload: { diffs: input.delivery.diffs },
         time_created: input.now,
         time_updated: input.now,
       })
       .run()
+  }
+  if (input.delivery.commitRef) {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        goal_run_id: input.goalRunID,
+        delivery_id: input.deliveryID,
+        kind: "git_ref",
+        label: "delivery-commit",
+        payload: { commit_ref: input.delivery.commitRef },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+  for (const item of input.delivery.diffs) {
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        goal_run_id: input.goalRunID,
+        delivery_id: input.deliveryID,
+        kind: "changed_file",
+        label: item.file,
+        payload: item,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+  }
+}
+
+// Per-goal delivery: produced by pipeline/executor.ts the moment a goal_run
+// finishes. Stores the delivery row + artifacts for later aggregation, but
+// does NOT create an evaluation row — per-goal verdicts live inside the
+// task-level delivery-agent run, so a per-goal eval would sit pending forever
+// with no updater (see tick-32 bench DB: evl_*002* rows that never leave
+// inconclusive/pending). Emits DeliveryReady so bridges know to refresh.
+export function persistGoalDelivery(input: {
+  task: TaskRow
+  run: RunRow
+  goalRunID: string
+  deliveryID: string
+  delivery: DeliveryInput
+  now: number
+}) {
+  Database.transaction((db) => {
+    writeDeliveryRow(db, input)
+    Database.effect(() =>
+      EngineProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
+    )
+  })
+}
+
+// Task-level delivery: produced by orchestrator's `deliver` tool after all
+// goal_runs complete. Writes the aggregated delivery row (goal_run_id=NULL) +
+// one `scope='delivery'` evaluation row pending. The evaluation is the
+// 1:1 counterpart the delivery-agent settles via
+// updateEvaluationFromDeliveryVerdict() — the invariant referenced elsewhere
+// in this file lives here and nowhere else.
+export function persistTaskDelivery(input: {
+  task: TaskRow
+  run: RunRow
+  deliveryID: string
+  delivery: DeliveryInput
+  now: number
+}) {
+  const evaluationID = Identifier.ascending("evaluation")
+  Database.transaction((db) => {
+    writeDeliveryRow(db, input)
     db.insert(EngineEvaluationTable)
       .values({
         id: evaluationID,
         task_id: input.task.id,
         run_id: input.run.id,
-        goal_run_id: input.goalRunID,
+        goal_run_id: null,
         delivery_id: input.deliveryID,
-        // Invariant: scope='delivery' ⇒ delivery_id NOT NULL, trivially held
-        // because persistDelivery is the only inserter that sets delivery_id.
+        // Invariant: scope='delivery' ⇒ delivery_id NOT NULL and
+        // goal_run_id IS NULL — only task-level deliveries create evals.
+        // Trivially held: persistTaskDelivery is the only writer of
+        // scope='delivery' rows and it passes goal_run_id=null above.
         scope: "delivery",
         status: "pending",
         verdict: "inconclusive",
@@ -646,68 +754,6 @@ export function persistDelivery(input: {
         time_updated: input.now,
       })
       .run()
-    db.insert(EngineArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        delivery_id: input.deliveryID,
-        kind: "report",
-        label: "assistant-summary",
-        payload: { summary: input.delivery.summary },
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
-    if (input.delivery.diffs.length > 0) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          kind: "diff",
-          label: "workspace-diff",
-          payload: { diffs: input.delivery.diffs },
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-    }
-    if (input.delivery.commitRef) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          kind: "git_ref",
-          label: "delivery-commit",
-          payload: { commit_ref: input.delivery.commitRef },
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-    }
-    for (const item of input.delivery.diffs) {
-      db.insert(EngineArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: input.task.id,
-          run_id: input.run.id,
-          goal_run_id: input.goalRunID,
-          delivery_id: input.deliveryID,
-          kind: "changed_file",
-          label: item.file,
-          payload: item,
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-    }
     Database.effect(() =>
       EngineProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
     )
@@ -715,12 +761,14 @@ export function persistDelivery(input: {
 }
 
 /**
- * Update the pending evaluation row attached to a delivery. Requires the row
- * created by persistDelivery() to exist — throws loudly when it does not,
- * because the 1:1 delivery↔evaluation invariant is the whole reason the
- * evaluation-never-created stall is fixable. A missing row means something
- * inserted a delivery without going through persistDelivery(), which is a
- * bug that must be surfaced, not silently patched.
+ * Update the pending evaluation row attached to a task-level delivery.
+ * Requires the row created by persistTaskDelivery() to exist — throws loudly
+ * when it does not, because the 1:1 task-delivery↔evaluation invariant is
+ * the whole reason the evaluation-never-created stall is fixable. A missing
+ * row means either (a) the caller passed a per-goal delivery id (per-goal
+ * deliveries have no eval by design), or (b) something inserted a
+ * task-level delivery without going through persistTaskDelivery(). Both are
+ * bugs that must be surfaced, not silently patched.
  */
 export function updateEvaluationFromDeliveryVerdict(input: {
   deliveryID: string
@@ -752,7 +800,8 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   if (!existing) {
     throw new Error(
       `updateEvaluationFromDeliveryVerdict: no evaluation row found for delivery ${input.deliveryID}. ` +
-      `persistDelivery() must have been bypassed — deliveries and evaluations are 1:1.`,
+      `Either persistTaskDelivery() was bypassed, or the caller passed a per-goal delivery id ` +
+      `(per-goal deliveries have no evaluation row — only task-level deliveries are 1:1 with an evaluation).`,
     )
   }
   const existingChecks: import("./engine.sql").EngineEvaluationCheck[] = Array.isArray(existing.checks)

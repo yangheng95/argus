@@ -1811,10 +1811,12 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Persist aggregated delivery
-        const { persistDelivery } = await import("@/engine/persist")
+        // Persist aggregated delivery — task-scoped variant, which is the
+        // only path that creates the `scope='delivery'` evaluation row the
+        // delivery-agent later settles via updateEvaluationFromDeliveryVerdict.
+        const { persistTaskDelivery } = await import("@/engine/persist")
         const deliveryID = Identifier.ascending("delivery")
-        persistDelivery({
+        persistTaskDelivery({
           task: task as any,
           run: run as any,
           deliveryID,
@@ -2541,8 +2543,9 @@ export function createOrchestratorTools(input: {
           const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
           const published = findDeliveryByRun(run.id) ?? delivery
 
-          // Update the evaluation row persistDelivery() created for this delivery.
-          // 1:1 delivery↔evaluation invariant: the row always exists here.
+          // Update the evaluation row persistTaskDelivery() created for this
+          // delivery. 1:1 task-delivery↔evaluation invariant: the row always
+          // exists here (per-goal deliveries never touch this path).
           // No `checks` argument: the `deliver` tool already wrote the full
           // structured check set; updateEvaluationFromDeliveryVerdict
           // preserves existing checks when none are supplied.
