@@ -260,7 +260,10 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       user?.goal_escalation_threshold ?? DEFAULTS.goal_escalation_threshold,
       user?.max_goal_retries ?? DEFAULTS.max_goal_retries,
     ),
-    max_delivery_iterations: user?.max_delivery_iterations ?? DEFAULTS.max_delivery_iterations,
+    max_delivery_iterations:
+      Number(process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS) ||
+      user?.max_delivery_iterations ||
+      DEFAULTS.max_delivery_iterations,
     max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
     workflows: (user?.workflows ?? DEFAULTS.workflows).map(w => ({
