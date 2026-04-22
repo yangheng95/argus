@@ -4928,8 +4928,11 @@ code .file-link:hover {
 /* appDialog must render above configDialog when both are modal (WebView2 top-layer fix) */
 #appDialog { z-index: 200; }
 .dialog::backdrop {
-  background: var(--dialog-backdrop);
-  backdrop-filter: blur(8px);
+  background:
+    radial-gradient(circle at 50% 20%, rgba(91, 141, 239, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(7, 12, 18, 0.52), rgba(7, 12, 18, 0.68)),
+    var(--dialog-backdrop);
+  backdrop-filter: blur(14px) saturate(118%);
 }
 
 .dialog-form {
@@ -4941,16 +4944,12 @@ code .file-link:hover {
   max-width: var(--ui-dialog-width);
   max-height: calc(100vh - (80px * var(--ui-scale)));
   overflow-y: auto;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 72%),
-    var(--dialog-bg);
-  border: 1px solid var(--border-hover);
-  border-radius: var(--radius-lg);
-  padding: var(--ui-dialog-padding);
-  box-shadow: var(--shadow-lg);
+  border: 1px solid color-mix(in srgb, var(--border) 88%, rgba(91, 141, 239, 0.16));
+  border-radius: calc(24px * var(--ui-scale));
+  padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale));
   display: flex;
   flex-direction: column;
-  gap: var(--ui-dialog-gap);
+  gap: calc(16px * var(--ui-scale));
 }
 
 .dialog-wide .dialog-form {
@@ -4974,23 +4973,38 @@ code .file-link:hover {
   max-height: calc(70vh * var(--ui-scale));
   display: flex;
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) 0;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: calc(18px * var(--ui-scale));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(84, 138, 247, 0.012) 76%, transparent),
+    color-mix(in srgb, var(--surface-inset) 94%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .session-msg {
   display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-subtle);
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: calc(14px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
 }
 
 .session-msg[data-role="assistant"] {
-  border-color: var(--border-hover);
-  background: var(--bg-card);
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--border));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(84, 138, 247, 0.012) 74%, transparent),
+    color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.session-msg[data-role="user"] {
+  align-self: flex-end;
+  width: min(100%, calc(560px * var(--ui-scale)));
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background: color-mix(in srgb, var(--accent-dim) 68%, transparent);
 }
 
 .session-msg-role {
@@ -5027,10 +5041,12 @@ code .file-link:hover {
 }
 
 .dialog-title {
-  font-size: var(--ui-font-heading);
+  font-size: clamp(18px, calc(19px * var(--ui-scale)), 22px);
   font-weight: 600;
   color: var(--text-strong);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  margin: 0;
 }
 
 .dialog-subtitle {
@@ -5047,6 +5063,34 @@ code .file-link:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--ui-gap-lg);
+}
+
+.dialog-form > .dialog-head:not(.config-dialog-head),
+.dialog-form > .dialog-header {
+  margin: calc(-18px * var(--ui-scale)) calc(-20px * var(--ui-scale)) 0;
+  padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 72%),
+    color-mix(in srgb, var(--surface-strong) 74%, transparent);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12px * var(--ui-scale));
+}
+
+.dialog-header-actions,
+.dialog-actions.compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: calc(8px * var(--ui-scale));
 }
 
 .field {
@@ -5298,6 +5342,15 @@ select.field-input option {
   margin-top: var(--ui-gap-xs);
 }
 
+.dialog-form > .dialog-actions:not(.compact) {
+  margin: auto calc(-20px * var(--ui-scale)) calc(-18px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
+  border-top: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  background:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 76%),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
 .dialog-actions.compact {
   margin-top: 0;
 }
@@ -5340,22 +5393,27 @@ select.field-input option {
 }
 
 .diff-preview {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-inset);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: calc(18px * var(--ui-scale));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(84, 138, 247, 0.012) 76%, transparent),
+    color-mix(in srgb, var(--surface-inset) 95%, transparent);
   overflow: auto;
   max-height: calc(100vh - (180px * var(--ui-scale)));
+  padding: calc(10px * var(--ui-scale));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .section-dialog-body {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: calc(18px * var(--ui-scale));
   background:
-    var(--surface-inset);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(84, 138, 247, 0.012) 76%, transparent),
+    color-mix(in srgb, var(--surface-inset) 95%, transparent);
   overflow: auto;
   max-height: calc(100vh - (180px * var(--ui-scale)));
-  padding: var(--ui-dialog-padding);
-  box-shadow: none;
+  padding: calc(14px * var(--ui-scale));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   user-select: text;
   -webkit-user-select: text;
 }
@@ -5485,6 +5543,14 @@ select.field-input option {
 }
 
 .app-dialog-body {
+  min-height: calc(72px * var(--ui-scale));
+  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: calc(16px * var(--ui-scale));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(84, 138, 247, 0.01) 76%, transparent),
+    color-mix(in srgb, var(--surface-inset) 94%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
@@ -9792,12 +9858,20 @@ body[data-theme="light"] .tech-sweep {
   -webkit-backdrop-filter: blur(12px) saturate(118%) brightness(1.01);
 }
 
-.chat,
-.dialog-form {
+.chat {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.024), transparent 52%),
     color-mix(in srgb, var(--surface) 95%, transparent);
   box-shadow: 0 16px 30px rgba(6, 10, 16, 0.16);
+}
+
+.dialog-form {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(84, 138, 247, 0.016) 66%, transparent),
+    color-mix(in srgb, var(--surface) 97%, var(--surface-inset) 3%);
+  box-shadow:
+    0 24px 48px rgba(4, 8, 12, 0.26),
+    0 10px 22px rgba(4, 8, 12, 0.12);
 }
 
 .sections {
@@ -9884,9 +9958,11 @@ body[data-theme="light"] .tech-sweep {
 .dialog-form:hover,
 .dialog-form:focus-within {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(84, 138, 247, 0.014) 64%, transparent),
-    color-mix(in srgb, var(--surface) 97%, transparent);
-  box-shadow: 0 18px 34px rgba(6, 10, 16, 0.18);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(84, 138, 247, 0.02) 68%, transparent),
+    color-mix(in srgb, var(--surface) 98%, var(--surface-inset) 2%);
+  box-shadow:
+    0 28px 56px rgba(4, 8, 12, 0.28),
+    0 12px 24px rgba(4, 8, 12, 0.12);
 }
 
 .titlebar::before,
@@ -9953,7 +10029,11 @@ body[data-theme="light"] .tech-sweep {
 }
 
 .dialog-form::before {
-  opacity: 0.18;
+  opacity: 0.24;
+  background:
+    radial-gradient(26% 28% at 12% 0%, rgba(91, 141, 239, 0.08), transparent 74%),
+    radial-gradient(20% 22% at 88% 18%, rgba(198, 175, 114, 0.06), transparent 76%);
+  filter: blur(28px);
 }
 
 .sidebar-header,
