@@ -70,7 +70,7 @@ import { WelcomeToast } from "./components/WelcomeToast";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
-import { nativeConfirm, nativeOpen, nativePrompt } from "./utils/native";
+import { nativeOpen, nativePrompt } from "./utils/native";
 import { installAppDialogBridge } from "./services/app-dialog";
 import { eventClosest } from "./utils/dom-utils";
 import { shortPath } from "./utils/tool";
@@ -552,12 +552,6 @@ if (boardEl) {
         }}
         onDeleteGoal={async (goalId) => {
           if (!goalId || !boardStore.selectedTaskID) return;
-          const ok = await nativeConfirm(t("goal.delete_confirm_message", { goalId }), {
-            title: t("goal.delete_confirm_title"),
-            okLabel: t("common.delete"),
-            kind: "warning",
-          });
-          if (!ok) return;
           try {
             await panelMessage(`Delete goal ${goalId}.`, {
               goalID: goalId,

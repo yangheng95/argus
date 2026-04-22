@@ -1,22 +1,14 @@
 /**
- * GoalWorkflowGroup — per-goal collapsible card with step-level detail.
+ * GoalWorkflowGroup — per-goal collapsible summary card for the sidebar.
  *
- * Each goal shows its workflow steps as emitted by board.goalWorkflows[].
- * Each step is a mini-container that can show:
- *   - Status indicator (pending/running/completed/failed)
- *   - Agent card messages for the matching step
- *   - Structured payload detail (plan nodes, changed files, checks, etc.)
- *
- * This bridges the workflow step tracking system and the live agent event system:
- *   - Step status comes from board.goalWorkflows[].steps[] (structured progress)
- *   - Step content comes from agentCards() (real-time message stream)
+ * The right-side goal panel should stay goal-scoped: title, objective,
+ * acceptance, and overall status. Step-by-step executor detail belongs in
+ * the conversation timeline, not duplicated here as a second Executor pane.
  */
-import { For, Show, createMemo } from "solid-js";
-import { StepPayloadBody } from "./StepPayloadBody";
+import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
-import { openBuildSessionDialog } from "../services/dialog";
-import type { StepPayload } from "../store/card-tree";
+import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 
 // ── Types ──
 
@@ -36,8 +28,6 @@ interface GoalStep {
   completedAt?: number;
   /** Summary detail: e.g., "5 steps" for plan, "12 files changed" for execute, "3/4 checks passed" for eval */
   summary?: string;
-  /** Structured per-step content — backend-driven, see GoalStepPayload */
-  payload?: StepPayload;
 }
 
 interface AcceptanceScorerLike {
@@ -57,6 +47,8 @@ interface AcceptanceSpecLike {
 interface GoalWorkflow {
   goalID: string;
   goalTitle: string;
+  orderIndex?: number;
+  retryCount?: number;
   /** Architect-authored 1–2 sentence execution directive for this goal.
    *  The real goal summary — acceptance_specs are the pass/fail contract,
    *  objective is the prose description a human reads first. */
@@ -93,26 +85,6 @@ interface GoalWorkflowGroupProps {
 
 // ── Helpers ──
 
-function stepIcon(status: string): string {
-  switch (status) {
-    case "completed": return "\u2713";
-    case "running": return "\u25CB";
-    case "failed": return "\u2717";
-    case "skipped": return "\u2014";
-    default: return "\u00B7";
-  }
-}
-
-function stepClass(status: string): string {
-  switch (status) {
-    case "completed": return "gwg-step--done";
-    case "running": return "gwg-step--running";
-    case "failed": return "gwg-step--failed";
-    case "skipped": return "gwg-step--skipped";
-    default: return "gwg-step--pending";
-  }
-}
-
 function goalStatusIcon(status: string): string {
   switch (status) {
     case "passed": return "\u2713";
@@ -131,96 +103,6 @@ function goalStatusClass(status: string): string {
   }
 }
 
-// ── Step Row (expandable when it has content) ──
-//
-// The right-hand Board is a CONTROL PANEL — it surfaces high-level status
-// (step verdicts, file counts, plan nodes, evaluator checks) and offers a
-// "jump to session" affordance. It deliberately does NOT mirror the
-// conversation panel's message stream here: a step's LLM chatter (orchestrator
-// dispatch brief, agent text/tool parts) belongs in the left-hand Conversation
-// where CardParts already renders them properly. Rendering both the control
-// summary AND the raw message stream side-by-side produced the unreadable
-// JSON wall operators complained about; the stream is removed from this
-// surface (rule 10 — no dual-source / duplicate rendering).
-
-function StepRow(props: {
-  step: GoalStep;
-  goalTitle?: string;
-}) {
-  // ── Content presence: structured payload only (messages live in the
-  //    conversation panel). ──
-  const hasPlanNodes = () =>
-    !!props.step.payload?.planNodes && props.step.payload.planNodes.length > 0;
-  const hasChangedFiles = () =>
-    !!props.step.payload?.changedFiles && props.step.payload.changedFiles.length > 0;
-  const hasChecks = () =>
-    !!props.step.payload?.checks && props.step.payload.checks.length > 0;
-  const hasEvalBody = () =>
-    hasChecks() || !!props.step.payload?.evalSummary || !!props.step.payload?.verdict;
-  // The pipeline workflow uses `build` as the single goal-scope step;
-  // the payload carries a pointer to the goal's build worker session
-  // (SessionTable kind="build"). Scope-based: any step whose payload
-  // ships a build session id surfaces the "open session" affordance.
-  const hasOpenSession = () =>
-    !!props.step.payload?.buildSessionID;
-  const hasContent = createMemo(() =>
-    hasPlanNodes() || hasChangedFiles() || hasEvalBody() || hasOpenSession(),
-  );
-
-  const isActive = () =>
-    props.step.status === "running" || props.step.status === "failed";
-
-  return (
-    <Show
-      when={hasContent()}
-      fallback={
-        <div class={`gwg-step ${stepClass(props.step.status)}`}>
-          <span class="gwg-step-icon">{stepIcon(props.step.status)}</span>
-          <span class="gwg-step-label">{props.step.label}</span>
-          <Show when={props.step.summary}>
-            <span class="gwg-step-summary">{props.step.summary}</span>
-          </Show>
-          <span class="gwg-step-status">{props.step.status}</span>
-        </div>
-      }
-    >
-      <details class={`gwg-step-detail ${stepClass(props.step.status)}`} open={isActive()}>
-        <summary class={`gwg-step ${stepClass(props.step.status)}`}>
-          <span class="gwg-step-icon">{stepIcon(props.step.status)}</span>
-          <span class="gwg-step-label">{props.step.label}</span>
-          <Show when={props.step.summary}>
-            <span class="gwg-step-summary">{props.step.summary}</span>
-          </Show>
-          <span class="gwg-step-status">{props.step.status}</span>
-        </summary>
-        <div class="gwg-step-body">
-          <StepPayloadBody payload={props.step.payload} stepID={props.step.stepID} />
-          {/* Sidebar-only affordance: jump to the goal's build session
-              dialog. The main-conversation Card already renders the session
-              inline, so it doesn't need this button. */}
-          <Show when={hasOpenSession()}>
-            <div class="gwg-open-session">
-              <button
-                type="button"
-                class="gwg-open-session-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void openBuildSessionDialog(
-                    props.step.payload!.buildSessionID!,
-                    props.goalTitle ?? "",
-                  );
-                }}
-              >
-                {t("goal.open_session")}
-              </button>
-            </div>
-          </Show>
-        </div>
-      </details>
-    </Show>
-  );
-}
-
 // ── Main GoalWorkflowGroup ──
 
 export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
@@ -233,6 +115,8 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
     props.defaultOpen ?? (status() === "running" || status() === "failed");
   const expanded = () => cardExpanded(cardKey(), status(), defaultOpen());
   const toggle = () => toggleCard(cardKey(), status(), defaultOpen());
+  const revisionLabel = () =>
+    goalRevisionLabelFromIndexes(props.goal.orderIndex, props.goal.retryCount);
 
   return (
     <div
@@ -252,6 +136,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
         <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
         <div class="gwg-title-row">
           <span class="gwg-title">{props.goal.goalTitle}</span>
+          <Show when={revisionLabel()}>
+            <span class="gwg-revision">{revisionLabel()}</span>
+          </Show>
           <Show when={props.goal.priority === "advisory"}>
             <span class="gwg-priority-badge">advisory</span>
           </Show>
@@ -281,6 +168,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
               title={t("goal.delete_button_title")}
               onClick={(e) => {
                 e.stopPropagation();
+              }}
+              onDblClick={(e) => {
+                e.stopPropagation();
                 props.onDeleteGoal!(props.goal.goalID);
               }}
             >
@@ -306,14 +196,6 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
               <div class="gwg-done-definition-text">{previewAcceptance(props.goal.acceptanceSpecs)}</div>
             </div>
           </Show>
-          <For each={props.goal.steps}>
-            {(step) => (
-              <StepRow
-                step={step}
-                goalTitle={props.goal.goalTitle}
-              />
-            )}
-          </For>
         </div>
       </Show>
     </div>
@@ -329,7 +211,7 @@ export function GoalWorkflowList(props: {
   return (
     <div class="gwg-list">
       <For each={props.goals}>
-        {(goal, idx) => (
+        {(goal) => (
           <GoalWorkflowGroup
             goal={goal}
             onEditGoal={props.onEditGoal}
