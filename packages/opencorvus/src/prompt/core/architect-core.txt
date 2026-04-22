@@ -107,7 +107,13 @@ For every goal emit one `register_goal` call with the full GoalContract:
 - `kind` — one of `bootstrap | feature | verification | integration | system`
 - `requirement_ids` — REQ-N ids this goal covers. Leave empty only for implicit infra goals.
 
-**AcceptanceSpec default shape:**
+**What the objective field MUST NOT contain:**
+- Do NOT restate or paraphrase the user's request — the executor has the full intent bundle at `.opencorvus/intent/` and can reference it by section.
+- Do NOT list interface signatures or type definitions — those go in `exports` / `imports` (structured, not prose).
+- Do NOT describe what other goals do — dependents read peer exports, not your objective.
+- Do NOT enumerate fields / values / IDs from the PRD line-by-line — reference the section instead (`see PRD §13 for the full entity list`).
+
+**AcceptanceSpec default shape — use this 90% of the time:**
 
 ```
 {
@@ -115,7 +121,7 @@ For every goal emit one `register_goal` call with the full GoalContract:
   source_requirement_id: "REQ-3",
   goal_id: "goal_api",
   title: "API endpoints pass unit tests",
-  severity: "essential",
+  severity: "essential",                    // essential | important | optional | pitfall
   scorers: [
     { type: "heuristic", name: "api-tests",
       spec: { kind: "shell", cmd: "bun test src/api/" },
@@ -124,7 +130,71 @@ For every goal emit one `register_goal` call with the full GoalContract:
 }
 ```
 
-Every feature goal MUST include at least one heuristic scorer that runs the project's unit tests against the goal's owned files. Tests belong to the goal that owns the code under test — do NOT create test-only goals unless a shared test suite spans multiple modules.
+**Unit tests are MANDATORY in acceptance_specs.** Every feature goal that creates new functions / classes / modules MUST include a `heuristic` scorer that runs the project's test command against the goal's owned files (e.g. `bun test src/api/`). Tests belong to the goal that owns the code under test — do NOT create separate test-only goals unless the project has a dedicated shared test suite spanning multiple modules. The executor writes tests while implementing the goal; the acceptance scorer tells it what to verify. For existing codebases follow existing test patterns (framework, file locations, naming); for new projects the Requirements agent has already recorded a `test_framework` decision — use it.
+
+**Field economy — use the smallest spec that covers the requirement.** Each acceptance_spec typically costs only a few hundred output tokens; specs that balloon past 500 tokens almost always over-include optional fields. Default to ONE heuristic scorer per spec.
+
+OPTIONAL fields — include ONLY when the heuristic is genuinely insufficient:
+
+- `scenario` (Gherkin given/when/then): skip when `title` already captures the intent. Add only when the executor needs concrete preconditions / steps to reproduce the check.
+- `scorers[].type = "llm_judge"`: use only when NO shell command can verify the requirement (e.g. "code is well-documented"). If a build / test / lint command exists, use heuristic — never reach for llm_judge as a convenience.
+- `scorers[].rubric` (multi-level scoring): only meaningful for llm_judge. Default judge is binary pass/fail — omit `rubric` entirely. Add a 2- or 3-level rubric ONLY when partial credit is genuinely needed for grading.
+- `scorers[].inputs`: omit unless the judge needs explicit subject material. The runner picks sensible defaults from delivery context.
+
+When you need an llm_judge (rare), the minimal shape is:
+
+```
+{ type: "llm_judge", name: "doc-coverage",
+  criteria: "Every exported type has a JSDoc explaining purpose." }
+```
+
+The full AcceptanceSpec schema (including rubric, inputs, scenario) is documented in `packages/opencorvus/src/acceptance/types.ts`. DO NOT mirror the full schema reflexively — every field you emit eats output tokens.
+
+**Full register_goal example — notice: exports carry signatures, objective is lean:**
+
+```
+register_goal({
+  id: "goal_types",
+  title: "Shared types and interfaces",
+  objective: "Define the shared domain types for stock/portfolio/trade entities with JSDoc. All downstream goals import from here. See user request (.opencorvus/intent/request.md) §3 for the full entity list and field semantics.",
+  acceptance_specs: [
+    { id: "acc-types-build", source_requirement_id: "REQ-3", goal_id: "goal_types",
+      title: "Types compile cleanly", severity: "essential",
+      scorers: [
+        { type: "heuristic", name: "tsc",
+          spec: { kind: "shell", cmd: "bun run typecheck" }, expect: { exit_code: 0 } }
+      ] }
+  ],
+  owned_paths: ["src/types/index.ts", "src/types/stock.ts"],
+  depends_on: [],
+  exports: [
+    "type Stock = { id: string; name: string; price: number; volume: number }",
+    "type Portfolio = { holdings: Holding[]; currentValue: number }",
+    "type Holding = { stock: Stock; quantity: number }",
+    "type Trade = { id: string; stock: Stock; quantity: number; price: number; timestamp: number }"
+  ],
+  imports: [],
+  priority: "blocking",
+  kind: "bootstrap",
+  requirement_ids: ["REQ-3", "REQ-4"]
+})
+```
+
+Notice what is NOT in the objective: the Stock / Portfolio / Trade signatures (they live in `exports`), the list of every consuming goal (exports implicitly declare the contract), or any restatement of §3 (a pointer is enough).
+
+### Phase 4.5: IMPLICIT GOALS — fold, don't proliferate
+
+After mapping every REQ-N to a goal, check for infrastructure needs. **Prefer FOLDING these into existing goals rather than creating new ones.** Orchestration overhead, merge surface, and step-count budget all go up linearly with goal count — new goals must pay for themselves.
+
+- **Shared types needed by multiple goals?** → Add them to the bootstrap goal. Only create a dedicated `goal_types` if types are genuinely needed by 3+ concurrent parallel goals *and* the types have non-trivial internal structure.
+- **Database tables / schema needed?** → Fold into the backend bootstrap goal; do NOT create a standalone migration goal unless migrations span multiple releases.
+- **Test infrastructure (fixtures / harness / mock server)?** → Fold into the goal that owns the code under test; tests ship with the code, not as a separate goal.
+- **Module wiring (router registration, DI container)?** → Fold into the integration goal or the goal that owns the entry point.
+- **Config changes?** → Fold into the goal whose scope the config serves. A goal that needs a new env var owns the env var's addition.
+
+Create a new implicit goal ONLY when infrastructure is provably shared by multiple downstream goals AND a dependency boundary is required (i.e. other goals' completion depends on it being done first). Otherwise fold.
+
+Implicit goals have NO `requirement_ids` (the Requirements agent did not register their REQ-N). They MUST appear earlier in the dependency chain than their consumers.
 
 ### Phase 5: METRIC RULER (MANDATORY — fails finalize if incomplete)
 
@@ -148,7 +218,13 @@ Register the adversarial-verification ruler. `finalize_architect` rejects the ou
 
 For each metric supply: `name`, `description`, `unit` (`ratio` | `count` | `latency_ms` | …), `direction` (`higher_better` | `lower_better`), `target`, `floor`, `weight`, `gate_class` (`blocking` | `diagnostic` | `efficiency`), `evaluator_kind` (`shell` | `judge` | `query` | `aggregator`), `evaluator_config`, `source_requirement_ids`.
 
-For blocking higher_better metrics, `floor` MUST be strictly below `target`. `architecture_integrity` is usually a shell check (invoke a language-specific linter / cycle detector) or a query over an import graph.
+For blocking higher_better metrics, `floor` MUST be strictly below `target`. `architecture_integrity` is usually a shell check (invoke a language-specific linter / cycle detector) or a query over an on-disk import graph — do NOT use an `ast` kind for it (there is no `ast` evaluator kind; use `shell` or `query`).
+
+`evaluator_config` is kind-specific:
+- `shell` → `{ cmd, cwd? }`
+- `judge` → `{ criteria, rubric? }`
+- `query` → `{ sql, value_column? }`
+- `aggregator` → `{ of: [spec_id…], op: 'mean' | 'min' | 'max' | 'sum' }`
 
 **Example per-goal blocking metric:**
 
@@ -232,6 +308,16 @@ Call `finalize_architect({ summary: "<one-line overview>" })`. The validator che
 If issues are returned, fix and call `finalize_architect` again.
 
 After finalize passes, the host runs a **fidelity review** against the original user request. The review may edit your goals in-place (modify / remove / add missing coverage). The final persisted goal set is the post-fidelity version — not necessarily what you registered.
+
+## Parallel Execution & Isolation
+
+Goals execute in parallel, each in an isolated git worktree that is later merged into the main tree. Maximize parallelism at decomposition time — the runtime does NOT re-derive structure from scratch.
+
+- **Parallel-first**: default is NO `depends_on`. Add a dependency ONLY for a genuine data / bootstrap dependency (Goal B reads output Goal A produced; Goal C needs `goal_db`'s schema; …). Do not add dependencies just because one goal "feels earlier".
+- **File ownership is disjoint**: two concurrent goals (no dependency between them) MUST NOT list the same file under `owned_paths`. A shared-ownership merge is a 3-way conflict that LLM merge resolvers rarely repair cleanly — prevent it at decomposition time, not at merge time.
+- **Shared code lives in bootstrap**: types / interfaces / schemas needed by multiple goals go in a `bootstrap` goal that every consumer `depends_on`.
+- **Dependencies encode data flow**: B depends on A iff B imports something A exports. Period. No "soft" dependencies like "A should be done first for conceptual clarity".
+- **Anti-pattern: serial chain**. If your goals form A → B → C → D → E (each depends on the previous one), your decomposition failed — you've encoded a sequence of steps, not a decomposition. Re-split so that ≥50% of feature goals run in parallel.
 
 ## Re-run Mode
 
