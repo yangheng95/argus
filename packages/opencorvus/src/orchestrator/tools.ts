@@ -591,15 +591,19 @@ export function createOrchestratorTools(input: {
 
         // Reference materialization: every external design source (Figma
         // frame, URL-screenshot, local file) gets pulled, written to
-        // AttachmentStore, and attached to the task with
-        // intent="visual_reference". Three wins:
-        //   1. design-analyst (and any later vision agent) reads it as a
-        //      normal task attachment — no special-cased fetch path.
-        //   2. The deliver-time visual SSIM gate picks it up automatically
-        //      (it walks task.attachments looking for visual references).
-        //   3. Text materials (design tokens JSON, style-guide markdown, …)
-        //      flow through the same listing + read_attachment pipeline as
-        //      user uploads.
+        // AttachmentStore, and registered on the task. Two destination
+        // columns:
+        //   • Figma frames → attachments (figma URL is part of the user
+        //     contract — the user pointed us at it).
+        //   • URL screenshots / local materials → system_artifacts (we
+        //     captured them ourselves to feed design-analyst; not user
+        //     intent — keeping them out of attachments prevents requirements
+        //     from treating system-generated PNGs as user input).
+        //
+        // design-analyst combines both columns when assembling its visual
+        // input. The deliver-time visual diff also reads both. Requirements
+        // reads only attachments — it must see user intent, not internal
+        // captures.
         const { AttachmentStore } = await import("@/storage/attachment-store")
         const fsMod = await import("node:fs/promises")
         const pathMod = await import("node:path")
@@ -660,7 +664,7 @@ export function createOrchestratorTools(input: {
               "image/png",
               `url-${slug}-${Date.now()}.png`,
             )
-            await EngineService.appendTaskAttachment(taskID, {
+            await EngineService.appendTaskSystemArtifact(taskID, {
               ...ref,
               intent: "visual_reference",
               source: "url-screenshot",
@@ -702,7 +706,7 @@ export function createOrchestratorTools(input: {
               mime,
               filename,
             )
-            await EngineService.appendTaskAttachment(taskID, {
+            await EngineService.appendTaskSystemArtifact(taskID, {
               ...ref,
               intent: "visual_reference",
               source: "material",
@@ -720,9 +724,15 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Refresh task to pick up any newly-attached references.
+        // Refresh task to pick up any newly-attached references. design-analyst
+        // sees the union of user attachments (figma + user uploads) and
+        // system_artifacts (URL screenshots + materials we just captured).
         const enrichedTask = requireTask(taskID)
-        const enrichedHasAttachments = Array.isArray(enrichedTask.attachments) && enrichedTask.attachments.length > 0
+        const designVisuals = [
+          ...(Array.isArray(enrichedTask.attachments) ? (enrichedTask.attachments as any[]) : []),
+          ...(Array.isArray(enrichedTask.system_artifacts) ? (enrichedTask.system_artifacts as any[]) : []),
+        ]
+        const enrichedHasAttachments = designVisuals.length > 0
 
         // Fail-fast if design_analysis was invoked on the strength of URLs /
         // materials but every source failed to materialize. Running
@@ -764,11 +774,13 @@ export function createOrchestratorTools(input: {
           const analysis = await DesignAnalystAgent.analyze({
             title: task.title,
             request: task.request,
-            attachments: enrichedHasAttachments ? enrichedTask.attachments as any : undefined,
+            attachments: enrichedHasAttachments ? designVisuals : undefined,
             // Pass the non-Figma URL list so the agent can call webfetch on
             // each for HTML/CSS analysis. Figma URLs are already rendered
-            // as PNGs in task.attachments above, so design-analyst reads
-            // them through the normal multimodal channel.
+            // as PNGs in attachments, and URL screenshots / materials are in
+            // system_artifacts above — design-analyst sees the union via
+            // `designVisuals` and reads them through the normal multimodal
+            // channel.
             urls: liveUrls,
             taskID,
             sessionID: designSession.id,
@@ -1861,13 +1873,20 @@ export function createOrchestratorTools(input: {
           | undefined
         try {
           const liveTask = requireTask(taskID)
-          const taskAttachments = Array.isArray(liveTask.attachments) ? liveTask.attachments as any[] : []
-          const tagged = taskAttachments.filter((a) =>
+          // Visual references for sizing the render viewport: union of user
+          // attachments (figma/user-upload) and system_artifacts (URL
+          // screenshots). The previous rendered_output (if any) is excluded —
+          // the new render is what sets the comparison baseline this round.
+          const visualPool = [
+            ...(Array.isArray(liveTask.attachments) ? (liveTask.attachments as any[]) : []),
+            ...(Array.isArray(liveTask.system_artifacts) ? (liveTask.system_artifacts as any[]) : []),
+          ].filter((a) => a?.intent !== "rendered_output")
+          const tagged = visualPool.filter((a) =>
             a?.intent === "visual_reference" && typeof a?.url === "string",
           )
           const imageAttachments = tagged.length > 0
             ? tagged
-            : taskAttachments.filter((a) =>
+            : visualPool.filter((a) =>
                 typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
               )
           if (imageAttachments.length > 0) {
@@ -1919,17 +1938,14 @@ export function createOrchestratorTools(input: {
                 intent: "rendered_output",
                 source: "puppeteer",
               }
-              // Register it on the task so the overlay / downstream
-              // code path sees it alongside the reference attachments.
-              const nextAttachments = Array.isArray(liveTask.attachments)
-                ? [...(liveTask.attachments as any[]), renderedAttachment]
-                : [renderedAttachment]
-              // Strip any stale prior rendered_output before appending so
-              // reworks don't accumulate N rendered PNGs.
-              const deduped = nextAttachments.filter(
-                (a) => !(a?.intent === "rendered_output" && a.sha !== renderedAttachment!.sha),
+              // System-generated visual evidence — lives in system_artifacts,
+              // not the user-contract attachments column. Replace-by-intent so
+              // reruns don't accumulate stale rendered PNGs.
+              await EngineService.replaceTaskSystemArtifactByIntent(
+                taskID,
+                "rendered_output",
+                renderedAttachment,
               )
-              await updateTask(liveTask, { attachments: deduped }, "delivery render produced rendered.png")
               log.info("deliver: rendered merged worktree", {
                 taskID, renderedPath, size, sha: renderedAttachment.sha,
               })
@@ -1953,14 +1969,18 @@ export function createOrchestratorTools(input: {
         try {
           const { DeliveryService } = await import("@/delivery/service")
           const { DeliveryVerdict } = await import("@/delivery/agent")
-          // Re-read the task row to pick up attachments that may have been
-          // materialized during design_analysis (Figma frames, URL screenshots).
+          // Re-read the task row to pick up references materialized during
+          // design_analysis. Delivery sees BOTH columns: user-contract
+          // attachments (figma frames, user uploads) AND system_artifacts
+          // (URL screenshots from design_analysis, plus the just-rendered
+          // PNG of the merged worktree). The visual-comparison loop needs
+          // both to diff "what we built" against "what the user asked for".
           const taskForDelivery = requireTask(taskID)
-          const deliveryAttachments = Array.isArray(taskForDelivery.attachments)
-            ? (taskForDelivery.attachments as Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>).filter(
-                (a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string",
-              )
-            : []
+          type AttachmentRef = { sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }
+          const deliveryAttachments = [
+            ...(Array.isArray(taskForDelivery.attachments) ? (taskForDelivery.attachments as AttachmentRef[]) : []),
+            ...(Array.isArray(taskForDelivery.system_artifacts) ? (taskForDelivery.system_artifacts as AttachmentRef[]) : []),
+          ].filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string")
 
           // Short-circuit: if the per-goal evaluator already flagged strict
           // checks as failed, the delivery LLM cannot rescue the outcome —

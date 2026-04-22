@@ -173,13 +173,31 @@ export const EngineTaskTable = sqliteTable(
     source: text().notNull().default("api"),
     title: text().notNull(),
     request: text().notNull(),
-    /** JSON array of AttachmentStore references — { sha, url, mime, size, filename?, intent?, source? }.
-     *  Base64 bytes are never stored here; they live on disk under the project's
-     *  .opencorvus/attachments directory and are fetched via the /attachment route.
-     *  `intent` controls which evaluator gate consumes the file (e.g.
-     *  "visual_reference" → deliver visual SSIM gate). `source` records where
-     *  the attachment came from (user-upload / figma / url-screenshot). */
+    /** USER-CONTRACT attachments only. JSON array of AttachmentStore references.
+     *  Carries what the USER explicitly attached as part of the task contract:
+     *    `source: "user-upload"` — files the user uploaded with the request
+     *    `source: "figma"`       — frames fetched from a user-provided Figma URL
+     *  Read by requirements / design-analyst as the user's intent (multimodal
+     *  prompt content). Read by delivery alongside system_artifacts for visual
+     *  comparison. Shown in the overlay as user-attached files.
+     *  System-generated visual evidence (URL screenshots, rendered.png, local
+     *  material reads) lives in `system_artifacts` instead — see that column
+     *  for the rationale. Mixing the two previously caused requirements to
+     *  hard-fail when a system-generated screenshot went missing.
+     *  Base64 bytes are never stored here; the file lives on disk under the
+     *  project's .opencorvus/attachments directory. */
     attachments: text({ mode: "json" }).$type<Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>>(),
+    /** SYSTEM-GENERATED artifacts. Same shape as `attachments` but covers
+     *  things the orchestrator/agents created (or read off disk) on the
+     *  user's behalf — never part of the user's contract:
+     *    `source: "url-screenshot"`  — design_analysis URL captures
+     *    `source: "material"`        — design_analysis local file reads
+     *    `source: "puppeteer"`       — delivery rendered.png captures
+     *  Read ONLY by delivery (visual diff against user attachments). Never
+     *  fed to requirements/design-analyst as user intent. Losing one of these
+     *  on disk is a soft failure: the consuming agent skips it; it does NOT
+     *  kill the whole task the way a user-contract attachment loss would. */
+    system_artifacts: text({ mode: "json" }).$type<Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>>().notNull().default([]),
     /** Design-analyst visual constraints (advisory only — delivery reads them as
      *  checklist guidance for its own visual review, they are NOT auto-scored
      *  and do NOT gate any phase). See `src/design-analyst/types.ts` for the
