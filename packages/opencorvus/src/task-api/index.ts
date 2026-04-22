@@ -1,3 +1,4 @@
+import fs from "node:fs/promises"
 import z from "zod"
 import { generateObject } from "ai"
 import { Agent } from "@/agent/agent"
@@ -556,6 +557,12 @@ export namespace EngineService {
    * by downstream agents, and picked up automatically by the deliver-time
    * visual SSIM gate as the reference image.
    *
+   * Verifies the underlying file is on disk and non-empty before persisting.
+   * A registered-but-missing reference would cause downstream multimodal
+   * loading (requirements / design-analyst / delivery) to ENOENT-crash on
+   * every retry — fail at the registration boundary instead of letting the
+   * dangling state poison the task forever.
+   *
    * No-op when the same sha is already attached (sha-based dedupe).
    */
   export async function appendTaskAttachment(
@@ -563,6 +570,24 @@ export namespace EngineService {
     attachment: { sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string },
   ) {
     const task = requireTask(taskID)
+    const located = AttachmentStore.nameFromUrl(attachment.url)
+    if (!located) {
+      throw new Error(
+        `appendTaskAttachment: attachment.url is not a valid /attachment/<projectID>/<name> reference: ${attachment.url}`,
+      )
+    }
+    const abs = AttachmentStore.resolveAbsolute(located.projectID, located.name)
+    if (!abs) {
+      throw new Error(
+        `appendTaskAttachment: cannot resolve attachment path for project ${located.projectID}/${located.name}`,
+      )
+    }
+    const stat = await fs.stat(abs).catch(() => null)
+    if (!stat || stat.size === 0) {
+      throw new Error(
+        `appendTaskAttachment: file missing or empty on disk — refusing to register dangling reference: ${abs}`,
+      )
+    }
     const prev = Array.isArray(task.attachments) ? (task.attachments as any[]) : []
     if (prev.some((a) => a?.sha === attachment.sha)) return prev
     const next = [...prev, attachment]
