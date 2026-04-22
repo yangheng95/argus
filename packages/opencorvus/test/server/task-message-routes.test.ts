@@ -4,7 +4,7 @@ import { Identifier } from "../../src/id/id"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import { Orchestrator } from "../../src/orchestrator/agent"
+import * as TaskLoop from "../../src/orchestrator/loop"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -24,7 +24,8 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const processTask = spyOn(Orchestrator, "processTask").mockResolvedValue(undefined)
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop").mockImplementation(() => undefined)
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
 
@@ -57,13 +58,19 @@ describe("task message routes", () => {
 
         expect(response.status).toBe(200)
         const body = await response.json() as { kind: string; message: string; should_resume: boolean }
+        await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
-        expect(processTask).toHaveBeenCalledWith(taskID, {
-          kind: "operator_message",
-          message: "把当前任务停下来，重新评估策略后继续。",
-          attachmentSummary: undefined,
+        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "operator message")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+          taskID,
+          trigger: {
+            kind: "operator_message",
+            message: "把当前任务停下来，重新评估策略后继续。",
+            attachmentSummary: undefined,
+          },
         })
 
         const row = Database.use((db) =>
@@ -81,7 +88,8 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const processTask = spyOn(Orchestrator, "processTask").mockResolvedValue(undefined)
+        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop").mockImplementation(() => undefined)
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
 
@@ -118,11 +126,19 @@ describe("task message routes", () => {
 
         expect(response.status).toBe(200)
         const body = await response.json() as { kind: string; message: string; should_resume: boolean }
+        await new Promise((resolve) => setTimeout(resolve, 0))
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
-        expect(processTask).toHaveBeenCalledTimes(1)
-        const trigger = processTask.mock.calls[0]?.[1] as {
+        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "operator message")
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        const trigger = (runTaskLoop.mock.calls[0]?.[0] as {
+          trigger: {
+            kind: string
+            message: string
+            attachmentSummary?: string
+          }
+        })?.trigger as {
           kind: string
           message: string
           attachmentSummary?: string

@@ -34,12 +34,69 @@ const DECISION_INACTIVITY_MS = parseInt(
   process.env.OPENCORVUS_DECISION_INACTIVITY_MS || String(10 * 60 * 1000), 10,
 ) // 10 min default — if Orchestrator produces no streaming tokens for 10 min, abort
 
+const LOOP_SLEEP_TICK_MS = 50
+
 // Per-taskID serial chain. A second runTaskLoop() call for the same task
 // waits for the in-flight loop to finish, then runs a fresh decision pass —
 // which reads the freshly-appended session message. Replaces the previous
 // in-memory "is running" Set that silently dropped user messages into
 // recordOperatorNote and was the root of the "queued, no resume" bug.
 const taskLoopChain = new Map<string, Promise<void>>()
+const taskLoopAbort = new Map<string, AbortController>()
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    const deadline = Date.now() + ms
+    function tick() {
+      if (signal?.aborted) {
+        resolve()
+        return
+      }
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) {
+        resolve()
+        return
+      }
+      setTimeout(tick, Math.min(LOOP_SLEEP_TICK_MS, remaining))
+    }
+    tick()
+  })
+}
+
+function combineSignals(signals: Array<AbortSignal | undefined>): AbortSignal | undefined {
+  const active = signals.filter((signal): signal is AbortSignal => !!signal)
+  if (active.length === 0) return undefined
+  if (active.length === 1) return active[0]
+
+  const controller = new AbortController()
+  const listeners = new Map<AbortSignal, () => void>()
+
+  const abortFrom = (source: AbortSignal) => {
+    if (!controller.signal.aborted) controller.abort(source.reason)
+    for (const [signal, listener] of listeners) {
+      signal.removeEventListener("abort", listener)
+    }
+    listeners.clear()
+  }
+
+  for (const signal of active) {
+    if (signal.aborted) {
+      abortFrom(signal)
+      return controller.signal
+    }
+    const listener = () => abortFrom(signal)
+    listeners.set(signal, listener)
+    signal.addEventListener("abort", listener, { once: true })
+  }
+
+  return controller.signal
+}
+
+export function interruptTaskLoop(taskID: string, reason = "task loop interrupted") {
+  taskLoopAbort.get(taskID)?.abort(reason)
+  Orchestrator.abort(taskID)
+}
 
 export async function runTaskLoop(input: {
   taskID: string
@@ -48,7 +105,20 @@ export async function runTaskLoop(input: {
   hooks: RuntimeHooks
 }) {
   const prev = taskLoopChain.get(input.taskID) ?? Promise.resolve()
-  const next = prev.catch(() => undefined).then(() => runTaskLoopInner(input))
+  const next = prev.catch(() => undefined).then(async () => {
+    const localAbort = new AbortController()
+    taskLoopAbort.set(input.taskID, localAbort)
+    try {
+      await runTaskLoopInner({
+        ...input,
+        signal: combineSignals([input.signal, localAbort.signal]),
+      })
+    } finally {
+      if (taskLoopAbort.get(input.taskID) === localAbort) {
+        taskLoopAbort.delete(input.taskID)
+      }
+    }
+  })
   taskLoopChain.set(input.taskID, next)
   // Clean up only if we're still the tail — a later call may have chained
   // on top of `next` before it resolved, and that one must stay in the map.
@@ -225,7 +295,8 @@ async function runTaskLoopInner(input: {
           taskID, activeGoalRuns: activeRuns.length,
           goalRunIDs: activeRuns.map(gr => gr.id),
         })
-        await new Promise(r => setTimeout(r, 5_000))
+        await sleep(5_000, signal)
+        if (signal?.aborted) break
         trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
         continue
       }
@@ -567,7 +638,7 @@ async function waitForGoalCompletion(
   let lastSnapshot = ""
 
   while (!signal?.aborted) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL))
+    await sleep(POLL_INTERVAL, signal)
     if (signal?.aborted) break
 
     // Check goal_run status (more granular than goal status)
