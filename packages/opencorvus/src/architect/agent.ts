@@ -33,7 +33,7 @@ import { Config } from "@/config/config"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
-import { reviewFidelity, applyFidelityCorrections } from "@/requirements/fidelity"
+import { reviewFidelity, applyFidelityCorrections } from "./fidelity"
 import type {
   ArchitectContract,
   ArchitectDecisionKey,
