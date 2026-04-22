@@ -84,9 +84,24 @@ async function run(input: {
 
   if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
 
-  // Read-only codebase tools + structured output tools (architect cannot write files)
-  const goalIDs = input.goals.map(g => g.id)
-  const outputToolKit = createArchitectOutputTools(goalIDs)
+  // Read-only codebase tools + structured output tools. The Architect is the
+  // authoritative goal decomposer, so the output kit is seeded with the
+  // goals already in flight (from Requirements or a prior Architect run) —
+  // modify_goal / remove_goal operate against that seed.
+  const seedGoals = input.goals.map((g) => ({
+    id: g.id,
+    title: g.title,
+    objective: g.objective,
+    acceptance_specs: g.acceptance_specs,
+    owned_paths: g.owned_paths,
+    depends_on: g.depends_on,
+    exports: g.exports,
+    imports: g.imports,
+    priority: g.priority,
+    kind: (g.kind as "bootstrap" | "feature" | "verification" | "integration" | "system") ?? "feature",
+    requirement_ids: g.requirement_ids,
+  }))
+  const outputToolKit = createArchitectOutputTools({ existingGoals: seedGoals })
   const plannerTools = await filterAgentTools(createPlannerTools(), "architect")
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
@@ -153,7 +168,12 @@ async function run(input: {
     )
   }
   const blueprint: ArchitectBlueprint = {
-    contracts: collector.contracts,
+    contracts: collector.contracts.map((c) => ({
+      category: c.category,
+      title: c.title,
+      spec: c.spec,
+      goalIDs: c.goalIDs,
+    })),
     summary: collector.summary || "Cross-goal coordination",
   }
 
