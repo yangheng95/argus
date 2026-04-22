@@ -6,16 +6,16 @@
    ───────────────────────────────────────────────────────────── */
 
 :root {
-  --card-gap: calc(8px * var(--ui-scale, 1));
-  --card-radius: calc(9px * var(--ui-scale, 1));
-  --card-pad-x: calc(12px * var(--ui-scale, 1));
-  --card-pad-y: calc(9px * var(--ui-scale, 1));
+  --card-gap: calc(10px * var(--ui-scale, 1));
+  --card-radius: calc(12px * var(--ui-scale, 1));
+  --card-pad-x: calc(13px * var(--ui-scale, 1));
+  --card-pad-y: calc(10px * var(--ui-scale, 1));
   --card-indent: calc(14px * var(--ui-scale, 1));
-  --card-bg-0: rgba(255, 255, 255, 0.045);
-  --card-bg-1: rgba(255, 255, 255, 0.065);
-  --card-bg-hover: rgba(255, 255, 255, 0.085);
-  --card-border: rgba(255, 255, 255, 0.09);
-  --card-border-strong: rgba(255, 255, 255, 0.14);
+  --card-bg-0: rgba(255, 255, 255, 0.038);
+  --card-bg-1: rgba(255, 255, 255, 0.056);
+  --card-bg-hover: rgba(255, 255, 255, 0.072);
+  --card-border: rgba(255, 255, 255, 0.078);
+  --card-border-strong: rgba(255, 255, 255, 0.12);
   --card-line: rgba(255, 255, 255, 0.14);
   --card-line-dim: rgba(255, 255, 255, 0.07);
 
@@ -67,7 +67,7 @@ body[data-theme="light"],
   background: var(--card-bg-0);
   margin: var(--card-gap) 0;
   overflow: hidden;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
   /* Chat / coding containers are flex-column; keep cards at their natural
      content height instead of being shrunk to fit. */
   flex: none;
@@ -75,10 +75,17 @@ body[data-theme="light"],
 
 .card[data-depth="0"] {
   background: var(--card-bg-0);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2) inset, 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 22px rgba(0, 0, 0, 0.12);
 }
 body[data-theme="light"] .card[data-depth="0"] {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 2px 6px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 6px 14px rgba(0, 0, 0, 0.05);
+}
+
+.card[data-depth="0"]:hover {
+  background: color-mix(in srgb, var(--card-bg-hover) 88%, transparent);
+  border-color: color-mix(in srgb, var(--card-border-strong) 78%, transparent);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.14);
+  transform: translateY(-1px);
 }
 
 /* Nested cards: remove outer border, use a left accent rail instead.
@@ -100,21 +107,21 @@ body[data-theme="light"] .card[data-depth="0"] {
 .card__head {
   display: flex;
   align-items: center;
-  gap: calc(8px * var(--ui-scale, 1));
+  gap: calc(9px * var(--ui-scale, 1));
   padding: var(--card-pad-y) var(--card-pad-x);
   font-size: var(--card-title-size);
   color: var(--text-strong);
   user-select: none;
   cursor: pointer;
-  line-height: 1.35;
-  min-height: calc(32px * var(--ui-scale, 1));
+  line-height: 1.42;
+  min-height: calc(36px * var(--ui-scale, 1));
   box-sizing: border-box;
 }
 .card__head[role="button"]:hover {
-  background-color: var(--card-bg-hover);
+  background-color: color-mix(in srgb, var(--card-bg-hover) 84%, transparent);
 }
 .card:not([data-depth="0"]) .card__head {
-  padding: calc(var(--card-pad-y) - 2px) calc(var(--card-pad-x) - 2px) calc(var(--card-pad-y) - 2px) 12px;
+  padding: calc(var(--card-pad-y) - 2px) calc(var(--card-pad-x) - 1px) calc(var(--card-pad-y) - 2px) 12px;
   min-height: calc(28px * var(--ui-scale, 1));
 }
 
@@ -126,13 +133,14 @@ body[data-theme="light"] .card[data-depth="0"] {
 }
 
 .card__title {
-  flex: 0 0 auto;
-  font-weight: 600;
-  letter-spacing: 0.005em;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 620;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 40%;
+  max-width: none;
 }
 
 .card__icon {
@@ -147,19 +155,19 @@ body[data-theme="light"] .card[data-depth="0"] {
   font-size: var(--card-meta-size);
   color: var(--text-soft);
   flex: none;
-  padding: 1px 5px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 3px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
 }
 body[data-theme="light"] .card__round {
   background: rgba(0, 0, 0, 0.06);
 }
 
 .card__subtitle {
-  flex: 1 1 auto;
+  flex: 0 1 34%;
   min-width: 0;
   font-size: var(--card-sub-size);
-  color: var(--text-soft);
+  color: color-mix(in srgb, var(--text-soft) 92%, var(--text-muted));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -189,13 +197,13 @@ body[data-theme="light"] .card__round {
   color: var(--text-muted);
   cursor: pointer;
   border-radius: 4px;
-  opacity: 0;
+  opacity: 0.4;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 .card__head:hover .card__copy,
 .card__copy:focus-visible,
 .card__copy--done {
-  opacity: 1;
+  opacity: 0.96;
 }
 .card__copy:hover {
   color: var(--text-strong);
@@ -222,14 +230,14 @@ body[data-theme="light"] .card__round {
   color: var(--text-muted);
   cursor: pointer;
   border-radius: 4px;
-  opacity: 0;
+  opacity: 0.4;
   font-size: 14px;
   line-height: 1;
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 .card__head:hover .card__rewind,
 .card__rewind:focus-visible {
-  opacity: 1;
+  opacity: 0.96;
 }
 .card__rewind:hover {
   color: var(--accent-warning, #f0b429);
@@ -309,11 +317,11 @@ body[data-theme="light"] .card__round {
 /* ── Body ────────────────────────────────────────────────── */
 
 .card__body {
-  padding: calc(var(--card-pad-y) - 1px) var(--card-pad-x) var(--card-pad-y) var(--card-pad-x);
-  border-top: 1px solid var(--card-line-dim);
+  padding: calc(var(--card-pad-y) + 1px) var(--card-pad-x) calc(var(--card-pad-y) + 1px) var(--card-pad-x);
+  border-top: 1px solid color-mix(in srgb, var(--card-line-dim) 88%, transparent);
   font-size: var(--card-sub-size);
   color: var(--text-strong);
-  line-height: 1.45;
+  line-height: 1.56;
 }
 .card:not([data-depth="0"]) > .card__body {
   padding: calc(var(--card-pad-y) - 3px) 12px calc(var(--card-pad-y) - 2px) 12px;
@@ -321,10 +329,10 @@ body[data-theme="light"] .card__round {
 }
 
 .card__children {
-  margin-top: calc(var(--card-pad-y) - 2px);
+  margin-top: calc(var(--card-pad-y) - 1px);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .card__body-actions {
@@ -416,10 +424,10 @@ body[data-theme="light"] .card__round {
 /* ── Goal preamble ───────────────────────────────────────── */
 
 .card__goal-desc {
-  margin: 4px 0 8px 0;
-  padding: 6px 8px;
-  background: var(--card-bg-1);
-  border-radius: 6px;
+  margin: 6px 0 10px 0;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--card-bg-1) 88%, transparent);
+  border-radius: 10px;
   font-size: var(--ui-font-small);
   color: var(--text-soft);
 }
@@ -458,8 +466,8 @@ body[data-theme="light"] .card__round {
 
 /* User: accent bubble — solid left rail, stronger tint, accent title. */
 .card[data-kind="message"][data-role="user"] {
-  background: var(--accent-dim);
-  border-color: var(--accent-dim);
+  background: color-mix(in srgb, var(--accent-dim) 76%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--card-border));
   border-left: 3px solid var(--accent);
 }
 .card[data-kind="message"][data-role="user"] > .card__head {
@@ -482,8 +490,8 @@ body[data-theme="light"] .card__round {
 
 /* System: muted meta-note — dashed left rail, faint amber tint, tiny uppercase title. */
 .card[data-kind="message"][data-role="system"] {
-  background: var(--card-system-bg);
-  border-color: var(--card-system-border);
+  background: color-mix(in srgb, var(--card-system-bg) 82%, transparent);
+  border-color: color-mix(in srgb, var(--card-system-border) 92%, transparent);
   border-left: 2px dashed var(--card-system-rail);
 }
 .card[data-kind="message"][data-role="system"] > .card__head {
@@ -533,13 +541,13 @@ body[data-theme="light"] .card__round {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   color: var(--text-soft, #888);
-  opacity: 0.55;
+  opacity: 0.42;
   white-space: nowrap;
   user-select: none;
   flex-shrink: 0;
 }
 .card__head:hover .card__token-hint {
-  opacity: 0.85;
+  opacity: 0.72;
 }
 
 /* ─────────────────────────────────────────────────────────────
