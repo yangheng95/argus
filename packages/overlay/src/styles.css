@@ -2077,8 +2077,8 @@ body[data-theme="light"] .section-badge {
 .sections-header {
   display: flex;
   align-items: center;
-  min-height: calc(44px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  min-height: calc(40px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
   border-bottom: 1px solid var(--border);
   background:
     linear-gradient(180deg, rgba(91, 141, 239, 0.04), rgba(91, 141, 239, 0) 58%),
@@ -2102,8 +2102,8 @@ body[data-theme="light"] .section-badge {
   flex: 1 1 0;
   min-height: 0;
   flex-direction: column;
-  gap: calc(10px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
   overflow-y: auto;
 }
 
@@ -2121,8 +2121,8 @@ body[data-theme="light"] .section-badge {
 .section-head {
   display: flex;
   align-items: center;
-  gap: calc(8px * var(--ui-scale));
-  padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  gap: calc(6px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border: none;
   border-radius: inherit;
   cursor: pointer;
@@ -2239,7 +2239,7 @@ body[data-theme="light"] .section-badge {
 }
 
 .section-body {
-  padding: 0 calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  padding: 0 calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale));
   overflow: visible;
   background: transparent;
   border: none;
@@ -2291,8 +2291,8 @@ body[data-theme="light"] .section-badge {
   display: block;
   font-size: var(--ui-font-control);
   color: var(--text-muted);
-  line-height: 1.55;
-  padding: calc(4px * var(--ui-scale)) 0;
+  line-height: 1.45;
+  padding: calc(2px * var(--ui-scale)) 0;
 }
 
 /* Shared empty-state shells for the primary overlay work surfaces. */
@@ -2303,17 +2303,17 @@ body[data-theme="light"] .section-badge {
 .file-view-empty .empty-hint {
   position: relative;
   display: grid;
-  gap: calc(10px * var(--ui-scale));
-  width: min(100%, calc(360px * var(--ui-scale)));
+  gap: calc(8px * var(--ui-scale));
+  width: min(100%, calc(340px * var(--ui-scale)));
   margin: 0;
-  padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
+  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: calc(16px * var(--ui-scale));
+  border-radius: calc(14px * var(--ui-scale));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(84, 138, 247, 0.014) 72%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(84, 138, 247, 0.012) 72%, transparent),
     color-mix(in srgb, var(--surface-strong) 74%, transparent);
   box-shadow:
-    0 10px 18px rgba(6, 10, 16, 0.1),
+    0 8px 14px rgba(6, 10, 16, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
   color: var(--text-soft);
 }
@@ -2335,6 +2335,12 @@ body[data-theme="light"] .section-badge {
 .changes-panel > .empty-hint,
 .sidebar-list-cluster > .empty-hint {
   max-width: calc(420px * var(--ui-scale));
+}
+
+.section-body > .empty-hint,
+.changes-panel > .empty-hint {
+  width: 100%;
+  max-width: none;
 }
 
 .diff-preview-empty .empty-hint,
@@ -2447,7 +2453,7 @@ body[data-theme="light"] .section-badge {
   justify-content: space-between;
   gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   font-size: var(--ui-font-control);
   color: var(--text-soft);
 }
@@ -2476,17 +2482,17 @@ body[data-theme="light"] .section-badge {
 .changes-groups {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .changes-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .changes-group + .changes-group {
-  padding-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
@@ -2494,7 +2500,7 @@ body[data-theme="light"] .section-badge {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
 .changes-group-copy {
@@ -2540,10 +2546,10 @@ body[data-theme="light"] .section-badge {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  gap: 6px;
+  padding: calc(7px * var(--ui-scale)) calc(9px * var(--ui-scale));
   border: 1px solid var(--border);
-  border-radius: calc(12px * var(--ui-scale));
+  border-radius: calc(10px * var(--ui-scale));
   background: var(--card-fill);
   color: inherit;
   text-align: left;
@@ -2568,14 +2574,14 @@ body[data-theme="light"] .section-badge {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .change-path {
   font-size: var(--ui-font-body);
   color: var(--text-strong);
   font-family: var(--mono);
-  line-height: 1.45;
+  line-height: 1.35;
   word-break: break-word;
 }
 
@@ -2589,7 +2595,7 @@ body[data-theme="light"] .section-badge {
 .change-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
   flex-shrink: 0;
@@ -6450,14 +6456,14 @@ select.field-input option {
 
 /* ── Config Area (bottom of right column, pinned outside scroll) ── */
 .config-area {
-  --config-toggle-padding-y: calc(4px * var(--ui-scale) + 1px);
-  --config-toggle-min-height: calc(var(--section-control-height) + 4px);
+  --config-toggle-padding-y: calc(3px * var(--ui-scale) + 1px);
+  --config-toggle-min-height: calc(var(--section-control-height) + 2px);
   display: flex;
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
   border-top: 1px solid var(--divider-soft);
   flex-shrink: 0;
-  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
 }
 
 .config-toggle {
@@ -6466,7 +6472,7 @@ select.field-input option {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(1px * var(--ui-scale));
+  gap: 0;
   height: var(--config-toggle-min-height);
   min-height: var(--config-toggle-min-height);
   padding: var(--config-toggle-padding-y) var(--section-head-padding-x);
@@ -6488,8 +6494,8 @@ select.field-input option {
     box-shadow 100ms,
     transform 100ms;
   position: relative;
-  padding-left: 32px;
-  padding-right: 32px;
+  padding-left: 30px;
+  padding-right: 30px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -6522,7 +6528,7 @@ select.field-input option {
   display: block;
   width: 100%;
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .config-toggle-meta {
@@ -6530,9 +6536,9 @@ select.field-input option {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  gap: calc(1px * var(--ui-scale)) calc(5px * var(--ui-scale));
   width: 100%;
-  line-height: 1.2;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
 }
 
@@ -6548,7 +6554,7 @@ select.field-input option {
    body's own max-height + overflow instead, independent of details flex
    layout. */
 #extensionsSection[open] > .config-section-body {
-  max-height: calc(320px * var(--ui-scale));
+  max-height: calc(280px * var(--ui-scale));
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -6944,7 +6950,7 @@ body[data-theme="light"] .config-close-btn:hover {
   line-height: 1.2;
   box-sizing: border-box;
   min-height: var(--section-control-height);
-  padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
   cursor: pointer;
   list-style: none;
   display: flex;
@@ -6997,10 +7003,10 @@ body[data-theme="light"] .config-close-btn:hover {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(1px * var(--ui-scale));
+  gap: 0;
   text-align: center;
-  padding-top: calc(4px * var(--ui-scale));
-  padding-bottom: calc(4px * var(--ui-scale));
+  padding-top: calc(3px * var(--ui-scale));
+  padding-bottom: calc(3px * var(--ui-scale));
 }
 
 .config-section-head-text {
@@ -7017,6 +7023,7 @@ body[data-theme="light"] .config-close-btn:hover {
   font-size: var(--ui-font-control);
   font-weight: 500;
   text-align: center;
+  line-height: 1.08;
 }
 
 .config-toggle-meta:empty::before {
@@ -7073,7 +7080,7 @@ body[data-theme="light"] .config-close-btn:hover {
 }
 
 .config-section-body {
-  padding: var(--section-body-padding-y) var(--section-body-padding-x) calc(10px * var(--ui-scale));
+  padding: var(--section-body-padding-y) var(--section-body-padding-x) calc(8px * var(--ui-scale));
   display: flex;
   flex-direction: column;
   gap: var(--section-field-gap);
@@ -7265,7 +7272,7 @@ body[data-theme="light"] .config-close-btn:hover {
 .config-section-llm .config-section-body {
   position: relative;
   gap: var(--section-row-gap);
-  padding: calc(10px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
 }
 
 .config-field-row {
@@ -7278,12 +7285,12 @@ body[data-theme="light"] .config-close-btn:hover {
 }
 
 .sections .config-section-llm .config-section-body {
-  padding: calc(12px * var(--ui-scale));
-  gap: calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
 }
 
 .sections .config-section-llm .config-inline-form {
-  gap: calc(10px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
 }
 
 .sections .config-section-llm .field-label {
@@ -7295,7 +7302,7 @@ body[data-theme="light"] .config-close-btn:hover {
 
 .sections .config-section-llm .config-field-row {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: calc(10px * var(--ui-scale));
+  gap: calc(8px * var(--ui-scale));
 }
 
 .sections .config-section-llm .config-field-row .field {
@@ -7305,7 +7312,7 @@ body[data-theme="light"] .config-close-btn:hover {
 .sections .config-section-llm .field-input,
 .sections .config-section-llm .field-input-group,
 .sections .config-section-llm .config-status-box-static {
-  min-height: calc(36px * var(--ui-scale));
+  min-height: calc(34px * var(--ui-scale));
 }
 
 .sections .config-section-llm .config-status-box-static {
@@ -8163,8 +8170,8 @@ body[data-theme="light"] .config-close-btn:hover {
    Section and subsection chevrons are already defined earlier in normal flow. */
 .config-toggle {
   position: relative;
-  padding-left: 32px;
-  padding-right: 32px;
+  padding-left: 30px;
+  padding-right: 30px;
 }
 
 .config-toggle::before {
@@ -8182,8 +8189,8 @@ body[data-theme="light"] .config-close-btn:hover {
 }
 
 .config-section-head-centered {
-  padding-left: 32px;
-  padding-right: 32px;
+  padding-left: 30px;
+  padding-right: 30px;
 }
 
 .config-section-head-centered::before {
