@@ -1,6 +1,6 @@
 import { apiJson } from "./api";
 import { replayTaskEventToTree } from "./events";
-import { resetWriter } from "./tree-writer";
+import { hydrateConversationView, resetWriter } from "./tree-writer";
 import {
   setBoardData,
   setBoardUpdatedAt,
@@ -22,14 +22,17 @@ export async function hydrateTaskConversation(taskID: string): Promise<number> {
   const transcript = Array.isArray(data?.transcript) ? data.transcript : [];
   const timeline = Array.isArray(data?.timeline) ? data.timeline : [];
   const events = Array.isArray(data?.events) ? data.events : [];
+  const view = data?.view ?? null;
+  const mergedMessages = mergeLoadedConversationMessages(timeline, transcript);
   const lastSequence = Number(data?.lastSequence || board?.lastSequence || 0);
 
   resetWriter();
-  setMessages(mergeLoadedConversationMessages(timeline, transcript));
+  setMessages(mergedMessages);
   setBoardData(board);
   setSnapshotVersion(boardSnapshot(board));
   setTaskSequence(Number.isFinite(lastSequence) && lastSequence > 0 ? lastSequence : 0);
   setBoardUpdatedAt(Date.now());
+  hydrateConversationView(view, mergedMessages);
 
   for (const event of events) {
     replayTaskEventToTree(event);
