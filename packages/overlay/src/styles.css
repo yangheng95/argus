@@ -1153,24 +1153,32 @@ body[data-theme="light"] .session-token-badge {
 .task-bar {
   display: flex;
   flex-direction: column;
-  gap: calc(2px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(14px * var(--ui-scale));
   margin: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale)) 0;
-  border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
-  background: var(--panel-fill);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: calc(18px * var(--ui-scale));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(84, 138, 247, 0.012) 62%, transparent),
+    color-mix(in srgb, var(--chrome) 82%, var(--surface));
   flex-shrink: 0;
-  box-shadow: var(--shadow);
+  box-shadow:
+    0 10px 18px rgba(5, 10, 16, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: border-color 120ms, background 120ms, box-shadow 120ms;
-  backdrop-filter: blur(26px) saturate(150%);
-  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(120%) brightness(1.01);
+  -webkit-backdrop-filter: blur(14px) saturate(120%) brightness(1.01);
 }
 
 .task-bar:hover,
 .task-bar:focus-within {
-  border-color: var(--hover-accent-border);
-  background: var(--panel-fill-hover);
-  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(84, 138, 247, 0.016) 68%, transparent),
+    color-mix(in srgb, var(--chrome) 86%, var(--surface));
+  box-shadow:
+    0 12px 22px rgba(5, 10, 16, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 .task-bar-main {
@@ -1186,13 +1194,13 @@ body[data-theme="light"] .session-token-badge {
   align-items: center;
   gap: calc(6px * var(--ui-scale));
   flex-shrink: 0;
-  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(10px * var(--ui-scale));
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--card-fill);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  background: color-mix(in srgb, var(--surface-strong) 74%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(16px) saturate(145%);
-  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  backdrop-filter: blur(10px) saturate(115%);
+  -webkit-backdrop-filter: blur(10px) saturate(115%);
 }
 
 .titlebar-task-status {
@@ -2988,10 +2996,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: calc(8px * var(--ui-scale));
-  padding: 4px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 72%),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
   flex-shrink: 0;
 }
 
@@ -9568,7 +9579,7 @@ body[data-theme="light"]::after {
   inset: 1px;
   z-index: 0;
   border-radius: inherit;
-  opacity: 0.18;
+  opacity: 0.08;
   background:
     linear-gradient(118deg, rgba(0, 0, 0, 0) 18%, rgba(207, 139, 87, 0.045) 36%, rgba(113, 179, 168, 0.075) 46%, rgba(198, 175, 114, 0.06) 56%, rgba(0, 0, 0, 0) 68%);
   transform: translateX(-62%);
@@ -9576,14 +9587,14 @@ body[data-theme="light"]::after {
 }
 
 .chat::after {
-  opacity: 0.22;
+  opacity: 0.12;
   animation-duration: 16s;
 }
 
 .sections-header::after {
   z-index: 0;
   border-radius: inherit;
-  opacity: 0.3;
+  opacity: 0.16;
   background:
     linear-gradient(112deg, rgba(0, 0, 0, 0) 12%, rgba(207, 139, 87, 0.06) 34%, rgba(113, 179, 168, 0.09) 48%, rgba(198, 175, 114, 0.08) 58%, rgba(0, 0, 0, 0) 76%);
   transform: translateX(-54%);
@@ -9593,7 +9604,7 @@ body[data-theme="light"]::after {
 .section[data-phase-state="active"] > .section-head::after {
   inset: 0;
   z-index: 0;
-  opacity: 0.4;
+  opacity: 0.22;
   background:
     linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(255, 255, 255, 0.02) 22%, rgba(113, 179, 168, 0.13) 46%, rgba(198, 175, 114, 0.1) 60%, rgba(0, 0, 0, 0) 82%);
   transform: translateX(-72%);
@@ -9608,7 +9619,7 @@ body[data-task-status="running"] .tech-sweep {
 body[data-task-status="running"] .chat::after,
 body[data-task-status="running"] .sections-header::after,
 body[data-task-status="running"] .section[data-phase-state="active"] > .section-head::after {
-  opacity: 0.34;
+  opacity: 0.2;
 }
 
 body[data-connection="offline"] .tech-grid,
@@ -9700,16 +9711,13 @@ body[data-theme="light"] .tech-sweep {
 }
 
 .titlebar,
-.task-bar,
 .sidebar,
 .chat,
 .sections,
 .dialog-form {
-  background: var(--panel-fill);
   border-color: var(--border);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(18px) saturate(142%) brightness(1.02);
-  -webkit-backdrop-filter: blur(18px) saturate(142%) brightness(1.02);
+  backdrop-filter: blur(16px) saturate(136%) brightness(1.01);
+  -webkit-backdrop-filter: blur(16px) saturate(136%) brightness(1.01);
 }
 
 .titlebar {
@@ -9721,18 +9729,30 @@ body[data-theme="light"] .tech-sweep {
   -webkit-backdrop-filter: blur(12px) saturate(118%) brightness(1.01);
 }
 
-.chat {
+.chat,
+.dialog-form {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 52%),
-    color-mix(in srgb, var(--surface) 94%, transparent);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), transparent 52%),
+    color-mix(in srgb, var(--surface) 95%, transparent);
   box-shadow: 0 16px 30px rgba(6, 10, 16, 0.16);
+}
+
+.sections {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(84, 138, 247, 0.012) 64%, transparent),
+    color-mix(in srgb, var(--surface) 94%, var(--surface-inset) 6%);
+  box-shadow:
+    0 18px 34px rgba(6, 10, 16, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .sidebar {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent 48%),
-    color-mix(in srgb, var(--surface) 93%, transparent);
-  box-shadow: 0 18px 34px rgba(6, 10, 16, 0.17);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 44%),
+    color-mix(in srgb, var(--surface) 90%, var(--surface-inset) 10%);
+  box-shadow:
+    0 14px 28px rgba(6, 10, 16, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .titlebar-menu-panel {
@@ -9743,17 +9763,15 @@ body[data-theme="light"] .tech-sweep {
   -webkit-backdrop-filter: none;
 }
 
-.titlebar:hover,
-.task-bar:hover,
-.task-bar:focus-within,
 .sidebar:hover,
 .sidebar:focus-within,
 .chat:hover,
 .chat:focus-within,
 .sections:hover,
-.sections:focus-within {
-  background: var(--panel-fill-hover);
-  box-shadow: var(--shadow-lg);
+.sections:focus-within,
+.dialog-form:hover,
+.dialog-form:focus-within {
+  border-color: var(--hover-accent-border);
 }
 
 .titlebar:hover,
@@ -9764,10 +9782,20 @@ body[data-theme="light"] .tech-sweep {
   box-shadow: 0 14px 26px rgba(5, 10, 16, 0.18);
 }
 
+.task-bar:hover,
+.task-bar:focus-within {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(84, 138, 247, 0.016) 68%, transparent),
+    color-mix(in srgb, var(--chrome) 86%, var(--surface));
+  box-shadow:
+    0 12px 22px rgba(5, 10, 16, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
 .chat:hover,
 .chat:focus-within {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(84, 138, 247, 0.014) 68%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(84, 138, 247, 0.016) 68%, transparent),
     color-mix(in srgb, var(--surface) 96%, transparent);
   box-shadow: 0 18px 34px rgba(6, 10, 16, 0.18);
 }
@@ -9775,13 +9803,30 @@ body[data-theme="light"] .tech-sweep {
 .sidebar:hover,
 .sidebar:focus-within {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(84, 138, 247, 0.016) 66%, transparent),
-    color-mix(in srgb, var(--surface) 95%, transparent);
-  box-shadow: 0 20px 38px rgba(6, 10, 16, 0.19);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(84, 138, 247, 0.012) 58%, transparent),
+    color-mix(in srgb, var(--surface) 92%, var(--surface-inset) 8%);
+  box-shadow: 0 16px 30px rgba(6, 10, 16, 0.17);
+}
+
+.sections:hover,
+.sections:focus-within {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(84, 138, 247, 0.016) 68%, transparent),
+    color-mix(in srgb, var(--surface) 95%, var(--surface-inset) 5%);
+  box-shadow:
+    0 20px 38px rgba(6, 10, 16, 0.19),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.dialog-form:hover,
+.dialog-form:focus-within {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(84, 138, 247, 0.014) 64%, transparent),
+    color-mix(in srgb, var(--surface) 97%, transparent);
+  box-shadow: 0 18px 34px rgba(6, 10, 16, 0.18);
 }
 
 .titlebar::before,
-.task-bar::before,
 .sidebar::before,
 .chat::before,
 .sections::before,
@@ -9798,6 +9843,18 @@ body[data-theme="light"] .tech-sweep {
     radial-gradient(28% 24% at 78% 70%, rgba(113, 179, 168, 0.11), transparent 72%),
     radial-gradient(16% 18% at 54% 38%, rgba(198, 175, 114, 0.08), transparent 74%);
   filter: blur(24px);
+}
+
+.task-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.18;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.04) 24%, rgba(91, 141, 239, 0.06) 50%, rgba(255, 255, 255, 0) 78%);
+  filter: blur(20px);
 }
 
 .titlebar::before {
@@ -9822,6 +9879,52 @@ body[data-theme="light"] .tech-sweep {
     radial-gradient(24% 28% at 10% 2%, rgba(91, 141, 239, 0.07), transparent 74%),
     radial-gradient(20% 20% at 88% 100%, rgba(207, 139, 87, 0.045), transparent 76%);
   filter: blur(26px);
+}
+
+.sections::before {
+  opacity: 0.24;
+  background:
+    radial-gradient(24% 24% at 12% 4%, rgba(91, 141, 239, 0.06), transparent 74%),
+    radial-gradient(20% 20% at 84% 20%, rgba(198, 175, 114, 0.05), transparent 76%);
+  filter: blur(26px);
+}
+
+.dialog-form::before {
+  opacity: 0.18;
+}
+
+.sidebar-header,
+.chat-header,
+.sections-header,
+.section-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.sidebar-header,
+.chat-header,
+.sections-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0) 74%),
+    color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+.section-head {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 72%),
+    color-mix(in srgb, var(--surface-strong) 66%, transparent);
+}
+
+.sidebar-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0) 74%),
+    color-mix(in srgb, var(--surface-strong) 68%, var(--surface-inset) 32%);
+}
+
+.sections-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 72%),
+    color-mix(in srgb, var(--surface-strong) 76%, transparent);
 }
 
 .titlebar > *,
