@@ -37,7 +37,6 @@ import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
 import { findGoal, findGoalRun, findLatestTipGoalRun, findPlan, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
 import { syncGoalStatus } from "./goal-status"
-import { assertGoalRunTransition, type GoalRunStatus } from "./goal-run-state-machine"
 import { createDecisionLog } from "@/decision-log"
 import { StaleRowError } from "./state"
 
@@ -648,9 +647,9 @@ export function updateGoalRun(
   const row = findGoalRun(goalRunID)
   if (!row) return undefined
   const nextStatus = values.status ?? row.status
-  if (nextStatus !== row.status) {
-    assertGoalRunTransition(row.status as GoalRunStatus, nextStatus as GoalRunStatus)
-  }
+  // Rule 23: no state-machine transition gate. LLM / orchestrator may drive
+  // goal_run.status to any value at any time; timestamp heuristics below are
+  // informational, not blocking.
   const now = Date.now()
   const statusChanged = nextStatus !== row.status
   const normalizedValues = {

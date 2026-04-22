@@ -6,7 +6,6 @@ import { EngineProgressSnapshotTable, EngineRunTable, EngineTaskTable } from "./
 import { requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { Identifier } from "@/id/id"
 import { assertTransition, type TaskStatus } from "./state-machine"
-import { assertRunTransition, type RunStatus } from "./run-state-machine"
 
 /**
  * Raised by updateTask/updateRun when the caller's row snapshot is stale:
@@ -128,9 +127,8 @@ export async function updateRun(
   summary: string,
 ) {
   const nextStatus = values.status ?? row.status
-  if (nextStatus !== row.status) {
-    assertRunTransition(row.status as RunStatus, nextStatus as RunStatus)
-  }
+  // Rule 23: no state-machine transition gate. LLM / orchestrator may drive
+  // run.status to any value at any time.
   const nextBlocking = values.blocking_reason === undefined ? row.blocking_reason : values.blocking_reason
   const nextError = values.error === undefined ? row.error : values.error
   const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
