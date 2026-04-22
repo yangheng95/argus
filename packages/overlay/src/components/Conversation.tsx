@@ -2,7 +2,7 @@ import { For, Show, onMount, onCleanup, createSignal } from "solid-js";
 import { Card } from "./Card";
 import { cardTreeStore } from "../store/card-tree";
 import { t } from "../utils/i18n";
-import { setupAutoScroll, type AutoScrollController } from "../utils/dom-utils";
+import { setupAutoScroll } from "../utils/dom-utils";
 
 // ── Conversation Component ──
 //
@@ -18,31 +18,26 @@ export function Conversation(props: { container: HTMLElement }) {
 
   const hasItems = () => cardTreeStore.order.length > 0;
 
-  const [tracking, setTracking] = createSignal(false);
-  let controller: AutoScrollController | undefined;
+  const [tracking, setTracking] = createSignal(true);
 
   onMount(() => {
     const c = setupAutoScroll(el, {
       isTracking: tracking,
       onUserScrollUp: () => setTracking(false),
     });
-    controller = c;
-    onCleanup(c.cleanup);
+    const resumeTracking = () => {
+      if (tracking()) return;
+      const distanceFromBottom = el.scrollHeight - el.clientHeight - el.scrollTop;
+      if (distanceFromBottom <= 8) {
+        setTracking(true);
+      }
+    };
+    el.addEventListener("scroll", resumeTracking, { passive: true });
+    onCleanup(() => {
+      el.removeEventListener("scroll", resumeTracking);
+      c.cleanup();
+    });
   });
-
-  function toggleTracking() {
-    if (tracking()) {
-      setTracking(false);
-    } else {
-      setTracking(true);
-      controller?.scrollToBottom();
-    }
-  }
-
-  function scrollToTop() {
-    setTracking(false);
-    controller?.scrollToTop();
-  }
 
   const emptyText = () => t("chat.empty");
 
@@ -65,37 +60,6 @@ export function Conversation(props: { container: HTMLElement }) {
           </Show>
         )}
       </For>
-      <Show when={hasItems()}>
-        <div class="chat-scroll-actions">
-          <button
-            type="button"
-            class="chat-scroll-top"
-            onClick={scrollToTop}
-            title={t("chat.scroll_top_title")}
-            aria-label={t("chat.scroll_top_title")}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span class="chat-follow-label">{t("chat.scroll_top")}</span>
-          </button>
-          <button
-            type="button"
-            class="chat-follow-toggle"
-            classList={{ "is-active": tracking() }}
-            onClick={toggleTracking}
-            title={tracking() ? t("chat.follow.on_title") : t("chat.follow.off_title")}
-            aria-pressed={tracking()}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <span class="chat-follow-label">
-              {tracking() ? t("chat.follow.on") : t("chat.follow.off")}
-            </span>
-          </button>
-        </div>
-      </Show>
     </>
   );
 }
