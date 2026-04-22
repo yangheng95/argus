@@ -96,13 +96,34 @@ Decisions carry WHY, not just WHAT. Examples:
 
 This is the core phase. For EVERY requirement from Phase 1, assign it to a goal.
 
-**Rules for decomposition:**
+**Rules for decomposition — software-engineering perspective (low coupling, high cohesion):**
+
+Every goal runs in an isolated worktree and gets merged back into main. Two goals writing to the same file produces a 3-way merge that LLM resolvers rarely repair cleanly — the merge conflict becomes the deliverable's failure mode. Prevent this at decomposition time, not at merge time.
+
 - Every REQ-N must appear in at least one goal's requirement_ids.
-- Group requirements by subsystem/module: requirements touching the same files, module, or directory belong in the same goal.
-- Requirements belonging to the same layer (e.g. all backend HTTP handlers, all DB schema + seed data) SHOULD be merged unless file ownership forces a split.
-- Split when: (1) disjoint owned_paths required for parallel execution, (2) a genuine data dependency forcing a bootstrap boundary, (3) the merged goal would require implementing 40+ files or spanning multiple unrelated subsystems — the executor WILL fail on such mega-goals.
-- Do NOT split just for "separation of concerns" or "cleaner design" — those concerns live inside the code the executor writes, not in the goal graph.
-- Do NOT merge everything into 1–2 mega-goals for a large PRD — the executor has finite context and will produce incomplete output. A PRD spanning multiple subsystems (e.g., chart rendering + indicator calculation + toolbar + interaction + backend API) must produce one goal per major subsystem.
+
+- **Group by responsibility layer, not by file proximity.** Layers in a typical web app:
+  `data model / schema` → `persistence` → `business logic / domain` → `API / transport` → `UI components` → `UI state & interaction` → `integration / bootstrap`. Each layer ideally = one goal. A requirement that spans two layers gets split across those layers' goals, NOT merged into whichever layer's files it happens to touch more.
+
+- **No shared glue files across goals.** Identify the integration surfaces — root `App.tsx`, router entry, DI container wiring, `main.ts`, `package.json` scripts, bootstrap config. These files pull everything together and WILL be written by every goal that plugs into them. Assign these files to exactly ONE goal (typically the integration / bootstrap goal), and require all other goals to export public interfaces the integration goal then imports. Goals NEVER co-write a glue file.
+
+- **Split cohesion from coupling, not features from features.** Two requirements that share a data model but differ in responsibility (e.g. "validate input" vs "render input form") belong in different goals — they change for different reasons (Single Responsibility). Two requirements that change together for the same reason (e.g. "API returns users list" + "API returns users list with pagination") belong in one goal.
+
+- **Depend on exports, not internals.** Goal B depending on Goal A means A produces an `exports` contract (interface / type / route / schema), B only imports that contract. Neither goal reaches into the other's `owned_paths`. If you can't state goal B's dependency as "imports of { X, Y, Z } from A" without also needing to know A's internals, the boundary is wrong — re-split.
+
+- **Split when:**
+  (1) disjoint `owned_paths` achievable with a clean interface between them,
+  (2) a genuine data / bootstrap dependency forcing an order,
+  (3) responsibility belongs to a different layer of the stack,
+  (4) the merged goal would exceed ~40 files or span unrelated subsystems.
+
+- **Do NOT split** into micro-goals that only compose by passing strings around (fake decoupling via text interfaces), and do NOT create a goal per REQ — one goal can cover many REQs as long as they share the same axis of change.
+
+- **Do NOT merge** everything into 1–2 mega-goals for a large PRD — the executor's context is finite and merge conflicts go up super-linearly when goals share files. A PRD spanning multiple subsystems (chart rendering + indicators + toolbar + interactions + API + schema) requires one goal per subsystem AND a dedicated integration goal that owns the glue files.
+
+- **Cohesion self-check for each goal:** can you state what this goal does in one sentence without mentioning another goal's file path or internal symbol? If not, the goal is reaching across a boundary — re-split.
+
+- **Coupling self-check for each goal pair:** for every (A, B) with `A.depends_on = B`, is the entire dependency expressible as "A imports { ...exports } from B"? If A also needs to modify B's `owned_paths`, the boundary is wrong.
 
 **For each goal, define the FULL GoalContract:**
 - `id`: Unique identifier (e.g., goal_bootstrap, goal_api, goal_ui)
