@@ -7,19 +7,19 @@ import type { EngineExecutorSessionStatus, EngineGoalRunStatus, EngineRunStatus 
  * *different* handling from three call sites that historically shared the
  * same boolean and deadlocked each other:
  *
- *   - **live**    — in flight. Orchestrator dispatch gate suppresses the
- *                   TaskAgent while any goal_run is live so the agent can't
- *                   race with an executor that's still writing state.
+ *   - **live**    — in flight. The outer task loop waits while any goal_run
+ *                   is live so decision turns do not race executors that are
+ *                   still writing state.
  *   - **terminal**— succeeded and done. Dispatch-dedup uses this (the
  *                   agent shouldn't redispatch a goal whose run completed)
- *                   but the dispatch gate must NOT wait on it — the agent
- *                   has to wake up and decide to `deliver` or keep going.
+ *                   but the loop must NOT wait on it — the agent has to wake
+ *                   up and decide to `deliver` or keep going.
  *   - **retriable**— failed / aborted. Terminal, but a fresh dispatch is
  *                   allowed.
  *
  * Prior collapse: `completed.liveness = "live"` conflated #1 and #2, so
- * the dispatch gate stayed clamped after every successful goal and the
- * TaskAgent never woke up to call `deliver`. That's the stall the
+ * the loop wait stayed clamped after every successful goal and the TaskAgent
+ * never woke up to call `deliver`. That's the stall the
  * overlay benchmark hit at iteration 2..26 before timing out.
  */
 type GoalRunStatusMeta = {
@@ -93,6 +93,7 @@ function executorSessionStatusesWhere(
 }
 
 export const LIVE_GOAL_RUN_STATUSES = goalRunStatusesWhere((meta) => meta.liveness === "live")
+export const ACTIVE_GOAL_RUN_STATUSES = LIVE_GOAL_RUN_STATUSES.filter((status) => status !== "queued") as EngineGoalRunStatus[]
 export const RETRIABLE_GOAL_RUN_STATUSES = goalRunStatusesWhere((meta) => meta.liveness === "retriable")
 export const GOAL_RUN_RESETTABLE_STATUSES = goalRunStatusesWhere((meta) => meta.resettable)
 export const GOAL_RUN_SUCCESS_STATUSES = goalRunStatusesWhere((meta) => meta.satisfiesGoal)

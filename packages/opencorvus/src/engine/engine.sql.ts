@@ -32,8 +32,8 @@ export type EnginePlanStatus = "active" | "superseded"
 export type EngineGoalPriority = "blocking" | "advisory"
 // engine_goal.status was retired in the LLM-autonomous redesign: it was a
 // cached projection of (cascade_state, goal_run chain tip) used as a
-// dispatch gate, and the FSM gate itself was the source of status-carousel
-// deadlocks. Call-sites read engine/describe.ts::goalStatusByID (live
+// queue/loop scheduling hint, and the old gate itself was the source of
+// status-carousel deadlocks. Call-sites read engine/describe.ts::goalStatusByID (live
 // derivation from goal_run chain) or engine/describe.ts::describeGoal
 // (structured view with is_running / is_terminal_ok / etc.). The column
 // is gone; no type alias for it.

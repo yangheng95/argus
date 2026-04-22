@@ -267,6 +267,7 @@ export async function abortLiveExecutionForProject(input: {
 }): Promise<AbortLiveResult> {
   const sessionRows = listLiveExecutorSessionsForProject(input.projectID)
   const goalRunRows = listLiveGoalRunsForProject(input.projectID)
+    .filter((goalRun) => goalRun.status !== "queued")
   const executorSessions = abortExecutorSessions(sessionRows)
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals = input.cleanupGoalWorkspaces === true

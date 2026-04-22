@@ -33,6 +33,14 @@ function authoritativeTip(goalID: string, goalRuns: GoalRunRow[]): GoalRunRow | 
   return supersedeTips(goalRuns.filter((r) => r.goal_id === goalID))[0]
 }
 
+export function isQueuedGoalRunStartable(goalRun: GoalRunRow, goal: GoalRow, goalRuns: GoalRunRow[]): boolean {
+  if (goalRun.status !== "queued") return false
+  if (!isDispatchableGoal(goal)) return false
+  const tip = authoritativeTip(goal.id, goalRuns)
+  if (!tip || tip.id !== goalRun.id) return false
+  return unsatisfiedDependencyGoalIDs(goal, goalRuns).length === 0
+}
+
 export function unsatisfiedDependencyGoalIDs(goal: GoalRow, goalRuns: GoalRunRow[]): string[] {
   const dependencyIDs = Array.isArray(goal.depends_on) ? goal.depends_on : []
   return dependencyIDs.filter((dependencyGoalID) => {

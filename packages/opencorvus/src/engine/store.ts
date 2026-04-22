@@ -1,7 +1,7 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
-import { Database, NotFoundError, and, asc, desc, eq, gte, inArray, isNull, like, lt, sql } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, gte, inArray, isNull, like, lt, sql } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { EvaluationCheck } from "./model"
@@ -27,7 +27,7 @@ import {
   type EngineExecutorRef,
   type EngineEvaluationCheck,
 } from "./engine.sql"
-import { DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
+import { ACTIVE_GOAL_RUN_STATUSES, DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
 
 export type TaskRow = typeof EngineTaskTable.$inferSelect
 export type PlanRow = typeof EnginePlanVersionTable.$inferSelect
@@ -412,9 +412,25 @@ export function listActiveGoalRunsForRun(coordinatorRunID: string) {
       .where(
         and(
           eq(EngineGoalRunTable.coordinator_run_id, coordinatorRunID),
-          inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
+          inArray(EngineGoalRunTable.status, ACTIVE_GOAL_RUN_STATUSES),
         ),
       )
+      .all(),
+  )
+}
+
+export function listQueuedGoalRunsForRun(coordinatorRunID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineGoalRunTable)
+      .where(
+        and(
+          eq(EngineGoalRunTable.coordinator_run_id, coordinatorRunID),
+          eq(EngineGoalRunTable.status, "queued"),
+        ),
+      )
+      .orderBy(EngineGoalRunTable.time_created)
       .all(),
   )
 }
@@ -655,45 +671,6 @@ function taskRows(rows: TaskRow[]) {
 
 export function listTaskRows(rows: TaskRow[]) {
   return taskRows(rows)
-}
-
-/** Returns true if the project has at least one task with status "active". */
-export function hasActiveTaskInProject(projectID: string): boolean {
-  return !!Database.use((db) =>
-    db
-      .select({ id: EngineTaskTable.id })
-      .from(EngineTaskTable)
-      .where(and(eq(EngineTaskTable.project_id, projectID), eq(EngineTaskTable.status, "active")))
-      .limit(1)
-      .get(),
-  )
-}
-
-/**
- * Find the next queued task for a project, ordered by priority then creation
- * time (FIFO within the same priority). The serial queue calls this when an
- * active task ends.
- *
- * Priority order (highest first): critical → high → normal → low.
- *
- * `critical` is reserved for repair-shaped follow-ups emitted by the delivery
- * agent's `submit_next_task` — they jump ahead of any normal/high queued work
- * but never preempt an already-active task in the project. `high`/`normal`/
- * `low` follow-ups from the same tool share the user-facing levels.
- */
-export function findNextQueuedTaskForProject(projectID: string): TaskRow | undefined {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineTaskTable)
-      .where(and(eq(EngineTaskTable.project_id, projectID), eq(EngineTaskTable.status, "queued")))
-      .orderBy(
-        asc(sql`CASE ${EngineTaskTable.priority} WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END`),
-        asc(EngineTaskTable.time_created),
-      )
-      .limit(1)
-      .get(),
-  )
 }
 
 export function listProjectTasks(projectID: string, limit = 50) {

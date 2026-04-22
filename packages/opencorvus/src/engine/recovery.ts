@@ -1,12 +1,13 @@
 import { Log } from "@/util/log"
+import { advanceQueue, listActiveForCwd, listOrphanedActiveInProject, listQueuedCwdsInProject, resumeActiveTaskLoop, taskCwd } from "./queue"
 import {
   abortLiveExecutionForProject,
   abortRuns,
 } from "./writer"
 import {
-  listLiveExecutorSessionsForProject,
   listLiveGoalRunsForProject,
   listLiveRunsForProject,
+  searchProjectTasks,
 } from "./store"
 
 const log = Log.create({ service: "engine-recovery" })
@@ -24,6 +25,8 @@ const RECOVERY_REASON = "Process restart: executor session lost during recovery"
  */
 export async function recoverProjectExecution(input: {
   projectID: string
+  isTaskLoopActive?: (taskID: string) => boolean
+  startTaskLoop?: (taskID: string) => Promise<void> | void
 }) {
   const { executorSessions: abortedSessions, goalRuns: abortedGoalRuns } =
     await abortLiveExecutionForProject({
@@ -32,19 +35,75 @@ export async function recoverProjectExecution(input: {
       cleanupGoalWorkspaces: false,
     })
   const abortedRuns = await recoverOrphanRuns(input.projectID)
+  const resumedTaskIDs = await resumeRecoveredTaskLoops(input)
 
   log.info("project recovery complete", {
     projectID: input.projectID,
     abortedSessions,
     abortedGoalRuns,
     abortedRuns,
+    resumedTaskIDs,
   })
 
   return {
     abortedSessions,
     abortedGoalRuns,
     abortedRuns,
+    resumedTaskID: resumedTaskIDs[0],
+    resumedTaskIDs,
   }
+}
+
+async function resumeRecoveredTaskLoops(input: {
+  projectID: string
+  isTaskLoopActive?: (taskID: string) => boolean
+  startTaskLoop?: (taskID: string) => Promise<void> | void
+}) {
+  if (input.startTaskLoop) {
+    return resumeRecoveredTaskLoopsWithHooks(input)
+  }
+
+  const resumedTaskIDs: string[] = []
+  const orphaned = [...listOrphanedActiveInProject(input.projectID)]
+    .sort((left, right) => (right.time_status_changed ?? 0) - (left.time_status_changed ?? 0))
+  for (const task of orphaned) {
+    await resumeActiveTaskLoop(task.id)
+    resumedTaskIDs.push(task.id)
+  }
+
+  for (const cwd of listQueuedCwdsInProject(input.projectID)) {
+    if (listActiveForCwd(cwd).length > 0) continue
+    const before = new Set(listActiveForCwd(cwd).map((task) => task.id))
+    await advanceQueue(cwd)
+    for (const task of listActiveForCwd(cwd)) {
+      if (!before.has(task.id)) resumedTaskIDs.push(task.id)
+    }
+  }
+
+  return resumedTaskIDs
+}
+
+async function resumeRecoveredTaskLoopsWithHooks(input: {
+  projectID: string
+  isTaskLoopActive?: (taskID: string) => boolean
+  startTaskLoop: (taskID: string) => Promise<void> | void
+}) {
+  const activeTask = [...listOrphanedActiveInProject(input.projectID)]
+    .sort((left, right) => (right.time_status_changed ?? 0) - (left.time_status_changed ?? 0))[0]
+  if (activeTask && !input.isTaskLoopActive?.(activeTask.id)) {
+    await input.startTaskLoop(activeTask.id)
+    return [activeTask.id]
+  }
+
+  if (searchProjectTasks(input.projectID, { status: "active", limit: 100 }).length > 0) {
+    return []
+  }
+
+  const queuedTask = searchProjectTasks(input.projectID, { status: "queued", limit: 100 })
+    .sort((left, right) => (left.time_created ?? 0) - (right.time_created ?? 0))[0]
+  if (!queuedTask || input.isTaskLoopActive?.(queuedTask.id)) return []
+  await input.startTaskLoop(queuedTask.id)
+  return [queuedTask.id]
 }
 
 /**
@@ -61,13 +120,9 @@ async function recoverOrphanRuns(projectID: string) {
   const liveGoalRunIDs = new Set(
     listLiveGoalRunsForProject(projectID).map((goalRun) => goalRun.coordinator_run_id),
   )
-  const liveRunSessionIDs = new Set(
-    listLiveExecutorSessionsForProject(projectID).map((session) => session.run_id),
-  )
   const orphans = listLiveRunsForProject(projectID).filter((run) => {
     if (run.status === "queued") return false
     if (liveGoalRunIDs.has(run.id)) return false
-    if (liveRunSessionIDs.has(run.id)) return false
     return true
   })
   return abortRuns(orphans, "Process restart: run lost live executor state during recovery")
