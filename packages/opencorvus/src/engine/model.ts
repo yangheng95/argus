@@ -832,6 +832,37 @@ export const TaskEvent = z.object({
   payload: z.record(z.string(), z.any()),
 })
 
+export const TaskConversationPhaseLocation = z.object({
+  stepID: z.string(),
+  phaseID: z.string(),
+})
+
+export const TaskConversationSessionView = z.object({
+  sessionID: z.string(),
+  stage: z.string(),
+  parentSessionID: z.string().optional(),
+  goalID: z.string().optional(),
+  messageIDs: z.array(z.string()),
+  firstMessageTime: z.number(),
+  lastMessageTime: z.number(),
+  placement: z.enum(["top_level", "goal_phase", "hidden", "filtered"]),
+  phase: TaskConversationPhaseLocation.optional(),
+})
+
+export const TaskConversationView = z.object({
+  topLevelSessionIDs: z.array(z.string()),
+  sessions: TaskConversationSessionView.array(),
+})
+
+export const TaskConversationHydration = z.object({
+  lastSequence: z.number().int().nonnegative(),
+  board: TaskBoard,
+  transcript: z.array(z.any()),
+  timeline: z.array(z.any()),
+  events: TaskEvent.array(),
+  view: TaskConversationView,
+})
+
 export const ArtifactAudit = z.object({
   source_files_added: z.number(),
   config_files_added: z.number(),

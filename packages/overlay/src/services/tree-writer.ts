@@ -900,6 +900,15 @@ interface EnsureSessionOpts {
   time: number;
 }
 
+interface HydratedConversationViewSession {
+  sessionID?: string;
+  stage?: string;
+  parentSessionID?: string;
+  goalID?: string;
+  messageIDs?: string[];
+  firstMessageTime?: number;
+}
+
 /** Resolve the cardID a session should write its parts to. For goal-scope
  *  sessions whose stage maps to a declared phase (planner → plan,
  *  build → build, evaluator → evaluate), this IS the phase card — the
@@ -965,7 +974,11 @@ function resolvePhaseOrSessionCardID(
   return { cardID: sessionCardID(stage, sessionID), isPhase: false };
 }
 
-function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionInfo {
+function ensureSessionCard(
+  sessionID: string,
+  opts: EnsureSessionOpts,
+  deferHierarchy = false,
+): SessionInfo {
   const existing = sessions.get(sessionID);
   if (existing) {
     // Backfill on first real message.updated. Two arrivals matter for the
@@ -1062,12 +1075,14 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
     if (opts.goalID && !existing.goalID) {
       existing.goalID = opts.goalID;
     }
-    rebuildCardHierarchy();
+    if (!deferHierarchy) rebuildCardHierarchy();
     // A fidelity event may have arrived before this session's first
     // message.updated (reconnect replay, SSE interleaving). Drain any held
     // payload now that the session card exists under its real stage id.
-    drainPendingFidelity(sessionID);
-    drainPendingSubagentTerminal(sessionID);
+    if (!deferHierarchy) {
+      drainPendingFidelity(sessionID);
+      drainPendingSubagentTerminal(sessionID);
+    }
     return existing;
   }
 
@@ -1107,10 +1122,104 @@ function ensureSessionCard(sessionID: string, opts: EnsureSessionOpts): SessionI
   };
   sessions.set(sessionID, info);
 
-  rebuildCardHierarchy();
-  drainPendingFidelity(sessionID);
-  drainPendingSubagentTerminal(sessionID);
+  if (!deferHierarchy) {
+    rebuildCardHierarchy();
+    drainPendingFidelity(sessionID);
+    drainPendingSubagentTerminal(sessionID);
+  }
   return info;
+}
+
+export function hydrateConversationView(view: any, transcript: any[]): void {
+  const sessionViews: HydratedConversationViewSession[] = Array.isArray(view?.sessions)
+    ? view.sessions
+    : [];
+  if (sessionViews.length === 0) return;
+  // Hydration runs immediately after setBoardData(); do not rely on the
+  // detached boardStore effect having re-projected phase cards yet.
+  rebuildBoardDerivedCards();
+  const messageByID = new Map<string, any>();
+  for (const message of Array.isArray(transcript) ? transcript : []) {
+    const id = String(message?.info?.id || "");
+    if (id) messageByID.set(id, message);
+  }
+  const orderedSessions = sessionViews.slice().sort(
+    (left, right) =>
+      Number(left?.firstMessageTime || 0) - Number(right?.firstMessageTime || 0),
+  );
+  for (const sessionView of orderedSessions) {
+    const sessionID = String(sessionView?.sessionID || "");
+    const stage = String(sessionView?.stage || "");
+    const firstMessageTime = Number(sessionView?.firstMessageTime || 0);
+    if (!sessionID || !stage) {
+      throw new Error("hydrateConversationView: session view missing sessionID/stage");
+    }
+    if (!(firstMessageTime > 0)) {
+      throw new Error(`hydrateConversationView: session ${sessionID} missing firstMessageTime`);
+    }
+    if (stage === "filtered") continue;
+    const session = ensureSessionCard(
+      sessionID,
+      {
+        stage,
+        parentSessionID: String(sessionView?.parentSessionID || ""),
+        goalID: String(sessionView?.goalID || ""),
+        time: firstMessageTime,
+      },
+      true,
+    );
+    const messageIDs = Array.isArray(sessionView?.messageIDs) ? sessionView.messageIDs : [];
+    for (const rawMessageID of messageIDs) {
+      const messageID = String(rawMessageID || "");
+      if (!messageID) continue;
+      const message = messageByID.get(messageID);
+      if (!message) {
+        throw new Error(`hydrateConversationView: message ${messageID} missing from transcript`);
+      }
+      const info = message?.info;
+      const role = String(info?.role || "");
+      const resolvedRole = String(info?.resolvedRole || info?.agent || role || "assistant");
+      const agent = String(info?.agent || "");
+      const parentSessionID = String(info?.parentSessionID || session.parentSessionID || "");
+      const goalID = String(info?.goalID || session.goalID || "");
+      const timeCreated = Number(info?.time?.created || 0);
+      if (!(timeCreated > 0)) {
+        throw new Error(`hydrateConversationView: message ${messageID} missing info.time.created`);
+      }
+      const completed =
+        Number.isFinite(info?.time?.completed) && Number(info.time.completed) > 0;
+      messages.set(messageID, {
+        id: messageID,
+        sessionID,
+        role,
+        resolvedRole,
+        agent,
+        parentSessionID,
+        goalID,
+        time: timeCreated,
+        completed,
+      });
+      session.messageIDs.add(messageID);
+      if (parentSessionID && !session.parentSessionID) session.parentSessionID = parentSessionID;
+      if (goalID && !session.goalID) session.goalID = goalID;
+      ensureBoundaryPart(sessionID, messageID, resolvedRole, timeCreated);
+      const parts = Array.isArray(message?.parts) ? message.parts : [];
+      for (const part of parts) {
+        const partID = String(part?.id || "");
+        if (!partID) {
+          throw new Error(`hydrateConversationView: message ${messageID} contains part without id`);
+        }
+        upsertPart(sessionID, partID, { ...part });
+      }
+    }
+  }
+  rebuildCardHierarchy();
+  for (const sessionView of orderedSessions) {
+    const sessionID = String(sessionView?.sessionID || "");
+    if (!sessionID) continue;
+    drainPendingFidelity(sessionID);
+    drainPendingSubagentTerminal(sessionID);
+  }
 }
 
 function ensureBoundaryPart(sessionID: string, messageID: string, role: string, time: number): void {

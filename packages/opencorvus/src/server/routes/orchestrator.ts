@@ -3,6 +3,8 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
+import { ControlTimeline } from "@/control/timeline"
+import { projectConversationView } from "@/conversation/view"
 import {
   Artifact,
   Budget,
@@ -20,6 +22,7 @@ import {
   Run,
   TaskBoard,
   TaskBrief,
+  TaskConversationHydration,
   TaskMessageInput,
   TaskMessageResult,
   TaskAccepted,
@@ -27,6 +30,7 @@ import {
   Task,
   UpdateGoalInput,
 } from "@/engine/model"
+import { taskRewindCursor } from "@/engine/rewind"
 import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
 import { Session } from "@/session"
@@ -357,6 +361,64 @@ export const EngineRoutes = lazy(() =>
       },
     )
     .get(
+      "/task/:taskID/conversation",
+      describeRoute({
+        summary: "Hydrate task conversation state",
+        description:
+          "Load the current task board plus the persisted conversation inputs " +
+          "needed to rebuild the overlay conversation tree before SSE resumes.",
+        operationId: "task.conversation",
+        responses: {
+          200: {
+            description: "Task conversation hydrate payload",
+            content: {
+              "application/json": {
+                schema: resolver(TaskConversationHydration),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        const taskID = c.req.valid("param").taskID
+        const board = await EngineService.getBoard(taskID, { sync: true })
+        const transcript = await loadTaskTranscript(taskID)
+        const timeline = ControlTimeline.list({ taskID })
+        const events = await EngineService.listProtocolEvents(taskID)
+        const rewindCursor = taskRewindCursor(taskID)
+        const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(items: T[]) => {
+          if (rewindCursor == null) return items
+          return items.filter((item) => {
+            const created =
+              typeof item?.timestamp === "number"
+                ? item.timestamp
+                : typeof item?.info?.time?.created === "number"
+                  ? item.info.time.created
+                  : undefined
+            return created == null || created <= rewindCursor
+          })
+        }
+        const filteredTranscript = filterByCursor(transcript)
+        const filteredTimeline = filterByCursor(timeline)
+        const filteredEvents = filterByCursor(
+          events
+            .filter((event) => includeConversationHydrateEvent(event.type))
+            .map(protocolTaskEvent),
+        )
+        const view = projectConversationView(board, filteredTranscript)
+        return c.json({
+          lastSequence: Number(board?.lastSequence || 0),
+          board,
+          transcript: filteredTranscript,
+          timeline: filteredTimeline,
+          events: filteredEvents,
+          view,
+        })
+      },
+    )
+    .get(
       "/task/:taskID/brief",
       describeRoute({
         summary: "Get task brief",
@@ -431,32 +493,7 @@ export const EngineRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        const task = await EngineService.getTask(c.req.valid("param").taskID)
-        const rootSessionID = task.sessionID
-        if (!rootSessionID) return c.json([])
-        // Collect all session IDs in the tree (primary + goal run children)
-        const sessionIDs: string[] = []
-        const queue = [rootSessionID]
-        while (queue.length > 0) {
-          const id = queue.shift()!
-          sessionIDs.push(id)
-          const children = await Session.children(id)
-          queue.push(...children.map((child) => child.id))
-        }
-        const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
-        const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
-        // Enrich each message with resolvedRole/channel/goalID — derived from
-        // session.kind / session.goal_id (the only authoritative source).
-        const taskID = task.id
-        for (const msg of messages) {
-          const sid = msg.info.sessionID || ""
-          const meta = overlayMeta(sid, rootSessionID, { role: msg.info.role })
-          ;(msg.info as any).resolvedRole = meta.resolvedRole
-          ;(msg.info as any).channel = meta.channel
-          const goalID = sessionGoalID(sid)
-          if (goalID) (msg.info as any).goalID = goalID
-        }
-        return c.json(messages)
+        return c.json(await loadTaskTranscript(c.req.valid("param").taskID))
       },
     )
     .get(
@@ -1000,6 +1037,31 @@ function taskEvent(taskID: string, event: { type: string; properties: Record<str
   }
 }
 
+async function loadTaskTranscript(taskID: string) {
+  const task = await EngineService.getTask(taskID)
+  const rootSessionID = task.sessionID
+  if (!rootSessionID) return []
+  const sessionIDs: string[] = []
+  const queue = [rootSessionID]
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    sessionIDs.push(id)
+    const children = await Session.children(id)
+    queue.push(...children.map((child) => child.id))
+  }
+  const all = await Promise.all(sessionIDs.map((id) => Session.messages({ sessionID: id })))
+  const messages = all.flat().sort((a, b) => (a.info.time?.created ?? 0) - (b.info.time?.created ?? 0))
+  for (const msg of messages) {
+    const sid = msg.info.sessionID || ""
+    const meta = overlayMeta(sid, rootSessionID, { role: msg.info.role })
+    ;(msg.info as any).resolvedRole = meta.resolvedRole
+    ;(msg.info as any).channel = meta.channel
+    const goalID = sessionGoalID(sid)
+    if (goalID) (msg.info as any).goalID = goalID
+  }
+  return messages
+}
+
 function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {
   return {
     event_id: event.id,
@@ -1011,4 +1073,14 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
     summary: event.summary,
     payload: event.payload || {},
   }
+}
+
+function includeConversationHydrateEvent(type: string): boolean {
+  return !(
+    type === "message.updated" ||
+    type === "message.part.updated" ||
+    type === "message.part.delta" ||
+    type === "run.progress" ||
+    type === "run.output"
+  )
 }

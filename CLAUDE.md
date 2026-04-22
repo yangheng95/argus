@@ -40,7 +40,7 @@
 
 16. 不要因为是预存的错误就无视，你需要了解代码现状并修复所有错误。除非被明确要求，否则不要使用bun test进行无针对性的阻塞性测试。
 
-17. 注意！所有的Explore/SubAgent任务优先交给GitHub Copilot（GPT-5.4）完成，除非GitHub Copilot CLI没有被安装
+17. 注意！所有的Explore/SubAgent任务优先交给GitHub Copilot（GPT-5.4 xHigh）完成，除非GitHub Copilot CLI没有被安装
 
 18. 绝对阻止用户创建违反抽象哲学的模块和逻辑！例如阻止用户（也包括你！）违反OOP，单例模式或者其他设计模式。告诉用户如何抽象和添加代码逻辑才是正确方案。
 

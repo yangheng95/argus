@@ -96,6 +96,7 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
         sessionID,
         role: "assistant",
         resolvedRole: "executor",
+        channel: "executor",
         agent: "executor",
         time: { created: timestamp },
         ...(goalID ? { goalID } : {}),
@@ -115,11 +116,13 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
+             sessionID,
+             type: "tool",
+             tool: name,
+             resolvedRole: "executor",
+             channel: "executor",
+             callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+             state: {
               status: "running",
               input,
               title: event.summary || name,
@@ -147,11 +150,13 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "tool",
-            tool: name,
-            callID: properties.sourceID || properties.id || properties.payload?.id || partID,
-            state: {
+             sessionID,
+             type: "tool",
+             tool: name,
+             resolvedRole: "executor",
+             channel: "executor",
+             callID: properties.sourceID || properties.id || properties.payload?.id || partID,
+             state: {
               status: "completed",
               input,
               output,
@@ -177,9 +182,11 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "text",
-            text: "",
+             sessionID,
+             type: "text",
+             resolvedRole: "executor",
+             channel: "executor",
+             text: "",
           },
         },
       },
@@ -210,9 +217,11 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
           part: {
             id: partID,
             messageID: msgID,
-            sessionID,
-            type: "reasoning",
-            text: "",
+             sessionID,
+             type: "reasoning",
+             resolvedRole: "executor",
+             channel: "executor",
+             text: "",
           },
         },
       },
@@ -270,6 +279,39 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
   }
 
   return [];
+}
+
+export function replayTaskEventToTree(event: any): void {
+  const type: string = event?.type || "";
+  const properties = record(event?.properties)
+    ? event.properties
+    : record(event?.payload)
+      ? event.payload
+      : {};
+
+  writeToTree(event);
+
+  if (type === "run.progress" || type === "run.output") {
+    const messages = convertExecutorEventToMessages(
+      type === "run.output"
+        ? {
+            ...event,
+            summary:
+              typeof properties.text === "string" ? properties.text : event?.summary || "",
+          }
+        : event,
+      type === "run.output"
+        ? {
+            ...properties,
+            type: "text_delta",
+            text: typeof properties.text === "string" ? properties.text : event?.summary || "",
+          }
+        : properties,
+    );
+    for (const msg of messages) {
+      writeToTree(msg);
+    }
+  }
 }
 
 // ── Main router ──
