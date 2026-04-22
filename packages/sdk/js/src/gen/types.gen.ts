@@ -1361,6 +1361,7 @@ export type Session = {
     | "planner"
     | "goal"
     | "architect"
+    | "fidelity"
     | "delivery"
     | "executor"
     | "build"
@@ -2846,6 +2847,7 @@ export type GlobalSession = {
     | "planner"
     | "goal"
     | "architect"
+    | "fidelity"
     | "delivery"
     | "executor"
     | "build"
@@ -4527,6 +4529,7 @@ export type SessionCreateData = {
       | "planner"
       | "goal"
       | "architect"
+      | "fidelity"
       | "delivery"
       | "executor"
       | "build"
@@ -7682,6 +7685,431 @@ export type TaskEventsResponses = {
 }
 
 export type TaskEventsResponse = TaskEventsResponses[keyof TaskEventsResponses]
+
+export type TaskConversationData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/conversation"
+}
+
+export type TaskConversationErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskConversationError = TaskConversationErrors[keyof TaskConversationErrors]
+
+export type TaskConversationResponses = {
+  /**
+   * Task conversation hydrate payload
+   */
+  200: {
+    lastSequence: number
+    board: {
+      lastSequence?: number
+      task: {
+        id: string
+        projectID: string
+        directory?: string
+        sessionID?: string | null
+        activePlanVersionID?: string | null
+        activeRunID?: string | null
+        requestID?: string
+        source: string
+        title: string
+        request: string
+        status: "queued" | "active" | "completed" | "failed" | "cancelled"
+        priority: "critical" | "high" | "normal" | "low"
+        kind?: "workflow" | "build"
+        blockingReason?: string
+        error?: string
+        budget?: {
+          maxRuns?: number
+          maxFixRuns?: number
+          maxExecutorGroups?: number
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        attachments?: Array<{
+          sha: string
+          url: string
+          mime: string
+          size: number
+          filename?: string
+          intent?: string
+          source?: string
+        }>
+        time: {
+          created: number
+          updated: number
+          started?: number
+          completed?: number
+        }
+      }
+      spec?: {
+        content: string
+        file?: string
+        source?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+        }
+      }
+      plan?: {
+        id: string
+        taskID: string
+        version: number
+        status: "active" | "superseded"
+        summary: string
+        prompt: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      run?: {
+        id: string
+        taskID: string
+        planVersionID?: string | null
+        sessionID?: string | null
+        executor: "opencode" | "codex" | "claude-code"
+        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+        phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
+        blockingReason?: string
+        error?: string
+        retryCount: number
+        executorRef?: {
+          sessionID?: string
+          queueTaskID?: string
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          started?: number
+          completed?: number
+        }
+      }
+      delivery?: {
+        id: string
+        taskID: string
+        runID: string
+        status: "candidate" | "publishing" | "delivered" | "failed"
+        summary: string
+        result: {
+          summary: string
+          changedFiles: Array<string>
+          diffs: Array<FileDiff>
+          artifacts?: Array<{
+            kind: string
+            label: string
+            payload?: {
+              [key: string]: unknown
+            }
+          }>
+          publish?: {
+            [key: string]: unknown
+          }
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      candidateDelivery?: {
+        id: string
+        taskID: string
+        runID: string
+        status: "candidate" | "publishing" | "delivered" | "failed"
+        summary: string
+        result: {
+          summary: string
+          changedFiles: Array<string>
+          diffs: Array<FileDiff>
+          artifacts?: Array<{
+            kind: string
+            label: string
+            payload?: {
+              [key: string]: unknown
+            }
+          }>
+          publish?: {
+            [key: string]: unknown
+          }
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      acceptedDelivery?: {
+        id: string
+        taskID: string
+        runID: string
+        status: "candidate" | "publishing" | "delivered" | "failed"
+        summary: string
+        result: {
+          summary: string
+          changedFiles: Array<string>
+          diffs: Array<FileDiff>
+          artifacts?: Array<{
+            kind: string
+            label: string
+            payload?: {
+              [key: string]: unknown
+            }
+          }>
+          publish?: {
+            [key: string]: unknown
+          }
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      evaluation?: {
+        id: string
+        taskID: string
+        runID: string
+        deliveryID?: string | null
+        status: "pending" | "passed" | "failed" | "inconclusive"
+        verdict: "accepted" | "rejected" | "inconclusive"
+        summary: string
+        checks: Array<{
+          name: string
+          label?: string
+          family?: string
+          status: "passed" | "failed" | "skipped"
+          evidence?: string
+        }>
+        time: {
+          created: number
+          updated: number
+          completed?: number
+        }
+      }
+      interactions: Array<{
+        id: string
+        taskID: string
+        runID: string
+        sessionID?: string | null
+        externalID: string
+        type: "permission" | "question"
+        status: "pending" | "answered" | "rejected" | "expired"
+        title: string
+        body: string
+        payload?: {
+          [key: string]: unknown
+        }
+        response?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          resolved?: number
+        }
+      }>
+      channels: Array<{
+        id: string
+        platform: string
+        channel: string
+        thread: string
+        payload?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }>
+      artifacts: Array<{
+        id: string
+        taskID: string
+        runID: string
+        deliveryID?: string | null
+        kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "link" | "git_ref" | "pr"
+        label: string
+        payload?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }>
+      overview: {
+        headline: string
+        summary: string
+        currentFailure?: {
+          source: "task" | "run" | "interaction" | "evaluation"
+          title: string
+          summary: string
+          checks?: Array<{
+            name: string
+            label?: string
+            family?: string
+            status: "passed" | "failed" | "skipped"
+            evidence?: string
+          }>
+        }
+        nextStep: {
+          kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_delivery" | "message"
+          title: string
+          detail?: string
+        }
+        controls: {
+          canRetry: boolean
+          canReplan: boolean
+          canCancel: boolean
+        }
+      }
+      brief: {
+        content: string
+        updated_at: number
+      }
+      workflow?: {
+        id: string
+        name: string
+        steps: Array<{
+          id: string
+          label: string
+          tool: string
+          scope: "task" | "goal"
+          skippable: boolean
+          status: "pending" | "running" | "completed" | "skipped" | "failed"
+          phases?: Array<{
+            id: string
+            label: string
+            sessionKind: string
+          }>
+        }>
+        goalLoopStepIDs: Array<string>
+      }
+      requirements?: Array<{
+        id: string
+        description: string
+        type: "explicit" | "inferred" | "system"
+        priority: "blocking" | "advisory"
+      }>
+      architect?: {
+        summary: string
+        contractCount: number
+        categories: Array<string>
+      }
+      goalWorkflows?: Array<{
+        goalID: string
+        goalTitle: string
+        goalObjective?: string
+        goalStatus: string
+        orderIndex: number
+        workspaceDir?: string
+        workspaceBranch?: string
+        retryCount: number
+        priority: "blocking" | "advisory"
+        steps: Array<{
+          stepID: string
+          label: string
+          status: "pending" | "running" | "completed" | "skipped" | "failed"
+          startedAt?: number
+          completedAt?: number
+          summary?: string
+          payload?: {
+            planNodes?: Array<{
+              id: string
+              title: string
+              brief: string
+              orderIndex: number
+            }>
+            buildSessionID?: string
+            workspaceDir?: string
+            changedFiles?: Array<string>
+            diffStats?: {
+              files?: number
+              additions?: number
+              deletions?: number
+            }
+            checks?: Array<{
+              name: string
+              status: string
+              evidence?: string
+              family?: string
+            }>
+            evalSummary?: string
+            verdict?: string
+          }
+          phases?: {
+            [key: string]: {
+              status: "pending" | "running" | "completed" | "skipped" | "failed"
+              startedAt?: number
+              completedAt?: number
+            }
+          }
+        }>
+        contracts?: Array<{
+          key: string
+          value: string
+          reason?: string
+        }>
+      }>
+      criteriaResults?: Array<{
+        name: string
+        label?: string
+        family?: string
+        status: "passed" | "failed" | "skipped"
+        evidence?: string
+      }>
+    }
+    transcript: Array<unknown>
+    timeline: Array<unknown>
+    events: Array<{
+      event_id: string
+      task_id: string
+      run_id?: string
+      type: string
+      timestamp: number
+      sequence?: number
+      summary: string
+      payload: {
+        [key: string]: unknown
+      }
+    }>
+    view: {
+      topLevelSessionIDs: Array<string>
+      sessions: Array<{
+        sessionID: string
+        stage: string
+        parentSessionID?: string
+        goalID?: string
+        messageIDs: Array<string>
+        firstMessageTime: number
+        lastMessageTime: number
+        placement: "top_level" | "goal_phase" | "hidden" | "filtered"
+        phase?: {
+          stepID: string
+          phaseID: string
+        }
+      }>
+    }
+  }
+}
+
+export type TaskConversationResponse = TaskConversationResponses[keyof TaskConversationResponses]
 
 export type TaskBriefData = {
   body?: never

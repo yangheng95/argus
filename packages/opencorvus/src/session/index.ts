@@ -157,6 +157,7 @@ export namespace Session {
         "planner",
         "goal",
         "architect",
+        "fidelity",
         "delivery",
         "executor",
         "build",

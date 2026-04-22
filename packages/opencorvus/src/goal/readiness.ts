@@ -1,15 +1,14 @@
 /**
- * Goal dispatch idempotency helpers.
+ * Goal dispatch readiness helpers.
  *
- * The FSM-era "readiness" gate (dep-graph filter + status-based admission)
- * was retired in the LLM-autonomous scheduling redesign — the orchestrator
- * LLM reads the describe layer and decides which goals to dispatch, and
- * the pool executes whatever IDs it's told. The only invariant the pool
- * still enforces is **idempotency**: never double-dispatch a goal that
- * already has a live or satisfied tip in its supersede chain.
+ * Readiness stays goal_run-history-driven: we do not read or mutate
+ * engine_goal.status here. But the pool must still enforce two admission
+ * invariants before a new goal_run is allowed to start:
  *
- * Everything here is a pure function of the goal_run event stream — no
- * engine_goal.status reads, no dependency graph resolution.
+ *   1. idempotency — never double-dispatch a goal that already has a live or
+ *      authoritative satisfied tip in its supersede chain
+ *   2. dependency satisfaction — a goal with depends_on cannot dispatch until
+ *      every dependency has an authoritative satisfied tip
  */
 import type { GoalRow, GoalRunRow } from "@/engine"
 import { doesGoalRunSatisfyGoal, isLiveGoalRunStatus } from "@/engine/catalog"
@@ -30,9 +29,24 @@ export function supersedeTips(goalRuns: GoalRunRow[]): GoalRunRow[] {
   return goalRuns.filter((r) => !supersededIDs.has(r.id))
 }
 
+function authoritativeTip(goalID: string, goalRuns: GoalRunRow[]): GoalRunRow | undefined {
+  return supersedeTips(goalRuns.filter((r) => r.goal_id === goalID))[0]
+}
+
+export function unsatisfiedDependencyGoalIDs(goal: GoalRow, goalRuns: GoalRunRow[]): string[] {
+  const dependencyIDs = Array.isArray(goal.depends_on) ? goal.depends_on : []
+  return dependencyIDs.filter((dependencyGoalID) => {
+    const tip = authoritativeTip(dependencyGoalID, goalRuns)
+    if (!tip) return true
+    if (tip.superseded_reason) return true
+    return !doesGoalRunSatisfyGoal(tip.status)
+  })
+}
+
 /**
  * True when it is legal to dispatch a fresh goal_run for this goal. Returns
- * false when the tip is:
+ * false when any declared dependency lacks an authoritative successful tip,
+ * or when the goal's own tip is:
  *   - live (queued / accepted / planning / running / evaluating / blocked),
  *     because that goal_run is already working — a second dispatch would
  *     race against it.
@@ -49,9 +63,9 @@ export function supersedeTips(goalRuns: GoalRunRow[]): GoalRunRow[] {
  */
 export function isGoalDispatchable(goal: GoalRow, goalRuns: GoalRunRow[]): boolean {
   if (!isDispatchableGoal(goal)) return false
-  const tips = supersedeTips(goalRuns.filter((r) => r.goal_id === goal.id))
-  if (tips.length === 0) return true
-  const tip = tips[0]!
+  if (unsatisfiedDependencyGoalIDs(goal, goalRuns).length > 0) return false
+  const tip = authoritativeTip(goal.id, goalRuns)
+  if (!tip) return true
   if (isLiveGoalRunStatus(tip.status)) return false
   if (doesGoalRunSatisfyGoal(tip.status) && !tip.superseded_reason) return false
   return true
@@ -63,5 +77,9 @@ export function isGoalDispatchable(goal: GoalRow, goalRuns: GoalRunRow[]): boole
  * by the pool to skip IDs the LLM re-submitted after they already ran.
  */
 export function isGoalAlreadyDispatched(goal: GoalRow, goalRuns: GoalRunRow[]): boolean {
-  return !isGoalDispatchable(goal, goalRuns) && isDispatchableGoal(goal)
+  if (!isDispatchableGoal(goal)) return false
+  const tip = authoritativeTip(goal.id, goalRuns)
+  if (!tip) return false
+  if (isLiveGoalRunStatus(tip.status)) return true
+  return doesGoalRunSatisfyGoal(tip.status) && !tip.superseded_reason
 }

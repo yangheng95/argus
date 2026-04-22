@@ -30,6 +30,8 @@ import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
 import { Config } from "@/config/config"
+import type { VisualSpec } from "@/design-analyst/types"
+import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -73,6 +75,8 @@ export namespace ArchitectAgent {
     requirements?: ParsedRequirement[]
     /** Runtime / framework / test decisions produced by Requirements. */
     requirementDecisions?: RequirementsDecision[]
+    /** Advisory visual contract produced by design_analysis. */
+    designSpecs?: VisualSpec[]
     /** Delivery feedback that triggered this re-run. Absent on first pass. */
     retryContext?: ArchitectRetryContext
     /** SessionID for fidelity event correlation. */
@@ -97,6 +101,7 @@ async function run(input: {
   decisionLog: DecisionLog
   requirements?: ParsedRequirement[]
   requirementDecisions?: RequirementsDecision[]
+  designSpecs?: VisualSpec[]
   retryContext?: ArchitectRetryContext
   sessionID?: string
   signal?: AbortSignal
@@ -227,7 +232,7 @@ async function run(input: {
     goals: goalsForFidelity,
     signal: input.signal,
     taskID: input.taskID,
-    sessionID: input.sessionID,
+    parentSessionID: input.sessionID,
   })
 
   const finalGoals = fidelity.verdict === "needs_correction"
@@ -293,11 +298,32 @@ function buildUserPrompt(input: {
   decisionLog: DecisionLog
   requirements?: ParsedRequirement[]
   requirementDecisions?: RequirementsDecision[]
+  designSpecs?: VisualSpec[]
   retryContext?: ArchitectRetryContext
 }): string {
   const sections: string[] = []
 
   sections.push(`# Task\n\nTitle: ${input.taskTitle}\n\nRequest:\n${input.taskRequest}`)
+  sections.push(
+    [
+      "# Input Contract",
+      "",
+      "The task title and request above are the authoritative user input for this stage.",
+      "If requirements, foundational decisions, retry context, or visual contract sections appear below, they are also authoritative.",
+      "Do NOT search the workspace for shadow copies of the request or `.opencorvus/intent/*`.",
+      "Architect runs before per-goal execution starts, so `.opencorvus/intent/*` is not part of this stage contract.",
+    ].join("\n"),
+  )
+
+  if (input.designSpecs && input.designSpecs.length > 0) {
+    sections.push(renderVisualContractPromptSection({
+      specs: input.designSpecs,
+      instructions: [
+        "The following advisory visual constraints came from design_analysis.",
+        "Use them when decomposing frontend goals, owned paths, interaction work, and fidelity coverage.",
+      ],
+    }))
+  }
 
   if (input.requirements && input.requirements.length > 0) {
     const reqText = input.requirements

@@ -228,6 +228,8 @@ import type {
   TaskBriefResponses,
   TaskCancelErrors,
   TaskCancelResponses,
+  TaskConversationErrors,
+  TaskConversationResponses,
   TaskCreateErrors,
   TaskCreateResponses,
   TaskDeleteErrors,
@@ -1917,6 +1919,7 @@ export class Session2 extends HeyApiClient {
         | "planner"
         | "goal"
         | "architect"
+        | "fidelity"
         | "delivery"
         | "executor"
         | "build"
@@ -4627,6 +4630,36 @@ export class Task extends HeyApiClient {
     )
     return (options?.client ?? this.client).sse.get<TaskEventsResponses, unknown, ThrowOnError>({
       url: "/task/{taskID}/events",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Hydrate task conversation state
+   *
+   * Load the current task board plus the persisted conversation inputs needed to rebuild the overlay conversation tree before SSE resumes.
+   */
+  public conversation<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskConversationResponses, TaskConversationErrors, ThrowOnError>({
+      url: "/task/{taskID}/conversation",
       ...options,
       ...params,
     })

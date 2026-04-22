@@ -22,7 +22,7 @@ test("root user message → channel=main (only path that leaves a card)", async 
   })
 })
 
-test("user message in a sub-agent session routes to that sub-agent's card", async () => {
+test("user message in a sub-agent session routes to that sub-agent's card as orchestrator auth", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -35,7 +35,7 @@ test("user message in a sub-agent session routes to that sub-agent's card", asyn
         title: "executor",
       })
       const meta = overlayMeta(exec.id, root.id, { role: "user" })
-      expect(meta.resolvedRole).toBe("user")
+      expect(meta.resolvedRole).toBe("orchestrator")
       expect(meta.channel).toBe("executor")
     },
   })

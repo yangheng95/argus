@@ -128,54 +128,36 @@ async function continueTaskMessage(
   attachments: AttachmentStore.Reference[] = [],
 ) {
   const task = requireTask(taskID)
-  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-  const { runTaskLoop } = await import("@/orchestrator/loop")
-
-  // Inject fast path: a live executor is consuming a stream and the new
-  // message can be injected mid-turn without restarting anything.
-  // Text-only; attachments must go through session.
-  const injected =
-    attachments.length === 0 && run ? await injectRunningTaskMessage(task, run, text) : false
-  if (injected) {
-    return { mode: "injected" as const, resumed: true, status: "active" as const }
-  }
 
   // Append the user message to session history — the describe layer and
   // orchestrator prompt both read session messages, so appending here is
   // how the new message becomes visible to whatever runs next.
   await appendTaskSessionMessage(task, text, attachments)
 
-  // Terminal tasks (completed / failed / cancelled) re-activate: flip status
-  // to queued so the orchestrator loop's terminal early-exit doesn't fire
-  // before it sees the new message.
-  const terminal = task.status === "completed" || task.status === "failed" || task.status === "cancelled"
-  if (terminal) {
-    await updateTask(
-      task,
-      { status: "queued", error: null, blocking_reason: null },
-      "User message received, re-activating task",
-    )
-  }
+  const attachmentSummary = attachments.length > 0
+    ? [
+        "Attachments:",
+        ...attachments.map((ref) => `- ${ref.filename ?? ref.sha} — ${ref.mime} — url: ${ref.url}`),
+      ].join("\n")
+    : undefined
 
-  // Always call runTaskLoop. Per-taskID serial chain in loop.ts ensures a
-  // second call while a loop is in flight waits for the current pass to
-  // finish, then runs a fresh pass that reads the just-appended message.
-  // There is no "is running" in-memory flag and no operator-note bypass —
-  // every user message deterministically drives a decision pass.
-  const { hooks } = await import("@/engine/state")
-  runTaskLoop({
-    taskID,
-    trigger: { kind: "retry" },
-    hooks: hooks(),
+  // User messages are interpreted by the Orchestrator, not pre-classified in
+  // task-api. This gives the scheduler one authoritative place to decide
+  // whether the new input means continue, cancel, retry, or strategy change.
+  Orchestrator.processTask(taskID, {
+    kind: "operator_message",
+    message: text,
+    attachmentSummary,
   }).catch((err) => {
-    log.error("task loop failed on user-message resume", {
+    log.error("orchestrator failed on operator message", {
       taskID, error: err instanceof Error ? err.message : String(err),
     })
   })
+
   return {
-    mode: terminal ? ("agent_retry" as const) : ("resumed" as const),
+    mode: "scheduler" as const,
     resumed: true,
-    status: terminal ? ("queued" as const) : (task.status as string),
+    status: task.status as string,
   }
 }
 
@@ -1188,7 +1170,7 @@ export namespace EngineService {
       }
     }
 
-    // All free-text user messages are recorded verbatim as operator notes and
+    // Natural-language user messages are recorded verbatim as operator notes and
     // forwarded to the Orchestrator. The agent reads notes in-context and decides
     // whether the message implies a goal change, a plan hint, or is mere
     // context — no separate LLM-based intent classifier, no keyword dispatch.
@@ -1210,14 +1192,9 @@ export namespace EngineService {
       summary: "Operator note recorded",
     }, { taskID, source: "service.message" })
     const note = await continueTaskMessage(taskID, input.text, attachmentRefs)
-    const message =
-      task.status === "cancelled" || task.status === "failed"
-        ? note.resumed ? "Task restarted with your message." : "Message recorded."
-        : note.mode === "injected"
-          ? "Operator message injected into the running task."
-          : note.resumed
-            ? "Operator note recorded. Queued a follow-up run."
-            : "Operator note recorded."
+    const message = note.resumed
+      ? "Operator note recorded. Scheduler notified."
+      : "Operator note recorded."
     return {
       kind: "note" as const,
       message,

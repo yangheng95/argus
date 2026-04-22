@@ -3301,6 +3301,7 @@
                       "planner",
                       "goal",
                       "architect",
+                      "fidelity",
                       "delivery",
                       "executor",
                       "build",
@@ -12509,6 +12510,1840 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.events({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/task/{taskID}/conversation": {
+      "get": {
+        "operationId": "task.conversation",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Hydrate task conversation state",
+        "description": "Load the current task board plus the persisted conversation inputs needed to rebuild the overlay conversation tree before SSE resumes.",
+        "responses": {
+          "200": {
+            "description": "Task conversation hydrate payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lastSequence": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "board": {
+                      "type": "object",
+                      "properties": {
+                        "lastSequence": {
+                          "type": "number"
+                        },
+                        "task": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "projectID": {
+                              "type": "string"
+                            },
+                            "directory": {
+                              "type": "string"
+                            },
+                            "sessionID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^ses.*"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "activePlanVersionID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^pln.*"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "activeRunID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^run.*"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "requestID": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "request": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "queued",
+                                "active",
+                                "completed",
+                                "failed",
+                                "cancelled"
+                              ]
+                            },
+                            "priority": {
+                              "type": "string",
+                              "enum": [
+                                "critical",
+                                "high",
+                                "normal",
+                                "low"
+                              ]
+                            },
+                            "kind": {
+                              "default": "workflow",
+                              "type": "string",
+                              "enum": [
+                                "workflow",
+                                "build"
+                              ]
+                            },
+                            "blockingReason": {
+                              "type": "string"
+                            },
+                            "error": {
+                              "type": "string"
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "maxRuns": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "maxFixRuns": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "maxExecutorGroups": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              }
+                            },
+                            "metadata": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "attachments": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "sha": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  },
+                                  "mime": {
+                                    "type": "string"
+                                  },
+                                  "size": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "filename": {
+                                    "type": "string"
+                                  },
+                                  "intent": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "sha",
+                                  "url",
+                                  "mime",
+                                  "size"
+                                ]
+                              }
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                },
+                                "updated": {
+                                  "type": "number"
+                                },
+                                "started": {
+                                  "type": "number"
+                                },
+                                "completed": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created",
+                                "updated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "projectID",
+                            "source",
+                            "title",
+                            "request",
+                            "status",
+                            "priority",
+                            "time"
+                          ]
+                        },
+                        "spec": {
+                          "type": "object",
+                          "properties": {
+                            "content": {
+                              "type": "string"
+                            },
+                            "file": {
+                              "type": "string"
+                            },
+                            "source": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "content",
+                            "time"
+                          ]
+                        },
+                        "plan": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^pln.*"
+                            },
+                            "taskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "active",
+                                "superseded"
+                              ]
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "prompt": {
+                              "type": "string"
+                            },
+                            "metadata": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                },
+                                "updated": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created",
+                                "updated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "taskID",
+                            "version",
+                            "status",
+                            "summary",
+                            "prompt",
+                            "time"
+                          ]
+                        },
+                        "run": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            "taskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "planVersionID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^pln.*"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "sessionID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^ses.*"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "executor": {
+                              "type": "string",
+                              "enum": [
+                                "opencode",
+                                "codex",
+                                "claude-code"
+                              ]
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "queued",
+                                "accepted",
+                                "running",
+                                "blocked",
+                                "completed",
+                                "failed",
+                                "aborted"
+                              ]
+                            },
+                            "phase": {
+                              "type": "string",
+                              "enum": [
+                                "plan",
+                                "execute",
+                                "evaluate",
+                                "deliver",
+                                "dispatch",
+                                "retry"
+                              ]
+                            },
+                            "blockingReason": {
+                              "type": "string"
+                            },
+                            "error": {
+                              "type": "string"
+                            },
+                            "retryCount": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "executorRef": {
+                              "type": "object",
+                              "properties": {
+                                "sessionID": {
+                                  "type": "string",
+                                  "pattern": "^ses.*"
+                                },
+                                "queueTaskID": {
+                                  "type": "string",
+                                  "pattern": "^tsk.*"
+                                }
+                              }
+                            },
+                            "metadata": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                },
+                                "updated": {
+                                  "type": "number"
+                                },
+                                "started": {
+                                  "type": "number"
+                                },
+                                "completed": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created",
+                                "updated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "taskID",
+                            "executor",
+                            "status",
+                            "phase",
+                            "retryCount",
+                            "time"
+                          ]
+                        },
+                        "delivery": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^dlv.*"
+                            },
+                            "taskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "runID": {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "candidate",
+                                "publishing",
+                                "delivered",
+                                "failed"
+                              ]
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "result": {
+                              "type": "object",
+                              "properties": {
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "changedFiles": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "diffs": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/components/schemas/FileDiff"
+                                  }
+                                },
+                                "artifacts": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "payload": {
+                                        "type": "object",
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "additionalProperties": {}
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "label"
+                                    ]
+                                  }
+                                },
+                                "publish": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                }
+                              },
+                              "required": [
+                                "summary",
+                                "changedFiles",
+                                "diffs"
+                              ]
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                },
+                                "updated": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created",
+                                "updated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "taskID",
+                            "runID",
+                            "status",
+                            "summary",
+                            "result",
+                            "time"
+                          ]
+                        },
+                        "candidateDelivery": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^dlv.*"
+                            },
+                            "taskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "runID": {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "candidate",
+                                "publishing",
+                                "delivered",
+                                "failed"
+                              ]
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "result": {
+                              "type": "object",
+                              "properties": {
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "changedFiles": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "diffs": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/components/schemas/FileDiff"
+                                  }
+                                },
+                                "artifacts": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "payload": {
+                                        "type": "object",
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "additionalProperties": {}
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "label"
+                                    ]
+                                  }
+                                },
+                                "publish": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                }
+                              },
+                              "required": [
+                                "summary",
+                                "changedFiles",
+                                "diffs"
+                              ]
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                },
+                                "updated": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created",
+                                "updated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "taskID",
+                            "runID",
+                            "status",
+                            "summary",
+                            "result",
+                            "time"
+                          ]
+                        },
+                        "acceptedDelivery": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^dlv.*"
+                            },
+                            "taskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "runID": {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "candidate",
+                                "publishing",
+                                "delivered",
+                                "failed"
+                              ]
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "result": {
+                              "type": "object",
+                              "properties": {
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "changedFiles": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "diffs": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/components/schemas/FileDiff"
+                                  }
+                                },
+                                "artifacts": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "payload": {
+                                        "type": "object",
+                                        "propertyNames": {
+                                          "type": "string"
+                                        },
+                                        "additionalProperties": {}
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "label"
+                                    ]
+                                  }
+                                },
+                                "publish": {
+                                  "type": "object",
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "additionalProperties": {}
+                                }
+                              },
+                              "required": [
+                                "summary",
+                                "changedFiles",
+                                "diffs"
+                              ]
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                },
+                                "updated": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created",
+                                "updated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "taskID",
+                            "runID",
+                            "status",
+                            "summary",
+                            "result",
+                            "time"
+                          ]
+                        },
+                        "evaluation": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^evl.*"
+                            },
+                            "taskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            },
+                            "runID": {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            "deliveryID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^dlv.*"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "passed",
+                                "failed",
+                                "inconclusive"
+                              ]
+                            },
+                            "verdict": {
+                              "type": "string",
+                              "enum": [
+                                "accepted",
+                                "rejected",
+                                "inconclusive"
+                              ]
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "checks": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "family": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "passed",
+                                      "failed",
+                                      "skipped"
+                                    ]
+                                  },
+                                  "evidence": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "status"
+                                ]
+                              }
+                            },
+                            "time": {
+                              "type": "object",
+                              "properties": {
+                                "created": {
+                                  "type": "number"
+                                },
+                                "updated": {
+                                  "type": "number"
+                                },
+                                "completed": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "created",
+                                "updated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "taskID",
+                            "runID",
+                            "status",
+                            "verdict",
+                            "summary",
+                            "checks",
+                            "time"
+                          ]
+                        },
+                        "interactions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^int.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "runID": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "sessionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "externalID": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "permission",
+                                  "question"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "answered",
+                                  "rejected",
+                                  "expired"
+                                ]
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "body": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "response": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "resolved": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "runID",
+                              "externalID",
+                              "type",
+                              "status",
+                              "title",
+                              "body",
+                              "time"
+                            ]
+                          }
+                        },
+                        "channels": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "platform": {
+                                "type": "string"
+                              },
+                              "channel": {
+                                "type": "string"
+                              },
+                              "thread": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "platform",
+                              "channel",
+                              "thread",
+                              "time"
+                            ]
+                          }
+                        },
+                        "artifacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^art.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "runID": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "deliveryID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^dlv.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "patch",
+                                  "changed_file",
+                                  "log",
+                                  "report",
+                                  "image",
+                                  "diff",
+                                  "link",
+                                  "git_ref",
+                                  "pr"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "runID",
+                              "kind",
+                              "label",
+                              "time"
+                            ]
+                          }
+                        },
+                        "overview": {
+                          "type": "object",
+                          "properties": {
+                            "headline": {
+                              "type": "string"
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "currentFailure": {
+                              "type": "object",
+                              "properties": {
+                                "source": {
+                                  "type": "string",
+                                  "enum": [
+                                    "task",
+                                    "run",
+                                    "interaction",
+                                    "evaluation"
+                                  ]
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "checks": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "family": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "passed",
+                                          "failed",
+                                          "skipped"
+                                        ]
+                                      },
+                                      "evidence": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "name",
+                                      "status"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "source",
+                                "title",
+                                "summary"
+                              ]
+                            },
+                            "nextStep": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "resolve_blocker",
+                                    "retry",
+                                    "replan",
+                                    "observe",
+                                    "review_delivery",
+                                    "message"
+                                  ]
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "title"
+                              ]
+                            },
+                            "controls": {
+                              "type": "object",
+                              "properties": {
+                                "canRetry": {
+                                  "type": "boolean"
+                                },
+                                "canReplan": {
+                                  "type": "boolean"
+                                },
+                                "canCancel": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "canRetry",
+                                "canReplan",
+                                "canCancel"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "headline",
+                            "summary",
+                            "nextStep",
+                            "controls"
+                          ]
+                        },
+                        "brief": {
+                          "type": "object",
+                          "properties": {
+                            "content": {
+                              "type": "string"
+                            },
+                            "updated_at": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "content",
+                            "updated_at"
+                          ]
+                        },
+                        "workflow": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "steps": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "tool": {
+                                    "type": "string"
+                                  },
+                                  "scope": {
+                                    "type": "string",
+                                    "enum": [
+                                      "task",
+                                      "goal"
+                                    ]
+                                  },
+                                  "skippable": {
+                                    "type": "boolean"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "pending",
+                                      "running",
+                                      "completed",
+                                      "skipped",
+                                      "failed"
+                                    ]
+                                  },
+                                  "phases": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "sessionKind": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "label",
+                                        "sessionKind"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "label",
+                                  "tool",
+                                  "scope",
+                                  "skippable",
+                                  "status"
+                                ]
+                              }
+                            },
+                            "goalLoopStepIDs": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "steps",
+                            "goalLoopStepIDs"
+                          ]
+                        },
+                        "requirements": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "explicit",
+                                  "inferred",
+                                  "system"
+                                ]
+                              },
+                              "priority": {
+                                "type": "string",
+                                "enum": [
+                                  "blocking",
+                                  "advisory"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "description",
+                              "type",
+                              "priority"
+                            ]
+                          }
+                        },
+                        "architect": {
+                          "type": "object",
+                          "properties": {
+                            "summary": {
+                              "type": "string"
+                            },
+                            "contractCount": {
+                              "type": "number"
+                            },
+                            "categories": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "summary",
+                            "contractCount",
+                            "categories"
+                          ]
+                        },
+                        "goalWorkflows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "goalTitle": {
+                                "type": "string"
+                              },
+                              "goalObjective": {
+                                "type": "string"
+                              },
+                              "goalStatus": {
+                                "type": "string"
+                              },
+                              "orderIndex": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "workspaceDir": {
+                                "type": "string"
+                              },
+                              "workspaceBranch": {
+                                "type": "string"
+                              },
+                              "retryCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "priority": {
+                                "type": "string",
+                                "enum": [
+                                  "blocking",
+                                  "advisory"
+                                ]
+                              },
+                              "steps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "stepID": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "pending",
+                                        "running",
+                                        "completed",
+                                        "skipped",
+                                        "failed"
+                                      ]
+                                    },
+                                    "startedAt": {
+                                      "type": "number"
+                                    },
+                                    "completedAt": {
+                                      "type": "number"
+                                    },
+                                    "summary": {
+                                      "type": "string"
+                                    },
+                                    "payload": {
+                                      "type": "object",
+                                      "properties": {
+                                        "planNodes": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string"
+                                              },
+                                              "title": {
+                                                "type": "string"
+                                              },
+                                              "brief": {
+                                                "type": "string"
+                                              },
+                                              "orderIndex": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "id",
+                                              "title",
+                                              "brief",
+                                              "orderIndex"
+                                            ]
+                                          }
+                                        },
+                                        "buildSessionID": {
+                                          "type": "string"
+                                        },
+                                        "workspaceDir": {
+                                          "type": "string"
+                                        },
+                                        "changedFiles": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "diffStats": {
+                                          "type": "object",
+                                          "properties": {
+                                            "files": {
+                                              "type": "number"
+                                            },
+                                            "additions": {
+                                              "type": "number"
+                                            },
+                                            "deletions": {
+                                              "type": "number"
+                                            }
+                                          }
+                                        },
+                                        "checks": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "name": {
+                                                "type": "string"
+                                              },
+                                              "status": {
+                                                "type": "string"
+                                              },
+                                              "evidence": {
+                                                "type": "string"
+                                              },
+                                              "family": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "name",
+                                              "status"
+                                            ]
+                                          }
+                                        },
+                                        "evalSummary": {
+                                          "type": "string"
+                                        },
+                                        "verdict": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "phases": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {
+                                        "type": "object",
+                                        "properties": {
+                                          "status": {
+                                            "type": "string",
+                                            "enum": [
+                                              "pending",
+                                              "running",
+                                              "completed",
+                                              "skipped",
+                                              "failed"
+                                            ]
+                                          },
+                                          "startedAt": {
+                                            "type": "number"
+                                          },
+                                          "completedAt": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "status"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "stepID",
+                                    "label",
+                                    "status"
+                                  ]
+                                }
+                              },
+                              "contracts": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "value"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "goalID",
+                              "goalTitle",
+                              "goalStatus",
+                              "orderIndex",
+                              "retryCount",
+                              "priority",
+                              "steps"
+                            ]
+                          }
+                        },
+                        "criteriaResults": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "family": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "passed",
+                                  "failed",
+                                  "skipped"
+                                ]
+                              },
+                              "evidence": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "task",
+                        "interactions",
+                        "channels",
+                        "artifacts",
+                        "overview",
+                        "brief"
+                      ]
+                    },
+                    "transcript": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "timeline": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "event_id": {
+                            "type": "string"
+                          },
+                          "task_id": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "run_id": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "type": "number"
+                          },
+                          "sequence": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "event_id",
+                          "task_id",
+                          "type",
+                          "timestamp",
+                          "summary",
+                          "payload"
+                        ]
+                      }
+                    },
+                    "view": {
+                      "type": "object",
+                      "properties": {
+                        "topLevelSessionIDs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "sessions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionID": {
+                                "type": "string"
+                              },
+                              "stage": {
+                                "type": "string"
+                              },
+                              "parentSessionID": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "type": "string"
+                              },
+                              "messageIDs": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "firstMessageTime": {
+                                "type": "number"
+                              },
+                              "lastMessageTime": {
+                                "type": "number"
+                              },
+                              "placement": {
+                                "type": "string",
+                                "enum": [
+                                  "top_level",
+                                  "goal_phase",
+                                  "hidden",
+                                  "filtered"
+                                ]
+                              },
+                              "phase": {
+                                "type": "object",
+                                "properties": {
+                                  "stepID": {
+                                    "type": "string"
+                                  },
+                                  "phaseID": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "stepID",
+                                  "phaseID"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionID",
+                              "stage",
+                              "messageIDs",
+                              "firstMessageTime",
+                              "lastMessageTime",
+                              "placement"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "topLevelSessionIDs",
+                        "sessions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "lastSequence",
+                    "board",
+                    "transcript",
+                    "timeline",
+                    "events",
+                    "view"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.task.conversation({\n  ...\n})"
           }
         ]
       }
@@ -24882,6 +26717,7 @@
               "planner",
               "goal",
               "architect",
+              "fidelity",
               "delivery",
               "executor",
               "build",
@@ -28078,6 +29914,7 @@
               "planner",
               "goal",
               "architect",
+              "fidelity",
               "delivery",
               "executor",
               "build",

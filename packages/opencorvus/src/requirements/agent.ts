@@ -23,6 +23,8 @@ import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
+import type { VisualSpec } from "@/design-analyst/types"
+import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type {
   ParsedRequirement,
   RequirementsDecision,
@@ -65,6 +67,8 @@ export namespace RequirementsAgent {
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+    /** Advisory visual contract produced by design_analysis. */
+    designSpecs?: VisualSpec[]
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -85,6 +89,7 @@ async function runInternal(input: {
   title: string
   request: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+  designSpecs?: VisualSpec[]
   taskID?: string
   sessionID?: string
   signal?: AbortSignal
@@ -334,11 +339,34 @@ function buildUserPrompt(
   input: {
     title: string
     request: string
+    designSpecs?: VisualSpec[]
     taskID?: string
   },
   context: string,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  sections.push(
+    [
+      "# Input Contract",
+      "",
+      "The task title and request above are the authoritative user input for this stage.",
+      "If clarifications, operator notes, or visual contract sections appear below, they are also authoritative.",
+      "Do NOT search the workspace for shadow copies of the request, benchmark prompt files, or `.opencorvus/intent/*`.",
+      "Requirements runs before per-goal worktrees exist, so `.opencorvus/intent/*` is not part of this stage contract.",
+    ].join("\n"),
+  )
+
+  if (input.designSpecs && input.designSpecs.length > 0) {
+    sections.push(renderVisualContractPromptSection({
+      specs: input.designSpecs,
+      instructions: [
+        "The following advisory visual constraints came from design_analysis.",
+        "Convert them into concrete frontend / interaction requirements where relevant.",
+        "Do not ignore them, and do not re-invent conflicting UI requirements.",
+      ],
+    }))
+  }
 
   if (input.taskID) {
     const clarifications = clarificationTranscriptSection(input.taskID)

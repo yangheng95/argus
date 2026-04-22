@@ -12,6 +12,7 @@ import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
 import { RequirementsAgent, type RequirementsResult } from "./agent"
 import type { DecisionLog } from "@/decision-log"
+import type { VisualSpec } from "@/design-analyst/types"
 
 const log = Log.create({ service: "requirements-service" })
 
@@ -34,6 +35,8 @@ export namespace RequirementsService {
     request: string
     /** Base64 image attachments — injected as vision content alongside the request text. */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+    /** Advisory visual contract produced by design_analysis. */
+    designSpecs?: VisualSpec[]
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -52,6 +55,7 @@ export namespace RequirementsService {
         title: input.title,
         request: input.request,
         attachments: input.attachments,
+        designSpecs: input.designSpecs,
         taskID: input.taskID,
         sessionID: input.sessionID,
         signal: input.signal,

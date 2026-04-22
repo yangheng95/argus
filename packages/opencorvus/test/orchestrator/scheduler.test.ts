@@ -48,15 +48,15 @@ describe("orchestrator scheduler invariants", () => {
     })
   })
 
-  test("plan restart preserves spec but retires execution history", () => {
+  test("plan restart preserves spec but fully regenerates the goal plan", () => {
     expect(restartStagePlan("plan", true)).toEqual({
       clearSpec: false,
       clearPlan: true,
-      deleteGoals: false,
-      resetGoalStatuses: true,
+      deleteGoals: true,
+      resetGoalStatuses: false,
       retireGoalRuns: true,
       queueFreshRun: false,
-      nextAction: "create_run",
+      nextAction: "architect",
     })
   })
 

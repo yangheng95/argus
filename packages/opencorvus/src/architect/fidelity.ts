@@ -13,13 +13,15 @@
 import { stepCountIs, tool } from "ai"
 import z from "zod"
 import { Log } from "@/util/log"
-import { AgentRuntime } from "@/agent/runtime"
+import { AgentRuntime, sessionStreamHooks } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import type { GoalContractFields } from "@/pipeline/types"
 import { AcceptanceSpecSchema, renderSpecsAsText } from "@/acceptance/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
+import { Session } from "@/session"
+import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "fidelity-review" })
 
@@ -120,31 +122,61 @@ export async function reviewFidelity(input: {
   /** Task ID for cache stickiness — same key requirements used keeps hexin
    *  on the same upstream pool, so prompt cache hits across stages. Also
    *  used as the aggregate for the FidelityReviewCompleted event so the
-   *  overlay can render a native verdict card. */
+   *  overlay can render a native verdict card on the fidelity session. */
   taskID?: string
-  /** Requirements agent session ID — forwarded into FidelityReviewCompleted
-   *  so the overlay can nest the verdict card under the requirements session
-   *  card instead of surfacing it as a top-level escapee. */
-  sessionID?: string
+  /** Architect session ID. Fidelity review is promoted to a first-class
+   *  child session under this parent so the overlay renders an independent
+   *  agent card for each invocation. */
+  parentSessionID?: string
 }): Promise<FidelityResult> {
   const { goals, signal } = input
 
+  if (input.taskID && !input.parentSessionID) {
+    throw new Error(
+      `reviewFidelity requires parentSessionID for task-backed runs (taskID=${input.taskID}). ` +
+        `Architect must create a fidelity child session instead of routing review through a synthetic card.`,
+    )
+  }
+
+  const fidelitySession = input.parentSessionID
+    ? await Session.createNext({
+        kind: "fidelity",
+        parentID: input.parentSessionID,
+        title: `Fidelity Review: ${input.taskTitle}`,
+        directory: Instance.directory,
+      })
+    : undefined
+  const fidelitySessionID = fidelitySession?.id
+  const noopHooks = {
+    onChunk: async () => {},
+    onError: () => {},
+    flush: async () => {},
+    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
+  } as any
+  const hooks = fidelitySessionID
+    ? sessionStreamHooks({
+        sessionID: fidelitySessionID,
+        taskID: input.taskID ?? "",
+        stage: "fidelity",
+      })
+    : noopHooks
+
   // Liveness: the tool-call LLM pass may run 60-180s. The Started event +
-  // Progress tick below feed the overlay's running fidelity card and the
-  // benchmark alive-stall detector. They carry no LLM output.
-  emitFidelityLifecycle("started", input.taskID, input.sessionID, 0, 0)
+  // Progress tick below feed the fidelity session card and the benchmark
+  // alive-stall detector. They carry no LLM output.
+  emitFidelityLifecycle("started", input.taskID, fidelitySessionID, 0, 0)
   const startedAt = Date.now()
   const progressTicker =
-    input.taskID && input.sessionID
+    input.taskID && fidelitySessionID
       ? setInterval(() => {
           // attempt=0 because the tool-call flow has no user-visible retry
           // counter — the AI SDK absorbs Zod validation retries within a
-          // single call. The overlay subtitle suppresses the "attempt N"
-          // prefix when attempt is 0 (tree-writer.materializeRunningFidelity).
+          // single call. The overlay subtitle suppresses the "attempt N" prefix
+          // when attempt is 0 (tree-writer.materializeRunningFidelity).
           emitFidelityLifecycle(
             "progress",
             input.taskID,
-            input.sessionID,
+            fidelitySessionID,
             0,
             Date.now() - startedAt,
           )
@@ -159,7 +191,7 @@ export async function reviewFidelity(input: {
         corrections: [],
         missingGoals: [],
       }
-      emitFidelityEvent(input.taskID, input.sessionID, result, 0)
+      emitFidelityEvent(input.taskID, fidelitySessionID, result, 0)
       return result
     }
 
@@ -167,7 +199,7 @@ export async function reviewFidelity(input: {
     if (!model) {
       log.warn("no LLM available for fidelity review, skipping")
       const result: FidelityResult = { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
-      emitFidelityEvent(input.taskID, input.sessionID, result, 0)
+      emitFidelityEvent(input.taskID, fidelitySessionID, result, 0)
       return result
     }
 
@@ -252,26 +284,6 @@ export async function reviewFidelity(input: {
     const systemPrompt = buildFidelitySystem()
     const userPrompt = buildFidelityPrompt(input)
 
-    // No-op session hooks: fidelity is a synthetic LLM call, not part of any
-    // agent session — reasoning/text/tool chunks do NOT land in the session
-    // `part` table. Instead they are forwarded to the overlay via the
-    // FidelityReviewChunk protocol event (see `chunkForwarder` below), which
-    // the overlay renders inside the running fidelity card. noopHooks here =
-    // no persistence; the forwarder handles liveness independently.
-    const noopHooks = {
-      onChunk: async () => {},
-      onError: () => {},
-      flush: async () => {},
-      failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
-    } as any
-
-    const chunkForwarder = createFidelityChunkForwarder({
-      taskID: input.taskID,
-      sessionID: input.sessionID,
-      intervalMs: 500,
-    })
-
-    try {
     const runResult = await AgentRuntime.run({
       agent: "fidelity",
       model,
@@ -284,17 +296,12 @@ export async function reviewFidelity(input: {
       // the tool result so the model can fix the malformed input on the next
       // step without us hand-rolling a retry loop.
       stopWhen: stepCountIs(3),
-      // Naked taskID matches the original ProviderLLM.stream call site —
-      // preserves whatever hexin upstream-pool routing the prior fidelity
-      // pass had. Stage-suffixed keys are an orthogonal concern, not in
-      // scope for this rewrite.
       cacheKey: input.taskID,
-      sessionID: "",
+      sessionID: fidelitySessionID ?? "",
       taskID: input.taskID,
       stage: "fidelity",
       signal,
-      hooks: noopHooks,
-      forwardChunk: chunkForwarder.handleChunk,
+      hooks,
       policies: {
         progressTimeoutMs: 180_000,
         // "collect" so a single Zod tool-input rejection doesn't abort the
@@ -321,25 +328,18 @@ export async function reviewFidelity(input: {
       validationFailures: runResult.failures.count,
     })
 
-    emitFidelityEvent(input.taskID, input.sessionID, collector.result, runResult.toolCallCount || 1)
+    emitFidelityEvent(input.taskID, fidelitySessionID, collector.result, runResult.toolCallCount || 1)
     return collector.result
-    } finally {
-      // Flush the last ≤500ms of buffered reasoning / tool_input deltas so
-      // the overlay sees them before the verdict card replaces the running
-      // card. On the failure path this is a no-op — the card will be
-      // replaced by the verdict (or error) render regardless.
-      await chunkForwarder.flushAll()
-      chunkForwarder.dispose()
-    }
   } finally {
     if (progressTicker) clearInterval(progressTicker)
   }
 }
 
 /** Broadcast the parsed fidelity verdict so the overlay can render a native
- *  verdict card (badge + issues list + corrections diff). Silently skips when
- *  the caller did not provide a taskID (e.g. CLI dry-runs) — EngineProtocol
- *  requires a taskID to persist to protocol_event. */
+ *  verdict block (badge + issues list + corrections diff) on the fidelity
+ *  session card. Silently skips when the caller did not provide a taskID
+ *  (e.g. CLI dry-runs) — EngineProtocol requires a taskID to persist to
+ *  protocol_event. */
 function emitFidelityEvent(
   taskID: string | undefined,
   sessionID: string | undefined,
@@ -348,13 +348,12 @@ function emitFidelityEvent(
 ): void {
   if (!taskID) return
   if (!sessionID) {
-    // sessionID is required for the overlay to attach the verdict card under
-    // the architect session. A missing value would otherwise force the
-    // overlay to either escape the card to the top level or silently drop
-    // it — both violate project rule 1. Loud-fail here at the source.
+    // sessionID is required for the overlay to attach the verdict payload to
+    // the fidelity agent session. A missing value would otherwise force the
+    // frontend back onto the synthetic-card path we are removing.
     throw new Error(
       `fidelity.review.completed: sessionID required but missing (taskID=${taskID}). ` +
-        `Architect agent must thread its sessionID through ArchitectAgent.coordinate → reviewFidelity.`,
+        `reviewFidelity must create a fidelity child session before invoking AgentRuntime.run.`,
     )
   }
   const payload = {
@@ -382,10 +381,10 @@ function emitFidelityEvent(
 /** Emit fidelity review lifecycle events — Started and Progress — while the
  *  LLM call is in flight. Started fires once before the tool-use loop;
  *  Progress fires every 20s while we wait. Both advance the benchmark
- *  alive-stall detector and feed the overlay's running-fidelity card header
- *  (tree-writer's handleFidelityStarted / handleFidelityProgress own the
- *  card lifecycle). Silently skips when taskID or sessionID is missing —
- *  CLI dry-runs don't need liveness events. */
+ *  alive-stall detector and feed the overlay's running fidelity session
+ *  card header (tree-writer's handleFidelityStarted / handleFidelityProgress
+ *  own the card lifecycle). Silently skips when taskID or sessionID is
+ *  missing — CLI dry-runs don't need liveness events. */
 function emitFidelityLifecycle(
   phase: "started" | "progress",
   taskID: string | undefined,
