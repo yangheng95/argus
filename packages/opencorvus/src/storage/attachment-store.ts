@@ -59,22 +59,30 @@ export namespace AttachmentStore {
   }
 
   /**
-   * Persist an attachment under `<projectDir>/.opencorvus/attachments/<sha>.<ext>`.
+   * Persist an attachment under `<project.worktree>/.opencorvus/attachments/<sha>.<ext>`.
    * Content-addressed: identical payloads deduplicate to the same file. Returns
    * a reference carrying the HTTP URL that AttachmentRoutes serves.
+   *
+   * The storage directory is derived from `Project.get(projectID).worktree` —
+   * this is the SOLE source of truth for attachment locations. Callers must
+   * not pass a directory; doing so previously created a double-source bug
+   * where writers used `Instance.directory` (cwd-prone) while readers used
+   * `project.worktree`, leaving registered-but-missing files when the two
+   * diverged.
    */
   export async function write(
     projectID: string,
-    projectDir: string,
     data: Buffer,
     mime: string,
     filename?: string,
   ): Promise<Reference> {
     if (!mime) throw new Error("AttachmentStore.write requires a non-empty mime type")
+    const project = Project.get(projectID)
+    if (!project) throw new Error(`AttachmentStore.write: unknown project ${projectID}`)
     const sha = crypto.createHash("sha256").update(data).digest("hex")
     const ext = extensionFor(mime, filename)
     const name = `${sha}.${ext}`
-    const dir = storageDir(projectDir)
+    const dir = storageDir(project.worktree)
     await fs.mkdir(dir, { recursive: true })
     const abs = path.join(dir, name)
     const existing = await fs.stat(abs).catch(() => null)

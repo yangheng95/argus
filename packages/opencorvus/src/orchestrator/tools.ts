@@ -622,7 +622,6 @@ export function createOrchestratorTools(input: {
             const frame = await fetchFigmaFrame({ url: figmaUrl })
             const ref = await AttachmentStore.write(
               Instance.project.id,
-              Instance.directory,
               frame.png,
               "image/png",
               `figma-${frame.fileKey}-${frame.nodeId.replace(/[^a-zA-Z0-9]/g, "_")}.png`,
@@ -657,7 +656,6 @@ export function createOrchestratorTools(input: {
             const slug = hostname.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60) || "url"
             const ref = await AttachmentStore.write(
               Instance.project.id,
-              Instance.directory,
               shot.png,
               "image/png",
               `url-${slug}-${Date.now()}.png`,
@@ -683,7 +681,7 @@ export function createOrchestratorTools(input: {
         // --- Local material files --------------------------------------------
         // Paths are resolved against the project root and must stay inside
         // it — refusing traversal matches the codebase-tools boundary rule.
-        const projectRoot = Instance.directory
+        const projectRoot = Instance.project.worktree
         for (const rawPath of materialPaths) {
           try {
             const abs = pathMod.isAbsolute(rawPath)
@@ -700,7 +698,6 @@ export function createOrchestratorTools(input: {
             const mime = guessMimeFromFilename(filename)
             const ref = await AttachmentStore.write(
               Instance.project.id,
-              Instance.directory,
               bytes,
               mime,
               filename,
@@ -1909,7 +1906,6 @@ export function createOrchestratorTools(input: {
               const bytes = await (await import("node:fs/promises")).readFile(renderedPath)
               const written = await AttachmentStore.write(
                 liveTask.project_id,
-                Instance.directory,
                 bytes,
                 "image/png",
                 "rendered.png",
