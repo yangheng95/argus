@@ -270,7 +270,8 @@ export function createOrchestratorTools(input: {
       execute: async () => {
         let task = requireTask(taskID)
         log.info("requirements guard check", { taskID, hasSpec: !!task.active_spec_version_id })
-        if (task.active_spec_version_id) return `Requirements analysis already completed (spec=${task.active_spec_version_id}). Proceed to architect.`
+        // Rule 23: no status gate. LLM may choose to re-parse requirements
+        // (overwrites active_spec_version_id with a new v1 snapshot).
 
         // No design-analysis gate here: per rule 23, phase ordering is an LLM
         // decision (the orchestrator prompt explains when to call
@@ -845,9 +846,9 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        if (!task.active_spec_version_id) {
-          return "No spec snapshot yet — run `requirements` first so the Architect has REQ-N + decisions to decompose against."
-        }
+        // Rule 23: no precondition gate. Architect runs even without a spec
+        // snapshot — findRequirements() returns [] and the LLM decides
+        // whether it has enough context or needs to bail out.
         const existingGoals = listGoals(taskID)
 
         await trackStepStart("architect")
@@ -1287,23 +1288,11 @@ export function createOrchestratorTools(input: {
           )
         }
 
-        // Hard per-goal retry budget. Not a status-machine gate — a runaway
-        // budget guardrail so a stuck LLM can't burn infinite iterations on
-        // the same contract. Once exhausted the LLM must change strategy
-        // (modify_goal / re-run architect / fail_task) — the describe layer shows
-        // retry_count / max_goal_retries so it can see this coming.
-        const orchCfg = await EngineConfig.get()
-        const maxGoalRetries = orchCfg.max_goal_retries
+        // Rule 23: no retry-budget gate. retry_count is still incremented
+        // below and surfaced to the prompt via describe so the LLM can see
+        // how many times this goal has been retried and change strategy on
+        // its own (modify_goal / re-run architect / fail_task).
         const priorRetries = (goal as any).retry_count ?? 0
-        if (priorRetries >= maxGoalRetries) {
-          return (
-            `Goal ${goalID} "${goal.title}" has exhausted its retry budget ` +
-            `(${priorRetries}/${maxGoalRetries}). Change strategy:\n` +
-            `  - modify_goal to change acceptance_specs / owned_paths\n` +
-            `  - re-run architect to refine the goal set (add / modify / split / remove)\n` +
-            `  - fail_task if the issue is fundamental`
-          )
-        }
 
         const { findLatestTipGoalRun } = await import("@/engine/store")
         const { startNewAttempt } = await import("@/engine/persist")
@@ -1343,7 +1332,7 @@ export function createOrchestratorTools(input: {
 
         return (
           `Opened new attempt for goal "${goal.title}" (${goalID}) — ` +
-          `retry ${priorRetries + 1}/${maxGoalRetries}, reason=manual_retry. ` +
+          `retry count now ${priorRetries + 1}, reason=manual_retry. ` +
           `Call dispatch_goal(["${goalID}"]) next to actually run it.\n` +
           `Analysis: [${analysis.failure_class}] ${analysis.expected_fix.slice(0, 120)}\n` +
           `Context: ${reason}`
@@ -1518,30 +1507,10 @@ export function createOrchestratorTools(input: {
         const dbGoals = listGoals(taskID)
         if (dbGoals.length === 0) return "No goals found. Run requirements first."
 
-        // Idempotency guard: refuse create_run while a prior run is still in
-        // a non-terminal state. Creating a second run while the first is
-        // running is the bug on tsk_d9bc59062001xuMSbxYap8hY5t — the new run
-        // re-dispatched the already-passed bootstrap goal instead of moving
-        // on to the pending batch-2 goals. After a run finishes (terminal
-        // status: completed / failed / aborted), orchestrator may create a
-        // new run for post-delivery rework.
-        if (task.active_run_id) {
-          const existing = findRun(task.active_run_id)
-          if (existing && isLiveRunStatus(existing.status)) {
-            return (
-              `Run ${existing.id} is still ${existing.status}. Cannot create a new run while a prior one is live. ` +
-              `Use dispatch_goal(goalIDs: [...]) to run specific goals. ` +
-              `If you need rework, first modify_goal to update contracts, then this tool will permit a new run after the active one reaches terminal status.`
-            )
-          }
-        }
-
-        // Budget enforcement: max_runs
-        const totalRuns = findRuns(taskID).length
-        const maxRuns = await effectiveMaxRuns(task)
-        if (totalRuns >= maxRuns) {
-          return `Budget exhausted: ${totalRuns}/${maxRuns} runs used. Cannot create more runs. Consider delivering current state or failing the task.`
-        }
+        // Rule 23: no idempotency / budget gates. The LLM may choose to open
+        // a new run while a prior one is still live (old run becomes
+        // orphaned for GoalPool to notice), and budget numbers are surfaced
+        // to the prompt via the describe layer instead of refused here.
 
         const now = Date.now()
         const executor = task.executor
@@ -1647,13 +1616,9 @@ export function createOrchestratorTools(input: {
         if (!run.plan_version_id) {
           return `Run ${runID} has no plan_version_id. Create a fresh run before submitting execution.`
         }
-        if (run.status === "completed" || run.status === "failed" || run.status === "aborted") {
-          return `Run ${runID} is already ${run.status}. Create a fresh run before submitting execution again.`
-        }
-        if (run.status === "running" || run.status === "blocked") {
-          stopAfterDispatch.abort("submit_execution")
-          return `Run ${runID} is already ${run.status}. STOP HERE — task loop will continue dispatch via GoalPool.`
-        }
+        // Rule 23: no run-status gate. submit_execution is idempotent at the
+        // pool layer — LLM may re-submit whenever it believes goals need to
+        // be re-enqueued. Any existing pool activity continues unaffected.
 
         await updateTask(task, { status: "active", error: null, blocking_reason: null }, "Execution submitted")
         await updateRun(run, { status: "running" }, "Execution submitted")
@@ -1835,17 +1800,11 @@ export function createOrchestratorTools(input: {
 
         const goals = listGoals(taskID)
 
-        // Hard lock: refuse delivery while any goals are still running/pending
-        const notDone = goals.filter(g => isDispatchableGoal(g) && (goalStatusByID(g.id) === "running" || goalStatusByID(g.id) === "pending"))
-        if (notDone.length > 0) {
-          return `Cannot deliver: ${notDone.length} goal(s) still in progress (${notDone.map(g => `${g.title}:${goalStatusByID(g.id)}`).join(", ")}). Wait for ALL goals to complete before delivering.`
-        }
-
-        const blockingFailed = goals.filter(g => g.priority === "blocking" && goalStatusByID(g.id) === "failed")
-        if (blockingFailed.length > 0) {
-          const summary = blockingFailed.map(g => `[${goalStatusByID(g.id)}] ${g.title}`).join("; ")
-          return `Cannot deliver: ${blockingFailed.length} blocking goal(s) failed. Fix them first: ${summary}`
-        }
+        // Rule 23: no state-machine gates. LLM chooses when to deliver; the
+        // DeliveryAgent sees whatever state the task is in (goals running /
+        // pending / failed / passed) and makes its own acceptance call.
+        // Goal statuses are still read below for aggregation, but no branch
+        // here rejects the call based on them.
 
         // Aggregate per-goal deliveries
         const { listGoalRunsForRun, findDeliveryByGoalRun } = await import("@/engine/store")
