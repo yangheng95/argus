@@ -141,16 +141,23 @@ async function continueTaskMessage(
       ].join("\n")
     : undefined
 
-  // User messages are interpreted by the Orchestrator, not pre-classified in
-  // task-api. This gives the scheduler one authoritative place to decide
-  // whether the new input means continue, cancel, retry, or strategy change.
-  Orchestrator.processTask(taskID, {
-    kind: "operator_message",
-    message: text,
-    attachmentSummary,
-  }).catch((err) => {
-    log.error("orchestrator failed on operator message", {
-      taskID, error: err instanceof Error ? err.message : String(err),
+  // User messages must re-enter the task lifecycle shell. Calling the
+  // Orchestrator directly bypasses loop/pool coordination and can strand the
+  // message behind a sleeping wait path.
+  import("@/orchestrator/loop").then(async ({ interruptTaskLoop, runTaskLoop }) => {
+    interruptTaskLoop(taskID, "operator message")
+    runTaskLoop({
+      taskID,
+      trigger: {
+        kind: "operator_message",
+        message: text,
+        attachmentSummary,
+      } as any,
+      hooks: hooks(),
+    }).catch((err) => {
+      log.error("task loop failed on operator message", {
+        taskID, error: err instanceof Error ? err.message : String(err),
+      })
     })
   })
 
