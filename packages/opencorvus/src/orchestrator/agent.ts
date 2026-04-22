@@ -7,6 +7,8 @@
  * - Task creation (kind: "created") — new task, agent plans and submits execution
  * - Batch complete (kind: "batch_complete") — goal batch finished (any mix of pass/fail),
  *   agent reads fresh context and decides next action
+ * - Operator message (kind: "operator_message") — user sent a new message and the
+ *   scheduler must decide whether to inject guidance, cancel, retry, or change strategy
  * - User retry request (kind: "retry")
  *
  * The Orchestrator controls the entire pipeline via tools:
@@ -56,6 +58,7 @@ export type OrchestratorTrigger =
   | { kind: "created" }
   | { kind: "batch_complete"; runID: string; summary: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
   | { kind: "delivery_rejected"; runID: string; feedback: Record<string, unknown> }
+  | { kind: "operator_message"; message: string; attachmentSummary?: string }
   | { kind: "retry" }
 
 // ---------------------------------------------------------------------------
@@ -93,11 +96,12 @@ export namespace Orchestrator {
     // calling processTask, so legitimate completion triggers pass naturally.
     // failRun() marks all active goal_runs as failed before calling, so it
     // also passes. Only spurious triggers (orphan recovery, user retry,
-    // redundant syncRun re-notifications) are blocked.
+    // redundant syncRun re-notifications) are blocked. Operator messages are
+    // an explicit override: the user is asking the scheduler to intervene now.
     const gateTask = findTask(taskID)
     if (gateTask?.active_run_id) {
       const activeGoalRuns = listActiveGoalRunsForRun(gateTask.active_run_id)
-      if (activeGoalRuns.length > 0) {
+      if (activeGoalRuns.length > 0 && trigger.kind !== "operator_message") {
         const goalTitleByID = new Map(listGoals(taskID).map((goal) => [goal.id, goal.title]))
         const now = Date.now()
         const waitingOn = activeGoalRuns.map((goalRun) => ({
@@ -190,9 +194,36 @@ export namespace Orchestrator {
 
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
-      const { tools, stopSignal: dispatchSignal } = createOrchestratorTools({ taskID, agentSessionID: agentSession.id, signal: ctrl.signal, workflow, workflowState })
+      const { tools, stopSignal: dispatchSignal, finalizeDeferredStop } = createOrchestratorTools({
+        taskID,
+        agentSessionID: agentSession.id,
+        signal: ctrl.signal,
+        workflow,
+        workflowState,
+        operatorMessage:
+          trigger.kind === "operator_message"
+            ? {
+                text: trigger.message,
+                attachmentSummary: trigger.attachmentSummary,
+              }
+            : undefined,
+      })
       stopSignal = dispatchSignal
       const guard = toolGuard(tools)
+      const onStepFinish = async (step: unknown) => {
+        try {
+          await guard.onStepFinish(step)
+        } finally {
+          const stopReason = finalizeDeferredStop()
+          if (stopReason) {
+            log.info("orchestrator deferred stop finalized", {
+              taskID,
+              trigger: trigger.kind,
+              reason: stopReason,
+            })
+          }
+        }
+      }
 
       // 4. Build prompt — use the user's original request as the user message
       // for "created" triggers (it IS the user's intent). For re-triggers
@@ -251,7 +282,7 @@ export namespace Orchestrator {
         taskID,
         stage: "orchestrator",
         signal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
-        onStepFinish: guard.onStepFinish,
+        onStepFinish,
         hooks: contentHooks,
         policies: {
           // Orchestrator is the root coordinator: it sits in `tool.execute`
@@ -444,6 +475,23 @@ function describeTrigger(task: TaskRow, trigger: OrchestratorTrigger): string {
       return lines.join("\n")
     }
 
+    case "operator_message": {
+      const lines = [
+        "Operator message received.",
+        "",
+        "Latest user message:",
+        trigger.message,
+      ]
+      if (trigger.attachmentSummary) {
+        lines.push("", trigger.attachmentSummary)
+      }
+      lines.push(
+        "",
+        "Decide whether to inject this guidance into the running executor, retry the task, cancel the task, restart from a stage, or ask a clarification question.",
+      )
+      return lines.join("\n")
+    }
+
     case "retry":
       return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
   }
@@ -507,6 +555,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "- **architect** — authoritative goal decomposer: produces goals, metric specs, challenge seeds, traceability, cross-goal contracts, and fidelity verdict. Always call after requirements; re-run on delivery rejection to refine (add / modify / split / remove) the goal set.",
   "- **create_run + submit_execution** — start per-goal dispatch. GoalPool runs each goal's build in its worktree.",
   "- **dispatch_goal / retry_goal / modify_goal** — per-goal manipulation after the initial dispatch. Goal creation / removal happens only through a re-run of `architect`.",
+  "- **cancel_task / retry_task / inject_operator_message** — operator-message controls. Use when the user asks to stop, continue with new guidance, or resume a stopped task.",
   "- **query_failed_goals / read_context** — observation; call before any retry decision.",
   "- **deliver** — adversarial verification + fix + publish. The single verdict gate; always required.",
   "- **publish_delivery / fail_task / restart_from_stage / refine / question** — terminal / control / clarification.",
@@ -568,6 +617,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "  5. Only when the rejection is clearly a single-goal internal bug (e.g. its own tests fail, its own contract unmet, and no other goal's files need touching) → **retry_goal** with per-goal analysis (root_cause + failure_class + expected_fix). Going to retry_goal when `build` was the right tool just forces the fix into a shard that cannot see the rest of the tree.",
   "  6. Two consecutive rejections on the SAME goal-set under the same contract → the goal decomposition itself is suspect → re-run **architect** to fully regenerate the goal list while keeping requirements. Do not keep retrying the same goals a third time.",
   "  7. Requirements themselves are wrong (user intent misread, spec incoherent) → **restart_from_stage('requirements')**.",
+  "  8. REPO POLLUTION rung (cross-goal infrastructure failure, NOT a goal defect). Trigger signals: multiple goals fail with merge_conflict in the same iteration, OR a merge_conflict cites paths under `node_modules/`, `dist/`, `build/`, `.opencorvus/`, `.env`, or any lockfile that should never have been tracked. This is the main branch being poisoned by a scaffold/executor mistake — retrying goals will not fix it because every new worktree checks out from the same polluted tip. Respond with a single `build` call whose request text tells the build agent to: (a) inspect `git ls-files | grep -E 'node_modules/|dist/|build/|\\.opencorvus/|\\.env$'`, (b) run `git rm --cached -r <polluted-paths>`, (c) ensure root `.gitignore` lists the polluted roots, (d) commit the cleanup, (e) then re-run the merges for any still-pending goal. Do NOT retry the failing goals before repo cleanup — the same conflicts will reappear.",
   "  - Implementation bugs in already-passed goals → **modify_goal** with tightened criteria, then let the loop redispatch.",
   "",
   "After re-execution completes you will be re-triggered — call **deliver** again. Loop until the Arbiter",
@@ -580,6 +630,15 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "- Call **question** with suggestions as multi-select options so the user picks which to roll in.",
   "- Then **restart_from_stage(requirements)** to begin a new cycle.",
   "- If refine throws (non-JSON output), do NOT retry it — call question directly asking what to improve, then restart_from_stage based on the answer. If no specific request, end the turn.",
+  "",
+  "## On operator_message",
+  "",
+  "- The latest user message is shown in the trigger text. Read it carefully before any tool call.",
+  "- If the user is asking the current work to stop, use **cancel_task**.",
+  "- If the user is refining the current approach and the task should continue under the same run, use **inject_operator_message**.",
+  "- If the task is failed or cancelled and the user wants it to continue, use **retry_task**.",
+  "- If the user is changing strategy rather than just adding guidance, prefer **restart_from_stage** over blind continuation.",
+  "- Do not ignore operator_message just because goals are active; this trigger exists so you can intervene mid-execution.",
   "",
   "## Clarification (`question`)",
   "",
@@ -609,7 +668,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "- After submit_execution / dispatch_goal → STOP. You'll be re-triggered.",
   "- Both workflows END with deliver acceptance — never declare a task done without deliver accepting.",
   "- `build` (direct) does NOT auto-complete the task — you MUST call deliver after.",
-  "- Terminal state (completed/failed/cancelled) → do nothing.",
+  "- Terminal state with no fresh operator_message → do nothing.",
   "- User messages in Operator Notes → acknowledge in your reasoning.",
   "- When executor returns errors, default action is fix-and-retry, not give up.",
 ].join("\n")

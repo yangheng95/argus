@@ -8,6 +8,7 @@ import { dict } from "@/util/object"
 import { selectorList } from "@/check/policy"
 import { renderSpecsAsText } from "@/acceptance/types"
 import { createDecisionLog } from "@/decision-log"
+import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Session } from "@/session"
@@ -15,6 +16,7 @@ import { Snapshot } from "@/snapshot"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
 import z from "zod"
+import type { VisualSpec } from "@/design-analyst/types"
 import {
   findTask,
   updateGoalRun,
@@ -29,6 +31,7 @@ import type {
 
 const log = Log.create({ service: "goal-runner" })
 const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
+const ARCHITECT_CONTRACT_VALUE_CAP = 4_000
 
 function summary(prefix: string, files: string[]) {
   if (files.length === 0) return `${prefix}. No file changes were detected.`
@@ -537,6 +540,7 @@ export function buildGoalPrompt(input: {
   goal: GoalRow
   taskRequest?: string
   taskID?: string
+  designSpecs?: VisualSpec[]
   /** Direct dependencies only — caller already filtered by goal.depends_on. */
   dependencies?: GoalRow[]
   cwd?: string
@@ -560,7 +564,12 @@ export function buildGoalPrompt(input: {
   // Only populated when Orchestrator called architect(); empty string if skipped (single goal / simple task).
   // Goal-scoped read: peer goals' private architect notes do not bleed into this executor's prompt.
   const architectConsensus = input.taskID
-    ? createDecisionLog(input.taskID).phasePromptSectionForGoal("architect", input.goal.id, "Architect Consensus")
+    ? createDecisionLog(input.taskID).phasePromptSectionForGoal(
+        "architect",
+        input.goal.id,
+        "Architect Consensus",
+        { valueCap: ARCHITECT_CONTRACT_VALUE_CAP },
+      )
     : ""
 
   // Retry feedback: surfaces the latest rejected evaluation + Orchestrator's
@@ -593,6 +602,15 @@ export function buildGoalPrompt(input: {
     // Dependency context
     dependencyContext
       ? `## Dependencies (completed before this goal)\n\nThese goals completed before yours. Their output is already in your workspace:\n${dependencyContext}`
+      : undefined,
+    input.designSpecs && input.designSpecs.length > 0
+      ? renderVisualContractPromptSection({
+          specs: input.designSpecs,
+          instructions: [
+            "The following advisory visual constraints came from design_analysis.",
+            "Implement the subset that is relevant to this goal's owned files, UI surface, and interactions.",
+          ],
+        })
       : undefined,
     architectConsensus || undefined,
     retryFeedback || undefined,
@@ -644,6 +662,9 @@ ${compactPlanContext(input.plan)}`,
       "- Ignore other goals, later stages, and broader product work unless this goal explicitly requires them.",
       "- Do not make speculative improvements outside the current goal contract.",
       "- Do not run git add, git commit, or git push unless the current goal explicitly requires a commit.",
+      "- Repo hygiene (STRICT): before you run any package install (bun install / bun add / npm install / pnpm add / etc.), VERIFY the worktree's .gitignore at the repo root contains at minimum `node_modules/`, `dist/`, `build/`, `.env`, `.opencorvus/`. If any are missing, ADD them FIRST and save the file BEFORE running the install. Never rely on the fact that the install happens after the delivery `git add -A` — the add does respect .gitignore, but only for files created after the ignore rule is on disk.",
+      "- NEVER pass `-f` / `--force` to `git add`. NEVER hand-write files under `node_modules/`, `dist/`, `build/`, `.next/`, `.svelte-kit/`, or other generated-artifact roots. NEVER explicitly `git add node_modules/` or any of those roots. These trees are platform-specific binaries; once in git they trigger cross-goal merge conflicts that cascade across the whole task. If you catch yourself about to add them, stop and report it as an ENVIRONMENT BLOCKER instead.",
+      "- If `git status` before an intended commit shows a path under any ignored root, that is a signal the ignore rule was missing when the file was first staged. Do not proceed with the commit. Fix the ignore rule, run `git rm --cached -r <path>`, re-verify with `git status`, only then commit.",
       ...(allowedPaths.length > 0
         ? [
             // Scoped task: explicit file allowlist → package management is unconditionally forbidden
