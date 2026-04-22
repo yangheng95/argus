@@ -58,6 +58,27 @@ const e = (type: string, properties: Record<string, any> = {}, dt = 0): FixtureE
   properties: { taskID: TASK_ID, ...properties },
 });
 
+function messageInfo(channel: string, info: Record<string, any>) {
+  return {
+    info: {
+      ...info,
+      resolvedRole: info.resolvedRole ?? channel,
+      agent: info.agent ?? channel,
+      channel,
+    },
+  };
+}
+
+function messagePart(channel: string, part: Record<string, any>) {
+  return {
+    part: {
+      ...part,
+      resolvedRole: part.resolvedRole ?? channel,
+      channel,
+    },
+  };
+}
+
 export const EVENTS: FixtureEvent[] = [
   // ── Task bootstrap ──
   e("task.created", {
@@ -72,27 +93,26 @@ export const EVENTS: FixtureEvent[] = [
   }, 0),
 
   // ── Orchestrator session: assistant message with reasoning + text ──
-  e("message.updated", {
-    info: {
+  e("message.updated", messageInfo("assistant", {
+    
       id: "msg_orch_1",
       sessionID: ROOT_SID,
       role: "assistant",
       resolvedRole: "assistant",
       agent: "assistant",
       time: { created: T0 + 1000 },
-    },
-  }, 1000),
+    
+  }), 1000),
 
   // Reasoning part streamed via deltas
-  e("message.part.updated", {
-    part: {
+  e("message.part.updated", messagePart("assistant", {
       id: "part_orch_reason",
       messageID: "msg_orch_1",
       sessionID: ROOT_SID,
       type: "reasoning",
       text: "",
-    },
-  }, 1100),
+    
+  }), 1100),
   e("message.part.delta", {
     partID: "part_orch_reason",
     messageID: "msg_orch_1",
@@ -109,15 +129,14 @@ export const EVENTS: FixtureEvent[] = [
   }, 1300),
 
   // Text reply streamed
-  e("message.part.updated", {
-    part: {
+  e("message.part.updated", messagePart("assistant", {
       id: "part_orch_text",
       messageID: "msg_orch_1",
       sessionID: ROOT_SID,
       type: "text",
       text: "",
-    },
-  }, 1400),
+    
+  }), 1400),
   e("message.part.delta", {
     partID: "part_orch_text",
     messageID: "msg_orch_1",
@@ -184,8 +203,7 @@ export const EVENTS: FixtureEvent[] = [
   }, 2500),
 
   // ── Non-goal child sessions under the root orchestrator ──
-  e("message.updated", {
-    info: {
+  e("message.updated", messageInfo("requirements", {
       id: "msg_requirements_1",
       sessionID: REQUIREMENTS_SID,
       role: "assistant",
@@ -193,19 +211,17 @@ export const EVENTS: FixtureEvent[] = [
       agent: "requirements",
       parentSessionID: ROOT_SID,
       time: { created: T0 + 2600 },
-    },
-  }, 2600),
-  e("message.part.updated", {
-    part: {
+    
+  }), 2600),
+  e("message.part.updated", messagePart("requirements", {
       id: "part_requirements_text",
       messageID: "msg_requirements_1",
       sessionID: REQUIREMENTS_SID,
       type: "text",
       text: "Collected product requirements.",
-    },
-  }, 2650),
-  e("message.updated", {
-    info: {
+    
+  }), 2650),
+  e("message.updated", messageInfo("design-analyst", {
       id: "msg_design_1",
       sessionID: DESIGN_SID,
       role: "assistant",
@@ -213,19 +229,17 @@ export const EVENTS: FixtureEvent[] = [
       agent: "design-analyst",
       parentSessionID: ROOT_SID,
       time: { created: T0 + 2700 },
-    },
-  }, 2700),
-  e("message.part.updated", {
-    part: {
+    
+  }), 2700),
+  e("message.part.updated", messagePart("design-analyst", {
       id: "part_design_text",
       messageID: "msg_design_1",
       sessionID: DESIGN_SID,
       type: "text",
       text: "Captured the visual system.",
-    },
-  }, 2750),
-  e("message.updated", {
-    info: {
+    
+  }), 2750),
+  e("message.updated", messageInfo("architect", {
       id: "msg_architect_1",
       sessionID: ARCHITECT_SID,
       role: "assistant",
@@ -233,23 +247,21 @@ export const EVENTS: FixtureEvent[] = [
       agent: "architect",
       parentSessionID: ROOT_SID,
       time: { created: T0 + 2800 },
-    },
-  }, 2800),
-  e("message.part.updated", {
-    part: {
+    
+  }), 2800),
+  e("message.part.updated", messagePart("architect", {
       id: "part_architect_text",
       messageID: "msg_architect_1",
       sessionID: ARCHITECT_SID,
       type: "text",
       text: "Defined the system contracts.",
-    },
-  }, 2850),
+    
+  }), 2850),
 
   // ── Executor container session (child of orchestrator, bound to GOAL_ID) ──
   // The container itself has no visible card — overlay filters it out via
   // `stage === "executor"` so the step card represents it visually.
-  e("message.updated", {
-    info: {
+  e("message.updated", messageInfo("executor", {
       id: "msg_exec_1",
       sessionID: EXECUTOR_SID,
       role: "assistant",
@@ -258,8 +270,8 @@ export const EVENTS: FixtureEvent[] = [
       parentSessionID: ROOT_SID,
       goalID: GOAL_ID,
       time: { created: T0 + 3000 },
-    },
-  }, 3000),
+    
+  }), 3000),
 
   e("agent.updated", {
     stage: "executor",
@@ -301,8 +313,7 @@ export const EVENTS: FixtureEvent[] = [
   }, 5200),
 
   // ── Planner (plan phase) — first child of executor container ──
-  e("message.updated", {
-    info: {
+  e("message.updated", messageInfo("planner", {
       id: "msg_planner_1",
       sessionID: PLANNER_SID,
       role: "assistant",
@@ -311,21 +322,19 @@ export const EVENTS: FixtureEvent[] = [
       parentSessionID: EXECUTOR_SID,
       goalID: GOAL_ID,
       time: { created: T0 + 5800 },
-    },
-  }, 5800),
-  e("message.part.updated", {
-    part: {
+    
+  }), 5800),
+  e("message.part.updated", messagePart("planner", {
       id: "part_planner_text",
       messageID: "msg_planner_1",
       sessionID: PLANNER_SID,
       type: "text",
       text: "Planned the build sequence.",
-    },
-  }, 5850),
+    
+  }), 5850),
 
   // ── Build worker (build phase) — writes code ──
-  e("message.updated", {
-    info: {
+  e("message.updated", messageInfo("build", {
       id: "msg_build_1",
       sessionID: BUILD_SID,
       role: "assistant",
@@ -334,12 +343,11 @@ export const EVENTS: FixtureEvent[] = [
       parentSessionID: EXECUTOR_SID,
       goalID: GOAL_ID,
       time: { created: T0 + 6000 },
-    },
-  }, 6000),
+    
+  }), 6000),
 
   // Build worker runs a bash tool
-  e("message.part.updated", {
-    part: {
+  e("message.part.updated", messagePart("build", {
       id: "part_build_tool_1",
       messageID: "msg_build_1",
       sessionID: BUILD_SID,
@@ -352,18 +360,17 @@ export const EVENTS: FixtureEvent[] = [
         output: "added 42 packages",
         time: { start: T0 + 6050, end: T0 + 6080 },
       },
-    },
-  }, 6080),
+    
+  }), 6080),
 
-  e("message.part.updated", {
-    part: {
+  e("message.part.updated", messagePart("build", {
       id: "part_build_text",
       messageID: "msg_build_1",
       sessionID: BUILD_SID,
       type: "text",
       text: "Build passed.",
-    },
-  }, 6100),
+    
+  }), 6100),
 
   // ── Goal passed: all phases complete ──
   e("task.updated", {

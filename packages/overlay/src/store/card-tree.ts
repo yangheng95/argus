@@ -95,11 +95,14 @@ export interface CardNode {
   role?: string;
   title: string;
   subtitle?: string;
-  /** Goal decomposition index + 1; shown as `#N` when > 0. Stamped onto the
+  /** Goal decomposition index + 1; shown as `#GN` when > 0. Stamped onto the
    *  executor step card from the backend `goalWorkflow.orderIndex` so the
    *  number matches the numbered breakdown operators see during requirements
    *  planning (and does NOT re-number when a goal is removed). */
   round?: number;
+  /** Goal attempt / retry index + 1; shown as `Vn` alongside `#GN` on the
+   *  goal-scoped step card so retries are distinguishable in the timeline. */
+  attempt?: number;
   /** Goal this card belongs to. Set on executor step cards, goal-phase cards,
    *  and any session card that was routed to a goal phase. */
   goalID?: string;

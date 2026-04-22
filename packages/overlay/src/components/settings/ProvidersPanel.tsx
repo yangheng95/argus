@@ -157,17 +157,16 @@ export default function ProvidersPanel() {
     <div class="general-panel">
       {/* ── Custom Providers ── */}
       <div class="config-panel-group">
-        <h4 class="config-panel-group-title">
-          Custom Providers
+        <div class="config-panel-group-head">
+          <h4 class="config-panel-group-title">Custom Providers</h4>
           <button
             type="button"
             class="btn btn-primary mini"
-            style="margin-left: auto; font-size: var(--ui-font-meta);"
             onClick={startAdd}
           >
             + Add
           </button>
-        </h4>
+        </div>
 
         <Show when={providerEntries().length === 0 && !showAdd()}>
           <div class="config-panel-card" style="opacity: 0.6; font-size: var(--ui-font-control); padding: 12px;">
@@ -178,21 +177,19 @@ export default function ProvidersPanel() {
         <For each={providerEntries()}>
           {([id, provider]) => (
             <div class="config-panel-card" style="margin-bottom: 8px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                <strong style="font-size: var(--ui-font-title);">{provider.name || id}</strong>
-                <div style="display: flex; gap: 6px;">
+              <div class="config-panel-card-head">
+                <strong class="config-panel-card-title">{provider.name || id}</strong>
+                <div class="config-panel-card-actions">
                   <button
                     type="button"
                     class="btn mini"
-                    style="font-size: var(--ui-font-meta); padding: 2px 8px;"
                     onClick={() => startEdit(id)}
                   >
                     Edit
                   </button>
                   <button
                     type="button"
-                    class="btn mini"
-                    style="font-size: var(--ui-font-meta); padding: 2px 8px; color: var(--color-danger, #e55);"
+                    class="btn mini danger"
                     onClick={() => handleDelete(id)}
                     disabled={saving()}
                   >
@@ -305,14 +302,16 @@ export default function ProvidersPanel() {
             <div style="font-size: var(--ui-font-control); opacity: 0.6; margin-bottom: 6px;">
               Auto-detected providers from models.dev, env vars, and auth.
             </div>
-            <For each={catalogEntries()}>
-              {(p) => (
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--color-border, #333); font-size: var(--ui-font-control);">
-                  <span>{p.name}</span>
-                  <span style="opacity: 0.5;">{p.modelCount} models</span>
-                </div>
-              )}
-            </For>
+            <div class="config-panel-list">
+              <For each={catalogEntries()}>
+                {(p) => (
+                  <div class="config-panel-list-row">
+                    <span class="config-panel-list-main">{p.name}</span>
+                    <span class="config-panel-list-meta">{p.modelCount} models</span>
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </div>
       </Show>

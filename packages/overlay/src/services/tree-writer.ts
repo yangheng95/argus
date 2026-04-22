@@ -90,12 +90,10 @@ const knownGoalIDs = new Set<string>();
  *  created under attempt N never leaks its parts onto the attempt N+1
  *  card after rebuild. */
 const goalCurrentRunID = new Map<string, string>();
-/** Fidelity cards that have been materialized into cardTreeStore → owning
- *  requirements session id. `rebuildCardHierarchy` reads this to attach the
- *  verdict card under the session card's childIDs. Entries are ONLY added
- *  from `materializeFidelity` (after the owning session is confirmed to
- *  exist), so every entry here has a reachable parent — eliminating the
- *  "written-to-store-but-unreachable" silent-drop path. */
+/** Legacy fidelity child-card ownership map. New fidelity runs render on the
+ *  session card itself, so this map stays empty for fresh data but remains
+ *  wired for older protocol slices that still materialize kind="fidelity"
+ *  child cards. */
 const fidelityCardOwners = new Map<string, string>();
 
 /** Fidelity events that arrived before their owning session's first
@@ -574,13 +572,8 @@ function handleInteraction(event: any): void {
 
 // ── Fidelity review ──
 
-function fidelityCardID(taskID: string): string {
-  // Stable per-task id — fidelity runs once per requirements cycle; re-emits
-  // (parse retries, reconnect replays) must upsert the same card, not stack
-  // new ones. The previous `fidelity:<taskID>:<emittedAt>` scheme produced
-  // duplicates whenever event.emittedAt was absent and we fell back to
-  // Date.now(), which happened on every SSE redelivery.
-  return `fidelity:${taskID}`;
+function fidelityCardID(sessionID: string): string {
+  return sessionCardID("fidelity", sessionID);
 }
 
 /** Buffered running-phase payload so `rebuildCardHierarchy` can re-attach a
@@ -588,7 +581,6 @@ function fidelityCardID(taskID: string): string {
  *  (task reselect / replay). Keyed by taskID. Separate from `pendingFidelity`
  *  because that map is for COMPLETED payloads that predate their session. */
 interface RunningFidelityPayload {
-  taskID: string
   sessionID: string
   startedAt: number
   attempt: number
@@ -608,13 +600,12 @@ function handleFidelityStarted(event: any): void {
   }
   const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
   const payload: RunningFidelityPayload = {
-    taskID,
     sessionID,
     startedAt: emittedAt > 0 ? emittedAt : Date.now(),
     attempt: 0,
     elapsedMs: 0,
   };
-  runningFidelity.set(taskID, payload);
+  runningFidelity.set(sessionID, payload);
   materializeRunningFidelity(payload);
 }
 
@@ -630,15 +621,14 @@ function handleFidelityProgress(event: any): void {
   }
   const attempt = Number(props.attempt || 0);
   const elapsedMs = Number(props.elapsedMs || props.elapsed_ms || 0);
-  const existing = runningFidelity.get(taskID);
+  const existing = runningFidelity.get(sessionID);
   const payload: RunningFidelityPayload = {
-    taskID,
     sessionID,
     startedAt: existing?.startedAt ?? (Date.now() - elapsedMs),
     attempt,
     elapsedMs,
   };
-  runningFidelity.set(taskID, payload);
+  runningFidelity.set(sessionID, payload);
   materializeRunningFidelity(payload);
 }
 
@@ -673,7 +663,7 @@ function handleFidelityChunk(event: any): void {
   }
   if (!delta) return;
 
-  const cardID = fidelityCardID(taskID);
+  const cardID = fidelityCardID(sessionID);
   const existing = cardTreeStore.cards[cardID];
   // Completed event already upserted the verdict — ignore trailing chunks.
   if (existing?.fidelity) return;
@@ -681,11 +671,11 @@ function handleFidelityChunk(event: any): void {
   // backend ordering bug (chunk before started) — loud-fail per rule 1.
   if (!existing) {
     throw new Error(
-      `fidelity.review.chunk arrived before started (taskID=${taskID})`,
+      `fidelity.review.chunk arrived before started (taskID=${taskID}, sessionID=${sessionID})`,
     );
   }
 
-  const partID = `fidelity:${taskID}:reasoning:${attempt}`;
+  const partID = `fidelity:${sessionID}:reasoning:${attempt}`;
 
   setCardTreeStore(
     "cards",
@@ -702,14 +692,16 @@ function handleFidelityChunk(event: any): void {
   );
 }
 
-/** Upsert the running-phase fidelity card. If the owning requirements session
- *  isn't in `sessions` yet (SSE reorder / replay), we still write the card
- *  WITHOUT an owner — `rebuildCardHierarchy` will place it under the session
- *  once it materialises via the `fidelityCardOwners` map. This matches how
- *  the completed path handles the same race, just inverted (we always have a
- *  card, possibly orphaned momentarily, vs. completed's out-of-band hold). */
+/** Upsert the running-phase fidelity session card. Fidelity is now a normal
+ *  agent session, so lifecycle events target the session card directly. */
 function materializeRunningFidelity(p: RunningFidelityPayload): void {
-  const cardID = fidelityCardID(p.taskID);
+  const session = ensureSessionCard(p.sessionID, {
+    stage: "fidelity",
+    parentSessionID: "",
+    goalID: "",
+    time: p.startedAt,
+  });
+  const cardID = session.cardID;
   const existing = cardTreeStore.cards[cardID];
   // If the completed event has already landed, don't downgrade the verdict
   // card back to "running". `attempts` on a completed card is > 0 and the
@@ -725,26 +717,16 @@ function materializeRunningFidelity(p: RunningFidelityPayload): void {
   // streamed in between two Progress events.
   if (existing) {
     setCardTreeStore("cards", cardID, {
+      ...existing,
       status: "running",
       subtitle,
+      stage: "fidelity",
+      accent: stageAccent("fidelity"),
+      title: roleTitleKey("fidelity"),
     });
-    fidelityCardOwners.set(cardID, p.sessionID);
     return;
   }
-  setCardTreeStore("cards", cardID, {
-    id: cardID,
-    kind: "fidelity",
-    stage: "fidelity",
-    accent: stageAccent("fidelity"),
-    status: "running",
-    title: roleTitleKey("fidelity"),
-    subtitle,
-    parts: [],
-    childIDs: [],
-    time: p.startedAt,
-  });
-  fidelityCardOwners.set(cardID, p.sessionID);
-  rebuildCardHierarchy();
+  throw new Error(`fidelity session card missing after ensureSessionCard (sessionID=${p.sessionID})`);
 }
 
 function formatElapsed(sec: number): string {
@@ -803,42 +785,35 @@ function handleFidelityCompleted(event: any): void {
     attempts,
   };
 
-  const session = sessions.get(sessionID);
-  if (!session || !cardTreeStore.cards[session.cardID]) {
-    // Session hasn't materialized yet — hold the payload out-of-band. This
-    // keeps cardTreeStore.cards free of unreachable entries. Drained by
-    // ensureSessionCard once the session arrives (see drainPendingFidelity).
-    pendingFidelity.set(sessionID, payload);
-    return;
-  }
+  const session = ensureSessionCard(sessionID, {
+    stage: "fidelity",
+    parentSessionID: "",
+    goalID: "",
+    time: emittedAt,
+  });
 
   materializeFidelity(session, payload);
   // Running-card lifecycle: the completed upsert now owns this cardID; drop
   // the runningFidelity entry so a late `progress` event for the same task
   // doesn't rewrite the verdict back to a running placeholder.
-  runningFidelity.delete(taskID);
+  runningFidelity.delete(sessionID);
 }
 
-/** Atomically write the fidelity card into cardTreeStore and register its
- *  owning session. Only called when the owning session card already exists
- *  — callers MUST NOT skip the session guard. `rebuildCardHierarchy()` is
- *  invoked so the new card becomes a child of its session in the same tick. */
+/** Atomically write the fidelity verdict onto the session card itself. */
 function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): void {
-  const cardID = fidelityCardID(p.taskID);
+  const cardID = session.cardID;
   const status: CardStatus = p.verdict === "faithful" ? "completed" : "error";
-  // FidelityBody renders the structured verdict block from `fidelity`;
-  // the parts array stays empty.
+  const existing = cardTreeStore.cards[cardID];
+  if (!existing) {
+    throw new Error(`fidelity session card missing on completion (sessionID=${session.sessionID})`);
+  }
   setCardTreeStore("cards", cardID, {
-    id: cardID,
-    kind: "fidelity",
+    ...existing,
     stage: "fidelity",
     accent: stageAccent("fidelity"),
     status,
     title: roleTitleKey("fidelity"),
     subtitle: undefined,
-    parts: [],
-    childIDs: [],
-    time: p.emittedAt,
     fidelity: {
       verdict: p.verdict,
       issues: p.issues,
@@ -847,8 +822,6 @@ function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): v
       attempts: p.attempts,
     },
   });
-  fidelityCardOwners.set(cardID, session.sessionID);
-  rebuildCardHierarchy();
 }
 
 /** Drain any fidelity payload waiting for this session and materialize it.
@@ -1483,14 +1456,10 @@ function rebuildGoalStepCards(board: any): void {
 
       // The executor step card IS the goal card — there is exactly one
       // goal-scope step per goal (workflow.ts: `build` with scope="goal"),
-      // so we stamp every goal field onto the step card. The header reads
-      // `#N  <goal title>  <goalID tail> · <step summary>`; the body (see
-      // Card.tsx `kind === "step"`) renders the goal description.
-      const gidTail = gid.length > 8 ? gid.slice(-8) : gid;
-      const subtitle = [gidTail, step.summary]
-        .map((s) => (s ? String(s).trim() : ""))
-        .filter((s) => s.length > 0)
-        .join(" · ") || undefined;
+      // so we stamp every goal field onto the step card. The header keeps
+      // only the goal title plus the shared #G/V revision label; file-level
+      // details live in the dedicated Changes panel instead of duplicating
+      // them inside the conversation card.
       setCardTreeStore("cards", stepCardID, {
         id: stepCardID,
         kind: "step",
@@ -1498,14 +1467,15 @@ function rebuildGoalStepCards(board: any): void {
         accent: stageAccent(stepID),
         status: stepStatus,
         title: String(gw.goalTitle || step.label || agentStageLabel(stepID) || stepID),
-        subtitle,
+        subtitle: undefined,
         round: orderIndex + 1,
+        attempt: typeof gw.retryCount === "number" ? gw.retryCount + 1 : 1,
         parts: [],
         childIDs: phaseChildIDs,
         stepPayload: step.payload && typeof step.payload === "object" ? step.payload : undefined,
         stepID,
         goalID: gid,
-        goalDescription: gw.goalDescription || undefined,
+        goalDescription: gw.goalObjective || undefined,
         time: stepStartedAt,
       });
     }

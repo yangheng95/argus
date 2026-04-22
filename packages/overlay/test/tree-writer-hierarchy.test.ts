@@ -18,6 +18,25 @@ import {
   TASK_ID,
 } from "./fixtures/goal-phase-events";
 
+const FIDELITY_SID = "ses_fidelity";
+
+function stampedInfo(channel: string, info: Record<string, any>) {
+  return {
+    ...info,
+    resolvedRole: info.resolvedRole ?? channel,
+    agent: info.agent ?? channel,
+    channel,
+  };
+}
+
+function stampedPart(channel: string, part: Record<string, any>) {
+  return {
+    ...part,
+    resolvedRole: part.resolvedRole ?? channel,
+    channel,
+  };
+}
+
 test("phase cards absorb goal-scoped session parts — no nested session cards", async () => {
   // 正本清源 pass:
   //   - session.kind="executor" is a CONTAINER (no LLM), filtered from UI.
@@ -117,21 +136,21 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
     type: "message.updated",
     properties: {
       taskID: TASK_ID,
-      info: {
+      info: stampedInfo("assistant", {
         id: "msg_root",
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
         agent: "assistant",
         time: { created: 1_776_000_000_000 },
-      },
+      }),
     },
   });
   applyEvent({
     type: "message.updated",
     properties: {
       taskID: TASK_ID,
-      info: {
+      info: stampedInfo("architect", {
         id: "msg_architect",
         sessionID: "ses_architect",
         role: "assistant",
@@ -139,7 +158,7 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
         agent: "architect",
         parentSessionID: ROOT_SID,
         time: { created: 1_776_000_001_000 },
-      },
+      }),
     },
   });
 
@@ -202,12 +221,9 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
   });
 
   const stepCardID = `step:${GOAL_ID}:${GOAL_RUN_ID}:build`;
-  // Subtitle format: `${goalID tail} · ${step.summary}` — executor step
-  // absorbed the old goal-group card, so both the stable identity (last
-  // 8 of goalID) and the step's own summary live in the header.
-  expect(cardTreeStore.cards[stepCardID]?.subtitle).toBe(
-    `${GOAL_ID.slice(-8)} · 3 planned steps`,
-  );
+  // Step headers no longer duplicate the summary into `subtitle`; the
+  // summary lives in the structured step payload instead.
+  expect(cardTreeStore.cards[stepCardID]?.subtitle).toBeUndefined();
   expect(cardTreeStore.cards[stepCardID]?.title).toBe("Scaffold project");
   expect(cardTreeStore.cards[stepCardID]?.round).toBe(1);
   expect(cardTreeStore.cards[stepCardID]?.stepID).toBe("build");
@@ -254,14 +270,14 @@ test("tree-writer projects interactions into session children and top-level card
     type: "message.updated",
     properties: {
       taskID: TASK_ID,
-      info: {
+      info: stampedInfo("assistant", {
         id: "msg_root_interaction",
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
         agent: "assistant",
         time: { created: 1_776_000_000_500 },
-      },
+      }),
     },
   });
 
@@ -304,7 +320,7 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
     type: "message.updated",
     properties: {
       taskID: TASK_ID,
-      info: {
+      info: stampedInfo("assistant", {
         id: "msg_root",
         sessionID: ROOT_ASSISTANT_SID,
         role: "assistant",
@@ -312,7 +328,7 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
         agent: "assistant",
         parentSessionID: TASK_VIRTUAL_SID,
         time: { created: 1_776_000_000_500 },
-      },
+      }),
     },
   });
 
@@ -321,7 +337,7 @@ test("root assistant session with parentSessionID pointing to task-virtual root 
   expect(cardTreeStore.order).toContain(rootCardID);
 });
 
-test("pending:session:* placeholder does not escape to top-level order", () => {
+test("channel-stamped part.updated materializes the correct session card immediately", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
@@ -338,32 +354,34 @@ test("pending:session:* placeholder does not escape to top-level order", () => {
   setBoardStore("selectedTaskID", TASK_ID);
 
   // A message.part.updated arrives before any message.updated for this
-  // session (high-cadence streaming race). ensureSessionCard creates a
-  // pending:session:<sid> placeholder; it MUST NOT show up at top level.
+  // session (high-cadence streaming race). Because the fixture now carries
+  // the bridge-stamped channel, tree-writer can materialize the correct
+  // staged session card immediately instead of creating a pending stub.
   applyEvent({
     type: "message.part.updated",
     properties: {
       taskID: TASK_ID,
-      part: {
+      part: stampedPart("planner", {
         id: "prt_stream",
         messageID: "msg_race",
         sessionID: "ses_race",
         type: "text",
         text: "partial stream",
-      },
+        parentSessionID: ROOT_SID,
+      }),
     },
   });
 
-  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeDefined();
-  expect(cardTreeStore.order).not.toContain("pending:session:ses_race");
+  expect(cardTreeStore.cards["pending:session:ses_race"]).toBeUndefined();
+  expect(cardTreeStore.cards["planner:session:ses_race"]).toBeDefined();
+  expect(cardTreeStore.order).toContain("planner:session:ses_race");
 
-  // Once message.updated arrives with a real stage, the card renames and
-  // claims its place under its parent (assistant root).
+  // Once message.updated arrives, the same planner session card stays put.
   applyEvent({
     type: "message.updated",
     properties: {
       taskID: TASK_ID,
-      info: {
+      info: stampedInfo("planner", {
         id: "msg_race",
         sessionID: "ses_race",
         role: "assistant",
@@ -371,21 +389,21 @@ test("pending:session:* placeholder does not escape to top-level order", () => {
         agent: "planner",
         parentSessionID: ROOT_SID,
         time: { created: 1_776_000_001_000 },
-      },
+      }),
     },
   });
   applyEvent({
     type: "message.updated",
     properties: {
       taskID: TASK_ID,
-      info: {
+      info: stampedInfo("assistant", {
         id: "msg_root",
         sessionID: ROOT_SID,
         role: "assistant",
         resolvedRole: "assistant",
         agent: "assistant",
         time: { created: 1_776_000_000_500 },
-      },
+      }),
     },
   });
 
@@ -400,7 +418,7 @@ test("pending:session:* placeholder does not escape to top-level order", () => {
   );
 });
 
-test("fidelity card attaches under requirements session when session is known", () => {
+test("fidelity completed event materializes an independent fidelity session card", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
@@ -417,40 +435,11 @@ test("fidelity card attaches under requirements session when session is known", 
   setBoardStore("selectedTaskID", TASK_ID);
 
   applyEvent({
-    type: "message.updated",
-    properties: {
-      taskID: TASK_ID,
-      info: {
-        id: "msg_root",
-        sessionID: ROOT_SID,
-        role: "assistant",
-        resolvedRole: "assistant",
-        agent: "assistant",
-        time: { created: 1_776_000_000_500 },
-      },
-    },
-  });
-  applyEvent({
-    type: "message.updated",
-    properties: {
-      taskID: TASK_ID,
-      info: {
-        id: "msg_req",
-        sessionID: REQUIREMENTS_SID,
-        role: "assistant",
-        resolvedRole: "requirements",
-        agent: "requirements",
-        parentSessionID: ROOT_SID,
-        time: { created: 1_776_000_001_000 },
-      },
-    },
-  });
-  applyEvent({
     type: "fidelity.review.completed",
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
-      sessionID: REQUIREMENTS_SID,
+      sessionID: FIDELITY_SID,
       verdict: "needs_correction",
       issues: [{ type: "uncovered", description: "missing goal X" }],
       corrections: [],
@@ -459,16 +448,14 @@ test("fidelity card attaches under requirements session when session is known", 
     },
   });
 
-  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}`;
-  const fidelityCardID = `fidelity:${TASK_ID}`;
+  const fidelityCardID = `fidelity:session:${FIDELITY_SID}`;
   expect(cardTreeStore.cards[fidelityCardID]).toBeDefined();
-  expect(cardTreeStore.order).not.toContain(fidelityCardID);
-  expect(
-    cardTreeStore.cards[requirementsCardID]?.childIDs || [],
-  ).toContain(fidelityCardID);
+  expect(cardTreeStore.cards[fidelityCardID]?.kind).toBe("agent");
+  expect(cardTreeStore.cards[fidelityCardID]?.fidelity?.verdict).toBe("needs_correction");
+  expect(cardTreeStore.order).toContain(fidelityCardID);
 });
 
-test("fidelity event with unknown session holds payload out-of-band (no unreachable store entry)", () => {
+test("fidelity completed event can materialize before any message stream arrives", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
@@ -484,15 +471,14 @@ test("fidelity event with unknown session holds payload out-of-band (no unreacha
   });
   setBoardStore("selectedTaskID", TASK_ID);
 
-  // Fidelity event arrives before the requirements session's first
-  // message.updated. Card must NOT be in cardTreeStore.cards (would be
-  // unreachable), and NOT in order (would escape).
+  // The protocol event itself carries enough identity to create the
+  // fidelity session card even before any message/part stream arrives.
   applyEvent({
     type: "fidelity.review.completed",
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
-      sessionID: REQUIREMENTS_SID,
+      sessionID: FIDELITY_SID,
       verdict: "faithful",
       issues: [],
       corrections: [],
@@ -501,47 +487,10 @@ test("fidelity event with unknown session holds payload out-of-band (no unreacha
     },
   });
 
-  const fidelityCardID = `fidelity:${TASK_ID}`;
-  expect(cardTreeStore.cards[fidelityCardID]).toBeUndefined();
-  expect(cardTreeStore.order).not.toContain(fidelityCardID);
-
-  // When the session arrives, the held payload materializes and attaches.
-  applyEvent({
-    type: "message.updated",
-    properties: {
-      taskID: TASK_ID,
-      info: {
-        id: "msg_root",
-        sessionID: ROOT_SID,
-        role: "assistant",
-        resolvedRole: "assistant",
-        agent: "assistant",
-        time: { created: 1_776_000_000_500 },
-      },
-    },
-  });
-  applyEvent({
-    type: "message.updated",
-    properties: {
-      taskID: TASK_ID,
-      info: {
-        id: "msg_req",
-        sessionID: REQUIREMENTS_SID,
-        role: "assistant",
-        resolvedRole: "requirements",
-        agent: "requirements",
-        parentSessionID: ROOT_SID,
-        time: { created: 1_776_000_001_000 },
-      },
-    },
-  });
-
-  const requirementsCardID = `requirements:session:${REQUIREMENTS_SID}`;
+  const fidelityCardID = `fidelity:session:${FIDELITY_SID}`;
   expect(cardTreeStore.cards[fidelityCardID]).toBeDefined();
-  expect(cardTreeStore.order).not.toContain(fidelityCardID);
-  expect(
-    cardTreeStore.cards[requirementsCardID]?.childIDs || [],
-  ).toContain(fidelityCardID);
+  expect(cardTreeStore.cards[fidelityCardID]?.status).toBe("completed");
+  expect(cardTreeStore.order).toContain(fidelityCardID);
 });
 
 test("fidelity event missing sessionID throws (schema became required)", () => {
@@ -576,7 +525,7 @@ test("fidelity event missing sessionID throws (schema became required)", () => {
   ).toThrow(/missing sessionID/);
 });
 
-test("resetWriter clears pendingFidelity so a later session does not resurrect a stale payload", () => {
+test("resetWriter clears fidelity session cards materialized from protocol events", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
@@ -597,7 +546,7 @@ test("resetWriter clears pendingFidelity so a later session does not resurrect a
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
-      sessionID: REQUIREMENTS_SID,
+      sessionID: FIDELITY_SID,
       verdict: "faithful",
       issues: [],
       corrections: [],
@@ -608,37 +557,7 @@ test("resetWriter clears pendingFidelity so a later session does not resurrect a
 
   resetWriter();
 
-  applyEvent({
-    type: "message.updated",
-    properties: {
-      taskID: TASK_ID,
-      info: {
-        id: "msg_root",
-        sessionID: ROOT_SID,
-        role: "assistant",
-        resolvedRole: "assistant",
-        agent: "assistant",
-        time: { created: 1_776_000_000_500 },
-      },
-    },
-  });
-  applyEvent({
-    type: "message.updated",
-    properties: {
-      taskID: TASK_ID,
-      info: {
-        id: "msg_req",
-        sessionID: REQUIREMENTS_SID,
-        role: "assistant",
-        resolvedRole: "requirements",
-        agent: "requirements",
-        parentSessionID: ROOT_SID,
-        time: { created: 1_776_000_001_000 },
-      },
-    },
-  });
-
-  const fidelityCardID = `fidelity:${TASK_ID}`;
+  const fidelityCardID = `fidelity:session:${FIDELITY_SID}`;
   expect(cardTreeStore.cards[fidelityCardID]).toBeUndefined();
 });
 
