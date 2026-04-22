@@ -4,6 +4,7 @@ import { streamSSE } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { ControlTimeline } from "@/control/timeline"
+import { projectConversationView } from "@/conversation/view"
 import {
   Artifact,
   Budget,
@@ -399,12 +400,21 @@ export const EngineRoutes = lazy(() =>
             return created == null || created <= rewindCursor
           })
         }
+        const filteredTranscript = filterByCursor(transcript)
+        const filteredTimeline = filterByCursor(timeline)
+        const filteredEvents = filterByCursor(
+          events
+            .filter((event) => includeConversationHydrateEvent(event.type))
+            .map(protocolTaskEvent),
+        )
+        const view = projectConversationView(board, filteredTranscript)
         return c.json({
           lastSequence: Number(board?.lastSequence || 0),
           board,
-          transcript: filterByCursor(transcript),
-          timeline: filterByCursor(timeline),
-          events: filterByCursor(events.map(protocolTaskEvent)),
+          transcript: filteredTranscript,
+          timeline: filteredTimeline,
+          events: filteredEvents,
+          view,
         })
       },
     )
@@ -1063,4 +1073,14 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
     summary: event.summary,
     payload: event.payload || {},
   }
+}
+
+function includeConversationHydrateEvent(type: string): boolean {
+  return !(
+    type === "message.updated" ||
+    type === "message.part.updated" ||
+    type === "message.part.delta" ||
+    type === "run.progress" ||
+    type === "run.output"
+  )
 }
