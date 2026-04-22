@@ -3450,10 +3450,10 @@ code .file-link:hover {
   flex: 1;
   overflow-y: auto;
   overflow-anchor: none;
-  padding: calc(10px * var(--ui-scale)) var(--ui-panel-padding-x);
+  padding: calc(14px * var(--ui-scale)) calc(var(--ui-panel-padding-x) + 2px) calc(20px * var(--ui-scale));
   display: flex;
   flex-direction: column;
-  gap: var(--ui-gap-lg);
+  gap: calc(14px * var(--ui-scale));
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
@@ -3489,12 +3489,18 @@ code .file-link:hover {
    read freely; clicking it re-engages follow and jumps to the bottom. */
 .chat-scroll-actions {
   position: sticky;
-  bottom: 8px;
+  bottom: calc(14px * var(--ui-scale));
   align-self: flex-end;
   display: flex;
-  gap: 8px;
-  margin-right: 4px;
+  gap: calc(6px * var(--ui-scale));
+  margin-right: calc(4px * var(--ui-scale));
   z-index: 5;
+  opacity: 0.82;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.chat-scroll-actions:hover {
+  opacity: 1;
 }
 
 .chat-scroll-top,
@@ -3502,29 +3508,33 @@ code .file-link:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  padding: calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--border, rgba(255, 255, 255, 0.12)) 82%, transparent);
   border-radius: 999px;
-  background: var(--panel, rgba(20, 22, 28, 0.85));
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--panel, rgba(20, 22, 28, 0.85)) 84%, transparent);
+  backdrop-filter: blur(12px) saturate(108%);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   line-height: 1.4;
   cursor: pointer;
   user-select: none;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .chat-scroll-top:hover,
 .chat-follow-toggle:hover {
   color: var(--text);
   border-color: var(--accent, #4a9eff);
+  box-shadow: 0 14px 20px rgba(0, 0, 0, 0.14);
 }
 
 .chat-follow-toggle.is-active {
   color: var(--accent, #4a9eff);
   border-color: var(--accent, #4a9eff);
-  background: color-mix(in srgb, var(--accent, #4a9eff) 14%, transparent);
+  background: color-mix(in srgb, var(--accent, #4a9eff) 12%, var(--panel, rgba(20, 22, 28, 0.85)));
 }
 
 .chat-scroll-top svg,
@@ -9631,9 +9641,9 @@ body[data-theme="light"] .tech-sweep {
 
 .chat {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 52%),
     color-mix(in srgb, var(--surface) 94%, transparent);
-  box-shadow: 0 18px 36px rgba(6, 10, 16, 0.18);
+  box-shadow: 0 16px 30px rgba(6, 10, 16, 0.16);
 }
 
 .titlebar-menu-panel {
@@ -9668,9 +9678,9 @@ body[data-theme="light"] .tech-sweep {
 .chat:hover,
 .chat:focus-within {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(84, 138, 247, 0.018) 70%, transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(84, 138, 247, 0.014) 68%, transparent),
     color-mix(in srgb, var(--surface) 96%, transparent);
-  box-shadow: 0 20px 38px rgba(6, 10, 16, 0.2);
+  box-shadow: 0 18px 34px rgba(6, 10, 16, 0.18);
 }
 
 .titlebar::before,
@@ -9702,11 +9712,11 @@ body[data-theme="light"] .tech-sweep {
 }
 
 .chat::before {
-  opacity: 0.56;
+  opacity: 0.34;
   background:
-    radial-gradient(24% 24% at 14% 0%, rgba(91, 141, 239, 0.08), transparent 72%),
-    radial-gradient(20% 22% at 88% 100%, rgba(113, 179, 168, 0.06), transparent 74%);
-  filter: blur(28px);
+    radial-gradient(22% 22% at 14% 0%, rgba(91, 141, 239, 0.06), transparent 72%),
+    radial-gradient(18% 18% at 88% 100%, rgba(113, 179, 168, 0.045), transparent 74%);
+  filter: blur(24px);
 }
 
 .titlebar > *,
