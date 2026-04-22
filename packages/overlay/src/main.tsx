@@ -70,11 +70,10 @@ import { WelcomeToast } from "./components/WelcomeToast";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
-import { nativeOpen, nativePrompt } from "./utils/native";
+import { nativeConfirm, nativeOpen, nativePrompt } from "./utils/native";
 import { installAppDialogBridge } from "./services/app-dialog";
 import { eventClosest } from "./utils/dom-utils";
 import { shortPath } from "./utils/tool";
-import { initGitCurrent } from "./utils/git";
 import {
   applyDirectory,
   browseDirectory,
@@ -412,57 +411,62 @@ function installGoalFormHandlers(): void {
 
   cancelBtn?.addEventListener("click", () => dialog.close());
 
-  form.addEventListener("submit", async (e) => {
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!boardStore.selectedTaskID) return;
     const goalID = (document.getElementById("goalId") as HTMLInputElement | null)?.value.trim() || "";
     const title = (document.getElementById("goalDescription") as HTMLTextAreaElement | null)?.value.trim() || "";
     const acceptanceText = (document.getElementById("goalCriteria") as HTMLTextAreaElement | null)?.value.trim() || "";
     if (!title) return;
+    const taskID = boardStore.selectedTaskID || undefined;
 
-    try {
-      if (goalID) {
-        // The backend's UpdateGoalInput requires acceptance_specs[].min(1).
-        // Wrap the operator's free-text criterion into a single essential
-        // llm_judge spec — same shape that addOperatorGoal synthesizes when
-        // an operator-defined goal arrives without structured specs. We
-        // intentionally keep the form simple (one textarea) rather than
-        // expose the full spec editor; richer authoring belongs to the
-        // requirements agent's structured tools.
-        const fallbackCriterion = "The requested change is implemented and acceptance checks pass.";
-        const criterion = acceptanceText || fallbackCriterion;
-        const acceptanceSpec = {
-          id: `acc-operator-${goalID}-${Date.now()}`,
-          source_requirement_id: "operator",
-          goal_id: goalID,
-          title: title.slice(0, 80),
-          severity: "essential",
-          scorers: [
-            {
-              type: "llm_judge",
-              name: "operator-acceptance",
-              criteria: criterion,
-              inputs: ["delivery_summary", "changed_files"],
-            },
-          ],
-        };
-        await panelMessage(`Update goal ${goalID}.`, {
-          goalID,
-          description: title,
-          acceptance_specs: [acceptanceSpec],
-          taskID: boardStore.selectedTaskID || undefined,
-        });
-      } else {
-        const payload = acceptanceText ? `/goal ${title}\nAcceptance: ${acceptanceText}` : `/goal ${title}`;
-        await panelMessage(payload, {
-          taskID: boardStore.selectedTaskID || undefined,
-        });
+    // Non-blocking save: close the dialog immediately and fire the update
+    // asynchronously so the operator's UI is never frozen waiting for the
+    // server. Errors surface via console + subsequent loadBoard diff.
+    dialog.close();
+
+    void (async () => {
+      try {
+        if (goalID) {
+          // The backend's UpdateGoalInput requires acceptance_specs[].min(1).
+          // Wrap the operator's free-text criterion into a single essential
+          // llm_judge spec — same shape that addOperatorGoal synthesizes when
+          // an operator-defined goal arrives without structured specs. We
+          // intentionally keep the form simple (one textarea) rather than
+          // expose the full spec editor; richer authoring belongs to the
+          // requirements agent's structured tools.
+          const fallbackCriterion = "The requested change is implemented and acceptance checks pass.";
+          const criterion = acceptanceText || fallbackCriterion;
+          const acceptanceSpec = {
+            id: `acc-operator-${goalID}-${Date.now()}`,
+            source_requirement_id: "operator",
+            goal_id: goalID,
+            title: title.slice(0, 80),
+            severity: "essential",
+            scorers: [
+              {
+                type: "llm_judge",
+                name: "operator-acceptance",
+                criteria: criterion,
+                inputs: ["delivery_summary", "changed_files"],
+              },
+            ],
+          };
+          await panelMessage(`Update goal ${goalID}.`, {
+            goalID,
+            description: title,
+            acceptance_specs: [acceptanceSpec],
+            taskID,
+          });
+        } else {
+          const payload = acceptanceText ? `/goal ${title}\nAcceptance: ${acceptanceText}` : `/goal ${title}`;
+          await panelMessage(payload, { taskID });
+        }
+        await loadBoard({ sync: true });
+      } catch (err) {
+        console.error("Failed to save goal", err);
       }
-      dialog.close();
-      await loadBoard({ sync: true });
-    } catch (err) {
-      console.error("Failed to save goal", err);
-    }
+    })();
   });
 }
 
@@ -544,19 +548,16 @@ if (boardEl) {
           goalIdInput.value = goalId || "";
           goalDesc.value = title || "";
           goalCrit.value = detail || "";
-          goalDialog.showModal();
+          goalDialog.show();
         }}
         onDeleteGoal={async (goalId) => {
           if (!goalId || !boardStore.selectedTaskID) return;
-          const nativeConfirm = (window as any).nativeConfirm;
-          if (typeof nativeConfirm === "function") {
-            const ok = await nativeConfirm(t("goal.delete_button_title"), {
-              title: t("goal.title"),
-              okLabel: t("common.delete"),
-              kind: "warning",
-            });
-            if (!ok) return;
-          }
+          const ok = await nativeConfirm(t("goal.delete_confirm_message", { goalId }), {
+            title: t("goal.delete_confirm_title"),
+            okLabel: t("common.delete"),
+            kind: "warning",
+          });
+          if (!ok) return;
           try {
             await panelMessage(`Delete goal ${goalId}.`, {
               goalID: goalId,
@@ -1130,48 +1131,6 @@ disposers.push(createRoot((dispose) => {
     if (copyBtn) copyBtn.disabled = count === 0;
   });
 
-  // ── Task ID badge ──
-  // Click to copy the full task id; hover shows it in the title. Lets operators
-  // paste the id straight into DB queries (`WHERE task_id = '...'`) without
-  // digging through the sidebar tooltip. Shown only when a task is selected.
-  {
-    const badge = document.getElementById("taskIDBadge") as HTMLButtonElement | null;
-    if (badge) {
-      badge.addEventListener("click", async () => {
-        const full = badge.dataset.taskId ?? "";
-        if (!full) return;
-        try {
-          await navigator.clipboard.writeText(full);
-          const prev = badge.textContent ?? "";
-          badge.textContent = "copied";
-          badge.dataset.copied = "true";
-          setTimeout(() => {
-            badge.textContent = prev;
-            delete badge.dataset.copied;
-          }, 1200);
-        } catch (err) {
-          console.error("[taskIDBadge] clipboard write failed", err);
-        }
-      });
-    }
-    createEffect(() => {
-      const id = boardStore.selectedTaskID;
-      const el = document.getElementById("taskIDBadge") as HTMLButtonElement | null;
-      if (!el) return;
-      if (!id) {
-        el.hidden = true;
-        el.dataset.taskId = "";
-        el.textContent = "";
-        el.title = "";
-        return;
-      }
-      el.hidden = false;
-      el.dataset.taskId = id;
-      el.textContent = id.length > 10 ? `${id.slice(0, 4)}…${id.slice(-6)}` : id;
-      el.title = id;
-    });
-  }
-
   // ── Debug-copy (double-click `任务` header) ──
   // Dumps a plain-text debug blob with everything a human needs to diagnose a
   // stuck / mis-merged task from the DB: task id, project dir, session, active
@@ -1324,23 +1283,54 @@ window.addEventListener("beforeunload", () => {
 });
 installSystemThemeListener(() => applyTheme(settingsStore.theme));
 
-// ── Directory action buttons (#taskDir, #recentDirPanel, #taskGit) ──
+// ── Directory action buttons (#taskDir, #recentDirPanel) ──
 
 function renderRecentDirPanel(): void {
   const panel = document.getElementById("recentDirPanel");
   if (!panel) return;
   const dirs = loadRecentDirectories();
   const current = activeDirectory();
+  const head = [
+    `<div class="recent-dir-panel-head">`,
+    `<div class="recent-dir-panel-title">${escapeHtml(t("cwd.recent"))}</div>`,
+    current
+      ? `<div class="recent-dir-panel-meta" title="${escapeHtml(current)}">${escapeHtml(shortPath(current))}</div>`
+      : "",
+    `</div>`,
+  ].join("");
   if (!dirs.length) {
-    panel.innerHTML = `<div class="recent-dir-empty">${escapeHtml(t("cwd.recent_empty"))}</div>`;
+    panel.innerHTML = [
+      `<div class="recent-dir-panel-shell">`,
+      head,
+      `<div class="recent-dir-empty">${escapeHtml(t("cwd.recent_empty"))}</div>`,
+      `</div>`,
+    ].join("");
     return;
   }
-  panel.innerHTML = dirs
-    .map((dir) => {
-      const isActive = current && dir.toLowerCase() === current.toLowerCase();
-      return `<div class="recent-dir-row" data-active="${isActive}"><button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml(dir)}" title="${escapeHtml(dir)}">${escapeHtml(shortPath(dir))}</button><button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}">×</button></div>`;
-    })
-    .join("");
+  panel.innerHTML = [
+    `<div class="recent-dir-panel-shell">`,
+    head,
+    `<div class="recent-dir-list">`,
+    dirs
+      .map((dir) => {
+        const isActive = !!current && dir.toLowerCase() === current.toLowerCase();
+        return [
+          `<div class="recent-dir-row" data-active="${isActive}">`,
+          `<button type="button" class="recent-dir-item" data-recent-dir="${escapeHtml(dir)}" title="${escapeHtml(dir)}">`,
+          `<span class="recent-dir-copy">`,
+          `<span class="recent-dir-label">${escapeHtml(shortPath(dir))}</span>`,
+          `<span class="recent-dir-path">${escapeHtml(dir)}</span>`,
+          `</span>`,
+          isActive ? `<span class="recent-dir-state" aria-hidden="true">•</span>` : "",
+          `</button>`,
+          `<button type="button" class="recent-dir-remove" data-recent-remove="${escapeHtml(dir)}" title="${escapeHtml(t("common.delete"))}" aria-label="${escapeHtml(t("common.delete"))}">×</button>`,
+          `</div>`,
+        ].join("");
+      })
+      .join(""),
+    `</div>`,
+    `</div>`,
+  ].join("");
 }
 
 function openRecentDirPanel(): void {
@@ -1351,7 +1341,7 @@ function openRecentDirPanel(): void {
   const wrap = document.getElementById("taskCwdDropdown");
   if (wrap) {
     const rect = wrap.getBoundingClientRect();
-    panel.style.top = Math.round(rect.bottom + 4) + "px";
+    panel.style.top = Math.round(rect.bottom + 6) + "px";
     panel.style.left = Math.round(Math.max(4, rect.left)) + "px";
     panel.style.width = Math.round(rect.width) + "px";
     wrap.dataset.open = "true";
@@ -1428,10 +1418,6 @@ document.addEventListener("click", (e) => {
   if (target?.closest?.("#taskCwdDropdown") || target?.closest?.(".recent-dir-panel")) return;
   closeRecentDirPanel();
 }, listenerOpts);
-
-document.getElementById("taskGit")?.addEventListener("click", () => {
-  void initGitCurrent({ notify: true });
-});
 
 // ── Init ──
 
