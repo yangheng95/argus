@@ -1396,18 +1396,12 @@ export function createOrchestratorTools(input: {
           return `Run ${run.id} is ${run.status}. Only accepted/running/blocked runs may dispatch goals. Create a fresh run if this one is terminal.`
         }
 
-        // Push the IDs onto the in-memory dispatch queue. The task loop
-        // pulls this queue and calls pool.submit(ids) — the LLM's decision
-        // is authoritative. Idempotency in the pool silently skips IDs
-        // that are already live/satisfied, so re-listing a goal does no
-        // harm, but without this tool the loop no longer auto-submits
-        // anything.
-        const { pushDispatch } = await import("./dispatch-queue")
-        pushDispatch(taskID, goalIDs)
+        const { queueDispatchGoals } = await import("./dispatch-queue")
+        const queuedGoalIDs = queueDispatchGoals(taskID, goalIDs)
 
         requestStopAfterCurrentStep("dispatch_goal")
         return (
-          `Dispatched ${goalIDs.length} goal(s): ${goalIDs.join(", ")}. ` +
+          `Dispatched ${queuedGoalIDs.length} goal(s): ${queuedGoalIDs.join(", ")}. ` +
           `STOP HERE — task loop will run the pool and re-trigger you when the batch drains.` +
           (reason ? `\nReason: ${reason}` : "")
         )
@@ -1647,29 +1641,23 @@ export function createOrchestratorTools(input: {
         await updateTask(task, { status: "active", error: null, blocking_reason: null }, "Execution submitted")
         await updateRun(run, { status: "running" }, "Execution submitted")
 
-        // The tool description promises "equivalent to activating the run then
-        // calling dispatch_goal". Deliver on that: push every pending goal onto
-        // the dispatch queue so the loop's `pullDispatch` has work. Without
-        // this the loop sees no pending IDs, reaches "no dispatchable goals",
-        // and the stale-state circuit breaker fails the task after 5 cycles.
-        // GoalPool enforces its own dependency ordering + idempotency, so
-        // "dependency-ready" is resolved inside the pool — we just enumerate
-        // pending candidates here (the single projection consumers use for
-        // dispatchability, per goal-status.ts::deriveGoalStatus).
+        // submit_execution materializes the immediate dispatch decision as
+        // queued goal_run rows. Only currently dispatchable goals are queued;
+        // blocked dependents remain for a later decision cycle.
         const readyIDs = listGoals(taskID)
           .filter((g) => goalStatusByID(g.id) === "pending")
           .map((g) => g.id)
-        if (readyIDs.length === 0) {
+        const { queueDispatchGoals } = await import("./dispatch-queue")
+        const queuedGoalIDs = queueDispatchGoals(taskID, readyIDs)
+        if (queuedGoalIDs.length === 0) {
           requestStopAfterCurrentStep("submit_execution")
           return `Run ${runID} activated but no pending goals to dispatch. STOP HERE.`
         }
-        const { pushDispatch } = await import("./dispatch-queue")
-        pushDispatch(taskID, readyIDs)
 
         requestStopAfterCurrentStep("submit_execution")
         return (
-          `Run ${runID} activated; ${readyIDs.length} pending goal(s) pushed to dispatch queue: ` +
-          `${readyIDs.join(", ")}. STOP HERE — task loop will run the pool and re-trigger you ` +
+          `Run ${runID} activated; ${queuedGoalIDs.length} goal(s) queued for dispatch: ` +
+          `${queuedGoalIDs.join(", ")}. STOP HERE — task loop will run the pool and re-trigger you ` +
           `when the batch drains.`
         )
       },

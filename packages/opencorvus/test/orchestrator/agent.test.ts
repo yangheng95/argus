@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
-import { EngineGoalRunTable, EngineGoalTable, EnginePlanVersionTable, EngineRunTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineGoalRunTable, EngineGoalTable, EnginePlanNodeTable, EnginePlanVersionTable, EngineRunTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { listQueuedGoalRunsForRun } from "../../src/engine"
 import { EngineService } from "../../src/task-api"
 import { Orchestrator } from "../../src/orchestrator/agent"
 import { AgentRuntime } from "../../src/agent/runtime/runtime"
@@ -10,9 +11,8 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { pullDispatch } from "../../src/orchestrator/dispatch-queue"
 
-describe("orchestrator dispatch gate", () => {
+describe("orchestrator decision entry", () => {
   let tmp: Awaited<ReturnType<typeof tmpdir>>
 
   beforeEach(async () => {
@@ -26,7 +26,7 @@ describe("orchestrator dispatch gate", () => {
     await tmp?.[Symbol.asyncDispose]?.()
   })
 
-  test("emits task.waiting when dispatch is suppressed by active goal runs", async () => {
+  test("retry trigger still reaches the runtime when active goal runs exist", async () => {
     const now = Date.now()
     const projectID = `project_gate_${now}`
     const taskID = `tsk_gate_${now}`
@@ -34,95 +34,100 @@ describe("orchestrator dispatch gate", () => {
     const goalID = `goal_gate_${now}`
     const goalRunID = `goalrun_gate_${now}`
 
-    Database.use((db) => {
-      db.insert(ProjectTable).values({
-        id: projectID,
-        worktree: process.cwd(),
-        name: "Dispatch gate test",
-        sandboxes: "[]",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineTaskTable).values({
-        id: taskID,
-        project_id: projectID,
-        source: "test",
-        title: "Gate task",
-        request: "Verify gate waiting event",
-        status: "queued",
-        priority: "normal",
-        active_run_id: runID,
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineRunTable).values({
-        id: runID,
-        task_id: taskID,
-        executor: "opencode",
-        status: "running",
-        phase: "execute",
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineGoalTable).values({
-        id: goalID,
-        task_id: taskID,
-        title: "Blocked build goal",
-        slug: "blocked-build-goal",
-        objective: "Implement enough concrete code so the dispatch gate test can observe an active goal run without invoking the orchestrator runtime.",
-        acceptance_specs: [],
-        owned_paths: ["src/gate.ts"],
-        depends_on: [],
-        exports: [],
-        imports: [],
-        kind: "feature",
-        requirement_ids: [],
-        priority: "blocking",
-        source: "spec",
-        status: "running",
-        order_index: 0,
-        time_created: now,
-        time_updated: now,
-      }).run()
-      db.insert(EngineGoalRunTable).values({
-        id: goalRunID,
-        task_id: taskID,
-        goal_id: goalID,
-        coordinator_run_id: runID,
-        executor: "opencode",
-        status: "running",
-        time_started: now - 2_000,
-        time_created: now - 2_000,
-        time_updated: now - 2_000,
-      }).run()
-    })
-
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const session = await Session.create({ kind: "root", title: "Retry session" })
+        const resolveModel = spyOn(AgentModel, "resolveAgentModel").mockResolvedValue({
+          id: "test/mock",
+          providerID: "test",
+          modelID: "mock",
+        } as any)
+        const runtime = spyOn(AgentRuntime, "run").mockResolvedValue({
+          text: "",
+          steps: [],
+          finishReason: "stop",
+          toolCallCount: 0,
+          failures: { count: 0, items: [] },
+        })
+
+        Database.use((db) => {
+          db.insert(ProjectTable).values({
+            id: projectID,
+            worktree: process.cwd(),
+            name: "Decision entry test",
+            sandboxes: "[]",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: projectID,
+            session_id: session.id,
+            source: "test",
+            title: "Decision task",
+            request: "Verify retry trigger still reaches runtime with active goal runs",
+            status: "active",
+            priority: "normal",
+            active_run_id: runID,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineRunTable).values({
+            id: runID,
+            task_id: taskID,
+            session_id: session.id,
+            executor: "opencode",
+            status: "running",
+            phase: "execute",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineGoalTable).values({
+            id: goalID,
+            task_id: taskID,
+            title: "Still running goal",
+            slug: "still-running-goal",
+            objective: "Keep one active goal run so this test proves processTask itself no longer suppresses retry.",
+            acceptance_specs: [],
+            owned_paths: ["src/gate.ts"],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "spec",
+            status: "running",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineGoalRunTable).values({
+            id: goalRunID,
+            task_id: taskID,
+            goal_id: goalID,
+            coordinator_run_id: runID,
+            executor: "opencode",
+            status: "running",
+            time_started: now - 2_000,
+            time_created: now - 2_000,
+            time_updated: now - 2_000,
+          }).run()
+        })
+
         await Orchestrator.processTask(taskID, { kind: "retry" })
+
+        expect(resolveModel).toHaveBeenCalled()
+        expect(runtime).toHaveBeenCalledTimes(1)
+
+        const events = await EngineService.listProtocolEvents(taskID)
+        expect(events.find((event) => event.type === "task.waiting")).toBeUndefined()
       },
     })
-
-    const events = await EngineService.listProtocolEvents(taskID)
-    const waiting = events.find((event) => event.type === "task.waiting")
-    expect(waiting).toBeTruthy()
-    expect(waiting?.payload).toMatchObject({
-      taskID,
-      runID,
-      reason: "dispatch_gate_suppressed",
-    })
-    const payload = waiting?.payload as { waitingOn?: Array<{ goalRunID: string; goalID?: string; goalTitle: string; sinceMs: number }> } | undefined
-    expect(payload?.waitingOn).toHaveLength(1)
-    expect(payload?.waitingOn?.[0]).toMatchObject({
-      goalRunID,
-      goalID,
-      goalTitle: "Blocked build goal",
-    })
-    expect(payload?.waitingOn?.[0]?.sinceMs).toBeGreaterThanOrEqual(2_000)
   })
 
-  test("operator_message bypasses the dispatch gate and reaches the runtime", async () => {
+  test("operator_message reaches the runtime while goals are active", async () => {
     const now = Date.now()
     const projectID = `project_operator_${now}`
     const taskID = `tsk_operator_${now}`
@@ -348,6 +353,7 @@ describe("orchestrator dispatch gate", () => {
     const runID = `run_dispatch_stop_${now}`
     const planID = `plan_dispatch_stop_${now}`
     const queuedGoalID = `goal_dispatch_stop_${now}`
+    const queuedNodeID = `node_dispatch_stop_${now}`
 
     await Instance.provide({
       directory: tmp.path,
@@ -406,6 +412,39 @@ describe("orchestrator dispatch gate", () => {
             time_created: now,
             time_updated: now,
           }).run()
+          db.insert(EngineGoalTable).values({
+            id: queuedGoalID,
+            task_id: taskID,
+            plan_version_id: planID,
+            title: "Queued dispatch goal",
+            slug: "queued-dispatch-goal",
+            objective: "Verify retry-triggered dispatch persists as queued goal_run.",
+            acceptance_specs: [],
+            owned_paths: ["src/dispatch-stop.ts"],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "spec",
+            status: "pending",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EnginePlanNodeTable).values({
+            id: queuedNodeID,
+            task_id: taskID,
+            plan_version_id: planID,
+            kind: "goal",
+            goal_id: queuedGoalID,
+            title: "Queued dispatch goal",
+            brief: "Queue dispatch stop test goal",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
           db.insert(EngineRunTable).values({
             id: runID,
             task_id: taskID,
@@ -422,7 +461,7 @@ describe("orchestrator dispatch gate", () => {
         await Orchestrator.processTask(taskID, { kind: "retry" })
 
         expect(runtime).toHaveBeenCalledTimes(1)
-        expect(pullDispatch(taskID)).toEqual([queuedGoalID])
+        expect(listQueuedGoalRunsForRun(runID).map((goalRun) => goalRun.goal_id)).toEqual([queuedGoalID])
         const task = await EngineService.getTask(taskID)
         expect(task.error).toBeUndefined()
       },

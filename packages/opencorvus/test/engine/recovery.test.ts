@@ -5,6 +5,8 @@ import {
   EngineExecutorSessionTable,
   EngineGoalRunTable,
   EngineGoalTable,
+  EnginePlanNodeTable,
+  EnginePlanVersionTable,
   EngineRunTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
@@ -15,6 +17,10 @@ import { resetDatabase } from "../fixture/db"
 let projectID = ""
 let activeTaskID = ""
 let queuedTaskID = ""
+let queuedRunID = ""
+let queuedPlanID = ""
+let queuedGoalID = ""
+let queuedNodeID = ""
 let runID = ""
 let goalID = ""
 let goalRunID = ""
@@ -118,7 +124,7 @@ function seedActiveExecution() {
 
 function seedQueuedTask() {
   const now = Date.now()
-  Database.use((db) =>
+  Database.transaction((db) => {
     db.insert(EngineTaskTable).values({
       id: queuedTaskID,
       project_id: projectID,
@@ -126,11 +132,67 @@ function seedQueuedTask() {
       title: "queued task",
       request: "run queued work",
       status: "queued",
+      active_run_id: queuedRunID,
       priority: "normal",
       time_created: now,
       time_updated: now,
-    }).run(),
-  )
+    }).run()
+    db.insert(EnginePlanVersionTable).values({
+      id: queuedPlanID,
+      task_id: queuedTaskID,
+      version: 1,
+      status: "active",
+      summary: "Queued recovery plan",
+      prompt: "Queued recovery prompt",
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineGoalTable).values({
+      id: queuedGoalID,
+      task_id: queuedTaskID,
+      plan_version_id: queuedPlanID,
+      title: "queued goal",
+      slug: "queued-goal",
+      objective: "resume queued goal dispatch after recovery",
+      acceptance_specs: [],
+      owned_paths: [],
+      depends_on: [],
+      exports: [],
+      imports: [],
+      kind: "feature",
+      requirement_ids: [],
+      priority: "blocking",
+      source: "test",
+      status: "pending",
+      retry_count: 0,
+      order_index: 0,
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EnginePlanNodeTable).values({
+      id: queuedNodeID,
+      task_id: queuedTaskID,
+      plan_version_id: queuedPlanID,
+      kind: "goal",
+      goal_id: queuedGoalID,
+      title: "queued goal",
+      brief: "resume queued goal after recovery",
+      order_index: 0,
+      time_created: now,
+      time_updated: now,
+    }).run()
+    db.insert(EngineRunTable).values({
+      id: queuedRunID,
+      task_id: queuedTaskID,
+      plan_version_id: queuedPlanID,
+      executor: "opencode",
+      status: "queued",
+      phase: "execute",
+      retry_count: 0,
+      time_created: now,
+      time_updated: now,
+    }).run()
+  })
 }
 
 beforeEach(async () => {
@@ -138,6 +200,10 @@ beforeEach(async () => {
   projectID = `project_recovery_${Date.now()}`
   activeTaskID = `task_active_${Date.now()}`
   queuedTaskID = `task_queued_${Date.now()}`
+  queuedRunID = `run_queued_${Date.now()}`
+  queuedPlanID = `plan_queued_${Date.now()}`
+  queuedGoalID = `goal_queued_${Date.now()}`
+  queuedNodeID = `node_queued_${Date.now()}`
   runID = `run_${Date.now()}`
   goalID = `goal_${Date.now()}`
   goalRunID = `goal_run_${Date.now()}`

@@ -25,7 +25,7 @@ import { ExecutorRegistry } from "@/executor/registry"
 import { runGoalPipeline } from "@/pipeline"
 import { EngineConfig } from "./config"
 import { createDecisionLog } from "@/decision-log"
-import { isGoalDispatchable, unsatisfiedDependencyGoalIDs } from "@/goal/readiness"
+import { isQueuedGoalRunStartable, unsatisfiedDependencyGoalIDs } from "@/goal/readiness"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { writeIntentBundle } from "@/goal/intent-bundle"
 import {
@@ -33,6 +33,7 @@ import {
   listPlanNodesByPlan,
   listGoalsByPlan,
   listGoalRunsForDispatch,
+  listQueuedGoalRunsForRun,
   type TaskRow,
   type RunRow,
   type PlanRow,
@@ -40,7 +41,6 @@ import {
   type GoalRunRow,
 } from "./store"
 import {
-  createGoalRun,
   updateGoalRun,
   ensureExecutorSession,
   updateGoalWorkspace,
@@ -173,6 +173,7 @@ export interface PoolHooks {
 type GoalNodeEntry = {
   node: import("./store").PlanNodeRow & { goal_id: string }
   goal: GoalRow
+  goalRun: GoalRunRow
 }
 
 export class GoalPool {
@@ -188,38 +189,32 @@ export class GoalPool {
   }
 
   /**
-  * Submit goals for execution. The LLM decides which IDs to dispatch, but
-  * the pool still enforces two hard admission rules:
-  *   - idempotency: skip IDs whose own tip is already live or satisfied
-  *   - dependency satisfaction: skip IDs whose `depends_on` chain is not yet
-  *     authoritatively satisfied
-   *
-   * When `goalIDs` is omitted the pool auto-submits every currently-
-   * dispatchable goal in the plan (ordered by `order_index` for a
-   * deterministic queue). This is the transitional hook used by
-   * orchestrator/loop.ts until Phase 2b makes dispatch strictly
-   * LLM-driven; afterwards the argument will be required.
+  * Submit queued goal_run rows for execution. The LLM's dispatch decision is
+  * already materialized as `goal_run(status='queued')`; the pool only admits
+  * authoritative queued tips whose dependencies are currently satisfied.
    */
   submit(goalIDs?: string[]) {
-    const { plan, task } = this.opts
+    this.refreshQueue(goalIDs)
+    this.fillSlots()
+  }
+
+  private refreshQueue(goalIDs?: string[]) {
+    const { plan, task, run } = this.opts
     const nodes = listPlanNodesByPlan(plan.id)
     const goals = listGoalsByPlan(plan.id) as GoalRow[]
-    // Task-scoped goal_run history: idempotency must see COMPLETED runs
-    // from prior runs on the same task so goals that passed earlier are
-    // not re-dispatched when the orchestrator creates a second run.
     const goalRuns = listGoalRunsForDispatch(task.id)
+    const queuedGoalRuns = listQueuedGoalRunsForRun(run.id)
+    const filterIDs = goalIDs ? new Set(goalIDs) : undefined
 
-    const effectiveIDs = goalIDs ?? [...goals]
-      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
-      .map((g) => g.id)
-
-    for (const goalID of effectiveIDs) {
-      const goal = goals.find((g) => g.id === goalID)
+    for (const queuedGoalRun of queuedGoalRuns) {
+      if (filterIDs && !filterIDs.has(queuedGoalRun.goal_id)) continue
+      const goalID = queuedGoalRun.goal_id
+      const goal = goals.find((item) => item.id === goalID)
       if (!goal) {
         log.warn("pool.submit: goal not found in plan", { goalID, planID: plan.id })
         continue
       }
-      if (!isGoalDispatchable(goal, goalRuns)) {
+      if (!isQueuedGoalRunStartable(queuedGoalRun, goal, goalRuns)) {
         const blockedBy = unsatisfiedDependencyGoalIDs(goal, goalRuns)
         if (blockedBy.length > 0) {
           log.info("pool.submit: goal blocked by unsatisfied dependencies", {
@@ -228,22 +223,17 @@ export class GoalPool {
             planID: plan.id,
           })
         }
-        // Idempotency skip — normal when the LLM re-submits an already-
-        // dispatched ID or when the transitional auto-submit sees goals
-        // that are already running / satisfied.
         continue
       }
-      if (this.queue.some((q) => q.goal.id === goalID)) continue
+      if (this.queue.some((item) => item.goalRun.id === queuedGoalRun.id)) continue
       if (this.active.has(goalID)) continue
-      const node = nodes.find((n) => n.kind === "goal" && n.goal_id === goalID)
+      const node = nodes.find((item) => item.kind === "goal" && item.goal_id === goalID)
       if (!node) {
         log.warn("pool.submit: no plan_node found for goal", { goalID, planID: plan.id })
         continue
       }
-      this.queue.push({ node: node as GoalNodeEntry["node"], goal })
+      this.queue.push({ node: node as GoalNodeEntry["node"], goal, goalRun: queuedGoalRun })
     }
-
-    this.fillSlots()
   }
 
   /**
@@ -294,9 +284,10 @@ export class GoalPool {
     const { signal } = this.opts
     if (signal?.aborted) return
 
-    // FIFO — the LLM's submit order remains the preferred dispatch order,
-    // but actual admission is still guarded by isGoalDispatchable() so a
-    // dependency violation cannot enter active execution even if requested.
+    // Refresh queued tips first: a just-finished dependency may have made
+    // another pre-queued goal_run startable.
+    this.refreshQueue()
+
     while (this.active.size < this.opts.concurrency && this.queue.length > 0) {
       const entry = this.queue.shift()!
       this.dispatchGoal(entry)
@@ -323,7 +314,7 @@ export class GoalPool {
         this.active.delete(entry.goal.id)
         const result: GoalResult = {
           goalID: entry.goal.id,
-          goalRunID: "",
+          goalRunID: entry.goalRun.id,
           title: entry.goal.title,
           status: "failed",
           error: err instanceof Error ? err.message : String(err),
@@ -336,7 +327,7 @@ export class GoalPool {
         return result
       })
 
-    this.active.set(entry.goal.id, { goalRunID: "", ctrl, promise })
+    this.active.set(entry.goal.id, { goalRunID: entry.goalRun.id, ctrl, promise })
   }
 
   private async executeAndEval(entry: GoalNodeEntry, signal: AbortSignal): Promise<GoalResult> {
@@ -345,13 +336,13 @@ export class GoalPool {
     if (!sessionID) throw new Error(`Task ${task.id} has no session`)
 
     // ── 1. engine_goal.status is derived from goal_run chain tip; see
-    // engine/goal-status.ts. We do NOT write "running" here — the upcoming
-    // createGoalRun(queued) + pipeline/executor.ts updateGoalRun(running)
-    // will drive syncGoalStatus → goal.status=running within a few hundred ms.
+    // engine/goal-status.ts. The queued goal_run already exists before the
+    // pool starts; executor-side updateGoalRun(running) will drive
+    // syncGoalStatus → goal.status=running within a few hundred ms.
     //
 
     let worktreeDir: string | undefined
-    let goalRun: GoalRunRow | undefined
+    let goalRun: GoalRunRow = entry.goalRun
     try {
       // ── 2. Acquire goal-scoped workspace ──
       const worktreeInfo = await acquireGoalWorkspace(entry.goal)
@@ -478,16 +469,15 @@ export class GoalPool {
       // card in the overlay (build phase within the step).
       const buildSession = await createBuildSession(task as any, entry.goal as any, worktreeDir, containerSession.id)
 
-      // ── 4. Create GoalRun record ──
-      goalRun = createGoalRun({
-        taskID: task.id,
-        goalID: entry.goal.id,
-        planNodeID: entry.node.id,
-        coordinatorRunID: run.id,
-        sessionID: buildSession.id,
-        workspaceDir: worktreeDir,
-        metadata: { worktree_branch: worktreeInfo.branch },
-      })
+      // ── 4. Attach dispatch-time runtime metadata to the queued GoalRun ──
+      goalRun = updateGoalRun(goalRun.id, {
+        session_id: buildSession.id,
+        workspace_dir: worktreeDir,
+        metadata: {
+          ...((goalRun.metadata as Record<string, unknown>) ?? {}),
+          worktree_branch: worktreeInfo.branch,
+        },
+      }) ?? goalRun
 
       // ── 4b. Write worktree metadata for traceability ──
       {
@@ -507,10 +497,6 @@ export class GoalPool {
           log.warn("failed to write worktree meta", { goalID: entry.goal.id, error: String(err) })
         })
       }
-
-      // Update active slot with goalRunID
-      const slot = this.active.get(entry.goal.id)
-      if (slot) slot.goalRunID = goalRun.id
 
       throwIfAborted(signal)
 
@@ -835,77 +821,25 @@ export class GoalPool {
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err)
       log.error("goal dispatch/execution failed", { goalID: entry.goal.id, error })
-      if (goalRun) {
-        try {
-          updateGoalRun(goalRun.id, {
-            status: signal.aborted ? "aborted" : "failed",
-            error: signal.aborted ? "aborted" : error,
-            blocking_reason: null,
-          })
-        } catch (updateErr) {
-          log.warn("goal pool: failed to finalize goal_run after dispatch error", {
-            goalID: entry.goal.id,
-            goalRunID: goalRun.id,
-            error: updateErr instanceof Error ? updateErr.message : String(updateErr),
-          })
-        }
-        if (!signal.aborted) {
-          logWorktreePreservedForRetry(entry.goal.id, worktreeDir, error)
-        }
-      }
-
-      // No goal_run was created before the dispatch threw. Two cases with
-      // very different semantics:
-      //
-      //   A. Worktree WAS acquired (worktreeDir set). The failure happened
-      //      during per-goal planning — typically a transient LLM/provider
-      //      error (e.g. "No output generated" from a stream interruption).
-      //      This is retryable: create a shadow failed goal_run so
-      //      Goal.startNewAttempt(reason="manual_retry") + retry_goal
-      //      route a fresh attempt through the same goal.workspace_dir. Preserve the
-      //      workspace per spec-10 §2.4 — cleanup is reserved for terminal
-      //      goal states (passed / cascade_failed / task cancel), not
-      //      single-attempt transient errors.
-      //
-      //   B. Worktree could NOT be acquired (no worktreeDir, e.g. disk full,
-      //      git init failed, process crash during Worktree.create). The
-      //      cascade_state column that used to mark "permanently failed —
-      //      no workspace" is retired; instead record the failure as a
-      //      shadow goal_run with workspaceDir=null so the event timeline
-      //      has a visible, LLM-readable "dispatch attempt failed pre-
-      //      worktree." The orchestrator reads this via the describe layer
-      //      and decides (retry_goal / modify_goal / fail_task).
-      if (!goalRun) {
-        const goalRow = findGoal(entry.goal.id)
-        const branch = goalRow?.workspace_branch ?? undefined
-        const shadowRun = createGoalRun({
-          taskID: task.id,
-          goalID: entry.goal.id,
-          planNodeID: entry.node.id,
-          coordinatorRunID: run.id,
-          workspaceDir: worktreeDir ?? undefined,
-          metadata: {
-            worktree_branch: branch,
-            pre_create_failure: true,
-            worktree_acquired: !!worktreeDir,
-          },
-        })
-        updateGoalRun(shadowRun.id, {
-          status: "failed",
-          error,
+      try {
+        updateGoalRun(goalRun.id, {
+          status: signal.aborted ? "aborted" : "failed",
+          error: signal.aborted ? "aborted" : error,
           blocking_reason: null,
         })
-        if (worktreeDir) {
-          logWorktreePreservedForRetry(
-            entry.goal.id,
-            worktreeDir,
-            `pre-createGoalRun: ${error}`,
-          )
-        }
+      } catch (updateErr) {
+        log.warn("goal pool: failed to finalize goal_run after dispatch error", {
+          goalID: entry.goal.id,
+          goalRunID: goalRun.id,
+          error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+        })
+      }
+      if (!signal.aborted) {
+        logWorktreePreservedForRetry(entry.goal.id, worktreeDir, error)
       }
 
       return {
-        goalID: entry.goal.id, goalRunID: goalRun?.id ?? "", title: entry.goal.title,
+        goalID: entry.goal.id, goalRunID: goalRun.id, title: entry.goal.title,
         status: "failed", error, attempts: 1,
       }
     }

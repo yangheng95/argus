@@ -33,16 +33,11 @@ import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
-  findTask,
-  listActiveGoalRunsForRun,
-  listGoals,
   requireTask,
   updateTask,
   WorkflowRegistry,
   createWorkflowState,
   renderWorkflowPrompt,
-  EngineProtocol,
-  Event as EngineEvent,
 } from "@/engine"
 import { describeTask, renderTaskDescription } from "@/engine/describe"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
@@ -89,44 +84,6 @@ export namespace Orchestrator {
   }
 
   export async function processTask(taskID: string, trigger: OrchestratorTrigger): Promise<void> {
-    // ── Dispatch gate: suppress wake-up while goals are executing ──
-    // When goals are running in parallel, the Orchestrator has nothing useful
-    // to do — it would waste API tokens asking LLM to spin-wait.
-    // notifyGoalResult() ensures all goal_runs are in terminal state before
-    // calling processTask, so legitimate completion triggers pass naturally.
-    // failRun() marks all active goal_runs as failed before calling, so it
-    // also passes. Only spurious triggers (orphan recovery, user retry,
-    // redundant syncRun re-notifications) are blocked. Operator messages are
-    // an explicit override: the user is asking the scheduler to intervene now.
-    const gateTask = findTask(taskID)
-    if (gateTask?.active_run_id) {
-      const activeGoalRuns = listActiveGoalRunsForRun(gateTask.active_run_id)
-      if (activeGoalRuns.length > 0 && trigger.kind !== "operator_message") {
-        const goalTitleByID = new Map(listGoals(taskID).map((goal) => [goal.id, goal.title]))
-        const now = Date.now()
-        const waitingOn = activeGoalRuns.map((goalRun) => ({
-          goalRunID: goalRun.id,
-          goalID: goalRun.goal_id,
-          goalTitle: goalTitleByID.get(goalRun.goal_id) ?? goalRun.goal_id,
-          sinceMs: Math.max(0, now - (goalRun.time_started ?? goalRun.time_created ?? now)),
-        }))
-        await EngineProtocol.emit(EngineEvent.TaskWaiting, {
-          taskID,
-          runID: gateTask.active_run_id,
-          reason: "dispatch_gate_suppressed",
-          waitingOn,
-          summary: `Waiting on ${waitingOn.length} active goal run(s) before orchestrator dispatch can resume`,
-        }, { source: "orchestrator.dispatch-gate" })
-        log.info("orchestrator suppressed by dispatch gate", {
-          taskID,
-          trigger: trigger.kind,
-          activeGoalRuns: activeGoalRuns.length,
-          goalRunIDs: activeGoalRuns.map(gr => gr.id),
-        })
-        return
-      }
-    }
-
     abort(taskID)
     const ctrl = new AbortController()
     running.set(taskID, ctrl)

@@ -9,7 +9,7 @@
  *   - notifyGoalResult fire-and-forget (pool drain collects results)
  *   - fire-and-forget agent-notification races (PerRunState claim+finalize
  *     runs on the single updateRun terminal transition, not scattered maps)
- *   - dispatch gate (Orchestrator only runs between pool drains)
+ *   - duplicate wake-suppression gates (the loop owns all waiting between pool drains)
  *   - infinite wake-up loops (no re-triggering — the loop decides)
  *
  * All timeouts are inactivity-based, never hard/absolute.
@@ -352,15 +352,12 @@ async function runTaskLoopInner(input: {
       continue
     }
 
-    // ── Phase 3: GoalPool — execute the LLM's dispatch decision ──
-    // The pool runs whatever IDs the LLM just pushed onto the dispatch queue
-    // via dispatch_goal (orchestrator/dispatch-queue.ts). When the queue is
-    // empty — the LLM didn't dispatch anything this turn — the pool is not
-    // instantiated; the loop feeds a batch_complete trigger so the LLM can
-    // decide again from the latest describe snapshot. Stale-state detection
-    // is the hard backstop against "LLM never calls dispatch_goal."
-    const { pullDispatch } = await import("./dispatch-queue")
-    const pendingDispatch = pullDispatch(taskID)
+    // ── Phase 3: GoalPool — execute durable dispatch facts ──
+    // dispatch_goal / submit_execution now materialize dispatch immediately as
+    // queued goal_run rows. The pool consumes those authoritative queued tips;
+    // there is no separate in-memory channel to recover after restart.
+    const { listQueuedDispatchGoalIDs } = await import("./dispatch-queue")
+    const pendingDispatch = listQueuedDispatchGoalIDs(taskID)
 
     if (pendingDispatch.length > 0) {
       const concurrency = await effectiveMaxExecutorGroups(taskAfter)

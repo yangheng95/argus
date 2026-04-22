@@ -377,9 +377,8 @@ export namespace EngineService {
     async function recoverProjectExecution() {
       const projectID = Instance.project.id
       const { recoverProjectExecution } = await import("@/engine/recovery")
-      // Recovery only cleans physical resources (sessions / goal_runs /
-      // orphan runs). Loop resumption is user-message-driven via the
-      // continueTaskMessage path — no auto-restart on process startup.
+      // Recovery aborts stale executor state first, then resumes orphaned
+      // active loops / queued backlog through the queue coordinator.
       await recoverProjectExecution({ projectID })
     }
     setTimeout(() => {

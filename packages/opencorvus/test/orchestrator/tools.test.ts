@@ -3,11 +3,13 @@ import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
+  EngineGoalTable,
+  EnginePlanNodeTable,
   EnginePlanVersionTable,
   EngineRunTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
-import { requireRun, requireTask } from "../../src/engine"
+import { listQueuedGoalRunsForRun, requireRun, requireTask } from "../../src/engine"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -32,6 +34,8 @@ describe("orchestrator deferred stop", () => {
     const taskID = `tsk_tools_${stamp}`
     const planID = `plan_tools_${stamp}`
     const runID = `run_tools_${stamp}`
+    const goalID = `goal_tools_${stamp}`
+    const nodeID = `node_tools_${stamp}`
 
     Database.use((db) => {
       db.insert(ProjectTable).values({
@@ -75,6 +79,39 @@ describe("orchestrator deferred stop", () => {
         time_created: now,
         time_updated: now,
       }).run()
+      db.insert(EngineGoalTable).values({
+        id: goalID,
+        task_id: taskID,
+        plan_version_id: planID,
+        title: "Dispatch goal",
+        slug: "dispatch-goal",
+        objective: "Verify dispatch_goal creates a durable queued goal_run.",
+        acceptance_specs: [],
+        owned_paths: ["src/tools.ts"],
+        depends_on: [],
+        exports: [],
+        imports: [],
+        kind: "feature",
+        requirement_ids: [],
+        priority: "blocking",
+        source: "spec",
+        status: "pending",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EnginePlanNodeTable).values({
+        id: nodeID,
+        task_id: taskID,
+        plan_version_id: planID,
+        kind: "goal",
+        goal_id: goalID,
+        title: "Dispatch goal",
+        brief: "Verify queued goal_run creation",
+        order_index: 0,
+        time_created: now,
+        time_updated: now,
+      }).run()
     })
 
     await Instance.provide({
@@ -88,9 +125,10 @@ describe("orchestrator deferred stop", () => {
 
         expect(stopSignal.aborted).toBe(false)
 
-        const result = await tools.dispatch_goal.execute({ goalIDs: ["goal_demo"] }, {} as any)
+        const result = await tools.dispatch_goal.execute({ goalIDs: [goalID] }, {} as any)
 
-        expect(result).toContain("Dispatched 1 goal(s): goal_demo.")
+        expect(result).toContain(`Dispatched 1 goal(s): ${goalID}.`)
+        expect(listQueuedGoalRunsForRun(runID).map((goalRun) => goalRun.goal_id)).toEqual([goalID])
         expect(stopSignal.aborted).toBe(false)
         expect(finalizeDeferredStop()).toBe("dispatch_goal")
         expect(stopSignal.aborted).toBe(true)
