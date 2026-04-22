@@ -372,7 +372,12 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         "Run a shell command in the project directory and capture stdout/stderr/exit code. " +
         "Use to build the project, start servers, run smoke tests, or verify frontend rendering. " +
         "For server startup verification, use a short timeout (e.g., 10-15 seconds) to check if " +
-        "the server starts without crashing — do NOT keep servers running indefinitely.",
+        "the server starts without crashing — do NOT keep servers running indefinitely.\n\n" +
+        "If you background a process (`cmd &`) and it keeps the port alive past this call's " +
+        "timeout, note the returned `pid` line — that is the PID of the SHELL that spawned " +
+        "your backgrounded child, and you can target its whole tree on a later turn with " +
+        "`taskkill /F /T /PID <pid>` (Windows) or `kill -TERM -- -<pid>` (Unix). Prefer " +
+        "that over `netstat | findstr :3000` guessing — the shell's own PID is deterministic.",
       inputSchema: z.object({
         command: z.string().describe("Shell command to run (runs in project root)"),
         timeout_ms: z.number().default(120_000).describe("Max execution time ms"),
@@ -385,6 +390,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
             timeoutMs: timeout_ms,
           })
           const parts = [`exit_code: ${result.exitCode}`]
+          if (typeof result.pid === "number") parts.push(`pid: ${result.pid}`)
           if (result.timedOut) parts.push(`timeout_ms: ${timeout_ms}`)
           if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(0, 8000)}`)
           if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(0, 5000)}`)

@@ -32,6 +32,12 @@ export namespace Shell {
     /** True when idleTimeoutMs of inactivity was reached (process went quiet). */
     idleTimedOut: boolean
     aborted: boolean
+    /** OS PID of the spawned shell process. Surfaced so callers (tool wrappers,
+     *  LLM output) can target it with `taskkill /T /PID <pid>` or `kill -TERM
+     *  -<pid>` on a later turn — lets an agent cleanly kill a backgrounded
+     *  child (`cmd & …`) instead of guessing the PID via netstat. Undefined
+     *  only if spawn failed before a PID was assigned. */
+    pid?: number
   }
 
   function firstExisting(paths: Array<string | null | undefined>) {
@@ -201,6 +207,7 @@ export namespace Shell {
       timedOut,
       idleTimedOut,
       aborted,
+      pid: typeof proc.pid === "number" ? proc.pid : undefined,
     }
   }
 
