@@ -716,6 +716,13 @@ export const TaskBoardGoalContract = z.object({
 export const TaskBoardGoalWorkflow = z.object({
   goalID: z.string(),
   goalTitle: z.string(),
+  /** Authoritative goal summary written by the Architect: a 1–2 sentence
+   *  execution directive for this goal. Surfaces inside the goal card
+   *  header so operators see what the goal is about without opening the
+   *  acceptance_specs drawer. May be longer than the title but stays
+   *  single-paragraph — it is NOT the full user request, only this
+   *  goal's slice of it. */
+  goalObjective: z.string().optional(),
   goalStatus: z.string(),
   /** Decomposition-time position (0-based). Stable across goal removals so
    *  the overlay can display "#N" that matches the requirements breakdown

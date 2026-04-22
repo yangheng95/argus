@@ -12,11 +12,9 @@
  *   - Step content comes from agentCards() (real-time message stream)
  */
 import { For, Show, createMemo, JSX } from "solid-js";
-import { CardParts } from "./CardParts";
 import { StepPayloadBody } from "./StepPayloadBody";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
-import { orderedMessageParts } from "../utils/message";
 import { openBuildSessionDialog } from "../services/dialog";
 import type { StepPayload } from "../store/card-tree";
 
@@ -59,6 +57,10 @@ interface AcceptanceSpecLike {
 interface GoalWorkflow {
   goalID: string;
   goalTitle: string;
+  /** Architect-authored 1–2 sentence execution directive for this goal.
+   *  The real goal summary — acceptance_specs are the pass/fail contract,
+   *  objective is the prose description a human reads first. */
+  goalObjective?: string;
   goalStatus: string;
   /** Typed acceptance specs from the backend (board.ts). */
   acceptanceSpecs?: AcceptanceSpecLike[];
@@ -84,8 +86,6 @@ interface GoalWorkflowGroupProps {
   goal: GoalWorkflow;
   /** 1-based display index shown in the header (e.g. #3) */
   goalIndex?: number;
-  /** Agent card messages grouped by canonical stepID. */
-  stepMessages?: Record<string, any[]>;
   defaultOpen?: boolean;
   /** Optional: edit the goal (title + detail). */
   onEditGoal?: (goalID: string, title: string, detail: string) => void;
@@ -134,13 +134,23 @@ function goalStatusClass(status: string): string {
 }
 
 // ── Step Row (expandable when it has content) ──
+//
+// The right-hand Board is a CONTROL PANEL — it surfaces high-level status
+// (step verdicts, file counts, plan nodes, evaluator checks) and offers a
+// "jump to session" affordance. It deliberately does NOT mirror the
+// conversation panel's message stream here: a step's LLM chatter (orchestrator
+// dispatch brief, agent text/tool parts) belongs in the left-hand Conversation
+// where CardParts already renders them properly. Rendering both the control
+// summary AND the raw message stream side-by-side produced the unreadable
+// JSON wall operators complained about; the stream is removed from this
+// surface (rule 10 — no dual-source / duplicate rendering).
 
 function StepRow(props: {
   step: GoalStep;
-  messages?: any[];
   goalTitle?: string;
 }) {
-  // ── Content presence: structured payload OR streaming messages ──
+  // ── Content presence: structured payload only (messages live in the
+  //    conversation panel). ──
   const hasPlanNodes = () =>
     !!props.step.payload?.planNodes && props.step.payload.planNodes.length > 0;
   const hasChangedFiles = () =>
@@ -149,7 +159,6 @@ function StepRow(props: {
     !!props.step.payload?.checks && props.step.payload.checks.length > 0;
   const hasEvalBody = () =>
     hasChecks() || !!props.step.payload?.evalSummary || !!props.step.payload?.verdict;
-  const hasMessages = () => !!props.messages && props.messages.length > 0;
   // The pipeline workflow uses `build` as the single goal-scope step;
   // the payload carries a pointer to the goal's build worker session
   // (SessionTable kind="build"). Scope-based: any step whose payload
@@ -157,7 +166,7 @@ function StepRow(props: {
   const hasOpenSession = () =>
     !!props.step.payload?.buildSessionID;
   const hasContent = createMemo(() =>
-    hasPlanNodes() || hasChangedFiles() || hasEvalBody() || hasMessages() || hasOpenSession(),
+    hasPlanNodes() || hasChangedFiles() || hasEvalBody() || hasOpenSession(),
   );
 
   const isActive = () =>
@@ -185,9 +194,6 @@ function StepRow(props: {
             <span class="gwg-step-summary">{props.step.summary}</span>
           </Show>
           <span class="gwg-step-status">{props.step.status}</span>
-          <Show when={hasMessages()}>
-            <span class="gwg-step-count">({props.messages!.length})</span>
-          </Show>
         </summary>
         <div class="gwg-step-body">
           <StepPayloadBody payload={props.step.payload} stepID={props.step.stepID} />
@@ -209,14 +215,6 @@ function StepRow(props: {
               >
                 {t("goal.open_session")}
               </button>
-            </div>
-          </Show>
-          {/* Agent messages for this step */}
-          <Show when={hasMessages()}>
-            <div class="gwg-step-messages">
-              <For each={props.messages}>
-                {(msg) => <CardParts parts={orderedMessageParts(msg)} depth={1} />}
-              </For>
             </div>
           </Show>
         </div>
@@ -305,6 +303,12 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
       </div>
       <Show when={expanded()}>
         <div class="gwg-body">
+          <Show when={props.goal.goalObjective}>
+            <div class="gwg-objective">
+              <div class="gwg-objective-label">{t("goal.field.objective")}</div>
+              <div class="gwg-objective-text">{props.goal.goalObjective}</div>
+            </div>
+          </Show>
           <Show when={previewAcceptance(props.goal.acceptanceSpecs)}>
             <div class="gwg-done-definition">
               <div class="gwg-done-definition-label">
@@ -317,7 +321,6 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
             {(step) => (
               <StepRow
                 step={step}
-                messages={props.stepMessages?.[step.stepID]}
                 goalTitle={props.goal.goalTitle}
               />
             )}
@@ -331,8 +334,6 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
 /** Render a list of GoalWorkflowGroups */
 export function GoalWorkflowList(props: {
   goals: GoalWorkflow[];
-  /** Per-goal step messages: { [goalID]: { [stepID]: msg[] } } */
-  goalStepMessages?: Record<string, Record<string, any[]>>;
   onEditGoal?: (goalID: string, title: string, detail: string) => void;
   onDeleteGoal?: (goalID: string) => void;
 }) {
@@ -343,7 +344,6 @@ export function GoalWorkflowList(props: {
           <GoalWorkflowGroup
             goal={goal}
             goalIndex={idx() + 1}
-            stepMessages={props.goalStepMessages?.[goal.goalID]}
             onEditGoal={props.onEditGoal}
             onDeleteGoal={props.onDeleteGoal}
           />

@@ -10,7 +10,6 @@ import { boardStore } from "../store/board";
 import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
-import { goalStagePhaseID } from "../utils/workflow-step";
 import { deliveryGoalProgress } from "../utils/goal-workflow";
 import { WorkflowProgressBar } from "./WorkflowProgressBar";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
@@ -380,34 +379,6 @@ export function Board(props: BoardProps) {
     return out;
   });
 
-  // Bucket goal-step session messages by goalID + stepID. Pipeline workflow
-  // has ONE goal-scope step (`build`) with three phases (plan / build /
-  // evaluate); planner / build / evaluator stages each map to a phase
-  // within that step via goalStagePhaseID(). Messages are bucketed by
-  // stepID for the GoalWorkflowGroup renderer (stepMessages prop), which
-  // groups by step not phase.
-  const goalStepMessages = createMemo(() => {
-    const result: Record<string, Record<string, any[]>> = {};
-    const ids = Object.keys(cardTreeStore.cards);
-    const agentCards: CardNode[] = [];
-    for (const id of ids) {
-      const card = cardTreeStore.cards[id];
-      if (!card || card.kind !== "agent") continue;
-      if (!card.goalID) continue;
-      agentCards.push(card);
-    }
-    agentCards.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
-    for (const card of agentCards) {
-      const phase = goalStagePhaseID(card.stage || "");
-      if (!phase) continue;
-      const goalID = String(card.goalID);
-      if (!goalID) continue;
-      const bucketMap = (result[goalID] ??= {});
-      (bucketMap[phase.stepID] ??= []).push(...cardToSyntheticMessages(card));
-    }
-    return result;
-  });
-
   return (
     <>
       <div id="taskActionsBar">
@@ -501,7 +472,6 @@ export function Board(props: BoardProps) {
       >
         <GoalWorkflowList
           goals={goalWorkflows()}
-          goalStepMessages={goalStepMessages()}
           onEditGoal={props.onEditGoal}
           onDeleteGoal={props.onDeleteGoal}
         />
