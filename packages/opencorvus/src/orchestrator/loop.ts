@@ -489,17 +489,14 @@ async function classifyBreakerCause(
       !supersededIDs.has(r.id) &&
       ["queued", "accepted", "planning", "running", "evaluating", "blocked"].includes(r.status),
   )
-  // Per-goal deliveries (goal_run_id != null) write an evaluation row at
-  // `pending` from persistDelivery() and there is NO updater in the current
-  // pipeline (per_goal_enabled evaluator was removed — delivery verdict
-  // lives at task-level only). Treating those as "delivery_unverified"
-  // breaks the stale-breaker: every task with N dispatched goals has N
-  // pending per-goal evaluations by design.
-  //
-  // Only task-level deliveries (goal_run_id == null) participate in the
-  // deliver-tool arbiter loop that actually updates evaluation.status.
-  // If ALL of those are pending past the stale window, the deliver tool
-  // is wedged — that's the real "delivery_unverified" signal.
+  // Per-goal deliveries (goal_run_id != null) do not create an evaluation
+  // row (persistGoalDelivery writes delivery+artifacts only) — the
+  // delivery-agent's checks cover per-goal verdicts at task-level time.
+  // Only task-level deliveries (goal_run_id == null, written by
+  // persistTaskDelivery) own a `scope='delivery'` evaluation that the
+  // deliver tool settles. If ALL of those are pending past the stale
+  // window, the deliver tool is wedged — that's the real
+  // "delivery_unverified" signal.
   const unverifiedDeliveries = deliveries.filter((d) => {
     if (d.status !== "candidate") return false
     if (d.goal_run_id) return false
