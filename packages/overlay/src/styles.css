@@ -273,15 +273,15 @@ body {
   color: var(--text);
   position: relative;
   isolation: isolate;
-  background: transparent;
-  opacity: clamp(0.5, var(--ui-window-opacity), 1);
+  background: var(--bg);
+  opacity: 1;
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  transition: opacity 120ms ease;
+  transition: background 120ms ease;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -9522,7 +9522,8 @@ body[data-theme="light"] {
 body {
   position: relative;
   isolation: isolate;
-  background: transparent;
+  background: var(--bg);
+  opacity: 1;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -9538,20 +9539,20 @@ body::after {
 body::before {
   inset: -18%;
   z-index: -3;
-  opacity: 0.96;
+  opacity: 0.78;
   background:
     radial-gradient(42% 38% at 12% 18%, rgba(113, 179, 168, 0.15), transparent 74%),
     radial-gradient(30% 28% at 86% 16%, rgba(207, 139, 87, 0.08), transparent 72%),
     radial-gradient(26% 30% at 66% 78%, rgba(198, 175, 114, 0.08), transparent 76%),
     radial-gradient(80% 70% at 50% 50%, rgba(255, 255, 255, 0.024), transparent 72%),
     linear-gradient(180deg, rgba(16, 19, 22, 0.99), rgba(19, 23, 26, 0.97) 54%, rgba(14, 17, 20, 0.98));
-  filter: blur(42px) saturate(108%);
+  filter: blur(30px) saturate(104%);
 }
 
 body::after {
   inset: 0;
   z-index: -2;
-  opacity: 0.32;
+  opacity: 0.16;
   background:
     radial-gradient(24% 28% at 20% 62%, rgba(113, 179, 168, 0.05), transparent 74%),
     radial-gradient(26% 22% at 74% 42%, rgba(198, 175, 114, 0.04), transparent 72%),
@@ -9560,18 +9561,18 @@ body::after {
 }
 
 body[data-theme="light"]::before {
-  opacity: 0.98;
+  opacity: 0.84;
   background:
     radial-gradient(42% 38% at 12% 18%, rgba(79, 149, 136, 0.12), transparent 74%),
     radial-gradient(30% 28% at 86% 16%, rgba(184, 120, 72, 0.08), transparent 72%),
     radial-gradient(26% 30% at 66% 78%, rgba(159, 141, 90, 0.07), transparent 76%),
     radial-gradient(80% 70% at 50% 50%, rgba(255, 255, 255, 0.18), transparent 72%),
     linear-gradient(180deg, rgba(245, 240, 233, 1), rgba(241, 236, 228, 0.98) 54%, rgba(236, 230, 220, 0.98));
-  filter: blur(28px) saturate(104%);
+  filter: blur(22px) saturate(102%);
 }
 
 body[data-theme="light"]::after {
-  opacity: 0.26;
+  opacity: 0.14;
   background:
     radial-gradient(24% 28% at 20% 62%, rgba(79, 149, 136, 0.04), transparent 74%),
     radial-gradient(26% 22% at 74% 42%, rgba(159, 141, 90, 0.03), transparent 72%),
