@@ -223,18 +223,17 @@ export default function AgentModelsPanel() {
   return (
     <div class="general-panel">
       <div class="config-panel-group">
-        <h4 class="config-panel-group-title">
-          Agent Models
+        <div class="config-panel-group-head">
+          <h4 class="config-panel-group-title">Agent Models</h4>
           <button
             type="button"
             class="btn btn-ghost mini"
-            style="margin-left: auto; font-size: var(--ui-font-meta);"
             onClick={handleRefreshHexin}
             disabled={refreshing()}
           >
             {refreshing() ? "Refreshing…" : "Refresh Hexin Models"}
           </button>
-        </h4>
+        </div>
         <p style="margin: 4px 0 12px 0; font-size: var(--ui-font-meta); opacity: 0.75;">
           Choose which LLM each agent uses. Leave unset to inherit the
           project default (top-level `model` in opencorvus.jsonc).

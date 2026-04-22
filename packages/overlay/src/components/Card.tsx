@@ -1,9 +1,10 @@
-import { For, Show } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { CardNode } from "../store/card-tree";
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree";
 import { defaultExpandedForNode } from "../utils/card-tree";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { boardStore } from "../store/board";
+import { normalizeAgentRole } from "../utils/message";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
@@ -25,10 +26,21 @@ import { t } from "../utils/i18n";
  * and the default expansion policy resumes.
  */
 export function Card(props: { node: CardNode; depth: number }) {
+  let articleRef: HTMLElement | undefined;
   const defaultExpanded = () => defaultExpandedForNode(props.node);
+  const [stickyInlineSize, setStickyInlineSize] = createSignal<number | undefined>();
+
+  const isStageCard = () =>
+    props.node.kind === "agent" || props.node.kind === "phase" || props.node.kind === "step";
 
   const expanded = () =>
     cardExpanded(props.node.id, props.node.status, defaultExpanded());
+
+  const shouldLockInlineSize = () =>
+    (props.depth === 0 &&
+      !(props.node.kind === "message" &&
+        (props.node.role === "user" || props.node.role === "system"))) ||
+    (props.node.kind === "tool" && expanded());
 
   const collapsible = () => {
     // User / synthetic bubbles render as non-foldable bubbles.
@@ -75,16 +87,65 @@ export function Card(props: { node: CardNode; depth: number }) {
   // not via CardParts — header already summarises the tool call.
   const isTool = () => props.node.kind === "tool";
   const toolPart = () => props.node.toolPart;
+  const bodyParts = createMemo(() => {
+    const parts = props.node.parts ?? [];
+    if (props.node.kind !== "phase" || parts.length === 0) return parts;
+    const phaseRole = props.node.phaseSessionKind || props.node.stage || "";
+    const first = parts[0];
+    if (!phaseRole || first?.type !== "boundary") return parts;
+    return normalizeAgentRole(String(first.role || "")) === normalizeAgentRole(phaseRole)
+      ? parts.slice(1)
+      : parts;
+  });
+
+  const articleStyle = createMemo<Record<string, string> | undefined>(() => {
+    const style: Record<string, string> = {};
+    if (props.node.accent) style["--card-stage"] = props.node.accent;
+    const stickyWidth = stickyInlineSize();
+    if (stickyWidth && shouldLockInlineSize()) {
+      style["--card-sticky-inline-size"] = `${stickyWidth}px`;
+    }
+    return Object.keys(style).length > 0 ? style : undefined;
+  });
+
+  createEffect(() => {
+    const article = articleRef;
+    if (!article || !shouldLockInlineSize()) return;
+
+    let frame = 0;
+    const updateStickyInlineSize = () => {
+      frame = 0;
+      const nextWidth = Math.ceil(article.getBoundingClientRect().width);
+      if (!Number.isFinite(nextWidth) || nextWidth <= 0) return;
+      setStickyInlineSize((current) =>
+        typeof current === "number" && current >= nextWidth ? current : nextWidth,
+      );
+    };
+
+    const observer = new ResizeObserver(() => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(updateStickyInlineSize);
+    });
+
+    observer.observe(article);
+    updateStickyInlineSize();
+
+    onCleanup(() => {
+      observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    });
+  });
 
   return (
     <article
+      ref={articleRef}
       class="card"
       data-kind={props.node.kind}
       data-role={props.node.role || undefined}
       data-stage={props.node.stage || undefined}
       data-status={props.node.status || "none"}
       data-depth={props.depth}
-      style={props.node.accent ? { "--card-stage": props.node.accent } : undefined}
+      style={articleStyle()}
       classList={{ "card--expanded": expanded(), "card--collapsed": !expanded() }}
     >
       <CardHeader
@@ -97,9 +158,12 @@ export function Card(props: { node: CardNode; depth: number }) {
       <Show when={expanded()}>
         <div class="card__body">
           <Show when={props.node.kind === "step" && props.node.goalDescription}>
-            <div class="card__goal-desc">
-              <StaticTextPart text={props.node.goalDescription!} />
-            </div>
+            <section class="card__goal-desc" aria-label={t("goal.field.objective")}>
+              <div class="card__goal-desc-label">{t("goal.field.objective")}</div>
+              <div class="card__goal-desc-text">
+                <StaticTextPart text={props.node.goalDescription!} />
+              </div>
+            </section>
           </Show>
 
           {/* Tool card body: delegate to InlineToolPart body mode */}
@@ -107,10 +171,7 @@ export function Card(props: { node: CardNode; depth: number }) {
             <InlineToolPart part={toolPart()} mode="body" />
           </Show>
 
-          {/* Step payload: plan nodes / changed files / diff stats / eval
-              checks / verdict / "Open session" button — same renderer as the
-              sidebar Goals panel, so a step's detail is identical across
-              surfaces. */}
+          {/* Step payload: plan nodes / evaluation checks / verdict. */}
           <Show when={props.node.kind === "step" && props.node.stepPayload && props.node.stepID}>
             <StepPayloadBody
               payload={props.node.stepPayload}
@@ -119,15 +180,15 @@ export function Card(props: { node: CardNode; depth: number }) {
           </Show>
 
           {/* Fidelity verdict: renders the parsed FidelityResult (verdict
-              badge + issues list + corrections diff) in place of the raw
-              JSON that used to leak into the requirements reasoning card. */}
-          <Show when={props.node.kind === "fidelity" && props.node.fidelity}>
+              badge + issues list + corrections diff) on the fidelity agent
+              card while still preserving the underlying reasoning/tool parts. */}
+          <Show when={props.node.fidelity}>
             <FidelityBody fidelity={props.node.fidelity!} />
           </Show>
 
           {/* Generic parts */}
-          <Show when={!isTool() && (props.node.parts?.length ?? 0) > 0}>
-            <CardParts parts={props.node.parts} depth={props.depth} />
+          <Show when={!isTool() && bodyParts().length > 0}>
+            <CardParts parts={bodyParts()} depth={props.depth} />
           </Show>
 
           {/* Recursive children.
@@ -159,7 +220,7 @@ export function Card(props: { node: CardNode; depth: number }) {
             </div>
           </Show>
 
-          <Show when={collapsible()}>
+          <Show when={collapsible() && isStageCard()}>
             <div class="card__body-actions">
               <button
                 type="button"

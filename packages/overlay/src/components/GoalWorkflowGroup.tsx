@@ -9,6 +9,7 @@ import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
+import { StaticTextPart } from "./TextPart";
 
 // ── Types ──
 
@@ -185,7 +186,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
           <Show when={props.goal.goalObjective}>
             <div class="gwg-objective">
               <div class="gwg-objective-label">{t("goal.field.objective")}</div>
-              <div class="gwg-objective-text">{props.goal.goalObjective}</div>
+              <div class="gwg-objective-text">
+                <StaticTextPart text={props.goal.goalObjective!} />
+              </div>
             </div>
           </Show>
           <Show when={previewAcceptance(props.goal.acceptanceSpecs)}>
@@ -193,7 +196,9 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
               <div class="gwg-done-definition-label">
                 {t("goal.field.acceptance")}
               </div>
-              <div class="gwg-done-definition-text">{previewAcceptance(props.goal.acceptanceSpecs)}</div>
+              <div class="gwg-done-definition-text">
+                <StaticTextPart text={previewAcceptance(props.goal.acceptanceSpecs)} />
+              </div>
             </div>
           </Show>
         </div>

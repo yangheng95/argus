@@ -69,8 +69,8 @@
   --ui-font-body: clamp(11px, calc(11.5px * var(--ui-scale)), 12px);
   --ui-font-control: clamp(10px, calc(10.5px * var(--ui-scale)), 11px);
   --ui-font-meta: clamp(10px, calc(10px * var(--ui-scale)), 11px);
-  --ui-font-small: clamp(9px, calc(9px * var(--ui-scale)), 10px);
-  --ui-font-tiny: clamp(8px, calc(8px * var(--ui-scale)), 9px);
+  --ui-font-small: clamp(10px, calc(10.25px * var(--ui-scale)), 11px);
+  --ui-font-tiny: clamp(10px, calc(10px * var(--ui-scale)), 10.5px);
   --ui-font-code: clamp(10px, calc(10.5px * var(--ui-scale)), 11px);
   --ui-font-label: var(--ui-font-meta);
   --ui-gap-xs: calc(4px * var(--ui-scale));
@@ -10627,7 +10627,7 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   height: calc(18px * var(--ui-scale));
   flex-shrink: 0;
   border-radius: 50%;
-  font-size: calc(9px * var(--ui-scale));
+  font-size: clamp(10px, calc(10px * var(--ui-scale)), 11px);
   font-weight: 700;
   line-height: 1;
   background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
@@ -10736,7 +10736,7 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(var(--ui-font-meta) - 1px);
+  font-size: var(--ui-font-control);
   color: var(--text-soft);
   background: color-mix(in srgb, var(--surface-inset) 58%, transparent);
   border-radius: 999px;
@@ -10774,11 +10774,37 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   margin-bottom: 3px;
 }
 .gwg-objective-text {
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-body);
   color: var(--text);
-  line-height: 1.5;
-  white-space: pre-wrap;
+  line-height: 1.6;
   word-break: break-word;
+}
+.gwg-objective-text .msg-text,
+.gwg-objective-text .md-frozen-block,
+.gwg-objective-text .md-active-block,
+.gwg-done-definition-text .msg-text,
+.gwg-done-definition-text .md-frozen-block,
+.gwg-done-definition-text .md-active-block,
+.gwg-plan-node-title .msg-text,
+.gwg-plan-node-brief .msg-text,
+.gwg-eval-summary .msg-text,
+.gwg-eval-summary .md-frozen-block,
+.gwg-eval-summary .md-active-block {
+  margin: 0;
+}
+.gwg-objective-text .msg-text > :first-child,
+.gwg-done-definition-text .msg-text > :first-child,
+.gwg-plan-node-title .msg-text > :first-child,
+.gwg-plan-node-brief .msg-text > :first-child,
+.gwg-eval-summary .msg-text > :first-child {
+  margin-top: 0;
+}
+.gwg-objective-text .msg-text > :last-child,
+.gwg-done-definition-text .msg-text > :last-child,
+.gwg-plan-node-title .msg-text > :last-child,
+.gwg-plan-node-brief .msg-text > :last-child,
+.gwg-eval-summary .msg-text > :last-child {
+  margin-bottom: 0;
 }
 
 /* Done-definition block (what "done" means for this goal) */
@@ -10798,10 +10824,9 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   margin-bottom: 3px;
 }
 .gwg-done-definition-text {
-  font-size: var(--ui-font-small);
+  font-size: var(--ui-font-body);
   color: var(--text);
-  line-height: 1.5;
-  white-space: pre-wrap;
+  line-height: 1.6;
 }
 
 /* ── Step row ────────────────────────────────────────────── */
@@ -10824,7 +10849,7 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   border-radius: 50%;
   background: var(--subtle-2);
   color: var(--text-muted);
-  font-size: calc(9px * var(--ui-scale));
+  font-size: clamp(10px, calc(10px * var(--ui-scale)), 11px);
   font-weight: 700;
   line-height: 1;
   box-shadow: 0 0 0 1px var(--subtle-3) inset;
@@ -10976,7 +11001,7 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
 }
 .gwg-plan-node-brief {
   margin-top: 2px;
-  font-size: var(--ui-font-tiny);
+  font-size: var(--ui-font-control);
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -11094,7 +11119,6 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   font-size: var(--ui-font-small);
   color: var(--text);
   line-height: 1.5;
-  white-space: pre-wrap;
 }
 
 /* ── Step messages (live agent output) ───────────────────── */
@@ -11139,7 +11163,7 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   height: 14px;
   flex-shrink: 0;
   border-radius: 50%;
-  font-size: calc(8px * var(--ui-scale));
+  font-size: clamp(10px, calc(10px * var(--ui-scale)), 10px);
   font-weight: 700;
   line-height: 1;
   background: var(--subtle-2);

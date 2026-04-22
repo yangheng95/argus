@@ -4,7 +4,7 @@
 // bridge (wired in main.tsx). The panel itself is read-only — it does not
 // render the diff inline any more.
 
-import { createMemo, createResource, For, Show } from "solid-js";
+import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import {
   currentChangeGroups,
@@ -29,6 +29,8 @@ export interface ChangesPanelProps {
 }
 
 export function ChangesPanel(props: ChangesPanelProps) {
+  const [selectedGroupID, setSelectedGroupID] = createSignal("");
+
   const fallbackGroups = createMemo<ChangeGroup[]>(() => {
     if (props.changes === undefined) return currentChangeGroups();
     const changes = props.changes;
@@ -54,18 +56,52 @@ export function ChangesPanel(props: ChangesPanelProps) {
     return resolveCurrentChangeGroups();
   });
 
-  const groups = createMemo<ChangeGroup[]>(() => resolvedGroups() || fallbackGroups());
+  const groups = createMemo<ChangeGroup[]>(() =>
+    (resolvedGroups() || fallbackGroups()).filter((group) => group.changes.length > 0),
+  );
   const files = createMemo<FileChange[]>(() =>
     groups().flatMap((group) => group.changes),
   );
+  const hideEmptySelection = createMemo(() => !!props.hasSelectedTask && files().length === 0);
 
   const hasGoalGrouping = createMemo(() =>
     groups().some((group) => !!group.goalLabel),
   );
+  const activeGroup = createMemo<ChangeGroup | null>(() => {
+    const currentGroups = groups();
+    if (currentGroups.length === 0) return null;
+    const selectedID = selectedGroupID();
+    return currentGroups.find((group) => group.id === selectedID) || currentGroups[0] || null;
+  });
+  const visibleEntries = createMemo<Array<{ group: ChangeGroup; item: FileChange }>>(() => {
+    if (hasGoalGrouping()) {
+      const group = activeGroup();
+      if (!group) return [];
+      return group.changes.map((item) => ({ group, item }));
+    }
+    return groups().flatMap((group) => group.changes.map((item) => ({ group, item })));
+  });
 
   const openWorkspaceDiff = (window as any).openWorkspaceDiff as
     | ((target: DiffTarget) => void)
     | undefined;
+
+  createEffect(() => {
+    const currentGroups = groups();
+    const selectedID = selectedGroupID();
+    if (currentGroups.length === 0) {
+      if (selectedID) setSelectedGroupID("");
+      return;
+    }
+    if (selectedID && currentGroups.some((group) => group.id === selectedID)) return;
+    setSelectedGroupID(currentGroups[0]!.id);
+  });
+
+  createEffect(() => {
+    const section = document.getElementById("changesSection");
+    if (!(section instanceof HTMLElement)) return;
+    section.hidden = hideEmptySelection();
+  });
 
   async function handleRowClick(group: ChangeGroup, item: FileChange) {
     if (typeof openWorkspaceDiff !== "function") return;
@@ -84,20 +120,21 @@ export function ChangesPanel(props: ChangesPanelProps) {
   const totalDeletions = createMemo(() =>
     files().reduce((sum, item) => sum + (item.deletions ?? 0), 0),
   );
+  const tabLabel = (group: ChangeGroup): string =>
+    group.goalLabel || group.goalTitle || group.id;
+  const tabTitle = (group: ChangeGroup): string =>
+    [group.goalLabel, group.goalTitle].filter(Boolean).join(" · ") || group.id;
 
   return (
-    <div class="changes-panel">
+    <Show when={!hideEmptySelection()}>
       <Show
         when={files().length > 0}
         fallback={
-          <p class="empty-hint">
-            {props.hasSelectedTask
-              ? t("files.unavailable")
-              : t("files.select_target")}
-          </p>
+          <Show when={!props.hasSelectedTask}>
+            <p class="empty-hint">{t("files.select_target")}</p>
+          </Show>
         }
       >
-        {/* Summary row */}
         <div class="changes-summary">
           <span>{tc("files.changed", files().length)}</span>
           <span class="changes-total">
@@ -106,58 +143,59 @@ export function ChangesPanel(props: ChangesPanelProps) {
           </span>
         </div>
 
-        {/* File list */}
-        <div class="changes-groups">
-          <For each={groups()}>
-            {(group) => (
-              <section class="changes-group">
-                <Show when={group.goalLabel}>
-                  <div class="changes-group-head">
-                    <span class="changes-group-copy">
-                      <span class="changes-group-label">{group.goalLabel}</span>
-                      <Show when={group.goalTitle}>
-                        <span class="changes-group-title">{group.goalTitle}</span>
-                      </Show>
-                    </span>
-                    <span class="changes-group-total">
-                      <span data-tone="add">+{group.additions}</span>
-                      <span data-tone="del">-{group.deletions}</span>
-                    </span>
-                  </div>
-                </Show>
-                <div class="changes-list" data-grouped={hasGoalGrouping() ? "true" : "false"}>
-                  <For each={group.changes}>
-                    {(item, index) => (
-                      <button
-                        type="button"
-                        class="change-row"
-                        data-change-index={index()}
-                        title={item.file}
-                        onClick={() => void handleRowClick(group, item)}
-                      >
-                        <span class="change-main">
-                          <span class="change-path">{item.file}</span>
-                        </span>
-                        <span class="change-meta">
-                          <span class="change-status" data-status={item.status}>
-                            {changeStatusLabel(item.status)}
-                          </span>
-                          <span class="diff-dialog-stat" data-tone="add">
-                            +{item.additions}
-                          </span>
-                          <span class="diff-dialog-stat" data-tone="del">
-                            -{item.deletions}
-                          </span>
-                        </span>
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </section>
+        <Show when={hasGoalGrouping()}>
+          <div class="changes-tabs" role="tablist" aria-label={t("section.files")}>
+            <For each={groups()}>
+              {(group) => {
+                const active = () => activeGroup()?.id === group.id;
+                return (
+                  <button
+                    type="button"
+                    class="changes-tab"
+                    role="tab"
+                    aria-selected={active()}
+                    data-active={active() ? "true" : "false"}
+                    title={tabTitle(group)}
+                    onClick={() => setSelectedGroupID(group.id)}
+                  >
+                    <span class="changes-tab-label">{tabLabel(group)}</span>
+                    <span class="changes-tab-count">{group.changes.length}</span>
+                  </button>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
+
+        <div class="changes-list" data-grouped={hasGoalGrouping() ? "true" : "false"}>
+          <For each={visibleEntries()}>
+            {({ group, item }, index) => (
+              <button
+                type="button"
+                class="change-row"
+                data-change-index={index()}
+                title={item.file}
+                onClick={() => void handleRowClick(group, item)}
+              >
+                <span class="change-main">
+                  <span class="change-path">{item.file}</span>
+                </span>
+                <span class="change-meta">
+                  <span class="change-status" data-status={item.status}>
+                    {changeStatusLabel(item.status)}
+                  </span>
+                  <span class="diff-dialog-stat" data-tone="add">
+                    +{item.additions}
+                  </span>
+                  <span class="diff-dialog-stat" data-tone="del">
+                    -{item.deletions}
+                  </span>
+                </span>
+              </button>
             )}
           </For>
         </div>
       </Show>
-    </div>
+    </Show>
   );
 }

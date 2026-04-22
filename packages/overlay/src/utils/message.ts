@@ -37,6 +37,7 @@ export const AGENT_CARD_STAGES = new Set<AgentRole>([
   "evaluator",
   "delivery",
   "build",
+  "fidelity",
 ]);
 
 /**

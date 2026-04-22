@@ -6,7 +6,7 @@ import { Card } from "./Card";
 import { FilePart } from "./FilePart";
 import { type CardNode } from "../utils/card-tree";
 import { stamp } from "../utils/time";
-import { toolNameKey, displayToolDetail, shortRelativePath } from "../utils/tool";
+import { toolNameKey, displayToolArguments, shortRelativePath } from "../utils/tool";
 import { selectedTaskDirectory } from "../store/board";
 
 const TODO_CARD_TITLES: Record<string, string> = {
@@ -29,21 +29,15 @@ function toolToCardNode(part: any): CardNode {
   const toolName = String(part?.tool || "tool");
   const state = part?.state || {};
   const key = toolNameKey(toolName);
-  const detail = displayToolDetail(toolName, state.input || {}, state, selectedTaskDirectory());
+  const args = displayToolArguments(toolName, state.input, state, selectedTaskDirectory());
   const title = TODO_CARD_TITLES[key] || toolName;
-  const subtitle =
-    (typeof state.title === "string" && state.title.trim() && TODO_CARD_TITLES[key]
-      ? state.title.trim()
-      : detail && detail.toLowerCase() !== toolName.toLowerCase()
-        ? detail
-        : undefined);
   return {
     id: String(part?.id || `tool:${toolName}:${Math.random().toString(36).slice(2)}`),
     kind: "tool",
     stage: key,
     status,
     title,
-    subtitle,
+    subtitle: args || undefined,
     parts: [],
     children: [],
     toolPart: part,

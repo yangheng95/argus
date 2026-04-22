@@ -1,6 +1,6 @@
 // ── StepPayloadBody ──
 // Single renderer for a workflow step's structured content: plan nodes,
-// changed files + diffstats, eval checks + verdict + summary.
+// evaluation checks, verdict, and summary.
 //
 // Deliberately does NOT render the "Open session" button — that's a
 // sidebar-only affordance (the main conversation IS the session, so the
@@ -10,6 +10,7 @@
 
 import { For, Show } from "solid-js";
 import type { StepPayload } from "../utils/card-tree";
+import { StaticTextPart } from "./TextPart";
 
 function verdictClass(verdict: string): string {
   if (verdict === "accepted") return "gwg-verdict--accepted";
@@ -34,8 +35,6 @@ export function StepPayloadBody(props: {
   stepID: string;
 }) {
   const hasPlanNodes = () => !!props.payload?.planNodes?.length;
-  const hasChangedFiles = () => !!props.payload?.changedFiles?.length;
-  const hasDiffStats = () => props.payload?.diffStats?.files !== undefined;
   const hasChecks = () => !!props.payload?.checks?.length;
 
   return (
@@ -47,36 +46,19 @@ export function StepPayloadBody(props: {
             <For each={props.payload!.planNodes}>
               {(node) => (
                 <div class="gwg-plan-node">
-                  <div class="gwg-plan-node-title">{node.title}</div>
+                  <div class="gwg-plan-node-title">
+                    <StaticTextPart text={node.title} />
+                  </div>
                   <Show when={node.brief}>
-                    <div class="gwg-plan-node-brief">{node.brief}</div>
+                    <div class="gwg-plan-node-brief">
+                      <StaticTextPart text={node.brief} />
+                    </div>
                   </Show>
                 </div>
               )}
             </For>
           </div>
         </Show>
-
-        {/* Changed files + diff stats */}
-        <Show when={hasChangedFiles() || hasDiffStats()}>
-          <div class="gwg-changed-files">
-            <Show when={hasDiffStats()}>
-              <div class="gwg-diff-stats">
-                <span class="gwg-diff-files">{props.payload!.diffStats!.files} files</span>
-                <Show when={props.payload!.diffStats!.additions !== undefined}>
-                  <span class="gwg-diff-additions">+{props.payload!.diffStats!.additions}</span>
-                </Show>
-                <Show when={props.payload!.diffStats!.deletions !== undefined}>
-                  <span class="gwg-diff-deletions">-{props.payload!.diffStats!.deletions}</span>
-                </Show>
-              </div>
-            </Show>
-            <For each={props.payload!.changedFiles}>
-              {(file) => <div class="gwg-changed-file">{file}</div>}
-            </For>
-          </div>
-        </Show>
-
         {/* Eval verdict + summary + checks */}
         <Show when={props.payload?.verdict}>
           <div class={`gwg-verdict ${verdictClass(props.payload!.verdict!)}`}>
@@ -84,7 +66,9 @@ export function StepPayloadBody(props: {
           </div>
         </Show>
         <Show when={props.payload?.evalSummary}>
-          <div class="gwg-eval-summary">{props.payload!.evalSummary}</div>
+          <div class="gwg-eval-summary">
+            <StaticTextPart text={props.payload!.evalSummary!} />
+          </div>
         </Show>
         <Show when={hasChecks()}>
           <div class="gwg-checks">

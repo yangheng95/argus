@@ -7,6 +7,7 @@ import { apiJson } from "./api";
 import { boardStore } from "../store/board";
 import { deriveChanges, normalizeDiffs } from "./meta";
 import type { FileChange } from "../components/DiffView";
+import { goalRevisionLabelFromIndexes } from "../utils/goal-label";
 
 export interface DiffTarget {
   filePath: string;
@@ -48,12 +49,6 @@ function scopeCacheKey(scope: { goalRunID?: string; runID?: string }): string {
   return "";
 }
 
-function goalRoundLabel(goal: any): string {
-  const order = Number.isFinite(Number(goal?.orderIndex)) ? Number(goal.orderIndex) + 1 : 0;
-  const round = Number.isFinite(Number(goal?.retryCount)) ? Number(goal.retryCount) + 1 : 1;
-  return `goal #${order} (R#${round})`;
-}
-
 function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
   return workflows
     .map((goal) => {
@@ -87,7 +82,7 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
         goalRunID,
         goalOrderIndex: Number.isFinite(Number(goal?.orderIndex)) ? Number(goal.orderIndex) : undefined,
         goalRetryCount: Number.isFinite(Number(goal?.retryCount)) ? Number(goal.retryCount) : undefined,
-        goalLabel: goalRoundLabel(goal),
+        goalLabel: goalRevisionLabelFromIndexes(goal?.orderIndex, goal?.retryCount),
         goalTitle: typeof goal?.goalTitle === "string" ? goal.goalTitle : undefined,
         additions: typeof stats?.additions === "number" ? stats.additions : 0,
         deletions: typeof stats?.deletions === "number" ? stats.deletions : 0,

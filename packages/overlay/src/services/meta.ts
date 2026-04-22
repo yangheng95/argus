@@ -79,56 +79,6 @@ export async function loadMeta(): Promise<void> {
  * .ts — still needed by loadMeta's finally-block and the
  * 's directory setter.
  */
-/**
- * Build a concise git status label: branch · +ahead -behind · staged/modified/untracked · clean
- */
-function gitLabel(vcs: any, dir: string): string {
-  if (!dir) return t("git.unavailable");
-  if (vcs === null || vcs === undefined) return t("git.unavailable");
-  if (!vcs.initialized) return t("git.init");
-  if (!vcs.branch) return t("git.no_commits");
-  const parts: string[] = [vcs.branch];
-  if (vcs.ahead) parts.push(`+${vcs.ahead}`);
-  if (vcs.behind) parts.push(`-${vcs.behind}`);
-  if (vcs.conflicts) parts.push(t("git.conflicts", { count: vcs.conflicts }));
-  if (vcs.dirty) {
-    const changes: string[] = [];
-    if (vcs.staged) changes.push(t("git.staged", { count: vcs.staged }));
-    if (vcs.modified) changes.push(t("git.modified", { count: vcs.modified }));
-    if (vcs.untracked) changes.push(t("git.untracked", { count: vcs.untracked }));
-    parts.push(changes.join(" "));
-  } else {
-    parts.push(t("git.clean"));
-  }
-  return parts.filter(Boolean).join(" · ");
-}
-
-/**
- * Build a multi-line git tooltip with all status details.
- */
-function gitTitle(vcs: any, dir: string): string {
-  if (!dir) return "";
-  if (vcs === null || vcs === undefined) return "";
-  if (!vcs.initialized) return t("git.init_title");
-  if (!vcs.branch) return t("git.no_commits_title");
-  return [
-    t("git.branch", { value: vcs.branch }),
-    t("git.clean_title", { value: vcs.clean ? t("common.yes") : t("common.no") }),
-    t("git.staged", { count: vcs.staged ?? 0 }),
-    t("git.modified", { count: vcs.modified ?? 0 }),
-    t("git.untracked", { count: vcs.untracked ?? 0 }),
-    t("git.conflicts", { count: vcs.conflicts ?? 0 }),
-    t("git.ahead", { count: vcs.ahead ?? 0 }),
-    t("git.behind", { count: vcs.behind ?? 0 }),
-  ].join("\n");
-}
-
-function canInitGit(): boolean {
-  const vcs = boardStore.vcs;
-  if (vcs === null || vcs === undefined) return false;
-  return !!settingsStore.directory && !vcs.initialized;
-}
-
 function relativePathFrom(base: string, target: string): string {
   if (!base || !target) return "";
   const norm = (s: string) => s.replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
@@ -146,9 +96,7 @@ function shortPath(p: string): string {
 export function renderMeta(): void {
   const dirNode = document.getElementById("taskDir");
   const workspaceNode = document.getElementById("taskWorkspaceDir");
-  const gitNode = document.getElementById("taskGit");
   const dir = settingsStore.directory || boardStore.board?.task?.directory || "";
-  const vcs = boardStore.vcs;
 
   if (dirNode) {
     dirNode.innerHTML = pathBreadcrumb(dir);
@@ -167,16 +115,6 @@ export function renderMeta(): void {
     workspaceNode.textContent = show ? t("cwd.execution_workspace", { value: label }) : "";
     workspaceNode.setAttribute("title", show ? workspaceText : "");
     (workspaceNode as HTMLElement).hidden = !show;
-  }
-
-  if (gitNode) {
-    const actionable = canInitGit();
-    const unborn = vcs?.initialized && !vcs?.branch;
-    gitNode.textContent = gitLabel(vcs, dir);
-    gitNode.setAttribute("title", gitTitle(vcs, dir));
-    (gitNode as HTMLElement).dataset.state = actionable ? "action" : unborn ? "unborn" : vcs?.dirty ? "dirty" : vcs?.clean ? "clean" : "idle";
-    (gitNode as HTMLElement).dataset.actionable = String(actionable);
-    gitNode.toggleAttribute("disabled", !actionable);
   }
 }
 

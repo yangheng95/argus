@@ -50,7 +50,6 @@ export interface DomRefs {
   taskDir: HTMLElement | null;
   recentDirPanel: HTMLElement | null;
   taskWorkspaceDir: HTMLElement | null;
-  taskGit: HTMLElement | null;
   btnBrowseCwd: HTMLButtonElement | null;
   btnCreateCwd: HTMLButtonElement | null;
   btnOpenCwd: HTMLButtonElement | null;
@@ -317,7 +316,6 @@ export function getDomRefs(): DomRefs {
     taskDir: $<HTMLElement>("#taskDir"),
     recentDirPanel: $<HTMLElement>("#recentDirPanel"),
     taskWorkspaceDir: $<HTMLElement>("#taskWorkspaceDir"),
-    taskGit: $<HTMLElement>("#taskGit"),
     btnBrowseCwd: $<HTMLButtonElement>("#btnBrowseCwd"),
     btnCreateCwd: $<HTMLButtonElement>("#btnCreateCwd"),
     btnOpenCwd: $<HTMLButtonElement>("#btnOpenCwd"),

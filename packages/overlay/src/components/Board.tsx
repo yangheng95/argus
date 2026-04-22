@@ -116,41 +116,34 @@ interface TaskActionsPanelProps {
 
 export function TaskActionsPanel(props: TaskActionsPanelProps) {
   const controls = createMemo(() => props.overview?.controls || {});
-  const hasButtons = createMemo(
-    () => controls().canRetry || controls().canReplan,
-  );
-  const visible = createMemo(() => hasButtons());
+  const hasButtons = createMemo(() => controls().canRetry || controls().canReplan);
 
   return (
-    <Show when={visible()}>
-      <div class="task-actions-bar">
-        <Show when={hasButtons()}>
-          <div class="task-actions-buttons">
-            <Show when={controls().canRetry}>
-              <button
-                type="button"
-                class="btn btn-primary"
-                data-task-action="retry"
-                title={t("task.action.retry_title")}
-                aria-label={t("task.action.retry_title")}
-                onClick={() => props.onRetry?.()}
-              >
-                {t("task.action.retry")}
-              </button>
-            </Show>
-            <Show when={controls().canReplan}>
-              <button
-                type="button"
-                class="btn btn-ghost"
-                data-task-action="replan"
-                title={t("task.action.replan_title")}
-                aria-label={t("task.action.replan_title")}
-                onClick={() => props.onReplan?.()}
-              >
-                {t("task.action.replan")}
-              </button>
-            </Show>
-          </div>
+    <Show when={hasButtons()}>
+      <div class="task-actions-buttons">
+        <Show when={controls().canRetry}>
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-task-action="retry"
+            title={t("task.action.retry_title")}
+            aria-label={t("task.action.retry_title")}
+            onClick={() => props.onRetry?.()}
+          >
+            {t("task.action.retry")}
+          </button>
+        </Show>
+        <Show when={controls().canReplan}>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            data-task-action="replan"
+            title={t("task.action.replan_title")}
+            aria-label={t("task.action.replan_title")}
+            onClick={() => props.onReplan?.()}
+          >
+            {t("task.action.replan")}
+          </button>
         </Show>
       </div>
     </Show>

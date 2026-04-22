@@ -237,6 +237,7 @@ function TaskRow(props: {
     <div
       class="task-row-mini global-task-row"
       data-active={isActive() ? "true" : undefined}
+      data-status={status()}
       title={title()}
     >
       <button
@@ -254,10 +255,12 @@ function TaskRow(props: {
           <span class="status-dot" data-status={status()} aria-hidden="true" />
           <strong>{title()}</strong>
         </div>
-        <span class="task-row-badge" aria-live="polite" aria-atomic="true">
-          {taskListBadge(props.item, props.queuePos)}
-        </span>
-        <small>{taskListMeta(props.item)}</small>
+        <div class="task-row-meta">
+          <span class="task-row-badge" data-status={status()} aria-live="polite" aria-atomic="true">
+            {taskListBadge(props.item, props.queuePos)}
+          </span>
+          <small class="task-row-stamp">{taskListMeta(props.item)}</small>
+        </div>
       </button>
       <Show when={canCancel()}>
         <CancelButton id={id()} onCancel={props.onCancelTask!} />

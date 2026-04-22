@@ -18,6 +18,7 @@ import {
 } from "../store/messages";
 import {
   loadTasks,
+  loadBoard,
   clearBoard,
   boardStore,
   setBoardStore,
@@ -31,6 +32,7 @@ import {
   workspaceRestoreDirectory,
 } from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
+import { taskScopedPath } from "./task-path";
 import { applyDirectory } from "./workspace";
 import { resetWriter } from "./tree-writer";
 import { hydrateTaskConversation } from "./conversation";
@@ -73,6 +75,13 @@ export interface SelectTaskOptions {
 }
 
 // ── Helpers ──
+
+function taskPath(taskID: string, suffix = ""): string {
+  const item = taskByID(taskID);
+  const directory =
+    typeof item?.task?.directory === "string" ? item.task.directory : "";
+  return taskScopedPath(taskID, directory, suffix);
+}
 
 /**
  * Default chat request timeout: 10 minutes.
@@ -304,7 +313,7 @@ export async function selectTask(
 export async function deleteTask(taskID: string): Promise<boolean> {
   if (!taskID) return false;
   try {
-    await apiJson(`task/${encodeURIComponent(taskID)}`, {
+    await apiJson(taskPath(taskID), {
       method: "DELETE",
     });
     if (boardStore.selectedTaskID === taskID) {
@@ -472,7 +481,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
  */
 export async function retryTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/retry`, {
+  await apiJson(taskPath(taskID, "/retry"), {
     method: "POST",
   });
   await loadBoard();
@@ -485,7 +494,7 @@ export async function retryTask(taskID: string): Promise<void> {
  */
 export async function replanTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/replan`, {
+  await apiJson(taskPath(taskID, "/replan"), {
     method: "POST",
   });
   await loadBoard();
@@ -498,7 +507,7 @@ export async function replanTask(taskID: string): Promise<void> {
  */
 export async function cancelTask(taskID: string): Promise<void> {
   if (!taskID) return;
-  await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+  await apiJson(taskPath(taskID, "/cancel"), {
     method: "POST",
   });
   await loadBoard();
@@ -513,7 +522,7 @@ export async function cancelTask(taskID: string): Promise<void> {
 export async function interruptTask(taskID: string): Promise<boolean> {
   if (!taskID) return false;
   try {
-    await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+    await apiJson(taskPath(taskID, "/cancel"), {
       method: "POST",
     });
     await loadBoard();

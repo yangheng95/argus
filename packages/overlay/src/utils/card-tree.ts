@@ -46,8 +46,10 @@ export interface CardNode {
   title: string;
   /** Header secondary slot (e.g. goal id tail, path, command). */
   subtitle?: string;
-  /** Goal index / round number; shown as #N when > 0. */
+  /** Goal index / round number; shown as #GN when > 0. */
   round?: number;
+  /** Goal attempt / retry number; shown as Vn on goal-scoped step cards. */
+  attempt?: number;
   /** Goal this card belongs to — stamped on the executor step card and any
    *  goal-phase / session card routed into it. */
   goalID?: string;
@@ -147,10 +149,15 @@ function normGoalStatus(raw: any): CardStatus | undefined {
 // Current CardParts behavior renders every tool as a card and leaves completed
 // tools collapsed by default, but the heuristic is kept as a single policy hook.
 
+// Todo tools render a structured checklist; inline chips would hide the list,
+// and a collapsed completed card would hide the plan itself — so they stay
+// both promoted and expanded regardless of completion status.
+const TODO_TOOLS = new Set([
+  "todowrite", "todoread", "todoupdate", "updateplan",
+]);
 const ALWAYS_PROMOTE_TOOLS = new Set([
   "task", "agent", "spawnagent", "subagent",
-  // Todo tools render a structured checklist; inline chips would hide the list.
-  "todowrite", "todoread", "todoupdate", "updateplan",
+  ...TODO_TOOLS,
 ]);
 const CODE_WRITE_TOOLS = new Set([
   "write", "writefile", "edit", "editfile", "applypatch",
@@ -211,6 +218,9 @@ export function defaultExpandedForNode(node: CardNode): boolean {
   // operator almost always wants those visible when the goal is alive.
   // A completed executor collapses to save space.
   if (node.kind === "step") return node.status !== "completed";
+  // Todo checklists must stay expanded — the card's whole value is the list
+  // of remaining items; a collapsed completed card hides the plan itself.
+  if (node.kind === "tool" && TODO_TOOLS.has(toolNameKey(node.toolPart?.tool || ""))) return true;
   // tool defaults: collapsed when completed, open when running.
   return node.status !== "completed";
 }
