@@ -6,12 +6,12 @@
 
 import { createResource, createMemo, Show } from "solid-js";
 import { DiffView, changeStatusLabel, type FileChange } from "./DiffView";
-import { resolveDiff } from "../services/diff";
+import { resolveDiff, type DiffTarget } from "../services/diff";
 import { t } from "../utils/i18n";
 
 export interface DiffPreviewPanelProps {
-  /** File path to show — null/empty renders the empty state. */
-  filePath: string | null;
+  /** Diff target to show — null/empty renders the empty state. */
+  target: DiffTarget | null;
 }
 
 export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
@@ -19,10 +19,16 @@ export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
   // the last value, so switching back to a previously-viewed file is
   // instantaneous as long as the underlying delivery cache is still warm.
   const [change] = createResource<FileChange | null, string>(
-    () => props.filePath || "",
-    async (path) => {
-      if (!path) return null;
-      return resolveDiff(path);
+    () => {
+      const target = props.target;
+      if (!target?.filePath) return "";
+      return `${target.goalRunID || "task"}:${target.filePath}`;
+    },
+    async (key) => {
+      if (!key) return null;
+      const target = props.target;
+      if (!target?.filePath) return null;
+      return resolveDiff(target);
     },
   );
 
@@ -32,7 +38,7 @@ export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
   return (
     <div class="diff-preview-panel">
       <Show
-        when={props.filePath}
+        when={props.target?.filePath}
         fallback={
           <div class="diff-preview-empty">
             <p class="empty-hint">{t("diff.select_file")}</p>
@@ -40,8 +46,13 @@ export function DiffPreviewPanel(props: DiffPreviewPanelProps) {
         }
       >
         <header class="diff-preview-head">
-          <span class="diff-preview-path" title={props.filePath || ""}>
-            {props.filePath}
+          <span class="diff-preview-copy">
+            <Show when={props.target?.goalLabel}>
+              <span class="diff-preview-scope">{props.target?.goalLabel}</span>
+            </Show>
+            <span class="diff-preview-path" title={props.target?.filePath || ""}>
+              {props.target?.filePath}
+            </span>
           </span>
           <Show when={item()}>
             <span class="diff-preview-meta">

@@ -4,9 +4,15 @@
 // bridge (wired in main.tsx). The panel itself is read-only — it does not
 // render the diff inline any more.
 
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createResource, For, Show } from "solid-js";
 import { boardStore } from "../store/board";
-import { currentChanges, resolveDiff } from "../services/diff";
+import {
+  currentChangeGroups,
+  resolveCurrentChangeGroups,
+  resolveDiff,
+  type ChangeGroup,
+  type DiffTarget,
+} from "../services/diff";
 import { changeStatusLabel, type FileChange } from "./DiffView";
 import { t, tc } from "../utils/i18n";
 
@@ -23,10 +29,54 @@ export interface ChangesPanelProps {
 }
 
 export function ChangesPanel(props: ChangesPanelProps) {
-  const files = createMemo<FileChange[]>(() => {
-    if (props.changes !== undefined) return props.changes;
-    return currentChanges();
+  const fallbackGroups = createMemo<ChangeGroup[]>(() => {
+    if (props.changes === undefined) return currentChangeGroups();
+    const changes = props.changes;
+    return [
+      {
+        id: "props",
+        additions: changes.reduce((sum, item) => sum + (item.additions ?? 0), 0),
+        deletions: changes.reduce((sum, item) => sum + (item.deletions ?? 0), 0),
+        changes,
+      },
+    ];
   });
+
+  const requestKey = createMemo(() => {
+    const groups = fallbackGroups();
+    return props.changes !== undefined
+      ? `props:${groups[0]?.changes.length ?? 0}`
+      : `${boardStore.selectedTaskID}:${boardStore.snapshotVersion}:${groups.map((group) => group.id).join("|")}`;
+  });
+
+  const [resolvedGroups] = createResource(requestKey, async () => {
+    if (props.changes !== undefined) return fallbackGroups();
+    return resolveCurrentChangeGroups();
+  });
+
+  const groups = createMemo<ChangeGroup[]>(() => resolvedGroups() || fallbackGroups());
+  const files = createMemo<FileChange[]>(() =>
+    groups().flatMap((group) => group.changes),
+  );
+
+  const hasGoalGrouping = createMemo(() =>
+    groups().some((group) => !!group.goalLabel),
+  );
+
+  const openWorkspaceDiff = (window as any).openWorkspaceDiff as
+    | ((target: DiffTarget) => void)
+    | undefined;
+
+  async function handleRowClick(group: ChangeGroup, item: FileChange) {
+    if (typeof openWorkspaceDiff !== "function") return;
+    const target: DiffTarget = {
+      filePath: item.file,
+      ...(group.goalRunID ? { goalRunID: group.goalRunID } : {}),
+      ...(group.goalLabel ? { goalLabel: group.goalLabel } : {}),
+    };
+    void resolveDiff(target);
+    openWorkspaceDiff(target);
+  }
 
   const totalAdditions = createMemo(() =>
     files().reduce((sum, item) => sum + (item.additions ?? 0), 0),
@@ -34,18 +84,6 @@ export function ChangesPanel(props: ChangesPanelProps) {
   const totalDeletions = createMemo(() =>
     files().reduce((sum, item) => sum + (item.deletions ?? 0), 0),
   );
-
-  async function handleRowClick(item: FileChange) {
-    const openWorkspaceDiff = (window as any).openWorkspaceDiff as
-      | ((filePath: string) => void)
-      | undefined;
-    if (typeof openWorkspaceDiff !== "function") return;
-    // Kick off the resolve in the background so the shared diff cache is
-    // warm by the time DiffPreviewPanel mounts; DiffPreviewPanel will also
-    // call resolveDiff itself, so this is purely a latency optimisation.
-    void resolveDiff(item.file);
-    openWorkspaceDiff(item.file);
-  }
 
   return (
     <div class="changes-panel">
@@ -69,31 +107,53 @@ export function ChangesPanel(props: ChangesPanelProps) {
         </div>
 
         {/* File list */}
-        <div class="changes-list">
-          <For each={files()}>
-            {(item, index) => (
-              <button
-                type="button"
-                class="change-row"
-                data-change-index={index()}
-                title={item.file}
-                onClick={() => void handleRowClick(item)}
-              >
-                <span class="change-main">
-                  <span class="change-path">{item.file}</span>
-                </span>
-                <span class="change-meta">
-                  <span class="change-status" data-status={item.status}>
-                    {changeStatusLabel(item.status)}
-                  </span>
-                  <span class="diff-dialog-stat" data-tone="add">
-                    +{item.additions}
-                  </span>
-                  <span class="diff-dialog-stat" data-tone="del">
-                    -{item.deletions}
-                  </span>
-                </span>
-              </button>
+        <div class="changes-groups">
+          <For each={groups()}>
+            {(group) => (
+              <section class="changes-group">
+                <Show when={group.goalLabel}>
+                  <div class="changes-group-head">
+                    <span class="changes-group-copy">
+                      <span class="changes-group-label">{group.goalLabel}</span>
+                      <Show when={group.goalTitle}>
+                        <span class="changes-group-title">{group.goalTitle}</span>
+                      </Show>
+                    </span>
+                    <span class="changes-group-total">
+                      <span data-tone="add">+{group.additions}</span>
+                      <span data-tone="del">-{group.deletions}</span>
+                    </span>
+                  </div>
+                </Show>
+                <div class="changes-list" data-grouped={hasGoalGrouping() ? "true" : "false"}>
+                  <For each={group.changes}>
+                    {(item, index) => (
+                      <button
+                        type="button"
+                        class="change-row"
+                        data-change-index={index()}
+                        title={item.file}
+                        onClick={() => void handleRowClick(group, item)}
+                      >
+                        <span class="change-main">
+                          <span class="change-path">{item.file}</span>
+                        </span>
+                        <span class="change-meta">
+                          <span class="change-status" data-status={item.status}>
+                            {changeStatusLabel(item.status)}
+                          </span>
+                          <span class="diff-dialog-stat" data-tone="add">
+                            +{item.additions}
+                          </span>
+                          <span class="diff-dialog-stat" data-tone="del">
+                            -{item.deletions}
+                          </span>
+                        </span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </section>
             )}
           </For>
         </div>

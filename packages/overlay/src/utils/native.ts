@@ -103,13 +103,17 @@ export async function nativeSelect(
 
 export async function nativeOpen(target: string): Promise<boolean> {
   if (!target) return false;
+  const isUrl = /^https?:\/\//i.test(target);
   const invoke = (window as any).__TAURI__?.core?.invoke as
     | ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>)
     | undefined;
   if (typeof invoke !== "function") {
+    if (isUrl) {
+      window.open(target, "_blank", "noopener");
+      return true;
+    }
     throw new Error("Tauri runtime unavailable — cannot open " + target);
   }
-  const isUrl = /^https?:\/\//i.test(target);
   const opened = isUrl
     ? await invoke("overlay_open_url", { url: target })
     : await invoke("overlay_open_path", { path: target });

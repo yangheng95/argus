@@ -1,8 +1,17 @@
-import { createMemo, Show } from "solid-js";
-import { displayToolIcon, displayToolDetail, toolStatusLabel, toolNameKey, stripAnsi } from "../utils/tool";
+import { createMemo, For, Show } from "solid-js";
+import { DiffView, changeStatusLabel, type FileChange } from "./DiffView";
+import {
+  displayToolIcon,
+  displayToolDetail,
+  toolStatusLabel,
+  toolNameKey,
+  stripAnsi,
+  shortRelativePath,
+} from "../utils/tool";
 import { extToLang, renderCodeBlock } from "../utils/markdown";
 import { selectedTaskDirectory } from "../store/board";
 import { TodoListPart, extractTodos } from "./TodoListPart";
+import { StaticTextPart } from "./TextPart";
 
 // Same tool-kind sets used to drive code rendering below.
 const FILE_WRITE_TOOLS = new Set(["write", "writefile"]);
@@ -12,9 +21,81 @@ const FILE_READ_TOOLS = new Set(["read", "readfile"]);
 // raw JSON — the output is JSON.stringify of the todos array, which is
 // unreadable and floods the card body. updateplan uses the same shape.
 const TODO_TOOLS = new Set(["todowrite", "todoread", "todoupdate", "updateplan"]);
+const READ_NOTE_RE = /^\((?:Showing|End of file|Output capped at)/;
+
+interface ParsedReadOutput {
+  kind: "file" | "directory";
+  body: string;
+  note?: string;
+  reminder?: string;
+}
+
+interface ToolDiffItem extends FileChange {
+  openPath: string;
+  displayPath: string;
+}
 
 function isFileContentTool(key: string): boolean {
   return FILE_WRITE_TOOLS.has(key) || FILE_EDIT_TOOLS.has(key) || FILE_READ_TOOLS.has(key);
+}
+
+function diffStatus(raw: unknown, before?: string, after?: string): FileChange["status"] {
+  const value = String(raw || "").trim().toLowerCase();
+  if (value === "add" || value === "added") return "added";
+  if (value === "delete" || value === "deleted" || value === "remove" || value === "removed") {
+    return "deleted";
+  }
+  if (before === "" && typeof after === "string" && after.length > 0) return "added";
+  if (after === "" && typeof before === "string" && before.length > 0) return "deleted";
+  return "modified";
+}
+
+function asText(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function asCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function normalizeToolDiff(raw: any, base: string): ToolDiffItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const before = asText(raw.before) ?? asText(raw.oldContent);
+  const after = asText(raw.after) ?? asText(raw.newContent);
+  const sourcePath = asText(raw.file) ?? asText(raw.filePath) ?? asText(raw.path);
+  const targetPath = asText(raw.movePath) ?? sourcePath;
+  if (!targetPath) return null;
+
+  const sourceDisplay = sourcePath ? shortRelativePath(sourcePath, base) : "";
+  const targetDisplay = asText(raw.relativePath) || shortRelativePath(targetPath, base) || targetPath;
+  const displayPath =
+    sourcePath && targetPath !== sourcePath
+      ? `${sourceDisplay || sourcePath} -> ${targetDisplay}`
+      : targetDisplay;
+
+  return {
+    file: displayPath,
+    status: diffStatus(raw.type, before, after),
+    additions: asCount(raw.additions),
+    deletions: asCount(raw.deletions),
+    before,
+    after,
+    openPath: targetPath,
+    displayPath,
+  };
+}
+
+function extractToolDiffs(state: any, base: string): ToolDiffItem[] | null {
+  const meta = state?.metadata;
+  const files = Array.isArray(meta?.files)
+    ? meta.files
+        .map((item: any) => normalizeToolDiff(item, base))
+        .filter((item: ToolDiffItem | null): item is ToolDiffItem => !!item)
+    : [];
+  if (files.length > 0) return files;
+
+  const single = normalizeToolDiff(meta?.filediff, base);
+  return single ? [single] : null;
 }
 
 function extractFilePath(inp: any): string {
@@ -31,6 +112,103 @@ function extractCodeContent(key: string, inp: any, out: string): string {
   }
   if (FILE_READ_TOOLS.has(key)) return out;
   return "";
+}
+
+function extractTaggedBlock(text: string, tag: string): string | null {
+  const open = `<${tag}>`;
+  const close = `</${tag}>`;
+  const start = text.indexOf(open);
+  if (start < 0) return null;
+  const end = text.indexOf(close, start + open.length);
+  if (end < 0) return null;
+  let inner = text.slice(start + open.length, end);
+  if (inner.startsWith("\n")) inner = inner.slice(1);
+  if (inner.endsWith("\n")) inner = inner.slice(0, -1);
+  return inner;
+}
+
+function splitReadBody(block: string): { body: string; note?: string } {
+  const lines = block.split("\n");
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+  const last = lines[lines.length - 1]?.trim() ?? "";
+  if (!READ_NOTE_RE.test(last)) {
+    return { body: lines.join("\n") };
+  }
+  lines.pop();
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop();
+  return { body: lines.join("\n"), note: last };
+}
+
+function parseReadOutput(output: string): ParsedReadOutput | null {
+  const type = extractTaggedBlock(output, "type");
+  if (type !== "file" && type !== "directory") return null;
+  const block = extractTaggedBlock(output, type === "file" ? "content" : "entries");
+  if (block === null) return null;
+  const { body, note } = splitReadBody(block);
+  const reminder = extractTaggedBlock(output, "system-reminder")?.trim() || undefined;
+  return {
+    kind: type,
+    body,
+    note,
+    reminder,
+  };
+}
+
+function ToolDiffList(props: { items: ToolDiffItem[] }) {
+  const totals = () => ({
+    additions: props.items.reduce((sum, item) => sum + (item.additions ?? 0), 0),
+    deletions: props.items.reduce((sum, item) => sum + (item.deletions ?? 0), 0),
+  });
+
+  return (
+    <section class="msg-tool-diffs">
+      <div class="msg-tool-diffs__summary">
+        <span class="msg-tool-diffs__count">
+          {props.items.length} {props.items.length === 1 ? "file" : "files"}
+        </span>
+        <span class="msg-tool-diffs__meta">
+          <span class="diff-dialog-stat" data-tone="add">
+            +{totals().additions}
+          </span>
+          <span class="diff-dialog-stat" data-tone="del">
+            -{totals().deletions}
+          </span>
+        </span>
+      </div>
+      <For each={props.items}>
+        {(item) => (
+          <section class="msg-tool-diff-card">
+            <header class="msg-tool-diff-card__head">
+              <div class="msg-tool-diff-card__copy">
+                <a
+                  class="msg-tool-diff-link"
+                  href="#"
+                  data-file-path={item.openPath}
+                  title={item.openPath}
+                >
+                  {item.displayPath}
+                </a>
+                <span class="change-status" data-status={item.status}>
+                  {changeStatusLabel(item.status)}
+                </span>
+              </div>
+              <div class="msg-tool-diff-card__meta">
+                <span class="diff-dialog-stat" data-tone="add">
+                  +{item.additions}
+                </span>
+                <span class="diff-dialog-stat" data-tone="del">
+                  -{item.deletions}
+                </span>
+              </div>
+            </header>
+            <div class="msg-tool-diff-card__body">
+              <DiffView item={item} />
+            </div>
+          </section>
+        )}
+      </For>
+    </section>
+  );
 }
 
 /**
@@ -65,6 +243,11 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
   const output = () => stripAnsi(state().output || "");
   const error = () => stripAnsi(state().error || "") || output();
   const key = () => toolNameKey(toolName());
+  const readView = createMemo(() => {
+    if (status() !== "completed") return null;
+    if (!FILE_READ_TOOLS.has(key())) return null;
+    return parseReadOutput(output());
+  });
 
   // Code rendering for completed file-content tools — always full (no
   // truncation) because block mode lives inside its own <Card> body
@@ -73,9 +256,12 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
     if (status() !== "completed") return null;
     const k = key();
     if (!isFileContentTool(k)) return null;
-    const content = extractCodeContent(k, input(), output());
+    const parsedRead = readView();
+    const content = FILE_READ_TOOLS.has(k)
+      ? parsedRead?.body ?? extractCodeContent(k, input(), output())
+      : extractCodeContent(k, input(), output());
     if (!content) return null;
-    const lang = extToLang(extractFilePath(input()));
+    const lang = parsedRead?.kind === "directory" ? "plaintext" : extToLang(extractFilePath(input()));
     return renderCodeBlock(content, lang, Infinity);
   });
 
@@ -85,6 +271,16 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
   const todoItems = createMemo(() => {
     if (!TODO_TOOLS.has(key())) return null;
     return extractTodos(state());
+  });
+  const toolDiffs = createMemo(() => {
+    if (status() !== "completed") return null;
+    return extractToolDiffs(state(), selectedTaskDirectory());
+  });
+  const showStructuredOutput = createMemo(() => (toolDiffs()?.length ?? 0) > 0);
+  const showPlainOutput = createMemo(() => {
+    if (status() !== "completed" || !output() || readView()) return false;
+    if (showStructuredOutput()) return /<diagnostics\b/i.test(output());
+    return !codeResult();
   });
 
   const showChip = () => mode() !== "body";
@@ -110,15 +306,29 @@ export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "
             <Show when={status() === "pending" && raw() && !todoItems()}>
               <div class="msg-tool-input">{raw()}</div>
             </Show>
-            <Show when={codeResult()}>
+            <Show when={showStructuredOutput()}>
+              <ToolDiffList items={toolDiffs()!} />
+            </Show>
+            <Show when={codeResult() && !showStructuredOutput()}>
               <div class="msg-tool-code md-content" innerHTML={codeResult()!.html} />
             </Show>
-            <Show when={status() === "completed" && output() && !codeResult()}>
+            <Show when={readView()?.note}>
+              <div class="msg-read-meta">{readView()!.note}</div>
+            </Show>
+            <Show when={readView()?.reminder}>
+              <section class="msg-read-reminder">
+                <div class="msg-read-reminder__label">Loaded instructions</div>
+                <div class="msg-read-reminder__body">
+                  <StaticTextPart text={readView()!.reminder!} />
+                </div>
+              </section>
+            </Show>
+            <Show when={showPlainOutput()}>
               <div class="msg-tool-output msg-tool-output--expanded">{output()}</div>
             </Show>
           </>
         }>
-          <TodoListPart todos={todoItems()!} />
+          <TodoListPart todos={todoItems()!} variant={mode() === "body" ? "card" : "inline"} />
         </Show>
         <Show when={status() === "error" && error()}>
           <div class="msg-tool-error">{error()}</div>

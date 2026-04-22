@@ -69,6 +69,7 @@ import { Orchestrator } from "@/orchestrator/agent"
 import {
   activeRunBySession,
   findArtifacts,
+  findDeliveryByGoalRun,
   findDeliveryByRun,
   findLatestDeliveryForRun,
   findExecutorSessionByRun,
@@ -781,6 +782,16 @@ export namespace EngineService {
     // so that goal-run deliveries (shown in the board) are also previewable.
     const delivery = findDeliveryByRun(runID) ?? findLatestDeliveryForRun(runID)
     if (!delivery) throw new NotFoundError({ message: `Delivery not found for run ${runID}` })
+    return viewDelivery(delivery)
+  }
+
+  export async function getGoalRunDelivery(goalRunID: string) {
+    // Read-only — goal-level diff previews must resolve against the
+    // specific goal_run delivery instead of the task-level aggregate.
+    const delivery = findDeliveryByGoalRun(goalRunID)
+    if (!delivery) {
+      throw new NotFoundError({ message: `Delivery not found for goal_run ${goalRunID}` })
+    }
     return viewDelivery(delivery)
   }
 

@@ -129,16 +129,18 @@ export function displayToolDetail(
       const meta = record((safeState as any).metadata) ? (safeState as any).metadata : {};
       const readLines = (meta as any).lines;
       const totalLines = (meta as any).totalLines;
-      const hasReadLines = typeof readLines === "number" && Number.isFinite(readLines);
+      const hasReadLines = typeof readLines === "number" && Number.isFinite(readLines) && readLines > 0;
       const hasTotal = typeof totalLines === "number" && Number.isFinite(totalLines);
       const linesSuffix = hasReadLines
         ? hasTotal && totalLines !== readLines
           ? ` (${readLines}/${totalLines} lines)`
           : ` (${readLines} lines)`
         : "";
-      if (hasOffset || hasLimit) {
-        const start = hasOffset ? offset : 1;
-        const span = hasLimit ? `+${limit}` : "";
+      const start = hasOffset ? offset : 1;
+      const spanSize = hasLimit ? limit : hasReadLines ? readLines : undefined;
+      const hasSpan = typeof spanSize === "number" && Number.isFinite(spanSize) && spanSize > 0;
+      if (hasOffset || hasSpan) {
+        const span = hasSpan ? `+${spanSize}` : "";
         return `${shortPath} @${start}${span}${linesSuffix}`;
       }
       return `${shortPath}${linesSuffix}`;

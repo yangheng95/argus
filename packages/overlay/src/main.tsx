@@ -19,6 +19,7 @@ import {
   WorkspacePanel,
   type WorkspaceView,
 } from "./components/WorkspacePanel";
+import type { DiffTarget } from "./services/diff";
 import { initApp } from "./services/init";
 import { applyTasks, loadTasks, boardStore, loadBoard, setBoardStore, setBoardData } from "./store/board";
 import {
@@ -69,7 +70,7 @@ import { WelcomeToast } from "./components/WelcomeToast";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
-import { nativePrompt } from "./utils/native";
+import { nativeOpen, nativePrompt } from "./utils/native";
 import { installAppDialogBridge } from "./services/app-dialog";
 import { eventClosest } from "./utils/dom-utils";
 import { shortPath } from "./utils/tool";
@@ -118,7 +119,7 @@ const [logOpen, setLogOpen] = createSignal(false);
 const [workspaceOpen, setWorkspaceOpen] = createSignal(false);
 const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
-  filePath: "",
+  target: { filePath: "" },
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -232,8 +233,8 @@ function toggleWorkspace(): void {
 }
 
 /** Open (or switch to) a diff file in the workspace. */
-function openWorkspaceDiff(filePath: string): void {
-  openWorkspace({ kind: "diff", filePath });
+function openWorkspaceDiff(target: DiffTarget): void {
+  openWorkspace({ kind: "diff", target });
 }
 
 /** Open (or switch to) a file preview in the workspace. */
@@ -259,6 +260,19 @@ document.addEventListener("click", (ev) => {
   if (!path) return;
   ev.preventDefault();
   openWorkspaceFile(path);
+}, listenerOpts);
+
+document.addEventListener("click", (ev) => {
+  const target = ev.target as HTMLElement | null;
+  if (!target) return;
+  const anchor = target.closest<HTMLAnchorElement>("a[href]");
+  if (!anchor || anchor.hasAttribute("data-file-path")) return;
+  const href = anchor.getAttribute("href") || "";
+  if (!/^https?:\/\//i.test(href)) return;
+  ev.preventDefault();
+  void nativeOpen(href).catch((error) => {
+    console.error("[ui] Failed to open external link", error);
+  });
 }, listenerOpts);
 
 function installGlobalBridges(): void {

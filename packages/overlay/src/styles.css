@@ -2398,6 +2398,68 @@ body[data-theme="light"] .section-badge {
   gap: 4px;
 }
 
+.changes-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.changes-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.changes-group + .changes-group {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.changes-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.changes-group-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.changes-group-label {
+  font-size: var(--ui-font-control);
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.changes-group-title {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.changes-group-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: var(--ui-font-control);
+  font-variant-numeric: tabular-nums;
+}
+
+.changes-group-total [data-tone="add"] {
+  color: var(--good);
+}
+
+.changes-group-total [data-tone="del"] {
+  color: var(--bad);
+}
+
 .change-row {
   width: 100%;
   display: flex;
@@ -3281,7 +3343,7 @@ body[data-resizing="row"] * {
 
 .diff-preview-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: calc(8px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
@@ -3289,8 +3351,22 @@ body[data-resizing="row"] * {
   background: var(--subtle-1);
 }
 
-.diff-preview-path {
+.diff-preview-copy {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diff-preview-scope {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.diff-preview-path {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3419,14 +3495,21 @@ code .file-link:hover {
 /* Follow-to-bottom toggle — sticky at bottom-right of the scroll container.
    Default (is-active off) means auto-scroll is disabled and the user can
    read freely; clicking it re-engages follow and jumps to the bottom. */
-.chat-follow-toggle {
+.chat-scroll-actions {
   position: sticky;
   bottom: 8px;
   align-self: flex-end;
+  display: flex;
+  gap: 8px;
+  margin-right: 4px;
+  z-index: 5;
+}
+
+.chat-scroll-top,
+.chat-follow-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-right: 4px;
   padding: 4px 10px;
   border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
   border-radius: 999px;
@@ -3437,10 +3520,10 @@ code .file-link:hover {
   line-height: 1.4;
   cursor: pointer;
   user-select: none;
-  z-index: 5;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
+.chat-scroll-top:hover,
 .chat-follow-toggle:hover {
   color: var(--text);
   border-color: var(--accent, #4a9eff);
@@ -3452,6 +3535,7 @@ code .file-link:hover {
   background: color-mix(in srgb, var(--accent, #4a9eff) 14%, transparent);
 }
 
+.chat-scroll-top svg,
 .chat-follow-toggle svg {
   flex-shrink: 0;
   transition: transform 0.15s ease;
@@ -3585,7 +3669,177 @@ code .file-link:hover {
   overflow-x: auto;
 }
 
+.msg-tool-diffs {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+  margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
+}
+
+.msg-tool-diffs__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+}
+
+.msg-tool-diffs__count {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.msg-tool-diffs__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.msg-tool-diff-card {
+  border: 1px solid var(--subtle-4);
+  border-radius: calc(16px * var(--ui-scale));
+  background: color-mix(in srgb, var(--subtle-2) 82%, transparent);
+  overflow: hidden;
+}
+
+.msg-tool-diff-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-bottom: 1px solid var(--subtle-4);
+}
+
+.msg-tool-diff-card__copy {
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+}
+
+.msg-tool-diff-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  flex-shrink: 0;
+}
+
+.msg-tool-diff-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.msg-tool-diff-link:hover {
+  color: var(--accent-hover);
+}
+
+.msg-tool-diff-card__body {
+  padding: calc(10px * var(--ui-scale));
+}
+
+.msg-tool-diff-card__body .diff-lines {
+  border-radius: calc(12px * var(--ui-scale));
+  overflow: hidden;
+}
+
 /* Structured todo list (todowrite / todoread / updateplan tool body) */
+.msg-todo-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+  margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) 0;
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: calc(16px * var(--ui-scale));
+  background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
+  border: 1px solid var(--subtle-4);
+}
+.msg-todo-card__summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(10px * var(--ui-scale));
+}
+.msg-todo-card__headline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: calc(8px * var(--ui-scale));
+  min-width: 0;
+}
+.msg-todo-card__count {
+  font-size: calc(var(--ui-font-body) * 1.2);
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.msg-todo-card__label {
+  color: var(--text-soft);
+  font-size: var(--ui-font-small);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.msg-todo-card__meta {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+}
+.msg-todo-card__progress {
+  height: calc(6px * var(--ui-scale));
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--subtle-3);
+}
+.msg-todo-card__progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--good) 100%);
+}
+.msg-todo-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(6px * var(--ui-scale));
+}
+.msg-todo-card__stat {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(22px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border-radius: 999px;
+  border: 1px solid var(--subtle-4);
+  background: var(--subtle-3);
+  color: var(--text-muted);
+  font-size: calc(var(--ui-font-control) * 0.92);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.msg-todo-card__stat[data-status="in_progress"] {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: transparent;
+}
+.msg-todo-card__stat[data-status="pending"] {
+  color: var(--text-soft);
+}
+.msg-todo-card__stat[data-status="completed"] {
+  color: var(--good);
+  background: var(--good-dim);
+  border-color: transparent;
+}
+.msg-todo-card__stat[data-status="cancelled"] {
+  color: var(--bad);
+  background: var(--bad-dim);
+  border-color: transparent;
+}
 .msg-todo-list {
   list-style: none;
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
@@ -3599,12 +3853,25 @@ code .file-link:hover {
   flex-direction: column;
   gap: calc(4px * var(--ui-scale));
 }
+.msg-todo-list--card {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  gap: calc(6px * var(--ui-scale));
+}
 .msg-todo-item {
   display: flex;
   align-items: flex-start;
   gap: calc(8px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale)) 0;
   color: var(--text);
+}
+.msg-todo-list--card .msg-todo-item {
+  padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
+  border: 1px solid var(--subtle-4);
 }
 .msg-todo-icon {
   flex: 0 0 auto;
@@ -3661,6 +3928,46 @@ code .file-link:hover {
 }
 .msg-todo-priority[data-priority="low"] {
   color: var(--text-muted);
+}
+.msg-read-meta {
+  margin: calc(2px * var(--ui-scale)) 0 0 0;
+  padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border-radius: calc(12px * var(--ui-scale));
+  background: var(--subtle-2);
+  border: 1px solid var(--subtle-4);
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  line-height: 1.55;
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg-read-reminder {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ui-scale));
+  margin-top: calc(8px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  border-radius: calc(12px * var(--ui-scale));
+  background: color-mix(in srgb, var(--subtle-2) 88%, transparent);
+  border: 1px solid var(--subtle-4);
+}
+.msg-read-reminder__label {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.msg-read-reminder__body .msg-text {
+  font-size: var(--ui-font-control);
+  line-height: 1.65;
+}
+.msg-read-reminder__body .msg-text > :first-child {
+  margin-top: 0;
+}
+.msg-read-reminder__body .msg-text > :last-child {
+  margin-bottom: 0;
 }
 
 /* ── Executor Summary Panel (right-panel section) ── */
@@ -9917,6 +10224,30 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   gap: 2px;
   padding: var(--ui-gap-sm) var(--ui-card-padding-x) var(--ui-card-padding-y) calc(var(--ui-card-padding-x) + 4px);
   border-top: 1px solid var(--subtle-2);
+}
+
+/* Objective block (Architect-written 1–2 sentence execution directive) */
+.gwg-objective {
+  margin-bottom: var(--ui-gap-sm);
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  background: var(--subtle-1);
+  border-left: 2px solid var(--accent-strong, var(--accent));
+  border-radius: 4px;
+}
+.gwg-objective-label {
+  font-size: var(--ui-font-tiny);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.gwg-objective-text {
+  font-size: var(--ui-font-small);
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Done-definition block (what "done" means for this goal) */

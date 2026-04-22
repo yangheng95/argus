@@ -10,6 +10,7 @@ import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
 import { StepPayloadBody } from "./StepPayloadBody";
 import { FidelityBody } from "./FidelityCard";
+import { t } from "../utils/i18n";
 
 /**
  * Unified recursive card primitive.
@@ -155,6 +156,25 @@ export function Card(props: { node: CardNode; depth: number }) {
                   </Show>
                 )}
               </For>
+            </div>
+          </Show>
+
+          <Show when={collapsible()}>
+            <div class="card__body-actions">
+              <button
+                type="button"
+                class="card__collapse-toggle"
+                onClick={toggle}
+                title={t("card.collapse_title")}
+                aria-label={t("card.collapse_title")}
+              >
+                <span class="card__collapse-toggle-icon" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+                <span class="card__collapse-toggle-label">{t("card.collapse")}</span>
+              </button>
             </div>
           </Show>
         </div>

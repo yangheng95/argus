@@ -36,6 +36,8 @@ import { escapeHtml } from "./markdown";
  * - `scrollToBottom` on the returned controller jumps to the bottom without
  *   being mis-classified as a user scroll (used when the caller turns
  *   tracking on again).
+ * - `scrollToTop` mirrors that behavior for explicit jumps to the start of
+ *   the transcript without polluting user-scroll detection.
  *
  * Program-initiated scrolls (our own scrollTop writes) are distinguished
  * from user scrolls by tracking the last landing position we set. Scroll
@@ -53,6 +55,7 @@ export interface AutoScrollOptions {
 export interface AutoScrollController {
   cleanup: () => void;
   scrollToBottom: () => void;
+  scrollToTop: () => void;
 }
 
 export function setupAutoScroll(
@@ -105,6 +108,10 @@ export function setupAutoScroll(
     },
     scrollToBottom: () => {
       el.scrollTop = el.scrollHeight;
+      expectedTop = el.scrollTop;
+    },
+    scrollToTop: () => {
+      el.scrollTop = 0;
       expectedTop = el.scrollTop;
     },
   };

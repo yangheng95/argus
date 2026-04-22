@@ -77,6 +77,8 @@ import type {
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
+  GoalRunDeliveryErrors,
+  GoalRunDeliveryResponses,
   InstanceDisposeResponses,
   InteractionRejectErrors,
   InteractionRejectResponses,
@@ -5254,6 +5256,36 @@ export class Run extends HeyApiClient {
   }
 }
 
+export class GoalRun extends HeyApiClient {
+  /**
+   * Get goal-run delivery
+   */
+  public delivery<ThrowOnError extends boolean = false>(
+    parameters: {
+      goalRunID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "goalRunID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GoalRunDeliveryResponses, GoalRunDeliveryErrors, ThrowOnError>({
+      url: "/goal-run/{goalRunID}/delivery",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Interaction extends HeyApiClient {
   /**
    * Reply to interaction
@@ -6865,6 +6897,11 @@ export class OpencodeClient extends HeyApiClient {
   private _run?: Run
   get run(): Run {
     return (this._run ??= new Run({ client: this.client }))
+  }
+
+  private _goalRun?: GoalRun
+  get goalRun(): GoalRun {
+    return (this._goalRun ??= new GoalRun({ client: this.client }))
   }
 
   private _interaction?: Interaction

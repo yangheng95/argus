@@ -14010,6 +14010,9 @@
                           "goalTitle": {
                             "type": "string"
                           },
+                          "goalObjective": {
+                            "type": "string"
+                          },
                           "goalStatus": {
                             "type": "string"
                           },
@@ -16272,6 +16275,165 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.run.delivery({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/goal-run/{goalRunID}/delivery": {
+      "get": {
+        "operationId": "goalRun.delivery",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "goalRunID",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true
+          }
+        ],
+        "summary": "Get goal-run delivery",
+        "responses": {
+          "200": {
+            "description": "Goal-run delivery",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^dlv.*"
+                    },
+                    "taskID": {
+                      "type": "string",
+                      "pattern": "^tsk.*"
+                    },
+                    "runID": {
+                      "type": "string",
+                      "pattern": "^run.*"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "candidate",
+                        "publishing",
+                        "delivered",
+                        "failed"
+                      ]
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "type": "string"
+                        },
+                        "changedFiles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "diffs": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/FileDiff"
+                          }
+                        },
+                        "artifacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "payload": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "label"
+                            ]
+                          }
+                        },
+                        "publish": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "changedFiles",
+                        "diffs"
+                      ]
+                    },
+                    "time": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "number"
+                        },
+                        "updated": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "created",
+                        "updated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "taskID",
+                    "runID",
+                    "status",
+                    "summary",
+                    "result",
+                    "time"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.goalRun.delivery({\n  ...\n})"
           }
         ]
       }
@@ -27055,7 +27217,7 @@
                 "maximum": 9007199254740991
               },
               "goal_escalation_threshold": {
-                "description": "After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.",
+                "description": "After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / re-run architect / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.",
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 9007199254740991

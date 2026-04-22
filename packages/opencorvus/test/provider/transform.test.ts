@@ -130,6 +130,18 @@ describe("ProviderTransform.options - gpt-5 textVerbosity", () => {
       headers: {},
     }) as any
 
+  const createAzureGpt5Model = (apiId: string) =>
+    ({
+      ...createGpt5Model(apiId),
+      id: `azure/${apiId}`,
+      providerID: "azure",
+      api: {
+        id: apiId,
+        url: `https://example.openai.azure.com/openai/deployments/${apiId}`,
+        npm: "@ai-sdk/azure",
+      },
+    }) as any
+
   test("gpt-5.2 should have textVerbosity set to low", () => {
     const model = createGpt5Model("gpt-5.2")
     const result = ProviderTransform.options({ model, sessionID, providerOptions: {} })
@@ -169,6 +181,13 @@ describe("ProviderTransform.options - gpt-5 textVerbosity", () => {
   test("gpt-5.2-codex should NOT have textVerbosity set (codex models excluded)", () => {
     const model = createGpt5Model("gpt-5.2-codex")
     const result = ProviderTransform.options({ model, sessionID, providerOptions: {} })
+    expect(result.textVerbosity).toBeUndefined()
+  })
+
+  test("azure gpt-5.4 should set promptCacheKey without textVerbosity", () => {
+    const model = createAzureGpt5Model("gpt-5.4")
+    const result = ProviderTransform.options({ model, sessionID, providerOptions: {} })
+    expect(result.promptCacheKey).toBe(sessionID)
     expect(result.textVerbosity).toBeUndefined()
   })
 })
