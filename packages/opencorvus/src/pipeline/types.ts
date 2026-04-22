@@ -12,14 +12,20 @@ import type { DecisionLog } from "@/decision-log"
 import type { AcceptanceSpec } from "@/acceptance/types"
 
 // ---------------------------------------------------------------------------
-// Goal Contract — the ONLY interface between Requirements and Pipeline.
+// Goal Contract — the interface between the Architect (producer) and the
+// execution pipeline (consumer).
 //
-// Invariants (from architecture spec):
-// ① Requirements Agent is the sole producer, GoalPipeline is the sole consumer.
+// Invariants:
+// ① Architect Agent is the sole producer of goal rows. Requirements produces
+//    REQ-N + foundational decisions only; it never writes goals.
 // ② DB mapping is lossless: each field gets its own column, no compression.
-// ③ acceptance_specs must be Eval Agent executable (deterministic shell + rubric).
+// ③ acceptance_specs must be Eval Agent executable (deterministic shell +
+//    rubric).
 // ④ owned_paths is the hard write boundary for Executor.
-// ⑤ Contract is immutable once created. Only re-running requirements can change it.
+// ⑤ Contract is frozen after Architect finalize. The Architect may edit it by
+//    being re-invoked (add / modify / split / remove goals), and the
+//    orchestrator may point-fix a field via `modify_goal`; otherwise the
+//    contract does not change while a goal is executing.
 // ---------------------------------------------------------------------------
 
 export interface GoalContractFields {

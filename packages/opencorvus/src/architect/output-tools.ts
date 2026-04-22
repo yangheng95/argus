@@ -1,7 +1,7 @@
 /**
  * Zod-validated tool calls for the Architect Agent.
  *
- * The Architect is now the authoritative goal decomposer: it registers goals,
+ * The Architect is the authoritative goal decomposer: it registers goals,
  * metric specs, challenge seeds, traceability, and cross-goal contracts — and
  * can also refine (modify/remove) goals during re-runs triggered by delivery
  * feedback. Every registration path writes into a single collector; the
@@ -11,11 +11,6 @@
  * Small tool calls (~500 bytes each) avoid the streaming buffering that a
  * monolithic submit tool would trigger for TypeScript source inside `spec`
  * or long acceptance criteria.
- *
- * NOTE: `MANDATORY_*_BLOCKING_METRICS` constants and `Architect*Spec` / `...Seed`
- * / `TraceabilityEntry` types currently live under `@/requirements/*`; they
- * will move to `@/architect/types` in Phase 3 of the decompose migration. The
- * cross-package import below is the single source of truth until then.
  */
 import { tool } from "ai"
 import z from "zod"
@@ -27,17 +22,34 @@ import {
   GoalContractUpdateSchema,
 } from "@/pipeline/goal-contract.schema"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import {
-  MANDATORY_GOAL_BLOCKING_METRICS,
-  MANDATORY_GLOBAL_BLOCKING_METRICS,
-} from "@/requirements/output-tools"
 import type {
   ArchitectChallengeSeed,
+  ArchitectContract,
+  ArchitectDecisionKey,
   ArchitectGlobalMetricSpec,
   ArchitectGoalMetricSpec,
   TraceabilityEntry,
-} from "@/requirements/types"
-import type { ArchitectContract, ArchitectDecisionKey } from "./types"
+} from "./types"
+
+/**
+ * Mandatory blocking metric coverage. Architect must register a spec with each
+ * of these names in order to finalize — these are the gates Arbiter reads when
+ * deciding accept/stalled/abort. Gate class must be 'blocking'; diagnostic and
+ * efficiency classes are additive signals that do not substitute for these.
+ */
+export const MANDATORY_GOAL_BLOCKING_METRICS = [
+  "functional_correctness",
+  "scenario_coverage",
+  "contract_compliance",
+  "regression_count",
+] as const
+
+export const MANDATORY_GLOBAL_BLOCKING_METRICS = [
+  "cross_goal_contract_consistency",
+  "non_regression_surface",
+  "architecture_integrity",
+  "user_intent_fidelity",
+] as const
 
 // ---------------------------------------------------------------------------
 // Collector — single buffer for the full Architect output

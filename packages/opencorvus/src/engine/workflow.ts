@@ -178,9 +178,9 @@ const PIPELINE: MiniWorkflow = {
       id: "architect",
       tool: "architect",
       label: "Architect",
-      hint: "多 goal 时协调跨目标接口契约 + 目录蓝图。单 goal 跳过。",
+      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约 / fidelity。每个 task 都要跑；delivery 拒绝后也可 re-run 精修 goal 集合。",
       scope: "task",
-      skippable: true,
+      skippable: false,
       after: ["requirements"],
     },
     {
