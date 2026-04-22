@@ -2,9 +2,9 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { EngineTaskTable } from "../../src/engine/engine.sql"
+import * as Queue from "../../src/engine/queue"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import * as TaskLoop from "../../src/orchestrator/loop"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -24,8 +24,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop").mockImplementation(() => undefined)
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
 
@@ -62,15 +61,15 @@ describe("task message routes", () => {
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
-        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "operator message")
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        expect(dispatchTaskLoop.mock.calls[0]?.[0]).toMatchObject({
           taskID,
           trigger: {
             kind: "operator_message",
             message: "把当前任务停下来，重新评估策略后继续。",
             attachmentSummary: undefined,
           },
+          interrupt: true,
         })
 
         const row = Database.use((db) =>
@@ -88,8 +87,7 @@ describe("task message routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const interruptTaskLoop = spyOn(TaskLoop, "interruptTaskLoop").mockImplementation(() => undefined)
-        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
         const taskID = Identifier.ascending("task")
         const now = Date.now()
 
@@ -130,9 +128,8 @@ describe("task message routes", () => {
         expect(body.kind).toBe("note")
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
-        expect(interruptTaskLoop).toHaveBeenCalledWith(taskID, "operator message")
-        expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        const trigger = (runTaskLoop.mock.calls[0]?.[0] as {
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        const trigger = (dispatchTaskLoop.mock.calls[0]?.[0] as {
           trigger: {
             kind: string
             message: string
@@ -148,6 +145,7 @@ describe("task message routes", () => {
         expect(trigger.attachmentSummary).toContain("Attachments:")
         expect(trigger.attachmentSummary).toContain("spec.txt")
         expect(trigger.attachmentSummary).toContain("text/plain")
+        expect((dispatchTaskLoop.mock.calls[0]?.[0] as { interrupt?: boolean }).interrupt).toBe(true)
       },
     })
   })
