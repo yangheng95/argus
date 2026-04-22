@@ -133,6 +133,18 @@ function goalStatusClass(status: string): string {
   }
 }
 
+function goalChangedFileCount(goal: GoalWorkflow): number {
+  const files = new Set<string>();
+  for (const step of goal.steps) {
+    const changedFiles = step.payload?.changedFiles;
+    if (!Array.isArray(changedFiles)) continue;
+    for (const file of changedFiles) {
+      if (typeof file === "string" && file) files.add(file);
+    }
+  }
+  return files.size;
+}
+
 // ── Step Row (expandable when it has content) ──
 //
 // The right-hand Board is a CONTROL PANEL — it surfaces high-level status
@@ -235,6 +247,17 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
     props.defaultOpen ?? (status() === "running" || status() === "failed");
   const expanded = () => cardExpanded(cardKey(), status(), defaultOpen());
   const toggle = () => toggleCard(cardKey(), status(), defaultOpen());
+  const stepSummary = createMemo(() => {
+    const total = props.goal.steps.length;
+    if (total <= 0) return "";
+    const completed = props.goal.steps.filter((step) => step.status === "completed").length;
+    return `${completed}/${total} steps`;
+  });
+  const fileSummary = createMemo(() => {
+    const count = goalChangedFileCount(props.goal);
+    if (count <= 0) return "";
+    return `${count} ${count === 1 ? "file" : "files"}`;
+  });
 
   return (
     <div
@@ -252,54 +275,68 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
         }}
       >
         <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
-        <Show when={props.goalIndex !== undefined}>
-          <span class="gwg-index">#{props.goalIndex}</span>
-        </Show>
-        <span class="gwg-title">{props.goal.goalTitle}</span>
-        <span
-          class="gwg-id"
-          title={props.goal.goalID}
-          onClick={(e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(props.goal.goalID).catch(() => {});
-          }}
-        >
-          {props.goal.goalID.slice(-8)}
-        </span>
-        <Show when={props.goal.priority === "advisory"}>
-          <span class="gwg-priority-badge">advisory</span>
-        </Show>
-        <Show when={props.onEditGoal}>
-          <button
-            type="button"
-            class="gwg-action-btn gwg-action-edit"
-            title={t("goal.edit_button_title")}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onEditGoal!(
-                props.goal.goalID,
-                props.goal.goalTitle,
-                previewAcceptance(props.goal.acceptanceSpecs),
-              );
-            }}
-          >
-            {"\u270E"}
-          </button>
-        </Show>
-        <Show when={props.onDeleteGoal}>
-          <button
-            type="button"
-            class="gwg-action-btn gwg-action-delete"
-            title={t("goal.delete_button_title")}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onDeleteGoal!(props.goal.goalID);
-            }}
-          >
-            {"\u2715"}
-          </button>
-        </Show>
-        <span class="gwg-chevron" aria-hidden="true">{"\u25BC"}</span>
+        <div class="gwg-header-copy">
+          <div class="gwg-title-row">
+            <Show when={props.goalIndex !== undefined}>
+              <span class="gwg-index">#{props.goalIndex}</span>
+            </Show>
+            <span class="gwg-title">{props.goal.goalTitle}</span>
+          </div>
+          <div class="gwg-meta-row">
+            <span
+              class="gwg-id"
+              title={props.goal.goalID}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(props.goal.goalID).catch(() => {});
+              }}
+            >
+              {props.goal.goalID.slice(-8)}
+            </span>
+            <Show when={stepSummary()}>
+              <span class="gwg-meta-pill">{stepSummary()}</span>
+            </Show>
+            <Show when={fileSummary()}>
+              <span class="gwg-meta-pill">{fileSummary()}</span>
+            </Show>
+            <Show when={props.goal.priority === "advisory"}>
+              <span class="gwg-priority-badge">advisory</span>
+            </Show>
+          </div>
+        </div>
+        <div class="gwg-header-actions">
+          <Show when={props.onEditGoal}>
+            <button
+              type="button"
+              class="gwg-action-btn gwg-action-edit"
+              title={t("goal.edit_button_title")}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onEditGoal!(
+                  props.goal.goalID,
+                  props.goal.goalTitle,
+                  previewAcceptance(props.goal.acceptanceSpecs),
+                );
+              }}
+            >
+              {"\u270E"}
+            </button>
+          </Show>
+          <Show when={props.onDeleteGoal}>
+            <button
+              type="button"
+              class="gwg-action-btn gwg-action-delete"
+              title={t("goal.delete_button_title")}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onDeleteGoal!(props.goal.goalID);
+              }}
+            >
+              {"\u2715"}
+            </button>
+          </Show>
+          <span class="gwg-chevron" aria-hidden="true">{"\u25BC"}</span>
+        </div>
       </div>
       <Show when={expanded()}>
         <div class="gwg-body">
