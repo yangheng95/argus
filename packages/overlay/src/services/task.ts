@@ -11,14 +11,12 @@
 import { apiJson, apiUrl, apiHeaders } from "./api";
 import { startSSE, stopSSE } from "./sse";
 import {
-  syncTask,
   clearMessages,
   setSelectedTaskID,
   abortChatRequest,
   setChatAttachments,
 } from "../store/messages";
 import {
-  loadBoard,
   loadTasks,
   clearBoard,
   boardStore,
@@ -35,6 +33,7 @@ import {
 import { appStore, setAppStore } from "../store/app";
 import { applyDirectory } from "./workspace";
 import { resetWriter } from "./tree-writer";
+import { hydrateTaskConversation } from "./conversation";
 
 // ── Types ──
 
@@ -272,17 +271,10 @@ export async function selectTask(
       if (stale()) return;
     }
 
-    await Promise.all([
-      loadBoard({ sync: true }).catch((e) =>
-        console.error("[selectTask] loadBoard failed:", e),
-      ),
-      syncTask(nextTaskID).catch((e) =>
-        console.error("[selectTask] syncTask failed:", e),
-      ),
-    ]);
+    const lastSequence = await hydrateTaskConversation(nextTaskID);
     if (stale()) return;
 
-    startSSE(nextTaskID);
+    startSSE(nextTaskID, lastSequence);
 
     // Persist the active task so initApp -> restoreInitialWorkspace() can
     // resume it on the next launch. Without this write the localStorage key
@@ -542,4 +534,3 @@ export async function interruptTask(taskID: string): Promise<boolean> {
 setOrphanedSelectionHandler(() => {
   void selectTask("");
 });
-
