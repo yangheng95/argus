@@ -958,10 +958,10 @@ export function createOrchestratorTools(input: {
           // to per-goal executors via phasePromptSectionForGoal. The
           // orchestrator only needs a structured short ack.
           const summary = SubAgentProtocol.yieldResult({
-            headline: `Architect coordination complete: ${result.entriesWritten} contracts written to Decision Log.`,
-            summary: result.blueprint.summary,
-            fields: result.blueprint.contracts.length > 0
-              ? [["categories", [...new Set(result.blueprint.contracts.map((c) => c.category))]]]
+            headline: `Architect coordination complete: ${result.contracts.length} contracts written to Decision Log.`,
+            summary: result.summary,
+            fields: result.contracts.length > 0
+              ? [["categories", [...new Set(result.contracts.map((c) => c.category))]]]
               : [],
             pointer: "read_context scope=decisions (architect phase entries)",
           })
@@ -978,9 +978,9 @@ export function createOrchestratorTools(input: {
               taskID,
               sessionID: architectSession.id,
               status: "completed",
-              contractCount: result.blueprint.contracts.length,
-              categories: [...new Set(result.blueprint.contracts.map(c => c.category))],
-              blueprintSummary: result.blueprint.summary,
+              contractCount: result.contracts.length,
+              categories: [...new Set(result.contracts.map(c => c.category))],
+              blueprintSummary: result.summary,
               summary,
             },
             { source: "orchestrator.architect" },
