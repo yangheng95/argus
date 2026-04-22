@@ -1634,9 +1634,13 @@ export function createOrchestratorTools(input: {
     }),
 
     restart_from_stage: tool({
-      description: "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo requirements/plan from scratch.",
+      description: "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo requirements/plan from scratch. `plan` fully regenerates the goal decomposition while keeping requirements intact — use it after repeated per-goal retry has failed to converge.",
       inputSchema: z.object({
-        stage: z.enum(["requirements", "plan", "executor"]).describe("Which stage to restart from"),
+        stage: z.enum(["requirements", "plan", "executor"]).describe(
+          "`requirements`: re-elicit requirements; deletes spec + plan + goals. " +
+          "`plan`: keep requirements; delete plan + goals so the architect fully re-decomposes from scratch. " +
+          "`executor`: keep requirements + plan + goals; reset goal statuses so the executor re-runs each goal.",
+        ),
         reason: z.string().describe("Why restarting from this stage"),
       }),
       execute: async ({ stage, reason }) => {

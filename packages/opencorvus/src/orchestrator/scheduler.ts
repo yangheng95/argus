@@ -25,14 +25,19 @@ export function restartStagePlan(stage: RestartStage, hasActivePlan: boolean) {
         nextAction: "requirements" as const,
       }
     case "plan":
+      // Fully regenerate goals while preserving the validated spec/requirements.
+      // Goals are deleted (not reset) so the architect re-plans from scratch
+      // without old goal rows colliding with the new decomposition.
+      // abortLiveExecutionForTask cleans the per-goal worktrees; git main is
+      // left alone — the architect plans against whatever main looks like now.
       return {
         clearSpec: false,
         clearPlan: true,
-        deleteGoals: false,
-        resetGoalStatuses: true,
+        deleteGoals: true,
+        resetGoalStatuses: false,
         retireGoalRuns: true,
         queueFreshRun: false,
-        nextAction: "create_run" as const,
+        nextAction: "architect" as const,
       }
     case "executor":
       return {
