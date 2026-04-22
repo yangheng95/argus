@@ -132,7 +132,6 @@
         </div>
         <div class="task-meta-actions">
           <span id="solidSessionTokenBadge"></span>
-          <button type="button" class="task-git" id="taskGit" data-state="idle" data-actionable="false" disabled data-i18n="git.unavailable">Git unavailable</button>
         </div>
       </div>
     </section>
@@ -141,11 +140,8 @@
     <div class="panel-body" id="panelBody">
       <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="sidebar-header">
-          <div class="sidebar-copy">
-            <div class="sidebar-title" data-i18n="sidebar.title">Tasks</div>
-            <div class="sidebar-subtitle" id="sidebarSubtitle" data-i18n="sidebar.subtitle">Tasks</div>
-          </div>
-          <div class="sidebar-header-actions" role="toolbar" aria-label="Tasks" data-i18n-aria-label="sidebar.subtitle">
+          <div class="sidebar-title" data-i18n="sidebar.title">Task List</div>
+          <div class="sidebar-header-actions" role="toolbar" aria-label="Task List" data-i18n-aria-label="sidebar.title">
             <div class="sidebar-toolset">
               <button
                 type="button"
@@ -208,29 +204,22 @@
         <div
           class="task-switch-progress"
           id="taskSwitchProgress"
-          role="progressbar"
           aria-label="Loading task"
           aria-busy="false"
           data-active="false"
         ></div>
         <header class="chat-header">
-          <span class="chat-title" data-i18n="chat.title">任务</span>
-          <div class="chat-header-status">
-            <div class="task-status chat-task-status" id="taskStatus" hidden>
-              <span class="status-icon" id="statusIcon" data-status="idle" aria-hidden="true"></span>
-              <span class="status-label" id="statusLabel" data-i18n="task.status.idle">No task</span>
-              <span class="elapsed" id="taskElapsed"></span>
+          <div class="chat-header-main">
+            <span class="chat-title" data-i18n="chat.title">任务</span>
+            <div class="chat-header-status">
+              <div class="task-status chat-task-status" id="taskStatus" hidden>
+                <span class="status-icon" id="statusIcon" data-status="idle" aria-hidden="true"></span>
+                <span class="status-label" id="statusLabel" data-i18n="task.status.idle">No task</span>
+                <span class="elapsed" id="taskElapsed"></span>
+              </div>
             </div>
           </div>
           <div class="chat-header-meta">
-            <button
-              type="button"
-              class="task-id-badge"
-              id="taskIDBadge"
-              title="Copy task ID"
-              aria-label="Copy task ID"
-              hidden
-            ></button>
             <span class="chat-count" id="chatCount"></span>
             <button
               type="button"
@@ -266,6 +255,14 @@
         <!-- Workspace panel (Build + Diff) — stacked above composer, not a right column -->
         <div id="solidWorkspaceMount" class="workspace-mount" hidden></div>
         <div id="solidChatComposer"></div>
+        <div class="chat-author-footer" id="chatAuthor" aria-label="Author">
+          <span class="chat-author-name">杨恒@代码生成组</span>
+          <span class="chat-author-sep" aria-hidden="true">·</span>
+          <a class="chat-author-link" href="https://github.com/yangheng95/argus" target="_blank" rel="noopener">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1C4.1 1 1 4.1 1 8c0 3.1 2 5.7 4.8 6.6.4.1.5-.2.5-.4v-1.3C4.2 13.3 3.7 12 3.7 12c-.3-.8-.8-1-.8-1-.6-.4.1-.4.1-.4.7.1 1.1.7 1.1.7.6 1.1 1.7.8 2.1.6.1-.4.3-.8.4-.9-1.7-.2-3.5-.9-3.5-3.8 0-.8.3-1.5.7-2-.1-.2-.3-1 .1-2 0 0 .6-.2 2 .8.6-.2 1.2-.3 1.8-.3s1.2.1 1.8.3c1.4-1 2-.8 2-.8.4 1 .2 1.8.1 2 .5.5.7 1.2.7 2 0 2.9-1.8 3.6-3.5 3.8.3.2.5.7.5 1.4v2.1c0 .2.1.5.5.4C13 13.7 15 11.1 15 8c0-3.9-3.1-7-7-7z" fill="currentColor"/></svg>
+            <span>github.com/yangheng95/argus</span>
+          </a>
+        </div>
       </section>
       <div class="pane-resizer pane-resizer-right" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize control panel"></div>
 
