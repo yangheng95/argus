@@ -436,7 +436,7 @@ test("fidelity completed event materializes an independent fidelity session card
 
   applyEvent({
     type: "fidelity.review.completed",
-    emittedAt: 1_776_000_002_000,
+    timestamp: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: FIDELITY_SID,
@@ -475,7 +475,7 @@ test("fidelity completed event can materialize before any message stream arrives
   // fidelity session card even before any message/part stream arrives.
   applyEvent({
     type: "fidelity.review.completed",
-    emittedAt: 1_776_000_002_000,
+    timestamp: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: FIDELITY_SID,
@@ -512,7 +512,7 @@ test("fidelity event missing sessionID throws (schema became required)", () => {
   expect(() =>
     applyEvent({
       type: "fidelity.review.completed",
-      emittedAt: 1_776_000_002_000,
+      timestamp: 1_776_000_002_000,
       properties: {
         taskID: TASK_ID,
         verdict: "faithful",
@@ -543,7 +543,7 @@ test("resetWriter clears fidelity session cards materialized from protocol event
 
   applyEvent({
     type: "fidelity.review.completed",
-    emittedAt: 1_776_000_002_000,
+    timestamp: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: FIDELITY_SID,

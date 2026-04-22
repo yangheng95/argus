@@ -598,10 +598,18 @@ function handleFidelityStarted(event: any): void {
       `fidelity.review.started missing sessionID (taskID=${taskID})`,
     );
   }
-  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  // Same envelope contract as handleFidelityCompleted: read `timestamp`.
+  // `Date.now()` fallback here was the rule-1 fallback that let the card
+  // materialize with a client-local start time instead of the server emit
+  // time, so duration math against progress/completed (which both use the
+  // server clock) drifted.
+  const emittedAt = Number(event?.timestamp);
+  if (!(emittedAt > 0)) {
+    throw new Error(`fidelity.review.started missing envelope timestamp (taskID=${taskID}); SSE envelope must carry timestamp (server: protocolTaskEvent)`);
+  }
   const payload: RunningFidelityPayload = {
     sessionID,
-    startedAt: emittedAt > 0 ? emittedAt : Date.now(),
+    startedAt: emittedAt,
     attempt: 0,
     elapsedMs: 0,
   };
@@ -751,9 +759,14 @@ function handleFidelityCompleted(event: any): void {
     );
   }
 
-  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  // SSE envelope's emit time is `timestamp` (server: protocolTaskEvent in
+  // orchestrator.ts). That is the single envelope field; reading
+  // `emittedAt`/`emitted_at` never matched because the server emits
+  // neither, so every fidelity.review.completed replay threw and killed
+  // the stream processor on task re-open.
+  const emittedAt = Number(event?.timestamp);
   if (!(emittedAt > 0)) {
-    throw new Error(`fidelity.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
+    throw new Error(`fidelity.review.completed missing envelope timestamp (taskID=${taskID}); SSE envelope must carry timestamp (server: protocolTaskEvent)`);
   }
   const issues = Array.isArray(props.issues) ? props.issues : [];
   const corrections = Array.isArray(props.corrections) ? props.corrections : [];
