@@ -226,6 +226,26 @@ For blocking higher_better metrics, `floor` MUST be strictly below `target`. `ar
 - `query` → `{ sql, value_column? }`
 - `aggregator` → `{ of: [spec_id…], op: 'mean' | 'min' | 'max' | 'sum' }`
 
+**Evaluator MUST actually measure something.** Every blocking metric ends up as the Arbiter's pass/fail gate. A trivially-true evaluator silently turns a blocking gate into a no-op — the Prosecutor sees `met_target=true` for a check that never ran. This is worse than leaving the metric out: it LIES. Forbidden patterns (any of these is grounds for `finalize_architect` to reject):
+
+- Constant-return shells: `echo 0`, `echo 1`, `echo 1.0`, `printf 0`, `true`, `exit 0`, `: \| true` — these always pass regardless of project state.
+- Always-true shortcircuits: `<real cmd> \|\| echo 0`, `<real cmd> \|\| true`, `<real cmd>; true`, `<real cmd> 2>/dev/null \|\| echo 0` — any `\|\|` fallback that synthesises a "success" value when the real check fails also lies. Run the real check; let a non-zero exit fail the metric honestly.
+- Stub-looking commands: `echo 'not implemented'`, `echo 'skipped'`, `echo 'N/A'`, `echo 'no check available'` — even with `|| true` stripped, these produce no real signal.
+- `evaluator_kind="judge"` with a one-word `criteria` like `"good"` or `"correct"` — judge rubrics must name concrete, verifiable properties.
+
+Concrete evaluators for each mandatory blocking metric — copy these shapes, don't invent "echo" placeholders:
+
+- `functional_correctness` → `{ cmd: "bun test src/<goal-dir>/", cwd?: "." }` or the project's equivalent test runner scoped to the goal's owned_paths. Parse the pass-ratio.
+- `scenario_coverage` → a judge scorer reading `acceptance_specs[].scenarios` against the diff, OR a shell scorer that greps test file names against the acceptance_spec scenarios list.
+- `contract_compliance` → `{ cmd: "bunx tsc --noEmit -p tsconfig.json" }` for TS projects (catches signature drift); `{ cmd: "mypy <goal-dir>" }` for Python. Picks language-appropriate typechecker.
+- `regression_count` → shell that compares current test failures against a baseline or prior passing list. If no baseline exists at registration time, use `{ cmd: "bun test --bail --reporter=count --filter=<goal pattern>", }` and count the failing line. Do NOT register an `echo 0` placeholder "because we don't know the baseline yet" — the Metric Executor will supply the comparison context.
+- `cross_goal_contract_consistency` → `{ cmd: "bunx tsc --noEmit" }` at project root (catches every cross-file type mismatch at once). For non-TS projects, invoke the language's cross-module check.
+- `non_regression_surface` → aggregator of prior-iteration passing goal set, or a shell that re-runs every prior-iteration passing spec. Non-trivial shell is fine; a stub is not.
+- `architecture_integrity` → `{ cmd: "bunx madge --circular src/" }` for JS/TS, `{ cmd: "pydeps --show-cycles <pkg>" }` for Python, or a `query` over a pre-computed import graph. Never `echo 'no check available'`.
+- `user_intent_fidelity` → `judge` scorer with a `criteria` that names the specific user request clauses this delivery must honor (lift them from task.request).
+
+If a goal legitimately has no way to measure one of these (rare — usually means the goal is scoped wrong), raise it in the goal's objective as a known limitation and pick a `diagnostic` gate_class instead. Do NOT silently satisfy the blocking registration with a stub.
+
 **Example per-goal blocking metric:**
 
 ```
