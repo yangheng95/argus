@@ -671,8 +671,11 @@ export namespace ProviderTransform {
         result["textVerbosity"] = "low"
       }
 
-      if (input.model.providerID.startsWith("opencorvus")) {
+      if (input.model.providerID.startsWith("opencorvus") || input.model.api.npm === "@ai-sdk/azure") {
         result["promptCacheKey"] = input.sessionID
+      }
+
+      if (input.model.providerID.startsWith("opencorvus")) {
         result["include"] = ["reasoning.encrypted_content"]
         result["reasoningSummary"] = "auto"
       }

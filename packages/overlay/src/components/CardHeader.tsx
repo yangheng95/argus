@@ -15,8 +15,12 @@ function statusBadge(node: CardNode): { tone: string; glyph: string } {
 }
 
 function leadingGlyph(node: CardNode): string {
-  if (node.kind === "tool") return displayToolIcon(node.title);
+  if (node.kind === "tool") return displayToolIcon(node.stage || node.title);
   return "";
+}
+
+function isStageCard(node: CardNode): boolean {
+  return node.kind === "agent" || node.kind === "phase";
 }
 
 /** Compact token count — "8.4k" rather than "8432", so the low-contrast
@@ -52,7 +56,11 @@ export function CardHeader(props: {
   const [copied, setCopied] = createSignal(false);
   const [rewinding, setRewinding] = createSignal(false);
   const canCopy = () => !!collectCardText(props.node);
-  const canRewind = () => !!props.onRewind && typeof props.node.time === "number" && props.node.time > 0;
+  const canRewind = () =>
+    !!props.onRewind &&
+    isStageCard(props.node) &&
+    typeof props.node.time === "number" &&
+    props.node.time > 0;
 
   const onCopy = async (e: MouseEvent | KeyboardEvent) => {
     e.stopPropagation();
@@ -187,8 +195,22 @@ export function CardHeader(props: {
             }
           }}
         >
-          {/* counterclockwise arrow glyph — U+21BA */}
-          <span aria-hidden="true">{"\u21BA"}</span>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M6.5 3.5L3 7l3.5 3.5"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M13 12.5c0-2.7-2.1-4.9-4.8-4.9H3.4"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
       </Show>
       <Show when={props.collapsible}>

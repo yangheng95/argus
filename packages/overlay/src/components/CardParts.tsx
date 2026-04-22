@@ -1,16 +1,24 @@
 import { For, Switch, Match, Show } from "solid-js";
 import { TextPart } from "./TextPart";
 import { ReasoningPart, isEmptyReasoning } from "./ReasoningPart";
-import { InlineToolPart } from "./InlineToolPart";
 import { InteractionCard } from "./InteractionCard";
 import { Card } from "./Card";
 import { FilePart } from "./FilePart";
-import { shouldPromoteTool, type CardNode } from "../utils/card-tree";
+import { type CardNode } from "../utils/card-tree";
 import { stamp } from "../utils/time";
 import { toolNameKey, displayToolDetail, shortRelativePath } from "../utils/tool";
 import { selectedTaskDirectory } from "../store/board";
 
-/** Build a transient CardNode for a promoted tool part so <Card> can frame it. */
+const TODO_CARD_TITLES: Record<string, string> = {
+  todowrite: "Todos",
+  todoread: "Todos",
+  todoupdate: "Todos",
+  updateplan: "Plan",
+};
+
+/** Build a transient CardNode for a tool part so every tool shares the same
+ *  card chrome. Completed tools intentionally inherit the card default of
+ *  starting collapsed so the timeline only shows header-level summary. */
 function toolToCardNode(part: any): CardNode {
   const status = (() => {
     const s = String(part?.state?.status || "").toLowerCase();
@@ -20,15 +28,21 @@ function toolToCardNode(part: any): CardNode {
   })();
   const toolName = String(part?.tool || "tool");
   const state = part?.state || {};
+  const key = toolNameKey(toolName);
   const detail = displayToolDetail(toolName, state.input || {}, state, selectedTaskDirectory());
+  const title = TODO_CARD_TITLES[key] || toolName;
   const subtitle =
-    detail && detail.toLowerCase() !== toolName.toLowerCase() ? detail : undefined;
+    (typeof state.title === "string" && state.title.trim() && TODO_CARD_TITLES[key]
+      ? state.title.trim()
+      : detail && detail.toLowerCase() !== toolName.toLowerCase()
+        ? detail
+        : undefined);
   return {
     id: String(part?.id || `tool:${toolName}:${Math.random().toString(36).slice(2)}`),
     kind: "tool",
-    stage: toolNameKey(toolName),
+    stage: key,
     status,
-    title: toolName,
+    title,
     subtitle,
     parts: [],
     children: [],
@@ -41,8 +55,7 @@ function toolToCardNode(part: any): CardNode {
 }
 
 /** Render the parts list of a card body. Handles boundary separators,
- *  inline text / reasoning, and tool promotion (promoted tools are rendered
- *  as nested <Card>s so they fold independently). Each part renders as its
+ *  inline text / reasoning, and nested tool cards. Each part renders as its
  *  own sibling. */
 export function CardParts(props: { parts: any[]; depth: number }) {
   return (
@@ -69,11 +82,8 @@ export function CardParts(props: { parts: any[]; depth: number }) {
           >
             <ReasoningPart part={part} />
           </Match>
-          <Match when={part?.type === "tool" && shouldPromoteTool(part)}>
-            <Card node={toolToCardNode(part)} depth={props.depth + 1} />
-          </Match>
           <Match when={part?.type === "tool"}>
-            <InlineToolPart part={part} mode="block" />
+            <Card node={toolToCardNode(part)} depth={props.depth + 1} />
           </Match>
           <Match when={part?.type === "patch" && (part.files || []).length > 0}>
             <div class="msg-patch">

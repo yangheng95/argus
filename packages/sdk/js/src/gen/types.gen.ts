@@ -2525,7 +2525,7 @@ export type Config = {
      */
     max_goal_retries?: number
     /**
-     * After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.
+     * After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / re-run architect / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.
      */
     goal_escalation_threshold?: number
     /**
@@ -8049,6 +8049,7 @@ export type TaskBoardResponses = {
     goalWorkflows?: Array<{
       goalID: string
       goalTitle: string
+      goalObjective?: string
       goalStatus: string
       orderIndex: number
       workspaceDir?: string
@@ -8838,6 +8839,60 @@ export type RunDeliveryResponses = {
 }
 
 export type RunDeliveryResponse = RunDeliveryResponses[keyof RunDeliveryResponses]
+
+export type GoalRunDeliveryData = {
+  body?: never
+  path: {
+    goalRunID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/goal-run/{goalRunID}/delivery"
+}
+
+export type GoalRunDeliveryErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type GoalRunDeliveryError = GoalRunDeliveryErrors[keyof GoalRunDeliveryErrors]
+
+export type GoalRunDeliveryResponses = {
+  /**
+   * Goal-run delivery
+   */
+  200: {
+    id: string
+    taskID: string
+    runID: string
+    status: "candidate" | "publishing" | "delivered" | "failed"
+    summary: string
+    result: {
+      summary: string
+      changedFiles: Array<string>
+      diffs: Array<FileDiff>
+      artifacts?: Array<{
+        kind: string
+        label: string
+        payload?: {
+          [key: string]: unknown
+        }
+      }>
+      publish?: {
+        [key: string]: unknown
+      }
+    }
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type GoalRunDeliveryResponse = GoalRunDeliveryResponses[keyof GoalRunDeliveryResponses]
 
 export type RunArtifactsData = {
   body?: never

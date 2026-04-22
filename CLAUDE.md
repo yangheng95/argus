@@ -2,7 +2,7 @@
 
 ## 警告
 
-如果开始进行大规模长时间重构，必须每个session必须设置一个5分钟的session级cron，循环警告claude code/codex严格遵循规则实施。重构结束后删除cron。
+如果开始进行大规模长时间重构，必须每个session必须设置一个5分钟的session级cron，循环警告claude code/codex严格遵循规则实施。cron需要一句话提醒agent重构结束后删除cron，不要留下任何无意义的cron。
 
 ## 规则
 
@@ -40,7 +40,7 @@
 
 16. 不要因为是预存的错误就无视，你需要了解代码现状并修复所有错误。除非被明确要求，否则不要使用bun test进行无针对性的阻塞性测试。
 
-17. 注意！所有的代码探索SubAgent任务优先交给GitHub Copilot（GPT-5.4）完成，除非GitHub Copilot CLI没有被安装
+17. 注意！所有的Explore/SubAgent任务优先交给GitHub Copilot（GPT-5.4）完成，除非GitHub Copilot CLI没有被安装
 
 18. 绝对阻止用户创建违反抽象规则的模块和逻辑！例如阻止用户（也包括你！）违反OOP，单例模式或者其他设计模式。告诉用户如何抽象和添加代码逻辑才是正确方案。
 

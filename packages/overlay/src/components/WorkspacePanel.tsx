@@ -6,10 +6,11 @@
 import { Show } from "solid-js";
 import { DiffPreviewPanel } from "./DiffPreviewPanel";
 import { FileViewPanel } from "./FileViewPanel";
+import type { DiffTarget } from "../services/diff";
 import { t } from "../utils/i18n";
 
 export type WorkspaceView =
-  | { kind: "diff"; filePath: string }
+  | { kind: "diff"; target: DiffTarget }
   | { kind: "file"; filePath: string };
 
 export interface WorkspacePanelProps {
@@ -24,14 +25,16 @@ export interface WorkspacePanelProps {
 export function WorkspacePanel(props: WorkspacePanelProps) {
   const isDiff = () => props.view.kind === "diff";
   const isFile = () => props.view.kind === "file";
+  const diffTarget = () =>
+    props.view.kind === "diff" ? props.view.target : null;
   const diffFilePath = () =>
-    props.view.kind === "diff" ? props.view.filePath : null;
+    props.view.kind === "diff" ? props.view.target.filePath : null;
   const fileFilePath = () =>
     props.view.kind === "file" ? props.view.filePath : null;
 
   function selectDiff() {
     if (props.view.kind !== "diff") {
-      props.onSelectView({ kind: "diff", filePath: "" });
+      props.onSelectView({ kind: "diff", target: { filePath: "" } });
     }
   }
   function selectFile() {
@@ -98,7 +101,7 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
           data-kind="diff"
           style={{ display: isDiff() ? "flex" : "none" }}
         >
-          <DiffPreviewPanel filePath={diffFilePath()} />
+          <DiffPreviewPanel target={diffTarget()} />
         </div>
         {/* File view — lazy fetches file content via /file/content */}
         <div

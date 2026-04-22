@@ -327,6 +327,92 @@ body[data-theme="light"] .card__round {
   gap: 2px;
 }
 
+.card__body-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: calc(var(--card-pad-y) + 4px);
+  padding-top: 2px;
+}
+
+.card__collapse-toggle {
+  width: min(240px, 74%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--card-meta-size);
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.card__collapse-toggle::before,
+.card__collapse-toggle::after {
+  content: "";
+  flex: 1 1 0;
+  height: 1px;
+}
+
+.card__collapse-toggle::before {
+  background: linear-gradient(90deg, transparent, var(--card-line-dim));
+}
+
+.card__collapse-toggle::after {
+  background: linear-gradient(90deg, var(--card-line-dim), transparent);
+}
+
+.card__collapse-toggle:hover,
+.card__collapse-toggle:focus-visible {
+  color: var(--text-strong);
+}
+
+.card__collapse-toggle:focus-visible {
+  outline: none;
+}
+
+.card__collapse-toggle-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--card-stage, var(--text-soft)) 72%, var(--text-muted));
+  background: color-mix(in srgb, var(--card-bg-1) 82%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-stage, var(--card-line)) 12%, var(--card-line-dim));
+  transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.card__collapse-toggle:hover .card__collapse-toggle-icon,
+.card__collapse-toggle:focus-visible .card__collapse-toggle-icon {
+  color: var(--card-stage, var(--text-strong));
+  background: color-mix(in srgb, var(--card-stage, var(--card-bg-1)) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-stage, var(--card-border-strong)) 28%, var(--card-line));
+  transform: translateY(-1px);
+}
+
+.card__collapse-toggle svg {
+  flex: none;
+}
+
+.card__collapse-toggle-label {
+  flex: none;
+  color: var(--text-soft);
+  font-weight: 500;
+  transition: color 120ms ease;
+}
+
+.card__collapse-toggle:hover .card__collapse-toggle-label,
+.card__collapse-toggle:focus-visible .card__collapse-toggle-label {
+  color: var(--text-strong);
+}
+
 /* ── Goal preamble ───────────────────────────────────────── */
 
 .card__goal-desc {

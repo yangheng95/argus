@@ -4,9 +4,10 @@
 // (`cardTreeStore`). This file holds:
 //
 //  1. `CardNode` — structurally compatible with the store's CardNode so that
-//     transient card instances (tool promotion in CardParts) and store-backed
+//     transient card instances (nested tool cards in CardParts) and store-backed
 //     cards render through the same component path.
-//  2. `shouldPromoteTool` — pure tool-promotion policy consumed by CardParts.
+//  2. `shouldPromoteTool` — historical render heuristic retained for
+//     compatibility with older callers and policy discussions.
 //  3. `defaultExpandedForNode` / `collectCardText` — render-side helpers
 //     used by Card / CardHeader.
 import { cardTreeStore } from "../store/card-tree";
@@ -139,10 +140,12 @@ function normGoalStatus(raw: any): CardStatus | undefined {
   return normStatus(raw);
 }
 
-// ── Tool promotion rules ──
-// Whether a tool part should be elevated to its own <Card> rather than
-// rendered inline. Called by downstream renderers in S2; exported pure
-// so it can be unit-tested independently.
+// ── Tool expansion heuristic ──
+// Historical name kept because downstream code already imports it. The
+// function answers the historical question: which tool outputs are substantial
+// enough to deserve card-style treatment or default expansion policy?
+// Current CardParts behavior renders every tool as a card and leaves completed
+// tools collapsed by default, but the heuristic is kept as a single policy hook.
 
 const ALWAYS_PROMOTE_TOOLS = new Set([
   "task", "agent", "spawnagent", "subagent",

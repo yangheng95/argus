@@ -823,6 +823,28 @@ export const EngineRoutes = lazy(() =>
       },
     )
     .get(
+      "/goal-run/:goalRunID/delivery",
+      describeRoute({
+        summary: "Get goal-run delivery",
+        operationId: "goalRun.delivery",
+        responses: {
+          200: {
+            description: "Goal-run delivery",
+            content: {
+              "application/json": {
+                schema: resolver(Delivery),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ goalRunID: z.string().min(1) })),
+      async (c) => {
+        return c.json(await EngineService.getGoalRunDelivery(c.req.valid("param").goalRunID))
+      },
+    )
+    .get(
       "/run/:runID/artifacts",
       describeRoute({
         summary: "List run artifacts",
