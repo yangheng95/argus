@@ -1224,7 +1224,7 @@ export namespace Config {
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure"),
           max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it"),
-          goal_escalation_threshold: z.number().int().min(1).optional().describe("After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / add_goal / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time."),
+          goal_escalation_threshold: z.number().int().min(1).optional().describe("After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / re-run architect / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time."),
           max_delivery_iterations: z.number().int().min(1).max(10).optional().describe("Hard ceiling on adversarial iteration count; Arbiter returns 'abort' at this iteration regardless of other signals."),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
           default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID"),

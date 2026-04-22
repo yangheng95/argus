@@ -90,7 +90,7 @@ export interface EngineConfigType {
   /**
    * Advisory escalation gate: when a goal has accumulated this many failed
    * attempts, `retry_goal` forces the orchestrator to change strategy
-   * (modify_goal / add_goal / fail_task) instead of retrying the same contract.
+   * (modify_goal / re-run architect / fail_task) instead of retrying the same contract.
    * Must be ≤ max_goal_retries (config merge clamps to that invariant).
    */
   goal_escalation_threshold: number
