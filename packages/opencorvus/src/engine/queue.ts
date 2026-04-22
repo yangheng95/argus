@@ -8,7 +8,8 @@
  * Two tasks in the same cwd must never run concurrently (shared git state,
  * shared file system). Two tasks in different cwds are independent.
  *
- * Every dispatch site must go through `advanceQueue(cwd)` for atomic claim.
+ * All external scheduling requests must go through this module so queued-task
+ * claiming and active-task re-entry share one coordinator.
  */
 
 import { ProjectTable } from "@/project/project.sql"
@@ -17,12 +18,50 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
+import type { TaskLoopTrigger } from "@/orchestrator/loop"
 
 const log = Log.create({ service: "engine.queue" })
 
 // Process-local dedup — prevents two loops running for the same taskID
 // in the same process. The real queue lock is in the DB (claimNextForCwd).
 const loopInFlight = new Set<string>()
+const queuedTaskTriggers = new Map<string, TaskLoopTrigger>()
+
+function zeroSummary() {
+  return { passed: 0, failed: 0, total: 0 }
+}
+
+function deriveQueuedTrigger(task: TaskRow): TaskLoopTrigger {
+  if (task.active_run_id) {
+    return { kind: "retry" }
+  }
+
+  return { kind: "created" }
+}
+
+function deriveResumeTrigger(task: TaskRow): TaskLoopTrigger {
+  if (!task.active_run_id) {
+    return { kind: "created" }
+  }
+
+  return {
+    kind: "batch_complete",
+    runID: task.active_run_id ?? "",
+    summary: zeroSummary(),
+  }
+}
+
+async function launchTaskLoop(taskID: string, trigger: TaskLoopTrigger, interrupt = false): Promise<void> {
+  const [{ runTaskLoop, interruptTaskLoop }, { hooks }] = await Promise.all([
+    import("@/orchestrator/loop"),
+    import("@/engine/state"),
+  ])
+  if (interrupt) interruptTaskLoop(taskID, "task loop dispatch interrupt")
+  void runTaskLoop({ taskID, trigger, hooks: hooks() })
+    .catch((err) => {
+      log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
+    })
+}
 
 /**
  * Resolve the working directory for a task.
@@ -180,7 +219,31 @@ export async function advanceQueue(cwd: string): Promise<void> {
   if (!cwd) return
   const claimed = claimNextForCwd(cwd)
   if (!claimed) return
-  await startLoopForTask(claimed, { kind: "claimed" }, cwd)
+  const trigger = queuedTaskTriggers.get(claimed.id) ?? deriveQueuedTrigger(claimed)
+  queuedTaskTriggers.delete(claimed.id)
+  await startLoopForTask(claimed, trigger, cwd)
+}
+
+export async function dispatchTaskLoop(input: {
+  taskID: string
+  trigger: TaskLoopTrigger
+  interrupt?: boolean
+}): Promise<void> {
+  const task = findTask(input.taskID)
+  if (!task) return
+  const cwd = taskCwd(task.id)
+  if (!cwd) {
+    log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, trigger: input.trigger.kind })
+    return
+  }
+
+  if (task.status === "queued") {
+    queuedTaskTriggers.set(task.id, input.trigger)
+    await advanceQueue(cwd)
+    return
+  }
+
+  await launchTaskLoop(task.id, input.trigger, input.interrupt === true)
 }
 
 /**
@@ -200,7 +263,7 @@ export async function resumeActiveTaskLoop(taskID: string): Promise<void> {
     log.warn("resumeActiveTaskLoop: task has no cwd", { taskID })
     return
   }
-  await startLoopForTask(task, { kind: "resume" }, cwd)
+  await startLoopForTask(task, deriveResumeTrigger(task), cwd)
 }
 
 /**
@@ -213,7 +276,7 @@ export async function resumeActiveTaskLoop(taskID: string): Promise<void> {
  */
 async function startLoopForTask(
   task: TaskRow,
-  trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number } },
+  trigger: TaskLoopTrigger,
   cwd: string,
 ): Promise<void> {
   if (loopInFlight.has(task.id)) {
@@ -221,17 +284,10 @@ async function startLoopForTask(
     return
   }
   loopInFlight.add(task.id)
-  const [{ runTaskLoop }, { hooks }] = await Promise.all([
-    import("@/orchestrator/loop"),
-    import("@/engine/state"),
-  ])
   // Fire the loop without awaiting — serial dispatch is guaranteed by the
   // claim SQL, not by blocking the caller. Callers that need completion
   // should await at the loop exit hook instead.
-  void runTaskLoop({ taskID: task.id, trigger, hooks: hooks() })
-    .catch((err) => {
-      log.error("task loop failed", { taskID: task.id, error: err instanceof Error ? err.message : String(err) })
-    })
+  void launchTaskLoop(task.id, trigger)
     .finally(() => {
       loopInFlight.delete(task.id)
       // Loop has exited → the cwd may now be idle; advance the queue.

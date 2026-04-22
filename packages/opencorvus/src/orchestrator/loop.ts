@@ -18,8 +18,8 @@
 import { Log } from "@/util/log"
 import { GoalPool, type PoolHooks } from "@/engine/goal-pool"
 import type { RuntimeHooks } from "@/engine/runtime-hooks"
-import { Orchestrator } from "@/orchestrator/agent"
-import { effectiveMaxExecutorGroups, findTask, findRun, findPlan, listGoalsByPlan, listPlanNodesByPlan, findNextQueuedTaskForProject } from "@/engine"
+import { Orchestrator, type OrchestratorTrigger } from "@/orchestrator/agent"
+import { effectiveMaxExecutorGroups, findTask, findRun, findPlan, listGoalsByPlan, listPlanNodesByPlan } from "@/engine"
 import type { TaskRow, RunRow, PlanRow } from "@/engine"
 import { mergeGoalDelivery } from "@/engine/runtime"
 import { describeTaskFromRow, statusOf } from "@/engine/describe"
@@ -98,9 +98,11 @@ export function interruptTaskLoop(taskID: string, reason = "task loop interrupte
   Orchestrator.abort(taskID)
 }
 
+export type TaskLoopTrigger = OrchestratorTrigger
+
 export async function runTaskLoop(input: {
   taskID: string
-  trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
+  trigger: TaskLoopTrigger
   signal?: AbortSignal
   hooks: RuntimeHooks
 }) {
@@ -137,17 +139,16 @@ export async function runTaskLoop(input: {
  */
 async function runTaskLoopInner(input: {
   taskID: string
-  trigger: { kind: string; runID?: string; summary?: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
+  trigger: TaskLoopTrigger
   signal?: AbortSignal
   hooks: RuntimeHooks
 }) {
   const { taskID, signal, hooks } = input
   let trigger = input.trigger
 
-  // Immediately mark the task as "active" so hasActiveTaskInProject() blocks
-  // subsequent tasks from starting their loops concurrently. Without this,
-  // a task stays "queued" through spec/requirements/architect phases, causing the
-  // serial queue check to miss it and start a second task loop in parallel.
+  // Immediately mark the task as active so the cwd-scoped queue can observe
+  // that this task now owns execution for its workspace before the first
+  // orchestrator decision completes.
   {
     const { updateTask } = await import("@/engine/state")
     const task = findTask(taskID)
@@ -187,7 +188,11 @@ async function runTaskLoopInner(input: {
     iteration++
     const task = findTask(taskID)
     if (!task) { log.error("task not found, exiting loop", { taskID }); break }
-    if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
+    if (
+      (task.status === "completed" || task.status === "failed" || task.status === "cancelled") &&
+      trigger.kind !== "operator_message" &&
+      trigger.kind !== "retry"
+    ) {
       log.info("task in terminal state, exiting loop", { taskID, status: task.status })
       break
     }
@@ -226,6 +231,14 @@ async function runTaskLoopInner(input: {
     // Re-read task state after agent decision
     const taskAfter = findTask(taskID)
     if (!taskAfter) break
+    if (taskAfter.status === "completed" || taskAfter.status === "failed" || taskAfter.status === "cancelled") {
+      log.info("task entered terminal state after decision", {
+        taskID,
+        status: taskAfter.status,
+        trigger: trigger.kind,
+      })
+      break
+    }
 
     // ── Delivery rejection detection ──
     // When the deliver tool rejects it writes a verdict artifact
@@ -258,25 +271,14 @@ async function runTaskLoopInner(input: {
         log.info("delivery rejection detected — re-triggering orchestrator", {
           taskID,
           verdictArtifactID: verdictArt.id,
-          issues: Array.isArray(feedback.issues_found) ? (feedback.issues_found as unknown[]).length : 0,
         })
-
-        // Reset stale counter — delivery rejection is genuine progress
-        lastGoalSnapshot = ""
-        staleCount = 0
-
         trigger = {
           kind: "delivery_rejected",
           runID: taskAfter.active_run_id ?? "",
           feedback,
-        } as any
-        continue // Skip Phase 2/3, go straight back to Decision Point
+        }
+        continue
       }
-    }
-
-    if (taskAfter.status === "completed" || taskAfter.status === "failed" || taskAfter.status === "cancelled") {
-      log.info("task reached terminal state after decision", { taskID, status: taskAfter.status })
-      break
     }
 
     // ── Phase 2: Check if goals were dispatched ──
@@ -506,25 +508,8 @@ async function runTaskLoopInner(input: {
   }
 
   log.info("task loop exited", { taskID, iteration })
-  // When the loop exits without the task reaching terminal, the task stays
-  // at status="active" in DB. The next user message will append to the
-  // session and call runTaskLoop() again — the per-taskID serial chain
-  // ensures it runs after this call returns. No auto-restart, no new
-  // status enum, no in-memory "is running" flag.
-
-  // Serial queue: when this task's loop exits, start the next queued task in the project.
-  const completedTask = findTask(taskID)
-  if (completedTask?.project_id) {
-    const next = findNextQueuedTaskForProject(completedTask.project_id)
-    if (next) {
-      log.info("serial queue: starting next queued task", { nextTaskID: next.id, projectID: completedTask.project_id })
-      import("@/engine/state").then(async ({ hooks }) => {
-        runTaskLoop({ taskID: next.id, trigger: { kind: "queued" }, hooks: hooks() }).catch((err) => {
-          log.error("serial queue: task loop failed", { taskID: next.id, error: err instanceof Error ? err.message : String(err) })
-        })
-      })
-    }
-  }
+  // Queue progression is owned by engine/queue.ts. This loop only owns one
+  // task's lifecycle and leaves sibling dispatch to the cwd queue.
 }
 
 /**

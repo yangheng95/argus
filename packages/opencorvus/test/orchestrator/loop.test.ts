@@ -125,4 +125,46 @@ describe("orchestrator loop", () => {
       },
     })
   })
+
+  test("operator_message can re-enter a failed task through the loop shell", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "Terminal operator message test" })
+        const now = Date.now()
+        const taskID = `tsk_terminal_operator_${now}`
+        const seen: string[] = []
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: session.id,
+            source: "test",
+            title: "Terminal operator message task",
+            request: "Allow operator message to re-enter terminal tasks",
+            status: "failed",
+            priority: "normal",
+            error: "initial failure",
+            time_created: now,
+            time_updated: now,
+          }).run()
+        })
+
+        spyOn(Orchestrator, "processTask").mockImplementation(async (_id, trigger: any) => {
+          seen.push(trigger.kind)
+        })
+
+        await runTaskLoop({
+          taskID,
+          trigger: { kind: "operator_message", message: "重新评估失败原因并继续。" },
+          hooks: hooks(),
+        })
+
+        expect(seen).toEqual(["operator_message"])
+      },
+    })
+  })
 })

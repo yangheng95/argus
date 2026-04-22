@@ -59,6 +59,7 @@ import {
 } from "@/engine/helpers"
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
+import { dispatchTaskLoop } from "@/engine/queue"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
 import { AutoPermission } from "@/engine/auto-permission"
@@ -83,7 +84,6 @@ import {
   findRuns,
   findTask,
   findTaskByRequest,
-  hasActiveTaskInProject,
   listGlobalTasks,
   listProjectTasks,
   listTaskRows,
@@ -144,21 +144,14 @@ async function continueTaskMessage(
   // User messages must re-enter the task lifecycle shell. Calling the
   // Orchestrator directly bypasses loop/pool coordination and can strand the
   // message behind a sleeping wait path.
-  import("@/orchestrator/loop").then(async ({ interruptTaskLoop, runTaskLoop }) => {
-    interruptTaskLoop(taskID, "operator message")
-    runTaskLoop({
-      taskID,
-      trigger: {
-        kind: "operator_message",
-        message: text,
-        attachmentSummary,
-      } as any,
-      hooks: hooks(),
-    }).catch((err) => {
-      log.error("task loop failed on operator message", {
-        taskID, error: err instanceof Error ? err.message : String(err),
-      })
-    })
+  void dispatchTaskLoop({
+    taskID,
+    trigger: {
+      kind: "operator_message",
+      message: text,
+      attachmentSummary,
+    },
+    interrupt: true,
   })
 
   return {
@@ -513,23 +506,7 @@ export namespace EngineService {
       source: input.source ?? "api",
       userID: slackUser(metadata),
     })
-    // Serial queue: only start the loop immediately if no other task is active.
-    // If a task is already running, this task stays in "queued" state and will
-    // be picked up by the serial queue trigger when the active task finishes.
-    if (!hasActiveTaskInProject(Instance.project.id)) {
-      import("@/orchestrator/loop").then(async ({ runTaskLoop }) => {
-        const { hooks } = await import("@/engine/state")
-        runTaskLoop({
-          taskID,
-          trigger: { kind: "created" },
-          hooks: hooks(),
-        }).catch((err) => {
-          log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
-        })
-      })
-    } else {
-      log.info("task queued (serial): another task is active", { taskID, projectID: Instance.project.id })
-    }
+    void dispatchTaskLoop({ taskID, trigger: { kind: "created" } })
     return taskID
   }
 
@@ -1103,18 +1080,9 @@ export namespace EngineService {
     if (["queued", "active"].includes(task.status)) {
       throw new Error(`task ${taskID} is already active`)
     }
-    // Reset to queued and start the task loop
+    // Reset to queued and hand scheduling back to the single queue/coordinator entry.
     await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "Retry requested by operator")
-    import("@/orchestrator/loop").then(async ({ runTaskLoop }) => {
-      const { hooks } = await import("@/engine/state")
-      runTaskLoop({
-        taskID,
-        trigger: { kind: "retry" },
-        hooks: hooks(),
-      }).catch((err) => {
-        log.error("task loop failed on retry", { taskID, error: err instanceof Error ? err.message : String(err) })
-      })
-    })
+    void dispatchTaskLoop({ taskID, trigger: { kind: "retry" } })
     return viewTask(requireTask(taskID))
   }
 
@@ -1149,14 +1117,7 @@ export namespace EngineService {
       return { resumed: false, status: run.status }
     }
     const nextRunID = await EngineRuntime.createOperatorRun(task, run, note)
-    // Start task loop — it handles dispatch via GoalPool
-    import("@/orchestrator/loop").then(({ runTaskLoop }) => {
-      runTaskLoop({
-        taskID: task.id,
-        trigger: { kind: "retry", runID: nextRunID },
-        hooks: hooks(),
-      }).catch((err) => log.error("task loop failed on retry", { taskID: task.id, error: String(err) }))
-    })
+    void dispatchTaskLoop({ taskID: task.id, trigger: { kind: "retry" } })
     return { resumed: true, status: "active" as const }
   }
 
