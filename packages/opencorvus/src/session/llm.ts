@@ -24,6 +24,19 @@ export namespace LLM {
   const log = Log.create({ service: "llm" })
   export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
 
+  // Thrown into the fullStream iterator when the inactivity watchdog fires.
+  // Identity (instanceof/name) is the single source of truth for "this stall
+  // is safe to retry via part-rollback" — processor catches this specifically
+  // and replays the same streamText call after removing the partial parts it
+  // emitted this turn. Do not broaden to other stream errors: provider errors,
+  // protocol errors, and tool-induced aborts must not trigger part-rollback.
+  export class StreamStalledError extends Error {
+    override readonly name = "StreamStalledError"
+    constructor(public readonly inactivityMs: number) {
+      super(`LLM stream stalled: no tokens received for ${inactivityMs / 1000}s`)
+    }
+  }
+
   export type StreamInput = {
     user: Message.User
     sessionID: string
@@ -43,6 +56,10 @@ export namespace LLM {
   export type StreamResult = StreamTextResult<ToolSet, unknown> & {
     pauseInactivityTimer: (() => void) | undefined
     resumeInactivityTimer: (() => void) | undefined
+    // True iff the inactivity watchdog tripped — caller inspects this after
+    // fullStream throws to decide whether the abort was starvation (retry
+    // eligible) vs a normal user/parent abort.
+    isStarvation: () => boolean
   }
 
   export async function stream(input: StreamInput): Promise<StreamResult> {
@@ -171,7 +188,10 @@ export namespace LLM {
       ...input.messages,
     ]
 
-    const STREAM_INACTIVITY_MS = 2 * 60 * 1000
+    // 60s chosen to fire below executor.ts's 90s parent-inactivity watchdog,
+    // so the processor gets one chance to roll back and retry a starved
+    // stream before the parent kills the whole goal_run.
+    const STREAM_INACTIVITY_MS = 60 * 1000
 
     const inactivityAbort = new AbortController()
     let inactivityTimer: ReturnType<typeof setTimeout> | undefined
@@ -180,7 +200,7 @@ export namespace LLM {
       if (inactivityTimer !== undefined) clearTimeout(inactivityTimer)
       inactivityTimer = setTimeout(() => {
         l.warn("stream inactivity timeout", { inactivityMs: STREAM_INACTIVITY_MS, modelID: input.model.id, providerID: input.model.providerID })
-        inactivityAbort.abort(new Error(`LLM stream stalled: no tokens received for ${STREAM_INACTIVITY_MS / 1000}s`))
+        inactivityAbort.abort(new StreamStalledError(STREAM_INACTIVITY_MS))
       }, STREAM_INACTIVITY_MS)
     }
 
@@ -255,6 +275,7 @@ export namespace LLM {
     const streamResult: StreamResult = Object.assign(result, {
       pauseInactivityTimer: clearInactivityTimer,
       resumeInactivityTimer: resetInactivityTimer,
+      isStarvation: () => inactivityAbort.signal.aborted,
     })
     return streamResult
   }

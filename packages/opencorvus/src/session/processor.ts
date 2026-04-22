@@ -18,6 +18,11 @@ import { Question } from "@/question"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
+  // Starvation = inactivity watchdog in LLM.stream tripped mid-stream. Retry
+  // is only safe when no tool has executed this turn (tool side effects are
+  // not replayable). Bounded so a wedged provider cannot retry forever before
+  // the parent executor's 90s watchdog kills the goal_run.
+  const MAX_STARVATION_RETRIES = 2
   const log = Log.create({ service: "session.processor" })
 
   export type Info = Awaited<ReturnType<typeof create>>
@@ -49,11 +54,25 @@ export namespace SessionProcessor {
         log.info("process")
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
+        let starvationAttempt = 0
+        let stream: LLM.StreamResult | undefined
+        // Snapshot of the tail part id at the start of each iteration.
+        // On starvation retry, we remove every part with id > tailPartID so
+        // the next streamText call emits into a clean tail rather than piling
+        // new deltas on top of the aborted turn's partial parts.
+        let tailPartID: string | undefined
+        // Flipped true as soon as a tool-result is persisted this turn. Tool
+        // side effects are not replayable (files written, commands run), so
+        // starvation retry is disabled once any tool has executed.
+        let toolExecutedThisTurn = false
         while (true) {
           try {
+            const partsBefore = await Message.parts(input.assistantMessage.id)
+            tailPartID = partsBefore.length ? partsBefore[partsBefore.length - 1].id : undefined
+            toolExecutedThisTurn = false
             let currentText: Message.TextPart | undefined
             let reasoningMap: Record<string, Message.ReasoningPart> = {}
-            const stream = await LLM.stream(streamInput)
+            stream = await LLM.stream(streamInput)
             const pauseInactivity = stream.pauseInactivityTimer
             const resumeInactivity = stream.resumeInactivityTimer
 
@@ -258,6 +277,9 @@ export namespace SessionProcessor {
                       },
                     })
 
+                    // Tool side effects have landed — starvation retry is no
+                    // longer safe for this turn (rollback would replay tools).
+                    toolExecutedThisTurn = true
                     delete toolcalls[value.toolCallId]
                   }
                   break
@@ -286,6 +308,9 @@ export namespace SessionProcessor {
                     ) {
                       blocked = shouldBreak
                     }
+                    // Tool ran (produced error after side effects possibly
+                    // taken) — same starvation-retry guard as tool-result.
+                    toolExecutedThisTurn = true
                     delete toolcalls[value.toolCallId]
                   }
                   break
@@ -416,6 +441,54 @@ export namespace SessionProcessor {
               error: e,
               stack: JSON.stringify(e.stack),
             })
+            // Starvation retry: the inactivity watchdog in LLM.stream tripped
+            // and the abort propagated out of fullStream. Safe to replay only
+            // when no tool has run this turn (tools are not idempotent). We
+            // remove every part emitted since `tailPartID` (the snapshot taken
+            // at the top of this iteration), reset per-turn tracking state,
+            // and fall through to `continue` so the next while-iteration
+            // re-invokes LLM.stream with the same streamInput.
+            const starved = stream?.isStarvation?.() === true
+            if (starved && !toolExecutedThisTurn && starvationAttempt < MAX_STARVATION_RETRIES) {
+              starvationAttempt++
+              const parts = await Message.parts(input.assistantMessage.id)
+              const stale = tailPartID ? parts.filter((p) => p.id > tailPartID!) : parts
+              for (const part of stale) {
+                await Session.removePart({
+                  sessionID: input.sessionID,
+                  messageID: input.assistantMessage.id,
+                  partID: part.id,
+                })
+              }
+              // Reset per-turn tracking: reasoning/tool dicts, snapshot ref,
+              // buffered reasoning deltas. currentText is block-scoped inside
+              // the try so it's already cleared.
+              for (const k of Object.keys(toolcalls)) delete toolcalls[k]
+              reasoningDeltaBuf.clear()
+              if (reasoningFlushTimer) {
+                clearTimeout(reasoningFlushTimer)
+                reasoningFlushTimer = null
+              }
+              snapshot = undefined
+              const delay = SessionRetry.delay(starvationAttempt)
+              log.warn("stream starvation — rolling back partial parts and retrying", {
+                sessionID: input.sessionID,
+                messageID: input.assistantMessage.id,
+                attempt: starvationAttempt,
+                rolledBackParts: stale.length,
+                delayMs: delay,
+              })
+              SessionStatus.set(input.sessionID, {
+                type: "retry",
+                attempt: starvationAttempt,
+                message: "LLM stream stalled — retrying",
+                next: Date.now() + delay,
+              })
+              await SessionRetry.sleep(delay, input.abort).catch((err) => {
+                log.debug("starvation retry sleep aborted or failed", { error: String(err) })
+              })
+              continue
+            }
             const error = Message.fromError(e, { providerID: input.model.providerID })
             if (Message.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
