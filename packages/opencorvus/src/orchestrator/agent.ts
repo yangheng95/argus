@@ -228,7 +228,10 @@ export namespace Orchestrator {
       })
 
       // 5. Run through AgentRuntime — unified guard / failure / persistence wiring.
-      const taskAgentProgressMs = 20 * 60 * 1000
+      // Cap sub-agent tool execution duration. Delivery / dispatch_goal can legitimately
+      // exceed 20 min on complex tasks (e.g. full-site replication), so this is overridable
+      // via OPENCORVUS_ORCHESTRATOR_STALL_MS. Default 20 min balances everyday tasks.
+      const taskAgentProgressMs = Number(process.env.OPENCORVUS_ORCHESTRATOR_STALL_MS) || 20 * 60 * 1000
       const runResult = await AgentRuntime.run({
         agent: "orchestrator",
         model,

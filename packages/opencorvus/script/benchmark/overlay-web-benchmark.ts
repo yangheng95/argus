@@ -434,6 +434,10 @@ process.env.OPENCORVUS_STANDBY_TIMEOUT_MS = String(standbyTimeoutMs)
 // Legacy env vars from old fixed-pipeline architecture
 process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
+// Orchestrator alive/progress cap — must exceed the longest legitimate sub-agent
+// tool.execute (delivery / dispatch_goal). Benchmark delivery on full-site replication
+// tasks observed 21 min; align with planning-stall-timeout-ms for headroom.
+process.env.OPENCORVUS_ORCHESTRATOR_STALL_MS = String(planningStallTimeoutMs)
 
 console.log(
   `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} alive-stall=${aliveStallTimeoutMs / 1000}s progress-stall=${stallTimeoutMs / 1000}s planning-progress-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
