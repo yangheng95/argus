@@ -795,6 +795,12 @@ function buildWorkflowFields(
       goalID: goal.id,
       goalRunID: tipRun?.id,
       goalTitle: goal.title,
+      // Architect writes the goal's `objective` as a 1–2 sentence execution
+      // directive for the per-goal executor. Surface it on the overlay goal
+      // card so operators see a proper summary instead of having to parse
+      // acceptance_specs. Empty string stays `undefined` — the overlay's
+      // GoalWorkflowGroup only renders this when present.
+      goalObjective: goal.objective?.trim() ? goal.objective.trim() : undefined,
       goalStatus: goalStatusByID(goal.id),
       orderIndex: goal.order_index,
       workspaceDir: goal.workspace_dir ?? undefined,
