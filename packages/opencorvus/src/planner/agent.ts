@@ -26,11 +26,14 @@ import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } fr
 import { extractTag } from "@/util/parse-section-tags"
 import type { TextHooks } from "@/llm/api"
 import { renderSpecsAsText } from "@/acceptance/types"
+import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import type { VisualSpec } from "@/design-analyst/types"
 import type { GoalContract } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import PLANNER_CORE from "@/prompt/core/planner-core.txt"
 
 const log = Log.create({ service: "pipeline-planner" })
+const ARCHITECT_CONTRACT_VALUE_CAP = 4_000
 
 export interface PlanSteps {
   title: string
@@ -59,6 +62,7 @@ export interface PlanSteps {
 export async function planGoal(input: {
   contract: GoalContract
   decisionLog?: DecisionLog
+  designSpecs?: VisualSpec[]
   workDir?: string
   sessionID?: string
   signal?: AbortSignal
@@ -91,11 +95,16 @@ export async function planGoal(input: {
   let architectSection = ""
   if (input.decisionLog) {
     decisionSection = input.decisionLog.phasePromptSectionForGoal("requirements", contract.goal.id, "Decisions (relevant to this goal)")
-    architectSection = input.decisionLog.phasePromptSectionForGoal("architect", contract.goal.id, "Architect Consensus")
+    architectSection = input.decisionLog.phasePromptSectionForGoal(
+      "architect",
+      contract.goal.id,
+      "Architect Consensus",
+      { valueCap: ARCHITECT_CONTRACT_VALUE_CAP },
+    )
   }
 
   const systemPrompt = await buildPlannerSystem()
-  const userPrompt = buildPlannerPrompt(contract, context, decisionSection, task.request, architectSection)
+  const userPrompt = buildPlannerPrompt(contract, context, decisionSection, task.request, architectSection, input.designSpecs)
 
   const abortSignals: AbortSignal[] = [guard.signal]
   if (signal) abortSignals.push(signal)
@@ -177,6 +186,7 @@ export function buildPlannerPrompt(
   decisionSection: string,
   taskRequest: string,
   architectSection?: string,
+  designSpecs?: VisualSpec[],
 ): string {
   const { goal, dependencies } = contract
   const sections: string[] = []
@@ -211,6 +221,16 @@ export function buildPlannerPrompt(
   }
 
   sections.push(`## Task Context\n\n${taskRequest}`)
+
+  if (designSpecs && designSpecs.length > 0) {
+    sections.push(renderVisualContractPromptSection({
+      specs: designSpecs,
+      instructions: [
+        "The following advisory visual constraints came from design_analysis.",
+        "Use them when planning UI, layout, responsive, and interaction work relevant to this goal.",
+      ],
+    }))
+  }
 
   // Architect consensus (binding contracts) — injected prominently before general decisions
   if (architectSection) {

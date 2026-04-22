@@ -5,11 +5,13 @@ import { EngineProtocol } from "@/engine/protocol"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
 import { Log } from "@/util/log"
-import type { SessionKind } from "@/session/session.sql"
+import { Database, eq } from "@/storage/db"
+import { MessageTable, type SessionKind } from "@/session/session.sql"
 import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParentID } from "./task-event"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let initialized = false
+let bridgeQueue = Promise.resolve()
 
 // ── Overlay rendering metadata ──
 //
@@ -114,18 +116,40 @@ function sessionFromProperties(properties: Record<string, unknown>) {
 }
 
 // Cache message-level info (role) so part/delta events can resolve metadata
-// without re-reading the message row. message.updated always arrives before
-// or with part events for the same message.
+// without hitting SQLite on the hot path. This is only a fast path:
+// `saveMessage -> updatePart -> updateMessage` legitimately emits part events
+// before message.updated, so cache misses must fall back to the persisted row.
 const messageRoleCache = new Map<string, string>()
 
-function cacheMessageInfo(properties: Record<string, unknown>) {
-  const info = properties.info as any
-  if (!info?.id) return
-  messageRoleCache.set(info.id, String(info.role || "assistant"))
+function rememberMessageRole(messageID: string, role: string) {
+  if (!messageID) return
+  messageRoleCache.set(messageID, role)
   if (messageRoleCache.size > 500) {
     const first = messageRoleCache.keys().next().value
     if (first) messageRoleCache.delete(first)
   }
+}
+
+function cacheMessageInfo(properties: Record<string, unknown>) {
+  const info = properties.info as any
+  if (!info?.id) return
+  rememberMessageRole(info.id, String(info.role || "assistant"))
+}
+
+function readPersistedMessageRole(messageID: string): string | undefined {
+  const row = Database.use((db) =>
+    db
+      .select({ data: MessageTable.data })
+      .from(MessageTable)
+      .where(eq(MessageTable.id, messageID))
+      .get(),
+  )
+  const role = row?.data && typeof row.data === "object" && "role" in row.data
+    ? (row.data as Record<string, unknown>).role
+    : undefined
+  if (typeof role !== "string" || !role) return undefined
+  rememberMessageRole(messageID, role)
+  return role
 }
 
 function roleForEvent(properties: Record<string, unknown>): string {
@@ -140,7 +164,20 @@ function roleForEvent(properties: Record<string, unknown>): string {
   if (messageID && messageRoleCache.has(messageID)) {
     return messageRoleCache.get(messageID)!
   }
-  return "assistant"
+  if (messageID) {
+    const persisted = readPersistedMessageRole(messageID)
+    if (persisted) return persisted
+    throw new Error(
+      `bridge: message ${messageID} missing role in cache and DB while enriching event`,
+    )
+  }
+  throw new Error("bridge: event missing both info.role and messageID")
+}
+
+function enqueueBridgeWork(work: () => Promise<void>) {
+  const pending = bridgeQueue.then(work)
+  bridgeQueue = pending.then(() => undefined, () => undefined)
+  return pending
 }
 
 /**
@@ -262,14 +299,22 @@ export function ensureTaskMessageProtocolBridge() {
   initialized = true
   const hostDirectory = Instance.directory
 
-  Bus.subscribe(Message.Event.Updated, (event) => {
+  Bus.subscribe(Message.Event.Updated, (event) => enqueueBridgeWork(async () => {
     cacheMessageInfo(event.properties)
-    return bridgeEvent(Message.Event.Updated, event.properties)
-  })
-  Bus.subscribe(Message.Event.PartUpdated, (event) => bridgeEvent(Message.Event.PartUpdated, event.properties))
-  Bus.subscribe(Message.Event.Removed, (event) => bridgeEvent(Message.Event.Removed, event.properties))
-  Bus.subscribe(Message.Event.PartRemoved, (event) => bridgeEvent(Message.Event.PartRemoved, event.properties))
-  Bus.subscribe(Message.Event.PartDelta, (event) => bridgeDelta(event.properties))
+    await bridgeEvent(Message.Event.Updated, event.properties)
+  }))
+  Bus.subscribe(Message.Event.PartUpdated, (event) => enqueueBridgeWork(async () => {
+    await bridgeEvent(Message.Event.PartUpdated, event.properties)
+  }))
+  Bus.subscribe(Message.Event.Removed, (event) => enqueueBridgeWork(async () => {
+    await bridgeEvent(Message.Event.Removed, event.properties)
+  }))
+  Bus.subscribe(Message.Event.PartRemoved, (event) => enqueueBridgeWork(async () => {
+    await bridgeEvent(Message.Event.PartRemoved, event.properties)
+  }))
+  Bus.subscribe(Message.Event.PartDelta, (event) => enqueueBridgeWork(async () => {
+    await bridgeDelta(event.properties)
+  }))
 
   // Cross-Instance bridge: executor sessions run in worktree Instances whose
   // Bus.publish() never reaches the main Instance's subscribers. GlobalBus
@@ -287,16 +332,36 @@ export function ensureTaskMessageProtocolBridge() {
     if (envelope.directory === hostDirectory) return
     const props = envelope.payload.properties
     if (!props) return
-    Instance.provide({ directory: hostDirectory, fn: () => {
-      const type = envelope.payload.type
-      if (type === Message.Event.Updated.type) {
-        cacheMessageInfo(props)
-        return bridgeEvent(Message.Event.Updated, props)
-      }
-      if (type === Message.Event.PartUpdated.type) return bridgeEvent(Message.Event.PartUpdated, props)
-      if (type === Message.Event.Removed.type) return bridgeEvent(Message.Event.Removed, props)
-      if (type === Message.Event.PartRemoved.type) return bridgeEvent(Message.Event.PartRemoved, props)
-      if (type === Message.Event.PartDelta.type) return bridgeDelta(props)
-    }})
+    void enqueueBridgeWork(async () => {
+      await Instance.provide({ directory: hostDirectory, fn: async () => {
+        const type = envelope.payload.type
+        if (type === Message.Event.Updated.type) {
+          cacheMessageInfo(props)
+          await bridgeEvent(Message.Event.Updated, props)
+          return
+        }
+        if (type === Message.Event.PartUpdated.type) {
+          await bridgeEvent(Message.Event.PartUpdated, props)
+          return
+        }
+        if (type === Message.Event.Removed.type) {
+          await bridgeEvent(Message.Event.Removed, props)
+          return
+        }
+        if (type === Message.Event.PartRemoved.type) {
+          await bridgeEvent(Message.Event.PartRemoved, props)
+          return
+        }
+        if (type === Message.Event.PartDelta.type) {
+          await bridgeDelta(props)
+        }
+      }})
+    }).catch((err) => {
+      log.error("bridge: cross-instance relay failed", {
+        type: envelope.payload?.type,
+        sourceDirectory: envelope.directory,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
   })
 }

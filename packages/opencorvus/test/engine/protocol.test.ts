@@ -209,4 +209,73 @@ describe("orchestrator protocol", () => {
       },
     })
   })
+
+  test("preserves saveMessage root user part events instead of dropping them", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "Task root" })
+        Database.use((db) =>
+          db.update(EngineTaskTable)
+            .set({
+              session_id: root.id,
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+
+        const rootMessageID = Identifier.ascending("message")
+        const rootPartID = Identifier.ascending("part")
+        const rootMessage = {
+          id: rootMessageID,
+          sessionID: root.id,
+          role: "user" as const,
+          time: { created: now },
+          agent: "planner",
+          model: { providerID: "test", modelID: "test" },
+        } satisfies Message.User
+
+        await Session.saveMessage(rootMessage)
+        await Session.updatePart({
+          id: rootPartID,
+          sessionID: root.id,
+          messageID: rootMessageID,
+          type: "text",
+          text: "root prompt before message.updated",
+        } satisfies Message.TextPart)
+        await Session.updateMessage(rootMessage)
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 25 })) {
+          if (
+            events.some((item) => item.type === "message.part.updated" && item.sessionID === root.id) &&
+            events.some((item) => item.type === "message.updated" && item.sessionID === root.id)
+          ) break
+          await Bun.sleep(20)
+          events = await EngineService.listProtocolEvents(taskID)
+        }
+
+        const rootEvents = events.filter((item) => item.sessionID === root.id)
+        expect(rootEvents.map((item) => item.type)).toEqual([
+          "message.part.updated",
+          "message.updated",
+        ])
+
+        const partEvent = rootEvents[0]
+        expect(partEvent?.payload).toMatchObject({
+          resolvedRole: "user",
+          channel: "main",
+          part: {
+            resolvedRole: "user",
+            channel: "main",
+            messageID: rootMessageID,
+          },
+        })
+      },
+    })
+  })
 })

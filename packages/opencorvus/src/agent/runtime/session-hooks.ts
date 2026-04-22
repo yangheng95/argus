@@ -13,6 +13,7 @@
  *     is delegated to it — see `AgentRuntime.run`.
  */
 import type { TextHooks } from "@/llm/api"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from "@/session"
 import { Message } from "@/session"
 import { Identifier } from "@/id/id"
@@ -108,11 +109,13 @@ export interface SessionStreamHooksInput {
 
 export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStreamHooks {
   const failures = input.failures ?? createStreamFailureTracker()
+  let message: Message.Assistant | undefined
   let messageID: string | undefined
   let textPartID: string | undefined
   let textAccumulated = ""
   let reasoningPartID: string | undefined
   let reasoningAccumulated = ""
+  let reasoningStartedAt: number | undefined
   const toolParts = new Map<string, Message.ToolPart>()
   // AI SDK uses `chunk.id` for tool-input-* events and `chunk.toolCallId` for
   // tool-call/tool-result events. These may differ, so we maintain a mapping
@@ -123,7 +126,7 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
     if (messageID) return messageID
     const id = Identifier.ascending("message")
     const now = Date.now()
-    await Session.updateMessage({
+    message = await Session.updateMessage({
       id,
       sessionID: input.sessionID,
       role: "assistant",
@@ -136,9 +139,65 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
       path: { cwd: "", root: "" },
       cost: 0,
       tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    } as Message.Assistant)
+    } as Message.Assistant) as Message.Assistant
     messageID = id
     return id
+  }
+
+  async function persistAccumulatedParts(msgID: string, closedAt?: number) {
+    if (reasoningPartID && reasoningAccumulated) {
+      await Session.updatePart({
+        id: reasoningPartID,
+        messageID: msgID,
+        sessionID: input.sessionID,
+        type: "reasoning",
+        text: reasoningAccumulated,
+        time: {
+          start: reasoningStartedAt ?? closedAt ?? Date.now(),
+          ...(closedAt ? { end: closedAt } : {}),
+        },
+      } as Message.ReasoningPart)
+    }
+    if (textPartID && textAccumulated) {
+      await Session.updatePart({
+        id: textPartID,
+        messageID: msgID,
+        sessionID: input.sessionID,
+        type: "text",
+        text: textAccumulated,
+      } as Message.TextPart)
+      log.info("session-stream flushed text", {
+        sessionID: input.sessionID,
+        partID: textPartID,
+        chars: textAccumulated.length,
+      })
+    }
+  }
+
+  async function completeCurrentMessage() {
+    if (!messageID || !message) return
+    const completedAt = Date.now()
+    await persistAccumulatedParts(messageID, completedAt)
+    if (!message.time.completed || message.time.completed < completedAt) {
+      message = await Session.updateMessage({
+        ...message,
+        time: {
+          ...message.time,
+          completed: completedAt,
+        },
+      } as Message.Assistant) as Message.Assistant
+    }
+  }
+
+  function resetCurrentMessage() {
+    message = undefined
+    messageID = undefined
+    textPartID = undefined
+    textAccumulated = ""
+    reasoningPartID = undefined
+    reasoningAccumulated = ""
+    reasoningStartedAt = undefined
+    inputIdToCallId.clear()
   }
 
   async function persistErrorToolPart(opts: {
@@ -206,13 +265,14 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
           const msgID = await ensureMessage()
           if (!reasoningPartID) {
             const id = Identifier.ascending("part")
+            reasoningStartedAt = Date.now()
             await Session.updatePart({
               id,
               messageID: msgID,
               sessionID: input.sessionID,
               type: "reasoning",
               text: "",
-              time: { start: Date.now() },
+              time: { start: reasoningStartedAt },
             } as Message.ReasoningPart)
             reasoningPartID = id
           }
@@ -361,9 +421,8 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
             if (v === chunk.toolCallId) { inputIdToCallId.delete(k); break }
           }
           if (toolParts.size === 0) {
-            messageID = undefined
-            textPartID = undefined
-            reasoningPartID = undefined
+            await completeCurrentMessage()
+            resetCurrentMessage()
           }
           return
         }
@@ -389,68 +448,35 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
       log.warn("session-stream onError", { sessionID: input.sessionID, error: reason })
     },
     async flush() {
-      if (messageID && reasoningPartID && reasoningAccumulated) {
-        try {
-          await Session.updatePart({
-            id: reasoningPartID,
-            messageID,
-            sessionID: input.sessionID,
-            type: "reasoning",
-            text: reasoningAccumulated,
-            time: { start: Date.now() },
-          } as Message.ReasoningPart)
-        } catch (err) {
-          const reason = err instanceof Error ? err.message : String(err)
-          failures.record({ kind: "flush", reason, chunkType: "reasoning" })
-          log.warn("session-stream flush reasoning failed", { sessionID: input.sessionID, error: reason })
-        }
-      }
-      if (messageID && textPartID && textAccumulated) {
-        try {
-          await Session.updatePart({
-            id: textPartID,
-            messageID,
-            sessionID: input.sessionID,
-            type: "text",
-            text: textAccumulated,
-          } as Message.TextPart)
-          log.info("session-stream flushed text", {
-            sessionID: input.sessionID,
-            partID: textPartID,
-            chars: textAccumulated.length,
-          })
-        } catch (err) {
-          const reason = err instanceof Error ? err.message : String(err)
-          failures.record({ kind: "flush", reason, chunkType: "text" })
-          log.warn("session-stream flush text failed", { sessionID: input.sessionID, error: reason })
-        }
-      }
       for (const [, part] of toolParts) {
         const currentState = part.state && typeof part.state === "object" ? part.state : {} as Record<string, unknown>
         const status = (currentState as any).status
         if (status === "running" || status === "pending" || !status) {
           try {
-            // ToolStateCompleted requires an `input` record. A `pending` part
-            // never had one assigned (only a streaming `raw` JSON string), so
-            // we recover the parsed args via `pendingToolInput` when possible
-            // and fall back to `{}` rather than letting `undefined` leak into
-            // Zod's `.parse(...)`.
             const recoveredInput = ((currentState as any).input as Record<string, unknown> | undefined)
               ?? pendingToolInput(part)
               ?? {}
+            const error = "Tool execution interrupted before result was received"
             await Session.updatePart({
               ...part,
               state: {
                 ...currentState,
-                status: "completed",
+                status: "error",
                 input: recoveredInput,
-                output: (currentState as any).output ?? "",
+                error,
                 time: {
                   start: (currentState as any).time?.start ?? Date.now(),
                   end: Date.now(),
                 },
               },
             } as Message.ToolPart)
+            failures.record({
+              kind: "flush",
+              reason: error,
+              chunkType: "tool",
+              toolCallId: part.callID,
+              toolName: part.tool,
+            })
           } catch (err) {
             const reason = err instanceof Error ? err.message : String(err)
             failures.record({ kind: "flush", reason, chunkType: "tool", toolCallId: part.callID })
@@ -462,7 +488,16 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
           }
         }
       }
+      try {
+        await completeCurrentMessage()
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        const chunkType = reasoningAccumulated ? "reasoning" : (textAccumulated ? "text" : "message")
+        failures.record({ kind: "flush", reason, chunkType })
+        log.warn("session-stream flush message finalization failed", { sessionID: input.sessionID, error: reason })
+      }
       toolParts.clear()
+      resetCurrentMessage()
     },
     failures: {
       snapshot: () => failures.snapshot(),

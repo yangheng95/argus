@@ -30,6 +30,7 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  historical task rows render, but new code must use the
  *                  specific kind above.
  *   architect      architect sub-agent
+ *   fidelity       goal-set fidelity reviewer (child of architect)
  *   delivery       delivery sub-agent
  *   executor       per-goal container session — empty parent that groups
  *                  planner + build + evaluator children for permission
@@ -52,6 +53,7 @@ export type SessionKind =
   | "planner"
   | "goal"
   | "architect"
+  | "fidelity"
   | "delivery"
   | "executor"
   | "build"

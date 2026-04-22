@@ -160,14 +160,34 @@ export function createOrchestratorTools(input: {
   signal?: AbortSignal
   workflow?: import("@/engine/workflow").MiniWorkflow
   workflowState?: import("@/engine/workflow").WorkflowState
+  operatorMessage?: {
+    text: string
+    attachmentSummary?: string
+  }
 }) {
   const { taskID } = input
 
-  // Blocking tools (submit_execution, dispatch_goal) signal
-  // this controller on success. The agent loop is then forcefully terminated so
-  // the model can't spin-wait with read_context calls. The agent gets re-triggered
-  // when execution completes.
+  // Some tools intentionally end the current orchestrator turn. Do not abort
+  // the provider stream from inside the tool body itself — that races the AI
+  // SDK's tool-result persistence and makes a successful tool look interrupted.
+  // Instead record a deferred stop reason here and let the caller abort after
+  // the current step has finished cleanly.
   const stopAfterDispatch = new AbortController()
+  let pendingStopReason: string | undefined
+
+  function requestStopAfterCurrentStep(reason: string) {
+    if (!pendingStopReason) pendingStopReason = reason
+  }
+
+  function finalizeDeferredStop(): string | undefined {
+    if (!pendingStopReason) return undefined
+    const reason = pendingStopReason
+    pendingStopReason = undefined
+    if (!stopAfterDispatch.signal.aborted) {
+      stopAfterDispatch.abort(reason)
+    }
+    return reason
+  }
 
   // ── Workflow step tracking (passive observation) ──
 
@@ -275,9 +295,9 @@ export function createOrchestratorTools(input: {
 
         // No design-analysis gate here: per rule 23, phase ordering is an LLM
         // decision (the orchestrator prompt explains when to call
-        // design_analysis). Requirements and design-analyst are decoupled —
-        // visual specs live on task.design_specs and are consumed by delivery
-        // directly as advisory guidance, not forwarded into requirements.
+        // design_analysis). Visual specs live on task.design_specs; when
+        // present they are injected into requirements / architect / planner /
+        // build prompts from that single source of truth.
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
         // The RequirementsService runs inside AgentRuntime which owns its own
@@ -305,6 +325,7 @@ export function createOrchestratorTools(input: {
               title: task.title,
               request: task.request,
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
+              designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
               taskID,
               sessionID: requirementsSession.id,
               signal: input.signal,
@@ -463,9 +484,9 @@ export function createOrchestratorTools(input: {
         "  - The request mentions a URL to replicate or analyze",
         "  - The request explicitly asks for layout/design analysis",
         "",
-        "The design specification is appended to the task request, enriching it with",
-        "exact layout structure, style tokens, component inventory, and interaction patterns.",
-        "This enables the requirements agent to produce more accurate, pixel-level goals.",
+        "The design specification is persisted on task.design_specs and injected into",
+        "requirements, architect, planner, and build prompts from that single source of truth.",
+        "This enables downstream stages to derive more accurate pixel-level requirements and implementation plans.",
         "",
         "SKIP this step when:",
         "  - No visual references are available",
@@ -522,7 +543,9 @@ export function createOrchestratorTools(input: {
         const liveUrls = inputUrls.filter((u) => !/(^|\.)figma\.com\//i.test(u))
         const materialPaths = Array.isArray(materials) ? materials.filter((m) => typeof m === "string" && m.length > 0) : []
         if (!hasAttachments && liveUrls.length === 0 && figmaUrls.length === 0 && materialPaths.length === 0) {
-          return "No visual references available (no image attachments, no URLs, no Figma URL, no local materials). Skip design_analysis and proceed to requirements."
+          throw new Error(
+            "Design analysis requires at least one real visual reference: image attachment, URL, Figma URL, or local material path.",
+          )
         }
 
         await trackStepStart("design_analysis")
@@ -702,7 +725,7 @@ export function createOrchestratorTools(input: {
             figmaUrlCount: figmaUrls.length,
             materialCount: materialPaths.length,
           })
-          return message
+          throw new Error(message)
         }
 
         const designSession = await Session.createNext({
@@ -790,8 +813,8 @@ export function createOrchestratorTools(input: {
 
           return SubAgentProtocol.yieldResult({
             headline:
-              "SUCCESS: Visual contract persisted on task.design_specs. Delivery will consume " +
-              "it as advisory checklist. NEXT: call requirements for functional decomposition.",
+              "SUCCESS: Visual contract persisted on task.design_specs. Subsequent stages will inject " +
+              "it from that single source of truth. NEXT: call requirements for functional decomposition.",
             fields: [
               ["total_specs", String(analysis.specs.length)],
               ["color", String(countByCategory.color ?? 0)],
@@ -822,7 +845,7 @@ export function createOrchestratorTools(input: {
             },
             { source: "orchestrator.design_analysis" },
           )
-          return `Design analysis failed: ${msg}. Proceeding without a visual contract — call requirements directly if appropriate.`
+          throw err instanceof Error ? err : new Error(msg)
         }
       },
     }),
@@ -913,6 +936,7 @@ export function createOrchestratorTools(input: {
             decisionLog,
             requirements,
             requirementDecisions,
+            designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
             signal: input.signal,
             stream: {
               onChunk: async (arg: any) => {
@@ -1381,7 +1405,7 @@ export function createOrchestratorTools(input: {
         const { pushDispatch } = await import("./dispatch-queue")
         pushDispatch(taskID, goalIDs)
 
-        stopAfterDispatch.abort("dispatch_goal")
+        requestStopAfterCurrentStep("dispatch_goal")
         return (
           `Dispatched ${goalIDs.length} goal(s): ${goalIDs.join(", ")}. ` +
           `STOP HERE — task loop will run the pool and re-trigger you when the batch drains.` +
@@ -1636,13 +1660,13 @@ export function createOrchestratorTools(input: {
           .filter((g) => goalStatusByID(g.id) === "pending")
           .map((g) => g.id)
         if (readyIDs.length === 0) {
-          stopAfterDispatch.abort("submit_execution")
+          requestStopAfterCurrentStep("submit_execution")
           return `Run ${runID} activated but no pending goals to dispatch. STOP HERE.`
         }
         const { pushDispatch } = await import("./dispatch-queue")
         pushDispatch(taskID, readyIDs)
 
-        stopAfterDispatch.abort("submit_execution")
+        requestStopAfterCurrentStep("submit_execution")
         return (
           `Run ${runID} activated; ${readyIDs.length} pending goal(s) pushed to dispatch queue: ` +
           `${readyIDs.join(", ")}. STOP HERE — task loop will run the pool and re-trigger you ` +
@@ -1660,6 +1684,46 @@ export function createOrchestratorTools(input: {
         const task = requireTask(taskID)
         await updateTask(task, { status: "failed", error, time_completed: Date.now() }, `Failed: ${error}`)
         return `Task ${taskID} failed: ${error}`
+      },
+    }),
+
+    cancel_task: tool({
+      description: "Cancel the task immediately. Use when the user explicitly asks to stop or abandon the current work.",
+      inputSchema: z.object({
+        reason: z.string().describe("Why you are cancelling the task"),
+      }),
+      execute: async ({ reason }) => {
+        await EngineService.cancelTask(taskID)
+        return `Task ${taskID} cancelled. Reason: ${reason}`
+      },
+    }),
+
+    retry_task: tool({
+      description: "Retry a failed or cancelled task when the user wants to continue from the latest state.",
+      inputSchema: z.object({
+        reason: z.string().describe("Why you are retrying the task"),
+      }),
+      execute: async ({ reason }) => {
+        await EngineService.retryTask(taskID)
+        return `Task ${taskID} retried. Reason: ${reason}`
+      },
+    }),
+
+    inject_operator_message: tool({
+      description: "Forward the latest operator message into the currently running executor session. Use only when the task should continue under the same active execution, not when strategy must change.",
+      inputSchema: z.object({
+        reason: z.string().describe("Why this operator message should be injected into the current execution"),
+      }),
+      execute: async ({ reason }) => {
+        const latest = input.operatorMessage?.text?.trim()
+        if (!latest) {
+          return "No operator message is available on this trigger."
+        }
+        const payload = input.operatorMessage?.attachmentSummary
+          ? `${latest}\n\n${input.operatorMessage.attachmentSummary}`
+          : latest
+        const result = await EngineService.injectMessage(taskID, payload)
+        return `Operator message injected. Reason: ${reason}. resumed=${result.resumed} status=${result.status}`
       },
     }),
 
@@ -2296,7 +2360,7 @@ export function createOrchestratorTools(input: {
                 failMsg,
               )
             }
-            stopAfterDispatch.abort("deliver_stalled")
+            requestStopAfterCurrentStep("deliver_stalled")
             return failMsg
           }
 
@@ -2318,7 +2382,7 @@ export function createOrchestratorTools(input: {
                 failMsg,
               )
             }
-            stopAfterDispatch.abort("deliver_abort")
+            requestStopAfterCurrentStep("deliver_abort")
             return failMsg
           }
 
@@ -2423,7 +2487,7 @@ export function createOrchestratorTools(input: {
             affected_goal_ids: verdict.affected_goal_ids,
           })
 
-          stopAfterDispatch.abort("delivery_rework")
+          requestStopAfterCurrentStep("delivery_rework")
           return SubAgentProtocol.yieldResult({
             headline: `Delivery rejected — iteration ${iteration}, arbiter=${decision.verdict}, assistant must re-plan`,
             fields: [
@@ -2485,7 +2549,7 @@ export function createOrchestratorTools(input: {
                 failMsg,
               )
             }
-            stopAfterDispatch.abort("deliver_rejected")
+            requestStopAfterCurrentStep("deliver_rejected")
             return failMsg
           }
 
@@ -2511,7 +2575,7 @@ export function createOrchestratorTools(input: {
             /* best effort */
           }
 
-          stopAfterDispatch.abort("delivery_threw")
+          requestStopAfterCurrentStep("delivery_threw")
           return (
             `Delivery verification threw (not a structured rejection): ${msg}. ` +
             `Iteration ${iterationErr}, arbiter=${decisionErr.verdict} (reason: ${decisionErr.reason}). ` +
@@ -2935,5 +2999,9 @@ export function createOrchestratorTools(input: {
     }),
   }
 
-  return { tools, stopSignal: stopAfterDispatch.signal }
+  return {
+    tools,
+    stopSignal: stopAfterDispatch.signal,
+    finalizeDeferredStop,
+  }
 }

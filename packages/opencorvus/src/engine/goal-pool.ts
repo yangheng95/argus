@@ -25,7 +25,7 @@ import { ExecutorRegistry } from "@/executor/registry"
 import { runGoalPipeline } from "@/pipeline"
 import { EngineConfig } from "./config"
 import { createDecisionLog } from "@/decision-log"
-import { isGoalDispatchable } from "@/goal/readiness"
+import { isGoalDispatchable, unsatisfiedDependencyGoalIDs } from "@/goal/readiness"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { writeIntentBundle } from "@/goal/intent-bundle"
 import {
@@ -188,11 +188,11 @@ export class GoalPool {
   }
 
   /**
-   * Submit goals for execution. The LLM decides which IDs to dispatch —
-   * the pool only enforces idempotency (skip IDs whose tip is already
-   * live or satisfied). There is no dependency-graph gate; the LLM sees
-   * each goal's `depends_on` in the describe layer and sequences dispatch
-   * accordingly.
+  * Submit goals for execution. The LLM decides which IDs to dispatch, but
+  * the pool still enforces two hard admission rules:
+  *   - idempotency: skip IDs whose own tip is already live or satisfied
+  *   - dependency satisfaction: skip IDs whose `depends_on` chain is not yet
+  *     authoritatively satisfied
    *
    * When `goalIDs` is omitted the pool auto-submits every currently-
    * dispatchable goal in the plan (ordered by `order_index` for a
@@ -220,6 +220,14 @@ export class GoalPool {
         continue
       }
       if (!isGoalDispatchable(goal, goalRuns)) {
+        const blockedBy = unsatisfiedDependencyGoalIDs(goal, goalRuns)
+        if (blockedBy.length > 0) {
+          log.info("pool.submit: goal blocked by unsatisfied dependencies", {
+            goalID,
+            blockedBy,
+            planID: plan.id,
+          })
+        }
         // Idempotency skip — normal when the LLM re-submits an already-
         // dispatched ID or when the transitional auto-submit sees goals
         // that are already running / satisfied.
@@ -286,9 +294,9 @@ export class GoalPool {
     const { signal } = this.opts
     if (signal?.aborted) return
 
-    // FIFO — the LLM's submit order is the dispatch order. Dependency
-    // sequencing is the LLM's responsibility (it reads describe output
-    // and calls dispatch_goal with the right IDs at the right time).
+    // FIFO — the LLM's submit order remains the preferred dispatch order,
+    // but actual admission is still guarded by isGoalDispatchable() so a
+    // dependency violation cannot enter active execution even if requested.
     while (this.active.size < this.opts.concurrency && this.queue.length > 0) {
       const entry = this.queue.shift()!
       this.dispatchGoal(entry)
@@ -427,6 +435,9 @@ export class GoalPool {
           const planSteps = await planGoal({
             contract: planContract,
             decisionLog: plannerDL,
+            designSpecs: Array.isArray((task as { design_specs?: unknown[] }).design_specs)
+              ? ((task as { design_specs: unknown[] }).design_specs as any)
+              : undefined,
             workDir: worktreeDir,
             sessionID: planSession.id,
             signal,
@@ -519,6 +530,9 @@ export class GoalPool {
         goal: entry.goal as any,
         taskRequest: plan.prompt,
         taskID: task.id,
+        designSpecs: Array.isArray((task as { design_specs?: unknown[] }).design_specs)
+          ? ((task as { design_specs: unknown[] }).design_specs as any)
+          : undefined,
         dependencies: dependencyGoals,
         cwd: worktreeDir,
       })

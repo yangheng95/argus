@@ -1,5 +1,11 @@
 # 11 — Agent OOP 协议设计
 
+> 状态：未来方案 / 未落地实现。
+>
+> 当前运行时并未实现本文中的 `BaseAgent`、`AgentRegistry`、`AgentMailbox`、
+> 白名单点对点消息或统一 mailbox 协议。现行实现仍然以 orchestrator tool 调度、
+> `task.design_specs` / `decision_log` 持久化、以及 per-stage session prompt 注入为准。
+> 修改现网消息路径时，必须先以当前实现为真源，不得把本文当作已生效协议。
 > 对应代码（待实现）：`src/agent/base.ts` · `src/agent/registry.ts` · `src/agent/mailbox.ts` ·
 > `src/agent/contract.ts` · `src/agent/prompt/` · `src/prompt/core/`
 >
