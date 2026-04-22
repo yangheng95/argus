@@ -122,6 +122,143 @@ export function insertGoalRows(
   })
 }
 
+/**
+ * Architect-driven goal upsert.
+ *
+ * Sole persistence path from the Architect's goal set into engine_goal. Computes
+ * a diff against the existing rows for the task and applies INSERT / UPDATE /
+ * DELETE atomically:
+ *
+ *   • id matches an existing row                       → UPDATE contract fields
+ *   • id is not in DB and not in `removedLLMIDs`       → INSERT as new goal
+ *   • existing row whose id is in `removedLLMIDs`      → DELETE row
+ *   • existing row not referenced at all               → kept as-is
+ *
+ * The Architect emits a mix of DB ids (seeded from the current row set) and
+ * fresh LLM ids (for newly registered goals). `depends_on` may point at either,
+ * so we build an LLM-id → DB-id map once and rewrite deps before each write.
+ *
+ * Returns the final goal set as DB rows plus the id translation map (empty
+ * values for pure identity mappings).
+ */
+export function upsertGoalsFromArchitect(
+  db: Database.TxOrDb,
+  input: {
+    taskID: string
+    specSnapshotID: string
+    architectGoals: Array<GoalRowInput & { llmID: string }>
+    removedLLMIDs: string[]
+    now: number
+  },
+): {
+  persisted: Array<{ id: string; title: string; llmID: string }>
+  llmToDBID: Map<string, string>
+  deletedIDs: string[]
+} {
+  const existing = listGoals(input.taskID)
+  const existingByID = new Map(existing.map((g) => [g.id, g]))
+
+  // First pass: assign DB ids for every goal in the Architect output. Existing
+  // ids stay the same; fresh LLM ids get a new DB id. Builds the id map that
+  // the second pass consults when rewriting depends_on.
+  const llmToDBID = new Map<string, string>()
+  const plan: Array<{ llmID: string; dbID: string; isNew: boolean; goal: GoalRowInput }> = []
+  for (const goal of input.architectGoals) {
+    if (existingByID.has(goal.llmID)) {
+      llmToDBID.set(goal.llmID, goal.llmID)
+      plan.push({ llmID: goal.llmID, dbID: goal.llmID, isNew: false, goal })
+    } else {
+      const dbID = Identifier.ascending("goal")
+      llmToDBID.set(goal.llmID, dbID)
+      plan.push({ llmID: goal.llmID, dbID, isNew: true, goal })
+    }
+  }
+
+  // DELETE: rows whose ids the Architect explicitly removed.
+  const deletedIDs: string[] = []
+  for (const llmID of input.removedLLMIDs) {
+    const dbID = llmToDBID.get(llmID) ?? (existingByID.has(llmID) ? llmID : undefined)
+    if (!dbID) continue
+    db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, dbID)).run()
+    deletedIDs.push(dbID)
+  }
+
+  const persisted: Array<{ id: string; title: string; llmID: string }> = []
+  for (let index = 0; index < plan.length; index++) {
+    const { llmID, dbID, isNew, goal } = plan[index]
+    const deps = (goal.depends_on ?? []).flatMap((dep) => {
+      const mapped = llmToDBID.get(dep)
+      if (mapped) return [mapped]
+      if (existingByID.has(dep)) return [dep]
+      log.warn("upsertGoalsFromArchitect: depends_on references unknown id — dropping", {
+        goalID: dbID,
+        unknownDep: dep,
+      })
+      return []
+    })
+    const priorMetadata =
+      existingByID.get(dbID)?.metadata && typeof existingByID.get(dbID)!.metadata === "object"
+        ? (existingByID.get(dbID)!.metadata as Record<string, unknown>)
+        : {}
+    const metadata = {
+      ...priorMetadata,
+      ...(goal.metadata ?? {}),
+      architect_llm_id: llmID,
+      depends_on_goal_ids: deps.length > 0 ? deps : undefined,
+    }
+
+    if (isNew) {
+      db.insert(EngineGoalTable)
+        .values({
+          id: dbID,
+          task_id: input.taskID,
+          plan_version_id: null,
+          spec_snapshot_id: input.specSnapshotID,
+          title: goal.title,
+          slug: goalSlug(goal.title),
+          objective: goal.objective,
+          acceptance_specs: goal.acceptance_specs,
+          owned_paths: goal.owned_paths ?? [],
+          depends_on: deps,
+          exports: goal.exports ?? [],
+          imports: goal.imports ?? [],
+          kind: goal.kind ?? "feature",
+          requirement_ids: goal.requirement_ids ?? [],
+          metadata,
+          priority: goal.priority ?? "blocking",
+          source: goal.source ?? "spec",
+          order_index: index,
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    } else {
+      db.update(EngineGoalTable)
+        .set({
+          spec_snapshot_id: input.specSnapshotID,
+          title: goal.title,
+          objective: goal.objective,
+          acceptance_specs: goal.acceptance_specs,
+          owned_paths: goal.owned_paths ?? [],
+          depends_on: deps,
+          exports: goal.exports ?? [],
+          imports: goal.imports ?? [],
+          kind: goal.kind ?? "feature",
+          requirement_ids: goal.requirement_ids ?? [],
+          metadata,
+          priority: goal.priority ?? "blocking",
+          order_index: index,
+          time_updated: input.now,
+        })
+        .where(eq(EngineGoalTable.id, dbID))
+        .run()
+    }
+    persisted.push({ id: dbID, title: goal.title, llmID })
+  }
+
+  return { persisted, llmToDBID, deletedIDs }
+}
+
 export function insertRequirements(
   db: Database.TxOrDb,
   input: {

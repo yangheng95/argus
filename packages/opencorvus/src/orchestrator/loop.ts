@@ -165,7 +165,7 @@ async function runTaskLoopInner(input: {
     // stream so the orchestrator agent gets a `delivery_rejected` trigger
     // with structured feedback on its next decision point. The orchestrator
     // reads affected_goal_ids + rejection_details to decide strategy
-    // (modify_goal vs add_goal vs let-it-redispatch).
+    // (modify_goal vs re-run architect vs let-it-redispatch).
     //
     // Keyed on the verdict artifact — NOT on goal_run.superseded_reason
     // string matching. Per rule 23 we do not branch on enum label values;

@@ -49,7 +49,6 @@ import {
 import { effectiveMaxRuns } from "@/engine/helpers"
 import { goalStatusByID } from "@/engine/describe"
 import {
-  GoalContractAddInputSchema,
   GoalContractUpdateSchema,
 } from "@/pipeline/goal-contract.schema"
 import type { EngineBudget } from "@/engine/engine.sql"
@@ -832,20 +831,26 @@ export function createOrchestratorTools(input: {
     // -----------------------------------------------------------------------
 
     architect: tool({
-      description: "Coordinate cross-goal contracts. Call after requirements when multiple goals have exports/imports dependencies. Writes precise interface contracts, directory blueprints, and shared type definitions to the Decision Log so parallel goals don't conflict. Skip for single-goal or trivial tasks. Always coordinates ALL goals — goal selection is automatic.",
+      description:
+        "Decompose the task into goals. The Architect reads the REQ-N list + " +
+        "foundational decisions produced by requirements, explores the codebase, " +
+        "and registers the final goal set (including metric specs, challenge " +
+        "seeds, traceability, cross-goal contracts, and fidelity verdict). " +
+        "Call after `requirements`. Call again (as a re-run) when delivery " +
+        "rejects the current goal set and the problem is structural rather " +
+        "than a point fix; Architect will refine the existing goals instead " +
+        "of throwing them away.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
       execute: async () => {
-        const allGoals = listGoals(taskID)
-        if (allGoals.length === 0) return "No goals to coordinate. Run requirements first."
-        if (allGoals.length === 1) return "Single goal — architect coordination not needed."
+        const task = requireTask(taskID)
+        if (!task.active_spec_version_id) {
+          return "No spec snapshot yet — run `requirements` first so the Architect has REQ-N + decisions to decompose against."
+        }
+        const existingGoals = listGoals(taskID)
 
         await trackStepStart("architect")
-
-        const targetGoals = allGoals
-
-        const task = requireTask(taskID)
 
         const architectSession = await Session.createNext({
           kind: "architect",
@@ -855,33 +860,58 @@ export function createOrchestratorTools(input: {
         })
         const hooks = sessionStreamHooks({ sessionID: architectSession.id, taskID, stage: "architect" })
 
-        // try/catch around the agent call so the overlay receives a
-        // terminal status event even when ArchitectAgent throws. Without
-        // this the architect session card spins forever on failure.
         try {
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
 
+          // Load Requirements output straight from the DB so the Architect
+          // sees the same REQ-N list the overlay does. Decisions come from
+          // the decision log phase=requirements section the Requirements
+          // agent already seeded.
+          const { findRequirements } = await import("@/engine/store")
+          const reqRows = task.active_spec_version_id
+            ? findRequirements(task.active_spec_version_id)
+            : []
+          const requirements = reqRows.map((r) => {
+            const meta = (r.metadata ?? {}) as Record<string, unknown>
+            const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
+            return {
+              id: sourceID,
+              type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
+              description: r.description,
+            }
+          })
+          const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
+            key: d.key,
+            value: d.value,
+            reason: d.reason,
+          }))
+
           const { ArchitectAgent } = await import("@/architect/agent")
 
           const result = await ArchitectAgent.coordinate({
-            goals: targetGoals.map(g => ({
+            goals: existingGoals.map((g) => ({
               id: g.id,
               title: g.title,
               objective: g.objective,
-              acceptance_specs: (typeof g.acceptance_specs === "string" ? JSON.parse(g.acceptance_specs) : (g.acceptance_specs ?? [])) as AcceptanceSpec[],
-              owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : (g.owned_paths ?? []),
-              depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : (g.depends_on ?? []),
-              exports: typeof g.exports === "string" ? JSON.parse(g.exports) : (g.exports ?? []),
-              imports: typeof g.imports === "string" ? JSON.parse(g.imports) : (g.imports ?? []),
+              acceptance_specs: (typeof g.acceptance_specs === "string"
+                ? JSON.parse(g.acceptance_specs)
+                : g.acceptance_specs ?? []) as AcceptanceSpec[],
+              owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : g.owned_paths ?? [],
+              depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : g.depends_on ?? [],
+              exports: typeof g.exports === "string" ? JSON.parse(g.exports) : g.exports ?? [],
+              imports: typeof g.imports === "string" ? JSON.parse(g.imports) : g.imports ?? [],
               priority: g.priority as "blocking" | "advisory",
               kind: g.kind,
-              requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : (g.requirement_ids ?? []),
+              requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
             })),
             taskRequest: task.request,
             taskTitle: task.title,
             taskID,
+            sessionID: architectSession.id,
             decisionLog,
+            requirements,
+            requirementDecisions,
             signal: input.signal,
             stream: {
               onChunk: async (arg: any) => {
@@ -899,26 +929,142 @@ export function createOrchestratorTools(input: {
 
           await hooks.flush()
 
+          // Persist Architect output in a single transaction: new spec_snapshot
+          // supersedes the previous, goals upsert, metrics baseline install,
+          // challenge_seeds on task row. If any step throws the whole set
+          // rolls back — no half-applied decomposition survives.
+          const { upsertGoalsFromArchitect } = await import("@/engine/persist")
+          const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
+          const { persistArchitectMetrics } = await import("@/metrics/store")
+          const now = Date.now()
+          const newSpecSnapshotID = Identifier.ascending("spec")
+          const priorSpecSnapshotID = task.active_spec_version_id
 
-          // Sub-agent → caller boundary. Full blueprint prose is already
-          // persisted under the Decision Log (architect phase) and surfaces
-          // to per-goal executors via phasePromptSectionForGoal. The
-          // orchestrator only needs a structured short ack.
-          const summary = SubAgentProtocol.yieldResult({
-            headline: `Architect coordination complete: ${result.contracts.length} contracts written to Decision Log.`,
-            summary: result.summary,
-            fields: result.contracts.length > 0
-              ? [["categories", [...new Set(result.contracts.map((c) => c.category))]]]
-              : [],
-            pointer: "read_context scope=decisions (architect phase entries)",
-          })
+          const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
+          const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
+          const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
+          const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
+          const contractLines = result.contracts.map((c) => `- **${c.category}** — ${c.title} (goals: ${c.goalIDs.join(", ") || "task-wide"})`)
+
+          const specContent = [
+            `# ${task.title}`,
+            "",
+            result.summary,
+            "",
+            "## Requirements",
+            ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
+            "",
+            "## Decisions",
+            ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
+            "",
+            "## Goals",
+            ...(goalLines.length > 0 ? goalLines : ["_(none)_"]),
+            "",
+            "## Traceability",
+            ...(traceLines.length > 0 ? traceLines : ["_(none)_"]),
+            "",
+            "## Architect Contracts",
+            ...(contractLines.length > 0 ? contractLines : ["_(none)_"]),
+          ].join("\n")
+
+          let persisted: Array<{ id: string; title: string; llmID: string }> = []
+          let llmToDBID = new Map<string, string>()
+          let deletedIDs: string[] = []
+          try { Database.transaction((db) => {
+            db.insert(EngineSpecSnapshotTable).values({
+              id: newSpecSnapshotID,
+              task_id: taskID,
+              version: 2,
+              status: "ready",
+              summary: result.summary,
+              content: specContent,
+              scope: requirements.map((r) => r.description).join("; "),
+              time_created: now,
+              time_updated: now,
+            }).run()
+
+            if (priorSpecSnapshotID) {
+              db.update(EngineSpecSnapshotTable)
+                .set({ status: "superseded", time_updated: now })
+                .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
+                .run()
+            }
+
+            const out = upsertGoalsFromArchitect(db, {
+              taskID,
+              specSnapshotID: newSpecSnapshotID,
+              architectGoals: result.goals.map((g) => ({
+                llmID: g.id,
+                title: g.title,
+                objective: g.objective,
+                acceptance_specs: g.acceptance_specs,
+                owned_paths: g.owned_paths,
+                depends_on: g.depends_on,
+                exports: g.exports,
+                imports: g.imports,
+                kind: g.kind,
+                requirement_ids: g.requirement_ids,
+                priority: g.priority,
+                source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
+              })),
+              removedLLMIDs: result.removedGoalIDs,
+              now,
+            })
+            persisted = out.persisted
+            llmToDBID = out.llmToDBID
+            deletedIDs = out.deletedIDs
+
+            persistArchitectMetrics({
+              task_id: taskID,
+              goal_id_map: llmToDBID,
+              goal_metric_specs: result.goalMetricSpecs,
+              global_metric_specs: result.globalMetricSpecs,
+            })
+
+            db.update(EngineTaskTable)
+              .set({
+                active_spec_version_id: newSpecSnapshotID,
+                architect_challenge_seeds: result.challengeSeeds as unknown as Record<string, unknown>[],
+                time_updated: now,
+              })
+              .where(eq(EngineTaskTable.id, taskID))
+              .run()
+            Database.effect(() =>
+              EngineProtocol.emit(
+                EngineEvent.TaskUpdated,
+                { taskID, status: task.status, summary: "Goals decomposed by Architect" },
+                { source: "orchestrator.architect" },
+              ),
+            )
+          }) } catch (dbErr) {
+            log.error("architect: failed to persist goals to DB", {
+              taskID,
+              error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+              stack: dbErr instanceof Error ? dbErr.stack : undefined,
+            })
+            throw dbErr
+          }
+
+          for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
 
           await trackStepComplete("architect")
 
-          // Phase-level completion event — Panel uses this to refresh the
-          // Architect section without tracking individual workflow steps.
-          // `sessionID` + `status` drive the overlay's session-card terminal
-          // write.
+          const summary = SubAgentProtocol.yieldResult({
+            headline:
+              `Architect decomposition complete: ${persisted.length} goals, ${result.goalMetricSpecs.length} goal metrics, ` +
+              `${result.globalMetricSpecs.length} global metrics, ${result.challengeSeeds.length} challenge seeds, ` +
+              `${result.contracts.length} contracts. Fidelity: ${result.fidelity.verdict}.` +
+              (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
+              ` NEXT: call create_run + submit_execution to start goal execution.`,
+            summary: result.summary,
+            fields: [
+              ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
+              ["contract_categories", [...new Set(result.contracts.map((c) => c.category))]],
+              ["fidelity", result.fidelity.verdict],
+            ],
+            pointer: `read_context scope=decisions (spec ${newSpecSnapshotID})`,
+          })
+
           EngineProtocol.emit(
             EngineEvent.ArchitectCompleted,
             {
@@ -926,7 +1072,7 @@ export function createOrchestratorTools(input: {
               sessionID: architectSession.id,
               status: "completed",
               contractCount: result.contracts.length,
-              categories: [...new Set(result.contracts.map(c => c.category))],
+              categories: [...new Set(result.contracts.map((c) => c.category))],
               blueprintSummary: result.summary,
               summary,
             },
@@ -956,43 +1102,6 @@ export function createOrchestratorTools(input: {
     // Per-goal tools — Orchestrator decides when to call each
     // -----------------------------------------------------------------------
 
-
-    add_goal: tool({
-      description:
-        "Dynamically add a new goal to the task. Use when you discover missing " +
-        "requirements, infrastructure needs, or integration gaps during execution. " +
-        "All fields are validated by the same Zod schema as register_goal — invalid " +
-        "input returns an error without inserting.",
-      inputSchema: GoalContractAddInputSchema.extend({
-        reason: z.string().describe("Why you decided to add this goal"),
-      }),
-      execute: async (input) => {
-        const task = requireTask(taskID)
-        const { insertGoalRows } = await import("@/engine/persist")
-        const now = Date.now()
-        const specSnapshotID = task.active_spec_version_id ?? Identifier.ascending("spec")
-        const goals = Database.use((db) => insertGoalRows(db, {
-          taskID,
-          specSnapshotID,
-          goals: [{
-            goalID: Identifier.ascending("goal"),
-            title: input.title,
-            objective: input.objective,
-            acceptance_specs: input.acceptance_specs,
-            owned_paths: input.owned_paths,
-            depends_on: input.depends_on,
-            exports: input.exports,
-            imports: input.imports,
-            kind: input.kind,
-            requirement_ids: [],
-            priority: input.priority,
-            source: "system" as const,
-          }],
-          now,
-        }))
-        return `Goal added: ${goals[0].id} — "${input.title}"`
-      },
-    }),
 
     modify_goal: tool({
       description:
@@ -1141,7 +1250,7 @@ export function createOrchestratorTools(input: {
         "Call query_failed_goals first to understand the failure; the schema requires root-cause analysis " +
         "so reflexive retry without understanding is impossible. " +
         "Per-goal retry budget (max_goal_retries) is enforced as a hard ceiling — once exhausted, change " +
-        "strategy (modify_goal, add_goal, fail_task).",
+        "strategy (modify_goal, re-run architect, fail_task).",
       inputSchema: z.object({
         goalID: z.string().describe("The goal to retry. Must be currently failed or aborted."),
         reason: z
@@ -1181,7 +1290,7 @@ export function createOrchestratorTools(input: {
         // Hard per-goal retry budget. Not a status-machine gate — a runaway
         // budget guardrail so a stuck LLM can't burn infinite iterations on
         // the same contract. Once exhausted the LLM must change strategy
-        // (modify_goal / add_goal / fail_task) — the describe layer shows
+        // (modify_goal / re-run architect / fail_task) — the describe layer shows
         // retry_count / max_goal_retries so it can see this coming.
         const orchCfg = await EngineConfig.get()
         const maxGoalRetries = orchCfg.max_goal_retries
@@ -1191,7 +1300,7 @@ export function createOrchestratorTools(input: {
             `Goal ${goalID} "${goal.title}" has exhausted its retry budget ` +
             `(${priorRetries}/${maxGoalRetries}). Change strategy:\n` +
             `  - modify_goal to change acceptance_specs / owned_paths\n` +
-            `  - add_goal to insert a prerequisite\n` +
+            `  - re-run architect to refine the goal set (add / modify / split / remove)\n` +
             `  - fail_task if the issue is fundamental`
           )
         }
@@ -2261,7 +2370,7 @@ export function createOrchestratorTools(input: {
           // syncGoalStatus projects pending, and the dispatch loop re-runs
           // the goal under the new attempt. Mechanism is decoupled from LLM
           // decision: state flips unconditionally; the orchestrator only
-          // chooses *strategy* (modify_goal / add_goal / let-it-redispatch)
+          // chooses *strategy* (modify_goal / re-run architect / let-it-redispatch)
           // when it next runs.
           //
           // engine_iteration + the verdict artifact persisted above are the
