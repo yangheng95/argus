@@ -15,7 +15,7 @@ import { PidGuard } from "@/shell/pid-guard"
 import { SessionPromptState } from "./prompt/state"
 
 export namespace SessionShell {
-  const { log, state, start, cancel, lastModel } = SessionPromptState
+  const { log, state, start, cancel } = SessionPromptState
 
   export const ShellInput = z.object({
     sessionID: Identifier.schema("session"),
@@ -52,7 +52,8 @@ export namespace SessionShell {
       await SessionRevert.cleanup(session)
     }
     const agent = await Agent.get(input.agent)
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    const { Provider } = await import("../provider/provider")
+    const model = input.model ?? agent.model ?? (await Provider.defaultModel())
     const userMsg: Message.User = {
       id: Identifier.ascending("message"),
       sessionID: input.sessionID,

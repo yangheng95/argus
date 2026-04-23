@@ -2995,9 +2995,18 @@ export function createOrchestratorTools(input: {
           // reply; we forward it (capped) so the orchestrator can judge
           // whether build actually addressed the prior rejection before
           // re-dispatching.
+          const { Agent: AgentForBuild } = await import("@/agent/agent")
+          const { Provider: ProviderForBuild } = await import("@/provider/provider")
+          const buildAgent = await AgentForBuild.get("build")
+          const buildModel = buildAgent?.model ?? (await ProviderForBuild.defaultModel())
           const result = await SessionPrompt.prompt({
             sessionID: buildSession.id,
             agent: "build",
+            // Explicit model — this is a newly-created buildSession with no
+            // message history, so the SessionPrompt fallback chain would
+            // otherwise bottom out at Provider.defaultModel() deep inside and
+            // lose context. Resolve up front for clean diagnostics.
+            model: { providerID: buildModel.providerID, modelID: buildModel.modelID },
             parts: [{ type: "text", text: request, kind: "user_content" }],
           })
           await Session.touch(buildSession.id).catch(err => log.warn("Session.touch failed (non-fatal metadata update)", { sessionID: buildSession.id, error: String(err) }))

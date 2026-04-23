@@ -220,26 +220,37 @@ export async function ensureGitignore() {
 }
 
 /**
- * Remove orchestrator scratch paths from the git index if earlier runs
- * committed them before the ignore rules existed. `git rm --cached` untracks
- * without touching the working tree, so the on-disk files stay and only the
- * tracked instance is purged; the next `git add -A` will then honor the
- * ignore entries and leave them alone.
+ * Remove orchestrator scratch paths from the git index AND commit the
+ * deletion, so HEAD no longer tracks them. The previous version stopped at
+ * `git rm --cached` — that left HEAD still tracking the paths (with the
+ * deletion only staged, never committed). Subsequent `git merge --ff-only`
+ * attempts then saw "local changes would be overwritten" on those paths even
+ * though .gitignore rules were in effect, because git's safety check
+ * compares HEAD state, not ignore state. Concrete incident:
+ * `glr_dba0f6877001...` aborted with stderr listing `.opencorvus-meta.json`
+ * and `.opencorvus/intent/README.md` as the blockers.
  *
- * Each path is attempted independently and failures (path not tracked,
- * repo without history, etc.) are swallowed — this is a curative helper,
- * not a gatekeeper.
+ * Curative helper, not a gatekeeper — individual path failures are swallowed
+ * (path not tracked, repo without history, etc.). A commit is only created
+ * when at least one path was actually staged for removal.
  */
 async function untrackOpencorvusScratch(dir: string) {
   const { $ } = await import("bun")
+  let anyStaged = false
   for (const target of OPENCORVUS_SCRATCH_PATHS) {
     // `git ls-files --error-unmatch` only exits 0 when at least one tracked
     // entry matches, so we can skip the (noisier) `git rm` for paths that
     // were never committed in the first place.
     const tracked = await $`git ls-files --error-unmatch -- ${target}`.cwd(dir).quiet().nothrow()
     if (tracked.exitCode !== 0) continue
-    await $`git rm -r --cached --ignore-unmatch -- ${target}`.cwd(dir).quiet().nothrow()
+    const removed = await $`git rm -r --cached --ignore-unmatch -- ${target}`.cwd(dir).quiet().nothrow()
+    if (removed.exitCode === 0) anyStaged = true
   }
+  if (!anyStaged) return
+  await $`git -c user.name=opencorvus -c user.email=noreply@opencorvus.ai commit --no-gpg-sign --no-verify -m ${"chore: untrack orchestrator scratch paths (.opencorvus/**, .opencorvus-meta.json)"}`
+    .cwd(dir)
+    .quiet()
+    .nothrow()
 }
 
 function baseline(task: TaskRow) {

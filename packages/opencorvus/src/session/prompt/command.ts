@@ -12,8 +12,6 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Session } from ".."
 import { Command } from "../../command"
 import { installRuntimeShims } from "@/runtime/shims"
-import { SessionPromptState } from "./state"
-const { lastModel } = SessionPromptState
 import { resolvePromptParts } from "./parts"
 import type { PromptInput } from "./schema"
 
@@ -115,7 +113,7 @@ export async function command(
       }
     }
     if (input.model) return Provider.parseModel(input.model)
-    return await lastModel(input.sessionID)
+    return await Provider.defaultModel()
   })()
 
   try {
@@ -166,7 +164,7 @@ export async function command(
   const userModel = isSubtask
     ? input.model
       ? Provider.parseModel(input.model)
-      : await lastModel(input.sessionID)
+      : await Provider.defaultModel()
     : taskModel
 
   await Plugin.trigger(

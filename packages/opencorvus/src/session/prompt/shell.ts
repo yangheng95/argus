@@ -15,7 +15,8 @@ import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
 import { installRuntimeShims } from "@/runtime/shims"
 import { SessionPromptState } from "./state"
-const { state: promptState, start: startSession, cancel: cancelSession, lastModel } = SessionPromptState
+import { Provider } from "../../provider/provider"
+const { state: promptState, start: startSession, cancel: cancelSession } = SessionPromptState
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -62,7 +63,7 @@ export async function shell(
     await SessionRevert.cleanup(session)
   }
   const agent = await Agent.get(input.agent)
-  const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+  const model = input.model ?? agent.model ?? (await Provider.defaultModel())
   const userMsg: Message.User = {
     id: Identifier.ascending("message"),
     sessionID: input.sessionID,

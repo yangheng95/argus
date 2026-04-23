@@ -76,12 +76,4 @@ export namespace SessionPromptState {
     s.callbacks = []
   }
 
-  export async function lastModel(_sessionID: string) {
-    // Always read from config so UI model changes take effect immediately.
-    // Previously this scanned session history first, causing "stickiness"
-    // where an old model kept being used even after the user switched
-    // provider/model in the settings panel.
-    const { Provider } = await import("../../provider/provider")
-    return Provider.defaultModel()
-  }
 }
