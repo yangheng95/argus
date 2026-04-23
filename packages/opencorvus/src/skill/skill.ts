@@ -40,13 +40,27 @@ export namespace Skill {
      *  (requirements / architect / planner) must NOT see executor skills —
      *  they plan goals, they don't implement. */
     stage: z.string().optional(),
-    /** Auto-detect conditions — skill is loaded when any condition matches the project. */
+    /** Auto-detect conditions — skill is loaded when any condition matches the project
+     *  OR the active task. File / deps scan the Instance directory; task_signals are
+     *  derived from the current task's request, attachments, and scripts. Any single
+     *  matching condition (across all three buckets) is sufficient. */
     auto_detect: z.object({
       files: z.array(z.string()).optional(),
       deps: z.array(z.string()).optional(),
+      task_signals: z.object({
+        has_attachment_image: z.boolean().optional().describe("True when the task carries a reference image attachment."),
+        request_contains_url: z.boolean().optional().describe("True when the task request text contains an http(s) URL."),
+        package_has_script: z.array(z.string()).optional().describe("Any of the listed npm/bun scripts exists in the project's package.json."),
+      }).optional(),
     }).optional(),
     /** Priority for ordering when multiple skills match (higher = first). */
     priority: z.number().optional().default(0),
+    /** Tools the delivery agent MUST call (and the call MUST pass) before it
+     *  can submit_verdict(accepted). Enforced in output-tools.submit_verdict
+     *  against the verdict's tool_call_evidence[]. Each entry is a tool name
+     *  as declared on the delivery tool set (e.g. "verify_page_integrity",
+     *  "screenshot", "run_command"). Empty or omitted = no enforcement. */
+    required_tools: z.array(z.string()).optional().default([]),
   })
   export type Info = z.infer<typeof Info>
 
@@ -99,7 +113,7 @@ export namespace Skill {
     // Register built-in skills (lowest priority — user skills with same name override)
     for (const raw of builtins) {
       const md = matter(raw.skill)
-      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
       if (!parsed.success) continue
       const location =
         Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
@@ -113,6 +127,7 @@ export namespace Skill {
         stage: parsed.data.stage,
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
+        required_tools: parsed.data.required_tools,
       }
     }
 
@@ -128,7 +143,7 @@ export namespace Skill {
 
       if (!md) return
 
-      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true, stage: true, auto_detect: true, priority: true, required_tools: true }).safeParse(md.data)
       if (!parsed.success) return
 
       // Warn on duplicate skill names
@@ -152,6 +167,7 @@ export namespace Skill {
         stage: parsed.data.stage,
         auto_detect: parsed.data.auto_detect,
         priority: parsed.data.priority,
+        required_tools: parsed.data.required_tools,
       }
     }
 

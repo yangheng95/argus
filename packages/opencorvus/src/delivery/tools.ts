@@ -9,6 +9,7 @@ import { tool } from "ai"
 import z from "zod"
 import fs from "fs/promises"
 import path from "path"
+import crypto from "node:crypto"
 import { createCodebaseTools } from "@/engine/codebase-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
@@ -17,6 +18,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { EngineService } from "@/task-api"
 import { findTask } from "@/engine/store"
+import { renderPage, findBrowserExecutable } from "@/delivery/checks/visual"
 
 const TASK_CHAIN_DEPTH_LIMIT = 3
 
@@ -402,5 +404,283 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
       },
     }),
 
+    screenshot: tool({
+      description:
+        "Capture a PNG screenshot of a URL or a local HTML file via puppeteer and write it to the " +
+        "project's .opencorvus/delivery-screenshots/ directory. Use this to produce visual evidence " +
+        "that the running application actually renders, or to capture before/after images around a " +
+        "fix. The screenshot is saved to disk; reference the returned absolute path and sha when " +
+        "citing this call in submit_verdict.tool_call_evidence. The tool returns the shot's size " +
+        "(bytes + dimensions) and a pixel-variance signal — a near-zero variance means the page " +
+        "rendered blank/uniform (JSON error, pre-hydration stub, loading state) and the capture " +
+        "itself does NOT count as a passed check. When you need to view the image contents, pass " +
+        "the returned path to read_file on the next iteration (delivery retries inject prior-run " +
+        "screenshots back as multimodal input).",
+      inputSchema: z.object({
+        url: z.string().describe("Absolute http(s) URL, file:// URL, or absolute local path to an HTML file. The file path form launches a short-lived static/project server so ES-module scripts resolve correctly — same logic as the pipeline's visual-diff helper."),
+        viewport_width: z.number().int().min(100).max(4096).default(1440).describe("Viewport width in CSS pixels."),
+        viewport_height: z.number().int().min(100).max(4096).default(900).describe("Viewport height in CSS pixels."),
+        label: z.string().optional().describe("Short label used in the output filename, e.g. 'after-fix-1' or 'chart-area'. Alphanum / dash only."),
+      }),
+      execute: async ({ url, viewport_width, viewport_height, label }) => {
+        const safeLabel = (label ?? "shot").replace(/[^a-zA-Z0-9-_]/g, "-").slice(0, 40) || "shot"
+        const outDir = path.join(projectDir, ".opencorvus", "delivery-screenshots")
+        await fs.mkdir(outDir, { recursive: true })
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+        const workDir = path.join(outDir, `${stamp}-${safeLabel}`)
+        try {
+          const rendered = await renderPage({
+            rendered: url,
+            outDir: workDir,
+            viewport: { width: viewport_width, height: viewport_height },
+          })
+          const buf = await fs.readFile(rendered.renderedPath)
+          const sha = crypto.createHash("sha256").update(buf).digest("hex").slice(0, 16)
+          const variance = luminanceVariance(buf)
+          const finalPath = path.join(outDir, `${stamp}-${safeLabel}-${sha}.png`)
+          await fs.rename(rendered.renderedPath, finalPath).catch(async () => {
+            await fs.copyFile(rendered.renderedPath, finalPath)
+          })
+          await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined)
+          return JSON.stringify({
+            ok: true,
+            path: finalPath,
+            sha,
+            bytes: buf.length,
+            width: rendered.size.width,
+            height: rendered.size.height,
+            viewport: rendered.viewport,
+            pixel_variance: Number(variance.toFixed(2)),
+            degenerate: variance < 25,
+            note: variance < 25
+              ? "Pixel variance < 25 — the screenshot is near-uniform (blank page, JSON error body, or unhydrated shell). Do NOT count as a passed visual check."
+              : undefined,
+          }, null, 2)
+        } catch (err) {
+          log.warn("screenshot failed", { url, err })
+          await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined)
+          return `screenshot failed: ${err instanceof Error ? err.message : String(err)}`
+        }
+      },
+    }),
+
+    verify_page_integrity: tool({
+      description:
+        "Hard verification that a URL actually serves a live, interactive application — NOT a curl " +
+        "bypass. One puppeteer session attaches 5 observers (request failures, response bodies, " +
+        "console errors, page errors, unhandled rejections) and runs six checks simultaneously:\n" +
+        "  1. HTTP: status 2xx + content-type text/html + body ≥ 200B at the page URL.\n" +
+        "  2. Asset: every <script src>/<link href>/<img src> loads with status 2xx (no 404/blocked).\n" +
+        "  3. DOM: the root element has ≥ min_dom_descendants subtree nodes (hydration check).\n" +
+        "  4. JS: zero pageerror events + zero console.error events during load.\n" +
+        "  5. Pixel: rendered screenshot pixel-variance ≥ 25 (rejects blank / JSON error pages).\n" +
+        "  6. Expected: every expect_selectors entry present and every expect_texts entry found in " +
+        "     the body's textContent.\n" +
+        "Returns a structured report per layer. The call PASSES only when every layer with an " +
+        "assertion passes — any single layer failure marks the whole call failed. Cite the returned " +
+        "JSON in submit_verdict.tool_call_evidence with detail=the failure list (or the key numbers " +
+        "when passed).",
+      inputSchema: z.object({
+        url: z.string().describe("http(s):// URL the app is listening on. If you only have a local file path, run the project's server first via run_command and target the listening URL."),
+        viewport_width: z.number().int().min(100).max(4096).default(1440),
+        viewport_height: z.number().int().min(100).max(4096).default(900),
+        min_dom_descendants: z.number().int().min(1).max(10000).default(20).describe("Minimum descendant count under document.body. 20 is a reasonable floor for any non-trivial app shell."),
+        expect_selectors: z.array(z.string()).default([]).describe("CSS selectors that MUST resolve to at least one element. Cite ids/classes from your spec."),
+        expect_texts: z.array(z.string()).default([]).describe("Substrings that MUST appear in document.body.textContent (case-sensitive). Use for headers, visible labels, data markers."),
+        wait_for_selector: z.string().optional().describe("Optional CSS selector to wait for before assertions run (e.g. '.chart canvas'). Default: just waitUntil networkidle0."),
+        wait_timeout_ms: z.number().int().min(1000).max(120000).default(30000),
+      }),
+      execute: async (args) => {
+        let puppeteer: typeof import("puppeteer-core")
+        try {
+          puppeteer = (await import("puppeteer-core")).default as any
+        } catch (err) {
+          return `verify_page_integrity: puppeteer-core unavailable — ${err instanceof Error ? err.message : String(err)}`
+        }
+        let executablePath: string
+        try {
+          executablePath = await findBrowserExecutable()
+        } catch (err) {
+          return `verify_page_integrity: no browser — ${err instanceof Error ? err.message : String(err)}`
+        }
+
+        const report = {
+          url: args.url,
+          passed: false,
+          layers: {
+            http: { passed: false, status: 0, content_type: "", body_length: 0, reason: "" },
+            asset: { passed: false, total: 0, failed: [] as Array<{ url: string; status: number; reason: string }> },
+            dom: { passed: false, body_descendants: 0, required: args.min_dom_descendants },
+            js: { passed: false, console_errors: [] as string[], page_errors: [] as string[] },
+            pixel: { passed: false, variance: 0, floor: 25, screenshot_path: "" },
+            expected: {
+              passed: false,
+              missing_selectors: [] as string[],
+              missing_texts: [] as string[],
+            },
+          },
+          summary: "",
+        }
+
+        const browser = await puppeteer.launch({
+          executablePath,
+          headless: true,
+          args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+        })
+        try {
+          const page = await browser.newPage()
+          await page.setViewport({
+            width: args.viewport_width,
+            height: args.viewport_height,
+            deviceScaleFactor: 1,
+          })
+
+          const failedRequests: Array<{ url: string; status: number; reason: string }> = []
+          let totalRequests = 0
+          page.on("response", (res) => {
+            totalRequests += 1
+            const status = res.status()
+            if (status >= 400 && status < 600) {
+              failedRequests.push({ url: res.url(), status, reason: res.statusText() || `HTTP ${status}` })
+            }
+          })
+          page.on("requestfailed", (req) => {
+            failedRequests.push({ url: req.url(), status: 0, reason: req.failure()?.errorText ?? "request failed" })
+          })
+          const consoleErrors: string[] = []
+          page.on("console", (msg) => {
+            if (msg.type() === "error") consoleErrors.push(msg.text().slice(0, 400))
+          })
+          const pageErrors: string[] = []
+          page.on("pageerror", (err) => {
+            const e = err as Error
+            pageErrors.push(e.message?.slice(0, 400) ?? String(err))
+          })
+
+          // Layer 1 — HTTP / content-type
+          const response = await page.goto(args.url, {
+            waitUntil: "networkidle0",
+            timeout: args.wait_timeout_ms,
+          })
+          const status = response?.status() ?? 0
+          const contentType = String(response?.headers()["content-type"] ?? "").toLowerCase()
+          const bodyBuf = response ? await response.buffer().catch(() => Buffer.alloc(0)) : Buffer.alloc(0)
+          report.layers.http.status = status
+          report.layers.http.content_type = contentType
+          report.layers.http.body_length = bodyBuf.length
+          if (status < 200 || status >= 300) {
+            report.layers.http.reason = `status=${status}`
+          } else if (!contentType.includes("text/html")) {
+            report.layers.http.reason = `content-type=${contentType || "(missing)"} — app root must serve text/html`
+          } else if (bodyBuf.length < 200) {
+            report.layers.http.reason = `body=${bodyBuf.length}B — too small to be an app shell`
+          } else {
+            report.layers.http.passed = true
+          }
+
+          if (args.wait_for_selector) {
+            try {
+              await page.waitForSelector(args.wait_for_selector, { timeout: args.wait_timeout_ms })
+            } catch {
+              // surface as selector miss in layer 6; do NOT throw
+            }
+          }
+
+          // Layer 2 — asset loads
+          report.layers.asset.total = totalRequests
+          report.layers.asset.failed = failedRequests
+          report.layers.asset.passed = failedRequests.length === 0
+
+          // Layer 3 — DOM descendants
+          const bodyDescendants = await page.evaluate(() =>
+            document.body ? document.body.getElementsByTagName("*").length : 0,
+          )
+          report.layers.dom.body_descendants = bodyDescendants
+          report.layers.dom.passed = bodyDescendants >= args.min_dom_descendants
+
+          // Layer 4 — JS errors
+          report.layers.js.console_errors = consoleErrors
+          report.layers.js.page_errors = pageErrors
+          report.layers.js.passed = consoleErrors.length === 0 && pageErrors.length === 0
+
+          // Layer 5 — pixel variance on a screenshot
+          const shotDir = path.join(projectDir, ".opencorvus", "delivery-screenshots")
+          await fs.mkdir(shotDir, { recursive: true })
+          const shotPath = path.join(
+            shotDir,
+            `verify-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
+          )
+          await page.screenshot({ path: shotPath as `${string}.png`, type: "png" })
+          const shotBuf = await fs.readFile(shotPath)
+          const variance = luminanceVariance(shotBuf)
+          report.layers.pixel.variance = Number(variance.toFixed(2))
+          report.layers.pixel.screenshot_path = shotPath
+          report.layers.pixel.passed = variance >= report.layers.pixel.floor
+
+          // Layer 6 — expected selectors / texts
+          const missingSelectors: string[] = []
+          for (const sel of args.expect_selectors ?? []) {
+            const found = await page.$(sel).then((e) => !!e).catch(() => false)
+            if (!found) missingSelectors.push(sel)
+          }
+          const bodyText = await page.evaluate(() => document.body?.textContent ?? "")
+          const missingTexts = (args.expect_texts ?? []).filter((t) => !bodyText.includes(t))
+          report.layers.expected.missing_selectors = missingSelectors
+          report.layers.expected.missing_texts = missingTexts
+          report.layers.expected.passed = missingSelectors.length === 0 && missingTexts.length === 0
+
+          report.passed =
+            report.layers.http.passed &&
+            report.layers.asset.passed &&
+            report.layers.dom.passed &&
+            report.layers.js.passed &&
+            report.layers.pixel.passed &&
+            report.layers.expected.passed
+
+          const failedLayers = Object.entries(report.layers)
+            .filter(([, v]) => !(v as { passed: boolean }).passed)
+            .map(([k]) => k)
+          report.summary = report.passed
+            ? `all 6 layers passed on ${args.url}`
+            : `failed layers: ${failedLayers.join(", ")}`
+        } catch (err) {
+          report.summary = `verify_page_integrity crashed: ${err instanceof Error ? err.message : String(err)}`
+          log.warn("verify_page_integrity failed", { url: args.url, err })
+        } finally {
+          await browser.close().catch(() => undefined)
+        }
+        return JSON.stringify(report, null, 2)
+      },
+    }),
+
   }
+}
+
+/** Stride-sampled luminance variance on a PNG buffer. A blank page, a JSON
+ *  error body rendered on white, and a pre-hydration stub all land near zero
+ *  (empirical floor: ~25/255² for real app shells). Used by screenshot and
+ *  verify_page_integrity as a fast structural sanity gate on the capture. */
+function luminanceVariance(pngBuffer: Buffer): number {
+  // Decode via pngjs on demand — dependency is already pulled by checks/visual.ts.
+  const { PNG } = require("pngjs") as typeof import("pngjs")
+  let png: import("pngjs").PNG
+  try {
+    png = PNG.sync.read(pngBuffer)
+  } catch {
+    return 0
+  }
+  const data = png.data
+  const stride = 64 * 4
+  let sum = 0
+  let sumSq = 0
+  let samples = 0
+  for (let i = 0; i + 2 < data.length; i += stride) {
+    const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]
+    sum += lum
+    sumSq += lum * lum
+    samples += 1
+  }
+  if (samples === 0) return 0
+  const mean = sum / samples
+  return sumSq / samples - mean * mean
 }

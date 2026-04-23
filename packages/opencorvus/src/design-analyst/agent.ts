@@ -246,11 +246,14 @@ function buildUserPrompt(input: {
 }
 
 async function designAnalystSystem(): Promise<string> {
+  // Single-source skill injection. `config.agent["design-analyst"].prompt`
+  // appends to the canonical CORE; it cannot replace it. The skill loader
+  // is the only injection path; no bypass field exists.
   const config = await Config.get()
-  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof systemOverride?.design_analyst_system === "string") return systemOverride.design_analyst_system
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.["design-analyst"]?.prompt
-  const core = typeof agentPrompt === "string" ? agentPrompt : DESIGN_ANALYST_CORE
+  const userAppend = (config.agent as Record<string, any> | undefined)?.["design-analyst"]?.prompt
+  const core = typeof userAppend === "string" && userAppend.trim().length > 0
+    ? DESIGN_ANALYST_CORE + "\n\n" + userAppend
+    : DESIGN_ANALYST_CORE
   const orchCfg = await EngineConfig.get()
   const skills = await loadStageSkills(orchCfg.design_analyst.skills, "design-analyst")
   return core + skills

@@ -36,22 +36,6 @@ export type EventTaskUpdated = {
   }
 }
 
-export type EventTaskWaiting = {
-  type: "task.waiting"
-  properties: {
-    taskID: string
-    runID?: string
-    reason: string
-    waitingOn: Array<{
-      goalRunID: string
-      goalID?: string
-      goalTitle: string
-      sinceMs: number
-    }>
-    summary: string
-  }
-}
-
 export type EventSpecCreated = {
   type: "spec.created"
   properties: {
@@ -1488,7 +1472,6 @@ export type Event =
   | EventInstallationUpdateAvailable
   | EventTaskCreated
   | EventTaskUpdated
-  | EventTaskWaiting
   | EventSpecCreated
   | EventSpecUpdated
   | EventSpecApproved
@@ -7675,6 +7658,7 @@ export type TaskEventsResponses = {
     task_id: string
     run_id?: string
     type: string
+    emittedAt: number
     timestamp: number
     sequence?: number
     summary: string
@@ -8082,6 +8066,7 @@ export type TaskConversationResponses = {
       task_id: string
       run_id?: string
       type: string
+      emittedAt: number
       timestamp: number
       sequence?: number
       summary: string
