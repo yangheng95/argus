@@ -488,6 +488,11 @@ export function buildGoalPrompt(input: {
   /** Direct dependencies only — caller already filtered by goal.depends_on. */
   dependencies?: GoalRow[]
   cwd?: string
+  /** Pre-resolved build-stage skill prompt (from `resolveStageSkills("build", taskSignals)`).
+   *  Lets the caller inject skill teaching — e.g. webpage-clone's webpage_extract →
+   *  webpage_compile → webpage_analyze workflow — into the executor prompt so the
+   *  executor knows which tools exist and when to use them. */
+  skillPrompt?: string
 }) {
   const meta = dict(input.node.metadata)
   const goalMeta = dict(input.goal.metadata)
@@ -526,6 +531,16 @@ export function buildGoalPrompt(input: {
     "You are executing one goal in an isolated workspace (git worktree) for the coordinator.",
     input.cwd
       ? `Your working directory is: ${input.cwd}\nAll file paths MUST be relative to this directory or use this absolute prefix. Never write files outside this directory.`
+      : undefined,
+    // Stage skills — caller resolves `stage: build` skills (webpage-clone,
+    // etc.) with the task's signals (attachment images, URL in request) and
+    // passes the resulting prompt here. This is how the mirror tool workflow
+    // (webpage_extract → webpage_compile → webpage_analyze → render → evaluate)
+    // reaches the executor: the skill content teaches when / why / how to
+    // call them, otherwise the executor has no signal that those tools
+    // exist beyond the tool registry manifest.
+    input.skillPrompt && input.skillPrompt.trim().length > 0
+      ? input.skillPrompt.trim()
       : undefined,
     // Intent bundle — the authoritative user-provided task material.
     // The caller contract (see function docstring) guarantees that

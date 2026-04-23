@@ -510,6 +510,27 @@ export class GoalPool {
       const dependencyGoals = dependencyIDs.length > 0
         ? listGoalsByPlan(plan.id).filter((g) => dependencyIDs.includes(g.id))
         : []
+
+      // Resolve `stage: build` skills with the task's signals so skills like
+      // webpage-clone auto-attach their teaching prompt when the task has a
+      // reference image / URL. Without this, per-goal executors never see
+      // webpage_extract / webpage_compile / webpage_analyze / webpage_render /
+      // webpage_evaluate instructions and fall back to hand-writing HTML.
+      const { resolveStageSkills } = await import("@/engine/skill-inject")
+      const taskAttachments = Array.isArray((task as { attachments?: unknown[] }).attachments)
+        ? ((task as { attachments: Array<{ mime?: string }> }).attachments)
+        : []
+      const taskSignals = {
+        has_attachment_image: taskAttachments.some((a) => (a?.mime ?? "").startsWith("image/")),
+        request_contains_url: /\bhttps?:\/\/\S+/i.test(plan.prompt ?? ""),
+      }
+      const buildSkills = await resolveStageSkills([], "build", taskSignals).catch((err) => {
+        log.warn("build skill resolve failed — executor runs without stage skills", {
+          goalID: entry.goal.id, error: String(err),
+        })
+        return { prompt: "", skills: [], requiredTools: [] as string[] }
+      })
+
       const prompt = buildGoalPrompt({
         plan: plan as any,
         node: { ...entry.node, brief: planNodeBrief } as any,
@@ -521,6 +542,7 @@ export class GoalPool {
           : undefined,
         dependencies: dependencyGoals,
         cwd: worktreeDir,
+        skillPrompt: buildSkills.prompt,
       })
 
       throwIfAborted(signal)
