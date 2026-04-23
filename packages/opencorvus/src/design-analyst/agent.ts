@@ -30,6 +30,7 @@ import { EngineConfig } from "@/engine"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import type { VisualSpec } from "./types"
 import { createDesignOutputTools } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
@@ -234,6 +235,13 @@ function buildUserPrompt(input: {
     "brand-voice docs) appear in the attachment manifest, read them with " +
     "`read_attachment` — do NOT ignore or hallucinate their contents.",
   )
+
+  try {
+    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
+    if (mirrorSection.trim().length > 0) sections.push(mirrorSection)
+  } catch {
+    // Instance not initialised — advisory section, skip.
+  }
 
   sections.push(
     "Extract the visual contract as a list of advisory VisualSpec entries. " +
