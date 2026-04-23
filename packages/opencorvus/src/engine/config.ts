@@ -4,7 +4,7 @@
  * 所有 agent（requirements / planner / evaluator / delivery）和编排策略的默认值
  * 集中定义在此，并从 opencorvus.jsonc 的 `assistant` 字段加载用户自定义值。
  *
- * 优先级：环境变量 > opencorvus.jsonc > 此处硬编码默认值
+ * 优先级：opencorvus.jsonc > 此处硬编码默认值
  *
  * 使用方式：
  *   import { EngineConfig } from "@/engine/config"
@@ -20,19 +20,16 @@ import type { MiniWorkflow } from "./workflow"
 
 export interface RequirementsConfig {
   max_steps: number
-  timeout_ms: number
   skills: string[]
 }
 
 export interface ArchitectConfig {
   max_steps: number
-  timeout_ms: number
   skills: string[]
 }
 
 export interface PlannerConfig {
   max_steps: number
-  timeout_ms: number
   skills: string[]
 }
 
@@ -47,7 +44,6 @@ export interface PlannerConfig {
  */
 export interface DeliveryConfig {
   max_steps: number
-  timeout_ms: number
   max_retries: number
   skills: string[]
   /** How many merge-conflict resolution passes the orchestrator may hand to
@@ -62,13 +58,11 @@ export interface DeliveryConfig {
 
 export interface DesignAnalystConfig {
   max_steps: number
-  timeout_ms: number
   skills: string[]
 }
 
 export interface IntentAnalysisConfig {
   max_steps: number
-  timeout_ms: number
   skills: string[]
 }
 
@@ -93,7 +87,7 @@ export interface EngineConfigType {
 // ═══════════════════════════════════════════════════════════════════
 
 const DEFAULTS: EngineConfigType = {
-  // Step / time budgets sized for sonnet-tier sub-agents on large PRDs.
+  // Step budgets sized for sonnet-tier sub-agents on large PRDs.
   // Sonnet deliberates more per step than haiku (deeper exploration, more
   // reasoning text) and large attachments push step counts into the dozens
   // before structured output begins. The previous budgets were sized for
@@ -101,17 +95,14 @@ const DEFAULTS: EngineConfigType = {
   // for a 30-requirement PRD with only 2 register_goal emitted.
   requirements: {
     max_steps: 200,        // was 100 — sonnet needs headroom for PRD scan + register passes
-    timeout_ms: 600_000,   // 10 min (was 5)
     skills: [],
   },
   architect: {
     max_steps: 60,         // was 20 — ~10 goals × 2-3 contract registrations
-    timeout_ms: 360_000,   // 6 min (was 3)
     skills: [],
   },
   planner: {
     max_steps: 80,         // was 30
-    timeout_ms: 600_000,   // 10 min (was 5)
     skills: [],
   },
   delivery: {
@@ -121,14 +112,12 @@ const DEFAULTS: EngineConfigType = {
     // verification (runs build / test / lint / rubric specs itself via
     // run_command and parallel per-goal subagents).
     max_steps: 160,        // was 80
-    timeout_ms: 1_200_000, // 20 min (was 10)
     max_retries: 2,
     skills: [],
     merge_conflict_max_retries: 2,
   },
   design_analyst: {
     max_steps: 80,         // was 50
-    timeout_ms: 480_000,   // 8 min (was 5)
     skills: [],
   },
   intent_analysis: {
@@ -136,7 +125,6 @@ const DEFAULTS: EngineConfigType = {
     // lookups. Budgets are intentionally tight — if it needs deeper
     // exploration, that is the job of downstream agents, not this one.
     max_steps: 20,
-    timeout_ms: 120_000,   // 2 min
     skills: [],
   },
   max_runs: 15,            // was 10
@@ -184,22 +172,18 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
   return {
     requirements: {
       max_steps: user?.requirements?.max_steps ?? DEFAULTS.requirements.max_steps,
-      timeout_ms: user?.requirements?.timeout_ms ?? DEFAULTS.requirements.timeout_ms,
       skills: user?.requirements?.skills ?? DEFAULTS.requirements.skills,
     },
     architect: {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
-      timeout_ms: user?.architect?.timeout_ms ?? DEFAULTS.architect.timeout_ms,
       skills: user?.architect?.skills ?? DEFAULTS.architect.skills,
     },
     planner: {
       max_steps: user?.planner?.max_steps ?? DEFAULTS.planner.max_steps,
-      timeout_ms: user?.planner?.timeout_ms ?? DEFAULTS.planner.timeout_ms,
       skills: user?.planner?.skills ?? DEFAULTS.planner.skills,
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
-      timeout_ms: user?.delivery?.timeout_ms ?? DEFAULTS.delivery.timeout_ms,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
       skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
       merge_conflict_max_retries:
@@ -207,12 +191,10 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     },
     design_analyst: {
       max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,
-      timeout_ms: user?.design_analyst?.timeout_ms ?? DEFAULTS.design_analyst.timeout_ms,
       skills: user?.design_analyst?.skills ?? DEFAULTS.design_analyst.skills,
     },
     intent_analysis: {
       max_steps: user?.intent_analysis?.max_steps ?? DEFAULTS.intent_analysis.max_steps,
-      timeout_ms: user?.intent_analysis?.timeout_ms ?? DEFAULTS.intent_analysis.timeout_ms,
       skills: user?.intent_analysis?.skills ?? DEFAULTS.intent_analysis.skills,
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,

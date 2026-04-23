@@ -426,17 +426,7 @@ export async function initial(input: {
 
 #### 3.3 Stage timeout 配置
 
-```typescript
-function stageTimeout(stage: "spec" | "goal" | "plan"): number {
-  const env = {
-    spec: "OPENCORVUS_SPEC_TIMEOUT_MS",
-    goal: "OPENCORVUS_GOAL_TIMEOUT_MS",
-    plan: "OPENCORVUS_PLAN_TIMEOUT_MS",
-  }
-  const defaults = { spec: 300_000, goal: 180_000, plan: 300_000 }
-  return parseInt(process.env[env[stage]] || String(defaults[stage]), 10)
-}
-```
+该设计稿里的 stage-level timeout helper 已被删除。当前实现不再为 requirements / architect / planner / delivery 维护单独的 agent timeout 配置入口；保留的超时只属于底层外部 I/O 边界。
 
 #### 3.4 withStageRetry 集成
 

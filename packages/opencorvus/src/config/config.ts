@@ -1170,7 +1170,6 @@ export namespace Config {
           requirements: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Requirements agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for requirements agent"),
             })
             .optional()
@@ -1178,7 +1177,6 @@ export namespace Config {
           architect: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for architect agent"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Architect agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for architect agent"),
             })
             .optional()
@@ -1186,7 +1184,6 @@ export namespace Config {
           planner: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Planner agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for planner agent"),
             })
             .optional()
@@ -1194,7 +1191,6 @@ export namespace Config {
           delivery: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Delivery agent timeout in milliseconds"),
               max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries"),
               merge_conflict_max_retries: z.number().int().min(1).optional().describe("Maximum merge-resolver retry attempts per conflicted file before aborting"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
@@ -1204,7 +1200,6 @@ export namespace Config {
           design_analyst: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Design analyst agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for design analyst agent"),
             })
             .optional()
@@ -1212,7 +1207,6 @@ export namespace Config {
           intent_analysis: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for intent-analysis agent"),
-              timeout_ms: z.number().int().min(1000).optional().describe("Intent-analysis agent timeout in milliseconds"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for intent-analysis agent"),
             })
             .optional()
