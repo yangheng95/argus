@@ -137,6 +137,8 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
         <span class="gwg-status-icon">{goalStatusIcon(props.goal.goalStatus)}</span>
         <div class="gwg-title-row">
           <span class="gwg-title">{props.goal.goalTitle}</span>
+        </div>
+        <div class="gwg-header-meta">
           <Show when={revisionLabel()}>
             <span class="gwg-revision">{revisionLabel()}</span>
           </Show>

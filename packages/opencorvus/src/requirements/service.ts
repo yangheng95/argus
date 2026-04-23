@@ -4,9 +4,8 @@
  * foundational decisions. Fidelity review has moved under the Architect
  * (the authoritative decomposer); goal checks live there too.
  *
- * Timeout policy lives in RequirementsAgent's AgentRuntime invocation: three
- * independent tiers (alive / progress / absolute) via createProgressGuard,
- * so delta-only loops do not defer the stall timer indefinitely.
+ * RequirementsAgent owns its own tool-level stall detection; this service
+ * only normalizes errors and lifecycle logging.
  */
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
@@ -27,8 +26,8 @@ export namespace RequirementsService {
   /**
    * Parse a task into REQ-N requirements + foundational decisions.
    *
-   * No hard timeout — the agent's own inactivity guard handles stalls.
-   * The caller's AbortSignal is the only cancellation mechanism.
+  * No runtime wall-clock watchdog here. Cancellation comes from the caller's
+  * AbortSignal or the agent's own tool-level stall detector.
    */
   export async function run(input: {
     title: string

@@ -54,6 +54,20 @@ export function StepPayloadBody(props: {
                       <StaticTextPart text={node.brief} />
                     </div>
                   </Show>
+                  <Show when={node.fileActions && node.fileActions.length > 0}>
+                    <div class="gwg-plan-node-brief">
+                      <StaticTextPart
+                        text={`Planned file actions:\n${(node.fileActions ?? []).map((item) => `- ${item.path}: ${item.intent}`).join("\n")}`}
+                      />
+                    </div>
+                  </Show>
+                  <Show when={node.verificationCommands && node.verificationCommands.length > 0}>
+                    <div class="gwg-plan-node-brief">
+                      <StaticTextPart
+                        text={`Planner verification commands:\n${(node.verificationCommands ?? []).map((item) => `- ${item.command} — ${item.purpose}`).join("\n")}`}
+                      />
+                    </div>
+                  </Show>
                 </div>
               )}
             </For>

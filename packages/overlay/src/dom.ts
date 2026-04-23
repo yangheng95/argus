@@ -12,7 +12,6 @@ export interface DomRefs {
   brandLogo: HTMLElement | null;
   brandVersion: HTMLElement | null;
   chatVersion: HTMLElement | null;
-  chatAuthor: HTMLElement | null;
 
  // Titlebar controls
   btnTitlebarMenu: HTMLButtonElement | null;
@@ -278,7 +277,6 @@ export function getDomRefs(): DomRefs {
     brandLogo: $<HTMLElement>(".brand-logo"),
     brandVersion: $<HTMLElement>("#brandVersion"),
     chatVersion: $<HTMLElement>("#chatVersion"),
-    chatAuthor: $<HTMLElement>("#chatAuthor"),
 
  // Titlebar controls
     btnTitlebarMenu: $<HTMLButtonElement>("#btnTitlebarMenu"),

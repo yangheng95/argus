@@ -65,6 +65,17 @@ export interface DecisionLogReader {
    */
   toPromptSection(options?: { limit?: number; valueCap?: number }): string
   /**
+   * Format all decisions for a specific phase as a text block for prompt
+   * injection. Includes both task-scoped entries and goal-scoped entries
+   * under that phase so task-level reviewers can see the full contract
+   * surface without reimplementing decision-log formatting.
+   */
+  phasePromptSection(
+    phase: string,
+    heading: string,
+    options?: { limit?: number; valueCap?: number },
+  ): string
+  /**
    * Format decisions for a specific phase, scoped to entries that are
    * either task-wide (no goalID) or attached to `goalID`. Per-goal
    * planners and executors use this so each prompt carries only the
@@ -107,6 +118,26 @@ function capEntryValue(value: string, cap: number): string {
   if (value.length <= cap) return value
   const omitted = value.length - cap
   return `${value.slice(0, cap)}… [+${omitted} chars truncated; full body in decision_log row]`
+}
+
+function formatPromptSectionEntries(
+  entries: DecisionEntry[],
+  heading: string,
+  options?: { limit?: number; valueCap?: number },
+): string {
+  if (entries.length === 0) return ""
+  const limit = options?.limit ?? DEFAULT_PHASE_ENTRY_LIMIT
+  const shown = entries.length > limit ? entries.slice(entries.length - limit) : entries
+  const omitted = entries.length - shown.length
+  const valueCap = options?.valueCap ?? DEFAULT_ENTRY_VALUE_CAP
+  const lines = shown.map((e) => {
+    const value = capEntryValue(e.value, valueCap)
+    return `### ${e.key}\n${value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`
+  })
+  const count = omitted > 0
+    ? `latest ${shown.length} of ${entries.length}; ${omitted} older omitted`
+    : `${shown.length} entries`
+  return `## ${heading} (${count})\n\n${lines.join("\n\n")}`
 }
 
 /**
@@ -205,30 +236,21 @@ export function createDecisionLog(taskID: string): DecisionLog {
       return `${header}\n\n${lines.join("\n")}`
     },
 
+    phasePromptSection(
+      phase: string,
+      heading: string,
+      options?: { limit?: number; valueCap?: number },
+    ): string {
+      return formatPromptSectionEntries(this.readByPhase(phase), heading, options)
+    },
+
     phasePromptSectionForGoal(
       phase: string,
       goalID: string,
       heading: string,
       options?: { limit?: number; valueCap?: number },
     ): string {
-      const matched = this.readByPhaseAndGoal(phase, goalID)
-      if (matched.length === 0) return ""
-      const limit = options?.limit ?? DEFAULT_PHASE_ENTRY_LIMIT
-      // readByPhaseAndGoal is ASC by time_created (same as read()). When
-      // trimmed, keep the latest slice so recent contracts beat superseded
-      // ones. Omission count is surfaced in the heading so the reader
-      // knows to call readByKey() if they need the full history.
-      const entries = matched.length > limit ? matched.slice(matched.length - limit) : matched
-      const omitted = matched.length - entries.length
-      const valueCap = options?.valueCap ?? DEFAULT_ENTRY_VALUE_CAP
-      const lines = entries.map((e) => {
-        const value = capEntryValue(e.value, valueCap)
-        return `### ${e.key}\n${value}${e.reason ? `\n_Why: ${e.reason}_` : ""}${e.goalID ? ` [goal:${e.goalID.slice(-8)}]` : ""}`
-      })
-      const count = omitted > 0
-        ? `latest ${entries.length} of ${matched.length}; ${omitted} older omitted`
-        : `${entries.length} entries`
-      return `## ${heading} (${count})\n\n${lines.join("\n\n")}`
+      return formatPromptSectionEntries(this.readByPhaseAndGoal(phase, goalID), heading, options)
     },
   }
 }

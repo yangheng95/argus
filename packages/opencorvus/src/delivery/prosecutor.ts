@@ -334,7 +334,7 @@ export interface ProsecutorRunResult {
 export async function runProsecutor(
   input: ProsecutorRunInput,
 ): Promise<ProsecutorRunResult> {
-  const model = await resolveAgentModel("delivery", { sessionID: input.task.sessionID })
+  const model = await resolveAgentModel("prosecutor", { sessionID: input.task.sessionID })
   const kit = createProsecutorTools({ task_id: input.task.id, iteration: input.iteration })
   const guard = toolGuard(kit.tools)
 
@@ -361,13 +361,10 @@ export async function runProsecutor(
     failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
   } as any
 
-  const abortSignals: AbortSignal[] = [guard.signal]
-  if (input.signal) abortSignals.push(input.signal)
-
   let rationale = ""
   try {
     const runResult = await AgentRuntime.run({
-      agent: "delivery",
+      agent: "prosecutor",
       model,
       system: PROSECUTOR_SYSTEM,
       messages: [{ role: "user" as const, content: brief }],
@@ -376,11 +373,10 @@ export async function runProsecutor(
       cacheKey: `task-${input.task.id}-prosecutor-iter-${input.iteration}`,
       sessionID: input.task.sessionID ?? "",
       taskID: input.task.id,
-      stage: "delivery",
-      signal: AbortSignal.any(abortSignals),
-      onStepFinish: guard.onStepFinish,
+      stage: "prosecutor",
+      signal: input.signal,
       hooks: passthroughHooks,
-      policies: { progressTimeoutMs: 180_000, failurePolicy: "collect" },
+      policies: { failurePolicy: "collect" },
     })
     rationale = extractRationaleText(runResult)
     log.info("prosecutor finished", {

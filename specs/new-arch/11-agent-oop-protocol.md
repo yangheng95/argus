@@ -6,6 +6,10 @@
 > 白名单点对点消息或统一 mailbox 协议。现行实现仍然以 orchestrator tool 调度、
 > `task.design_specs` / `decision_log` 持久化、以及 per-stage session prompt 注入为准。
 > 修改现网消息路径时，必须先以当前实现为真源，不得把本文当作已生效协议。
+>
+> 抽象修正：本文把未来 agent 家族拆成 `PipelineAgent` / `SessionAgent`，这是对当前
+> 执行器分流的直接映射，不是更好的最终抽象。关于“单一 AgentSpec + RuntimeMode /
+> ContextStrategy / BudgetPolicy” 的修正方案，见 [14-agent-runtime-mode.md](14-agent-runtime-mode.md)。
 > 对应代码（待实现）：`src/agent/base.ts` · `src/agent/registry.ts` · `src/agent/mailbox.ts` ·
 > `src/agent/contract.ts` · `src/agent/prompt/` · `src/prompt/core/`
 >
@@ -519,4 +523,5 @@ CREATE INDEX idx_mailbox_trace        ON agent_mailbox_message (trace_id);
 - [01-agents.md](01-agents.md) — Agent 家族调用链与职责
 - [05-config.md](05-config.md) — Config.Info 层级与 PATCH 协议
 - [07-panel.md](07-panel.md) — Panel 配置 UI（Agent Config 区域扩展点）
+- [13-agent-communication-matrix.md](13-agent-communication-matrix.md) — 本文的未来 whitelist 与当前 runtime 真相对照
 - [99-principles.md](99-principles.md) — 核心原则与 Anti-patterns（宪章）

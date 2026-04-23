@@ -77,11 +77,26 @@ let _boardQueued = false;
 // would create a cycle). If not registered, the invariant silently degrades —
 // that's a setup bug the app owner is expected to catch in init.
 let _orphanedSelectionHandler: (() => void) | null = null;
+// Board-derived overlays (goal step cards, interaction cards, request bubble)
+// are projected by services/tree-writer.ts. Register a callback here so the
+// projection runs exactly once after each applied board delta instead of
+// relying on a shallow reactive read of `boardStore.board`.
+let _boardProjectionHandler: (() => void) | null = null;
 
 export function setOrphanedSelectionHandler(
   handler: (() => void) | null,
 ): void {
   _orphanedSelectionHandler = handler;
+}
+
+export function setBoardProjectionHandler(
+  handler: (() => void) | null,
+): void {
+  _boardProjectionHandler = handler;
+}
+
+function notifyBoardProjection(): void {
+  _boardProjectionHandler?.();
 }
 
 function selectionIsOrphaned(tasks: any[], pending: any[]): boolean {
@@ -175,20 +190,26 @@ function assertBoardInvariants(data: any): void {
 
 function applyBoardDelta(data: any): void {
   if (data == null || typeof data !== "object") {
-    if (boardStore.board !== null) setBoardStore("board", null);
+    if (boardStore.board !== null) {
+      setBoardStore("board", null);
+      notifyBoardProjection();
+    }
     return;
   }
   const old = boardStore.board;
   if (!old || typeof old !== "object") {
     setBoardStore("board", data);
+    notifyBoardProjection();
     return;
   }
   // Update keys present in the new payload, only when their content changed.
   const seenKeys = new Set<string>();
+  let changed = false;
   for (const key of Object.keys(data)) {
     seenKeys.add(key);
     if (fieldChanged((old as any)[key], data[key])) {
       setBoardStore("board", key as any, data[key]);
+      changed = true;
     }
   }
   // Drop keys the server no longer reports — set to undefined so reactive
@@ -196,7 +217,9 @@ function applyBoardDelta(data: any): void {
   for (const key of Object.keys(old)) {
     if (seenKeys.has(key)) continue;
     setBoardStore("board", key as any, undefined);
+    changed = true;
   }
+  if (changed) notifyBoardProjection();
 }
 
 function clearBoardRetry(): void {
@@ -375,6 +398,7 @@ export function clearBoard(): void {
     vcs: null,
     changes: [],
   });
+  notifyBoardProjection();
 }
 
 // ── Direct setters (used by / SSE handlers) ──

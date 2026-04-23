@@ -3,6 +3,10 @@ import { cmd } from "./cmd"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { Flag } from "../../flag/flag"
 import { createConnection } from "net"
+import {
+  clearServerShutdownHandler,
+  registerServerShutdownHandler,
+} from "../../server/shutdown"
 
 /** Hide the console window on Windows using Win32 API. */
 function hideConsoleWindow() {
@@ -92,6 +96,7 @@ export const ServeCommand = cmd({
       const resolved = require("path").resolve(projectDir)
       console.log(`Project directory (sandbox): ${resolved}`)
     }
+    const shutdownDirectory = require("path").resolve(projectDir || process.cwd())
 
     // Kill old process if port is occupied, then wait for release with retries
     if (opts.port > 0 && (await isPortInUse(opts.port, opts.hostname))) {
@@ -101,6 +106,29 @@ export const ServeCommand = cmd({
         await new Promise((r) => setTimeout(r, 500))
         if (!(await isPortInUse(opts.port, opts.hostname))) break
       }
+    }
+
+    async function abortLiveExecutionOnShutdown(directory: string, reason: string) {
+      const { InstanceBootstrap } = await import("../../project/bootstrap")
+      const { Instance } = await import("../../project/instance")
+      const { listLiveRunsForProject } = await import("../../engine/store")
+      const { abortLiveExecutionForProject, abortRuns } = await import("../../engine/writer")
+
+      return Instance.provide({
+        directory,
+        init: InstanceBootstrap,
+        async fn() {
+          const projectID = Instance.project.id
+          const liveRuns = listLiveRunsForProject(projectID)
+          const execution = await abortLiveExecutionForProject({
+            projectID,
+            reason,
+            cleanupGoalWorkspaces: false,
+          })
+          const abortedRuns = await abortRuns(liveRuns, reason)
+          return { projectID, abortedRuns, ...execution }
+        },
+      })
     }
 
     process.on("uncaughtException", (err) => {
@@ -117,7 +145,42 @@ export const ServeCommand = cmd({
     console.log(`opencorvus server listening on ${serverUrl}`)
     console.log(`overlay UI available at ${serverUrl}/ui/`)
 
+    let shutdownPromise: Promise<void> | null = null
+    const requestShutdown = (trigger: string) => {
+      if (shutdownPromise) return shutdownPromise
+      shutdownPromise = (async () => {
+        const reason = `Server shutdown: ${trigger}`
+        console.log(`[serve] shutdown requested via ${trigger}`)
+        try {
+          const aborted = await abortLiveExecutionOnShutdown(shutdownDirectory, reason)
+          console.log(
+            `[serve] aborted live execution project=${aborted.projectID} runs=${aborted.abortedRuns} goalRuns=${aborted.goalRuns} executorSessions=${aborted.executorSessions}`,
+          )
+        } catch (error) {
+          console.error("[serve] graceful shutdown abort failed:", error)
+        }
+        try {
+          await server.stop(true)
+        } catch (error) {
+          console.error("[serve] server.stop failed during shutdown:", error)
+        }
+      })().finally(() => {
+        clearServerShutdownHandler(requestShutdown)
+        setTimeout(() => process.exit(0), 0)
+      })
+      return shutdownPromise
+    }
+    registerServerShutdownHandler(requestShutdown)
+
+    const signals: NodeJS.Signals[] = process.platform === "win32"
+      ? ["SIGINT", "SIGTERM", "SIGBREAK"]
+      : ["SIGINT", "SIGTERM"]
+    for (const signal of signals) {
+      process.on(signal, () => {
+        void requestShutdown(signal)
+      })
+    }
+
     await new Promise(() => {})
-    await server.stop()
   },
 })

@@ -1,5 +1,3 @@
-export { createProgressGuard } from "./progress-guard"
-export type { ProgressGuard, ProgressGuardOptions, ProgressTimeoutTier } from "./progress-guard"
 export { normalizeToolInput, normalizeToolOutput } from "./protocol-norm"
 export type { NormalizeResult, NormalizedInput, NormalizedOutput } from "./protocol-norm"
 export { createStreamFailureTracker, AgentStreamFailureError } from "./stream-failures"

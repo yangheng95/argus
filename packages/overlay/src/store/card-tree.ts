@@ -69,7 +69,14 @@ export interface BoundaryPart {
  *  `workbench/board.ts GoalStepPayload` since step rows show the same detail
  *  the sidebar Goals panel shows. */
 export interface StepPayload {
-  planNodes?: Array<{ id: string; title: string; brief: string; orderIndex: number }>;
+  planNodes?: Array<{
+    id: string;
+    title: string;
+    brief: string;
+    orderIndex: number;
+    fileActions?: Array<{ path: string; intent: string }>;
+    verificationCommands?: Array<{ command: string; purpose: string }>;
+  }>;
   buildSessionID?: string;
   workspaceDir?: string;
   changedFiles?: string[];

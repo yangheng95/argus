@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
@@ -10,7 +10,10 @@ import {
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { listQueuedGoalRunsForRun, requireRun, requireTask } from "../../src/engine"
+import { createWorkflowState, WorkflowRegistry } from "../../src/engine/workflow"
 import { createOrchestratorTools } from "../../src/orchestrator/tools"
+import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -209,6 +212,74 @@ describe("orchestrator deferred stop", () => {
         expect(finalizeDeferredStop()).toBe("submit_execution")
         expect(stopSignal.aborted).toBe(true)
         expect(finalizeDeferredStop()).toBeUndefined()
+      },
+    })
+  })
+
+  test("task-level build switches a pre-execution pipeline task to direct workflow", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_build_${stamp}`
+    const taskID = `tsk_build_${stamp}`
+    const pipeline = WorkflowRegistry.resolveSync("pipeline")!
+    const workflowState = createWorkflowState(pipeline)
+    workflowState.taskSteps.design_analysis = { status: "completed", startedAt: now - 4_000, completedAt: now - 3_000 }
+    workflowState.taskSteps.requirements = { status: "completed", startedAt: now - 2_000, completedAt: now - 1_000 }
+    workflowState.currentStepID = "architect"
+
+    Database.use((db) => {
+      db.insert(ProjectTable).values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "Build workflow switch test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      }).run()
+      db.insert(EngineTaskTable).values({
+        id: taskID,
+        project_id: projectID,
+        source: "test",
+        title: "Build workflow switch task",
+        request: "Verify task-level build switches workflow when pipeline has not decomposed into goals yet",
+        status: "active",
+        priority: "normal",
+        workflow_state: workflowState as any,
+        time_created: now,
+        time_updated: now,
+      }).run()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({ kind: "root", title: "build workflow test" })
+        spyOn(SessionPrompt, "prompt").mockResolvedValue({
+          parts: [{ type: "text", text: "Build succeeded." }],
+        } as any)
+
+        const { tools } = createOrchestratorTools({
+          taskID,
+          agentSessionID: parent.id,
+          signal: new AbortController().signal,
+          workflow: pipeline,
+          workflowState,
+        })
+
+        const result = await tools.build.execute({
+          request: "Implement the page directly.",
+          reason: "Pipeline preconditions failed before architect, so direct build is required.",
+        }, {} as any)
+
+        const task = requireTask(taskID)
+        const nextState = task.workflow_state as any
+
+        expect(result).toContain("Build agent finished")
+        expect(nextState.workflowID).toBe("direct")
+        expect(nextState.taskSteps.build?.status).toBe("completed")
+        expect(nextState.taskSteps.deliver?.status).toBe("pending")
+        expect(nextState.currentStepID).toBe("deliver")
+        expect(nextState.taskSteps.architect).toBeUndefined()
       },
     })
   })

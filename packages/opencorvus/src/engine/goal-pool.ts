@@ -371,7 +371,12 @@ export class GoalPool {
       // accurate (not stale from an empty project) and happen lazily per-goal
       // (not all 24 goals in parallel before any execution starts).
       // Planning is NOT optional — failure propagates and the goal run fails.
-      let planNodeBrief: string
+      let planNodeTitle = entry.node.title
+      let planNodeBrief = entry.node.brief
+      let planNodeMetadata =
+        entry.node.metadata && typeof entry.node.metadata === "object" && !Array.isArray(entry.node.metadata)
+          ? { ...(entry.node.metadata as Record<string, unknown>) }
+          : {}
       // Per-goal step identity: the only goal-scope step in the pipeline
       // workflow is `build`, with three phases (plan / build / evaluate).
       // We create a kind="executor" container session up front — the
@@ -444,10 +449,25 @@ export class GoalPool {
               onError: planHooks.onError,
             },
           })
+          planNodeTitle = planSteps.title
           planNodeBrief = planSteps.brief
+          planNodeMetadata = {
+            ...planNodeMetadata,
+            planner_report: {
+              title: planSteps.title,
+              brief: planSteps.brief,
+              file_actions: planSteps.file_actions,
+              verification_commands: planSteps.verification_commands,
+            },
+          }
           // Persist to plan node so buildGoalPrompt and the UI pick up the actual plan
           Database.use(db => db.update(EnginePlanNodeTable)
-            .set({ brief: planSteps.brief, time_updated: Date.now() })
+            .set({
+              title: planSteps.title,
+              brief: planSteps.brief,
+              metadata: planNodeMetadata,
+              time_updated: Date.now(),
+            })
             .where(eq(EnginePlanNodeTable.id, entry.node.id))
             .run())
           log.info("goal pool: per-goal plan created", { goalID: entry.goal.id, briefLen: planSteps.brief.length })
@@ -533,7 +553,7 @@ export class GoalPool {
 
       const prompt = buildGoalPrompt({
         plan: plan as any,
-        node: { ...entry.node, brief: planNodeBrief } as any,
+        node: { ...entry.node, title: planNodeTitle, brief: planNodeBrief, metadata: planNodeMetadata } as any,
         goal: entry.goal as any,
         taskRequest: plan.prompt,
         taskID: task.id,

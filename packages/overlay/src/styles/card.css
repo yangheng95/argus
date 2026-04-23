@@ -405,6 +405,25 @@ body[data-theme="light"] .card__round {
 /* Tool card: muted grey (no --card-stage injected for tool nodes) */
 .card[data-kind="tool"] { border-left-color: var(--card-stage-tool); }
 .card[data-kind="tool"] .card__title { font-family: var(--mono); font-weight: 500; font-size: var(--ui-font-small); }
+.card[data-kind="tool"] .card__meta-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: calc(4px * var(--ui-scale, 1));
+}
+.card[data-kind="tool"] .card__subtitle {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: none;
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: calc(var(--card-sub-size) - 0.2px);
+  line-height: 1.46;
+}
 .card[data-kind="tool"].card--expanded {
   width: fit-content;
   max-width: 100%;
@@ -418,19 +437,19 @@ body[data-theme="light"] .card__round {
   min-width: 0;
   max-width: none;
   display: block;
-  white-space: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
+  white-space: normal;
+  overflow: visible;
   text-overflow: clip;
-  word-break: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-family: var(--mono);
   font-size: calc(var(--card-sub-size) - 0.2px);
   line-height: 1.46;
-  scrollbar-width: none;
+  scrollbar-width: auto;
 }
 
 .card[data-kind="tool"].card--expanded .card__subtitle::-webkit-scrollbar {
-  display: none;
+  display: initial;
 }
 
 /* ── Body ────────────────────────────────────────────────── */

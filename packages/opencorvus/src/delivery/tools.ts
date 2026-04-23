@@ -48,10 +48,9 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         "Use this BEFORE deciding the verdict so you see which blocking metrics are unmet, " +
         "which counterexamples are open, and whether the loop is making progress. The output " +
         "lists per-iteration aggregate scores, deltas, open counterexample counts, and the " +
-        "current iteration's per-metric results with freshness flags. There is no strict/soft " +
-        "gating here — the Arbiter consumes this same data to choose continue / accept / " +
-        "stalled / abort. Your job is to ground your verdict in this signal rather than " +
-        "guessing from the diff alone.",
+        "current iteration's per-metric results with freshness flags. This trajectory is " +
+        "supporting evidence for delivery and orchestrator rework decisions — ground your " +
+        "verdict in this signal rather than guessing from the diff alone.",
       inputSchema: z.object({
         window: z.number().int().min(1).max(20).default(5).describe("Number of recent iterations to surface."),
       }),
@@ -78,7 +77,7 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         }
         for (const it of tail) {
           lines.push(
-            `iter=${it.iteration} verdict=${it.arbiter_verdict} S_k=${it.aggregate_score.toFixed(3)} ΔS=${it.delta_vs_prev.toFixed(3)} blocking_unmet=${it.blocking_unmet_count} open_ce=${it.open_counterexamples} novelty=${it.novelty_score} regressed=${it.regressed_blocking}`,
+            `iter=${it.iteration} trajectory=${it.arbiter_verdict} S_k=${it.aggregate_score.toFixed(3)} ΔS=${it.delta_vs_prev.toFixed(3)} blocking_unmet=${it.blocking_unmet_count} open_ce=${it.open_counterexamples} novelty=${it.novelty_score} regressed=${it.regressed_blocking}`,
           )
         }
         lines.push("")

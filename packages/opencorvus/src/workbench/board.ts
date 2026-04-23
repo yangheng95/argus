@@ -30,6 +30,7 @@ import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
+import { plannerReportFromMetadata } from "@/planner/output-tools"
 
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
@@ -969,7 +970,17 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   )
   const planNodes = nodes.length > 0
     ? nodes
-        .map((n) => ({ id: n.id, title: n.title, brief: n.brief, orderIndex: n.order_index }))
+        .map((n) => {
+          const report = plannerReportFromMetadata(n.metadata)
+          return {
+            id: n.id,
+            title: n.title,
+            brief: n.brief,
+            orderIndex: n.order_index,
+            fileActions: report?.file_actions,
+            verificationCommands: report?.verification_commands,
+          }
+        })
         .sort((a, b) => a.orderIndex - b.orderIndex)
     : undefined
 

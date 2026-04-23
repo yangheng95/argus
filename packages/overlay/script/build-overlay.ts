@@ -4,19 +4,22 @@
  * Full overlay build script — single command for the complete pipeline.
  *
  * Steps:
- *   1. Kill running overlay processes (Windows: taskkill)
- *   2. check:i18n — verify locale files match panel revision
- *   3. build:vite — bundle main.tsx + CSS + HTML → dist-vite/
- *   4. Remove stale opencorvus binary — force rebuild on every overlay build
- *   5. Rebuild SDK — regenerate src/gen/ + src/defaults.ts from live opencorvus spec
- *   6. Build opencorvus + tauri build --no-bundle — compile Rust → overlay binary
- *   7. Copy binary to dist/<platform>/
+ *   1. check:i18n — verify locale files match panel revision
+ *   2. build:vite — bundle main.tsx + CSS + HTML → dist-vite/
+ *   3. Remove stale opencorvus binary — force rebuild on every overlay build
+ *   4. Rebuild SDK — regenerate src/gen/ + src/defaults.ts from live opencorvus spec
+ *   5. Build opencorvus + tauri build --no-bundle — compile Rust → overlay binary
+ *   6. Copy binary to dist/<platform>/
  *
  * Usage:
  *   bun run build:overlay              # full pipeline (release profile, smallest binary)
  *   bun run build:overlay --fast       # no LTO, codegen-units=16, separate target/fast/ cache → 3-5x faster compile, larger binary
- *   bun run build:overlay --skip-tauri # UI only (steps 1-3)
- *   bun run build:overlay --skip-kill  # skip process kill
+ *   bun run build:overlay --skip-tauri # UI only (steps 1-2)
+ *
+ * Note: the caller is responsible for stopping any running overlay process
+ * before invoking this script. On Windows, Cargo's linker will fail with
+ * LNK1104 on `target/release/deps/opencorvus_overlay.exe` if a live overlay
+ * still holds the hardlinked release binary open.
  */
 
 import { $ } from "bun"
@@ -53,7 +56,6 @@ const packagedOverlay = path.join(distRoot, overlayFile)
 // ── Args ──
 const args = new Set(process.argv.slice(2))
 const skipTauri = args.has("--skip-tauri")
-const skipKill = args.has("--skip-kill")
 const fast = args.has("--fast")
 
 // Use a nested target/fast/ dir for --fast so the two profiles don't invalidate
@@ -104,77 +106,11 @@ function tauriArgs() {
   ]
 }
 
-// ── Step 1: Kill overlay processes ──
-//
-// NOTE: We used to run a PowerShell one-liner via Bun's $ shell, but Bun's
-// shell eagerly expands bare $IDENT sequences (its own env-var substitution,
-// not JS template interpolation). That turned `$_.Kill()` and `$r` into empty
-// strings, producing malformed PowerShell, which threw → the catch printed
-// "no overlay process running" while the real process stayed alive, then
-// Cargo's linker hit LNK1104 on target/release/deps/opencorvus_overlay.exe
-// because the hardlinked release binary was still locked. Use taskkill on
-// Windows — no $-variables involved, exit code tells us if anything was
-// killed, and we verify the process is really gone before proceeding.
-if (!skipKill) {
-  step("Stop running overlay processes")
-  if (isWindows) {
-    const isAlive = async () => {
-      const check = await $`tasklist /FI "IMAGENAME eq opencorvus-overlay.exe" /NH`.quiet().nothrow()
-      return check.stdout.toString().toLowerCase().includes("opencorvus-overlay.exe")
-    }
-    if (!(await isAlive())) {
-      console.log("no overlay process running")
-    } else {
-      // Graceful shutdown first: taskkill without /F posts WM_CLOSE to the
-      // Tauri overlay window. Tauri's close handler tears down the sidecar
-      // opencorvus server via a SIGTERM-equivalent, giving the server a
-      // chance to mark live runs as aborted in the DB — so no SIGKILL
-      // zombies are left behind for a future recovery sweep. We SIGKILL
-      // only as a last resort after a bounded wait.
-      await $`taskkill /IM opencorvus-overlay.exe`.quiet().nothrow()
-      const deadline = Date.now() + 8000
-      while (Date.now() < deadline && (await isAlive())) {
-        await new Promise((r) => setTimeout(r, 250))
-      }
-      if (await isAlive()) {
-        console.log("overlay did not exit within 8s — forcing")
-        await $`taskkill /F /IM opencorvus-overlay.exe`.quiet().nothrow()
-        // Windows releases file handles asynchronously after SIGKILL.
-        // Give the kernel a moment to drop the lock before the linker writes.
-        await new Promise((r) => setTimeout(r, 2000))
-      } else {
-        console.log("overlay exited gracefully")
-      }
-    }
-    if (await isAlive()) {
-      throw new Error(
-        `opencorvus-overlay.exe is still running after graceful + force kill.\n` +
-          `The linker will fail with LNK1104 on deps/opencorvus_overlay.exe ` +
-          `because Cargo hardlinks it to the running release/ binary.`,
-      )
-    }
-  } else {
-    // SIGTERM first (graceful), then SIGKILL if still alive after 8s.
-    await $`pkill opencorvus-overlay`.quiet().nothrow()
-    const deadline = Date.now() + 8000
-    const isAlive = async () => (await $`pgrep opencorvus-overlay`.quiet().nothrow()).exitCode === 0
-    while (Date.now() < deadline && (await isAlive())) {
-      await new Promise((r) => setTimeout(r, 250))
-    }
-    if (await isAlive()) {
-      console.log("overlay did not exit within 8s — forcing")
-      await $`pkill -KILL opencorvus-overlay`.quiet().nothrow()
-    } else {
-      console.log("overlay exited gracefully")
-    }
-  }
-}
-
-// ── Step 2: check:i18n ──
+// ── Step 1: check:i18n ──
 step("Check i18n")
 await $`bun run check:i18n`.cwd(dir)
 
-// ── Step 3: build:vite ──
+// ── Step 2: build:vite ──
 step("Build Vite → dist-vite/")
 await $`bun run build:vite`.cwd(dir)
 
@@ -183,7 +119,7 @@ if (skipTauri) {
   process.exit(0)
 }
 
-// ── Step 5: Remove stale opencorvus binary ──
+// ── Step 3: Remove stale opencorvus binary ──
 //
 // The overlay embeds the opencorvus binary at build time via OPENCORVUS_EMBED_PATH.
 // If we skip this step, a stale binary from a previous build is reused — the Tauri
@@ -194,7 +130,7 @@ const serverDistDir = path.join(opencorvus, "dist", serverDistName)
 await fs.rm(serverDistDir, { recursive: true, force: true })
 console.log(`removed ${serverDistDir}`)
 
-// ── Step 6: Rebuild SDK ──
+// ── Step 4: Rebuild SDK ──
 //
 // SDK regenerates src/gen/ from opencorvus's live OpenAPI spec and src/defaults.ts
 // from server-defaults.json. opencorvus imports @opencorvus-ai/sdk, so a stale gen/
@@ -203,7 +139,7 @@ console.log(`removed ${serverDistDir}`)
 step("Rebuild SDK")
 await $`bun run build`.cwd(sdk)
 
-// ── Step 7: Tauri build ──
+// ── Step 5: Tauri build ──
 step("Tauri build → overlay binary")
 
 console.log("Building opencorvus first...")
@@ -243,7 +179,7 @@ if (!(await exists(builtOverlay))) {
   throw new Error(`Overlay binary not found at ${builtOverlay}`)
 }
 
-// ── Step 8: Copy to dist/ ──
+// ── Step 6: Copy to dist/ ──
 step("Copy binary to dist/")
 await fs.mkdir(distRoot, { recursive: true })
 await fs.copyFile(builtOverlay, packagedOverlay)

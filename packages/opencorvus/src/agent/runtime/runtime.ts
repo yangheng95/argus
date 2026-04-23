@@ -4,12 +4,10 @@
  *
  * Responsibilities, previously duplicated across 7 files:
  *
- *   1. Configure ProgressGuard (alive / progress / absolute tiers).
- *   2. Build the session-hooks that persist stream output, with a shared
+ *   1. Build the session-hooks that persist stream output, with a shared
  *      failure tracker so side-effect failures are visible to the agent.
- *   3. Chain AbortSignals: caller signal + guard abort.
- *   4. Call `ProviderLLM.stream(...)` + await `stream.text/steps/finishReason`.
- *   5. After the stream resolves (or aborts), consult the failure tracker:
+ *   2. Call `ProviderLLM.stream(...)` + await `stream.text/steps/finishReason`.
+ *   3. After the stream resolves (or aborts), consult the failure tracker:
  *      honour `failurePolicy: "throw" | "collect"`.
  *
  * Non-goals:
@@ -22,8 +20,6 @@
 import { ProviderLLM } from "@/provider/llm"
 import type { ToolSet, ModelMessage } from "ai"
 import type { Provider } from "@/provider/provider"
-import { createProgressGuard } from "./progress-guard"
-import type { ProgressGuardOptions, ProgressTimeoutTier } from "./progress-guard"
 import { sessionStreamHooks } from "./session-hooks"
 import type { SessionStreamHooks } from "./session-hooks"
 import { AgentStreamFailureError, createStreamFailureTracker } from "./stream-failures"
@@ -37,12 +33,6 @@ export namespace AgentRuntime {
   export type FailurePolicy = "throw" | "collect"
 
   export interface Policies {
-    /** Tier 1 (default 120s): reset by any chunk. */
-    aliveTimeoutMs?: number
-    /** Tier 2 (required): reset by tool-call / tool-result / step-finish. */
-    progressTimeoutMs: number
-    /** Tier 3 (defaults to 2× progress): wall-clock cap. */
-    absoluteTimeoutMs?: number
     failurePolicy?: FailurePolicy
   }
 
@@ -82,145 +72,98 @@ export namespace AgentRuntime {
     finishReason: any
     toolCallCount: number
     failures: StreamFailureSnapshot
-    timeout?: { tier: ProgressTimeoutTier; reason: string }
   }
 
   export async function run<TOOLS extends ToolSet>(input: RunInput<TOOLS>): Promise<RunResult> {
-    const aliveTimeoutMs = input.policies.aliveTimeoutMs ?? 120_000
-    const progressTimeoutMs = input.policies.progressTimeoutMs
-    const absoluteTimeoutMs = input.policies.absoluteTimeoutMs ?? progressTimeoutMs * 2
     const failurePolicy = input.policies.failurePolicy ?? "throw"
-
-    const guardAbort = new AbortController()
-    let timeout: { tier: ProgressTimeoutTier; reason: string } | undefined
-    const guardOptions: ProgressGuardOptions = {
-      aliveTimeoutMs,
-      progressTimeoutMs,
-      absoluteTimeoutMs,
-      onTimeout: (reason, tier) => {
-        timeout = { tier, reason }
-        guardAbort.abort(new Error(`${input.agent}: ${reason}`))
-      },
-    }
-    const guard = createProgressGuard(guardOptions)
 
     const failures = createStreamFailureTracker()
     const hooks: SessionStreamHooks = input.hooks ?? sessionStreamHooks({
       sessionID: input.sessionID,
       taskID: input.taskID ?? "",
       stage: input.stage,
-      guard,
       failures,
     })
 
-    const signals: AbortSignal[] = [guardAbort.signal]
-    if (input.signal) signals.push(input.signal)
-
     const composedOnChunk = async (arg: any) => {
-      // Runtime-level alive bump — hooks own their own guard (or none), but
-      // the runtime must always see every chunk so its absolute/alive timers
-      // fire independently of whatever caller/hook semantics apply.
-      guard.alive()
-      const t = arg?.chunk?.type
-      // tool-call: LLM stream pauses while tool.execute runs. Parent emits
-      // no chunks during sub-agent work, so freeze alive-tier to avoid false
-      // positives on legitimately long tools (delivery, dispatch_goal).
-      // Absolute tier remains live as the ultimate safety net.
-      if (t === "tool-call") {
-        guard.progress()
-        guard.pause()
-      } else if (t === "tool-result") {
-        guard.resume()
-        guard.progress()
-      }
       await hooks.onChunk?.(arg)
       if (input.forwardChunk) await input.forwardChunk(arg)
     }
 
+    const stream = await ProviderLLM.stream({
+      model: input.model,
+      system: input.system,
+      messages: input.messages,
+      tools: input.tools,
+      toolChoice: input.toolChoice,
+      ...(input.signal ? { abortSignal: input.signal } : {}),
+      ...(input.stopWhen ? { stopWhen: input.stopWhen } : {}),
+      cacheKey: input.cacheKey,
+      onChunk: composedOnChunk,
+      onError: hooks.onError,
+      onStepFinish: (step: unknown) => input.onStepFinish?.(step),
+    })
+
+    let text: string, steps: any[], finishReason: any
     try {
-      const stream = await ProviderLLM.stream({
-        model: input.model,
-        system: input.system,
-        messages: input.messages,
-        tools: input.tools,
-        toolChoice: input.toolChoice,
-        abortSignal: AbortSignal.any(signals),
-        ...(input.stopWhen ? { stopWhen: input.stopWhen } : {}),
-        cacheKey: input.cacheKey,
-        onChunk: composedOnChunk,
-        onError: hooks.onError,
-        onStepFinish: (step: unknown) => {
-          guard.progress()
-          return input.onStepFinish?.(step)
-        },
-      })
+      ;[text, steps, finishReason] = await Promise.all([
+        stream.text,
+        stream.steps,
+        stream.finishReason,
+      ])
+    } finally {
+      await hooks.flush()
+    }
 
-      let text: string, steps: any[], finishReason: any
-      try {
-        ;[text, steps, finishReason] = await Promise.all([
-          stream.text,
-          stream.steps,
-          stream.finishReason,
-        ])
-      } finally {
-        guard.clear()
-        await hooks.flush()
-      }
-
-      // AI SDK delivers `tool-error` content parts only via `stream.steps`
-      // (never through onChunk, see AI SDK v5 StreamTextOnChunkCallback).
-      // Tool-error means inputSchema (Zod) rejected the model's tool call —
-      // the SDK has ALREADY fed the validation error back to the model as
-      // the tool's result, so the model sees it on the next step and can
-      // self-correct. We record it with `tool-input-validation` kind so
-      // downstream policy (orchestrator critical filter) keeps the task
-      // running; step-cap bounds unrecoverable loops, so this is NOT a
-      // silent fallback.
-      for (const step of steps) {
-        const content = Array.isArray((step as any).content) ? (step as any).content : []
-        for (const part of content) {
-          if (part?.type === "tool-error") {
-            failures.record({
-              kind: "tool-input-validation",
-              reason: part.error instanceof Error ? part.error.message : String(part.error ?? "tool-error"),
-              chunkType: "tool-error",
-              toolName: part.toolName,
-              toolCallId: part.toolCallId,
-              raw: part.input,
-            })
-          }
+    // AI SDK delivers `tool-error` content parts only via `stream.steps`
+    // (never through onChunk, see AI SDK v5 StreamTextOnChunkCallback).
+    // Tool-error means inputSchema (Zod) rejected the model's tool call —
+    // the SDK has ALREADY fed the validation error back to the model as
+    // the tool's result, so the model sees it on the next step and can
+    // self-correct. We record it with `tool-input-validation` kind so
+    // downstream policy (orchestrator critical filter) keeps the task
+    // running; step-cap bounds unrecoverable loops, so this is NOT a
+    // silent fallback.
+    for (const step of steps) {
+      const content = Array.isArray((step as any).content) ? (step as any).content : []
+      for (const part of content) {
+        if (part?.type === "tool-error") {
+          failures.record({
+            kind: "tool-input-validation",
+            reason: part.error instanceof Error ? part.error.message : String(part.error ?? "tool-error"),
+            chunkType: "tool-error",
+            toolName: part.toolName,
+            toolCallId: part.toolCallId,
+            raw: part.input,
+          })
         }
       }
+    }
 
-      const hooksSnap = hooks.failures.snapshot()
-      const runtimeSnap = failures.snapshot()
-      const mergedSnapshot: StreamFailureSnapshot = hooksSnap === runtimeSnap
-        ? hooksSnap
-        : {
-            count: hooksSnap.count + runtimeSnap.count,
-            items: [...hooksSnap.items, ...runtimeSnap.items],
-          }
+    const hooksSnap = hooks.failures.snapshot()
+    const runtimeSnap = failures.snapshot()
+    const mergedSnapshot: StreamFailureSnapshot = hooksSnap === runtimeSnap
+      ? hooksSnap
+      : {
+          count: hooksSnap.count + runtimeSnap.count,
+          items: [...hooksSnap.items, ...runtimeSnap.items],
+        }
 
-      if (failurePolicy === "throw" && mergedSnapshot.count > 0) {
-        throw new AgentStreamFailureError(input.agent, mergedSnapshot)
-      }
+    if (failurePolicy === "throw" && mergedSnapshot.count > 0) {
+      throw new AgentStreamFailureError(input.agent, mergedSnapshot)
+    }
 
-      const toolCallCount = steps.reduce(
-        (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-        0,
-      )
+    const toolCallCount = steps.reduce(
+      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
+      0,
+    )
 
-      return {
-        text,
-        steps,
-        finishReason,
-        toolCallCount,
-        failures: mergedSnapshot,
-        timeout,
-      }
-    } catch (err) {
-      guard.clear()
-      throw err
+    return {
+      text,
+      steps,
+      finishReason,
+      toolCallCount,
+      failures: mergedSnapshot,
     }
   }
 }

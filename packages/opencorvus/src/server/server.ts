@@ -114,7 +114,10 @@ export namespace Server {
         .route("/auth", AuthRoutes())
         .route("/ui", OverlayUI.routes())
         .use(async (c, next) => {
-          if (c.req.path === "/log") return next()
+          // Control-plane routes must stay available even if project bootstrap is broken.
+          if (c.req.path === "/log" || c.req.path === "/shutdown" || c.req.path === "/restart") {
+            return next()
+          }
           const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory") || process.cwd()
           const directory = decodeDirectory(raw)
           return Instance.provide({

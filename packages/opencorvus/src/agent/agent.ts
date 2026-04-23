@@ -1,7 +1,7 @@
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
-import { generateObject, streamObject, type ModelMessage } from "ai"
+import { streamObject, type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Truncate } from "../tool/truncation"
@@ -493,7 +493,10 @@ export namespace Agent {
     await Plugin.trigger("experimental.chat.system.transform", { model }, { system })
     const existing = await list()
 
-    const params = {
+    const isOpenAIOAuth =
+      defaultModel.providerID === "openai" && (await Auth.get(defaultModel.providerID))?.type === "oauth"
+
+    const result = streamObject({
       experimental_telemetry: {
         isEnabled: cfg.experimental?.openTelemetry,
         metadata: {
@@ -519,23 +522,17 @@ export namespace Agent {
         whenToUse: z.string(),
         systemPrompt: z.string(),
       }),
-    } satisfies Parameters<typeof generateObject>[0]
+      ...(isOpenAIOAuth
+        ? {
+            providerOptions: ProviderTransform.providerOptions(model, { store: false }),
+            onError: () => {},
+          }
+        : {}),
+    })
 
-    if (defaultModel.providerID === "openai" && (await Auth.get(defaultModel.providerID))?.type === "oauth") {
-      const result = streamObject({
-        ...params,
-        providerOptions: ProviderTransform.providerOptions(model, {
-          store: false,
-        }),
-        onError: () => {},
-      })
-      for await (const part of result.fullStream) {
-        if (part.type === "error") throw part.error
-      }
-      return result.object
+    for await (const part of result.fullStream) {
+      if (part.type === "error") throw part.error
     }
-
-    const result = await generateObject(params)
     return result.object
   }
 

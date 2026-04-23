@@ -4,12 +4,13 @@
 use std::{
     collections::VecDeque,
     fs,
-    net::TcpListener,
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::{Condvar, Mutex, OnceLock},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[cfg(windows)]
@@ -530,6 +531,24 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     let state = app.state::<Server>();
     let mut lock = state.0.lock().unwrap();
 
+    let exited_gracefully = if let (Some(port), Some(child)) = (lock.port, lock.child.as_mut()) {
+        match request_server_shutdown(port) {
+            Ok(()) => match wait_for_child_exit(child, Duration::from_secs(5)) {
+                Ok(exited) => exited,
+                Err(err) => {
+                    eprintln!("overlay: failed while waiting for graceful shutdown: {err}");
+                    false
+                }
+            },
+            Err(err) => {
+                eprintln!("overlay: graceful shutdown request failed: {err}");
+                false
+            }
+        }
+    } else {
+        false
+    };
+
     // Windows: drop the Job Object handle → KILL_ON_JOB_CLOSE terminates every
     // process in the job (direct child + all grandchildren).
     #[cfg(windows)]
@@ -539,7 +558,7 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     // grandchildren that inherited the group (LSP servers, PTY shells, etc.).
     #[cfg(unix)]
     if let Some(pgid) = lock.pgid.take() {
-        if pgid > 1 {
+        if !exited_gracefully && pgid > 1 {
             // SAFETY: kill(2) is always safe to call; SIGKILL = 9.
             unsafe { kill(-(pgid as i32), 9); }
         }
@@ -547,13 +566,66 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
 
     // Reap the direct child (may already be dead from the above).
     if let Some(mut child) = lock.child.take() {
-        let _ = child.kill(); // Ignore error — process may already be gone.
+        if !exited_gracefully {
+            let _ = child.kill(); // Ignore error — process may already be gone.
+        }
         if let Err(err) = child.wait() {
             eprintln!("overlay: failed to wait on server process: {err}");
         }
     }
 
     lock.port = None;
+}
+
+fn server_shutdown_authorization() -> Option<String> {
+    let password = std::env::var("OPENCORVUS_SERVER_PASSWORD").ok()?;
+    let password = password.trim();
+    if password.is_empty() {
+        return None;
+    }
+    let username = std::env::var("OPENCORVUS_SERVER_USERNAME")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "opencorvus".to_string());
+    Some(format!("Basic {}", STANDARD.encode(format!("{username}:{password}"))))
+}
+
+fn request_server_shutdown(port: u16) -> Result<(), String> {
+    let mut stream = TcpStream::connect((LOCAL_SERVER_HOST, port)).map_err(|err| err.to_string())?;
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(750)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(750)));
+
+    let mut request = format!(
+        "POST /shutdown HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\nContent-Length: 0\r\n",
+        host = LOCAL_SERVER_HOST,
+        port = port,
+    );
+    if let Some(auth) = server_shutdown_authorization() {
+        request.push_str(&format!("Authorization: {auth}\r\n"));
+    }
+    request.push_str("\r\n");
+
+    stream.write_all(request.as_bytes()).map_err(|err| err.to_string())?;
+    let mut response = String::new();
+    let _ = stream.read_to_string(&mut response);
+    Ok(())
+}
+
+fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> Result<bool, String> {
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return Ok(true),
+            Ok(None) => {
+                if started.elapsed() >= timeout {
+                    return Ok(false);
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(err) => return Err(err.to_string()),
+        }
+    }
 }
 
 fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {

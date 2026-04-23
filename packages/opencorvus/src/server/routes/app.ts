@@ -34,6 +34,7 @@ import { PanelKnowledgeRoutes } from "./panel-knowledge"
 import { ControlRoutes } from "./control"
 import { CodingRoutes } from "./coding"
 import { AttachmentRoutes } from "./attachment"
+import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
 
 const log = Log.create({ service: "server" })
 
@@ -70,6 +71,71 @@ export function AppRoutes(root: Hono) {
     .route("/panel/knowledge", PanelKnowledgeRoutes())
     .route("/control", ControlRoutes())
     .route("/coding", CodingRoutes())
+    .post(
+      "/shutdown",
+      describeRoute({
+        summary: "Shutdown the server",
+        description: "Gracefully abort live execution state and stop the current process.",
+        operationId: "server.shutdown",
+        responses: {
+          200: {
+            description: "Shutdown initiated",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ ok: z.boolean() })),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        if (!hasServerShutdownHandler()) {
+          log.warn("shutdown requested without registered shutdown handler")
+          return c.json({ ok: false }, 503)
+        }
+        log.info("shutdown requested")
+        setTimeout(() => {
+          requestServerShutdown("http.shutdown")
+        }, 25)
+        return c.json({ ok: true })
+      },
+    )
+    .post(
+      "/restart",
+      describeRoute({
+        summary: "Restart the server",
+        description: "Spawn a new server process with the same arguments, then exit.",
+        operationId: "server.restart",
+        responses: {
+          200: {
+            description: "Restart initiated",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ ok: z.boolean() })),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        if (!hasServerShutdownHandler()) {
+          log.warn("restart requested without registered shutdown handler")
+          return c.json({ ok: false }, 503)
+        }
+        log.info("restart requested, spawning new process")
+        const argv = process.argv
+        const child = Bun.spawn(argv, {
+          cwd: process.cwd(),
+          env: process.env as Record<string, string>,
+          stdio: ["ignore", "ignore", "ignore"],
+        })
+        child.unref()
+        setTimeout(() => {
+          requestServerShutdown("server.restart")
+        }, 25)
+        return c.json({ ok: true })
+      },
+    )
     .route("/", EngineRoutes())
     .route("/export", ExportRoutes())
     .route("/", FileRoutes())
@@ -400,36 +466,6 @@ export function AppRoutes(root: Hono) {
             })
           })
         })
-      },
-    )
-    .post(
-      "/restart",
-      describeRoute({
-        summary: "Restart the server",
-        description: "Spawn a new server process with the same arguments, then exit.",
-        operationId: "server.restart",
-        responses: {
-          200: {
-            description: "Restart initiated",
-            content: {
-              "application/json": {
-                schema: resolver(z.object({ ok: z.boolean() })),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        log.info("restart requested, spawning new process")
-        const argv = process.argv
-        const child = Bun.spawn(argv, {
-          cwd: process.cwd(),
-          env: process.env as Record<string, string>,
-          stdio: ["ignore", "ignore", "ignore"],
-        })
-        child.unref()
-        setTimeout(() => process.exit(0), 500)
-        return c.json({ ok: true })
       },
     )
 }

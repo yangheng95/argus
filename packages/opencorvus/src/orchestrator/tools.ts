@@ -332,10 +332,8 @@ export function createOrchestratorTools(input: {
         // build prompts from that single source of truth.
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
-        // The RequirementsService runs inside AgentRuntime which owns its own
-        // ProgressGuard (alive/progress/absolute tiers). No caller-level
-        // inactivity guard here — that was the same "delta = activity"
-        // hazard we just eliminated.
+        // RequirementsService runs inside AgentRuntime. Do not layer a second
+        // caller-side inactivity timer here.
         // Hoisted so the catch below can reference requirementsSession.id
         // when emitting the error-path terminal event.
         const requirementsSession = await Session.createNext({

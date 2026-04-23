@@ -11,10 +11,13 @@ import { createDecisionLog } from "@/decision-log"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
+import { buildGoalUpstreamAgentContextSections } from "@/prompt/upstream-context"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
+import { plannerReportFromMetadata } from "@/planner/output-tools"
 import z from "zod"
 import type { VisualSpec } from "@/design-analyst/types"
 import {
@@ -31,7 +34,6 @@ import type {
 
 const log = Log.create({ service: "goal-runner" })
 const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
-const ARCHITECT_CONTRACT_VALUE_CAP = 4_000
 
 function summary(prefix: string, files: string[]) {
   if (files.length === 0) return `${prefix}. No file changes were detected.`
@@ -465,6 +467,23 @@ export function buildRetryFeedbackSection(taskID: string, goalID: string): strin
   return lines.join("\n")
 }
 
+function renderGoalContractPromptSection(goal: GoalRow): string {
+  const lines: string[] = []
+  if (Array.isArray(goal.requirement_ids) && goal.requirement_ids.length > 0) {
+    lines.push(`- Requirement IDs: ${goal.requirement_ids.join(", ")}`)
+  }
+  if (Array.isArray(goal.depends_on) && goal.depends_on.length > 0) {
+    lines.push(`- Declared dependency goal IDs: ${goal.depends_on.join(", ")}`)
+  }
+  if (Array.isArray(goal.imports) && goal.imports.length > 0) {
+    lines.push(`- Imports from dependencies: ${goal.imports.join(", ")}`)
+  }
+  if (Array.isArray(goal.exports) && goal.exports.length > 0) {
+    lines.push(`- Exports promised to dependents: ${goal.exports.join(", ")}`)
+  }
+  return lines.length > 0 ? `## Goal Contract\n\n${lines.join("\n")}` : ""
+}
+
 /**
  * Build the executor's prompt for a single goal.
  *
@@ -494,10 +513,8 @@ export function buildGoalPrompt(input: {
    *  executor knows which tools exist and when to use them. */
   skillPrompt?: string
 }) {
-  const meta = dict(input.node.metadata)
   const goalMeta = dict(input.goal.metadata)
-  const waveTitle = typeof meta.wave_title === "string" ? meta.wave_title.trim() : ""
-  const waveObjective = typeof meta.wave_objective === "string" ? meta.wave_objective.trim() : ""
+  const plannerReport = plannerReportFromMetadata(input.node.metadata)
   const runnableChecks = executorSelectors(input.goal)
   const managedChecks = evaluatorManagedSelectors(input.goal)
   // Extract owned_paths and dependency context from goal metadata
@@ -507,16 +524,19 @@ export function buildGoalPrompt(input: {
         .map((g) => `- "${g.title}" (completed, output in your workspace)`)
         .join("\n")
     : ""
-  // Include architect consensus from Decision Log (interface contracts, directory blueprint, naming conventions).
-  // Only populated when Orchestrator called architect(); empty string if skipped (single goal / simple task).
-  // Goal-scoped read: peer goals' private architect notes do not bleed into this executor's prompt.
-  const architectConsensus = input.taskID
-    ? createDecisionLog(input.taskID).phasePromptSectionForGoal(
-        "architect",
-        input.goal.id,
-        "Architect Consensus",
-        { valueCap: ARCHITECT_CONTRACT_VALUE_CAP },
-      )
+  const goalContract = renderGoalContractPromptSection(input.goal)
+  // Upstream agent context — goal-scoped where possible so the executor sees
+  // the requirements decisions, design-analysis summary, and architect
+  // contracts that apply to THIS goal without inheriting peer-goal noise.
+  const upstreamAgentContext = input.taskID
+    ? buildGoalUpstreamAgentContextSections(input.taskID, input.goal.id)
+    : []
+
+  // Web tooling steering + mirror cache — every sub-agent sees the same
+  // section so they all reach for `webpage_extract` (not `webfetch`) and
+  // all dedup against already-captured URLs.
+  const mirrorSection = input.cwd
+    ? buildMirrorToolsPromptSection({ cwd: input.cwd })
     : ""
 
   // Retry feedback: surfaces the latest rejected evaluation + Orchestrator's
@@ -549,7 +569,7 @@ export function buildGoalPrompt(input: {
     // deliberately omit restatement of the user's request — the bundle
     // is the single authoritative channel for original wording,
     // clarifications, and operator notes.
-    "## User Intent Bundle\n\nThe user's original request and any clarifications / operator notes for this task are mounted at `.opencorvus/intent/`:\n- `intent/request.md` — the original request, verbatim\n- `intent/clarifications.md` — operator answers (if any)\n- `intent/operator-notes.md` — operator notes added during execution (if any)\n- `intent/README.md` — index of the bundle\n\nRead these files when the goal objective or plan steps reference a section or detail (e.g. \"see intent/request.md §13\"). Do not treat them as read-only hints — they are the authoritative source of truth for user intent.",
+    "## User Intent Bundle\n\nThe user's original request and any clarifications / operator notes for this task are mounted at `.opencorvus/intent/`:\n- `intent/request.md` — the original request, verbatim\n- `intent/clarifications.md` — operator answers (if any)\n- `intent/operator-notes.md` — operator notes added during execution (if any)\n- `intent/README.md` — index of the bundle and attachment lookup hints\n\nTask attachments are NOT duplicated into `.opencorvus/intent/`. When the request or bundle points at an attachment reference (`attachment://<sha>.<ext>` or `/attachment/<projectID>/<sha>.<ext>`), resolve it from the project's `.opencorvus/attachments/` store instead of expecting the attachment to be copied into this prompt.\n\nRead these files when the goal objective or plan steps reference a section or detail (e.g. \"see intent/request.md §13\"). Do not treat them as read-only hints — they are the authoritative source of truth for user intent.",
     "Other goals may be executing in parallel in separate worktrees.",
     "Treat the goal contract below as the only implementation target for this stage.",
     // Explicit file scope from goal decomposition
@@ -560,6 +580,7 @@ export function buildGoalPrompt(input: {
     dependencyContext
       ? `## Dependencies (completed before this goal)\n\nThese goals completed before yours. Their output is already in your workspace:\n${dependencyContext}`
       : undefined,
+    goalContract || undefined,
     input.designSpecs && input.designSpecs.length > 0
       ? renderVisualContractPromptSection({
           specs: input.designSpecs,
@@ -569,7 +590,8 @@ export function buildGoalPrompt(input: {
           ],
         })
       : undefined,
-    architectConsensus || undefined,
+    ...upstreamAgentContext,
+    mirrorSection || undefined,
     retryFeedback || undefined,
     `Goal:
 ${input.goal.title}: ${input.goal.objective}`,
@@ -581,6 +603,12 @@ ${renderSpecsAsText(input.goal.acceptance_specs ?? [])}`,
     input.node.brief
       ? `## Implementation Plan (from Planner)\n\n${input.node.title ? `**${input.node.title}**\n\n` : ""}${input.node.brief}`
       : undefined,
+    plannerReport && plannerReport.file_actions.length > 0
+      ? `Planned file actions:\n${plannerReport.file_actions.map((item) => `- ${item.path}: ${item.intent}`).join("\n")}`
+      : undefined,
+    plannerReport && plannerReport.verification_commands.length > 0
+      ? `Planner verification commands:\n${plannerReport.verification_commands.map((item) => `- ${item.command} — ${item.purpose}`).join("\n")}`
+      : undefined,
     runnableChecks.length > 0
       ? `Required self-run checks for this goal:
 ${runnableChecks.join(", ")}`
@@ -590,15 +618,6 @@ ${runnableChecks.join(", ")}`
 ${managedChecks.join(", ")}
 
 Prepare real implementation artifacts so these checks can pass, but do not fabricate placeholder UI/demo assets or long-lived runtime scaffolding just to satisfy them.`
-      : undefined,
-    waveTitle
-      ? [
-          "Stage context:",
-          `- Wave: ${waveTitle}`,
-          waveObjective ? `- Objective: ${waveObjective}` : undefined,
-          "- This stage executes in the same evolving workspace as the previous stages.",
-          "- Do not fork a second implementation track or reset earlier progress.",
-        ].filter(Boolean).join("\n")
       : undefined,
     `Coordinator context:
 ${compactPlanContext(input.plan)}`,

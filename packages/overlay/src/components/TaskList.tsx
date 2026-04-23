@@ -230,8 +230,12 @@ function TaskRow(props: {
   const status = () => (pending() ? "active" : props.item?.task?.status || "idle");
   const title = () => taskListTitle(props.item) || id();
   const isActive = () => !pending() && props.selectedTaskID === id();
+  const badgeLabel = () => taskListBadge(props.item, props.queuePos);
   const canCancel = () =>
     !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
+  const canDelete = () =>
+    !pending() && !!id() && !!props.onDeleteTask;
+  const hasActions = () => canCancel() || canDelete();
 
   return (
     <div
@@ -252,21 +256,31 @@ function TaskRow(props: {
         }}
       >
         <div class="task-row-head">
-          <span class="status-dot" data-status={status()} aria-hidden="true" />
           <strong>{title()}</strong>
         </div>
         <div class="task-row-meta">
-          <span class="task-row-badge" data-status={status()} aria-live="polite" aria-atomic="true">
-            {taskListBadge(props.item, props.queuePos)}
+          <span
+            class="task-row-badge"
+            data-status={status()}
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label={badgeLabel()}
+            title={badgeLabel()}
+          >
+            <span class="task-row-badge-text">{badgeLabel()}</span>
           </span>
           <small class="task-row-stamp">{taskListMeta(props.item)}</small>
         </div>
       </button>
-      <Show when={canCancel()}>
-        <CancelButton id={id()} onCancel={props.onCancelTask!} />
-      </Show>
-      <Show when={!pending() && !!id() && !!props.onDeleteTask}>
-        <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
+      <Show when={hasActions()}>
+        <div class="task-row-actions">
+          <Show when={canCancel()}>
+            <CancelButton id={id()} onCancel={props.onCancelTask!} />
+          </Show>
+          <Show when={canDelete()}>
+            <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
+          </Show>
+        </div>
       </Show>
     </div>
   );

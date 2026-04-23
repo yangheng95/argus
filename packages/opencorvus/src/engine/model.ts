@@ -671,6 +671,14 @@ export const TaskBoardGoalStepPayload = z.object({
     title: z.string(),
     brief: z.string(),
     orderIndex: z.number(),
+    fileActions: z.array(z.object({
+      path: z.string(),
+      intent: z.string(),
+    })).optional(),
+    verificationCommands: z.array(z.object({
+      command: z.string(),
+      purpose: z.string(),
+    })).optional(),
   })).optional(),
   /** The build worker session ID (SessionTable kind="build") — the LLM
    *  session that actually wrote code for this goal. Used by the overlay

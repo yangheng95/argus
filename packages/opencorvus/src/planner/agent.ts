@@ -23,13 +23,13 @@ import { Log } from "@/util/log"
 import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
-import { extractTag } from "@/util/parse-section-tags"
 import type { TextHooks } from "@/llm/api"
 import { renderSpecsAsText } from "@/acceptance/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { VisualSpec } from "@/design-analyst/types"
 import type { GoalContract } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
+import { createPlannerOutputTools } from "./output-tools"
 import PLANNER_CORE from "@/prompt/core/planner-core.txt"
 
 const log = Log.create({ service: "pipeline-planner" })
@@ -38,6 +38,8 @@ const ARCHITECT_CONTRACT_VALUE_CAP = 4_000
 export interface PlanSteps {
   title: string
   brief: string
+  file_actions: Array<{ path: string; intent: string }>
+  verification_commands: Array<{ command: string; purpose: string }>
 }
 
 /**
@@ -76,14 +78,15 @@ export async function planGoal(input: {
   const orchCfg = await EngineConfig.get()
   const planCfg = orchCfg.planner
   const MAX_STEPS = planCfg.max_steps
-  const TIMEOUT_MS = planCfg.timeout_ms
 
   // Resolve model — per-agent model from Agent.Info (config: agent.planner.model),
   // falling back to the user's most recent in-session model pick when no per-agent
   // override is configured.
   const model = await resolveAgentModel("planner", { taskID: task.id })
 
-  const guard = toolGuard(await filterAgentTools(createPlannerTools(input.workDir), "planner"))
+  const outputToolKit = createPlannerOutputTools()
+  const plannerTools = await filterAgentTools(createPlannerTools(input.workDir), "planner")
+  const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
   const context = prefetchContext(task.title, task.request)
 
   // Build Decision Log section — goal-scoped reads only. The full task log
@@ -106,9 +109,6 @@ export async function planGoal(input: {
   const systemPrompt = await buildPlannerSystem()
   const userPrompt = buildPlannerPrompt(contract, context, decisionSection, task.request, architectSection, input.designSpecs)
 
-  const abortSignals: AbortSignal[] = [guard.signal]
-  if (signal) abortSignals.push(signal)
-
   const passthroughHooks = {
     onChunk: input.stream?.onChunk,
     onError: input.stream?.onError,
@@ -126,11 +126,9 @@ export async function planGoal(input: {
     sessionID: "",
     taskID: task.id,
     stage: "planner",
-    signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish,
+    signal,
     hooks: passthroughHooks,
     policies: {
-      progressTimeoutMs: TIMEOUT_MS,
       failurePolicy: "collect",
     },
   })
@@ -138,24 +136,42 @@ export async function planGoal(input: {
   const resultSteps = runResult.steps
   const toolCallCount = runResult.toolCallCount
 
-  let allText = resultText?.trim() || ""
-  if (!allText) {
-    allText = resultSteps.map((s) => s.text).filter(Boolean).join("\n")
-  }
-
   log.info("per-goal planner finished", {
     goalID: goal.id,
-    textLength: allText.length,
+    textLength: (resultText?.trim() || "").length,
     toolCalls: toolCallCount,
   })
 
-  // Parse output — extract plan section or use full text
-  const planBrief = extractTag(allText, "plan_steps") || extractTag(allText, "plan") || extractTag(allText, "steps") || allText
-  const planTitle = extractTag(allText, "plan_title") || extractTag(allText, "title") || goal.title
+  const collector = outputToolKit.getCollector()
+  if (collector.errors.length > 0) {
+    throw new Error(
+      `planGoal: planner output tool errors for goal ${goal.id} (${goal.title}): ` +
+      collector.errors.join(" | "),
+    )
+  }
+
+  if (!collector.finalized || !collector.plan) {
+    throw new Error(
+      `planGoal: planner did not call submit_plan for goal ${goal.id} (${goal.title}). ` +
+      "The planner must emit its final plan via the submit_plan tool; plain-text output is not accepted.",
+    )
+  }
+
+  const planTitle = collector.plan.title.trim()
+  const planBrief = collector.plan.brief.trim()
+
+  log.info("per-goal planner output", {
+    goalID: goal.id,
+    titleLength: planTitle.length,
+    briefLength: planBrief.length,
+    toolCalls: toolCallCount,
+  })
 
   return {
     title: planTitle,
     brief: planBrief,
+    file_actions: collector.plan.file_actions,
+    verification_commands: collector.plan.verification_commands,
   }
 }
 
@@ -251,7 +267,8 @@ export function buildPlannerPrompt(
   const notes = operatorNotesSection(contract.task.id)
   if (notes) sections.push(notes)
 
-  sections.push("Now explore the codebase, then output your implementation plan using <plan_title> and <plan_steps> tags.")
+  sections.push("Now explore the codebase, then emit the final plan through the submit_plan tool.")
+  sections.push("Do not end with plain text tags or an empty response. A missing submit_plan call is a hard failure.")
 
   return sections.join("\n\n")
 }

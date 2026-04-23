@@ -20,7 +20,7 @@
 import { createEffect, createRoot } from "solid-js";
 import { produce } from "solid-js/store";
 import { cardTreeStore, setCardTreeStore, type CardNode, type CardStatus } from "../store/card-tree";
-import { boardStore } from "../store/board";
+import { boardStore, setBoardProjectionHandler } from "../store/board";
 import { messageStore } from "../store/messages";
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message";
 import { stageAccent } from "../utils/card-color";
@@ -1792,33 +1792,21 @@ function rebuildTopLevelOrder(): void {
   setCardTreeStore("order", order);
 }
 
-// ── Reactive link to boardStore ──
+// ── Board projection hook ──
 //
-// The writer pulls task.request / goalWorkflows / interactions from
-// `boardStore.board`. That store is updated out-of-band by loadBoard() HTTP
-// fetches in production, not only by the SSE events we see here. To keep the
-// cardTreeStore in sync without polling, subscribe to boardStore.board as a
-// Solid effect and reproject on every change.
-//
-// Placed at the END of the module so that every module-level `const` /
-// `function` / `Set` (`syntheticMirrorIDs`, `sessions`, `knownGoalIDs`,
-// `rebuildBoardDerivedCards`, `rebuildTopLevelOrder`, etc.) is fully
-// initialized before the effect fires. Placing the `createRoot` above these
-// declarations triggered a TDZ (`Cannot access 'syntheticMirrorIDs' before
-// initialization`) the first time `rebuildTopLevelOrder` ran inside the
-// first tick of the effect, because Solid `createEffect` evaluates
-// synchronously on creation.
-//
-// The effect is created once in a detached root (`createRoot`) so it outlives
-// any caller's reactive scope. Reset by `resetWriter()` is orthogonal —
-// clearing writer state then leaving the effect to repopulate on the next
-// board read is correct.
+// `loadBoard()` applies board snapshots via fine-grained `setBoardStore`
+// writes (`setBoardStore("board", key, value)`). A detached effect that reads
+// only `boardStore.board` does not reliably rerun for those nested writes, so
+// step / phase / interaction cards can stay stale until an unrelated task event
+// happens to force a rebuild. Register an explicit post-delta hook at the
+// store boundary instead: every successful board apply triggers exactly one
+// re-projection with the fully-updated snapshot.
+setBoardProjectionHandler(() => {
+  rebuildBoardDerivedCards();
+});
+rebuildBoardDerivedCards();
+
 createRoot(() => {
-  createEffect(() => {
-    // Read boardStore.board to establish the dependency, then project.
-    void boardStore.board;
-    rebuildBoardDerivedCards();
-  });
   // Pending / synthetic messages (see services/chat.ts) land in
   // `messageStore.messages` via `setMessages` — NOT through the SSE routing
   // that `applyEvent` consumes. Mirror them into `cardTreeStore` as

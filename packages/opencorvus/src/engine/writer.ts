@@ -17,7 +17,7 @@
  * task/run).
  */
 import { Log } from "@/util/log"
-import { Database, eq } from "@/storage/db"
+import { Database, and, eq, inArray } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
 import { EngineRunTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
@@ -31,6 +31,7 @@ import {
 import {
   findGoal,
   findRuns,
+  goalRunQueueTaskID,
   listGoals,
   listGoalWorkspacesForProject,
   listGoalRunsForTask,
@@ -161,6 +162,28 @@ async function cleanupGoalWorkspaces(goalIDs: string[]) {
   return cleaned
 }
 
+async function finalizeInterruptedQueueTasks(queueTaskIDs: Array<string | undefined>, reason: string) {
+  const ids = [...new Set(queueTaskIDs.filter((id): id is string => typeof id === "string" && id.length > 0))]
+  if (ids.length === 0) return
+  const now = Date.now()
+  const { TaskQueueTable } = await import("@/scheduler/task-queue.sql")
+  Database.use((db) =>
+    db
+      .update(TaskQueueTable)
+      .set({
+        status: "failed",
+        error_message: reason,
+        time_completed: now,
+        time_updated: now,
+      })
+      .where(and(
+        inArray(TaskQueueTable.id, ids),
+        inArray(TaskQueueTable.status, ["queued", "retrying", "running"]),
+      ))
+      .run(),
+  )
+}
+
 /** Abort a batch of goal_run rows. Workspace lifecycle is goal-scoped. */
 export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): Promise<number> {
   let aborted = 0
@@ -172,6 +195,7 @@ export async function abortGoalRuns(rows: GoalRunRow[], options: AbortOptions): 
     })
     if (updated) aborted += 1
   }
+  await finalizeInterruptedQueueTasks(rows.map((row) => goalRunQueueTaskID(row)), options.reason)
   return aborted
 }
 
@@ -194,6 +218,7 @@ export async function abortRuns(rows: RunRow[], reason: string): Promise<number>
     )
     aborted += 1
   }
+  await finalizeInterruptedQueueTasks(rows.map((row) => row.executor_ref?.queue_task_id), reason)
   return aborted
 }
 

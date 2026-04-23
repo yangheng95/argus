@@ -90,7 +90,7 @@ export function CardHeader(props: {
     typeof props.node.time === "number" &&
     props.node.time > 0;
   const collapsedPreview = () =>
-    !props.expanded && isStageCard(props.node)
+    !props.expanded && isStageCard(props.node) && props.node.kind !== "tool"
       ? collapsedPreviewText(collectCardText(props.node), props.node.title)
       : "";
   const hasSecondaryText = () => !!props.node.subtitle || !!collapsedPreview();
@@ -173,10 +173,10 @@ export function CardHeader(props: {
         <Show when={hasSecondaryText()}>
           <div class="card__meta-row">
             <Show when={props.node.subtitle}>
-              <span class="card__subtitle">{props.node.subtitle}</span>
+              <span class="card__subtitle" title={props.node.subtitle}>{props.node.subtitle}</span>
             </Show>
             <Show when={collapsedPreview()}>
-              <span class="card__collapsed-preview">{collapsedPreview()}</span>
+              <span class="card__collapsed-preview" title={collapsedPreview()}>{collapsedPreview()}</span>
             </Show>
           </div>
         </Show>

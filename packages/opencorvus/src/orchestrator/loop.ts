@@ -160,7 +160,7 @@ async function runTaskLoopInner(input: {
   log.info("task loop started", { taskID, trigger: trigger.kind })
 
   // ── Main loop: Decision → Pool → Decision ──
-  let iteration = 0
+  let decisionTurn = 0
   /** Absolute task-level iteration budget — the sole runaway guard on this
    *  loop. Per LLM-autonomous redesign the loop does not classify "stuck"
    *  itself; if the LLM is not making progress it can read the trajectory
@@ -180,7 +180,6 @@ async function runTaskLoopInner(input: {
   let lastReworkSeenAt = Date.now()
 
   while (!signal?.aborted) {
-    iteration++
     const task = findTask(taskID)
     if (!task) { log.error("task not found, exiting loop", { taskID }); break }
     if (
@@ -191,16 +190,40 @@ async function runTaskLoopInner(input: {
       log.info("task in terminal state, exiting loop", { taskID, status: task.status })
       break
     }
-    // Task-level iteration budget (hard ceiling). Prevents unbounded loops
-    // when the LLM produces small progress each cycle but never converges.
-    if (iteration > MAX_TASK_ITERATIONS) {
+
+    // Waiting on already-running goal executions is not a new Orchestrator
+    // decision. If we re-entered only because the wait loop ticked again,
+    // keep sleeping here instead of burning another decision turn.
+    if (trigger.kind === "batch_complete" && task.status === "active") {
+      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+      if (run) {
+        const { listActiveGoalRunsForRun } = await import("@/engine/store")
+        const activeGoalRuns = listActiveGoalRunsForRun(run.id)
+        if (activeGoalRuns.length > 0) {
+          log.info("active goal runs still executing before decision, waiting", {
+            taskID,
+            runID: run.id,
+            activeGoalRuns: activeGoalRuns.length,
+            goalRunIDs: activeGoalRuns.map((goalRun) => goalRun.id),
+          })
+          await sleep(5_000, signal)
+          if (signal?.aborted) break
+          continue
+        }
+      }
+    }
+
+    decisionTurn++
+    // Task-level iteration budget (hard ceiling) counts only actual
+    // Orchestrator decision turns, not passive wait-loop polls.
+    if (decisionTurn > MAX_TASK_ITERATIONS) {
       const { updateTask } = await import("@/engine/state")
       log.error("task iteration budget exhausted — failing task", {
-        taskID, iteration, max: MAX_TASK_ITERATIONS,
+        taskID, decisionTurn, max: MAX_TASK_ITERATIONS,
       })
       await updateTask(task, {
         status: "failed",
-        error: `Task iteration budget exhausted: ${iteration}/${MAX_TASK_ITERATIONS}. ` +
+        error: `Task iteration budget exhausted: decision turns ${decisionTurn}/${MAX_TASK_ITERATIONS}. ` +
           `Increase OPENCORVUS_MAX_TASK_ITERATIONS if the workload legitimately needs more rounds.`,
       }, "task-iteration budget")
       break
@@ -211,7 +234,7 @@ async function runTaskLoopInner(input: {
     //   - dispatch goals → calls dispatch_goal/submit_execution tool → self-aborts
     //   - complete/fail task → calls fail_task/deliver tool → exits
     //   - no action → finishReason=stop with no dispatch
-    log.info("decision point", { taskID, iteration, trigger: trigger.kind })
+    log.info("decision point", { taskID, iteration: decisionTurn, trigger: trigger.kind })
 
     let agentDispatched = false
     try {
@@ -463,7 +486,7 @@ async function runTaskLoopInner(input: {
     }
   }
 
-  log.info("task loop exited", { taskID, iteration })
+  log.info("task loop exited", { taskID, iteration: decisionTurn })
   // Queue progression is owned by engine/queue.ts. This loop only owns one
   // task's lifecycle and leaves sibling dispatch to the cwd queue.
 }
