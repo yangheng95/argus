@@ -59,8 +59,12 @@ async function resumeRecoveredTaskLoops(input: {
   isTaskLoopActive?: (taskID: string) => boolean
   startTaskLoop?: (taskID: string) => Promise<void> | void
 }) {
-  if (input.startTaskLoop) {
-    return resumeRecoveredTaskLoopsWithHooks(input)
+  const { startTaskLoop } = input
+  if (startTaskLoop) {
+    return resumeRecoveredTaskLoopsWithHooks({
+      ...input,
+      startTaskLoop,
+    })
   }
 
   const resumedTaskIDs: string[] = []
