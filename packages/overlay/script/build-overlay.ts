@@ -116,30 +116,57 @@ function tauriArgs() {
 // Windows — no $-variables involved, exit code tells us if anything was
 // killed, and we verify the process is really gone before proceeding.
 if (!skipKill) {
-  step("Kill running overlay processes")
+  step("Stop running overlay processes")
   if (isWindows) {
-    const killed = await $`taskkill /F /IM opencorvus-overlay.exe`.quiet().nothrow()
-    if (killed.exitCode === 0) {
-      console.log("killed running overlay process")
-      // Windows releases file handles asynchronously after process exit.
-      // Give the kernel a moment to drop the lock before the linker writes.
-      await new Promise((r) => setTimeout(r, 2000))
-    } else {
-      console.log("no overlay process running")
+    const isAlive = async () => {
+      const check = await $`tasklist /FI "IMAGENAME eq opencorvus-overlay.exe" /NH`.quiet().nothrow()
+      return check.stdout.toString().toLowerCase().includes("opencorvus-overlay.exe")
     }
-    // Verify: the linker will fail if any opencorvus-overlay.exe is alive.
-    const check = await $`tasklist /FI "IMAGENAME eq opencorvus-overlay.exe" /NH`.quiet().nothrow()
-    const stdout = check.stdout.toString()
-    if (stdout.toLowerCase().includes("opencorvus-overlay.exe")) {
+    if (!(await isAlive())) {
+      console.log("no overlay process running")
+    } else {
+      // Graceful shutdown first: taskkill without /F posts WM_CLOSE to the
+      // Tauri overlay window. Tauri's close handler tears down the sidecar
+      // opencorvus server via a SIGTERM-equivalent, giving the server a
+      // chance to mark live runs as aborted in the DB — so no SIGKILL
+      // zombies are left behind for a future recovery sweep. We SIGKILL
+      // only as a last resort after a bounded wait.
+      await $`taskkill /IM opencorvus-overlay.exe`.quiet().nothrow()
+      const deadline = Date.now() + 8000
+      while (Date.now() < deadline && (await isAlive())) {
+        await new Promise((r) => setTimeout(r, 250))
+      }
+      if (await isAlive()) {
+        console.log("overlay did not exit within 8s — forcing")
+        await $`taskkill /F /IM opencorvus-overlay.exe`.quiet().nothrow()
+        // Windows releases file handles asynchronously after SIGKILL.
+        // Give the kernel a moment to drop the lock before the linker writes.
+        await new Promise((r) => setTimeout(r, 2000))
+      } else {
+        console.log("overlay exited gracefully")
+      }
+    }
+    if (await isAlive()) {
       throw new Error(
-        `opencorvus-overlay.exe is still running after taskkill:\n${stdout}\n` +
+        `opencorvus-overlay.exe is still running after graceful + force kill.\n` +
           `The linker will fail with LNK1104 on deps/opencorvus_overlay.exe ` +
           `because Cargo hardlinks it to the running release/ binary.`,
       )
     }
   } else {
-    await $`pkill -f opencorvus-overlay`.quiet().nothrow()
-    console.log("done")
+    // SIGTERM first (graceful), then SIGKILL if still alive after 8s.
+    await $`pkill opencorvus-overlay`.quiet().nothrow()
+    const deadline = Date.now() + 8000
+    const isAlive = async () => (await $`pgrep opencorvus-overlay`.quiet().nothrow()).exitCode === 0
+    while (Date.now() < deadline && (await isAlive())) {
+      await new Promise((r) => setTimeout(r, 250))
+    }
+    if (await isAlive()) {
+      console.log("overlay did not exit within 8s — forcing")
+      await $`pkill -KILL opencorvus-overlay`.quiet().nothrow()
+    } else {
+      console.log("overlay exited gracefully")
+    }
   }
 }
 

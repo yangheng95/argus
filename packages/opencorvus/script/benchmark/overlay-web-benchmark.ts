@@ -1737,6 +1737,12 @@ function progressSignature(progress: any) {
     pending: Array.isArray(progress?.pendingInteractions)
       ? progress.pendingInteractions.map((item: any) => `${item.id || "interaction"}:${item.type || ""}:${item.status || ""}`)
       : [],
+    // Pre-plan sessions (requirements / architect / fidelity / design-analyst)
+    // surface here so the signature evolves while goals is still empty —
+    // keeps progress_age_ms moving during the architect phase.
+    sessions: Array.isArray(progress?.activeSessions)
+      ? progress.activeSessions.map((item: any) => `${item.kind || "?"}:${item.sessionID || ""}`)
+      : [],
   })
 }
 
