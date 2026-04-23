@@ -306,6 +306,39 @@ function sessionCardID(stage: string, sid: string): string {
   return `${stage}:session:${sid}`;
 }
 
+function isUserStage(stage: string): boolean {
+  return normalizeAgentRole(stage) === "user";
+}
+
+function createSessionCardNode(
+  cardID: string,
+  stage: string,
+  goalID: string,
+  time: number,
+  parts: any[] = [],
+  childIDs: string[] = [],
+): CardNode {
+  const userStage = isUserStage(stage);
+  return {
+    id: cardID,
+    kind: userStage ? "message" : "agent",
+    role: userStage ? "user" : undefined,
+    stage,
+    accent: !userStage && stage ? stageAccent(stage) : undefined,
+    status: "running",
+    title: userStage
+      ? roleTitleKey("user")
+      : stage
+        ? roleTitleKey(stage)
+        : "chat.role.assistant",
+    round: userStage ? undefined : 0,
+    goalID: goalID || undefined,
+    parts,
+    childIDs,
+    time,
+  };
+}
+
 /** Per-goal executor step card. Each goal has exactly one goal-scope step
  *  per attempt (see workflow.ts — the `build` step, labelled "Executor",
  *  is the only `scope: "goal"` entry in the pipeline). Every new attempt
@@ -598,18 +631,10 @@ function handleFidelityStarted(event: any): void {
       `fidelity.review.started missing sessionID (taskID=${taskID})`,
     );
   }
-  // Same envelope contract as handleFidelityCompleted: read `timestamp`.
-  // `Date.now()` fallback here was the rule-1 fallback that let the card
-  // materialize with a client-local start time instead of the server emit
-  // time, so duration math against progress/completed (which both use the
-  // server clock) drifted.
-  const emittedAt = Number(event?.timestamp);
-  if (!(emittedAt > 0)) {
-    throw new Error(`fidelity.review.started missing envelope timestamp (taskID=${taskID}); SSE envelope must carry timestamp (server: protocolTaskEvent)`);
-  }
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
   const payload: RunningFidelityPayload = {
     sessionID,
-    startedAt: emittedAt,
+    startedAt: emittedAt > 0 ? emittedAt : Date.now(),
     attempt: 0,
     elapsedMs: 0,
   };
@@ -759,14 +784,9 @@ function handleFidelityCompleted(event: any): void {
     );
   }
 
-  // SSE envelope's emit time is `timestamp` (server: protocolTaskEvent in
-  // orchestrator.ts). That is the single envelope field; reading
-  // `emittedAt`/`emitted_at` never matched because the server emits
-  // neither, so every fidelity.review.completed replay threw and killed
-  // the stream processor on task re-open.
-  const emittedAt = Number(event?.timestamp);
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
   if (!(emittedAt > 0)) {
-    throw new Error(`fidelity.review.completed missing envelope timestamp (taskID=${taskID}); SSE envelope must carry timestamp (server: protocolTaskEvent)`);
+    throw new Error(`fidelity.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
   }
   const issues = Array.isArray(props.issues) ? props.issues : [];
   const corrections = Array.isArray(props.corrections) ? props.corrections : [];
@@ -1025,27 +1045,17 @@ function ensureSessionCard(
               // Non-phase session card: migrate the placeholder CardNode
               // under its real id. Fall back to a fresh shell when no
               // placeholder exists (part event never arrived first).
-              cards[newCardID] = placeholder
-                ? {
-                    ...placeholder,
-                    id: newCardID,
-                    stage: stageForResolve,
-                    accent: stageAccent(stageForResolve),
-                    title: roleTitleKey(stageForResolve),
-                    time: opts.time,
-                  }
-                : {
-                    id: newCardID,
-                    kind: "agent",
-                    stage: stageForResolve,
-                    accent: stageAccent(stageForResolve),
-                    status: "running",
-                    title: roleTitleKey(stageForResolve),
-                    round: 0,
-                    parts: [],
-                    childIDs: [],
-                    time: opts.time,
-                  };
+              cards[newCardID] = {
+                ...placeholder,
+                ...createSessionCardNode(
+                  newCardID,
+                  stageForResolve,
+                  goalForResolve,
+                  opts.time,
+                  placeholder?.parts ?? [],
+                  placeholder?.childIDs ?? [],
+                ),
+              };
             }
             if (placeholder && existing.cardID !== newCardID) delete cards[existing.cardID];
           }),
@@ -1079,19 +1089,9 @@ function ensureSessionCard(
   // sessions the phase card already exists (resolvePhaseOrSessionCardID
   // stubbed it if necessary) and we route all subsequent parts to it.
   if (!isPhase) {
-    const node: CardNode = {
-      id: cardID,
-      kind: "agent",
-      stage,
-      accent: stage ? stageAccent(stage) : undefined,
-      status: "running",
-      title: stage ? roleTitleKey(stage) : "chat.role.assistant",
-      round: 0,
-      goalID: opts.goalID || undefined,
-      parts: [],
-      childIDs: [],
-      time: opts.time,
-    };
+    // Follow-up user turns should reuse the plain user bubble chrome from
+    // ctx:user-request instead of surfacing as foldable agent cards.
+    const node = createSessionCardNode(cardID, stage, opts.goalID || "", opts.time);
     setCardTreeStore("cards", cardID, node);
   }
 
@@ -1211,6 +1211,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
 function ensureBoundaryPart(sessionID: string, messageID: string, role: string, time: number): void {
   const session = sessions.get(sessionID);
   if (!session) return;
+  if (isUserStage(session.stage || role)) return;
   // Per-message key so each agent invocation in a long-lived session gets
   // its own timeline separator. See handleMessageUpdated for the semantic
   // rationale.

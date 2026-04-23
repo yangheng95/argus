@@ -24,7 +24,6 @@ import {
   selectTask,
   createTask,
 } from "./task";
-import { syntheticTextMessage } from "../utils/transcript";
 
 // ── Types ──
 
@@ -462,28 +461,7 @@ async function applyPanelResult(result: any): Promise<void> {
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
     await selectTask(taskID);
     ensureTaskListEntry(taskID, requestID, requestText, String(result?.message || ""));
-    if (result?.message) {
-      const text = String(result.message);
-      const alreadyVisible = messageStore.messages.some((item: any) =>
-        (Array.isArray(item?.parts) ? item.parts : []).some(
-          (part: any) => part?.type === "text" && String(part?.text || "") === text,
-        ),
-      );
-      if (alreadyVisible) return;
-      setMessages(
-        mergeMessages(messageStore.messages, [
-          syntheticTextMessage("assistant", Date.now(), text),
-        ]),
-      );
-    }
     return;
-  }
-  if (result?.message) {
-    setMessages(
-      mergeMessages(messageStore.messages, [
-        syntheticTextMessage("assistant", Date.now(), String(result.message)),
-      ]),
-    );
   }
 }
 
@@ -558,13 +536,10 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
       },
     );
     await loadBoard();
-    if ((result as any)?.message) {
-      setMessages(
-        mergeMessages(messageStore.messages, [
-          syntheticTextMessage("assistant", Date.now(), String((result as any).message)),
-        ]),
-      );
-    }
+    // The server may return a control-plane acknowledgement here
+    // (e.g. operator note recorded). The real conversation already comes
+    // from board/transcript rehydration, so mirroring the ack locally only
+    // creates a fake assistant turn with mismatched chrome.
     return result;
   } catch (error) {
     if (request.manualAbort) throw error;
