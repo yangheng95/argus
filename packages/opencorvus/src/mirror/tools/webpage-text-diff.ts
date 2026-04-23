@@ -18,6 +18,7 @@ import { Instance } from "../../project/instance"
 import { extractPage } from "../url/extract"
 import { compareText, extractTextFromTree } from "../shared/content-compare"
 import { ExtractedPageSchema } from "../ir/extracted-page"
+import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 function pathToFileUrl(p: string): string {
   const abs = path.resolve(p).replace(/\\/g, "/")
@@ -31,12 +32,18 @@ Re-extracts the rendered HTML via puppeteer on a \`file://\` URL and tokenises b
 
 Use this tool AFTER \`webpage_evaluate\` returns a score below target. It pinpoints *which strings* are missing, where SSIM+pixel diff only says *where*.
 
-Requires \`extracted-page.json\` (from \`webpage_extract\`) and \`index.html\` in the output directory.`,
+Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
   parameters: z.object({
-    outputDir: z
+    referenceDir: z
       .string()
       .describe(
-        "Directory containing extracted-page.json and index.html. Defaults to the current worktree.",
+        `Directory containing \`extracted-page.json\` (webpage_extract's output). Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree.`,
+      )
+      .optional(),
+    inputDir: z
+      .string()
+      .describe(
+        "Directory containing the clone's `index.html`. Defaults to the current worktree — where the executor wrote the deliverable.",
       )
       .optional(),
     limit: z
@@ -47,11 +54,12 @@ Requires \`extracted-page.json\` (from \`webpage_extract\`) and \`index.html\` i
       .optional(),
   }),
   async execute(params) {
-    const outputDir = params.outputDir
-      ? path.resolve(Instance.directory, params.outputDir)
+    const referenceDir = await resolveMirrorOutputDir(params.referenceDir)
+    const inputDir = params.inputDir
+      ? path.resolve(Instance.directory, params.inputDir)
       : Instance.directory
-    const extractedPath = path.join(outputDir, "extracted-page.json")
-    const indexPath = path.join(outputDir, "index.html")
+    const extractedPath = path.join(referenceDir, "extracted-page.json")
+    const indexPath = path.join(inputDir, "index.html")
 
     const raw = JSON.parse(await fs.readFile(extractedPath, "utf8"))
     const refPage = ExtractedPageSchema.parse(raw)

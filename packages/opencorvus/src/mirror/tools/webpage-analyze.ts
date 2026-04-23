@@ -17,7 +17,6 @@ import path from "node:path"
 import z from "zod"
 
 import { Tool } from "../../tool/tool"
-import { Instance } from "../../project/instance"
 import {
   analyzePage,
   generateTokensFile,
@@ -25,6 +24,7 @@ import {
   buildSharedContext,
 } from "../url/pattern"
 import { ExtractedPageSchema } from "../ir/extracted-page"
+import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 export const WebpageAnalyzeTool = Tool.define("webpage_analyze", {
   description: `Analyze an ExtractedPage into a deterministic ProjectScaffold (section list, component-pattern catalog, design-token system, file contracts). Zero LLM.
@@ -37,22 +37,35 @@ Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes four ar
 
 Returns a summary: section list, pattern list, token counts. The agent should \`read\` scaffold.json for full detail when needed.
 
+This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
+
 Use as step 3 of the webpage-clone workflow. Pure function, no network.`,
   parameters: z.object({
     outputDir: z
       .string()
       .describe(
-        "Directory containing extracted-page.json. Writes scaffold.json, design-tokens.ts, App.tsx, shared-context.md here. Defaults to the current worktree.",
+        `Directory containing extracted-page.json. Writes scaffold.json, design-tokens.ts, App.tsx, shared-context.md here. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`,
       )
       .optional(),
   }),
   async execute(params) {
-    const outputDir = params.outputDir
-      ? path.resolve(Instance.directory, params.outputDir)
-      : Instance.directory
+    const outputDir = await resolveMirrorOutputDir(params.outputDir)
     const extractedPath = path.join(outputDir, "extracted-page.json")
 
-    const raw = JSON.parse(await fs.readFile(extractedPath, "utf8"))
+    let extractedText: string
+    try {
+      extractedText = await fs.readFile(extractedPath, "utf8")
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new Error(
+          `Missing ${extractedPath}. \`webpage_analyze\` depends on \`webpage_extract\` output. ` +
+          `Run \`webpage_extract\` first and wait for it to finish before calling \`webpage_analyze\`.`,
+        )
+      }
+      throw error
+    }
+
+    const raw = JSON.parse(extractedText)
     const page = ExtractedPageSchema.parse(raw)
 
     const scaffold = analyzePage(page)

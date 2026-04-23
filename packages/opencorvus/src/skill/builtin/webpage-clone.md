@@ -72,29 +72,35 @@ If the user said "clone X" or "复刻 X" but gave only a name/brand/product (e.g
 
 Never invent a URL. If `websearch` returns nothing useful, stop and ask the user for the URL.
 
+## Artifact layout
+
+All mirror-tool artifacts live under **`.opencorvus/mirror/`** — a single hidden folder at the worktree root, separate from the clone's deliverable (`index.html` + its final `images/` if you promote them). This keeps the project tree clean so `git status`, `ls`, and the executor's own workflow aren't drowning in intermediate files.
+
+Refer to artifacts as `.opencorvus/mirror/<file>` unless a tool specifically accepts a different `inputDir` / `referenceDir` override. Do not scatter these into the worktree root.
+
 ## Step 1 — Extract the reference
 
-Call `webpage_extract` with the URL. Defaults (1440×900 viewport, `body` scope) are right for most desktop pages. This writes four artifacts to the worktree:
+Call `webpage_extract` with the URL. Defaults (1440×900 viewport, `body` scope) are right for most desktop pages. Artifacts land under `.opencorvus/mirror/`:
 
-- `reference.png` — the pixel target for scoring later
-- `extracted-page.json` — DOM tree with ~33 computed CSS properties per element
-- `images/img-N.{png,jpg,svg}` — downloaded image assets
+- `.opencorvus/mirror/reference.png` — the pixel target for scoring later
+- `.opencorvus/mirror/extracted-page.json` — DOM tree with ~33 computed CSS properties per element
+- `.opencorvus/mirror/images/img-N.{png,jpg,svg}` — downloaded image assets
 - (the tool prints a summary to context — the full JSON stays on disk)
 
 Network access to the URL is required. The tool will ask for permission.
 
 ## Step 2 — Compile the XML IR
 
-Call `webpage_compile` **only after step 1 completed successfully**. This reads `extracted-page.json` and emits `page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
+Call `webpage_compile` **only after step 1 completed successfully**. It reads `.opencorvus/mirror/extracted-page.json` and emits `.opencorvus/mirror/page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
 
 ## Step 3 — Analyze the structure
 
-Call `webpage_analyze` **only after step 1 completed successfully**. This reads `extracted-page.json` and writes:
+Call `webpage_analyze` **only after step 1 completed successfully**. It reads `.opencorvus/mirror/extracted-page.json` and writes under the same folder:
 
-- `scaffold.json` — section list + pattern catalog + design-token system
-- `design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (import these; do NOT invent hex values)
-- `App.tsx` — reference composition (you can inspect but don't copy it directly)
-- `shared-context.md` — compact prompt-ready summary of tokens + patterns
+- `.opencorvus/mirror/scaffold.json` — section list + pattern catalog + design-token system
+- `.opencorvus/mirror/design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (copy values; do NOT invent hex codes)
+- `.opencorvus/mirror/App.tsx` — reference composition (you can inspect but don't copy it directly)
+- `.opencorvus/mirror/shared-context.md` — compact prompt-ready summary of tokens + patterns
 
 ## Step 4 — Write the static HTML
 
@@ -104,20 +110,20 @@ Hard rules:
 
 1. **Static HTML only**. No JavaScript frameworks (React, Vue, etc.), no Babel, no JSX. Every visible text node MUST be present as raw HTML text — a viewer with JS disabled should still see the page's content.
 2. **CSS**: inline `<style>` + Tailwind via CDN (`<script src="https://cdn.tailwindcss.com"></script>`). No other runtime dependencies.
-3. **Text**: copy phrases verbatim from `page-ir.xml` `<Text>` tags and the `Section Text` catalog. Do not paraphrase headings, nav labels, or button text.
-4. **Images**: use the local paths from the `Section Images` catalog (`images/img-N.ext`). Fall back to original URLs only if local paths are absent.
-5. **Colors**: copy the hex values from `design-tokens.ts` `COLORS` directly into your inline CSS / Tailwind arbitrary-value classes. Do NOT `import` or `<script src>` `design-tokens.ts` — the final HTML must be self-contained so step 8 can delete it. Never invent tones.
-6. **Structure**: match the section order and rough bounds reported in `scaffold.json`.
+3. **Text**: copy phrases verbatim from `.opencorvus/mirror/page-ir.xml` `<Text>` tags and the `Section Text` catalog. Do not paraphrase headings, nav labels, or button text.
+4. **Images**: before writing `<img>` tags, copy / move `.opencorvus/mirror/images/` out to `./images/` at the worktree root so the final clone is portable and doesn't reference a hidden folder. Use relative paths `images/img-N.ext` from `index.html`. Fall back to original URLs only if local paths are absent.
+5. **Colors**: copy the hex values from `.opencorvus/mirror/design-tokens.ts` `COLORS` directly into your inline CSS / Tailwind arbitrary-value classes. Do NOT `import` or `<script src>` that file — the final HTML must be self-contained so step 8 can delete `.opencorvus/mirror/`. Never invent tones.
+6. **Structure**: match the section order and rough bounds reported in `.opencorvus/mirror/scaffold.json`.
 
-Before writing, `read` `page-ir.xml` and `shared-context.md` at minimum.
+Before writing, `read` `.opencorvus/mirror/page-ir.xml` and `.opencorvus/mirror/shared-context.md` at minimum.
 
 ## Step 5 — Render
 
-Call `webpage_render` (no args needed — defaults to the current worktree + viewport from step 1). It writes `rendered.png` and reports render time + any console errors.
+Call `webpage_render` (no args needed — `inputDir` defaults to the current worktree where `index.html` lives, `outputDir` defaults to `.opencorvus/mirror/`). It writes `.opencorvus/mirror/rendered.png` and reports render time + any console errors.
 
 ## Step 6 — Evaluate
 
-Call `webpage_evaluate` with `reference=reference.png` and `rendered=rendered.png`. It writes `diff.png` (red = pixels that differ) and returns an overall score in 0-100.
+Call `webpage_evaluate` with `reference=reference.png` and `rendered=rendered.png` (both resolved inside `.opencorvus/mirror/` — evaluate's `outputDir` defaults there). It writes `.opencorvus/mirror/diff.png` (red = pixels that differ) and returns an overall score in 0-100.
 
 The score formula: `round(ssim × 50 + (100 − pixelDiff%) × 0.5)`. Target ≥ 95.
 
@@ -142,22 +148,17 @@ Track your round count explicitly in your reasoning. Do not hand-wave ("I've don
 
 ## Step 8 — Clean up intermediate artifacts
 
-**Gate**: only run this step when the most recent `webpage_evaluate` score was ≥ target. If the loop in step 7 bailed out without reaching target, SKIP step 8 entirely — the forensic artifacts stay so the user can inspect what failed.
+**Gate**: only run this step when the most recent `webpage_evaluate` score was ≥ target. If the loop in step 7 bailed out without reaching target, SKIP step 8 entirely — the forensic artifacts stay under `.opencorvus/mirror/` so the user can inspect what failed.
 
 **Keep**:
 - `index.html` — the final clone
-- `images/` — the image assets the HTML references
+- `images/` — the image assets the HTML references (promoted out of `.opencorvus/mirror/images/` in step 4)
 
-**Delete** (use `bash` with `rm`):
-- `extracted-page.json`, `page-ir.xml`, `scaffold.json`, `shared-context.md` — analysis artifacts
-- `design-tokens.ts`, `App.tsx` — reference files the final HTML should have inlined
-- `reference.png`, `rendered*.png`, `diff*.png` — QA snapshots
-- `best-index.html` if the benchmark harness left one
-
-Example cleanup:
+**Delete** the entire mirror folder in one shot:
 
 ```bash
-rm -f extracted-page.json page-ir.xml scaffold.json shared-context.md design-tokens.ts App.tsx reference.png rendered*.png diff*.png best-index.html
+rm -rf .opencorvus/mirror
+rm -f best-index.html
 ```
 
 Verify afterwards with `ls` — the working directory must contain **only** `index.html` and `images/`. If `index.html` still imports `design-tokens.ts` at this stage, that is a bug — the colour values should have been inlined in step 4.

@@ -61,7 +61,7 @@ For **webpage / UI clone tasks** (request cites a reference URL like `https://�
    - `webpage_analyze`  — `extracted-page.json` → `ProjectScaffold` with design tokens, patterns, pre-generated `design-tokens.ts` / `App.tsx`
    - `webpage_render` + `webpage_evaluate` — render `index.html` and score SSIM vs the reference
 2. Decompose the task so ONE goal (typically the first, kind=`system` or a dedicated `extract` goal) runs `webpage_extract` → `webpage_compile` → `webpage_analyze` and commits the artifacts, and later goals import those artifacts (design tokens, IR, pattern catalog) as their authoritative source of structure. Do not let every goal re-read the screenshot with raw vision.
-3. The artifact paths (`.opencorvus/extract/*` or the goal's worktree) become `exports` of the extract goal and `imports` of the implementation goals. Register them as interface_contract entries so the pipeline is explicit.
+3. All mirror artifacts land under `.opencorvus/mirror/` (reference.png, extracted-page.json, page-ir.xml, scaffold.json, design-tokens.ts, App.tsx, shared-context.md, images/). Register `.opencorvus/mirror/<file>` paths as interface_contract `exports` on the extract goal and `imports` on every implementation goal so the pipeline is explicit; the implementation goals read those files instead of re-extracting.
 
 After exploration you should be able to:
 - Cite file paths and symbols from memory

@@ -13,6 +13,7 @@ import z from "zod"
 import { Tool } from "../../tool/tool"
 import { Instance } from "../../project/instance"
 import { renderFiles } from "../visual/render"
+import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 export const WebpageRenderTool = Tool.define("webpage_render", {
   description: `Render a local \`index.html\` via headless Chrome and write a PNG screenshot.
@@ -21,10 +22,16 @@ Serves the output directory over a loopback server, loads \`index.html\`, waits 
 
 Use as step 5 of the webpage-clone workflow (after your agent wrote index.html). Follow it with \`webpage_evaluate\` to score against reference.png. Requires a local browser — no external network is strictly needed.`,
   parameters: z.object({
+    inputDir: z
+      .string()
+      .describe(
+        "Directory containing the `index.html` to render (served over a loopback server). Defaults to the current worktree — where the executor writes the clone's deliverable.",
+      )
+      .optional(),
     outputDir: z
       .string()
       .describe(
-        "Directory containing index.html to render. Defaults to the current worktree. The screenshot is written here.",
+        `Directory to write the screenshot into. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree so artifacts stay out of the project source tree. Override with an absolute path or a worktree-relative path.`,
       )
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width. Default 1440.").optional(),
@@ -42,15 +49,16 @@ Use as step 5 of the webpage-clone workflow (after your agent wrote index.html).
       .optional(),
   }),
   async execute(params, ctx) {
-    const outputDir = params.outputDir
-      ? path.resolve(Instance.directory, params.outputDir)
+    const inputDir = params.inputDir
+      ? path.resolve(Instance.directory, params.inputDir)
       : Instance.directory
+    const outputDir = await resolveMirrorOutputDir(params.outputDir)
 
     await ctx.ask({
       permission: "webpage_render",
-      patterns: [outputDir],
+      patterns: [inputDir],
       always: ["*"],
-      metadata: { outputDir },
+      metadata: { inputDir, outputDir },
     })
 
     const viewport = {
@@ -60,7 +68,7 @@ Use as step 5 of the webpage-clone workflow (after your agent wrote index.html).
     const outputName = params.output_name ?? "rendered.png"
 
     const render = await renderFiles({
-      outputDir,
+      outputDir: inputDir,
       viewport,
       fullPage: params.full_page ?? false,
       timeout: params.timeout_ms ?? 30_000,
@@ -74,7 +82,7 @@ Use as step 5 of the webpage-clone workflow (after your agent wrote index.html).
       output: [
         `# Rendered screenshot`,
         "",
-        `- Input: \`${outputDir}/index.html\``,
+        `- Input: \`${inputDir}/index.html\``,
         `- Output: \`${pngPath}\``,
         `- Viewport: ${viewport.width}×${viewport.height}${params.full_page ? " (full page)" : ""}`,
         `- Render time: ${render.renderTimeMs}ms`,
