@@ -43,9 +43,24 @@ import { escapeHtml } from "./markdown";
  * from user scrolls by tracking the last landing position we set. Scroll
  * events that land within `PROGRAM_TOLERANCE` px of that position are
  * treated as program-echo and never fire `onUserScrollUp`.
+ *
+ * Follow-lock should only drop on likely user-driven upward scrolls. Reflow,
+ * focus management, or other programmatic scrollTop changes must not disable
+ * tracking, so we also require a recent scroll intent signal.
  */
 const BOTTOM_TOLERANCE = 8;
 const PROGRAM_TOLERANCE = 2;
+const USER_SCROLL_INTENT_WINDOW_MS = 250;
+const USER_SCROLL_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+  "Spacebar",
+]);
 
 export interface AutoScrollOptions {
   isTracking: () => boolean;
@@ -64,18 +79,72 @@ export function setupAutoScroll(
 ): AutoScrollController {
   let rafPending = false;
   let expectedTop = el.scrollTop;
+  const observedChildren = new Set<Element>();
+  let lastUserScrollIntentAt = Number.NEGATIVE_INFINITY;
+
+  function nowMs(): number {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
+  }
+
+  function markUserScrollIntent() {
+    lastUserScrollIntentAt = nowMs();
+  }
+
+  function hasRecentUserScrollIntent(): boolean {
+    return nowMs() - lastUserScrollIntentAt <= USER_SCROLL_INTENT_WINDOW_MS;
+  }
+
+  function onWheel() {
+    markUserScrollIntent();
+  }
+
+  function onTouchMove() {
+    markUserScrollIntent();
+  }
+
+  function onPointerDown(event: PointerEvent) {
+    if (event.target === el) markUserScrollIntent();
+  }
+
+  function onKeyDown(event: KeyboardEvent) {
+    if (event.defaultPrevented) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (USER_SCROLL_KEYS.has(event.key)) markUserScrollIntent();
+  }
 
   function distanceFromBottom(): number {
     return el.scrollHeight - el.clientHeight - el.scrollTop;
   }
 
+  function syncResizeTargets() {
+    const nextChildren = new Set(Array.from(el.children));
+    for (const child of nextChildren) {
+      if (observedChildren.has(child)) continue;
+      resizeObserver.observe(child);
+      observedChildren.add(child);
+    }
+    for (const child of Array.from(observedChildren)) {
+      if (nextChildren.has(child)) continue;
+      resizeObserver.unobserve(child);
+      observedChildren.delete(child);
+    }
+  }
+
   function onScroll() {
-    if (Math.abs(el.scrollTop - expectedTop) <= PROGRAM_TOLERANCE) {
-      expectedTop = el.scrollTop;
+    const nextTop = el.scrollTop;
+    const delta = nextTop - expectedTop;
+    if (Math.abs(delta) <= PROGRAM_TOLERANCE) {
+      expectedTop = nextTop;
       return;
     }
-    expectedTop = el.scrollTop;
-    if (opts.isTracking() && distanceFromBottom() > BOTTOM_TOLERANCE) {
+    const movedUp = delta < -PROGRAM_TOLERANCE;
+    expectedTop = nextTop;
+    if (
+      opts.isTracking() &&
+      movedUp &&
+      hasRecentUserScrollIntent() &&
+      distanceFromBottom() > BOTTOM_TOLERANCE
+    ) {
       opts.onUserScrollUp();
     }
   }
@@ -91,10 +160,23 @@ export function setupAutoScroll(
     });
   }
 
+  el.addEventListener("wheel", onWheel, { passive: true });
+  el.addEventListener("touchmove", onTouchMove, { passive: true });
+  el.addEventListener("pointerdown", onPointerDown, { passive: true });
+  el.addEventListener("keydown", onKeyDown);
   el.addEventListener("scroll", onScroll, { passive: true });
 
-  const observer = new MutationObserver(scrollDown);
-  observer.observe(el, { childList: true, subtree: true, characterData: true });
+  const resizeObserver = new ResizeObserver(scrollDown);
+  resizeObserver.observe(el);
+  syncResizeTargets();
+
+  const mutationObserver = new MutationObserver((records) => {
+    if (records.some((record) => record.type === "childList")) {
+      syncResizeTargets();
+    }
+    scrollDown();
+  });
+  mutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
 
   requestAnimationFrame(() => {
     el.scrollTop = el.scrollHeight;
@@ -103,8 +185,14 @@ export function setupAutoScroll(
 
   return {
     cleanup: () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("keydown", onKeyDown);
       el.removeEventListener("scroll", onScroll);
-      observer.disconnect();
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+      observedChildren.clear();
     },
     scrollToBottom: () => {
       el.scrollTop = el.scrollHeight;

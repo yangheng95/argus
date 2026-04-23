@@ -9,8 +9,6 @@
  *   - Exceptions inside an onChunk handler are recorded on the tracker;
  *     the surrounding try/catch keeps one bad chunk from taking down the
  *     whole stream, and AgentRuntime inspects `.failures.snapshot()` at end.
- *   - When a `ProgressGuard` is supplied, per-chunk alive/progress signalling
- *     is delegated to it — see `AgentRuntime.run`.
  */
 import type { TextHooks } from "@/llm/api"
 import { NamedError } from "@opencorvus-ai/util/error"
@@ -21,7 +19,6 @@ import { Log } from "@/util/log"
 import { normalizeToolInput, normalizeToolOutput } from "./protocol-norm"
 import type { StreamFailureTracker, StreamFailureSnapshot } from "./stream-failures"
 import { createStreamFailureTracker } from "./stream-failures"
-import type { ProgressGuard } from "./progress-guard"
 
 const log = Log.create({ service: "session-stream" })
 
@@ -98,10 +95,6 @@ export interface SessionStreamHooksInput {
   sessionID: string
   taskID: string
   stage?: string
-  /** Optional guard to ping on every chunk (alive) and on semantic progress
-   *  chunks (progress). AgentRuntime owns the guard; callers who only want
-   *  persistence can omit this. */
-  guard?: ProgressGuard
   /** Inject a caller-provided tracker to merge with other sources (e.g.
    *  runtime-level failures). Defaults to a fresh tracker. */
   failures?: StreamFailureTracker
@@ -233,7 +226,6 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
 
   return {
     onChunk: async ({ chunk }: { chunk: any }) => {
-      input.guard?.alive()
       try {
         if (chunk.type === "text-delta") {
           if (!chunk.text) return
@@ -335,7 +327,6 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
         }
 
         if (chunk.type === "tool-call") {
-          input.guard?.progress()
           const norm = normalizeToolInput(chunk.input)
           if (!norm.ok) {
             failures.record({
@@ -384,7 +375,6 @@ export function sessionStreamHooks(input: SessionStreamHooksInput): SessionStrea
         }
 
         if (chunk.type === "tool-result") {
-          input.guard?.progress()
           const existing = toolParts.get(chunk.toolCallId)
           if (!existing) return
           const inputNorm = normalizeToolInput(chunk.input)

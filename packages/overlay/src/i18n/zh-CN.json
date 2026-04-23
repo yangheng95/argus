@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "dfe7a666f971a0ae"
+    "panel_revision": "fe45ddf6eb785857"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -128,7 +128,7 @@
   "chat.role.design-analyst": "设计分析师",
   "chat.role.evaluator": "评审",
   "chat.role.executor": "执行器",
-  "chat.role.fidelity": "需求保真审查",
+  "chat.role.fidelity": "完成度审查",
   "chat.role.goal": "目标",
   "chat.role.orchestrator": "编排器",
   "chat.role.planner": "规划器",
@@ -142,7 +142,7 @@
   "chat.stop_title": "中止当前生成并停止任务执行。",
   "chat.thinking": "思考中…",
   "chat.tip": "Enter 发送 · Shift+Enter 换行",
-  "chat.title": "任务",
+  "chat.title": "会话",
   "chat.web_search_title": "联网搜索",
   "checks.pending": "等待中",
   "common.active": "活跃",
@@ -422,7 +422,7 @@
   "section.delivery": "交付",
   "section.criteria": "评估标准",
   "section.files": "文件变更",
-  "sections.title": "审阅面板",
+  "sections.title": "任务详情",
   "settings.always_on_top": "窗口置顶",
   "settings.auto_permission": "自动批准权限",
   "settings.language": "语言",

@@ -323,7 +323,6 @@ export async function reviewFidelity(input: {
       signal,
       hooks,
       policies: {
-        progressTimeoutMs: 180_000,
         // "collect" so a single Zod tool-input rejection doesn't abort the
         // run — we accept the verdict if the collector ended up populated by
         // a later self-corrected call. No collector → throw below.

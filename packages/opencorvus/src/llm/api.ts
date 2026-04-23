@@ -1,6 +1,5 @@
 import {
   APICallError,
-  generateObject as generateObjectBase,
   generateText as generateTextBase,
   streamObject as streamObjectBase,
   streamText as streamTextBase,
@@ -133,29 +132,6 @@ export async function completeText<TOOLS extends ToolSet>(
     finishReason: await result.finishReason,
     steps: await result.steps,
   }
-}
-
-export async function generateObject(
-  input: Parameters<typeof generateObjectBase>[0] & {
-    timeoutMs?: number | false
-    retries?: number
-    retryDelayMs?: number
-  },
-) {
-  const { timeoutMs: timeout, retries: count, retryDelayMs: delay, abortSignal, ...rest } = input
-  return call(
-    (attemptSignal) => generateObjectBase({
-      ...(rest as Parameters<typeof generateObjectBase>[0]),
-      abortSignal: attemptSignal,
-      maxRetries: 0,
-    }),
-    {
-      retries: count,
-      retryDelayMs: delay,
-      abortSignal,
-      timeoutMs: timeout,
-    },
-  )
 }
 
 export function streamText<TOOLS extends ToolSet = ToolSet>(

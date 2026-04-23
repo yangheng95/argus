@@ -2383,14 +2383,6 @@ export type Config = {
        */
       timeout_ms?: number
       /**
-       * Quality score threshold for retry (0.0-1.0)
-       */
-      quality_threshold?: number
-      /**
-       * Maximum requirements analysis attempts
-       */
-      max_attempts?: number
-      /**
        * Additional skill paths for requirements agent
        */
       skills?: Array<string>
@@ -2424,14 +2416,6 @@ export type Config = {
        * Planner agent timeout in milliseconds
        */
       timeout_ms?: number
-      /**
-       * Quality score threshold for retry (0.0-1.0)
-       */
-      quality_threshold?: number
-      /**
-       * Maximum plan generation attempts
-       */
-      max_attempts?: number
       /**
        * Additional skill paths for planner agent
        */
@@ -2504,18 +2488,6 @@ export type Config = {
      * Maximum fix runs after failure
      */
     max_fix_runs?: number
-    /**
-     * Maximum retries per individual goal before permanently failing it
-     */
-    max_goal_retries?: number
-    /**
-     * After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / re-run architect / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time.
-     */
-    goal_escalation_threshold?: number
-    /**
-     * Hard ceiling on adversarial iteration count; Arbiter returns 'abort' at this iteration regardless of other signals.
-     */
-    max_delivery_iterations?: number
     /**
      * Maximum parallel executor groups
      */
@@ -5956,8 +5928,23 @@ export type AppSkillsResponses = {
     auto_detect?: {
       files?: Array<string>
       deps?: Array<string>
+      task_signals?: {
+        /**
+         * True when the task carries a reference image attachment.
+         */
+        has_attachment_image?: boolean
+        /**
+         * True when the task request text contains an http(s) URL.
+         */
+        request_contains_url?: boolean
+        /**
+         * Any of the listed npm/bun scripts exists in the project's package.json.
+         */
+        package_has_script?: Array<string>
+      }
     }
     priority?: number
+    required_tools?: Array<string>
   }>
 }
 
@@ -6611,6 +6598,46 @@ export type CodingSessionMessagesResponses = {
    */
   200: unknown
 }
+
+export type ServerShutdownData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/shutdown"
+}
+
+export type ServerShutdownResponses = {
+  /**
+   * Shutdown initiated
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ServerShutdownResponse = ServerShutdownResponses[keyof ServerShutdownResponses]
+
+export type ServerRestartData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/restart"
+}
+
+export type ServerRestartResponses = {
+  /**
+   * Restart initiated
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ServerRestartResponse = ServerRestartResponses[keyof ServerRestartResponses]
 
 export type TaskCreateData = {
   body?: {
@@ -7633,6 +7660,12 @@ export type TaskProgressResponses = {
         updated: number
       }
     }>
+    activeSessions: Array<{
+      sessionID: string
+      kind: string
+      goalID: string | null
+      lastActivityMs: number
+    }>
   }
 }
 
@@ -8019,6 +8052,14 @@ export type TaskConversationResponses = {
               title: string
               brief: string
               orderIndex: number
+              fileActions?: Array<{
+                path: string
+                intent: string
+              }>
+              verificationCommands?: Array<{
+                command: string
+                purpose: string
+              }>
             }>
             buildSessionID?: string
             workspaceDir?: string
@@ -8482,6 +8523,14 @@ export type TaskBoardResponses = {
             title: string
             brief: string
             orderIndex: number
+            fileActions?: Array<{
+              path: string
+              intent: string
+            }>
+            verificationCommands?: Array<{
+              command: string
+              purpose: string
+            }>
           }>
           buildSessionID?: string
           workspaceDir?: string
@@ -10805,23 +10854,3 @@ export type EventSubscribeResponses = {
 }
 
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
-
-export type ServerRestartData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/restart"
-}
-
-export type ServerRestartResponses = {
-  /**
-   * Restart initiated
-   */
-  200: {
-    ok: boolean
-  }
-}
-
-export type ServerRestartResponse = ServerRestartResponses[keyof ServerRestartResponses]

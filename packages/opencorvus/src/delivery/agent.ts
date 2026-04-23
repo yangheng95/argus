@@ -23,8 +23,10 @@ import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
+import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks"
+import type { GoalInfo, DeliveryInfo } from "@/delivery/checks"
 import {
   DeliveryVerdict,
   FrontendCheck,
@@ -49,7 +51,6 @@ type VerifyInput = {
   task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
-  analysis?: GoalJudgmentType
   /** Visual-reference attachments (already materialized under the attachment store).
    *  When provided, the delivery agent receives the image bytes as a multimodal
    *  `file` content part so it can actually see the target — text-only read_file
@@ -86,9 +87,6 @@ export namespace DeliveryAgent {
 
     // Stream hooks the caller (DeliveryService) supplied — tunneled through
     // AgentRuntime so the same chunk/step callbacks reach this run.
-    // AgentRuntime already owns progress-guard wiring (alive/progress/absolute
-    // tiers) and signal composition, so we no longer construct an
-    // AbortSignal.timeout here.
     const passthroughHooks = {
       onChunk: input.stream?.onChunk,
       onError: input.stream?.onError,
@@ -97,8 +95,6 @@ export namespace DeliveryAgent {
     } as any
 
     const externalSignal = input.signal
-    const abortSignals: AbortSignal[] = [guard.signal]
-    if (externalSignal) abortSignals.push(externalSignal)
 
     const MAX_RETRIES = deliveryCfg.max_retries
     let verdict: DeliveryVerdictType | undefined
@@ -106,9 +102,8 @@ export namespace DeliveryAgent {
 
     // Retry loop covers missing-finalize failures — the agent ran but did not
     // call submit_verdict before the step budget ended. Stream-level failures
-    // and timeouts are handled by AgentRuntime's failure tracker and progress
-    // guard — we propagate them as thrown errors and only retry the
-    // finalize-missed path.
+    // are surfaced directly by AgentRuntime; we propagate them as thrown
+    // errors and only retry the finalize-missed path.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         if (externalSignal?.aborted) break
@@ -129,11 +124,9 @@ export namespace DeliveryAgent {
           sessionID: input.task.sessionID ?? "",
           taskID: input.task.id,
           stage: "delivery",
-          signal: AbortSignal.any(abortSignals),
-          onStepFinish: guard.onStepFinish,
+          signal: externalSignal,
           hooks: passthroughHooks,
           policies: {
-            progressTimeoutMs: deliveryCfg.timeout_ms,
             failurePolicy: "collect",
           },
         })
@@ -150,7 +143,6 @@ export namespace DeliveryAgent {
         steps: runResult.steps.length,
         toolCalls: runResult.toolCallCount,
         finishReason: runResult.finishReason,
-        timeoutTier: runResult.timeout?.tier,
         streamFailures: runResult.failures.count,
       })
 
@@ -263,7 +255,6 @@ function buildUserPrompt(
     task: { id?: string; title: string; request: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
-    analysis?: GoalJudgmentType
     attachments?: Array<{ sha: string; mime: string; filename?: string; intent?: string }>
   },
   context?: string,
@@ -311,6 +302,20 @@ function buildUserPrompt(
       }
     }
     sections.push(lines.join("\n"))
+  }
+
+  if (input.task.id) {
+    const upstreamContext = buildTaskUpstreamAgentContextSections(input.task.id)
+    if (upstreamContext.length > 0) sections.push(...upstreamContext)
+  }
+
+  // Mirror cache + pipeline steering — delivery must never re-fetch a URL
+  // the pipeline has already captured; it reads artifacts off disk instead.
+  try {
+    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
+    if (mirrorSection.trim().length > 0) sections.push(mirrorSection)
+  } catch {
+    // Instance not initialised — advisory, skip.
   }
 
   // Inline hint: when the user message carries image attachments (attached
@@ -372,16 +377,16 @@ function buildUserPrompt(
     `YOU execute every heuristic scorer with \`run_command\`, judge every rubric / ` +
     `llm_judge scorer by reading + reasoning, and record PASS or FAIL with concrete ` +
     `evidence.\n\n` +
-    `Your verdict is ADVISORY. A separate Arbiter runs after you — it reads the ` +
-    `metric ruler (engine_metric_result rows produced by the Metric Executor) and ` +
-    `decides the authoritative outcome. What matters is that your \`issues_found\` ` +
-    `and \`rejection_details\` are concrete and evidence-backed: if the Arbiter hands ` +
-    `control back to the orchestrator, the assistant reads your findings to decide ` +
-    `what to change next.\n\n` +
+    `Your verdict is authoritative for this delivery pass. Use ` +
+    `\`query_metric_trajectory\` to ground yourself in prior iterations and current ` +
+    `metric results, but do NOT outsource the acceptance decision to the trajectory. ` +
+    `What matters is that your \`issues_found\` and \`rejection_details\` are ` +
+    `concrete and evidence-backed: if you reject, the orchestrator reads your ` +
+    `findings to decide what to change next.\n\n` +
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id and affected_goal_ids when you reject)\n\n**Objective:** ${g.description}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
+            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id and affected_goal_ids when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g)}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
         )
         .join("\n\n---\n\n"),
   )
@@ -463,19 +468,6 @@ function buildUserPrompt(
     }
   }
 
-  if (input.analysis) {
-    sections.push(
-      `# Prior Analysis\n\n` +
-        `Verdict: ${input.analysis.verdict}\n` +
-        `Classification: ${input.analysis.classification}\n` +
-        `Summary: ${input.analysis.summary}\n\n` +
-        `Goal statuses:\n` +
-        input.analysis.goal_statuses
-          .map((g) => `- Goal ${g.goal_index}: ${g.status} — ${g.evidence}`)
-          .join("\n"),
-    )
-  }
-
   if (context) {
     sections.push(`# Pre-fetched Context\n\n${context}`)
   }
@@ -509,6 +501,16 @@ function buildUserPrompt(
   )
 
   return sections.join("\n\n")
+}
+
+function renderGoalContractDetails(goal: GoalInfo): string {
+  const lines: string[] = []
+  if (goal.requirement_ids.length > 0) lines.push(`- Requirement IDs: ${goal.requirement_ids.join(", ")}`)
+  if (goal.depends_on.length > 0) lines.push(`- Depends on goal IDs: ${goal.depends_on.join(", ")}`)
+  if (goal.imports.length > 0) lines.push(`- Imports: ${goal.imports.join(", ")}`)
+  if (goal.exports.length > 0) lines.push(`- Exports: ${goal.exports.join(", ")}`)
+  if (goal.owned_paths.length > 0) lines.push(`- Owned paths: ${goal.owned_paths.join(", ")}`)
+  return lines.length > 0 ? `\n\n**Goal contract:**\n${lines.join("\n")}` : ""
 }
 
 function truncate(text: string, maxLen: number): string {
@@ -579,15 +581,16 @@ Your rejections drive improvement — they loop back to the executor for rework.
 
 When \`query_metric_trajectory\` shows prior iterations with blocking-unmet metrics or open counterexamples, RAISE THE BAR: the executor had your feedback and should have addressed every cited issue. A reproducer that survives a rework cycle is stronger evidence than a first-pass observation — weight your rejection accordingly.
 
-There is no "don't duplicate the evaluator" rule anymore — the evaluator is gone. You ARE the one running build / test / lint / rubric checks. Run what you need. The only commands you can skip are ones an earlier rework cycle already recorded under \`query_criteria\` that you trust (and even then, re-run after applying any fix).
+There is no "don't duplicate the evaluator" rule anymore — the evaluator is gone. You ARE the one running build / test / lint / rubric checks. Run what you need. The only commands you can skip are ones an earlier rework cycle already recorded in \`query_metric_trajectory\` or surfaced through \`query_evidence\` that you trust (and even then, re-run after applying any fix).
 
 ## Available Tools
 
 ### Exploration
 - **read_file**, **find_files**, **search_code**, **list_directory**: Inspect codebase
 
-### Quality criteria
-- **query_criteria**: Read quality criteria already recorded for this task — results from PRIOR delivery iterations (when rework iteration > 1), external quality gates. ALWAYS call this BEFORE deciding the verdict. On iteration 1 this will usually be empty — there is no pre-computed per-goal evaluator output anymore. Visual similarity is NOT recorded as a criterion; compare the attached rendered image vs reference image yourself.
+### Quality evidence
+- **query_metric_trajectory**: Read recent iteration history, blocking-unmet counts, open counterexamples, and the current iteration's metric results. ALWAYS call this BEFORE deciding the verdict. On iteration 1 the history may be short, but it still shows whether prior delivery attempts already established unresolved failures. Visual similarity is NOT encoded there; compare the attached rendered image vs reference image yourself.
+- **query_evidence**: Drill into a specific goal-run or delivery-scope evidence record when the trajectory indicates a failing metric or when you need raw scorer detail for rejection_details.
 
 ### Rework (use when you find fixable issues)
 - **write_file**: Write or overwrite a file
@@ -825,7 +828,7 @@ Fields (see tool schema for exact types):
 A rejection that omits any of these fields, or cites a problem you never tried to fix, forces the orchestrator to re-discover what you already saw — that costs a full iteration.
 
 ## Rules
-- ALWAYS call query_criteria first — on iteration 1 it is usually empty (there is no pre-computed per-goal evaluator anymore); on rework iterations it carries prior delivery findings that tell you which issues MUST have been addressed. Visual similarity is NOT in query_criteria (SSIM gate was removed) — do the comparison yourself against the attached rendered+reference images.
+- ALWAYS call query_metric_trajectory first, then query_evidence when you need raw scorer detail. On rework iterations the trajectory tells you which failures and counterexamples MUST have been addressed. Visual similarity is NOT in the trajectory (SSIM gate was removed) — do the comparison yourself against the attached rendered+reference images.
 - Run build / test / lint / typecheck yourself on the merged tree (Phase 1). No one ran them before you at project scope.
 - Verify each goal's acceptance_specs explicitly (Phase 2) — heuristic scorers via run_command, rubric / llm_judge scorers via reading + reasoning. Treat the specs as INFORMATION, not as pre-scored results.
 - ALWAYS start the application to verify runtime behavior — reading code alone is NOT sufficient.

@@ -69,7 +69,11 @@ export interface GoalInfo {
   criteria: string
   priority: "blocking" | "advisory"
   check_selector?: string[]
-  requirement_ids?: string[]
+  requirement_ids: string[]
+  depends_on: string[]
+  imports: string[]
+  exports: string[]
+  owned_paths: string[]
 }
 
 export interface GoalReportClaim {

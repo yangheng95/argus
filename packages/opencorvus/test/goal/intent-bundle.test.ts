@@ -31,6 +31,9 @@ describe("writeIntentBundle", () => {
     const readmeMd = await fs.readFile(path.join(tmpDir, ".opencorvus", "intent", "README.md"), "utf8")
     expect(readmeMd).toContain("# Intent Bundle")
     expect(readmeMd).toContain("request.md")
+    expect(readmeMd).toContain("## Attachment Lookup")
+    expect(readmeMd).toContain("attachment://<sha>.<ext>")
+    expect(readmeMd).toContain(".opencorvus/attachments/")
     expect(readmeMd).not.toContain("clarifications.md")
     expect(readmeMd).not.toContain("operator-notes.md")
 
@@ -60,6 +63,7 @@ describe("writeIntentBundle", () => {
     const readmeMd = await fs.readFile(path.join(tmpDir, ".opencorvus", "intent", "README.md"), "utf8")
     expect(readmeMd).toContain("clarifications.md")
     expect(readmeMd).toContain("operator-notes.md")
+    expect(readmeMd).toContain("Task attachments are not duplicated into this directory.")
   })
 
   test("empty clarifications/notes strings are treated as absent", async () => {

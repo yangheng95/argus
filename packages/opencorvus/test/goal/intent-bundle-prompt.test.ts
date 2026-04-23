@@ -63,6 +63,7 @@ function seedBase() {
       task_id: taskID,
       plan_version_id: planID,
       title: "Implement X",
+      slug: "implement-x",
       objective: "Implement X with enough detail for the executor to proceed.",
       done_definition: "tests pass",
       owned_paths: ["src/x.ts"],
@@ -172,6 +173,8 @@ describe("buildGoalPrompt — intent bundle advertisement", () => {
         expect(prompt).toContain("## User Intent Bundle")
         expect(prompt).toContain(".opencorvus/intent/")
         expect(prompt).toContain("intent/request.md")
+        expect(prompt).toContain("attachment://<sha>.<ext>")
+        expect(prompt).toContain(".opencorvus/attachments/")
       },
     })
   })
@@ -200,6 +203,7 @@ describe("buildGoalPrompt — clarifications/notes double-exposure guard", () =>
         // Sanity check: bundle advertisement still present.
         expect(prompt).toContain("intent/clarifications.md")
         expect(prompt).toContain("intent/operator-notes.md")
+        expect(prompt).toContain("Task attachments are NOT duplicated into `.opencorvus/intent/`.")
       },
     })
   })

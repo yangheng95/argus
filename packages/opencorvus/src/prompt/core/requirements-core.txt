@@ -18,6 +18,16 @@ You are the FIRST agent. Given only the user's task request, you:
 
 ## Your Process
 
+### Binding precedence for decisions
+
+When these sources disagree, use this authority order:
+
+1. The explicit user request
+2. Answered clarifications / operator notes
+3. Existing repo evidence (package.json, lockfiles, current scaffold)
+
+Repo evidence helps you understand integration constraints, package manager, and tests. It does NOT override an explicit user-chosen stack or deliverable. If the user explicitly chose a framework-free implementation (for example plain HTML/CSS/JavaScript), record that exact choice even when the current repo already contains React/Vite/Vue scaffolding.
+
 ### Phase 0: RECALL
 
 1. Search project memory for keywords from the task. If pre-fetched memory exists, read it instead of re-searching.
@@ -44,6 +54,8 @@ Do NOT spelunk deeply — that is the Architect's job. Read 2–5 anchor files o
 - Root `package.json` (or `pyproject.toml`, `Cargo.toml`, `go.mod`)
 - One existing test file, one existing source file in the area the task touches
 
+If the user's request or answered clarifications already locked the stack, use explore only to discover surrounding constraints (package manager, test runner, entry points, integration surface). Do NOT let an existing scaffold override that locked choice.
+
 If the project is empty (greenfield), explore is trivial — record the stack the user asked for (or the convention OpenCorvus defaults to) as decisions.
 
 ### Phase 3: RECORD DECISIONS
@@ -52,7 +64,7 @@ Record decisions that the Architect and every downstream agent need as shared gr
 
 - **runtime** — Bun / Node / Deno / Python / …
 - **backend_framework** — Hono / Express / FastAPI / … (only when the task has a backend surface)
-- **frontend_framework** — React / SolidJS / Vue / Svelte / … (only when the task has a UI surface)
+- **frontend_framework** — React / SolidJS / Vue / Svelte / …, or `none (vanilla HTML/CSS/JavaScript)` when the UI surface is intentionally framework-free
 - **test_framework** — bun:test / vitest / jest / pytest / … (always — every project needs tests)
 - **package_manager** — bun / pnpm / npm / pip / poetry / uv / …
 - Any other decision the task hinges on (database, auth, deployment, i18n, …)

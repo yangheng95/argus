@@ -18,9 +18,10 @@
  * and passing the strings in. Keeping the DB lookup out of this module
  * makes it trivially testable without mocking the helpers module.
  *
- * Attachments (images, PDFs) are NOT copied here — they live under the
- * project's `.opencorvus/attachments/` keyed by sha and are referenced by
- * their filename in request.md when the user embedded them.
+ * Attachments are NOT copied here. They stay in the project's
+ * `.opencorvus/attachments/` store and are referenced indirectly
+ * (`attachment://<sha>.<ext>` / `/attachment/<projectID>/<sha>.<ext>`) by
+ * whichever task material needs them.
  */
 import fs from "fs/promises"
 import path from "path"
@@ -115,6 +116,15 @@ function renderReadme(manifest: Array<{ path: string; summary: string }>): strin
   for (const entry of manifest) {
     lines.push(`- \`${entry.path}\` — ${entry.summary}`)
   }
-  lines.push("")
+  lines.push(
+    "",
+    "## Attachment Lookup",
+    "",
+    "Task attachments are not duplicated into this directory.",
+    "When task material points at an attachment reference such as",
+    "`attachment://<sha>.<ext>` or `/attachment/<projectID>/<sha>.<ext>`,",
+    "resolve it from the project's `.opencorvus/attachments/` store.",
+    "",
+  )
   return lines.join("\n")
 }

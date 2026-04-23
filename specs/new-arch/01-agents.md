@@ -121,13 +121,14 @@ orchestrator/loop.ts — runTaskLoop()
 | Requirements | `requirements/agent.ts` | Zod tool 输出 Goals[] + 追溯矩阵 + fidelity | pipeline workflow 或 Orchestrator 判断需要 |
 | Architect | `architect/agent.ts` | 接口契约、目录蓝图、导出清单；写 decision-log | 跨目标协调需要时 |
 | Design Analyst | `design-analyst/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 布局 / 样式 / 组件清单 | 有视觉参考的前端任务 |
-| Planner | `planner/agent.ts` | per-goal 实现步骤 | 执行前（可选） |
+| Planner | `planner/agent.ts` | per-goal 实现步骤 | 当前由 `engine/goal-pool.ts` 在 per-goal build 前调用；不是 Orchestrator 的显式 tool |
 | Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 delivery_rejected 重新 call build） | 每个 workflow 末尾 |
 | Build | 由 `Agent.get("build")` 解析为 executor session | 在 worktree 中实际写代码 | Orchestrator 通过 `build` tool 调起 |
 
 **Checks（原 evaluator 模块）**：移到 `delivery/checks/`，不再是独立 sub-agent。delivery agent 通过 `discovery.ts` 解析 check family，调 `per-goal.ts` / `llm-judge-runner.ts` / `visual.ts` 执行确定性或 LLM judge 验证。旧 `src/evaluator/` 目录已删除。
 
-**所有 sub-agent 调用点**：`orchestrator/tools.ts`（Orchestrator 的 tool 注册器），不是固定顺序的 pipeline。
+**当前主要 stage-agent 调用点**：`orchestrator/tools.ts`（`requirements / design_analysis / architect / build / deliver`）。
+**例外**：`planner/agent.ts` 当前由 `engine/goal-pool.ts` 在 per-goal build 前调用；见 [13-agent-communication-matrix.md](13-agent-communication-matrix.md)。
 
 ## Decision Log
 
@@ -162,3 +163,4 @@ Executor 是**外部**进程，不属于 Agent Team：
 - [02-data.md](02-data.md) — `engine_*` 18 张表的行为
 - [03-control.md](03-control.md) — ChannelIngress / ControlMessage / Panel Capability 路由
 - [04-extensions.md](04-extensions.md) — Executor 与 plugin/mcp/acp 的边界
+- [13-agent-communication-matrix.md](13-agent-communication-matrix.md) — 预期 whitelist 与当前 direct/indirect 通信真相对照

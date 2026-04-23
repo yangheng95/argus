@@ -172,6 +172,7 @@ import type {
   RunGetErrors,
   RunGetResponses,
   ServerRestartResponses,
+  ServerShutdownResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -4009,6 +4010,46 @@ export class Coding extends HeyApiClient {
   }
 }
 
+export class Server extends HeyApiClient {
+  /**
+   * Shutdown the server
+   *
+   * Gracefully abort live execution state and stop the current process.
+   */
+  public shutdown<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<ServerShutdownResponses, unknown, ThrowOnError>({
+      url: "/shutdown",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Restart the server
+   *
+   * Spawn a new server process with the same arguments, then exit.
+   */
+  public restart<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<ServerRestartResponses, unknown, ThrowOnError>({
+      url: "/restart",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Global2 extends HeyApiClient {
   /**
    * List tasks across projects
@@ -6638,27 +6679,6 @@ export class Event extends HeyApiClient {
   }
 }
 
-export class Server extends HeyApiClient {
-  /**
-   * Restart the server
-   *
-   * Spawn a new server process with the same arguments, then exit.
-   */
-  public restart<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<ServerRestartResponses, unknown, ThrowOnError>({
-      url: "/restart",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class OpencodeClient extends HeyApiClient {
   public static readonly __registry = new HeyApiRegistry<OpencodeClient>()
 
@@ -6922,6 +6942,11 @@ export class OpencodeClient extends HeyApiClient {
     return (this._coding ??= new Coding({ client: this.client }))
   }
 
+  private _server?: Server
+  get server(): Server {
+    return (this._server ??= new Server({ client: this.client }))
+  }
+
   private _task?: Task
   get task(): Task {
     return (this._task ??= new Task({ client: this.client }))
@@ -7010,10 +7035,5 @@ export class OpencodeClient extends HeyApiClient {
   private _event?: Event
   get event(): Event {
     return (this._event ??= new Event({ client: this.client }))
-  }
-
-  private _server?: Server
-  get server(): Server {
-    return (this._server ??= new Server({ client: this.client }))
   }
 }

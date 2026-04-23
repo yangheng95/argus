@@ -113,7 +113,7 @@ async function run(input: {
   if (input.signal?.aborted) throw new Error("architect agent aborted")
 
   const orchCfg = await EngineConfig.get()
-  const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.architect
+  const { max_steps: MAX_STEPS } = orchCfg.architect
 
   const model = await resolveAgentModel("architect", { taskID: input.taskID })
 
@@ -149,9 +149,6 @@ async function run(input: {
     model: model.id,
   })
 
-  const abortSignals: AbortSignal[] = [guard.signal]
-  if (input.signal) abortSignals.push(input.signal)
-
   const passthroughHooks = {
     onChunk: input.stream?.onChunk,
     onError: input.stream?.onError,
@@ -169,11 +166,9 @@ async function run(input: {
     sessionID: input.sessionID ?? "",
     taskID: input.taskID,
     stage: "architect",
-    signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish,
+    signal: input.signal,
     hooks: passthroughHooks,
     policies: {
-      progressTimeoutMs: TIMEOUT_MS,
       failurePolicy: "collect",
     },
   })

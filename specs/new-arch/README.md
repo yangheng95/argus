@@ -26,6 +26,8 @@
 | [07-panel.md](07-panel.md) | Workbench / Panel 重设计 + SSE 事件 | J |
 | [11-agent-oop-protocol.md](11-agent-oop-protocol.md) | Agent OOP 协议：BaseAgent / CapabilityContract / Mailbox / Registry / Whitelist | 新 |
 | [12-overlay-card-system.md](12-overlay-card-system.md) | Overlay 统一卡片系统：Shell / Payload / Policy / Writer | 新 |
+| [13-agent-communication-matrix.md](13-agent-communication-matrix.md) | Agent 通信矩阵：预期 whitelist vs 当前实现的 direct/indirect 路径 | 新 |
+| [14-agent-runtime-mode.md](14-agent-runtime-mode.md) | Agent 抽象修正：AgentSpec / RuntimeMode / ContextStrategy / BudgetPolicy | 新 |
 | [99-principles.md](99-principles.md) | 核心原则、anti-patterns、非协商约束 | B · E |
 
 ### 归档与工作笔记

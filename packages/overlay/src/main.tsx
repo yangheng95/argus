@@ -178,6 +178,11 @@ function buildTaskDebugBlob(board: any): string {
   }
   push(
     ``,
+    `Notes:`,
+    `  - Structured goal reports are written into engine_delivery.result.report only after a goal has produced a delivery row.`,
+    `  - Queued/running/evaluating goals can be healthy and still show no report yet; that is not a planning failure by itself.`,
+    `  - The SQL block below marks report presence only. Use the report payload query to inspect the full JSON body.`,
+    ``,
     `# SQL templates (read-only — open the DB with bun:sqlite readonly:true,`,
     `#  default path C:/Users/<user>/.local/share/opencorvus/opencorvus.db)`,
     ``,
@@ -197,6 +202,11 @@ function buildTaskDebugBlob(board: any): string {
     `       json_extract(result, '$.commit_ref') AS commit_ref,`,
     `       json_extract(result, '$.stats')     AS stats,`,
     `       CASE WHEN json_extract(result, '$.report') IS NULL THEN 'no-report' ELSE 'has-report' END AS report`,
+    `FROM engine_delivery WHERE task_id = '${id}' ORDER BY time_created;`,
+    ``,
+    `-- Delivery report payload (JSON; empty until a goal has delivered)`,
+    `SELECT id, goal_run_id, status,`,
+    `       json_extract(result, '$.report') AS report_json`,
     `FROM engine_delivery WHERE task_id = '${id}' ORDER BY time_created;`,
     ``,
     `-- Evaluations`,

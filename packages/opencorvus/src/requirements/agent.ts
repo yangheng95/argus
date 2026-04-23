@@ -25,6 +25,8 @@ import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
+import { Instance } from "@/project/instance"
 import type {
   ParsedRequirement,
   RequirementsDecision,
@@ -102,7 +104,6 @@ async function runInternal(input: {
   const orchCfg = await EngineConfig.get()
   const {
     max_steps: MAX_STEPS,
-    timeout_ms: TIMEOUT_MS,
   } = orchCfg.requirements
 
   // Resolve model — per-agent model from Agent.Info (config: agent.requirements.model),
@@ -142,9 +143,6 @@ async function runInternal(input: {
     model: model.id,
   })
 
-  const abortSignals: AbortSignal[] = [guard.signal]
-  if (input.signal) abortSignals.push(input.signal)
-
   // RequirementsAgent is always invoked nested: the caller (orchestrator or
   // requirements service) owns persistence via its own session-hooks and
   // forwards chunks through `input.stream`. We therefore wrap those into
@@ -167,11 +165,9 @@ async function runInternal(input: {
     sessionID: input.sessionID ?? "",
     taskID: input.taskID,
     stage: "requirements",
-    signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish,
+    signal: input.signal,
     hooks: passthroughHooks,
     policies: {
-      progressTimeoutMs: TIMEOUT_MS,
       // Caller-side hooks do their own failure accounting; don't let runtime
       // throw here — the caller will surface any persist errors.
       failurePolicy: "collect",
@@ -306,6 +302,28 @@ function buildUserPrompt(
     ].join("\n"),
   )
 
+  sections.push(
+    [
+      "# Authority Order",
+      "",
+      "Use this precedence when recording foundational decisions:",
+      "1. The user's explicit request text.",
+      "2. Answered clarifications and operator notes.",
+      "3. The advisory visual contract for UI constraints.",
+      "4. Existing repo evidence such as package.json, lockfiles, and current scaffolds.",
+      "",
+      "Concrete stack or deliverable answers from clarifications/operator notes outrank existing package.json dependencies, framework scaffolds, and prior assumptions.",
+      "If the user explicitly chose a framework-free implementation, record that exact choice instead of upgrading it to the repo's current frontend scaffold.",
+    ].join("\n"),
+  )
+
+  if (input.taskID) {
+    const clarifications = clarificationTranscriptSection(input.taskID)
+    if (clarifications) sections.push(clarifications)
+    const notes = operatorNotesSection(input.taskID)
+    if (notes) sections.push(notes)
+  }
+
   if (input.designSpecs && input.designSpecs.length > 0) {
     sections.push(renderVisualContractPromptSection({
       specs: input.designSpecs,
@@ -317,15 +335,16 @@ function buildUserPrompt(
     }))
   }
 
-  if (input.taskID) {
-    const clarifications = clarificationTranscriptSection(input.taskID)
-    if (clarifications) sections.push(clarifications)
-    const notes = operatorNotesSection(input.taskID)
-    if (notes) sections.push(notes)
-  }
-
   if (context) {
     sections.push(`# Project Context (Pre-fetched)\n\n${context}`)
+  }
+
+  try {
+    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
+    if (mirrorSection.trim().length > 0) sections.push(mirrorSection)
+  } catch {
+    // Instance not initialised in rare test paths — skip, section is
+    // advisory only.
   }
 
   sections.push(

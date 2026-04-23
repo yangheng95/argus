@@ -18,7 +18,11 @@ import {
 import { startSSE } from "./sse";
 import { loadConfigInfo } from "./init";
 import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
-import { isBoardInvalidatingEventType, isRouterConsumedNoopEventType } from "./event-policy";
+import {
+  isBoardInvalidatingEventType,
+  isRouterConsumedNoopEventType,
+  isSubagentPhaseCompletedEventType,
+} from "./event-policy";
 
 // Forward SSE events to the tree-writer. Runs alongside `enqueueEvent` so
 // the `messageStore.messages` index (still consumed by Board panels, chat
@@ -316,6 +320,10 @@ export function replayTaskEventToTree(event: any): void {
 
 // ── Main router ──
 
+const BOARD_EVENT_DEBOUNCE = 500;
+
+let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
+
 /**
  * Route a parsed SSE event to the appropriate Solid store or action.
  * @returns true if the event was consumed; false if it should be forwarded to
@@ -334,6 +342,7 @@ export function routeSSEEvent(event: any): boolean {
     type === "message.part.updated" ||
     type === "message.part.delta"
   ) {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
     if (shouldReloadConversationForMessageEvent(event)) {
       void loadConversation();
       return true;
@@ -386,6 +395,7 @@ export function routeSSEEvent(event: any): boolean {
 
   // ── Executor progress / output events → convert to standard messages ──
   if (type === "run.progress") {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
     const progressType: string = properties.type || "";
 
     // Protocol noise — skip
@@ -417,6 +427,7 @@ export function routeSSEEvent(event: any): boolean {
   }
 
   if (type === "run.output") {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
     // Text output from executor — convert to message delta
     const messages = convertExecutorEventToMessages(event, {
       ...properties,
@@ -465,9 +476,6 @@ function executorEventKind(progressType: string | undefined): string {
 
 // ── Board / Task Lifecycle Event Handling ──
 
-const BOARD_EVENT_DEBOUNCE = 500;
-
-let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
 
 function normalizedEventType(event: any): string {
   const raw = String(event?.type || "").trim();
@@ -475,7 +483,7 @@ function normalizedEventType(event: any): string {
 }
 
 function eventTaskID(event: any): string {
-  return String(event?.properties?.taskID || event?.payload?.taskID || "");
+  return String(event?.taskID || event?.properties?.taskID || event?.payload?.taskID || "");
 }
 
 function eventSequence(event: any): number {
@@ -485,6 +493,16 @@ function eventSequence(event: any): number {
 
 function boardInvalidatingEvent(type: string): boolean {
   return isBoardInvalidatingEventType(type);
+}
+
+function shouldRefreshSelectedBoard(type: string): boolean {
+  return (
+    boardInvalidatingEvent(type) ||
+    type.startsWith("message.") ||
+    type.startsWith("run.") ||
+    type === "task.message" ||
+    isSubagentPhaseCompletedEventType(type)
+  );
 }
 
 function scheduleTasksCompat(delay = 0): void {
@@ -528,9 +546,9 @@ export function handleEventStreamEvent(event: any): void {
   }
   if (boardInvalidatingEvent(type)) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-    if (taskID && taskID === boardStore.selectedTaskID) {
-      scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    }
+  }
+  if (taskID && taskID === boardStore.selectedTaskID && shouldRefreshSelectedBoard(type)) {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
   }
 }
 
@@ -579,10 +597,10 @@ export function handleTaskListNotification(event: any): void {
     }
     setTaskSequence(sequence);
   }
-  if (boardInvalidatingEvent(type)) {
+  if (taskID) {
     scheduleTasksCompat(BOARD_EVENT_DEBOUNCE);
-    if (taskID && taskID === boardStore.selectedTaskID) {
-      scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    }
+  }
+  if (taskID && taskID === boardStore.selectedTaskID && shouldRefreshSelectedBoard(type)) {
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
   }
 }

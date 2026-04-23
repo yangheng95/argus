@@ -169,9 +169,8 @@ export namespace Orchestrator {
       })
       stopSignal = dispatchSignal
       const guard = toolGuard(tools)
-      const onStepFinish = async (step: unknown) => {
+      const onStepFinish = async (_step: unknown) => {
         try {
-          await guard.onStepFinish(step)
         } finally {
           const stopReason = finalizeDeferredStop()
           if (stopReason) {
@@ -227,8 +226,7 @@ export namespace Orchestrator {
         toolCount: Object.keys(tools).length,
       })
 
-      // 5. Run through AgentRuntime — unified guard / failure / persistence wiring.
-      const taskAgentProgressMs = 20 * 60 * 1000
+      // 5. Run through AgentRuntime — unified failure / persistence wiring.
       const runResult = await AgentRuntime.run({
         agent: "orchestrator",
         model,
@@ -240,19 +238,10 @@ export namespace Orchestrator {
         sessionID: agentSession.id,
         taskID,
         stage: "orchestrator",
-        signal: AbortSignal.any([ctrl.signal, guard.signal, stopSignal]),
+        signal: AbortSignal.any([ctrl.signal, stopSignal]),
         onStepFinish,
         hooks: contentHooks,
         policies: {
-          // Orchestrator is the root coordinator: it sits in `tool.execute`
-          // for minutes at a time while sub-agents (design-analyst /
-          // requirements / planner / executor) run. The root stream emits no
-          // chunks during those gaps, so a tight Tier-1 alive timer would
-          // false-trigger. Each sub-agent carries its own alive guard, so
-          // we collapse Tier 1 into Tier 2 here (alive == progress).
-          aliveTimeoutMs: taskAgentProgressMs,
-          progressTimeoutMs: taskAgentProgressMs,
-          absoluteTimeoutMs: taskAgentProgressMs * 3,
           // Root agent: surface child failures as collected state; the task
           // loop handles escalation, not the runtime.
           failurePolicy: "collect",
@@ -270,11 +259,10 @@ export namespace Orchestrator {
         finishReason: resultFinishReason,
         textLength: resultText?.length ?? 0,
         streamFailures: runResult.failures.count,
-        timeoutTier: runResult.timeout?.tier,
       })
 
       // Critical stream failures (mid-stream protocol violations, persist
-      // failures, provider onError, progress-guard timeouts) mean the
+      // failures, provider onError) mean the
       // agent's view of the run is incoherent and we must fail the task.
       // Excluded from critical:
       //   - `flush`: cleanup-path persistence hiccup after the LLM already
@@ -298,14 +286,12 @@ export namespace Orchestrator {
           firstFlushReason: flushOnly[0]?.reason,
         })
       }
-      if (critical.length > 0 || runResult.timeout) {
+      if (critical.length > 0) {
         const first = critical[0]
-        const reason = runResult.timeout?.reason
-          ?? (first ? `${first.kind}: ${first.reason}` : "unknown stream failure")
+        const reason = first ? `${first.kind}: ${first.reason}` : "unknown stream failure"
         log.warn("orchestrator surfaced stream failures", {
           taskID,
           criticalCount: critical.length,
-          timeoutTier: runResult.timeout?.tier,
           firstFailureKind: first?.kind,
         })
         const current = requireTask(taskID)

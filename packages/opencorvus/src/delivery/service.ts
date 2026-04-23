@@ -6,14 +6,13 @@
  *   - Wraps any thrown error in `DeliveryFailureError` so callers can type-
  *     check the delivery failure mode without sniffing message strings.
  *
- * Progress / alive / absolute timeouts and abort-signal composition are owned
- * by AgentRuntime (which DeliveryAgent dispatches through). This file used
- * to wrap a redundant second progress-guard around the same agent — that
- * three-layer guard stack was collapsed when delivery was migrated onto
- * AgentRuntime.
+ * Abort-signal composition and stream-failure collection are owned by
+ * AgentRuntime (which DeliveryAgent dispatches through). This file used
+ * to wrap a redundant second watchdog around the same agent; that extra
+ * layer was removed when delivery was migrated onto AgentRuntime.
  */
 import { DeliveryAgent, type DeliveryVerdictType } from "./agent"
-import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "./checks"
+import type { GoalInfo, DeliveryInfo } from "./checks"
 import { Log } from "@/util/log"
 import { type TextHooks } from "@/llm/api"
 
@@ -31,7 +30,6 @@ export namespace DeliveryService {
     task: { id?: string; title: string; request: string; sessionID?: string; metadata?: Record<string, unknown>; design_specs?: Array<{ id: string; category: string; title: string; requirement: string; applies_to: string; severity: "must" | "should"; rationale?: string }> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
-    analysis?: GoalJudgmentType
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
     signal?: AbortSignal
     stream?: TextHooks
@@ -47,7 +45,6 @@ export namespace DeliveryService {
         task: input.task,
         goals: input.goals,
         delivery: input.delivery,
-        analysis: input.analysis,
         attachments: input.attachments,
         stream: input.stream,
         signal: input.signal,

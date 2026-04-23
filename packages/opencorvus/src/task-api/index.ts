@@ -1,6 +1,6 @@
 import fs from "node:fs/promises"
 import z from "zod"
-import { generateObject } from "ai"
+import { streamObject } from "ai"
 import { Agent } from "@/agent/agent"
 import { resolveAgentModel } from "@/agent/model"
 import { Bus } from "@/bus"
@@ -1128,6 +1128,15 @@ export namespace EngineService {
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
+    const task = requireTask(taskID)
+
+    if (task.status === "failed") {
+      return {
+        kind: "note" as const,
+        message: "Task is failed. Retry the task before sending more guidance. This message was not recorded.",
+        should_resume: false,
+      }
+    }
 
     // Decode base64 attachments once, write bytes to AttachmentStore, and carry
     // references downstream. Mirrors createTask so that follow-up messages and
@@ -1149,7 +1158,6 @@ export namespace EngineService {
     // context — no separate LLM-based intent classifier, no keyword dispatch.
     // This removes the "Intent analysis failed" failure mode and the /goal
     // /plan prefix handlers (keyword-matching is forbidden by project rule 12).
-    const task = requireTask(taskID)
     recordNote({
       taskID,
       kind: "operator_note",
@@ -1227,21 +1235,25 @@ export namespace EngineService {
       .filter((part) => part.length > 0)
       .join("\n")
 
-    const result = await generateObject({
+    const stream = streamObject({
       model: language,
       temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
       messages: [
         {
           role: "system",
           content:
-            "你是协作中的助手。基于任务刚刚结束时的状态，推断用户最可能想让 AI 做的下一步，给出一条第一人称口吻的简短中文指令，直接作为用户发给 AI 的消息。要求：不超过 30 字；不使用引号；不解释；当任务明显已无后续时返回空字符串。",
+            "你是协作中的助手。基于任务刚刚结束时的状态，推断用户最可能想让 AI 做的下一步，给出一条第一人称口吻的简短中文指令，直接作为用户发给 AI 的消息。要求：不超过 30 字；不使用引号；不解释；当任务明显已无后续时返回空字符串。以 JSON 对象返回，字段名 suggestion。",
         },
         { role: "user", content: context },
       ],
       schema: z.object({ suggestion: z.string() }),
     })
 
-    const suggestion = (result.object?.suggestion ?? "").trim()
+    for await (const part of stream.fullStream) {
+      if (part.type === "error") throw part.error
+    }
+    const final = await stream.object
+    const suggestion = (final?.suggestion ?? "").trim()
     return { suggestion }
   }
 

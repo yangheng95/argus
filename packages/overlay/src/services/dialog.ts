@@ -120,14 +120,15 @@ export function renderAboutVersion(): void {
     )
     .join("");
 
-  // Version badge in chat footer
+  // Version is shown as a tooltip on the copyright footer (hover to see
+  // "Overlay vX.Y.Z / core ..."). The inline children are static markup in
+  // ChatComposer.tsx; we only mutate the title attribute here.
   const chatVersion = document.getElementById("chatVersion");
   if (chatVersion) {
     const connected = config !== null;
     const text = connected
       ? t("version.overlay", { version: OVERLAY_VERSION })
       : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`;
-    chatVersion.textContent = text;
     chatVersion.title = text;
   }
 

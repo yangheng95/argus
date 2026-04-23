@@ -116,7 +116,7 @@ async function run(input: {
   if (input.signal?.aborted) throw new Error("design analyst aborted before start")
 
   const orchCfg = await EngineConfig.get()
-  const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.design_analyst
+  const { max_steps: MAX_STEPS } = orchCfg.design_analyst
 
   const model = await resolveAgentModel("design-analyst", { taskID: input.taskID })
 
@@ -148,9 +148,6 @@ async function run(input: {
     attachmentCount: input.attachments?.length ?? 0,
   })
 
-  const abortSignals: AbortSignal[] = [guard.signal]
-  if (input.signal) abortSignals.push(input.signal)
-
   const passthroughHooks = {
     onChunk: input.stream?.onChunk,
     onError: input.stream?.onError,
@@ -168,11 +165,9 @@ async function run(input: {
     sessionID: input.sessionID ?? "",
     taskID: input.taskID,
     stage: "design-analyst",
-    signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish,
+    signal: input.signal,
     hooks: passthroughHooks,
     policies: {
-      progressTimeoutMs: TIMEOUT_MS,
       failurePolicy: "collect",
     },
   })

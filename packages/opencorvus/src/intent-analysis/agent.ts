@@ -66,7 +66,7 @@ async function run(input: IntentAnalysisAgent.AnalyzeInput): Promise<IntentAnaly
   if (input.signal?.aborted) throw new Error("intent-analysis agent aborted")
 
   const orchCfg = await EngineConfig.get()
-  const { max_steps: MAX_STEPS, timeout_ms: TIMEOUT_MS } = orchCfg.intent_analysis
+  const { max_steps: MAX_STEPS } = orchCfg.intent_analysis
 
   const model = await resolveAgentModel("intent-analysis", { taskID: input.taskID }).catch(
     () => undefined,
@@ -89,9 +89,6 @@ async function run(input: IntentAnalysisAgent.AnalyzeInput): Promise<IntentAnaly
     model: model.id,
   })
 
-  const abortSignals: AbortSignal[] = [guard.signal]
-  if (input.signal) abortSignals.push(input.signal)
-
   const passthroughHooks = {
     onChunk: input.stream?.onChunk,
     onError: input.stream?.onError,
@@ -110,11 +107,9 @@ async function run(input: IntentAnalysisAgent.AnalyzeInput): Promise<IntentAnaly
     sessionID: input.sessionID ?? "",
     taskID: input.taskID,
     stage: "intent-analysis",
-    signal: AbortSignal.any(abortSignals),
-    onStepFinish: guard.onStepFinish,
+    signal: input.signal,
     hooks: passthroughHooks,
     policies: {
-      progressTimeoutMs: TIMEOUT_MS,
       failurePolicy: "collect",
     },
   })
