@@ -11,8 +11,8 @@ import path from "node:path"
 import z from "zod"
 
 import { Tool } from "../../tool/tool"
-import { Instance } from "../../project/instance"
 import { evaluateVisual } from "../visual/evaluate"
+import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 export const WebpageEvaluateTool = Tool.define("webpage_evaluate", {
   description: `Score visual similarity between a reference and a rendered screenshot.
@@ -40,13 +40,11 @@ Use as step 6 of the webpage-clone workflow. Feed the diff image path back to th
       .optional(),
     outputDir: z
       .string()
-      .describe("Directory used to resolve relative paths and for default diff output. Defaults to the worktree.")
+      .describe(`Directory used to resolve relative paths and for default diff output. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`)
       .optional(),
   }),
   async execute(params) {
-    const outputDir = params.outputDir
-      ? path.resolve(Instance.directory, params.outputDir)
-      : Instance.directory
+    const outputDir = await resolveMirrorOutputDir(params.outputDir)
 
     const resolve = (p: string) => (path.isAbsolute(p) ? p : path.resolve(outputDir, p))
     const referencePath = resolve(params.reference)

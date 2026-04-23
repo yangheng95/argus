@@ -17,9 +17,9 @@ import path from "node:path"
 import z from "zod"
 
 import { Tool } from "../../tool/tool"
-import { Instance } from "../../project/instance"
 import { Log } from "../../util/log"
 import { extractPage } from "../url/extract"
+import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 const log = Log.create({ service: "mirror.tool.webpage_extract" })
 
@@ -40,7 +40,7 @@ Use this as step 1 of the webpage-clone workflow. Requires network access to the
     outputDir: z
       .string()
       .describe(
-        "Directory to write artifacts. Defaults to the current worktree. Artifacts: reference.png, extracted-page.json, images/.",
+        `Directory to write artifacts. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree so mirror artifacts (reference.png, extracted-page.json, images/) stay out of the project source tree. Override with an absolute or worktree-relative path when a different layout is needed.`,
       )
       .optional(),
     viewport_width: z.number().int().positive().describe("Viewport width in logical pixels. Default 1440.").optional(),
@@ -66,10 +66,7 @@ Use this as step 1 of the webpage-clone workflow. Requires network access to the
       metadata: { url: params.url },
     })
 
-    const outputDir = params.outputDir
-      ? path.resolve(Instance.directory, params.outputDir)
-      : Instance.directory
-    await fs.mkdir(outputDir, { recursive: true })
+    const outputDir = await resolveMirrorOutputDir(params.outputDir)
 
     const viewport = {
       width: params.viewport_width ?? 1440,
