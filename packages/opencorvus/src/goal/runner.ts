@@ -397,62 +397,6 @@ function compactPlanContext(plan: PlanRow) {
   ].filter(Boolean).join("\n")
 }
 
-function extractScopedRequest(request: string) {
-  if (!request.trim()) return ""
-  const lines = request.split(/\r?\n/)
-  const collected: string[] = []
-  let capture = false
-  let blankAfterScope = false
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!capture && /^only\s+(create|modify|create or modify|modify or create).*(files|paths?)\s*:?\s*$/i.test(trimmed)) {
-      capture = true
-      collected.push(trimmed)
-      continue
-    }
-    if (!capture && /^do not\s+/i.test(trimmed)) {
-      collected.push(trimmed)
-      continue
-    }
-    if (capture) {
-      if (!trimmed) {
-        blankAfterScope = true
-        continue
-      }
-      if (blankAfterScope && /^do not\s+/i.test(trimmed)) {
-        collected.push(trimmed)
-        continue
-      }
-      if (blankAfterScope) break
-      if (!/^[-*]\s+/.test(trimmed) && !/^\d+\.\s+/.test(trimmed) && !/^do not\s+/i.test(trimmed)) break
-      collected.push(trimmed)
-    }
-  }
-  return collected.join("\n")
-}
-
-function allowedRequestPaths(request: string) {
-  if (!request.trim()) return []
-  const lines = request.split(/\r?\n/)
-  const allowed: string[] = []
-  let capture = false
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!capture && /^only\s+(create|modify|create or modify|modify or create).*(files|paths?)\s*:?\s*$/i.test(trimmed)) {
-      capture = true
-      continue
-    }
-    if (!capture) continue
-    if (!trimmed) break
-    const bullet = trimmed.match(/^[-*]\s+`?([^`]+?)`?\s*$/)
-    const numbered = trimmed.match(/^\d+\.\s+`?([^`]+?)`?\s*$/)
-    const value = bullet?.[1] || numbered?.[1]
-    if (!value) break
-    allowed.push(value.replace(/\\/g, "/"))
-  }
-  return [...new Set(allowed)]
-}
-
 function extractPlanSection(prompt: string, heading: string) {
   const marker = prompt.indexOf(heading)
   if (marker < 0) return ""
@@ -551,8 +495,6 @@ export function buildGoalPrompt(input: {
   const waveObjective = typeof meta.wave_objective === "string" ? meta.wave_objective.trim() : ""
   const runnableChecks = executorSelectors(input.goal)
   const managedChecks = evaluatorManagedSelectors(input.goal)
-  const requestScope = extractScopedRequest(input.taskRequest ?? "")
-  const allowedPaths = allowedRequestPaths(input.taskRequest ?? "")
   // Extract owned_paths and dependency context from goal metadata
   const ownedPaths = Array.isArray(goalMeta.owned_paths) ? goalMeta.owned_paths as string[] : []
   const dependencyContext = input.dependencies && input.dependencies.length > 0
@@ -634,18 +576,6 @@ ${managedChecks.join(", ")}
 
 Prepare real implementation artifacts so these checks can pass, but do not fabricate placeholder UI/demo assets or long-lived runtime scaffolding just to satisfy them.`
       : undefined,
-    requestScope
-      ? `Scoped request constraints:
-${requestScope}`
-      : undefined,
-    allowedPaths.length > 0
-      ? [
-          "Allowed file edits:",
-          ...allowedPaths.map((item) => `- ${item}`),
-          "- Do not create, modify, or delete any file outside this allowlist.",
-          "- If a tool, type error, or test seems to require edits to an unlisted file such as tsconfig.json, package.json, lockfiles, README, or docs, stop and report the blocker instead of widening scope.",
-        ].join("\n")
-      : undefined,
     waveTitle
       ? [
           "Stage context:",
@@ -664,21 +594,15 @@ ${compactPlanContext(input.plan)}`,
       "- Do not run git add, git commit, or git push unless the current goal explicitly requires a commit.",
       "- Generated artifacts (dependency caches, build outputs, environment files, scratch directories) must never end up in git. Before producing any such tree, confirm the repo's ignore rules already exclude it; if not, update them first and save the file BEFORE creating the tree. `git add -A` respects ignore rules, but only for files created AFTER the rule is on disk.",
       "- NEVER pass `-f` / `--force` to `git add`, and never explicitly stage a path that an ignore rule should cover. If something already-generated shows up in `git status` pre-commit, that is a signal the ignore rule was missing upstream — do NOT override it. Fix the ignore, `git rm --cached -r` the stray entries, re-verify status, then commit. Overriding ignore rules poisons the shared branch for every parallel and downstream goal.",
-      ...(allowedPaths.length > 0
-        ? [
-            // Scoped task: explicit file allowlist → package management is unconditionally forbidden
-            "- UNCONDITIONAL: Do not run bun install, bun add, npm install, npm ci, pnpm add, pnpm install, yarn add, yarn install, or any other package or dependency management command. No exception exists for type errors, build failures, or missing modules. This constraint cannot be overridden.",
-            "- Do not modify package.json, package-lock.json, bun.lock, pnpm-lock.yaml, yarn.lock, or any manifest/lockfile. If the task explicitly lists these in its allowed file set, that is the only exception.",
-            "- This workspace already uses Bun for runtime and tests. Do not invoke npm, npx, pnpm, or yarn for anything.",
-            "- If build tools (tsc, type checkers, linters) fail due to missing packages or environment issues, that is an ENVIRONMENT BLOCKER. Stop, report the blocker with details, and do not attempt to fix the environment. The executor role is to write code, not to manage the runtime environment.",
-          ]
-        : [
-            // Open task: no explicit file scope → package management is allowed with minimal footprint
-            "- This workspace uses Bun. Prefer built-in Bun APIs (bun:sqlite, bun:test, bun:crypto, etc.) over external packages when they satisfy the requirement.",
-            "- Install third-party packages only when the task explicitly requires a framework or library not built into Bun. Use `bun add <pkg>` or `bun add -d <pkg>` (not npm/yarn/pnpm). Do not install packages just because a type checker or linter reports missing types.",
-            "- Do not use npm, npx, pnpm, or yarn for anything. Bun is the only package manager in this workspace.",
-          ]
-      ),
+      // Authoritative scope is the goal contract (owned_paths in the goal
+      // header + the verbatim task request in the intent bundle); the
+      // previous regex that scraped "Only create or modify these files:"
+      // out of the request text was a keyword-matching rule (CLAUDE.md #11)
+      // and has been removed. The executor reads the request and owned_paths
+      // itself and decides what is in scope.
+      "- This workspace uses Bun. Prefer built-in Bun APIs (bun:sqlite, bun:test, bun:crypto, etc.) over external packages when they satisfy the requirement.",
+      "- Install third-party packages only when the task explicitly requires a framework or library not built into Bun. Use `bun add <pkg>` or `bun add -d <pkg>` (not npm/yarn/pnpm). Do not install packages just because a type checker or linter reports missing types.",
+      "- Do not use npm, npx, pnpm, or yarn for anything. Bun is the only package manager in this workspace.",
       "- If the required verify command (bun test, cargo test, pytest, etc.) passes, the goal is met regardless of what other build tools report.",
     ].join("\n"),
     [
