@@ -103,8 +103,6 @@ async function runInternal(input: {
   const {
     max_steps: MAX_STEPS,
     timeout_ms: TIMEOUT_MS,
-    quality_threshold: QUALITY_RETRY_THRESHOLD,
-    max_attempts: MAX_ATTEMPTS,
   } = orchCfg.requirements
 
   // Resolve model — per-agent model from Agent.Info (config: agent.requirements.model),
@@ -132,148 +130,99 @@ async function runInternal(input: {
 
   const context = prefetchContext(input.title, input.request)
 
-  let lastParsed: RequirementsOutput | undefined
-  let lastQuality: { score: number; reasons: string[] } | undefined
-
   const systemPrompt = await requirementsSystem()
   const initialPrompt = buildUserPrompt(input, context)
   const initialContent = await buildMultimodalContent(initialPrompt, input.attachments)
-  let messages: any[] = [{ role: "user" as const, content: initialContent }]
-  let cumulativeToolCalls = 0
+  const messages: any[] = [{ role: "user" as const, content: initialContent }]
 
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (input.signal?.aborted) throw new Error("requirements agent aborted before attempt " + (attempt + 1))
+  await input.onStatus?.("Requirements agent starting")
 
-    await input.onStatus?.(`Requirements agent attempt ${attempt + 1}/${MAX_ATTEMPTS}`)
+  log.info("requirements agent starting", {
+    title: input.title,
+    model: model.id,
+  })
 
-    if (attempt > 0 && lastQuality) {
-      messages.push({
-        role: "user" as const,
-        content: buildRetryMessage(lastQuality, QUALITY_RETRY_THRESHOLD, attempt),
-      })
-    }
+  const abortSignals: AbortSignal[] = [guard.signal]
+  if (input.signal) abortSignals.push(input.signal)
 
-    log.info("requirements agent starting", {
-      title: input.title,
-      model: model.id,
-      attempt: attempt + 1,
-      retryReason: attempt > 0 && lastQuality ? `score ${lastQuality.score} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
-    })
+  // RequirementsAgent is always invoked nested: the caller (orchestrator or
+  // requirements service) owns persistence via its own session-hooks and
+  // forwards chunks through `input.stream`. We therefore wrap those into
+  // a passthrough hooks object so AgentRuntime neither creates a duplicate
+  // hooks nor requires a sessionID of its own.
+  const passthroughHooks = {
+    onChunk: input.stream?.onChunk,
+    onError: input.stream?.onError,
+    flush: async () => {},
+    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
+  } as any
+  const runResult = await AgentRuntime.run({
+    agent: "requirements",
+    model,
+    system: systemPrompt,
+    messages,
+    tools: guard.tools,
+    stopWhen: stepCountIs(MAX_STEPS),
+    cacheKey: input.taskID ? `task-${input.taskID}-requirements` : undefined,
+    sessionID: input.sessionID ?? "",
+    taskID: input.taskID,
+    stage: "requirements",
+    signal: AbortSignal.any(abortSignals),
+    onStepFinish: guard.onStepFinish,
+    hooks: passthroughHooks,
+    policies: {
+      progressTimeoutMs: TIMEOUT_MS,
+      // Caller-side hooks do their own failure accounting; don't let runtime
+      // throw here — the caller will surface any persist errors.
+      failurePolicy: "collect",
+    },
+  })
 
-    const abortSignals: AbortSignal[] = [guard.signal]
-    if (input.signal) abortSignals.push(input.signal)
+  log.info("requirements agent finished", {
+    steps: runResult.steps.length,
+    finishReason: runResult.finishReason,
+    textLength: (runResult.text?.trim() || "").length,
+    toolCalls: runResult.toolCallCount,
+  })
 
-    // RequirementsAgent is always invoked nested: the caller (orchestrator or
-    // requirements service) owns persistence via its own session-hooks and
-    // forwards chunks through `input.stream`. We therefore wrap those into
-    // a passthrough hooks object so AgentRuntime neither creates a duplicate
-    // hooks nor requires a sessionID of its own.
-    const passthroughHooks = {
-      onChunk: input.stream?.onChunk,
-      onError: input.stream?.onError,
-      flush: async () => {},
-      failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
-    } as any
-    const runResult = await AgentRuntime.run({
-      agent: "requirements",
-      model,
-      system: systemPrompt,
-      messages,
-      tools: guard.tools,
-      stopWhen: stepCountIs(MAX_STEPS),
-      cacheKey: input.taskID ? `task-${input.taskID}-requirements` : undefined,
-      sessionID: input.sessionID ?? "",
-      taskID: input.taskID,
-      stage: "requirements",
-      signal: AbortSignal.any(abortSignals),
-      onStepFinish: guard.onStepFinish,
-      hooks: passthroughHooks,
-      policies: {
-        progressTimeoutMs: TIMEOUT_MS,
-        // Caller-side hooks do their own failure accounting; don't let runtime
-        // throw here — the caller will surface any persist errors.
-        failurePolicy: "collect",
-      },
-    })
-
-    const resultSteps = runResult.steps
-    const resultFinishReason = runResult.finishReason
-    cumulativeToolCalls += runResult.toolCallCount
-
-    log.info("requirements agent finished", {
-      steps: resultSteps.length,
-      finishReason: resultFinishReason,
-      textLength: (runResult.text?.trim() || "").length,
-      toolCalls: runResult.toolCallCount,
-      cumulativeToolCalls,
-      attempt: attempt + 1,
-    })
-
-    // Structured tool-call output is the only supported path. If the LLM did
-    // not register any requirements via register_requirement, treat this
-    // attempt as a hard failure — no text-parsing fallback.
-    const collector = outputToolKit.getCollector()
-    if (collector.requirements.length === 0) {
-      log.warn("requirements agent: no requirements registered via tool calls", {
-        attempt: attempt + 1,
-        toolCalls: cumulativeToolCalls,
-        finishReason: resultFinishReason,
-      })
-      lastParsed = undefined
-      messages = [{ role: "user" as const, content: initialPrompt }]
-      outputToolKit.reset()
-      continue
-    }
-
-    const parsed = collectorToOutput(collector)
-    log.info("requirements agent: using structured output", {
-      requirements: parsed.requirements.length,
-      decisions: parsed.decisions.length,
-    })
-    lastParsed = parsed
-
-    const quality = validateQuality(parsed, cumulativeToolCalls)
-    lastQuality = quality
-
-    log.info("requirements agent output", {
-      requirements: parsed.requirements.length,
-      decisions: parsed.decisions.length,
-      toolCalls: cumulativeToolCalls,
-      quality,
-      attempt: attempt + 1,
-    })
-
-    if (quality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_ATTEMPTS - 1) {
-      const result = toResult(parsed)
-
-      // Seed Decision Log with foundational decisions
-      if (input.decisionLog && result.decisions.length > 0) {
-        for (const decision of result.decisions) {
-          input.decisionLog.append({
-            phase: "requirements",
-            key: decision.key,
-            value: decision.value,
-            reason: decision.reason,
-          })
-        }
-      }
-
-      return result
-    }
-
-    // Retry with fresh context — reset both messages and collector
-    messages = [{ role: "user" as const, content: initialPrompt }]
-    outputToolKit.reset()
-
-    log.warn("requirements: quality below threshold, retrying", {
-      score: quality.score,
-      threshold: QUALITY_RETRY_THRESHOLD,
-      reasons: quality.reasons,
-    })
+  // Structured tool-call output is the only supported path. If the LLM did
+  // not register any requirements via register_requirement, treat this as a
+  // hard contract failure — there is no text-parsing fallback, and the old
+  // `validateQuality` score gate that used a coded 0/0.25/0.5 formula to
+  // drive silent retries was a deterministic decision on LLM output
+  // (CLAUDE.md rule 23) and has been retired.
+  const collector = outputToolKit.getCollector()
+  if (collector.requirements.length === 0) {
+    throw new Error(
+      `requirements agent produced no requirements via register_requirement ` +
+      `(toolCalls=${runResult.toolCallCount}, finishReason=${runResult.finishReason}). ` +
+      `The orchestrator LLM must decide whether to re-invoke requirements, modify the ` +
+      `task prompt, or fail the task — no coded retry loop.`,
+    )
   }
 
-  if (!lastParsed) throw new Error("Requirements agent produced no output after all attempts")
-  return toResult(lastParsed)
+  const parsed = collectorToOutput(collector)
+  log.info("requirements agent output", {
+    requirements: parsed.requirements.length,
+    decisions: parsed.decisions.length,
+    toolCalls: runResult.toolCallCount,
+  })
+
+  const result = toResult(parsed)
+
+  // Seed Decision Log with foundational decisions
+  if (input.decisionLog && result.decisions.length > 0) {
+    for (const decision of result.decisions) {
+      input.decisionLog.append({
+        phase: "requirements",
+        key: decision.key,
+        value: decision.value,
+        reason: decision.reason,
+      })
+    }
+  }
+
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -388,58 +337,6 @@ function buildUserPrompt(
   )
 
   return sections.join("\n\n")
-}
-
-// ---------------------------------------------------------------------------
-// Retry message
-// ---------------------------------------------------------------------------
-
-function buildRetryMessage(
-  lastQuality: { score: number; reasons: string[] },
-  qualityThreshold: number,
-  attempt: number,
-): string {
-  return [
-    "# QUALITY RETRY — Previous Requirements Parse Was Insufficient",
-    "",
-    `Score: ${lastQuality.score.toFixed(2)} / ${qualityThreshold}. Attempt ${attempt + 1}.`,
-    "",
-    "**Issues:**",
-    ...lastQuality.reasons.map((r) => `- ${r}`),
-    "",
-    "You already explored the codebase — use that knowledge. Do NOT repeat tool calls. " +
-    "Fix all issues and re-submit requirements + decisions.",
-  ].join("\n")
-}
-
-// ---------------------------------------------------------------------------
-// Quality validation
-// ---------------------------------------------------------------------------
-
-function validateQuality(
-  parsed: RequirementsOutput,
-  toolCallCount: number,
-): { score: number; reasons: string[] } {
-  let score = 0
-  const reasons: string[] = []
-
-  // Requirement extraction (0.5) — did the agent parse the input exhaustively?
-  if (parsed.requirements.length >= 3) score += 0.5
-  else if (parsed.requirements.length >= 1) score += 0.25
-  else reasons.push("No requirements extracted from user input — requirements agent must parse input line by line")
-
-  // Tool usage (0.2) — grounded in codebase exploration
-  if (toolCallCount >= 5) score += 0.2
-  else if (toolCallCount >= 2) score += 0.1
-  else if (toolCallCount === 0) reasons.push("No tool calls — decisions not grounded in codebase")
-
-  // Decisions recorded (0.3) — runtime/framework/test at minimum
-  if (parsed.decisions.length >= 3) score += 0.3
-  else if (parsed.decisions.length >= 2) score += 0.2
-  else if (parsed.decisions.length >= 1) score += 0.1
-  else reasons.push("No foundational decisions recorded — runtime + framework + test are the minimum")
-
-  return { score: Math.min(score, 1), reasons }
 }
 
 // ---------------------------------------------------------------------------
