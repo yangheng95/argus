@@ -26,6 +26,7 @@ import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { DecisionLog } from "@/decision-log"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 
 const log = Log.create({ service: "fidelity-review" })
 
@@ -723,6 +724,13 @@ function buildFidelityPrompt(input: {
 
   const dlSection = input.decisionLog?.toPromptSection()
   if (dlSection) sections.push(dlSection)
+
+  try {
+    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
+    if (mirrorSection.trim().length > 0) sections.push(mirrorSection)
+  } catch {
+    // Instance not initialised — advisory section, skip.
+  }
 
   sections.push(
     "Now compare the goals against the user request, the requirement list, foundational " +

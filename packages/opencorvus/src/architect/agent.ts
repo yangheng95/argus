@@ -32,6 +32,8 @@ import { EngineConfig } from "@/engine"
 import { Config } from "@/config/config"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
+import { Instance } from "@/project/instance"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -396,6 +398,13 @@ function buildUserPrompt(input: {
 
   const dlSection = input.decisionLog.toPromptSection()
   if (dlSection) sections.push(dlSection)
+
+  try {
+    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
+    if (mirrorSection.trim().length > 0) sections.push(mirrorSection)
+  } catch {
+    // Instance not initialised — advisory section, skip.
+  }
 
   sections.push(
     "Explore the codebase, then register (or refine) the final goal set — " +
