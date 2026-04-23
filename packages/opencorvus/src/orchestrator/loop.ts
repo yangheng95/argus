@@ -22,7 +22,7 @@ import { Orchestrator, type OrchestratorTrigger } from "@/orchestrator/agent"
 import { effectiveMaxExecutorGroups, findTask, findRun, findPlan, listGoalsByPlan, listPlanNodesByPlan } from "@/engine"
 import type { TaskRow, RunRow, PlanRow } from "@/engine"
 import { mergeGoalDelivery } from "@/engine/runtime"
-import { describeTaskFromRow, statusOf } from "@/engine/describe"
+import { describeTaskFromRow } from "@/engine/describe"
 import type { GoalDesc } from "@/engine/describe"
 import { Database, eq } from "@/storage/db"
 import { isRunReadyForGoalDispatch } from "./scheduler"
@@ -161,22 +161,17 @@ async function runTaskLoopInner(input: {
 
   // ── Main loop: Decision → Pool → Decision ──
   let iteration = 0
-  /** Stale-state circuit breaker: fail the task if goal state does not change
-   *  for MAX_STALE_ITERATIONS consecutive decision cycles. Catches the case
-   *  where the LLM forgets to call dispatch_goal (no new goal_run rows). */
-  const MAX_STALE_ITERATIONS = 5
-  /** Absolute task-level iteration budget. Independent of stale detection —
-   *  even if the LLM keeps producing small progress every cycle, it cannot
-   *  burn more than this many decision rounds before the task is forced to
-   *  fail. The LLM-autonomous redesign removed most FSM gates; this is the
-   *  one hard ceiling that guarantees convergence in bounded time. Override
-   *  via `OPENCORVUS_MAX_TASK_ITERATIONS` (e.g. 200 for a debug PRD run). */
+  /** Absolute task-level iteration budget — the sole runaway guard on this
+   *  loop. Per LLM-autonomous redesign the loop does not classify "stuck"
+   *  itself; if the LLM is not making progress it can read the trajectory
+   *  on its next decision turn (via describe / query_metric_trajectory) and
+   *  call fail_task. The hard ceiling only exists so a truly wedged LLM
+   *  cannot burn unbounded decision rounds. Override via
+   *  `OPENCORVUS_MAX_TASK_ITERATIONS` (e.g. 200 for a debug PRD run). */
   const MAX_TASK_ITERATIONS = parseInt(
     process.env.OPENCORVUS_MAX_TASK_ITERATIONS || "50",
     10,
   )
-  let lastGoalSnapshot = ""
-  let staleCount = 0
   /** Floor for `findRecentDeliveryRejection` — only consider verdict
    *  artifacts newer than this. Initialized to loop start so we don't react
    *  to pre-existing verdicts from previous loop runs of the same task
@@ -416,47 +411,18 @@ async function runTaskLoopInner(input: {
       if (hasPending) {
         const passed = goals.filter((g) => g.is_terminal_ok).length
         const failed = goals.filter((g) => g.is_terminal_fail).length
-        const { listGoalRunsForDispatch } = await import("@/engine/store")
-        const goalRuns = listGoalRunsForDispatch(taskID)
-
         log.warn("pending goals present but none dispatched — feeding to Orchestrator", {
           taskID, passed, failed,
           pending: goals.filter((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted).length,
         })
 
-        // Stale-state detection on immutable goal_run history — the rule
-        // is unchanged: the task is stuck when the chain hasn't grown and
-        // no transitions happened for MAX_STALE_ITERATIONS decision cycles.
-        const snapshot = goalRuns
-          .map((r) => `${r.id}:${r.status}:${(r as { supersede_of?: string | null }).supersede_of ?? ""}`)
-          .sort()
-          .join(",")
-        if (snapshot === lastGoalSnapshot) {
-          staleCount++
-          log.warn("stale state detected", { taskID, staleCount, maxStale: MAX_STALE_ITERATIONS })
-          if (staleCount >= MAX_STALE_ITERATIONS) {
-            const breakdown = await classifyBreakerCause(
-              taskID,
-              goals.map((g) => ({ id: g.id, title: g.title, status: statusOf(g) })),
-              goalRuns,
-              [],
-            )
-            log.error("stale-state circuit breaker triggered — failing task", {
-              taskID, staleCount, cause: breakdown.cause, detail: breakdown.detail,
-            })
-            const { updateTask } = await import("@/engine/state")
-            await updateTask(task, {
-              status: "failed",
-              error:
-                `Task stuck: ${staleCount} consecutive decision cycles with no progress.\n` +
-                `Cause: ${breakdown.cause}.\n${breakdown.detail}`,
-            }, "Stale-state circuit breaker")
-            break
-          }
-        } else {
-          lastGoalSnapshot = snapshot
-          staleCount = 0
-        }
+        // No stale-state circuit breaker here — the LLM reads the same
+        // goal / goal_run state via describe on the next decision turn
+        // and decides whether to retry, modify a goal, fail, or wait.
+        // The deterministic `MAX_STALE_ITERATIONS` breaker was an FSM
+        // verdict over a goal_run snapshot string (CLAUDE.md #23) and
+        // masked real failures as "stuck" rather than routing them to
+        // the LLM for classification.
 
         trigger = {
           kind: "batch_complete",
@@ -486,13 +452,6 @@ async function runTaskLoopInner(input: {
       pending: pendingGoals.length,
     })
 
-    // GoalPool executed goals → state changed → reset stale counter
-    const snapshotAfterPool = goalsAfter.map((g) => `${g.id}:${statusOf(g)}`).sort().join(",")
-    if (snapshotAfterPool !== lastGoalSnapshot) {
-      lastGoalSnapshot = snapshotAfterPool
-      staleCount = 0
-    }
-
     trigger = {
       kind: "batch_complete",
       runID: run.id,
@@ -507,94 +466,6 @@ async function runTaskLoopInner(input: {
   log.info("task loop exited", { taskID, iteration })
   // Queue progression is owned by engine/queue.ts. This loop only owns one
   // task's lifecycle and leaves sibling dispatch to the cwd queue.
-}
-
-/**
- * Produce a concrete explanation for why the stale-state circuit breaker
- * fired. Reads engine_goal_run, engine_delivery, engine_evaluation to
- * distinguish the realistic shapes of "stuck":
- *
- *  - deps_unsatisfied: pending goals waiting on failed/missing upstream goals
- *  - stranded_pending: pending goals with deps met but never dispatched
- *    (readiness filter bug, supersede leak, live row without progress)
- *  - delivery_unverified: deliveries exist but their evaluation stayed
- *    pending/inconclusive for the breaker window — deliver tool stuck
- *  - goal_runs_wedged: live goal_runs never transitioned to terminal
- *  - unknown: fallback with raw counts for triage
- */
-async function classifyBreakerCause(
-  taskID: string,
-  goals: Array<{ id: string; status: string; title: string }>,
-  goalRuns: Array<{ id: string; goal_id: string; status: string; time_updated: number; supersede_of?: string | null }>,
-  diag: Array<{ goalID: string; goalTitle: string; unsatisfiedDeps: Array<{ depGoalTitle: string; depStatus: string }> }>,
-): Promise<{ cause: string; detail: string }> {
-  const { findDeliveriesForTask, findEvaluationsByTask } = await loadStore()
-  const deliveries = findDeliveriesForTask(taskID)
-  const evaluations = findEvaluationsByTask(taskID)
-  const pendingGoals = goals.filter((g) => g.status === "pending")
-  const supersededIDs = new Set(
-    goalRuns
-      .map((r) => (r as { supersede_of?: string | null }).supersede_of)
-      .filter((x): x is string => !!x),
-  )
-  const liveTips = goalRuns.filter(
-    (r) =>
-      !supersededIDs.has(r.id) &&
-      ["queued", "accepted", "planning", "running", "evaluating", "blocked"].includes(r.status),
-  )
-  // Per-goal deliveries (goal_run_id != null) do not create an evaluation
-  // row (persistGoalDelivery writes delivery+artifacts only) — the
-  // delivery-agent's checks cover per-goal verdicts at task-level time.
-  // Only task-level deliveries (goal_run_id == null, written by
-  // persistTaskDelivery) own a `scope='delivery'` evaluation that the
-  // deliver tool settles. If ALL of those are pending past the stale
-  // window, the deliver tool is wedged — that's the real
-  // "delivery_unverified" signal.
-  const unverifiedDeliveries = deliveries.filter((d) => {
-    if (d.status !== "candidate") return false
-    if (d.goal_run_id) return false
-    const ev = evaluations.find((e) => e.delivery_id === d.id)
-    return !ev || ev.status === "pending"
-  })
-
-  if (diag.length > 0) {
-    const blocked = diag.map((d) =>
-      `"${d.goalTitle}" blocked by: ${d.unsatisfiedDeps.map((dep) => `${dep.depGoalTitle} [${dep.depStatus}]`).join(", ")}`,
-    ).join("; ")
-    return { cause: "deps_unsatisfied", detail: blocked }
-  }
-  if (unverifiedDeliveries.length > 0) {
-    const list = unverifiedDeliveries.map((d) => `${d.id}@${d.goal_run_id ?? "run"}`).join(", ")
-    return {
-      cause: "delivery_unverified",
-      detail: `${unverifiedDeliveries.length} delivery candidates with pending evaluation: ${list}`,
-    }
-  }
-  if (liveTips.length > 0) {
-    const list = liveTips.map((r) => `${r.id}[${r.status}]`).join(", ")
-    return {
-      cause: "goal_runs_wedged",
-      detail: `${liveTips.length} live goal_run(s) that never transitioned to terminal: ${list}`,
-    }
-  }
-  if (pendingGoals.length > 0) {
-    const titles = pendingGoals.map((g) => g.title).join(", ")
-    return {
-      cause: "stranded_pending",
-      detail:
-        `${pendingGoals.length} pending goal(s) with no unmet deps but no ready dispatch: ${titles}. ` +
-        `This indicates a readiness filter bug (supersede chain / live row leak) — inspect engine_goal_run rows for this task.`,
-    }
-  }
-  return {
-    cause: "unknown",
-    detail: `goals=${goals.length} goal_runs=${goalRuns.length} deliveries=${deliveries.length} evaluations=${evaluations.length}`,
-  }
-}
-
-async function loadStore() {
-  const mod = await import("@/engine/store")
-  return mod as typeof import("@/engine/store")
 }
 
 /**
