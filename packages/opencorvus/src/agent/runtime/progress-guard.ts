@@ -43,6 +43,13 @@ export interface ProgressGuard {
   /** Reset both alive + progress timers. Call on step-finish / tool-call /
    *  tool-result — anything that proves the task advanced. */
   progress(): void
+  /** Suspend the alive-timer. Use around legitimate non-streaming waits
+   *  (e.g. tool.execute dispatching a sub-agent): the parent LLM emits no
+   *  chunks while the tool runs, so alive-tier measurement is meaningless.
+   *  The absolute tier keeps ticking as the safety net. Idempotent. */
+  pause(): void
+  /** Resume the alive-timer and bump lastAlive to now. Pair with `pause()`. */
+  resume(): void
   /** Stop the internal ticker. Idempotent. Call in `finally`. */
   clear(): void
   /** True once a timeout has fired (onTimeout called). */
@@ -65,6 +72,7 @@ export function createProgressGuard(options: ProgressGuardOptions): ProgressGuar
   let lastAlive = startedAt
   let lastProgress = startedAt
   let fired = false
+  let paused = false
 
   const fire = (tier: ProgressTimeoutTier, reason: string) => {
     if (fired) return
@@ -80,7 +88,7 @@ export function createProgressGuard(options: ProgressGuardOptions): ProgressGuar
       fire("absolute", `absolute timeout: ${now - startedAt}ms since start (cap ${absoluteMs}ms)`)
       return
     }
-    if (now - lastAlive > options.aliveTimeoutMs) {
+    if (!paused && now - lastAlive > options.aliveTimeoutMs) {
       fire("alive", `alive timeout: ${now - lastAlive}ms since last chunk (cap ${options.aliveTimeoutMs}ms)`)
       return
     }
@@ -102,6 +110,15 @@ export function createProgressGuard(options: ProgressGuardOptions): ProgressGuar
       const now = Date.now()
       lastAlive = now
       lastProgress = now
+    },
+    pause() {
+      if (fired) return
+      paused = true
+    },
+    resume() {
+      if (fired) return
+      paused = false
+      lastAlive = Date.now()
     },
     clear() {
       fired = true

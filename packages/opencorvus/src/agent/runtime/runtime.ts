@@ -122,7 +122,17 @@ export namespace AgentRuntime {
       // fire independently of whatever caller/hook semantics apply.
       guard.alive()
       const t = arg?.chunk?.type
-      if (t === "tool-call" || t === "tool-result") guard.progress()
+      // tool-call: LLM stream pauses while tool.execute runs. Parent emits
+      // no chunks during sub-agent work, so freeze alive-tier to avoid false
+      // positives on legitimately long tools (delivery, dispatch_goal).
+      // Absolute tier remains live as the ultimate safety net.
+      if (t === "tool-call") {
+        guard.progress()
+        guard.pause()
+      } else if (t === "tool-result") {
+        guard.resume()
+        guard.progress()
+      }
       await hooks.onChunk?.(arg)
       if (input.forwardChunk) await input.forwardChunk(arg)
     }
