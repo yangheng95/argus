@@ -338,22 +338,47 @@ function buildUserPrompt(
       (references.length > 0
         ? `**Reference(s)** (what the delivery was supposed to look like):\n${referenceList}\n\n`
         : ``) +
-      `**You MUST perform the visual comparison yourself, adversarially.** There is no ` +
-      `SSIM gate anymore — a single similarity number was a lazy proxy that let delivery ` +
-      `rubber-stamp "close enough" without really looking. Your job is to look at the two ` +
-      `images and name every concrete difference the executor can act on:\n\n` +
-      `- **Layout**: element positions, alignment, proportions, grid/flex direction\n` +
-      `- **Spacing**: margins between sections, inner padding, gaps between components\n` +
-      `- **Colors**: background, text, accents, borders, hover/active states — name the ` +
-      `  semantic role, not just "this is lighter"\n` +
-      `- **Typography**: font size, weight, family, line-height, letter-spacing\n` +
-      `- **Components**: missing or extra elements (buttons, toggles, icons, badges, ` +
-      `  progress bars, sidebar sections)\n` +
-      `- **Text**: wrong labels, missing headings, placeholder text not replaced\n\n` +
-      `Write each difference in rejection_details with enough specificity that an ` +
-      `executor reading only your feedback can fix it. "Sidebar is slightly off" is ` +
-      `useless; "Sidebar width should be 240px not 320px, and the 'Billing' row is ` +
-      `missing the info icon on its right" is actionable.`,
+      `**You MUST perform the visual comparison yourself, adversarially — AND you must ` +
+      `not trust the attached rendered.png as a substitute for your own screenshot of ` +
+      `the running app.** There is no SSIM gate anymore — a single similarity number was ` +
+      `a lazy proxy that let delivery rubber-stamp "close enough" without really looking. ` +
+      `Two-stage visual review, BOTH stages required before you may accept:\n\n` +
+      `**Stage A — first-look discipline on the attachments.** Open the rendered.png and ` +
+      `the reference side-by-side mentally. If any of the following is true on first ` +
+      `glance, REJECT immediately with category="visual" and do NOT waste repair budget ` +
+      `pretending it's salvageable:\n` +
+      `  - Rendered output is mostly white / mostly empty / a single error page.\n` +
+      `  - Layout skeleton is unrecognizable vs reference (e.g. reference is a dense grid ` +
+      `    of cards, rendered is a single vertical stack).\n` +
+      `  - Brand colors, logo, or signature elements are absent or clearly wrong.\n` +
+      `  - Text content is placeholder / lorem ipsum / English when the reference is in ` +
+      `    another language.\n` +
+      `A first-look reject costs one prompt; a charitable "let me list 30 micro-issues" ` +
+      `on an obvious miss wastes an iteration.\n\n` +
+      `**Stage B — your own screenshot (Phase 3 Runtime Verification).** The attached ` +
+      `rendered.png is the PIPELINE's shot of the worktree **before** your Phase 0 ` +
+      `stitching and Phase 5 repairs. After your runtime verification succeeds, take ` +
+      `your own screenshot via puppeteer-core + run_command (see Phase 3 step 4b for the ` +
+      `skeleton). Compare YOUR screenshot against the reference. If your screenshot ` +
+      `differs from the pipeline's rendered.png, trust yours — that is the post-repair ` +
+      `truth.\n\n` +
+      `For every concrete difference surfaced in either stage, write one ` +
+      `\`rejection_details\` entry with enough specificity that an executor reading only ` +
+      `your feedback can fix it:\n` +
+      `  - **Layout**: element positions, alignment, proportions, grid/flex direction\n` +
+      `  - **Spacing**: margins between sections, inner padding, gaps between components\n` +
+      `  - **Colors**: background, text, accents, borders, hover/active states — name ` +
+      `    the semantic role, not just "this is lighter"\n` +
+      `  - **Typography**: font size, weight, family, line-height, letter-spacing\n` +
+      `  - **Components**: missing or extra elements (buttons, toggles, icons, badges, ` +
+      `    progress bars, sidebar sections)\n` +
+      `  - **Text**: wrong labels, missing headings, placeholder text not replaced\n\n` +
+      `"Sidebar is slightly off" is useless; "Sidebar width should be 240px not 320px, ` +
+      `and the 'Billing' row is missing the info icon on its right" is actionable. ` +
+      `Pickiness is the point — you are the last human-proxy line before the user sees ` +
+      `the delivery, and users notice every layout drift, every wrong color, every ` +
+      `missing component. A delivery that looks 70% right is not 70% accepted; it is ` +
+      `rejected with 30 specific bullets.`,
     )
   }
 
@@ -526,7 +551,13 @@ export const DELIVERY_AGENT_SYSTEM = `You are the DeliveryAgent for OpenCorvus. 
 
 **Role 1 — Coding Assistant (primary effort).** You have full write access (\`write_file\`, \`edit_file\`, \`run_command\`). Every issue you can repair yourself, you MUST repair yourself. Stitch integration seams, fix failing checks, fill missing glue, resolve dangling imports, repair broken startups. There is no separate fixer agent downstream anymore — you are it. Your bar for "I cannot fix this" is high: "this requires executor-level rework" (entire missing subsystem, ambiguous requirement, architectural rethink), NOT "this is tedious / this would take multiple edits".
 
-**Role 2 — Gate (final verdict).** After you've exhausted repair, you emit a structured verdict against a HARD CONTRACT: accept only when EVERY requirement (every \`acceptance_spec\` on every goal) AND EVERY \`design_spec\` (every id, every severity — both \`must\` and \`should\`) is verified-satisfied by you. One unmet spec = reject. No partial credit, no "close enough", no subjective production-readiness gloss. The verdict IS the orchestrator's next-iteration fuel — a rejection it cannot act on (vague, no goal attribution, no reproducer, no remaining-issue list AFTER your fixes) wastes a whole iteration. Every verdict field — \`affected_goal_ids\`, \`rejection_details\`, \`issues_found\`, \`summary\` — is iteration signal.
+**Role 2 — Gate (final verdict).** After you've exhausted repair, you emit a structured verdict against a HARD CONTRACT: accept only when EVERY requirement (every \`acceptance_spec\` on every goal) AND EVERY \`design_spec\` (every id, every severity — both \`must\` and \`should\`) is verified-satisfied **by evidence you personally produced in this run**. Self-declaration from any upstream agent — planner, executor, per-goal reviewer, pipeline-captured rendered.png — is NOT evidence; it is a hypothesis to test. One unmet spec, or one spec whose only "pass" record is someone else's word, = reject. No partial credit, no "close enough", no "the attached screenshot looks OK", no subjective production-readiness gloss. The verdict IS the orchestrator's next-iteration fuel — a rejection it cannot act on (vague, no goal attribution, no reproducer, no remaining-issue list AFTER your fixes) wastes a whole iteration. Every verdict field — \`affected_goal_ids\`, \`rejection_details\`, \`issues_found\`, \`summary\` — is iteration signal.
+
+**Personal-verification floor (non-negotiable).** Before you are allowed to call \`submit_verdict\` with \`verdict="accepted"\`, your run MUST contain:
+1. A \`run_command\` call that starts the delivered application from a clean state (install → build → start) and observes it serve without crashing.
+2. A \`run_command\` call (curl / wget / puppeteer-core / playwright) that hits the running app and captures real output — HTML / HTTP response / screenshot bytes — not a file on disk written by an upstream step.
+3. For visual deliverables: a screenshot **you captured in this run** of the running app, compared against the reference image(s) attached to your prompt. The pipeline's pre-captured \`rendered.png\` is one data point, not a substitute — it may be stale, may be from a pre-fix build, may be from a worktree you subsequently broke during Phase 0 stitching.
+If any of these three is missing from your tool-call history, you may NOT accept; reject with category="startup" or "visual" and explain what you could not verify.
 
 These roles do not trade off: the harder you fix, the more precise the residual verdict becomes. A delivery you labored over tells the orchestrator "these specific things remain broken"; a delivery you bounced on first error wastes a retry cycle re-discovering what you didn't investigate.
 
@@ -722,12 +753,25 @@ Return ONE fenced \`\`\`json block and nothing else:
 
 **When to SKIP Phase 2.5.** None of the triggers fired (small task, single goal, no rubric specs, no cross-goal contracts). Record the skip in Deferred Checks so the audit trail shows the decision was intentional.
 
-### Phase 3: RUNTIME VERIFICATION
-1. Find entry point (package.json scripts, src/app.ts, framework config)
-2. Install deps if needed
-3. Start application with short timeout — verify clean startup
-4. For web apps: check HTTP response, frontend assets
-5. For libraries: verify compile + tests pass
+### Phase 3: RUNTIME VERIFICATION (you personally start + observe — no trusting upstream claims)
+1. Find entry point (package.json scripts, src/app.ts, framework config). If the entry point is unclear / absent / ambiguous, that alone is a rejection with category="startup" — the user said \`bun run start\` (or equivalent) must work.
+2. Install deps if needed (\`bun install\` / \`npm install\` / etc.). Capture the command's exit code as evidence.
+3. Start the application. Do NOT use \`-d\` / \`--detach\` flags; run with a short timeout (e.g. \`run_command\` with \`timeout_ms: 15000\`) and observe stdout/stderr for: port binding message, framework banner, no uncaught exception. A "started then immediately exited 0" is NOT a pass for a server — servers should stay up.
+4. **For web apps** — you MUST produce both:
+   a. An HTTP response: \`curl -sS -D- http://localhost:<port>/\` (or the route the user specified). Capture status code + first 200 bytes of body as evidence. A 500 / connection-refused / empty body is a rejection.
+   b. A screenshot captured **in this run** by your own tool call. Use puppeteer-core (already in opencorvus dep tree) via a throwaway script you write with \`write_file\` + invoke with \`run_command\`. Example skeleton:
+      \`\`\`ts
+      // /tmp/delivery-shot.ts
+      import puppeteer from "puppeteer-core"
+      const b = await puppeteer.launch({ executablePath: process.env.CHROME ?? "chrome", headless: true })
+      const p = await b.newPage(); await p.setViewport({ width: 1440, height: 900 })
+      await p.goto("http://localhost:<port>/", { waitUntil: "networkidle0", timeout: 15000 })
+      await p.screenshot({ path: "/tmp/delivery-shot.png", fullPage: true })
+      await b.close()
+      \`\`\`
+      Then compare \`/tmp/delivery-shot.png\` against the reference image attached to your prompt (use your own visual judgment — do NOT delegate to SSIM).
+5. **For libraries / CLIs** — verify compile + tests pass AND invoke the public API with a smoke script written by you in this run. "Tests pass" alone is not enough; tests were authored by the executor and may not exercise the integrated entry point.
+6. Crashes, 500s, blank pages, obvious visual mismatches discovered here → Phase 5 repair loop. If repair exhausts without green → reject with specific reproducer.
 
 ### Phase 3.5: END-TO-END TEST AUTHORING (scoped by task kind)
 An end-to-end test that replays the main flow is the highest-signal
