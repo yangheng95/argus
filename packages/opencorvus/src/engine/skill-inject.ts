@@ -18,6 +18,34 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "skill-inject" })
 
+/**
+ * Per-stage invariants that the skill system ALWAYS prepends to the skills
+ * section, whether or not any skill matched. These are contract-level
+ * reminders ("if any loaded skill declares required_tools, submit_verdict
+ * will enforce them") — the LLM must see them so it knows why the schema
+ * validation will reject a verdict that skips the mandatory tool calls.
+ *
+ * These are NOT overridable: no config field can replace or suppress this
+ * section. That is the whole point — bypassing the skill system bypasses
+ * the contract, which historically let delivery accept a JSON-404 screenshot.
+ * Single source of truth for stage contracts lives here, not in per-stage
+ * CORE constants that could drift.
+ */
+const STAGE_INVARIANTS: Record<string, string> = {
+  delivery: `## Skill-system invariants (enforced by submit_verdict)
+
+The delivery verdict schema carries a \`tool_call_evidence[]\` array. Injected
+skills declare \`required_tools\` in their frontmatter. When one or more of the
+auto-loaded skills declares required tools, **verdict='accepted' will be
+rejected** by submit_verdict unless every required tool appears in
+tool_call_evidence with \`passed=true\` and a reproducer-grade \`detail\`
+(minimum 8 non-trivial characters — numbers, URLs, exit codes, selectors, not
+prose like "looks fine"). If a check cannot be made to pass, switch to
+verdict='rejected' with the failing call recorded verbatim in
+tool_call_evidence so the orchestrator can hand the executor exact
+reproduction steps.`,
+}
+
 /** Characteristics of the active task used to auto-detect skills. */
 export interface TaskSignals {
   /** Task carries a reference image attachment (PNG/JPEG/WEBP). */
@@ -98,12 +126,14 @@ export async function resolveStageSkills(
     new Set(loaded.flatMap((s) => s.required_tools ?? [])),
   )
 
-  if (loaded.length === 0) {
-    return { prompt: "", skills: [], requiredTools }
-  }
-
+  const invariant = stage ? STAGE_INVARIANTS[stage] : undefined
   const sections = loaded.map((s) => `## Skill: ${s.name}\n\n${s.content.trim()}`)
-  const prompt = "\n\n# Injected Skills\n\n" + sections.join("\n\n---\n\n")
+
+  const parts: string[] = []
+  if (invariant) parts.push(invariant)
+  if (sections.length > 0) parts.push("# Injected Skills\n\n" + sections.join("\n\n---\n\n"))
+
+  const prompt = parts.length > 0 ? "\n\n" + parts.join("\n\n") : ""
   return { prompt, skills: loaded, requiredTools }
 }
 

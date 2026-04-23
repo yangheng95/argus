@@ -449,11 +449,16 @@ function validateQuality(
 export const REQUIREMENTS_SYSTEM = REQUIREMENTS_CORE
 
 async function requirementsSystem(): Promise<string> {
+  // Single-source skill injection: the stage's CORE constant is always
+  // present; `config.agent.requirements.prompt` is APPENDED (not replaced)
+  // so user additions ride on top of the canonical base. Skills then append
+  // via the one-and-only loadStageSkills path — no config field can bypass
+  // it. See specs/new-arch/11-agent-oop-protocol.md for the contract.
   const config = await Config.get()
-  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof systemOverride?.requirements_system === "string") return systemOverride.requirements_system
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.requirements?.prompt
-  const core = typeof agentPrompt === "string" ? agentPrompt : REQUIREMENTS_CORE
+  const userAppend = (config.agent as Record<string, any> | undefined)?.requirements?.prompt
+  const core = typeof userAppend === "string" && userAppend.trim().length > 0
+    ? REQUIREMENTS_CORE + "\n\n" + userAppend
+    : REQUIREMENTS_CORE
   const orchCfg = await EngineConfig.get()
   const skills = await loadStageSkills(orchCfg.requirements.skills, "requirements")
   return core + skills
