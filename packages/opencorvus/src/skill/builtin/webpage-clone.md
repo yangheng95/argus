@@ -74,33 +74,33 @@ Never invent a URL. If `websearch` returns nothing useful, stop and ask the user
 
 ## Artifact layout
 
-All mirror-tool artifacts live under **`.opencorvus/mirror/`** — a single hidden folder at the worktree root, separate from the clone's deliverable (`index.html` + its final `images/` if you promote them). This keeps the project tree clean so `git status`, `ls`, and the executor's own workflow aren't drowning in intermediate files.
+All mirror-tool artifacts live under **`mirror/`** — a single top-level folder at the worktree root, separate from the clone's deliverable (`index.html` + its final `images/` if you promote them). It is git-visible so the delivery commit captures the artifacts (do NOT place them under `.opencorvus/` — that tree is orchestrator scratch and is gitignored, so `git add -A` would drop them).
 
-Refer to artifacts as `.opencorvus/mirror/<file>` unless a tool specifically accepts a different `inputDir` / `referenceDir` override. Do not scatter these into the worktree root.
+Refer to artifacts as `mirror/<file>` unless a tool specifically accepts a different `inputDir` / `referenceDir` override. Do not scatter these into the worktree root.
 
 ## Step 1 — Extract the reference
 
-Call `webpage_extract` with the URL. Defaults (1440×900 viewport, `body` scope) are right for most desktop pages. Artifacts land under `.opencorvus/mirror/`:
+Call `webpage_extract` with the URL. Defaults (1440×900 viewport, `body` scope) are right for most desktop pages. Artifacts land under `mirror/`:
 
-- `.opencorvus/mirror/reference.png` — the pixel target for scoring later
-- `.opencorvus/mirror/extracted-page.json` — DOM tree with ~33 computed CSS properties per element
-- `.opencorvus/mirror/images/img-N.{png,jpg,svg}` — downloaded image assets
+- `mirror/reference.png` — the pixel target for scoring later
+- `mirror/extracted-page.json` — DOM tree with ~33 computed CSS properties per element
+- `mirror/images/img-N.{png,jpg,svg}` — downloaded image assets
 - (the tool prints a summary to context — the full JSON stays on disk)
 
 Network access to the URL is required. The tool will ask for permission.
 
 ## Step 2 — Compile the XML IR
 
-Call `webpage_compile` **only after step 1 completed successfully**. It reads `.opencorvus/mirror/extracted-page.json` and emits `.opencorvus/mirror/page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
+Call `webpage_compile` **only after step 1 completed successfully**. It reads `mirror/extracted-page.json` and emits `mirror/page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
 
 ## Step 3 — Analyze the structure
 
-Call `webpage_analyze` **only after step 1 completed successfully**. It reads `.opencorvus/mirror/extracted-page.json` and writes under the same folder:
+Call `webpage_analyze` **only after step 1 completed successfully**. It reads `mirror/extracted-page.json` and writes under the same folder:
 
-- `.opencorvus/mirror/scaffold.json` — section list + pattern catalog + design-token system
-- `.opencorvus/mirror/design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (copy values; do NOT invent hex codes)
-- `.opencorvus/mirror/App.tsx` — reference composition (you can inspect but don't copy it directly)
-- `.opencorvus/mirror/shared-context.md` — compact prompt-ready summary of tokens + patterns
+- `mirror/scaffold.json` — section list + pattern catalog + design-token system
+- `mirror/design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (copy values; do NOT invent hex codes)
+- `mirror/App.tsx` — reference composition (you can inspect but don't copy it directly)
+- `mirror/shared-context.md` — compact prompt-ready summary of tokens + patterns
 
 ## Step 4 — Write the static HTML
 
@@ -110,20 +110,20 @@ Hard rules:
 
 1. **Static HTML only**. No JavaScript frameworks (React, Vue, etc.), no Babel, no JSX. Every visible text node MUST be present as raw HTML text — a viewer with JS disabled should still see the page's content.
 2. **CSS**: inline `<style>` + Tailwind via CDN (`<script src="https://cdn.tailwindcss.com"></script>`). No other runtime dependencies.
-3. **Text**: copy phrases verbatim from `.opencorvus/mirror/page-ir.xml` `<Text>` tags and the `Section Text` catalog. Do not paraphrase headings, nav labels, or button text.
-4. **Images**: before writing `<img>` tags, copy / move `.opencorvus/mirror/images/` out to `./images/` at the worktree root so the final clone is portable and doesn't reference a hidden folder. Use relative paths `images/img-N.ext` from `index.html`. Fall back to original URLs only if local paths are absent.
-5. **Colors**: copy the hex values from `.opencorvus/mirror/design-tokens.ts` `COLORS` directly into your inline CSS / Tailwind arbitrary-value classes. Do NOT `import` or `<script src>` that file — the final HTML must be self-contained so step 8 can delete `.opencorvus/mirror/`. Never invent tones.
-6. **Structure**: match the section order and rough bounds reported in `.opencorvus/mirror/scaffold.json`.
+3. **Text**: copy phrases verbatim from `mirror/page-ir.xml` `<Text>` tags and the `Section Text` catalog. Do not paraphrase headings, nav labels, or button text.
+4. **Images**: before writing `<img>` tags, copy / move `mirror/images/` out to `./images/` at the worktree root so the final clone is portable and doesn't reference a hidden folder. Use relative paths `images/img-N.ext` from `index.html`. Fall back to original URLs only if local paths are absent.
+5. **Colors**: copy the hex values from `mirror/design-tokens.ts` `COLORS` directly into your inline CSS / Tailwind arbitrary-value classes. Do NOT `import` or `<script src>` that file — the final HTML must be self-contained so step 8 can delete `mirror/`. Never invent tones.
+6. **Structure**: match the section order and rough bounds reported in `mirror/scaffold.json`.
 
-Before writing, `read` `.opencorvus/mirror/page-ir.xml` and `.opencorvus/mirror/shared-context.md` at minimum.
+Before writing, `read` `mirror/page-ir.xml` and `mirror/shared-context.md` at minimum.
 
 ## Step 5 — Render
 
-Call `webpage_render` (no args needed — `inputDir` defaults to the current worktree where `index.html` lives, `outputDir` defaults to `.opencorvus/mirror/`). It writes `.opencorvus/mirror/rendered.png` and reports render time + any console errors.
+Call `webpage_render` (no args needed — `inputDir` defaults to the current worktree where `index.html` lives, `outputDir` defaults to `mirror/`). It writes `mirror/rendered.png` and reports render time + any console errors.
 
 ## Step 6 — Evaluate
 
-Call `webpage_evaluate` with `reference=reference.png` and `rendered=rendered.png` (both resolved inside `.opencorvus/mirror/` — evaluate's `outputDir` defaults there). It writes `.opencorvus/mirror/diff.png` (red = pixels that differ) and returns an overall score in 0-100.
+Call `webpage_evaluate` with `reference=reference.png` and `rendered=rendered.png` (both resolved inside `mirror/` — evaluate's `outputDir` defaults there). It writes `mirror/diff.png` (red = pixels that differ) and returns an overall score in 0-100.
 
 The score formula: `round(ssim × 50 + (100 − pixelDiff%) × 0.5)`. Target ≥ 95.
 
@@ -148,16 +148,16 @@ Track your round count explicitly in your reasoning. Do not hand-wave ("I've don
 
 ## Step 8 — Clean up intermediate artifacts
 
-**Gate**: only run this step when the most recent `webpage_evaluate` score was ≥ target. If the loop in step 7 bailed out without reaching target, SKIP step 8 entirely — the forensic artifacts stay under `.opencorvus/mirror/` so the user can inspect what failed.
+**Gate**: only run this step when the most recent `webpage_evaluate` score was ≥ target. If the loop in step 7 bailed out without reaching target, SKIP step 8 entirely — the forensic artifacts stay under `mirror/` so the user can inspect what failed.
 
 **Keep**:
 - `index.html` — the final clone
-- `images/` — the image assets the HTML references (promoted out of `.opencorvus/mirror/images/` in step 4)
+- `images/` — the image assets the HTML references (promoted out of `mirror/images/` in step 4)
 
 **Delete** the entire mirror folder in one shot:
 
 ```bash
-rm -rf .opencorvus/mirror
+rm -rf ./mirror
 rm -f best-index.html
 ```
 

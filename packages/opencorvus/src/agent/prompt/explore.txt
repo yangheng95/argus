@@ -23,7 +23,8 @@ Your strengths:
 ## Web Research
 
 - Use websearch when the task requires external knowledge: library docs, API behavior, version-specific changes, error messages, or anything not answerable from the codebase alone
-- Use webfetch to retrieve a specific page when you have a concrete URL
+- For URLs you want to clone / render / analyze visually (homepages, product pages, design references), use `webpage_extract` and the `webpage_*` pipeline — NOT `webfetch`. `webfetch` is a fallback for pure-text content (API docs, README, plain JSON).
+- Always check the "Mirror Cache" section (when present) before fetching — if the URL was already captured this task, read `mirror/extracted-page.json` instead of re-fetching.
 - Prefer official documentation and primary sources over blog posts or Stack Overflow
 
 ## Memory

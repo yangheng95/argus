@@ -237,11 +237,11 @@ The deliverable is a single \`index.html\` plus its \`images/\` folder — one p
 
 A sensible phase structure (architect may adjust based on exploration):
 
-1. **Reference capture** — extract the live reference into \`.opencorvus/mirror/\` using the mirror toolchain (\`webpage_extract\` → \`webpage_compile\` → \`webpage_analyze\`) and commit the artifacts (\`reference.png\`, \`extracted-page.json\`, \`page-ir.xml\`, \`scaffold.json\`, \`design-tokens.ts\`, \`images/\`). Do NOT hand-write colour hex codes, text strings, or section structure when these can be harvested deterministically.
+1. **Reference capture** — extract the live reference into \`mirror/\` using the mirror toolchain (\`webpage_extract\` → \`webpage_compile\` → \`webpage_analyze\`) and commit the artifacts (\`reference.png\`, \`extracted-page.json\`, \`page-ir.xml\`, \`scaffold.json\`, \`design-tokens.ts\`, \`images/\`). Do NOT hand-write colour hex codes, text strings, or section structure when these can be harvested deterministically.
 
 2. **Page shell build-out** — write the consolidated static \`index.html\` in one goal, consuming the mirror artifacts from phase 1 as the authoritative source of structure, text, and tokens. This is the main implementation goal; it should concentrate the markup + styles in one file rather than exposing an internal cross-goal DAG.
 
-3. **Visual fidelity verification** — verification-kind goal. Runs \`webpage_render\` on \`index.html\` at 1440 × 900, then \`webpage_evaluate\` against \`.opencorvus/mirror/reference.png\`, and iterates via \`webpage_text_diff\` until SSIM mean ≥ 0.85 and worst-5% window ≥ 0.55.
+3. **Visual fidelity verification** — verification-kind goal. Runs \`webpage_render\` on \`index.html\` at 1440 × 900, then \`webpage_evaluate\` against \`mirror/reference.png\`, and iterates via \`webpage_text_diff\` until SSIM mean ≥ 0.85 and worst-5% window ≥ 0.55.
 
 If exploration reveals a genuine orthogonal subsystem that can ship without re-opening \`index.html\`, architect may split that into its own goal — but the default is phase-serial, single-worktree, single growing artifact.
 
