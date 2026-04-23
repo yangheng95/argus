@@ -57,10 +57,43 @@ async function launchTaskLoop(taskID: string, trigger: TaskLoopTrigger, interrup
     import("@/engine/state"),
   ])
   if (interrupt) interruptTaskLoop(taskID, "task loop dispatch interrupt")
-  void runTaskLoop({ taskID, trigger, hooks: hooks() })
+  // Return the loop's own promise (absorbing errors). Callers that want to
+  // observe actual loop exit (queue-advance hook) attach `.finally` to the
+  // returned promise; callers that only want fire-and-forget ignore it.
+  // Previously this was `void runTaskLoop(...).catch(...)` which discarded
+  // the inner promise and resolved after mere scheduling — any `.finally`
+  // attached by the caller fired before the loop had done anything, so the
+  // queue-advance hook never fired on real task termination and sibling
+  // queued tasks in the same cwd stayed stuck forever.
+  return runTaskLoop({ taskID, trigger, hooks: hooks() })
     .catch((err) => {
       log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
     })
+}
+
+/**
+ * Bind the cwd queue-advance hook to an in-flight loop promise.
+ *
+ * Single authoritative bind point between per-invocation loop lifecycle
+ * and serial-queue progression. All paths that start a loop (initial
+ * claim, resume, retrigger on already-active task) route through here so
+ * the "loop exited → advance siblings" contract is written exactly once.
+ *
+ * Idempotent against overlapping invocations for the same task: the Set
+ * add/delete and the claim SQL both treat repeated calls as no-ops.
+ */
+function attachLoopCompletion(taskID: string, cwd: string, loopPromise: Promise<void>): void {
+  loopInFlight.add(taskID)
+  loopPromise.finally(() => {
+    loopInFlight.delete(taskID)
+    // Detach via queueMicrotask so `advanceQueue` → `startLoopForTask` →
+    // `.finally` re-entry doesn't stack synchronously.
+    queueMicrotask(() => {
+      advanceQueue(cwd).catch((err) => {
+        log.error("advanceQueue failed after loop exit", { cwd, error: err instanceof Error ? err.message : String(err) })
+      })
+    })
+  })
 }
 
 /**
@@ -243,7 +276,12 @@ export async function dispatchTaskLoop(input: {
     return
   }
 
-  await launchTaskLoop(task.id, input.trigger, input.interrupt === true)
+  // Task is already active — inject a new trigger into the existing loop
+  // chain (loop.ts serialises multi-trigger entries per taskID). The new
+  // invocation might be the one that drives the task to terminal, so its
+  // completion must also advance the cwd queue. Fire-and-forget: callers
+  // don't want to block on task completion.
+  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.trigger, input.interrupt === true))
 }
 
 /**
@@ -268,8 +306,8 @@ export async function resumeActiveTaskLoop(taskID: string): Promise<void> {
 
 /**
  * Internal: actually start the loop for a claimed/resumed task.
- * Registers in-flight dedup, runs the loop, and re-triggers advanceQueue
- * on exit so the next queued task is picked up.
+ * Serial dispatch is guaranteed by the DB claim SQL, not by blocking the
+ * caller; advance-on-exit is wired via `attachLoopCompletion`.
  *
  * Dynamic import of task-loop avoids a circular dependency
  * (task-loop → queue → task-loop).
@@ -283,21 +321,7 @@ async function startLoopForTask(
     log.info("loop already in flight, skipping", { taskID: task.id })
     return
   }
-  loopInFlight.add(task.id)
-  // Fire the loop without awaiting — serial dispatch is guaranteed by the
-  // claim SQL, not by blocking the caller. Callers that need completion
-  // should await at the loop exit hook instead.
-  void launchTaskLoop(task.id, trigger)
-    .finally(() => {
-      loopInFlight.delete(task.id)
-      // Loop has exited → the cwd may now be idle; advance the queue.
-      // Detached to avoid unbounded recursion (advanceQueue → loop → finally → advanceQueue).
-      queueMicrotask(() => {
-        advanceQueue(cwd).catch((err) => {
-          log.error("advanceQueue failed after loop exit", { cwd, error: err instanceof Error ? err.message : String(err) })
-        })
-      })
-    })
+  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, trigger))
 }
 
 /** Check if a task loop is currently running in this process. */
