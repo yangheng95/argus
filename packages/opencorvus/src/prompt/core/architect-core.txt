@@ -54,6 +54,15 @@ For **new feature / new module tasks:**
 2. Find export / registration entry points (router, DI container, `main.ts`)
 3. Read the existing test files to copy their shape
 
+For **webpage / UI clone tasks** (request cites a reference URL like `https://…` or attaches a reference screenshot):
+1. Do NOT ask the executor to hand-write the HTML / DOM structure from a screenshot. The project ships a deterministic mirror toolchain exposed to `stage: build` executors:
+   - `webpage_extract`  — URL → `extracted-page.json` + `reference.png`
+   - `webpage_compile`  — `extracted-page.json` → `page-ir.xml` (compact XML IR)
+   - `webpage_analyze`  — `extracted-page.json` → `ProjectScaffold` with design tokens, patterns, pre-generated `design-tokens.ts` / `App.tsx`
+   - `webpage_render` + `webpage_evaluate` — render `index.html` and score SSIM vs the reference
+2. Decompose the task so ONE goal (typically the first, kind=`system` or a dedicated `extract` goal) runs `webpage_extract` → `webpage_compile` → `webpage_analyze` and commits the artifacts, and later goals import those artifacts (design tokens, IR, pattern catalog) as their authoritative source of structure. Do not let every goal re-read the screenshot with raw vision.
+3. The artifact paths (`.opencorvus/extract/*` or the goal's worktree) become `exports` of the extract goal and `imports` of the implementation goals. Register them as interface_contract entries so the pipeline is explicit.
+
 After exploration you should be able to:
 - Cite file paths and symbols from memory
 - Name every cross-goal interface surface
