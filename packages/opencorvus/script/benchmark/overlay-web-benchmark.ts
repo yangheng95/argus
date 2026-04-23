@@ -434,10 +434,6 @@ process.env.OPENCORVUS_STANDBY_TIMEOUT_MS = String(standbyTimeoutMs)
 // Legacy env vars from old fixed-pipeline architecture
 process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
-// Orchestrator alive/progress cap — must exceed the longest legitimate sub-agent
-// tool.execute (delivery / dispatch_goal). Benchmark delivery on full-site replication
-// tasks observed 21 min; align with planning-stall-timeout-ms for headroom.
-process.env.OPENCORVUS_ORCHESTRATOR_STALL_MS = String(planningStallTimeoutMs)
 // Complex replication tasks legitimately need >3 delivery iterations to converge.
 // Schema allows up to 10. 6 balances convergence room against total wall time.
 process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS = "6"
