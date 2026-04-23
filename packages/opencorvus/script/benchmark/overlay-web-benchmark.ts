@@ -229,27 +229,39 @@ const referenceImages = rawReferenceImages.length > 0
   ? rawReferenceImages
   : (!requestFile && !requestAttachment ? [DEFAULT_BAIDU_REFERENCE] : [])
 const DEFAULT_TASK_REQUEST = `
-Clone the Baidu homepage (https://www.baidu.com/) as a single-file static HTML page.
+Reproduce the Baidu homepage (https://www.baidu.com/) as a pixel-faithful static web clone, delivered as a single \`index.html\` rendered at viewport 1440 × 900. The reference screenshot is attached at references/baidu.png.
 
-Only create or modify this file:
-- index.html
+## Scope (decompose by responsibility layer, NOT by file proximity)
 
-Do not add package.json, tsconfig.json, README files, docs, build tooling, or any other files.
-The working directory is empty; write one self-contained index.html at its root.
+Organise the work as a multi-goal plan. Each goal below is a distinct axis of change — they belong in different goals because they change for different reasons. Do NOT collapse them into one mega-goal.
 
-Viewport: 1440 × 900. The reference screenshot is attached at references/baidu.png.
+1. **Design tokens** — palette (Baidu blue #4E6EF2, neutrals), typography (Arial / "Microsoft YaHei" stack, sizes), spacing scale, border radii. Owns the authoritative \`:root\` CSS custom properties / Tailwind theme extension used by every other goal.
 
-Rules:
-1. Single-file STATIC HTML with inline CSS only. NO JavaScript frameworks, NO React/Vue/Babel/JSX, NO client-side rendering. Every visible text node must be present as raw HTML so that a non-executing reader sees the content.
-2. Only one external dependency is allowed: Tailwind CDN (https://cdn.tailwindcss.com). Tailwind classes plus an inline <style> block. Nothing else.
-3. Do not fetch https://www.baidu.com/ at runtime — the clone must be fully static.
-4. Match the reference layout: header with language / settings links, centered logo, large search box with the blue "百度一下" button, quick-link bar under the search box, and the footer.
-5. Use the exact Chinese text visible on the reference: "新闻 hao123 地图 贴吧 视频 图片 网盘 更多" for the top nav, "百度一下" for the submit button, etc.
-6. Brand color: Baidu blue #4E6EF2 (header links + search button). White background. Thin 1px grey search box border (#C8C8C8).
+2. **Global layout shell** — page-level structure: top bar (language + settings + login), centered content column, footer anchor. Owns the outer flex/grid skeleton only; does not own the search form or quick-link bar internals.
 
-Acceptance:
-- index.html renders at 1440 × 900 with SSIM ≥ 0.85 (mean) and ≥ 0.55 (worst-5% window) against references/baidu.png.
-- A visual-diff gate runs this automatically at delivery.
+3. **Hero logo + search form** — centred Baidu logo image, search input with icons on either side, the blue "百度一下" submit button, the suggestion / auto-complete affordance. Owns the search region's markup + styling.
+
+4. **Quick-link bar** — the row of shortcut links below the search box ("新闻 hao123 地图 贴吧 视频 图片 网盘 更多"). Owns its bar's markup + icons + spacing.
+
+5. **Footer & utility strip** — bottom strip: "设为首页", "关于百度", "About Baidu", ICP number, copyright. Owns the footer content + layout.
+
+6. **Visual fidelity verification** — verification-kind goal. Renders \`index.html\` at 1440 × 900 and runs the visual-diff gate against references/baidu.png. Fails unless SSIM mean ≥ 0.85 and worst-5% window ≥ 0.55.
+
+Goals 1–5 each export CSS classes / style snippets / section markup fragments; Goal 2 imports them and composes the final \`index.html\`. Register interface contracts between the tokens goal and its consumers, and between each section goal and the layout-shell goal.
+
+## Technical rules (apply to every implementation goal)
+
+- **Static HTML only.** NO JavaScript frameworks, NO React/Vue/Babel/JSX, NO client-side rendering. Every visible text node must appear as raw HTML so a non-executing reader sees the content.
+- **One external dependency allowed**: Tailwind CDN (https://cdn.tailwindcss.com). Tailwind utility classes plus an inline \`<style>\` block. Nothing else — no other CDNs, no local bundling, no build step.
+- **Do not fetch https://www.baidu.com/ at runtime.** The clone must be fully static.
+- **Exact text.** Preserve the Chinese strings visible on the reference: top nav "新闻 hao123 地图 贴吧 视频 图片 网盘 更多", submit button "百度一下", footer strings, etc.
+- **Exact palette.** Baidu blue #4E6EF2 for the search button and link hovers; white background; 1 px #C8C8C8 search-box border.
+- **Viewport.** Target 1440 × 900. The final composed page must look correct at that exact viewport.
+
+## Acceptance (gate)
+
+- Only one deliverable file: \`index.html\` at the project root. The implementation goals may produce intermediate artefacts (component snippets, tokens stylesheet) during their own iteration, but the layout-shell goal is responsible for emitting the single consolidated \`index.html\`.
+- Visual-diff gate: SSIM ≥ 0.85 (mean) and ≥ 0.55 (worst-5% window) against references/baidu.png. Runs automatically at delivery.
 `.trim()
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
