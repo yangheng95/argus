@@ -25,8 +25,9 @@ function emptyCollector(): DeliveryCollector {
   return { finalized: false }
 }
 
-export function createDeliveryOutputTools() {
+export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) {
   let collector: DeliveryCollector = emptyCollector()
+  const requiredTools = Array.from(new Set(input?.requiredTools ?? []))
 
   const tools = {
     submit_verdict: tool({
@@ -40,8 +41,11 @@ export function createDeliveryOutputTools() {
         "Attribution contract (enforced here):\n" +
         "- verdict='rejected' REQUIRES non-empty affected_goal_ids.\n" +
         "- Every rejection_details[].goal_id MUST appear in affected_goal_ids.\n" +
-        "- verdict='accepted' normalizes affected_goal_ids to [] (ignored).\n\n" +
-        "On validation failure the tool returns the error message — fix the " +
+        "- verdict='accepted' normalizes affected_goal_ids to [] (ignored).\n" +
+        (requiredTools.length > 0
+          ? `- verdict='accepted' REQUIRES tool_call_evidence[] to cover every required tool with passed=true: [${requiredTools.join(", ")}].\n`
+          : "") +
+        "\nOn validation failure the tool returns the error message — fix the " +
         "payload and call submit_verdict again.",
       inputSchema: DeliveryVerdict,
       execute: async (input) => {
@@ -66,6 +70,29 @@ export function createDeliveryOutputTools() {
 
         if (obj.verdict === "accepted") {
           obj.affected_goal_ids = []
+          if (requiredTools.length > 0) {
+            const passedTools = new Set(
+              (obj.tool_call_evidence ?? []).filter((e) => e.passed).map((e) => e.tool),
+            )
+            const missing = requiredTools.filter((t) => !passedTools.has(t))
+            if (missing.length > 0) {
+              return (
+                `Error: verdict='accepted' requires tool_call_evidence[] to cover every ` +
+                `skill-required tool with passed=true. Missing passed evidence for: ${missing.join(", ")}. ` +
+                `Either run the missing tool(s) and resubmit with the evidence populated, or ` +
+                `switch verdict to 'rejected' with rejection_details explaining why the check cannot pass.`
+              )
+            }
+            for (const ev of obj.tool_call_evidence ?? []) {
+              if (!ev.detail || ev.detail.trim().length < 8) {
+                return (
+                  `Error: tool_call_evidence[].detail for tool="${ev.tool}" is empty or trivially short. ` +
+                  `Populate with reproducer-grade evidence (numbers, URLs, exit codes, selectors), not prose narration. ` +
+                  `Then resubmit.`
+                )
+              }
+            }
+          }
         } else {
           if (obj.affected_goal_ids.length === 0) {
             return (

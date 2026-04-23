@@ -20,6 +20,25 @@ export const FrontendCheck = z.object({
   issues: z.array(z.string()).optional().describe("Frontend issues found"),
 })
 
+/**
+ * Evidence that a particular verification tool was actually called and what it
+ * returned. Used to enforce skill `required_tools` contracts: a skill can
+ * declare a tool MUST run (and pass) before verdict=accepted; submit_verdict
+ * then checks every required tool is represented here with passed=true.
+ *
+ * `detail` is free-form but MUST let a reviewer reproduce the check — URL,
+ * selector, response hash, exit code, etc. Prose like "checked the chart" is
+ * rejected as non-evidentiary.
+ */
+export const ToolCallEvidence = z.object({
+  tool: z.string().min(1).describe("Tool name as declared on the delivery tool set (e.g. 'verify_page_integrity', 'screenshot', 'run_command')."),
+  passed: z.boolean().describe("Whether this invocation passed the check the tool performed. Tools that purely gather evidence without a pass/fail semantic must still set true/false based on whether they completed successfully."),
+  target: z.string().optional().describe("The subject of the check — URL, endpoint, file path, command, selector. Populate whenever meaningful."),
+  detail: z.string().min(1).describe("Reproducer-grade evidence: headline numbers + key signals the tool reported. NOT prose narration."),
+  attachment_sha: z.string().optional().describe("SHA of any attachment (screenshot, log) produced by this call, for later inspection."),
+})
+export type ToolCallEvidenceType = z.infer<typeof ToolCallEvidence>
+
 export const DeliveryVerdict = z.object({
   verdict: z.enum(["accepted", "rejected"]),
   summary: z.string().min(1),
@@ -50,6 +69,9 @@ export const DeliveryVerdict = z.object({
     result: z.enum(["passed", "failed", "skipped"]),
     evidence: z.string().describe("Brief evidence or reason"),
   })).optional().describe("Extended checks that the evaluator deferred to delivery"),
+  tool_call_evidence: z.array(ToolCallEvidence).default([]).describe(
+    "Evidence that the mandatory verification tools ran. Every skill-declared required_tool must appear here with passed=true before verdict='accepted' is accepted. An empty list is only valid when no injected skill declared any required_tools.",
+  ),
 })
 
 export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>

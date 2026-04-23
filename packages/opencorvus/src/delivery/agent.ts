@@ -22,7 +22,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
-import { loadStageSkills } from "@/engine/skill-inject"
+import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { AttachmentStore } from "@/storage/attachment-store"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks"
 import {
@@ -68,12 +68,13 @@ export namespace DeliveryAgent {
     const deliveryCfg = (await EngineConfig.get()).delivery
 
     const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
-    const outputToolKit = createDeliveryOutputTools()
+    const systemResolved = await deliveryAgentSystem(input)
+    const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
     const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
     const context = prefetchDeliveryContext(input)
     const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
     const userPrompt = await buildMultimodalPrompt(textPrompt, input.attachments)
-    const systemPrompt = await deliveryAgentSystem()
+    const systemPrompt = systemResolved.prompt
 
     log.info("delivery agent starting", {
       title: input.task.title,
@@ -835,16 +836,41 @@ A rejection that omits any of these fields, or cites a problem you never tried t
 - When rejecting, list ALL issues that remain after your fix attempts — every rejection_detail becomes guidance for the executor's rework iteration
 - After accepting, if the delivered work obviously sets up an important next step, call submit_next_task with priority="normal"/"high" (iteration) or "low" (recommendation) so the project keeps moving instead of stalling at the user
 - Write body text in the same language as the task request
-- If the project is a library, verify compile + tests instead of startup`
+- If the project is a library, verify compile + tests instead of startup
 
-/** Config-aware resolver: checks config.prompt.delivery_system first, then config.agent.delivery.prompt, otherwise the default + skills. */
-export async function deliveryAgentSystem() {
+## Mandatory tool_call_evidence
+
+The delivery verdict schema carries a \`tool_call_evidence[]\` array. Injected skills may declare one or more \`required_tools\` — those tools MUST be called and return passed=true before you can submit verdict=accepted. The submit_verdict tool enforces this: it will reject an accepted payload that lacks evidence for any required tool, and you will have to rerun the missing check before retrying.
+
+Guidance:
+- When an injected skill lists \`verify_page_integrity\` as required, call it against every URL your delivery exposes (not just \`/\`). Wire up \`expect_selectors\` and \`expect_texts\` from the task's design_specs so layer 6 actually asserts the visible UI, not just that DOM exists.
+- When \`screenshot\` is required, capture AT LEAST one shot of the running app and cite its \`sha\` in the evidence \`attachment_sha\`. A \`pixel_variance\` under 25 means the image is degenerate (blank, JSON, loading stub) and MUST NOT be recorded as passed — fix the server/build first.
+- Evidence \`detail\` is reproducer-grade: cite status codes, content-type, dom_descendants, asset failures, missing selectors, variance values. Prose like "page looks correct" will be rejected.
+- For rejected verdicts, also populate tool_call_evidence with the failing calls — the orchestrator uses it to tell the executor exactly which tool output disproved the candidate.`
+
+/** Config-aware resolver: checks config.prompt.delivery_system first, then config.agent.delivery.prompt, otherwise the default + skills.
+ *
+ * Returns BOTH the composed prompt and the union of required_tools declared
+ * by every matched skill so callers can plumb the mandatory-tool contract
+ * into `submit_verdict`. Accepts the live task so auto-detect can use
+ * task-level signals (attachments, request URL) rather than only project
+ * files / deps. */
+export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt: string; requiredTools: string[] }> {
   const config = await Config.get()
   const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof systemOverride?.delivery_system === "string") return systemOverride.delivery_system
+  if (typeof systemOverride?.delivery_system === "string") {
+    return { prompt: systemOverride.delivery_system, requiredTools: [] }
+  }
   const agentPrompt = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
   const core = typeof agentPrompt === "string" ? agentPrompt : DELIVERY_AGENT_SYSTEM
   const orchCfg = await EngineConfig.get()
-  const skills = await loadStageSkills(orchCfg.delivery.skills, "delivery")
-  return core + skills
+  const taskSignals: TaskSignals | undefined = input
+    ? {
+        has_attachment_image: (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/")),
+        request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
+        request_text: input.task.request,
+      }
+    : undefined
+  const resolved = await resolveStageSkills(orchCfg.delivery.skills, "delivery", taskSignals)
+  return { prompt: core + resolved.prompt, requiredTools: resolved.requiredTools }
 }
