@@ -4,7 +4,7 @@ import { EngineRunTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -50,6 +50,94 @@ describe("engine queue", () => {
           trigger: { kind: "created" },
         })
         expect(findTask(taskID)?.status).toBe("active")
+      },
+    })
+  })
+
+  test("loop exit flips the queued sibling in the same cwd to active", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const activeID = `task_queue_active_${now}`
+        const siblingID = `task_queue_sibling_${now}`
+
+        // Hold the leader's runTaskLoop open until we release it; the
+        // sibling's runTaskLoop resolves immediately. Modelling a real task
+        // lifecycle: when the leader's loop exits it also flips task.status
+        // to a terminal value (runTaskLoopInner does this via updateTask in
+        // production); the queue-advance hook then finds the cwd idle and
+        // the sibling must flip `queued → active`.
+        let release: (() => void) | undefined
+        const holdLoop = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockImplementation(
+          async (arg: { taskID: string }) => {
+            if (arg.taskID === activeID) {
+              await holdLoop
+              Database.use((db) =>
+                db
+                  .update(EngineTaskTable)
+                  .set({ status: "completed", time_completed: Date.now() })
+                  .where(eq(EngineTaskTable.id, activeID))
+                  .run(),
+              )
+            }
+          },
+        )
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable).values({
+            id: activeID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "active task",
+            request: "holds the cwd lock until loop exits",
+            status: "queued",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: siblingID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "queued sibling",
+            request: "must flip to active after the leader's loop exits",
+            status: "queued",
+            priority: "normal",
+            time_created: now + 1,
+            time_updated: now + 1,
+          }).run()
+        })
+
+        await dispatchTaskLoop({ taskID: activeID, trigger: { kind: "created" } })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(findTask(activeID)?.status).toBe("active")
+        // Sibling stays queued while the leader's loop is still running —
+        // the cwd lock is held.
+        expect(findTask(siblingID)?.status).toBe("queued")
+
+        // Release the loop: the real loop exit → `.finally` → advanceQueue
+        // should now flip the sibling to active. Without the fix, advance
+        // fired right after scheduling and the sibling would remain queued.
+        release!()
+        await holdLoop
+        // Give microtasks + queueMicrotask + the follow-up advanceQueue a
+        // few turns to settle.
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          if (findTask(siblingID)?.status === "active") break
+        }
+
+        expect(findTask(siblingID)?.status).toBe("active")
+        expect(runTaskLoop).toHaveBeenCalledTimes(2)
+        expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({ taskID: siblingID })
       },
     })
   })
