@@ -203,7 +203,7 @@ const executor = (flag("--executor") || "opencode") as
   | "claude-code"
 const requestFile = flag("--request-file")
 const requestAttachment = flag("--request-attachment")
-const referenceImages = flag("--reference-images")?.split(",").map(s => s.trim()).filter(Boolean) ?? []
+const rawReferenceImages = flag("--reference-images")?.split(",").map(s => s.trim()).filter(Boolean) ?? []
 if (requestFile && requestAttachment) {
   process.stderr.write("[overlay-benchmark] cannot pass both --request-file and --request-attachment\n")
   process.exit(2)
@@ -221,38 +221,35 @@ const noBrowser = process.argv.includes("--no-browser")
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
 
-const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
+const DEFAULT_TASK_TITLE = "Overlay Web Benchmark — Baidu Homepage Clone"
+const DEFAULT_BAIDU_REFERENCE = path.join(import.meta.dir, "assets", "baidu.png")
+// When the caller runs with no custom request/attachment/reference, the default
+// Baidu-clone task drives the visual-diff gate using the committed fixture.
+const referenceImages = rawReferenceImages.length > 0
+  ? rawReferenceImages
+  : (!requestFile && !requestAttachment ? [DEFAULT_BAIDU_REFERENCE] : [])
 const DEFAULT_TASK_REQUEST = `
-Implement a minimal NoteStore.
+Clone the Baidu homepage (https://www.baidu.com/) as a single-file static HTML page.
 
-Only create or modify these files:
-- src/note-store.ts
-- src/note-store.test.ts
+Only create or modify this file:
+- index.html
 
-Do not add package.json, tsconfig.json, README files, docs, or any other files unless they are strictly required.
-The Bun runtime and bun:test are already available, and the project scaffold is ready.
+Do not add package.json, tsconfig.json, README files, docs, build tooling, or any other files.
+The working directory is empty; write one self-contained index.html at its root.
 
-Requirements for src/note-store.ts:
-- export interface Note { id: string; title: string; done: boolean; created_at: number }
-- export class NoteStore backed by an in-memory Map<string, Note>
-- create(title: string): trim the title, throw on empty input, use crypto.randomUUID(), set done=false and created_at=Date.now()
-- get(id: string): return Note | undefined
-- list(): return all notes sorted by created_at ascending
-- toggle(id: string): flip done and return the updated note or undefined
-- remove(id: string): delete the note and return boolean
+Viewport: 1440 × 900. The reference screenshot is attached at references/baidu.png.
 
-Requirements for src/note-store.test.ts:
-- use bun:test
-- cover these cases:
-  1. create returns a complete Note
-  2. empty title throws
-  3. list preserves creation order
-  4. toggle flips done
-  5. remove deletes successfully and get then returns undefined
+Rules:
+1. Single-file STATIC HTML with inline CSS only. NO JavaScript frameworks, NO React/Vue/Babel/JSX, NO client-side rendering. Every visible text node must be present as raw HTML so that a non-executing reader sees the content.
+2. Only one external dependency is allowed: Tailwind CDN (https://cdn.tailwindcss.com). Tailwind classes plus an inline <style> block. Nothing else.
+3. Do not fetch https://www.baidu.com/ at runtime — the clone must be fully static.
+4. Match the reference layout: header with language / settings links, centered logo, large search box with the blue "百度一下" button, quick-link bar under the search box, and the footer.
+5. Use the exact Chinese text visible on the reference: "新闻 hao123 地图 贴吧 视频 图片 网盘 更多" for the top nav, "百度一下" for the submit button, etc.
+6. Brand color: Baidu blue #4E6EF2 (header links + search button). White background. Thin 1px grey search box border (#C8C8C8).
 
 Acceptance:
-- run bun test ./src/note-store.test.ts
-- that command must pass
+- index.html renders at 1440 × 900 with SSIM ≥ 0.85 (mean) and ≥ 0.55 (worst-5% window) against references/baidu.png.
+- A visual-diff gate runs this automatically at delivery.
 `.trim()
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
@@ -313,9 +310,8 @@ const TASK_TITLE = flag("--title")?.trim()
   || DEFAULT_TASK_TITLE
 // DELIVERY_VERIFY_CMD is assigned after temp.dir is initialized (see below).
 // Auto-registration rules when no explicit --delivery-verify-cmd is supplied:
-//   1. reference-images provided → visual-diff SSIM gate (web/fig2code tasks)
-//   2. otherwise, default NoteStore task → bun test
-//   3. external --request-file without reference images → no auto-verify
+//   1. reference-images provided (default: the bundled Baidu fixture) → visual-diff SSIM gate
+//   2. external --request-file with no reference images → no auto-verify
 // Fig2code SSIM thresholds (mean 0.85, worst-5% 0.55) come from visual-diff defaults.
 let DELIVERY_VERIFY_CMD = ""
 // Legacy: TASK_GOALS used the old { description, criteria, priority } format
@@ -542,8 +538,7 @@ const reportFile = report ? path.resolve(report) : path.join(process.cwd(), `ove
   DELIVERY_VERIFY_CMD = skipLocalVerify
     ? ""
     : (deliveryVerifyCmd?.trim()
-      || (referenceImages.length > 0 ? buildVisualDiffCmd(referenceImages[0]) : "")
-      || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
+      || (referenceImages.length > 0 ? buildVisualDiffCmd(referenceImages[0]) : ""))
   if (DELIVERY_VERIFY_CMD) {
     console.log(`[overlay-benchmark] delivery_verify_cmd=${DELIVERY_VERIFY_CMD}`)
   }
