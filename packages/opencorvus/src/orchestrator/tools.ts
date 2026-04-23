@@ -2110,18 +2110,18 @@ export function createOrchestratorTools(input: {
 
           const passedCount = goals.filter(g => goalStatusByID(g.id) === "passed").length
           const failedCount = goals.filter(g => goalStatusByID(g.id) === "failed").length
-          // ── DAM: run metric executor + Arbiter ─────────────────────────
-          // The delivery-agent's verdict is an advisory signal; the Arbiter
-          // is the authoritative verdict source. Even an "accepted" agent
-          // verdict must pass the Arbiter's blocking-metric gate.
+          // ── Run metric executor + record trajectory snapshot ───────────
+          // The delivery agent's verdict is the AUTHORITATIVE decision. The
+          // old deterministic Arbiter (`metrics/arbiter.ts::arbitrate`) that
+          // used to re-derive accept/continue/stalled/abort from snapshot
+          // counts was a coded FSM (CLAUDE.md rule 23) — it silently
+          // overrode the agent's verdict and caused the benchmark deadlock
+          // on skipped metrics. The snapshot is still written for
+          // observability (LLM reads it via query_metric_trajectory).
           const {
             executeMetrics,
           } = await import("@/metrics/executor")
           const { computeIterationSnapshot } = await import("@/metrics/score")
-          const {
-            arbitrate,
-            ARBITER_DEFAULTS,
-          } = await import("@/metrics/arbiter")
           const {
             readCounterexamplesForTask,
             readIterationHistory,
@@ -2216,27 +2216,24 @@ export function createOrchestratorTools(input: {
             counterexamples,
             previousAggregateScore,
           })
-          const orchCfgForArbiter = await EngineConfig.get()
-          const arbiterConfig = {
-            ...ARBITER_DEFAULTS,
-            maxIterations: orchCfgForArbiter.max_delivery_iterations,
-          }
-          const decision = arbitrate([...priorIterations, snapshot], arbiterConfig)
-          writeIterationSnapshot({ ...snapshot, arbiter_verdict: decision.verdict })
-          log.info("deliver: arbiter decided", {
+          // Project agent verdict onto the legacy snapshot column so prompts
+          // that already cite "arbiter_verdict" (delivery/tools, prosecutor,
+          // orchestrator summary) keep rendering without churn. accepted →
+          // "accept"; anything else → "continue" (rework).
+          const projectedVerdict = verdict.verdict === "accepted" ? "accept" as const : "continue" as const
+          writeIterationSnapshot({ ...snapshot, arbiter_verdict: projectedVerdict })
+          log.info("deliver: agent verdict recorded", {
             taskID,
             iteration,
             agentVerdict: verdict.verdict,
-            arbiterVerdict: decision.verdict,
-            reason: decision.reason,
             aggregate_score: snapshot.aggregate_score.toFixed(3),
             blocking_unmet: snapshot.blocking_unmet_count,
           })
 
-          if (decision.verdict === "accept") {
+          if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")
-            log.info("deliver: arbiter accepted, auto-publishing", { taskID, runID: run.id, deliveryID })
-            // Auto-publish: verification passed → immediately complete task.
+            log.info("deliver: agent accepted, auto-publishing", { taskID, runID: run.id, deliveryID })
+            // Auto-publish: delivery agent accepted → immediately complete task.
             // No second LLM turn needed — avoids infinite loop where LLM ends turn
             // without calling publish_delivery.
             try {
@@ -2325,64 +2322,14 @@ export function createOrchestratorTools(input: {
             now: Date.now(),
           })
 
-          // Arbiter verdict routing. The metric trajectory lives in
-          // engine_iteration — the assistant reads it via query_metric_trajectory
-          // on the next turn. On `continue` we open a fresh attempt cycle
-          // for every passed/completed goal under reason=delivery_rework
-          // so the dispatch loop picks them up without LLM intervention.
-          if (decision.verdict === "stalled") {
-            const failMsg = SubAgentProtocol.yieldResult({
-              headline: `Delivery stalled — ${decision.reason}. Agent summary: ${verdict.summary}`,
-              fields: [
-                ["issues_found", verdict.issues_found],
-                ["iteration", String(iteration)],
-                ["aggregate_score", snapshot.aggregate_score.toFixed(3)],
-              ],
-              pointer: `verdict artifact ${verdictArtifactId}`,
-            })
-            const currentTaskR = requireTask(taskID)
-            if (currentTaskR.status === "active") {
-              await updateTask(
-                currentTaskR,
-                { status: "failed", error: failMsg, time_completed: Date.now() },
-                failMsg,
-              )
-            }
-            requestStopAfterCurrentStep("deliver_stalled")
-            return failMsg
-          }
-
-          if (decision.verdict === "abort") {
-            const failMsg = SubAgentProtocol.yieldResult({
-              headline: `Delivery aborted — ${decision.reason}`,
-              fields: [
-                ["issues_found", verdict.issues_found],
-                ["iteration", String(iteration)],
-                ["aggregate_score", snapshot.aggregate_score.toFixed(3)],
-              ],
-              pointer: `verdict artifact ${verdictArtifactId}`,
-            })
-            const currentTaskR = requireTask(taskID)
-            if (currentTaskR.status === "active") {
-              await updateTask(
-                currentTaskR,
-                { status: "failed", error: failMsg, time_completed: Date.now() },
-                failMsg,
-              )
-            }
-            requestStopAfterCurrentStep("deliver_abort")
-            return failMsg
-          }
-
-          // decision.verdict === "continue": rejection within the iteration
-          // budget. Open a fresh attempt cycle on every goal whose tip is
-          // currently passed/completed — Goal.startNewAttempt(reason=
-          // "delivery_rework") sets superseded_reason on the old terminal tip,
-          // syncGoalStatus projects pending, and the dispatch loop re-runs
-          // the goal under the new attempt. Mechanism is decoupled from LLM
-          // decision: state flips unconditionally; the orchestrator only
-          // chooses *strategy* (modify_goal / re-run architect / let-it-redispatch)
-          // when it next runs.
+          // Agent verdict is "rejected" or "inconclusive" — open a fresh
+          // attempt on every goal the delivery agent attributed the
+          // rejection to (verdict.affected_goal_ids). The orchestrator's
+          // next turn reads engine_iteration + the verdict artifact and
+          // chooses strategy (modify_goal / re-run architect / fail_task);
+          // the old deterministic "stalled/abort" branches were an FSM over
+          // metric counts (CLAUDE.md rule 23) and are gone — give-up decisions
+          // belong to the orchestrator LLM.
           //
           // engine_iteration + the verdict artifact persisted above are the
           // canonical source of truth for the rejection details — the
@@ -2439,14 +2386,14 @@ export function createOrchestratorTools(input: {
                 })
               : [`- (delivery agent attributed this goal but wrote no per-goal details)`]
             const value = [
-              `Delivery agent rejected the integrated deliverable (iteration ${iteration}, arbiter=${decision.verdict}).`,
+              `Delivery agent rejected the integrated deliverable (iteration ${iteration}, agent_verdict=${verdict.verdict}).`,
               `Task-level summary: ${verdict.summary}`,
               `Issues attributed to this goal:`,
               ...detailLines,
             ].join("\n")
             const reason = verdict.issues_found.length > 0
               ? `Delivery rejection; ${verdict.issues_found.length} issue(s): ${verdict.issues_found.slice(0, 3).join("; ")}`
-              : `Delivery rejection; arbiter_verdict=${decision.verdict}; arbiter_reason=${decision.reason}`
+              : `Delivery rejection; agent_verdict=${verdict.verdict}`
             startNewAttempt({
               goalID: g.id,
               reason: "delivery_rework",
@@ -2477,11 +2424,11 @@ export function createOrchestratorTools(input: {
 
           requestStopAfterCurrentStep("delivery_rework")
           return SubAgentProtocol.yieldResult({
-            headline: `Delivery rejected — iteration ${iteration}, arbiter=${decision.verdict}, assistant must re-plan`,
+            headline: `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}, assistant must re-plan`,
             fields: [
               ["issues_found", verdict.issues_found],
               ["iteration", String(iteration)],
-              ["arbiter_reason", decision.reason],
+              ["agent_summary", verdict.summary],
             ],
             pointer: `verdict artifact ${verdictArtifactId}; call query_metric_trajectory for full trajectory`,
           })
@@ -2490,16 +2437,15 @@ export function createOrchestratorTools(input: {
 
           const msg = err instanceof Error ? err.message : String(err)
           log.error("deliver: verification failed", { taskID, error: msg })
-          // Delivery verification threw. Write a stale-result iteration snapshot
-          // so the Arbiter can see the attempt, then let the arbiter decide
-          // whether this is an abort (e.g. two consecutive failures).
+          // Delivery verification threw — infrastructure fault (network /
+          // parse-retry exhaustion / tool crash). Write a snapshot for
+          // trajectory visibility; do NOT run any deterministic arbiter
+          // here. Give-up decisions belong to the orchestrator LLM — the
+          // old `decisionErr.verdict === "abort" | "stalled"` branch was an
+          // FSM over metric counts (CLAUDE.md rule 23) and is retired.
           const {
             computeIterationSnapshot: computeSnapshotErr,
           } = await import("@/metrics/score")
-          const {
-            arbitrate: arbitrateErr,
-            ARBITER_DEFAULTS: ARBITER_DEFAULTS_ERR,
-          } = await import("@/metrics/arbiter")
           const {
             readCounterexamplesForTask: readCeErr,
             readIterationHistory: readHistErr,
@@ -2520,36 +2466,12 @@ export function createOrchestratorTools(input: {
             counterexamples: readCeErr(taskID),
             previousAggregateScore: readPrevErr(taskID, iterationErr),
           })
-          const orchCfgErr = await EngineConfig.get()
-          const decisionErr = arbitrateErr([...priorItersErr, snapshotErr], {
-            ...ARBITER_DEFAULTS_ERR,
-            maxIterations: orchCfgErr.max_delivery_iterations,
-          })
-          writeSnapshotErr({ ...snapshotErr, arbiter_verdict: decisionErr.verdict })
+          writeSnapshotErr({ ...snapshotErr, arbiter_verdict: "continue" })
 
-          if (decisionErr.verdict === "abort" || decisionErr.verdict === "stalled") {
-            const failMsg = `Delivery verification threw (${msg}). Arbiter verdict=${decisionErr.verdict}: ${decisionErr.reason}`
-            const currentTaskE = requireTask(taskID)
-            if (currentTaskE.status === "active") {
-              await updateTask(
-                currentTaskE,
-                { status: "failed", error: failMsg, time_completed: Date.now() },
-                failMsg,
-              )
-            }
-            requestStopAfterCurrentStep("deliver_rejected")
-            return failMsg
-          }
-
-          // Delivery agent THREW — this is an infrastructure fault
-          // (network, LLM parse retry exhaustion, tool crash), NOT a
-          // verdict that goals are unacceptable. Do NOT open new attempts
-          // on passed goals: a throw carries zero evidence that any
-          // specific goal is at fault. That was rule-1 / rule-23 violation
-          // — the same blanket-reset pattern we removed from the rejected
-          // path. Instead: record the failure, let the orchestrator (LLM)
-          // read it and decide on the next turn whether to retry_goal,
-          // fail_task, or modify a goal.
+          // A throw carries no per-goal attribution — do NOT open new
+          // attempts. Record the failure in the decision log and hand back
+          // to the orchestrator LLM: it reads the trajectory on the next
+          // turn and chooses retry_goal / modify_goal / fail_task.
           try {
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
@@ -2557,7 +2479,7 @@ export function createOrchestratorTools(input: {
               phase: "delivery",
               key: `delivery_verification_threw_${iterationErr}`,
               value: `Delivery agent threw: ${msg}`,
-              reason: `arbiter_verdict=${decisionErr.verdict}; arbiter_reason=${decisionErr.reason}`,
+              reason: `infrastructure fault (no verdict produced); iteration ${iterationErr}`,
             })
           } catch {
             /* best effort */
@@ -2566,11 +2488,11 @@ export function createOrchestratorTools(input: {
           requestStopAfterCurrentStep("delivery_threw")
           return (
             `Delivery verification threw (not a structured rejection): ${msg}. ` +
-            `Iteration ${iterationErr}, arbiter=${decisionErr.verdict} (reason: ${decisionErr.reason}). ` +
-            `No goals were reset — the throw is an infrastructure fault and carries no per-goal ` +
-            `attribution. Read the decision log entry delivery_verification_threw_${iterationErr} and ` +
-            `decide: retry_goal on a suspect goal, modify_goal if the contract looks wrong, or fail_task ` +
-            `if the failure is fundamental.`
+            `Iteration ${iterationErr}. No goals were reset — the throw is an ` +
+            `infrastructure fault and carries no per-goal attribution. Read the ` +
+            `decision log entry delivery_verification_threw_${iterationErr} and ` +
+            `decide: retry_goal on a suspect goal, modify_goal if the contract ` +
+            `looks wrong, or fail_task if the failure is fundamental.`
           )
         }
       },
