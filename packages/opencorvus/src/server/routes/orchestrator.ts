@@ -1079,6 +1079,7 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
     task_id: event.taskID,
     run_id: event.runID,
     type: event.type.replace("engine.", ""),
+    emittedAt: timestamp,
     timestamp,
     sequence: event.sequence,
     summary: event.summary,

@@ -826,6 +826,7 @@ export const TaskEvent = z.object({
   task_id: Identifier.schema("task"),
   run_id: Identifier.schema("run").optional(),
   type: z.string(),
+  emittedAt: z.number().int().positive(),
   timestamp: z.number(),
   sequence: z.number().int().nonnegative().optional(),
   summary: z.string(),
@@ -901,18 +902,6 @@ export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "a
 export const Event = {
   TaskCreated: BusEvent.define("task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
-  TaskWaiting: BusEvent.define("task.waiting", z.object({
-    taskID: Identifier.schema("task"),
-    runID: Identifier.schema("run").optional(),
-    reason: z.string(),
-    waitingOn: z.array(z.object({
-      goalRunID: Identifier.schema("goal_run"),
-      goalID: Identifier.schema("goal").optional(),
-      goalTitle: z.string(),
-      sinceMs: z.number().int().nonnegative(),
-    })),
-    summary: z.string(),
-  })),
   SpecCreated: BusEvent.define("spec.created", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
   SpecUpdated: BusEvent.define("spec.updated", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), status: z.string(), summary: z.string() })),
   SpecApproved: BusEvent.define("spec.approved", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
