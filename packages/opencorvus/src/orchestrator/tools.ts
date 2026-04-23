@@ -538,7 +538,8 @@ export function createOrchestratorTools(input: {
             "Any number of design-reference URLs: live pages, design-tool share links " +
             "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
             "Non-Figma URLs are screenshot-rendered via headless Chromium and attached as visual_reference; " +
-            "Figma URLs use the REST API path. The LLM can also call `webfetch` on them for HTML/CSS analysis.",
+            "Figma URLs use the REST API path. design-analyst then works from those PNGs only — " +
+            "it does not re-fetch the URLs (no webfetch, no network tool).",
           ),
         figma_url: z.string().optional().describe(
           "Figma file URL rendered via the Figma REST API (figma.com/file/... or figma.com/design/...). " +
@@ -776,14 +777,11 @@ export function createOrchestratorTools(input: {
           const analysis = await DesignAnalystAgent.analyze({
             title: task.title,
             request: task.request,
+            // Single-source visual input: every URL / Figma frame / local
+            // material the orchestrator resolved has already been turned
+            // into a PNG in `designVisuals`. Raw URLs are not passed down;
+            // design-analyst has no network tool and works from pixels.
             attachments: enrichedHasAttachments ? designVisuals : undefined,
-            // Pass the non-Figma URL list so the agent can call webfetch on
-            // each for HTML/CSS analysis. Figma URLs are already rendered
-            // as PNGs in attachments, and URL screenshots / materials are in
-            // system_artifacts above — design-analyst sees the union via
-            // `designVisuals` and reads them through the normal multimodal
-            // channel.
-            urls: liveUrls,
             taskID,
             sessionID: designSession.id,
             signal: input.signal,
@@ -805,7 +803,10 @@ export function createOrchestratorTools(input: {
 
           // Persist the visual contract on task.design_specs (dedicated JSON
           // column, not metadata). Delivery reads it directly as advisory
-          // guidance — no other consumer, no forwarding, no markdown.
+          // guidance. We also write a compact phase summary into the
+          // Decision Log so architect / planner / build prompts can see the
+          // design-system and recommended-stack conclusions without trying to
+          // inline the full spec list.
           const freshTask = requireTask(taskID)
           await updateTask(
             freshTask,
@@ -819,6 +820,36 @@ export function createOrchestratorTools(input: {
             acc[s.category] = (acc[s.category] ?? 0) + 1
             return acc
           }, {})
+
+          const { createDecisionLog } = await import("@/decision-log")
+          const decisionLog = createDecisionLog(taskID)
+          decisionLog.append({
+            phase: "design_analysis",
+            key: "visual_contract_summary",
+            value:
+              `Total specs: ${analysis.specs.length}. ` +
+              `Color ${countByCategory.color ?? 0}, typography ${countByCategory.typography ?? 0}, ` +
+              `spacing ${countByCategory.spacing ?? 0}, layout ${countByCategory.layout ?? 0}, ` +
+              `component ${countByCategory.component ?? 0}, interaction ${countByCategory.interaction ?? 0}, ` +
+              `responsive ${countByCategory.responsive ?? 0}.`,
+            reason: "Design-analyst summary for downstream architect, planner, and build prompts.",
+          })
+          if (analysis.designSystem.trim()) {
+            decisionLog.append({
+              phase: "design_analysis",
+              key: "design_system",
+              value: analysis.designSystem,
+              reason: "Design-analyst identified the dominant design system / visual language.",
+            })
+          }
+          if (analysis.techStack.length > 0) {
+            decisionLog.append({
+              phase: "design_analysis",
+              key: "recommended_stack",
+              value: analysis.techStack.join(", "),
+              reason: "Design-analyst suggested implementation stack cues for downstream execution.",
+            })
+          }
 
           log.info("design_analysis: complete", {
             taskID,
@@ -2000,6 +2031,11 @@ export function createOrchestratorTools(input: {
           description: g.objective,
           criteria: renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]),
           priority: g.priority as "blocking" | "advisory",
+          requirement_ids: Array.isArray(g.requirement_ids) ? g.requirement_ids as string[] : [],
+          depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
+          imports: Array.isArray(g.imports) ? g.imports as string[] : [],
+          exports: Array.isArray(g.exports) ? g.exports as string[] : [],
+          owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
         }))
         const deliveryInfo = {
           summary: summaries.join("\n"),

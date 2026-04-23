@@ -84,15 +84,30 @@ export namespace Agent {
       bash: "allow",
       edit: "allow",
       task: "allow",
-      webfetch: "allow",
+      // webfetch is restricted to the `build` agent (the one actually turning a
+      // URL reference into code). design-analyst / planner / architect / explore
+      // read cached mirror artifacts instead of hitting the live network — the
+      // mirror pipeline (`webpage_extract` → compile / analyze / render /
+      // evaluate) is the canonical path for URL work. Keep default at `deny`
+      // so no stage agent reaches over the build-agent fence.
+      webfetch: "deny",
       websearch: "deny",
-      // Mirror tools — launch headless browser and hit external URLs on behalf
-      // of the agent. `allow` for both: unattended benchmark / pipeline runs
-      // (overlay-web-benchmark, CI, scheduled agents) block on "ask" and can
-      // never reach the extractor, which defeats the whole webpage-clone skill.
-      // Restrictive installs can override via user config.
+      // Mirror tools — the canonical pipeline for any URL work (extract →
+      // compile | analyze → render → evaluate → text_diff). `allow` for ALL
+      // six: unattended benchmark / pipeline runs (overlay-web-benchmark, CI,
+      // scheduled agents) block on "ask" and can never reach them, which
+      // defeats the whole webpage-clone pipeline. Leaving only 2 of 6 on
+      // `allow` (the historical state) also caused inconsistent behaviour
+      // where agents ran `webpage_extract` fine but then hit a permission
+      // ask on `webpage_compile` / `webpage_analyze` / `webpage_evaluate` /
+      // `webpage_text_diff` mid-pipeline. Restrictive installs can override
+      // any of them via user config.
       webpage_extract: "allow",
+      webpage_compile: "allow",
+      webpage_analyze: "allow",
       webpage_render: "allow",
+      webpage_evaluate: "allow",
+      webpage_text_diff: "allow",
       codesearch: "allow",
       lsp: "allow",
       memory: "allow",
@@ -129,6 +144,11 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
+            // webfetch is allowed ONLY on the build agent. Default is `deny`
+            // everywhere else so stage agents route URL work through the
+            // mirror pipeline (`webpage_extract` → compile / analyze / render /
+            // evaluate) instead of re-fetching text markup.
+            webfetch: "allow",
           }),
           user,
         ),
@@ -144,6 +164,12 @@ export namespace Agent {
           PermissionNext.fromConfig({
             todoread: "deny",
             todowrite: "deny",
+            // `general` inherits `task: "allow"` from `defaults`. Without this
+            // explicit deny a `general` subagent could spawn another `general`
+            // (or `explore`) via the task tool, recursively. task.ts only
+            // hard-denies task in the child session when the DISPATCHED agent
+            // lacks the `task` permission — so we must remove it here.
+            task: "deny",
           }),
           user,
         ),
@@ -313,6 +339,22 @@ export namespace Agent {
         description: "Intent-analysis agent. Front-of-pipeline intent disambiguation — turns a short user request into a structured IntentAnalysisResult (class, complexity, slots, missing info, clarifications).",
         prompt: INTENT_ANALYSIS_CORE,
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        options: {},
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      fidelity: {
+        name: "fidelity",
+        description: "Fidelity review stage. Verifies that the produced goal set covers the original user request; system prompt is built per-call in architect/fidelity.ts.",
+        options: {},
+        mode: "primary",
+        native: true,
+        hidden: true,
+      },
+      prosecutor: {
+        name: "prosecutor",
+        description: "Prosecutor stage. Adversarial half of the delivery Dynamic Adversarial Metrics loop; files counterexamples against the defender (delivery) verdict.",
         options: {},
         mode: "primary",
         native: true,

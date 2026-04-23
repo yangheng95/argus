@@ -12,12 +12,11 @@
  * ✗ Cannot modify files or execute code
  * ✗ Cannot call other agents
  * ✓ Reads codebase to discover existing design patterns/component libraries
- * ✓ Fetches URLs to analyze live pages
+ * ✓ Works from multimodal attachments (screenshots, PDF) and the shared
+ *   mirror cache at `mirror/extracted-page.json`; does NOT fetch URLs directly.
  * ✓ Emits specs via register_*_spec tools + finalize_design_requirements
  */
-import { stepCountIs, tool } from "ai"
-import z from "zod"
-import TurndownService from "turndown"
+import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { createPlannerTools } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
@@ -49,8 +48,14 @@ export namespace DesignAnalystAgent {
   export async function analyze(input: {
     title: string
     request: string
+    /**
+     * The complete visual input. Any URL the caller resolved is already
+     * captured as a PNG attachment here (intent="visual_reference"). The
+     * agent never receives raw URLs — that is a deliberate single-source
+     * rule: the orchestrator side is responsible for turning URL / Figma /
+     * material references into PNG bytes before calling analyze().
+     */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
-    urls?: string[]
     taskID?: string
     sessionID?: string
     signal?: AbortSignal
@@ -102,7 +107,6 @@ async function run(input: {
   title: string
   request: string
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
-  urls?: string[]
   taskID?: string
   sessionID?: string
   signal?: AbortSignal
@@ -125,7 +129,6 @@ async function run(input: {
   })()
   const guard = toolGuard({
     ...plannerTools,
-    ...createWebfetchTool(),
     ...createReadAttachmentTool(projectID),
     ...outputToolKit.tools,
   })
@@ -142,7 +145,7 @@ async function run(input: {
     title: input.title,
     model: model.id,
     hasAttachments: !!input.attachments?.length,
-    urlCount: input.urls?.length ?? 0,
+    attachmentCount: input.attachments?.length ?? 0,
   })
 
   const abortSignals: AbortSignal[] = [guard.signal]
@@ -214,19 +217,36 @@ async function buildMultimodalContent(
 function buildUserPrompt(input: {
   title: string
   request: string
-  urls?: string[]
+  attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
 }): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
 
-  const urls = (input.urls ?? []).filter((u) => typeof u === "string" && u.length > 0)
-  if (urls.length > 0) {
-    const lines = urls.map((u, i) => `${i + 1}. ${u}`).join("\n")
+  const visualAttachments = (input.attachments ?? []).filter(
+    (a) => (a.intent ?? "") === "visual_reference" || a.mime.startsWith("image/") || a.mime === "application/pdf",
+  )
+  if (visualAttachments.length > 0) {
+    const lines = visualAttachments.map((a, i) => {
+      const name = a.filename ?? `attachment-${i + 1}`
+      const source = a.source ? ` — captured from ${a.source}` : ""
+      return `${i + 1}. \`${name}\` (${a.mime})${source}`
+    }).join("\n")
     sections.push(
-      `# URL References\n\n${lines}\n\n` +
-      "For each URL: call \`webfetch\` to retrieve the page HTML for DOM / CSS / " +
-      "semantic analysis. A pre-rendered PNG may already be attached as a " +
-      "visual_reference — check the multimodal attachments and cross-reference " +
-      "pixel output with webfetched markup.",
+      `# Visual References (already attached)\n\n${lines}\n\n` +
+      "These files are attached to this message as multimodal content — read " +
+      "the pixels directly. Do NOT try to fetch anything over the network. " +
+      "Design-analyst has no webfetch / webpage_extract / network tool: the " +
+      "orchestrator already turned every URL / Figma frame / local material " +
+      "into one of these PNGs before dispatching you. Your whole job is to " +
+      "derive the visual contract from what is in front of you.",
+    )
+  } else {
+    sections.push(
+      "# No visual references attached\n\n" +
+      "No screenshots, mockups, or design materials were provided. Extract " +
+      "the visual contract from the textual brief only; register specs that " +
+      "can be inferred from the request wording (e.g. named brand palettes, " +
+      "explicit typography, explicit component mentions). Do NOT invent " +
+      "specifics that have no source in the brief.",
     )
   }
 
@@ -267,82 +287,3 @@ async function designAnalystSystem(): Promise<string> {
   return core + skills
 }
 
-const WEBFETCH_MAX_SIZE = 5 * 1024 * 1024
-const WEBFETCH_TIMEOUT = 30_000
-
-function createWebfetchTool() {
-  return {
-    webfetch: tool({
-      description:
-        "Fetch a URL and return its content as HTML or markdown. " +
-        "Use this to retrieve live web pages for layout/style analysis. " +
-        "For image URLs, returns the image as a base64 data URL.",
-      inputSchema: z.object({
-        url: z.string().describe("The URL to fetch"),
-        format: z
-          .enum(["html", "markdown"])
-          .default("html")
-          .describe("Return format: 'html' for raw HTML (best for CSS analysis), 'markdown' for readable text"),
-      }),
-      execute: async ({ url, format }) => {
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-          return "Error: URL must start with http:// or https://"
-        }
-
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), WEBFETCH_TIMEOUT)
-
-        try {
-          const headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-          }
-          const initial = await fetch(url, { signal: controller.signal, headers })
-          const response =
-            initial.status === 403 && initial.headers.get("cf-mitigated") === "challenge"
-              ? await fetch(url, { signal: controller.signal, headers: { ...headers, "User-Agent": "opencorvus" } })
-              : initial
-
-          if (!response.ok) return `Error: HTTP ${response.status}`
-
-          const contentLength = response.headers.get("content-length")
-          if (contentLength && parseInt(contentLength) > WEBFETCH_MAX_SIZE) {
-            return "Error: Response too large (> 5MB)"
-          }
-
-          const arrayBuffer = await response.arrayBuffer()
-          if (arrayBuffer.byteLength > WEBFETCH_MAX_SIZE) {
-            return "Error: Response too large (> 5MB)"
-          }
-
-          const contentType = response.headers.get("content-type") || ""
-          const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""
-
-          if (mime.startsWith("image/") && mime !== "image/svg+xml") {
-            const b64 = Buffer.from(arrayBuffer).toString("base64")
-            return `Image fetched: data:${mime};base64,${b64.slice(0, 200)}... (${arrayBuffer.byteLength} bytes). Full image available in context.`
-          }
-
-          const content = new TextDecoder().decode(arrayBuffer)
-
-          if (format === "markdown" && contentType.includes("text/html")) {
-            const td = new TurndownService({
-              headingStyle: "atx", hr: "---", bulletListMarker: "-",
-              codeBlockStyle: "fenced", emDelimiter: "*",
-            })
-            td.remove(["script", "style", "meta", "link"])
-            return td.turndown(content)
-          }
-
-          return content
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          return `Error fetching URL: ${msg}`
-        } finally {
-          clearTimeout(timer)
-        }
-      },
-    }),
-  }
-}
