@@ -186,6 +186,40 @@ Thumbs.db
 .opencorvus/
 .opencorvus-worktrees/
 .opencorvus-meta.json
+# Windows reserved device names — cross-platform LLMs sometimes write
+# 'taskkill ... 2>nul' or '... > nul' from inside a bash shell, which
+# (unlike cmd.exe) happily creates a real file literally named 'nul'.
+# Git then refuses to index it ('short read while indexing nul') and
+# the whole baseline / delivery commit aborts. Same trap for the other
+# DOS devices (CON, PRN, AUX, COM1-9, LPT1-9). Case variants covered
+# because the file might land as 'nul', 'NUL', or mixed.
+nul
+NUL
+Nul
+con
+CON
+prn
+PRN
+aux
+AUX
+com1
+com2
+com3
+com4
+com5
+com6
+com7
+com8
+com9
+lpt1
+lpt2
+lpt3
+lpt4
+lpt5
+lpt6
+lpt7
+lpt8
+lpt9
 `
 
 // Paths the orchestrator writes into each worktree for its own bookkeeping
