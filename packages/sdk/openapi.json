@@ -28977,12 +28977,6 @@
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
-                  "timeout_ms": {
-                    "description": "Requirements agent timeout in milliseconds",
-                    "type": "integer",
-                    "minimum": 1000,
-                    "maximum": 9007199254740991
-                  },
                   "skills": {
                     "description": "Additional skill paths for requirements agent",
                     "type": "array",
@@ -29000,12 +28994,6 @@
                     "description": "Maximum agentic steps for architect agent",
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 9007199254740991
-                  },
-                  "timeout_ms": {
-                    "description": "Architect agent timeout in milliseconds",
-                    "type": "integer",
-                    "minimum": 1000,
                     "maximum": 9007199254740991
                   },
                   "skills": {
@@ -29027,12 +29015,6 @@
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
-                  "timeout_ms": {
-                    "description": "Planner agent timeout in milliseconds",
-                    "type": "integer",
-                    "minimum": 1000,
-                    "maximum": 9007199254740991
-                  },
                   "skills": {
                     "description": "Additional skill paths for planner agent",
                     "type": "array",
@@ -29050,12 +29032,6 @@
                     "description": "Maximum agentic steps for delivery agent",
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 9007199254740991
-                  },
-                  "timeout_ms": {
-                    "description": "Delivery agent timeout in milliseconds",
-                    "type": "integer",
-                    "minimum": 1000,
                     "maximum": 9007199254740991
                   },
                   "max_retries": {
@@ -29089,12 +29065,6 @@
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
-                  "timeout_ms": {
-                    "description": "Design analyst agent timeout in milliseconds",
-                    "type": "integer",
-                    "minimum": 1000,
-                    "maximum": 9007199254740991
-                  },
                   "skills": {
                     "description": "Additional skill paths for design analyst agent",
                     "type": "array",
@@ -29112,12 +29082,6 @@
                     "description": "Maximum agentic steps for intent-analysis agent",
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 9007199254740991
-                  },
-                  "timeout_ms": {
-                    "description": "Intent-analysis agent timeout in milliseconds",
-                    "type": "integer",
-                    "minimum": 1000,
                     "maximum": 9007199254740991
                   },
                   "skills": {

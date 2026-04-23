@@ -27,8 +27,6 @@
 | `OPENCORVUS_AUTO_DISCOVER_EXECUTORS` | 自动发现 codex / claude-code | `0` |
 | `OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE` | Claude executor 权限模式 | `ask` |
 | `OPENCORVUS_EXECUTOR_CODEX_PERMISSION_MODE` | Codex executor 权限模式 | `ask` |
-| `OPENCORVUS_SPEC_TIMEOUT_MS` | Spec agent 无活动超时 | 无全局默认（按 agent 级配置） |
-| `OPENCORVUS_PLANNER_TIMEOUT_MS` | Planner agent 无活动超时 | 无全局默认（按 agent 级配置） |
 | `OPENCORVUS_TOOL_TIMEOUT_MS` | 单工具调用无活动超时 | 无全局默认（按工具类型单独控制） |
 | `OPENCORVUS_GOAL_RUN_TIMEOUT_MS` | Goal 运行上限 | 无限 |
 | `OPENCORVUS_DECISION_INACTIVITY_MS` | Task Agent 决策无活动超时 | 600000（`src/orchestrator/task-loop.ts:49`） |

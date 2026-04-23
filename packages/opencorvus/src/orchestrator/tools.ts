@@ -61,16 +61,6 @@ import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./
 
 const log = Log.create({ service: "task-tools" })
 
-// ---------------------------------------------------------------------------
-// Helpers (from pipeline.ts)
-// ---------------------------------------------------------------------------
-
-function stageTimeout(stage: "requirements" | "goal" | "plan"): number {
-  const env = { requirements: "OPENCORVUS_REQUIREMENTS_TIMEOUT_MS", goal: "OPENCORVUS_GOAL_TIMEOUT_MS", plan: "OPENCORVUS_PLAN_TIMEOUT_MS" }
-  const defaults = { requirements: 300_000, goal: 180_000, plan: 300_000 }
-  return parseInt(process.env[env[stage]] || String(defaults[stage]), 10)
-}
-
 /**
  * Lightweight MIME guess from filename extension. Covers the design-material
  * spectrum: images (inlined multimodal), PDFs (multimodal), text / markdown /

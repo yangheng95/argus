@@ -2379,10 +2379,6 @@ export type Config = {
        */
       max_steps?: number
       /**
-       * Requirements agent timeout in milliseconds
-       */
-      timeout_ms?: number
-      /**
        * Additional skill paths for requirements agent
        */
       skills?: Array<string>
@@ -2395,10 +2391,6 @@ export type Config = {
        * Maximum agentic steps for architect agent
        */
       max_steps?: number
-      /**
-       * Architect agent timeout in milliseconds
-       */
-      timeout_ms?: number
       /**
        * Additional skill paths for architect agent
        */
@@ -2413,10 +2405,6 @@ export type Config = {
        */
       max_steps?: number
       /**
-       * Planner agent timeout in milliseconds
-       */
-      timeout_ms?: number
-      /**
        * Additional skill paths for planner agent
        */
       skills?: Array<string>
@@ -2429,10 +2417,6 @@ export type Config = {
        * Maximum agentic steps for delivery agent
        */
       max_steps?: number
-      /**
-       * Delivery agent timeout in milliseconds
-       */
-      timeout_ms?: number
       /**
        * Maximum delivery generation retries
        */
@@ -2455,10 +2439,6 @@ export type Config = {
        */
       max_steps?: number
       /**
-       * Design analyst agent timeout in milliseconds
-       */
-      timeout_ms?: number
-      /**
        * Additional skill paths for design analyst agent
        */
       skills?: Array<string>
@@ -2471,10 +2451,6 @@ export type Config = {
        * Maximum agentic steps for intent-analysis agent
        */
       max_steps?: number
-      /**
-       * Intent-analysis agent timeout in milliseconds
-       */
-      timeout_ms?: number
       /**
        * Additional skill paths for intent-analysis agent
        */
