@@ -490,6 +490,19 @@ export const ProgressSnapshot = z.object({
   }),
 })
 
+/**
+ * Live session activity for a task — surfaces pre-plan agent work (requirements /
+ * architect / fidelity-review / design-analyst) that would otherwise be invisible
+ * because `goals` and `run` are empty until the architect finishes decomposing.
+ * Derived from protocol_event + session.kind; no FSM column involved.
+ */
+export const ActiveSession = z.object({
+  sessionID: Identifier.schema("session"),
+  kind: z.string(),
+  goalID: Identifier.schema("goal").nullable(),
+  lastActivityMs: z.number(),
+})
+
 export const Progress = z.object({
   task: Task,
   plan: PlanVersion.optional(),
@@ -500,6 +513,7 @@ export const Progress = z.object({
   delivery: Delivery.optional(),
   evaluation: Evaluation.optional(),
   snapshots: ProgressSnapshot.array(),
+  activeSessions: ActiveSession.array(),
 })
 
 export const ReplyInteractionInput = z.object({

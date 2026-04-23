@@ -1,7 +1,8 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
-import { Database, NotFoundError, and, desc, eq, gte, inArray, isNull, like, lt, sql } from "@/storage/db"
+import { ProtocolEventTable } from "@/protocol/protocol.sql"
+import { Database, NotFoundError, and, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, sql } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { EvaluationCheck } from "./model"
@@ -602,6 +603,52 @@ export function listGoalWorkspacesForProject(projectID: string) {
       .orderBy(desc(EngineGoalTable.time_updated))
       .all()
       .map((row) => row.goal),
+  )
+}
+
+/**
+ * Sessions that produced a protocol event for this task within the last
+ * `windowMs` milliseconds. This is the describe-layer view of "what agents
+ * are currently working" — it covers pre-plan sessions (requirements /
+ * architect / fidelity / design-analyst) which `goals` and `run` miss
+ * entirely because they're gated on `active_plan_version_id`.
+ *
+ * Source: protocol_event is the append-only truth for agent activity; we do
+ * not gate on `status` columns (rule 23: no state machine). Join with
+ * SessionTable only to surface `kind` / `goal_id` for UI labelling.
+ */
+export function listActiveSessionsForTask(taskID: string, windowMs = 60_000) {
+  const threshold = Date.now() - windowMs
+  return Database.use((db) =>
+    db
+      .select({
+        sessionID: ProtocolEventTable.session_id,
+        kind: SessionTable.kind,
+        goalID: SessionTable.goal_id,
+        lastActivityMs: sql<number>`MAX(${ProtocolEventTable.emitted_at})`.as("last_activity_ms"),
+      })
+      .from(ProtocolEventTable)
+      .innerJoin(SessionTable, eq(SessionTable.id, ProtocolEventTable.session_id))
+      .where(
+        and(
+          eq(ProtocolEventTable.task_id, taskID),
+          isNotNull(ProtocolEventTable.session_id),
+          gt(ProtocolEventTable.emitted_at, threshold),
+        ),
+      )
+      .groupBy(ProtocolEventTable.session_id)
+      .orderBy(desc(sql`last_activity_ms`))
+      .all()
+      .flatMap((row) =>
+        row.sessionID
+          ? [{
+              sessionID: row.sessionID,
+              kind: row.kind as string,
+              goalID: row.goalID,
+              lastActivityMs: row.lastActivityMs,
+            }]
+          : [],
+      ),
   )
 }
 
