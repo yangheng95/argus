@@ -47,8 +47,11 @@ export interface SnapshotInput {
 
 /**
  * Materialise an IterationSnapshot. The returned row has arbiter_verdict set
- * to a placeholder "continue"; the caller runs arbitrate() over the trailing
- * history to replace it before persisting.
+ * to a placeholder "continue"; the caller projects the delivery agent's own
+ * verdict (accepted → "accept", otherwise "continue") onto this column before
+ * persisting. The deterministic `arbitrate()` function that used to re-derive
+ * this value was retired — verdict ownership moved to the delivery agent
+ * (CLAUDE.md rule 23: no coded state machines).
  */
 export function computeIterationSnapshot(input: SnapshotInput): IterationSnapshot {
   const weights = input.weights ?? SCORE_WEIGHT_DEFAULTS
