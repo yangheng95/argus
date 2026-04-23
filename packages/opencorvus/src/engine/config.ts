@@ -21,8 +21,6 @@ import type { MiniWorkflow } from "./workflow"
 export interface RequirementsConfig {
   max_steps: number
   timeout_ms: number
-  quality_threshold: number
-  max_attempts: number
   skills: string[]
 }
 
@@ -35,8 +33,6 @@ export interface ArchitectConfig {
 export interface PlannerConfig {
   max_steps: number
   timeout_ms: number
-  quality_threshold: number
-  max_attempts: number
   skills: string[]
 }
 
@@ -85,19 +81,6 @@ export interface EngineConfigType {
   intent_analysis: IntentAnalysisConfig
   max_runs: number
   max_fix_runs: number
-  /** Max retries per individual goal. Goal permanently fails after this many retries. */
-  max_goal_retries: number
-  /**
-   * Advisory escalation gate: when a goal has accumulated this many failed
-   * attempts, `retry_goal` forces the orchestrator to change strategy
-   * (modify_goal / re-run architect / fail_task) instead of retrying the same contract.
-   * Must be ≤ max_goal_retries (config merge clamps to that invariant).
-   */
-  goal_escalation_threshold: number
-  /** Hard ceiling on adversarial iteration count passed to the Arbiter's
-   *  maxIterations. Once iteration >= this, the Arbiter returns `abort`
-   *  regardless of other signals. Default: 3. */
-  max_delivery_iterations: number
   max_executor_groups: number
   /** Default workflow ID for new tasks. Default: "pipeline". */
   default_workflow: string
@@ -119,8 +102,6 @@ const DEFAULTS: EngineConfigType = {
   requirements: {
     max_steps: 200,        // was 100 — sonnet needs headroom for PRD scan + register passes
     timeout_ms: 600_000,   // 10 min (was 5)
-    quality_threshold: 0.5,
-    max_attempts: 3,
     skills: [],
   },
   architect: {
@@ -131,8 +112,6 @@ const DEFAULTS: EngineConfigType = {
   planner: {
     max_steps: 80,         // was 30
     timeout_ms: 600_000,   // 10 min (was 5)
-    quality_threshold: 0.5,
-    max_attempts: 3,
     skills: [],
   },
   delivery: {
@@ -162,9 +141,6 @@ const DEFAULTS: EngineConfigType = {
   },
   max_runs: 15,            // was 10
   max_fix_runs: 20,
-  max_goal_retries: 5,     // hard ceiling
-  goal_escalation_threshold: 3,  // advisory: force strategy change after 3 failures
-  max_delivery_iterations: 3,
   max_executor_groups: 1,
   default_workflow: "pipeline",
   workflows: [],
@@ -204,23 +180,11 @@ export namespace EngineConfig {
 // 内部合并逻辑
 // ═══════════════════════════════════════════════════════════════════
 
-/**
- * Escalation threshold must never exceed the hard retry ceiling — otherwise
- * the escalation path can never fire before `exhausted` takes over, and the
- * gate becomes dead code. Clamp once at merge time so downstream readers
- * don't each have to remember the invariant.
- */
-function clampEscalationThreshold(threshold: number, maxRetries: number): number {
-  return Math.min(threshold, maxRetries)
-}
-
 function merge(user?: Config.Info["assistant"]): EngineConfigType {
   return {
     requirements: {
       max_steps: user?.requirements?.max_steps ?? DEFAULTS.requirements.max_steps,
       timeout_ms: user?.requirements?.timeout_ms ?? DEFAULTS.requirements.timeout_ms,
-      quality_threshold: user?.requirements?.quality_threshold ?? DEFAULTS.requirements.quality_threshold,
-      max_attempts: user?.requirements?.max_attempts ?? DEFAULTS.requirements.max_attempts,
       skills: user?.requirements?.skills ?? DEFAULTS.requirements.skills,
     },
     architect: {
@@ -231,8 +195,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     planner: {
       max_steps: user?.planner?.max_steps ?? DEFAULTS.planner.max_steps,
       timeout_ms: user?.planner?.timeout_ms ?? DEFAULTS.planner.timeout_ms,
-      quality_threshold: user?.planner?.quality_threshold ?? DEFAULTS.planner.quality_threshold,
-      max_attempts: user?.planner?.max_attempts ?? DEFAULTS.planner.max_attempts,
       skills: user?.planner?.skills ?? DEFAULTS.planner.skills,
     },
     delivery: {
@@ -255,15 +217,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
-    max_goal_retries: user?.max_goal_retries ?? DEFAULTS.max_goal_retries,
-    goal_escalation_threshold: clampEscalationThreshold(
-      user?.goal_escalation_threshold ?? DEFAULTS.goal_escalation_threshold,
-      user?.max_goal_retries ?? DEFAULTS.max_goal_retries,
-    ),
-    max_delivery_iterations:
-      Number(process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS) ||
-      user?.max_delivery_iterations ||
-      DEFAULTS.max_delivery_iterations,
     max_executor_groups: user?.max_executor_groups ?? DEFAULTS.max_executor_groups,
     default_workflow: user?.default_workflow ?? DEFAULTS.default_workflow,
     workflows: (user?.workflows ?? DEFAULTS.workflows).map(w => ({

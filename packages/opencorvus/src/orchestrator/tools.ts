@@ -1274,8 +1274,9 @@ export function createOrchestratorTools(input: {
         "The old terminal goal_run stays immutable; the next dispatch_goal on this ID creates a fresh run. " +
         "Call query_failed_goals first to understand the failure; the schema requires root-cause analysis " +
         "so reflexive retry without understanding is impossible. " +
-        "Per-goal retry budget (max_goal_retries) is enforced as a hard ceiling — once exhausted, change " +
-        "strategy (modify_goal, re-run architect, fail_task).",
+        "There is NO coded retry-budget gate — `retry_count` is incremented and surfaced via the " +
+        "describe layer so YOU can decide when to change strategy (modify_goal, re-run architect, fail_task) " +
+        "based on the evidence, rather than hitting a hardcoded ceiling.",
       inputSchema: z.object({
         goalID: z.string().describe("The goal to retry. Must be currently failed or aborted."),
         reason: z
