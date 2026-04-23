@@ -54,7 +54,7 @@ import {
 import type { EngineBudget } from "@/engine/engine.sql"
 import { updateRun, updateTask } from "@/engine/state"
 
-import { findStepByTool, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
+import { createWorkflowState, findStepByTool, WorkflowRegistry, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
 import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
@@ -187,6 +187,38 @@ export function createOrchestratorTools(input: {
       stopAfterDispatch.abort(reason)
     }
     return reason
+  }
+
+  async function switchPreExecutionPipelineBuildToDirectWorkflow(attachedGoalID?: string): Promise<void> {
+    if (attachedGoalID) return
+    if (!input.workflowState) return
+    if (input.workflow?.id !== "pipeline") return
+
+    const task = requireTask(taskID)
+    if (task.active_plan_version_id || task.active_run_id) return
+    if (listGoals(taskID).length > 0) return
+
+    const direct = WorkflowRegistry.resolveSync("direct")
+    if (!direct) return
+
+    const nextState = createWorkflowState(direct)
+    input.workflow = direct
+    input.workflowState = nextState
+
+    try {
+      await updateTask(task, { workflow_state: nextState }, "Workflow switched: direct build path selected")
+      EngineProtocol.emit(EngineEvent.WorkflowSelected, {
+        taskID,
+        workflowID: direct.id,
+        workflowName: direct.name,
+        summary: `Workflow "${direct.name}" selected`,
+      })
+    } catch (error) {
+      log.warn("build tool: failed to switch workflow to direct", {
+        taskID,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   // ── Workflow step tracking (passive observation) ──
@@ -1892,6 +1924,58 @@ export function createOrchestratorTools(input: {
           }
         }
 
+        // Direct-workflow fallback: when the orchestrator took the `direct`
+        // path (build → deliver, no per-goal dispatch), there are zero
+        // goal_runs and therefore zero aggregated diffs — but the build
+        // agent still wrote files to the main worktree. Without material
+        // here the delivery agent sees an empty workspace and rubber-stamps
+        // "accepted", which defeats the "build mode also undergoes delivery
+        // acceptance" contract. Read the working-tree diff directly so the
+        // delivery agent judges the actual changes.
+        if (allDiffs.length === 0 && goalRuns.length === 0) {
+          try {
+            const { $: $bun } = await import("bun")
+            const cwd = Instance.directory
+            const statusResult = await $bun`git status --porcelain=v1 -uall`.cwd(cwd).quiet().nothrow()
+            const statusLines = statusResult.stdout.toString().split("\n").filter((line) => line.trim().length > 0)
+            for (const raw of statusLines) {
+              // Porcelain format: "XY file" (X=index status, Y=worktree status). Extract the path.
+              const file = raw.slice(3).trim().replace(/^"(.+)"$/, "$1")
+              if (!file || seenFiles.has(file)) continue
+              let diff = ""
+              const diffResult = await $bun`git diff HEAD -- ${file}`.cwd(cwd).quiet().nothrow()
+              if (diffResult.exitCode === 0) diff = diffResult.stdout.toString()
+              if (!diff) {
+                // New / untracked — read raw contents so the delivery agent
+                // has real bytes instead of an empty diff.
+                const fs = await import("node:fs/promises")
+                const path = await import("node:path")
+                const full = path.join(cwd, file)
+                const content = await fs.readFile(full, "utf8").catch(() => "")
+                if (content) diff = `New file:\n${content}`
+              }
+              seenFiles.add(file)
+              allDiffs.push({ file, diff })
+            }
+            if (allDiffs.length > 0) {
+              summaries.push(
+                `Direct build produced ${allDiffs.length} changed file(s) in the main worktree.`,
+              )
+              log.info("deliver: direct-mode diff captured from main worktree", {
+                taskID, fileCount: allDiffs.length,
+              })
+            } else {
+              log.warn("deliver: direct mode with no per-goal deliveries AND empty working tree", {
+                taskID, cwd,
+              })
+            }
+          } catch (err) {
+            log.warn("deliver: direct-mode diff capture failed (non-fatal)", {
+              taskID, error: err instanceof Error ? err.message : String(err),
+            })
+          }
+        }
+
         // Persist aggregated delivery — task-scoped variant, which is the
         // only path that creates the `scope='delivery'` evaluation row the
         // delivery-agent later settles via updateEvaluationFromDeliveryVerdict.
@@ -2844,6 +2928,13 @@ export function createOrchestratorTools(input: {
         // overlay instead of floating at the conversation root.
         const inheritedGoalID = sessionGoalID(input.agentSessionID)
         const attachedGoalID = goalID || inheritedGoalID
+        const isTaskLevelBuild = !attachedGoalID
+
+        if (isTaskLevelBuild) {
+          await switchPreExecutionPipelineBuildToDirectWorkflow(attachedGoalID)
+          await trackStepStart("build")
+        }
+
         const buildSession = await Session.createNext({
           kind: "build",
           goalID: attachedGoalID,
@@ -2882,6 +2973,8 @@ export function createOrchestratorTools(input: {
             ? (lastText.length > 2000 ? lastText.slice(0, 2000) + "…(truncated)" : lastText)
             : "(build agent produced no text summary — check session for raw tool calls)"
 
+          if (isTaskLevelBuild) await trackStepComplete("build")
+
           // Build does NOT mark the task complete — deliver must accept.
           // Returning the actual build output (not a hardcoded string) is
           // what lets the orchestrator detect "build looped without fixing
@@ -2901,6 +2994,7 @@ export function createOrchestratorTools(input: {
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })
+          if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
           // Build itself failed (LLM error, tool guard fault, etc.) — distinct
           // from deliver-rejection. Surface the error and let the orchestrator
           // decide (retry build vs fail_task).
