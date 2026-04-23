@@ -22,6 +22,10 @@ import { AcceptanceSpecSchema, renderSpecsAsText } from "@/acceptance/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { Session } from "@/session"
 import { Instance } from "@/project/instance"
+import type { VisualSpec } from "@/design-analyst/types"
+import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import type { DecisionLog } from "@/decision-log"
+import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
 
 const log = Log.create({ service: "fidelity-review" })
 
@@ -118,6 +122,21 @@ export async function reviewFidelity(input: {
   userRequest: string
   taskTitle: string
   goals: GoalContractFields[]
+  /** Upstream evidence the reviewer must see to judge coverage:
+   *  - requirements: the REQ-N list architect decomposed against
+   *  - requirementDecisions: runtime / stack / test-framework decisions
+   *  - designSpecs: advisory visual contract from design-analyst
+   *  - decisionLog: architect's phase-level decisions recorded so far
+   *
+   *  Without these the reviewer only sees the user's raw sentence + the
+   *  finished goal list and cannot tell whether the goal set actually
+   *  covers requirements / decisions / visual intent. Architect must
+   *  forward whatever upstream context it received into every fidelity
+   *  run (same as it did for its own prompt). */
+  requirements?: ParsedRequirement[]
+  requirementDecisions?: RequirementsDecision[]
+  designSpecs?: VisualSpec[]
+  decisionLog?: DecisionLog
   signal?: AbortSignal
   /** Task ID for cache stickiness — same key requirements used keeps hexin
    *  on the same upstream pool, so prompt cache hits across stages. Also
@@ -195,7 +214,7 @@ export async function reviewFidelity(input: {
       return result
     }
 
-    const model = await resolveAgentModel("architect", { taskID: input.taskID }).catch(() => undefined)
+    const model = await resolveAgentModel("fidelity", { taskID: input.taskID }).catch(() => undefined)
     if (!model) {
       log.warn("no LLM available for fidelity review, skipping")
       const result: FidelityResult = { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
@@ -654,10 +673,39 @@ function buildFidelityPrompt(input: {
   userRequest: string
   taskTitle: string
   goals: GoalContractFields[]
+  requirements?: ParsedRequirement[]
+  requirementDecisions?: RequirementsDecision[]
+  designSpecs?: VisualSpec[]
+  decisionLog?: DecisionLog
 }): string {
   const sections: string[] = []
 
   sections.push(`# User Request (ORIGINAL — this is the ground truth)\n\nTitle: ${input.taskTitle}\n\n${input.userRequest}`)
+
+  if (input.requirements && input.requirements.length > 0) {
+    const reqText = input.requirements
+      .map((r) => `- **${r.id}** (${r.type}): ${r.description}`)
+      .join("\n")
+    sections.push(`# Requirements (${input.requirements.length}) — architect decomposed against this list\n\n${reqText}`)
+  }
+
+  if (input.requirementDecisions && input.requirementDecisions.length > 0) {
+    const decText = input.requirementDecisions
+      .map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
+      .join("\n")
+    sections.push(`# Foundational Decisions\n\n${decText}`)
+  }
+
+  if (input.designSpecs && input.designSpecs.length > 0) {
+    sections.push(renderVisualContractPromptSection({
+      specs: input.designSpecs,
+      instructions: [
+        "The following advisory visual constraints came from design_analysis.",
+        "Use them to judge whether the goal set covers the visual/interaction intent; " +
+          "an uncovered spec is evidence the goal decomposition is incomplete.",
+      ],
+    }))
+  }
 
   sections.push(`# Goal Contracts (${input.goals.length} goals)\n`)
   for (const goal of input.goals) {
@@ -673,7 +721,15 @@ function buildFidelityPrompt(input: {
     ].filter(Boolean).join("\n"))
   }
 
-  sections.push("Now compare the goals against the user request and call `submit_fidelity_verdict` with your verdict.")
+  const dlSection = input.decisionLog?.toPromptSection()
+  if (dlSection) sections.push(dlSection)
+
+  sections.push(
+    "Now compare the goals against the user request, the requirement list, foundational " +
+    "decisions, and the visual contract (when present). Call `submit_fidelity_verdict` with " +
+    "your verdict; cite specific REQ-N / spec IDs in your issue descriptions when the goal " +
+    "set leaves them uncovered or distorted.",
+  )
 
   return sections.join("\n\n")
 }
