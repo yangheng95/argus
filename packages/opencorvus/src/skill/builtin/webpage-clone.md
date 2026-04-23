@@ -3,6 +3,11 @@ name: webpage-clone
 description: Clone a live webpage as a static single-file HTML skeleton with visual similarity ≥ 95%. Uses headless-browser extraction, deterministic structure/token analysis, and an SSIM+pixel-match feedback loop. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (Apple HIG, macOS/iOS app, a specific site URL, a Figma/screenshot) and expects a visual match.
 stage: build
 auto_detect:
+  # OR-semantics across these blocks: any match activates the skill. For
+  # benchmark / greenfield clones the worktree starts empty, so files/deps
+  # miss; the task_signals block covers that case — a reference screenshot
+  # attachment OR an http(s) URL in the request text is an unambiguous
+  # "clone this page" intent.
   files:
     - index.html
     - public/index.html
@@ -25,12 +30,24 @@ auto_detect:
     - astro
     - vite
     - tailwindcss
+  task_signals:
+    has_attachment_image: true
+    request_contains_url: true
 priority: 60
 ---
 
 # Webpage Clone Skill
 
 You are producing a **static HTML skeleton** that visually mirrors a reference webpage. You have five deterministic tools — use them in order. Never open a browser yourself via `bash`; use the provided tools.
+
+## Critical Dependency Rule
+
+The general "parallelize independent tool calls" guidance does **not** apply to this workflow.
+
+- Steps 1-3 are **strictly serial** because each one writes artifacts consumed by the next step.
+- Never call `webpage_compile` or `webpage_analyze` in the same response as `webpage_extract`.
+- Wait for `webpage_extract` to finish and confirm `extracted-page.json` exists before calling either downstream tool.
+- Never start render/evaluate until after you have actually written `index.html`.
 
 ## Activation
 
@@ -68,11 +85,11 @@ Network access to the URL is required. The tool will ask for permission.
 
 ## Step 2 — Compile the XML IR
 
-Call `webpage_compile`. This reads `extracted-page.json` and emits `page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
+Call `webpage_compile` **only after step 1 completed successfully**. This reads `extracted-page.json` and emits `page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
 
 ## Step 3 — Analyze the structure
 
-Call `webpage_analyze`. This reads `extracted-page.json` and writes:
+Call `webpage_analyze` **only after step 1 completed successfully**. This reads `extracted-page.json` and writes:
 
 - `scaffold.json` — section list + pattern catalog + design-token system
 - `design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (import these; do NOT invent hex values)
