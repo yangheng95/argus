@@ -5,38 +5,54 @@ stage: delivery
 auto_detect:
   deps: ["hono", "express", "fastify", "koa", "@nestjs/core"]
 priority: 5
+required_tools:
+  - run_command
 ---
 
-## API Verification Checklist
+## API delivery verification — contract
 
-### Endpoint Content-Type
+Every endpoint the task spec lists must be invoked at least once during
+delivery, with `run_command` capturing the request + response, and the result
+cited in `tool_call_evidence[]`. Reading the handler code is NOT a substitute
+for a real HTTP round-trip.
 
-Every JSON endpoint must return `content-type: application/json`:
+### Required flow
+
+1. `run_command` to start the server (`bun run start` or the project's
+   equivalent). Confirm a listening address before continuing.
+
+2. For EVERY endpoint the spec describes, `run_command` with
+   `curl -sD- -o /dev/null -w '%{http_code} %{content_type}\n' ...`
+   (or the platform equivalent) to capture status + content-type in one line.
+   Bundle the whole round-trip into a single evidence entry per endpoint.
+
+3. Happy path, then at least one error path per endpoint:
+   - Missing body on a POST: expect 4xx with `application/json` body
+   - Unauthenticated request to a protected route: expect 401
+   - Unknown route: expect 404 with JSON, not HTML
+
+4. Authentication flow when the app has auth:
+   - Register → returns token
+   - Protected endpoint without token → 401
+   - Protected endpoint with token → 200
+   - Protected endpoint with malformed token → 401 (not 500)
+
+### tool_call_evidence entries
+
+One entry per `run_command` invocation that was part of verification. The
+`detail` field must carry the literal status + content-type + response-body
+prefix, not prose:
+
 ```
-curl -sD- http://localhost:{port}/api/health | grep -i content-type
+detail: "GET /api/stocks/AMD → 200 application/json, body[0:80]='{\"symbol\":\"AMD\",\"price\":124.52,...'"
 ```
-If it returns `text/plain` or `text/html` → fix the response.
 
-### Authentication Flow (if auth endpoints exist)
+### Common real failures this skill catches
 
-1. Register: `curl -X POST -H 'Content-Type: application/json' -d '{"username":"test","password":"test123"}' http://localhost:{port}/api/auth/register`
-2. Login: should return a token in the response body
-3. Protected endpoint WITHOUT token: `curl http://localhost:{port}/api/protected` → must return 401
-4. Protected endpoint WITH token: `curl -H 'Authorization: Bearer {token}' http://localhost:{port}/api/protected` → must return 200
+- JSON endpoint returns `text/plain` — frontend fetch().json() explodes
+- 404 returns HTML — SPA fallback leaked into `/api/*`
+- 500 leaks stack trace with file paths — security regression
+- Auth returns 200 on bad token — middleware not wired
 
-### Error Response Format
-
-Test invalid requests:
-```
-curl -X POST -H 'Content-Type: application/json' -d '{}' http://localhost:{port}/api/some-endpoint
-```
-- 400 errors must return JSON body with error message
-- 404 errors must return JSON, not HTML
-- 500 errors must not leak stack traces
-
-### Database Initialization
-
-If the app uses SQLite:
-- `data/` directory must be auto-created if missing
-- Tables must be created on first run (CREATE TABLE IF NOT EXISTS)
-- App must not crash if DB file doesn't exist yet
+Do NOT stop at reading the handler code. Populate `tool_call_evidence` with
+real `run_command` output or submit_verdict will reject the accepted verdict.

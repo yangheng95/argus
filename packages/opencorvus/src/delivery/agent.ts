@@ -22,7 +22,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
-import { loadStageSkills } from "@/engine/skill-inject"
+import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { AttachmentStore } from "@/storage/attachment-store"
 import type { GoalJudgmentType, GoalInfo, DeliveryInfo } from "@/delivery/checks"
 import {
@@ -68,12 +68,13 @@ export namespace DeliveryAgent {
     const deliveryCfg = (await EngineConfig.get()).delivery
 
     const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
-    const outputToolKit = createDeliveryOutputTools()
+    const systemResolved = await deliveryAgentSystem(input)
+    const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
     const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
     const context = prefetchDeliveryContext(input)
     const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
     const userPrompt = await buildMultimodalPrompt(textPrompt, input.attachments)
-    const systemPrompt = await deliveryAgentSystem()
+    const systemPrompt = systemResolved.prompt
 
     log.info("delivery agent starting", {
       title: input.task.title,
@@ -837,14 +838,30 @@ A rejection that omits any of these fields, or cites a problem you never tried t
 - Write body text in the same language as the task request
 - If the project is a library, verify compile + tests instead of startup`
 
-/** Config-aware resolver: checks config.prompt.delivery_system first, then config.agent.delivery.prompt, otherwise the default + skills. */
-export async function deliveryAgentSystem() {
+/** Single-source delivery system prompt.
+ *
+ * Composition (strict order, no bypass):
+ *   1. DELIVERY_AGENT_SYSTEM — code-owned canonical core (role, phases, rules)
+ *   2. config.agent.delivery.prompt — optional user append (MUST NOT replace)
+ *   3. resolveStageSkills output — invariant section + matched skills
+ *
+ * Returns the composed prompt and the union of required_tools declared by
+ * every matched skill so submit_verdict can enforce them. Task signals
+ * (attachments, request URL) drive auto-detect alongside project files/deps. */
+export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt: string; requiredTools: string[] }> {
   const config = await Config.get()
-  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof systemOverride?.delivery_system === "string") return systemOverride.delivery_system
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
-  const core = typeof agentPrompt === "string" ? agentPrompt : DELIVERY_AGENT_SYSTEM
+  const userAppend = (config.agent as Record<string, any> | undefined)?.delivery?.prompt
+  const core = typeof userAppend === "string" && userAppend.trim().length > 0
+    ? DELIVERY_AGENT_SYSTEM + "\n\n" + userAppend
+    : DELIVERY_AGENT_SYSTEM
   const orchCfg = await EngineConfig.get()
-  const skills = await loadStageSkills(orchCfg.delivery.skills, "delivery")
-  return core + skills
+  const taskSignals: TaskSignals | undefined = input
+    ? {
+        has_attachment_image: (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/")),
+        request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
+        request_text: input.task.request,
+      }
+    : undefined
+  const resolved = await resolveStageSkills(orchCfg.delivery.skills, "delivery", taskSignals)
+  return { prompt: core + resolved.prompt, requiredTools: resolved.requiredTools }
 }

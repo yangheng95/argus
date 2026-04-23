@@ -166,11 +166,14 @@ function buildUserPrompt(input: IntentAnalysisAgent.AnalyzeInput): string {
 }
 
 async function intentSystem(): Promise<string> {
+  // Single-source skill injection. `config.agent["intent-analysis"].prompt`
+  // appends to the canonical CORE; it cannot replace it. The skill loader
+  // is the only injection path; no bypass field exists.
   const config = await Config.get()
-  const systemOverride = (config as Record<string, unknown>).prompt as Record<string, unknown> | undefined
-  if (typeof systemOverride?.intent_analysis_system === "string") return systemOverride.intent_analysis_system
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.["intent-analysis"]?.prompt
-  const core = typeof agentPrompt === "string" ? agentPrompt : INTENT_CORE
+  const userAppend = (config.agent as Record<string, any> | undefined)?.["intent-analysis"]?.prompt
+  const core = typeof userAppend === "string" && userAppend.trim().length > 0
+    ? INTENT_CORE + "\n\n" + userAppend
+    : INTENT_CORE
   const orchCfg = await EngineConfig.get()
   const skills = await loadStageSkills(orchCfg.intent_analysis.skills, "intent-analysis")
   return core + skills
