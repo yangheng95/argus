@@ -179,6 +179,7 @@ interface SectionFrameProps {
   badgeId?: string;
   badgeText?: string;
   badgeTone?: string;
+  badgeVariant?: "status" | "metric";
   phaseState?: "active" | "related" | "";
   /** Initial open state at mount only; user toggle is preserved afterwards. */
   defaultOpen?: boolean;
@@ -225,6 +226,7 @@ function SectionFrame(props: SectionFrameProps) {
           class="section-badge"
           id={props.badgeId}
           data-tone={props.badgeTone}
+          data-variant={props.badgeVariant || "status"}
         >
           {props.badgeText || ""}
         </span>
@@ -452,6 +454,7 @@ export function Board(props: BoardProps) {
           const passed = gw.filter((g) => g.goalStatus === "passed").length;
           return gw.length > 0 ? `${passed}/${gw.length}` : "";
         })()}
+        badgeVariant="metric"
         badgeTone={(() => {
           const gw = goalWorkflows();
           if (gw.length === 0) return "";
@@ -519,6 +522,7 @@ export function Board(props: BoardProps) {
           const progress = deliveryGoalProgress(gs);
           return `${progress.completed}/${progress.total}`;
         })()}
+        badgeVariant="metric"
         badgeTone={(() => {
           const gs = goalWorkflows();
           if (gs.length === 0) {
