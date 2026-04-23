@@ -1171,8 +1171,6 @@ export namespace Config {
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for requirements agent"),
               timeout_ms: z.number().int().min(1000).optional().describe("Requirements agent timeout in milliseconds"),
-              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0)"),
-              max_attempts: z.number().int().min(1).optional().describe("Maximum requirements analysis attempts"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for requirements agent"),
             })
             .optional()
@@ -1189,8 +1187,6 @@ export namespace Config {
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent"),
               timeout_ms: z.number().int().min(1000).optional().describe("Planner agent timeout in milliseconds"),
-              quality_threshold: z.number().min(0).max(1).optional().describe("Quality score threshold for retry (0.0-1.0)"),
-              max_attempts: z.number().int().min(1).optional().describe("Maximum plan generation attempts"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for planner agent"),
             })
             .optional()
@@ -1223,9 +1219,6 @@ export namespace Config {
             .describe("Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model."),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure"),
-          max_goal_retries: z.number().int().min(0).optional().describe("Maximum retries per individual goal before permanently failing it"),
-          goal_escalation_threshold: z.number().int().min(1).optional().describe("After this many failed attempts on a goal, retry_goal forces an escalation (modify_goal / re-run architect / fail_task) instead of retrying the same contract. Clamped to max_goal_retries at merge time."),
-          max_delivery_iterations: z.number().int().min(1).max(10).optional().describe("Hard ceiling on adversarial iteration count; Arbiter returns 'abort' at this iteration regardless of other signals."),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
           default_workflow: z.string().optional().describe("Default workflow for new tasks: 'direct' (build → deliver iter), 'pipeline' (design_analysis → requirements → architect → per-goal build → deliver iter), or custom ID"),
           workflows: z
