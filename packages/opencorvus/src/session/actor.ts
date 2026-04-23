@@ -160,8 +160,4 @@ export namespace SessionActor {
     return actors()[sessionID]?.abort.signal === signal
   }
 
-  export async function lastModel(_sessionID: string) {
-    const { Provider } = await import("../provider/provider")
-    return Provider.defaultModel()
-  }
 }

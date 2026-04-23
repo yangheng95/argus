@@ -203,6 +203,10 @@ export async function resolveMergeConflict(
     let resolverError: string | undefined
     try {
       const { SessionPrompt } = await import("@/session/prompt")
+      const { Agent } = await import("@/agent/agent")
+      const { Provider } = await import("@/provider/provider")
+      const buildAgent = await Agent.get("build")
+      const resolverModel = buildAgent?.model ?? (await Provider.defaultModel())
       const promptText = buildMergeResolverPrompt({
         goal,
         notePath: path.relative(goalWorkDir, notePath).replace(/\\/g, "/"),
@@ -215,6 +219,11 @@ export async function resolveMergeConflict(
             sessionID: resolverSession.id,
             messageID: Identifier.ascending("message"),
             agent: "build",
+            // Explicit model. Without this the SessionPrompt fallback chain
+            // ends up calling Provider.defaultModel() implicitly, and the
+            // failure path there lost context — resolving upfront gives a
+            // meaningful MissingModelConfigError with the "build" scope.
+            model: { providerID: resolverModel.providerID, modelID: resolverModel.modelID },
             // goal_report is the goal-completion signal; the resolver is
             // NOT completing a goal (it's reconciling a merge), so deny
             // it to avoid the build-agent system prompt coaxing the
@@ -226,6 +235,16 @@ export async function resolveMergeConflict(
       })
     } catch (err) {
       resolverError = err instanceof Error ? err.message : String(err)
+      // Surface structured error payloads (provider/model ids, suggestions)
+      // into the resolver's error string so DB diagnostics beat out the
+      // opaque "ProviderModelNotFoundError" message form.
+      const data = (err as { data?: Record<string, unknown> })?.data
+      if (data) {
+        const parts = Object.entries(data)
+          .filter(([, v]) => v !== undefined && v !== null && v !== "")
+          .map(([k, v]) => `${k}=${Array.isArray(v) ? JSON.stringify(v) : String(v)}`)
+        if (parts.length > 0) resolverError += ` [${parts.join(" ")}]`
+      }
     }
 
     // Verify the resolver actually produced a committed merged tip.

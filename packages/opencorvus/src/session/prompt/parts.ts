@@ -24,8 +24,6 @@ import { iife } from "@/util/iife"
 import { defer } from "../../util/defer"
 import { fileURLToPath, pathToFileURL } from "bun"
 import { textForBoth } from "../part-visibility"
-import { SessionPromptState } from "./state"
-const { lastModel } = SessionPromptState
 import type { PromptInput } from "./schema"
 import { isDecodableText, decodeDataUrlText } from "../text-mime"
 
@@ -86,7 +84,7 @@ export async function resolvePromptParts(template: string): Promise<PromptInput[
 export async function createUserMessage(input: PromptInput) {
   const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
 
-  const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+  const model = input.model ?? agent.model ?? (await Provider.defaultModel())
   const full =
     !input.variant && agent.variant
       ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined)

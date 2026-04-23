@@ -192,14 +192,17 @@ export namespace SessionPrompt {
     return parts
   }
 
-  async function lastModel(sessionID: string) {
-    return SessionPromptState.lastModel(sessionID)
-  }
-
   async function createUserMessage(input: PromptInput) {
     const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
 
-    const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+    // Model resolution: explicit > per-agent config > top-level `model`.
+    // `Provider.defaultModel()` throws `MissingModelConfigError` when the
+    // operator never set a model — that error is actionable. The prior
+    // fallback (`SessionPromptState.lastModel`) was a wrapper around the
+    // same `Provider.defaultModel` but translated the miss into a vague
+    // `ProviderModelNotFoundError` with empty ids, which blocked
+    // diagnostics in merge-resolver / orchestrator-direct-build paths.
+    const model = input.model ?? agent.model ?? (await Provider.defaultModel())
     const full =
       !input.variant && agent.variant
         ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined)

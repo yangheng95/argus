@@ -13,7 +13,7 @@ import { Session } from "."
 import { SessionPromptState } from "./prompt/state"
 
 export namespace SessionCommand {
-  const { log, lastModel } = SessionPromptState
+  const { log } = SessionPromptState
 
   export const CommandInput = z.object({
     messageID: Identifier.schema("message").optional(),
@@ -100,7 +100,7 @@ export namespace SessionCommand {
         }
       }
       if (input.model) return Provider.parseModel(input.model)
-      return await lastModel(input.sessionID)
+      return await Provider.defaultModel()
     })()
 
     try {
@@ -151,7 +151,7 @@ export namespace SessionCommand {
     const userModel = isSubtask
       ? input.model
         ? Provider.parseModel(input.model)
-        : await lastModel(input.sessionID)
+        : await Provider.defaultModel()
       : taskModel
 
     await Plugin.trigger(

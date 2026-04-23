@@ -946,19 +946,16 @@ export namespace Provider {
    * isolated, so cross-provider continuity is impossible regardless of byte
    * equality).
    *
-   * Throws `ModelNotFoundError` if `cfg.model` is absent. Callers must not
-   * catch-and-default this — the expected remediation is for the operator to
-   * set `model` in opencorvus.jsonc.
+   * Throws `MissingModelConfigError` if `cfg.model` is absent. Callers must
+   * not catch-and-default — the remediation is for the operator to set
+   * `model` in opencorvus.jsonc.
    */
   export async function defaultModel(): Promise<{ providerID: string; modelID: string }> {
     const cfg = await Config.get()
     if (cfg.model) return parseModel(cfg.model)
-    throw new ModelNotFoundError({
-      providerID: "",
-      modelID: "",
-      suggestions: [
-        "Set `model` in opencorvus.jsonc, e.g. \"model\": \"anthropic/claude-sonnet-4-6\"",
-      ],
+    throw new MissingModelConfigError({
+      scope: "default",
+      hint: "Set top-level `model` in opencorvus.jsonc, e.g. \"model\": \"anthropic/claude-sonnet-4-6\".",
     })
   }
 
@@ -976,6 +973,22 @@ export namespace Provider {
       providerID: z.string(),
       modelID: z.string(),
       suggestions: z.array(z.string()).optional(),
+    }),
+  )
+
+  /**
+   * Distinct from `ModelNotFoundError`. Thrown when NO model was selected at
+   * all (operator never set `model` / no per-agent override), not when a
+   * specific id failed registry lookup. Keeping the two separate prevents the
+   * old trick of throwing `ProviderModelNotFoundError({providerID:"",modelID:""})`
+   * which made every "config missing" bug look like a provider-registry miss.
+   */
+  export const MissingModelConfigError = NamedError.create(
+    "MissingModelConfigError",
+    z.object({
+      scope: z.enum(["default", "agent"]),
+      agent: z.string().optional(),
+      hint: z.string(),
     }),
   )
 
