@@ -60,7 +60,7 @@ For **webpage / UI clone tasks** (request cites a reference URL like `https://�
    - `webpage_compile`  — `extracted-page.json` → `page-ir.xml` (compact XML IR)
    - `webpage_analyze`  — `extracted-page.json` → `ProjectScaffold` with design tokens, patterns, pre-generated `design-tokens.ts` / `App.tsx`
    - `webpage_render` + `webpage_evaluate` — render `index.html` and score SSIM vs the reference
-2. Decompose the task so ONE goal (typically the first, kind=`system` or a dedicated `extract` goal) runs `webpage_extract` → `webpage_compile` → `webpage_analyze` and commits the artifacts, and later goals import those artifacts (design tokens, IR, pattern catalog) as their authoritative source of structure. Do not let every goal re-read the screenshot with raw vision.
+2. Decompose the task into PHASE-SHAPED workloads. An early goal (typically the first, kind=`system` or a dedicated `extract` goal) runs `webpage_extract` → `webpage_compile` → `webpage_analyze` and commits the artifacts. Later goals consume those artifacts (design tokens, IR, pattern catalog) as their authoritative source of structure and advance the deliverable forward. Do not let every goal re-read the screenshot with raw vision, and do not split a single growing page shell into multiple goals that all need to keep editing the same file.
 3. All mirror artifacts land under `.opencorvus/mirror/` (reference.png, extracted-page.json, page-ir.xml, scaffold.json, design-tokens.ts, App.tsx, shared-context.md, images/). Register `.opencorvus/mirror/<file>` paths as interface_contract `exports` on the extract goal and `imports` on every implementation goal so the pipeline is explicit; the implementation goals read those files instead of re-extracting.
 
 After exploration you should be able to:
@@ -72,33 +72,37 @@ After exploration you should be able to:
 
 Assign every REQ-N to at least one goal. Core rules:
 
-**Group by responsibility layer, not file proximity.** Typical layers for a web app: `data model / schema` → `persistence` → `business logic / domain` → `API / transport` → `UI components` → `UI state & interaction` → `integration / bootstrap`. A requirement spanning two layers splits across those layers' goals — it does NOT collapse into whichever layer it happens to touch more.
+**Default to phase-shaped workloads, not module-shaped workloads.** First derive the sequence of milestones that would let a strong engineer ship the task incrementally: foundation / context capture → scaffold / shared assets → first end-to-end slice → follow-up expansion / refinement → verification / hardening. Goals should usually map to those execution phases. A phase may legitimately touch multiple directories if that is what the next stable milestone requires.
 
-**No shared glue files across goals.** Root `App.tsx`, router entry, DI wiring, `main.ts`, `package.json` scripts, bootstrap config — these pull everything together and will be co-written by every goal that plugs in. Assign them to exactly ONE goal (typically the integration / bootstrap goal); all others export interfaces the integration goal imports. Goals NEVER co-write a glue file.
+**Do not pick a target goal count up front.** Let the real milestone boundaries determine how many goals you need. Do NOT pad the plan with micro-goals, and do NOT collapse multiple unstable milestones into one giant goal just to keep the count low.
 
-**Split cohesion from coupling.** Two requirements that share a data model but differ in responsibility (e.g. "validate input" vs "render input form") belong in different goals — they change for different reasons (Single Responsibility). Two requirements that change together for the same reason (e.g. "API returns users list" + "API returns users list with pagination") belong in one goal.
+**Only split a phase into multiple goals when the phase itself contains a real DAG.** You need disjoint `owned_paths`, a stable handoff, and an explicit `exports` / `imports` contract. If the next step mostly continues editing the same growing artifact, keep it in the SAME goal rather than forcing a fake boundary.
+
+**Module / layer partition is opt-in, not default.** Use it only when exploration proves the subsystems are genuinely independent: disjoint `owned_paths`, no shared glue file, no shared visual acceptance surface, and no shared type / schema that is still likely to churn during execution. If you cannot prove that independence from real files and symbols, stay phase-first.
+
+**Single-artifact and visual work stays concentrated.** For webpage clones, landing pages, dashboards, docs sites, and similar tasks with one primary deliverable and one global acceptance surface, keep the main deliverable concentrated in one implementation goal. Earlier goals may prepare artifacts or scaffolds; later goals may verify or package; but do NOT split hero / nav / footer / content regions into separate goals when they all need to keep reopening the same page shell.
+
+**No shared glue files across goals.** Root `App.tsx`, router entry, DI wiring, `main.ts`, `package.json` scripts, bootstrap config — these pull everything together and will be co-written by every goal that plugs in. Assign them to exactly ONE goal at a time. If a later phase must continue editing that same glue file, that work belongs in the SAME goal unless the file has already stabilized and downstream phases can proceed by imports alone.
 
 **Depend on exports, not internals.** Goal B depending on Goal A means A produces an `exports` contract (interface / type / route / schema) and B only imports that contract. Neither goal reaches into the other's `owned_paths`. If you cannot state B's dependency as "imports of { X, Y, Z } from A", the boundary is wrong — re-split.
 
 **Split when:**
-(1) disjoint `owned_paths` achievable with a clean interface between them,
-(2) a genuine data / bootstrap dependency forcing an order,
-(3) responsibility belongs to a different layer of the stack,
-(4) the merged goal would exceed ~40 files or span unrelated subsystems.
+(1) the current milestone can hand off a stable artifact / interface to the next milestone,
+(2) disjoint `owned_paths` are achievable,
+(3) downstream work can proceed by imports / merged artifacts instead of reopening predecessor files,
+(4) the merged goal would exceed ~40 files or hide multiple unstable milestones.
 
 **Do NOT split** into micro-goals that only compose by passing strings around (fake decoupling via text interfaces). One goal can cover many REQs as long as they share the same axis of change.
 
-**Do NOT merge** everything into 1–2 mega-goals for a large PRD — the executor's context is finite and merge conflicts go up super-linearly when goals share files.
+**Do NOT merge** multiple unstable milestones into one goal when the executor would need to hold too much unfinished context at once. A goal may be broad, but it still needs one coherent stopping point.
 
-**Cohesion self-check for each goal:** can you state what this goal does in one sentence without mentioning another goal's file path or internal symbol? If not, re-split.
+**Phase self-check for each goal:** after this goal passes, what newly stable capability, artifact, or implementation surface becomes available to the next goal? If you cannot answer that in one sentence, the phase boundary is weak.
 
 **Coupling self-check for each pair (A, B) where A depends on B:** is the dependency expressible entirely as "A imports { …exports } from B"? If A also needs to modify B's `owned_paths`, the boundary is wrong.
 
-**Sizing guidelines:**
-- 1-line bug fix or tiny feature → 1–2 goals
-- Medium feature (10–30 requirements) → 3–6 goals
-- Large PRD (30–100+ requirements, multiple subsystems) → 5–10 goals
-- Ceiling is ~10 goals; above that, merge where possible
+**Module-exception self-check:** if you claim two goals are parallel module goals instead of sequential phases, can you explain why each one can finish without reopening the other's files? If not, keep them phase-ordered.
+
+**Goal-count guidance:** goal count follows the real milestone structure. Prefer a few strong goals over many fake seams, but do NOT impose an arbitrary ceiling or floor.
 
 ### Phase 4: REGISTER EACH GOAL
 

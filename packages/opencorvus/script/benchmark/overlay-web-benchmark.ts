@@ -231,23 +231,19 @@ const referenceImages = rawReferenceImages.length > 0
 const DEFAULT_TASK_REQUEST = `
 Reproduce the Baidu homepage (https://www.baidu.com/) as a pixel-faithful static web clone, delivered as a single \`index.html\` rendered at viewport 1440 × 900. The reference screenshot is attached at references/baidu.png.
 
-## Scope (decompose by responsibility layer, NOT by file proximity)
+## Scope (phase-shaped, not module-shaped)
 
-Organise the work as a multi-goal plan. Each goal below is a distinct axis of change — they belong in different goals because they change for different reasons. Do NOT collapse them into one mega-goal.
+The deliverable is a single \`index.html\` plus its \`images/\` folder — one primary artifact with one global acceptance surface. Do NOT split hero / nav / footer / search / quick-link regions into separate parallel goals that all keep re-opening the same page shell; that pattern fights this task. Decompose by execution phase instead.
 
-1. **Design tokens** — palette (Baidu blue #4E6EF2, neutrals), typography (Arial / "Microsoft YaHei" stack, sizes), spacing scale, border radii. Owns the authoritative \`:root\` CSS custom properties / Tailwind theme extension used by every other goal.
+A sensible phase structure (architect may adjust based on exploration):
 
-2. **Global layout shell** — page-level structure: top bar (language + settings + login), centered content column, footer anchor. Owns the outer flex/grid skeleton only; does not own the search form or quick-link bar internals.
+1. **Reference capture** — extract the live reference into \`.opencorvus/mirror/\` using the mirror toolchain (\`webpage_extract\` → \`webpage_compile\` → \`webpage_analyze\`) and commit the artifacts (\`reference.png\`, \`extracted-page.json\`, \`page-ir.xml\`, \`scaffold.json\`, \`design-tokens.ts\`, \`images/\`). Do NOT hand-write colour hex codes, text strings, or section structure when these can be harvested deterministically.
 
-3. **Hero logo + search form** — centred Baidu logo image, search input with icons on either side, the blue "百度一下" submit button, the suggestion / auto-complete affordance. Owns the search region's markup + styling.
+2. **Page shell build-out** — write the consolidated static \`index.html\` in one goal, consuming the mirror artifacts from phase 1 as the authoritative source of structure, text, and tokens. This is the main implementation goal; it should concentrate the markup + styles in one file rather than exposing an internal cross-goal DAG.
 
-4. **Quick-link bar** — the row of shortcut links below the search box ("新闻 hao123 地图 贴吧 视频 图片 网盘 更多"). Owns its bar's markup + icons + spacing.
+3. **Visual fidelity verification** — verification-kind goal. Runs \`webpage_render\` on \`index.html\` at 1440 × 900, then \`webpage_evaluate\` against \`.opencorvus/mirror/reference.png\`, and iterates via \`webpage_text_diff\` until SSIM mean ≥ 0.85 and worst-5% window ≥ 0.55.
 
-5. **Footer & utility strip** — bottom strip: "设为首页", "关于百度", "About Baidu", ICP number, copyright. Owns the footer content + layout.
-
-6. **Visual fidelity verification** — verification-kind goal. Renders \`index.html\` at 1440 × 900 and runs the visual-diff gate against references/baidu.png. Fails unless SSIM mean ≥ 0.85 and worst-5% window ≥ 0.55.
-
-Goals 1–5 each export CSS classes / style snippets / section markup fragments; Goal 2 imports them and composes the final \`index.html\`. Register interface contracts between the tokens goal and its consumers, and between each section goal and the layout-shell goal.
+If exploration reveals a genuine orthogonal subsystem that can ship without re-opening \`index.html\`, architect may split that into its own goal — but the default is phase-serial, single-worktree, single growing artifact.
 
 ## Technical rules (apply to every implementation goal)
 
