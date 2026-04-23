@@ -73,15 +73,6 @@ export function ChangesPanel(props: ChangesPanelProps) {
     const selectedID = selectedGroupID();
     return currentGroups.find((group) => group.id === selectedID) || currentGroups[0] || null;
   });
-  const visibleEntries = createMemo<Array<{ group: ChangeGroup; item: FileChange }>>(() => {
-    if (hasGoalGrouping()) {
-      const group = activeGroup();
-      if (!group) return [];
-      return group.changes.map((item) => ({ group, item }));
-    }
-    return groups().flatMap((group) => group.changes.map((item) => ({ group, item })));
-  });
-
   const openWorkspaceDiff = (window as any).openWorkspaceDiff as
     | ((target: DiffTarget) => void)
     | undefined;
@@ -144,10 +135,27 @@ export function ChangesPanel(props: ChangesPanelProps) {
         </div>
 
         <Show when={hasGoalGrouping()}>
-          <div class="changes-tabs" role="tablist" aria-label={t("section.files")}>
+          <div
+            class="changes-tabs"
+            role="tablist"
+            aria-label={t("section.files")}
+            onKeyDown={(e) => {
+              const list = groups()
+              if (list.length <= 1) return
+              const currentIdx = Math.max(0, list.findIndex((g) => g.id === activeGroup()?.id))
+              let next = currentIdx
+              if (e.key === "ArrowRight") next = (currentIdx + 1) % list.length
+              else if (e.key === "ArrowLeft") next = (currentIdx - 1 + list.length) % list.length
+              else if (e.key === "Home") next = 0
+              else if (e.key === "End") next = list.length - 1
+              else return
+              e.preventDefault()
+              setSelectedGroupID(list[next]!.id)
+            }}
+          >
             <For each={groups()}>
               {(group) => {
-                const active = () => activeGroup()?.id === group.id;
+                const active = () => group.id === activeGroup()?.id
                 return (
                   <button
                     type="button"
@@ -155,43 +163,66 @@ export function ChangesPanel(props: ChangesPanelProps) {
                     role="tab"
                     aria-selected={active()}
                     data-active={active() ? "true" : "false"}
+                    tabindex={active() ? 0 : -1}
                     title={tabTitle(group)}
                     onClick={() => setSelectedGroupID(group.id)}
                   >
                     <span class="changes-tab-label">{tabLabel(group)}</span>
-                    <span class="changes-tab-count">{group.changes.length}</span>
+                    <span class="changes-tab-count" aria-hidden="true">
+                      {group.changes.length}
+                    </span>
                   </button>
-                );
+                )
               }}
             </For>
           </div>
         </Show>
 
+        {/*
+          All-groups list strategy: mount every group's rows once and toggle
+          visibility via `data-active-group` on the list ancestor + a
+          `data-group-id` attribute on each chunk. Switching tabs flips one
+          attribute and CSS hides the inactive chunks — no Solid reconcile
+          runs on the row list, so goal-count × file-count stays off the
+          critical path of clicking a tab.
+        */}
         <div class="changes-list" data-grouped={hasGoalGrouping() ? "true" : "false"}>
-          <For each={visibleEntries()}>
-            {({ group, item }, index) => (
-              <button
-                type="button"
-                class="change-row"
-                data-change-index={index()}
-                title={item.file}
-                onClick={() => void handleRowClick(group, item)}
+          <For each={hasGoalGrouping() ? groups() : [groups()[0]].filter(Boolean) as ChangeGroup[]}>
+            {(group) => (
+              <div
+                class="changes-list-chunk"
+                data-group-id={group.id}
+                data-active={
+                  !hasGoalGrouping() || activeGroup()?.id === group.id ? "true" : "false"
+                }
               >
-                <span class="change-main">
-                  <span class="change-path">{item.file}</span>
-                </span>
-                <span class="change-meta">
-                  <span class="change-status" data-status={item.status}>
-                    {changeStatusLabel(item.status)}
-                  </span>
-                  <span class="diff-dialog-stat" data-tone="add">
-                    +{item.additions}
-                  </span>
-                  <span class="diff-dialog-stat" data-tone="del">
-                    -{item.deletions}
-                  </span>
-                </span>
-              </button>
+                <For each={group.changes}>
+                  {(item, index) => (
+                    <button
+                      type="button"
+                      class="change-row"
+                      data-change-index={index()}
+                      title={item.file}
+                      onClick={() => void handleRowClick(group, item)}
+                    >
+                      <span class="change-main">
+                        <span class="change-path">{item.file}</span>
+                      </span>
+                      <span class="change-meta">
+                        <span class="change-status" data-status={item.status}>
+                          {changeStatusLabel(item.status)}
+                        </span>
+                        <span class="diff-dialog-stat" data-tone="add">
+                          +{item.additions}
+                        </span>
+                        <span class="diff-dialog-stat" data-tone="del">
+                          -{item.deletions}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                </For>
+              </div>
             )}
           </For>
         </div>
