@@ -87,8 +87,11 @@ export namespace Agent {
       webfetch: "allow",
       websearch: "deny",
       // Mirror tools — launch headless browser and hit external URLs on behalf
-      // of the agent. Default to "ask" so a user sees the host before extract.
-      webpage_extract: "ask",
+      // of the agent. `allow` for both: unattended benchmark / pipeline runs
+      // (overlay-web-benchmark, CI, scheduled agents) block on "ask" and can
+      // never reach the extractor, which defeats the whole webpage-clone skill.
+      // Restrictive installs can override via user config.
+      webpage_extract: "allow",
       webpage_render: "allow",
       codesearch: "allow",
       lsp: "allow",
