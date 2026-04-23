@@ -170,6 +170,62 @@ test("non-goal sub-agent sessions surface at top level, not under their parent s
   expect(cardTreeStore.cards[rootCardID]?.childIDs || []).not.toContain(architectCardID);
 });
 
+test("follow-up user sessions render as plain user bubbles without boundary chrome", () => {
+  const USER_SID = "ses_user_followup";
+
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "initial request",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("main", {
+        id: "msg_user_followup",
+        sessionID: USER_SID,
+        role: "user",
+        resolvedRole: "user",
+        agent: "user",
+        time: { created: 1_776_000_001_000 },
+      }),
+    },
+  });
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("main", {
+        id: "prt_user_followup",
+        messageID: "msg_user_followup",
+        sessionID: USER_SID,
+        type: "text",
+        text: "继续",
+      }),
+    },
+  });
+
+  const userCardID = `user:session:${USER_SID}`;
+  const userCard = cardTreeStore.cards[userCardID];
+
+  expect(userCard).toBeDefined();
+  expect(userCard?.kind).toBe("message");
+  expect(userCard?.role).toBe("user");
+  expect((userCard?.parts || []).map((part) => part.type)).toEqual(["text"]);
+  expect(cardTreeStore.order).toContain(userCardID);
+});
+
 test("tree-writer preserves step summaries and payloads from board.goalWorkflows", () => {
   resetWriter();
   setBoardStore("board", {
@@ -436,7 +492,7 @@ test("fidelity completed event materializes an independent fidelity session card
 
   applyEvent({
     type: "fidelity.review.completed",
-    timestamp: 1_776_000_002_000,
+    emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: FIDELITY_SID,
@@ -475,7 +531,7 @@ test("fidelity completed event can materialize before any message stream arrives
   // fidelity session card even before any message/part stream arrives.
   applyEvent({
     type: "fidelity.review.completed",
-    timestamp: 1_776_000_002_000,
+    emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: FIDELITY_SID,
@@ -512,7 +568,7 @@ test("fidelity event missing sessionID throws (schema became required)", () => {
   expect(() =>
     applyEvent({
       type: "fidelity.review.completed",
-      timestamp: 1_776_000_002_000,
+      emittedAt: 1_776_000_002_000,
       properties: {
         taskID: TASK_ID,
         verdict: "faithful",
@@ -543,7 +599,7 @@ test("resetWriter clears fidelity session cards materialized from protocol event
 
   applyEvent({
     type: "fidelity.review.completed",
-    timestamp: 1_776_000_002_000,
+    emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
       sessionID: FIDELITY_SID,

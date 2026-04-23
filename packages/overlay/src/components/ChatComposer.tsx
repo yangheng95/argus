@@ -498,7 +498,9 @@ export function ChatComposer(props: ChatComposerProps) {
         <div class="chat-compose-meta-left">
           <span class="chat-version" id="chatVersion"></span>
         </div>
-        <div class="chat-compose-tip">{t("chat.tip")}</div>
+        <div class="chat-compose-meta-right">
+          <div class="chat-compose-tip">{t("chat.tip")}</div>
+        </div>
       </div>
     </form>
   );
