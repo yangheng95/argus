@@ -25,7 +25,6 @@ export {
   EngineMilestoneTable,
   EngineProgressSnapshotTable,
   EngineInteractionRequestTable,
-  EngineGoalSnapshotTable,
   EngineSpecSnapshotTable,
   EngineSpecItemTable,
   EngineChannelBindingTable,

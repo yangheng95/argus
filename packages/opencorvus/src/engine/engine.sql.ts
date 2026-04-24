@@ -430,26 +430,10 @@ export const EngineRequirementTable = sqliteTable(
   ],
 )
 
-export const EngineGoalSnapshotTable = sqliteTable(
-  "engine_goal_snapshot",
-  {
-    id: text().primaryKey(),
-    task_id: text()
-      .notNull()
-      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    spec_snapshot_id: text()
-      .notNull()
-      .references(() => EngineSpecSnapshotTable.id, { onDelete: "cascade" }),
-    version: integer().notNull().default(1),
-    status: text().notNull().$type<"ready" | "superseded" | "completed">().default("ready"),
-    summary: text().notNull(),
-    metadata: text({ mode: "json" }).$type<EngineMetadata>(),
-    ...Timestamps,
-  },
-  (table) => [
-    index("engine_goal_snapshot_task_idx").on(table.task_id),
-  ],
-)
+// Phase-6-f-cleanup-3: `engine_goal_snapshot` was never written or read by
+// src/ — the table was an unused placeholder from the pre-artifact design.
+// Deleted along with EngineGoalSnapshotTable definition, DDL CREATE,
+// findGoalSnapshot / goalSnapshotIDOfPlan helpers (zero callers).
 
 export const EnginePlanNodeTable = sqliteTable(
   "engine_plan_node",

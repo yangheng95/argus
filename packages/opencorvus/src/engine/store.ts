@@ -10,7 +10,6 @@ import {
   EngineArtifactTable,
   EngineExecutorSessionTable,
   EngineGoalTable,
-  EngineGoalSnapshotTable,
   EngineInteractionRequestTable,
   EngineMilestoneTable,
   EnginePlanNodeTable,
@@ -99,7 +98,6 @@ export type EvaluationRow = {
 export type ProgressRow = typeof EngineProgressSnapshotTable.$inferSelect
 export type ExecutorSessionRow = typeof EngineExecutorSessionTable.$inferSelect
 export type RequirementRow = typeof EngineRequirementTable.$inferSelect
-export type GoalSnapshotRow = typeof EngineGoalSnapshotTable.$inferSelect
 /** Phase-6-d artifact-backed goal_run shape. Was `typeof EngineGoalRunTable.$inferSelect`
  *  until `engine_goal_run` was deleted in favour of `engine_artifact` rows with
  *  kind="goal_run_attempt". Field names stay snake_case so old consumers do
@@ -251,37 +249,6 @@ export function findSpecSnapshot(specID: string) {
   )
 }
 
-export function findSpecSnapshots(taskID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineSpecSnapshotTable)
-      .where(eq(EngineSpecSnapshotTable.task_id, taskID))
-      .orderBy(desc(EngineSpecSnapshotTable.version))
-      .all(),
-  )
-}
-
-export function findSpecItems(specSnapshotID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineSpecItemTable)
-      .where(eq(EngineSpecItemTable.spec_snapshot_id, specSnapshotID))
-      .all(),
-  )
-}
-
-export function findSpecItemsByTask(taskID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineSpecItemTable)
-      .where(eq(EngineSpecItemTable.task_id, taskID))
-      .all(),
-  )
-}
-
 export function viewSpecSnapshot(row: SpecSnapshotRow) {
   return {
     id: row.id,
@@ -292,25 +259,6 @@ export function viewSpecSnapshot(row: SpecSnapshotRow) {
     content: row.content,
     scope: row.scope,
     outOfScope: row.out_of_scope ?? undefined,
-    evidence: row.evidence ?? undefined,
-    metadata: row.metadata ?? undefined,
-    time: {
-      created: row.time_created,
-      updated: row.time_updated,
-    },
-  }
-}
-
-export function viewSpecItem(row: SpecItemRow) {
-  return {
-    id: row.id,
-    taskID: row.task_id,
-    specSnapshotID: row.spec_snapshot_id,
-    title: row.title,
-    description: row.description,
-    status: row.status,
-    priority: row.priority,
-    checkSelector: row.check_selector ?? undefined,
     evidence: row.evidence ?? undefined,
     metadata: row.metadata ?? undefined,
     time: {
@@ -659,10 +607,6 @@ export function goalRunQueueTaskID(goalRun?: GoalRunRow) {
   return queueTaskID
 }
 
-export function listGoalRunsForDispatch(taskID: string) {
-  return listGoalRunsForTask(taskID)
-}
-
 export function listActiveGoalRunsForRun(coordinatorRunID: string): GoalRunRow[] {
   const rows = Database.use((db) =>
     db
@@ -776,20 +720,6 @@ export function listPlanNodesByPlan(planID: string) {
   )
 }
 
-export function findGoalSnapshot(goalSnapshotID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineGoalSnapshotTable)
-      .where(eq(EngineGoalSnapshotTable.id, goalSnapshotID))
-      .get(),
-  )
-}
-
-export function goalSnapshotIDOfPlan(plan: PlanRow) {
-  const metadata = plan.metadata as Record<string, unknown> | null
-  return typeof metadata?.goal_snapshot_id === "string" ? metadata.goal_snapshot_id : undefined
-}
 
 export function findRequirements(specSnapshotID: string) {
   return Database.use((db) =>

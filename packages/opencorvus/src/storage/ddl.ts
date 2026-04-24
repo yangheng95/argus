@@ -524,20 +524,8 @@ CREATE TABLE IF NOT EXISTS engine_requirement (
 CREATE INDEX IF NOT EXISTS engine_requirement_task_idx ON engine_requirement (task_id);
 CREATE INDEX IF NOT EXISTS engine_requirement_spec_idx ON engine_requirement (spec_snapshot_id);
 
-CREATE TABLE IF NOT EXISTS engine_goal_snapshot (
-  id               text PRIMARY KEY,
-  task_id          text NOT NULL,
-  spec_snapshot_id text NOT NULL,
-  version          integer NOT NULL DEFAULT 1,
-  status           text NOT NULL DEFAULT 'ready',
-  summary          text NOT NULL,
-  metadata         text,
-  time_created     integer NOT NULL,
-  time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES engine_task(id)          ON DELETE CASCADE,
-  FOREIGN KEY (spec_snapshot_id) REFERENCES engine_spec_snapshot(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS engine_goal_snapshot_task_idx ON engine_goal_snapshot (task_id);
+-- Phase-6-f-cleanup-3: engine_goal_snapshot was never written or read — a
+-- placeholder from the pre-artifact design. Deleted.
 
 CREATE TABLE IF NOT EXISTS engine_plan_node (
   id              text PRIMARY KEY,
