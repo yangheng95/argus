@@ -36,25 +36,8 @@ import type {
 const log = Log.create({ service: "goal-runner" })
 const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
 
-function summary(prefix: string, files: string[]) {
-  if (files.length === 0) return `${prefix}. No file changes were detected.`
-  const sample = files.slice(0, 3).join(", ")
-  return files.length <= 3
-    ? `${prefix}. Changed files: ${sample}.`
-    : `${prefix}. Changed files: ${sample} and ${files.length - 3} more.`
-}
 
-function includeDeliveryFile(file: string) {
-  // `.opencorvus/` covers scratch + `.opencorvus/worktrees/`, so the old
-  // standalone `.opencorvus-worktrees/` check is redundant (and its legacy
-  // path is no longer produced by Worktree.create).
-  return !file.startsWith(".opencorvus/")
-    && file !== ".opencorvus-meta.json"
-}
 
-function filterDeliveryDiffs(diffs: z.infer<typeof Snapshot.FileDiff>[]) {
-  return diffs.filter((item) => includeDeliveryFile(item.file))
-}
 
 function goalRunLocalSessionID(goalRun: GoalRunRow) {
   const id = dict(goalRun.metadata).local_session_id
@@ -699,30 +682,6 @@ ${compactPlanContext(input.plan)}`,
  * ignores via BASELINE_EXCLUDE and (b) it contains many `.git`-less package
  * trees whose traversal is expensive and unnecessary.
  */
-export async function stripNestedGitDirs(worktreeDir: string): Promise<string[]> {
-  const stripped: string[] = []
-  async function walk(dir: string, atRoot: boolean): Promise<void> {
-    const entries = await fs.readdir(dir, { withFileTypes: true }).catch((err) => {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return []
-      throw err
-    })
-    for (const entry of entries) {
-      if (entry.name === ".git") {
-        if (atRoot) continue
-        const full = path.join(dir, entry.name)
-        await fs.rm(full, { recursive: true, force: true })
-        stripped.push(path.relative(worktreeDir, full).replaceAll("\\", "/"))
-        continue
-      }
-      if (entry.name === "node_modules") continue
-      if (entry.isDirectory()) {
-        await walk(path.join(dir, entry.name), false)
-      }
-    }
-  }
-  await walk(worktreeDir, true)
-  return stripped
-}
 
 /**
  * Stage everything the executor produced, guard against accidental submodule
@@ -747,60 +706,6 @@ export async function stripNestedGitDirs(worktreeDir: string): Promise<string[]>
  * Caller contract: wrap with `Instance.provide({ directory: worktreeDir })`
  * so `$.cwd(Instance.directory)` runs in the worktree's own git.
  */
-export async function createGoalDeliveryCommit(
-  diffs: Array<{ file: string; status: string }>,
-  prefix: string,
-): Promise<string | undefined> {
-  const cwd = Instance.directory
-
-  const addResult = await $`git add -A`.quiet().cwd(cwd).nothrow()
-  if (addResult.exitCode !== 0) {
-    const stderr = addResult.stderr.toString().trim() || addResult.stdout.toString().trim() || "git add failed"
-    throw new Error(`createGoalDeliveryCommit: git add -A failed: ${stderr}`)
-  }
-
-  const status = (await $`git status --porcelain`.quiet().cwd(cwd).nothrow().text()).trim()
-  if (status.length === 0) {
-    return undefined
-  }
-
-  const lsResult = await $`git ls-files --stage`.quiet().cwd(cwd).nothrow()
-  const gitlinks = lsResult.stdout
-    .toString()
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.startsWith("160000 "))
-    .map((l) => l.split("\t")[1] ?? "")
-    .filter(Boolean)
-  if (gitlinks.length > 0) {
-    throw new Error(
-      `createGoalDeliveryCommit: delivery contains submodule pointer(s) instead of real files: ${gitlinks.join(", ")}. This happens when a nested .git survived stripNestedGitDirs(). Fix the stripping logic; do not commit gitlinks.`,
-    )
-  }
-
-  const commitMessage = `${prefix} delivery`
-  const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${commitMessage}`
-    .quiet()
-    .cwd(cwd)
-    .nothrow()
-  if (commitResult.exitCode !== 0) {
-    const stderr = commitResult.stderr.toString().trim() || commitResult.stdout.toString().trim() || "git commit failed"
-    throw new Error(`createGoalDeliveryCommit: git commit failed: ${stderr}`)
-  }
-
-  const head = (await $`git rev-parse HEAD`.quiet().cwd(cwd).nothrow().text()).trim()
-  if (!head) {
-    throw new Error("createGoalDeliveryCommit: git rev-parse HEAD returned empty after commit")
-  }
-
-  log.info("goal delivery commit", {
-    commit: head,
-    prefix,
-    diffHint: diffs.length,
-  })
-
-  return head
-}
 
 /**
  * Extract goal delivery from the worktree's own git.
@@ -833,98 +738,4 @@ export async function createGoalDeliveryCommit(
  * captured by goal-pool via `git rev-parse HEAD` in the worktree before
  * the executor starts.
  */
-export async function deliveryFromWorktree(
-  baseRef: string | undefined,
-  prefix: string,
-): Promise<{ mergeRef: string | undefined; delivery: { summary: string; commitRef?: string; diffs: z.infer<typeof Snapshot.FileDiff>[] } }> {
-  if (!baseRef) {
-    throw new Error("deliveryFromWorktree: baseRef is required — goal-pool must capture it via `git rev-parse HEAD` in the worktree before executor start.")
-  }
-  const stripped = await stripNestedGitDirs(Instance.worktree)
-  if (stripped.length > 0) {
-    log.info("stripped nested .git before delivery", { count: stripped.length, paths: stripped })
-  }
-  const cwd = Instance.directory
-
-  const diffHint: { file: string; status: string }[] = []
-  const commitRef = await createGoalDeliveryCommit(diffHint, prefix)
-  const mergeRef: string = commitRef ?? baseRef
-
-  const rawDiffs = mergeRef !== baseRef
-    ? await collectWorktreeFileDiffs(cwd, baseRef, mergeRef)
-    : []
-  const diffs = filterDeliveryDiffs(rawDiffs)
-  log.info("worktree delivery extracted", { baseRef, mergeRef, files: diffs.length, fileNames: diffs.map((d) => d.file) })
-  return {
-    mergeRef,
-    delivery: {
-      summary: summary(prefix, diffs.map((d) => d.file)),
-      commitRef,
-      diffs,
-    },
-  }
-}
-
-/**
- * Build a FileDiff[] (same shape as Snapshot.diffFull returned) from
- * `baseRef..mergeRef` in the worktree's own git. No separate git-dir,
- * no temp index. Matches `Snapshot.diffFull`'s three-step pattern:
- * name-status for the added/deleted/modified classification, numstat
- * for line counts (and binary detection), `git show` per file for the
- * before/after blobs.
- */
-async function collectWorktreeFileDiffs(
-  cwd: string,
-  from: string,
-  to: string,
-): Promise<z.infer<typeof Snapshot.FileDiff>[]> {
-  const result: z.infer<typeof Snapshot.FileDiff>[] = []
-  const status = new Map<string, "added" | "deleted" | "modified">()
-
-  const statuses = (
-    await $`git -c core.quotepath=false diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
-      .quiet()
-      .cwd(cwd)
-      .nothrow()
-      .text()
-  ).trim()
-  for (const line of statuses.split("\n")) {
-    if (!line) continue
-    const [code, file] = line.split("\t")
-    if (!code || !file) continue
-    const kind = code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified"
-    status.set(file, kind)
-  }
-
-  const numstat = (
-    await $`git -c core.quotepath=false diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
-      .quiet()
-      .cwd(cwd)
-      .nothrow()
-      .text()
-  ).trim()
-  for (const line of numstat.split("\n")) {
-    if (!line) continue
-    const [additions, deletions, file] = line.split("\t")
-    if (!file) continue
-    const isBinary = additions === "-" && deletions === "-"
-    const before = isBinary
-      ? ""
-      : (await $`git show ${from}:${file}`.quiet().cwd(cwd).nothrow().text())
-    const after = isBinary
-      ? ""
-      : (await $`git show ${to}:${file}`.quiet().cwd(cwd).nothrow().text())
-    const added = isBinary ? 0 : parseInt(additions)
-    const deleted = isBinary ? 0 : parseInt(deletions)
-    result.push({
-      file,
-      before,
-      after,
-      additions: Number.isFinite(added) ? added : 0,
-      deletions: Number.isFinite(deleted) ? deleted : 0,
-      status: status.get(file) ?? "modified",
-    })
-  }
-  return result
-}
 
