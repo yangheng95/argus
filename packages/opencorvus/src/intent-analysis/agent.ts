@@ -15,20 +15,33 @@
  *   ✓ May use read-only codebase tools (read/find/search/list) to ground
  *     complexity estimation in reality
  *   ✓ Only produces IntentAnalysisResult via structured tool calls
+ *
+ * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): runs via
+ * SessionPrompt.prompt + extraTools instead of AgentRuntime.run + a private
+ * finalize_intent tool. Terminal fields arrive through SessionLoop's
+ * StructuredOutput tool driven by `format: { type: "json_schema", schema }`;
+ * incremental slots / missing / clarifications are collected by agent-scoped
+ * tools injected via SessionPrompt.withExtraTools.
  */
-import { stepCountIs } from "ai"
-import type { TextHooks } from "@/llm/api"
+import z from "zod"
 import { createPlannerTools } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
-import { toolGuard } from "@/util/tool-guard"
-import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { EngineConfig } from "@/engine"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
+import { Instance } from "@/project/instance"
+import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
+import type { Message } from "@/session/message"
 import type { IntentAnalysisResult } from "./types"
-import { collectorToResult, createIntentOutputTools } from "./output-tools"
+import {
+  collectorToResult,
+  createIntentOutputTools,
+  IntentFinalSchema,
+  type IntentFinal,
+} from "./output-tools"
 
 import INTENT_CORE from "@/prompt/core/intent-analysis-core.txt"
 
@@ -46,14 +59,25 @@ export namespace IntentAnalysisAgent {
     title?: string
     /** Task ID used to resolve per-task model and cache key. */
     taskID?: string
-    /** Session ID — if supplied, stream output is persisted by caller-side hooks. */
-    sessionID?: string
+    /** Parent session — this agent creates its own child session under it.
+     *  When absent the child session is top-level. */
+    parentSessionID?: string
+    /** Explicit model override (provider/model). Skips `resolveAgentModel`
+     *  and `config.model` resolution. Used by smoke tests and by callers
+     *  that already resolved a model for a wider pipeline step. */
+    model?: { providerID: string; modelID: string }
     signal?: AbortSignal
-    stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
   }
 
-  export async function analyze(input: AnalyzeInput): Promise<IntentAnalysisResult> {
+  export interface AnalyzeOutput {
+    result: IntentAnalysisResult
+    /** The child session created for this invocation. Callers may inspect
+     *  its message stream for audit / UI rendering. */
+    sessionID: string
+  }
+
+  export async function analyze(input: AnalyzeInput): Promise<AnalyzeOutput> {
     return run(input)
   }
 }
@@ -62,22 +86,24 @@ export namespace IntentAnalysisAgent {
 // Internal
 // ---------------------------------------------------------------------------
 
-async function run(input: IntentAnalysisAgent.AnalyzeInput): Promise<IntentAnalysisResult> {
+async function run(input: IntentAnalysisAgent.AnalyzeInput): Promise<IntentAnalysisAgent.AnalyzeOutput> {
   if (input.signal?.aborted) throw new Error("intent-analysis agent aborted")
 
-  const orchCfg = await EngineConfig.get()
-  const { max_steps: MAX_STEPS } = orchCfg.intent_analysis
-
-  const model = await resolveAgentModel("intent-analysis", { taskID: input.taskID }).catch(
-    () => undefined,
-  )
+  let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
+  if (input.model) {
+    const { Provider } = await import("@/provider/provider")
+    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
+  } else {
+    model = await resolveAgentModel("intent-analysis", { taskID: input.taskID }).catch(
+      () => undefined,
+    )
+  }
   if (!model) throw new Error("no LLM model available for intent-analysis agent")
 
   if (input.signal?.aborted) throw new Error("intent-analysis agent aborted after model resolution")
 
   const plannerTools = await filterAgentTools(createPlannerTools(), "intent-analysis")
   const outputToolKit = createIntentOutputTools()
-  const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
 
   await input.onStatus?.("Intent-analysis agent: analyzing user request")
 
@@ -89,57 +115,57 @@ async function run(input: IntentAnalysisAgent.AnalyzeInput): Promise<IntentAnaly
     model: model.id,
   })
 
-  const passthroughHooks = {
-    onChunk: input.stream?.onChunk,
-    onError: input.stream?.onError,
-    flush: async () => {},
-    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
-  } as any
-
-  const runResult = await AgentRuntime.run({
-    agent: "intent-analysis",
-    model,
-    system: systemPrompt,
-    messages: [{ role: "user" as const, content: userPrompt }],
-    tools: guard.tools,
-    stopWhen: stepCountIs(MAX_STEPS),
-    cacheKey: input.taskID ? `task-${input.taskID}-intent-analysis` : undefined,
-    sessionID: input.sessionID ?? "",
-    taskID: input.taskID,
-    stage: "intent-analysis",
-    signal: input.signal,
-    hooks: passthroughHooks,
-    policies: {
-      failurePolicy: "collect",
-    },
+  const childSession = await Session.createNext({
+    kind: "intent-analysis",
+    parentID: input.parentSessionID,
+    title: input.title ? `Intent: ${input.title}` : "Intent analysis",
+    directory: Instance.directory,
   })
 
-  log.info("intent-analysis agent finished", {
-    steps: runResult.steps.length,
-    finishReason: runResult.finishReason,
-    toolCalls: runResult.toolCallCount,
+  const extraTools = { ...plannerTools, ...outputToolKit.tools }
+  const enableMap: Record<string, boolean> = Object.fromEntries(
+    Object.keys(extraTools).map((name) => [name, true]),
+  )
+
+  let finalMessage: Message.WithParts | undefined
+  await SessionPrompt.withExtraTools(childSession.id, extraTools, async () => {
+    finalMessage = await SessionPrompt.prompt({
+      sessionID: childSession.id,
+      model: { providerID: model.providerID, modelID: model.api.id },
+      agent: "intent-analysis",
+      system: systemPrompt,
+      tools: enableMap,
+      format: {
+        type: "json_schema",
+        schema: z.toJSONSchema(IntentFinalSchema) as Record<string, unknown>,
+        retryCount: 2,
+      },
+      parts: [{ type: "text", text: userPrompt }],
+    }) as Message.WithParts
   })
+
+  if (input.signal?.aborted) throw new Error("intent-analysis agent aborted during prompt")
+  if (!finalMessage) throw new Error("intent-analysis: SessionPrompt.prompt returned no message")
+
+  const structured = (finalMessage.info as Message.Assistant).structured as IntentFinal | undefined
 
   const collector = outputToolKit.getCollector()
-  if (!collector.finalized) {
-    throw new Error(
-      "Intent-analysis agent did not call finalize_intent. " +
-        "Check the model's tool-calling behavior or the intent-analysis prompt.",
-    )
-  }
+  const result = collectorToResult(collector, structured)
 
-  const result = collectorToResult(collector)
-
-  log.info("intent-analysis agent output", {
+  log.info("intent-analysis agent finished", {
     intent_class: result.intent_class,
     complexity: result.complexity,
     slots: result.extracted_slots.length,
     missing: result.missing_info.length,
     clarifications: result.clarifications.length,
     confidence: result.confidence,
+    structuredMissing: !structured,
   })
 
-  return result
+  return {
+    result,
+    sessionID: childSession.id,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -154,8 +180,9 @@ function buildUserPrompt(input: IntentAnalysisAgent.AnalyzeInput): string {
   sections.push(`# User Request\n\n${input.request}`)
   sections.push(
     "Analyze the request. Emit extract_slot / flag_missing_info / " +
-      "ask_clarification calls as warranted, then call finalize_intent " +
-      "exactly once to close the analysis.",
+      "ask_clarification calls as warranted, then call the StructuredOutput " +
+      "tool exactly once at the end with the terminal intent_class, " +
+      "complexity, confidence, and summary fields.",
   )
   return sections.join("\n\n")
 }

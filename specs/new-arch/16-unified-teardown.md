@@ -294,8 +294,17 @@ await SessionPrompt.prompt({
 - **阶段 3-b**：普通 stage agent 迁移：`intent-analysis → design-analyst → requirements → planner → deliver → orchestrator`。每个 agent 独立 PR：
   - `AgentRuntime.run(...)` → `SessionPrompt.prompt(child, { extraTools, format, system, parts })`
   - `finalize_*` 删除；结果从 `child` 会话最新 assistant message 的 `.info.structured` 取。
-  - 保持 incremental 工具（extract_slot 等）不变；它们通过 `extraTools` 注入。
+  - 保持 incremental 工具（extract_slot 等）不变；它们通过 `extraTools` 注入。返回值必须按 `{ output: string, title: string, metadata: object }` 形态——SessionLoop 持久化 Message.ToolPart 时强校验。
   - 测试：原本覆盖 agent 行为的测试全部通过；新增一条「finalize_* 调用不被识别」回归。
+  - 每个 agent 迁移必须附**真实 LLM smoke test**（仿 `test/intent-analysis/smoke.test.ts`）：`loadBenchmarkEnv` + `Server.listen({port:0})` + 调用 agent + 断言 `structured` 字段。gated by `OPENCORVUS_RUN_*_SMOKE=1` 避免 CI 阻塞。
+
+  **完成状态**：
+  - [x] `intent-analysis`（2026-04-24 commit 待定）：`SessionPrompt.withExtraTools + SessionPrompt.prompt({ format: json_schema, schema: IntentFinalSchema })`，smoke test 通过 `alibaba-coding-plan-cn/kimi-k2.5` 验证 intent_class=bug_fix / complexity=trivial / 4 slots / structuredMissing=false
+  - [ ] design-analyst
+  - [ ] requirements
+  - [ ] planner
+  - [ ] deliver
+  - [ ] orchestrator
 - orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / design_analysis / build / deliver` 只允许作为 tool-opened child session 存在。
 - **阶段 3-c**：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端。
 - **阶段 3-d**：**删除 `packages/opencorvus/src/agent/runtime/` 目录**。此步独立 PR，确认无残留引用。

@@ -48,6 +48,7 @@ export type SessionKind =
   | "root"
   | "orchestrator"
   | "assistant"
+  | "intent-analysis"
   | "requirements"
   | "design-analyst"
   | "planner"
