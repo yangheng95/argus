@@ -37,7 +37,7 @@ type ExecutorSessionStatusMeta = {
   live: boolean
 }
 
-export const GOAL_RUN_STATUS_CATALOG = {
+const GOAL_RUN_STATUS_CATALOG = {
   queued: { liveness: "live", satisfiesGoal: false, resettable: true },
   accepted: { liveness: "live", satisfiesGoal: false, resettable: true },
   planning: { liveness: "live", satisfiesGoal: false, resettable: true },
@@ -55,7 +55,7 @@ export const GOAL_RUN_STATUS_CATALOG = {
   aborted: { liveness: "retriable", satisfiesGoal: false, resettable: false },
 } as const satisfies Record<EngineGoalRunStatus, GoalRunStatusMeta>
 
-export const RUN_STATUS_CATALOG = {
+const RUN_STATUS_CATALOG = {
   queued: { live: true, dispatchable: false },
   accepted: { live: true, dispatchable: true },
   running: { live: true, dispatchable: true },
@@ -65,7 +65,7 @@ export const RUN_STATUS_CATALOG = {
   aborted: { live: false, dispatchable: false },
 } as const satisfies Record<EngineRunStatus, RunStatusMeta>
 
-export const EXECUTOR_SESSION_STATUS_CATALOG = {
+const EXECUTOR_SESSION_STATUS_CATALOG = {
   active: { live: true },
   completed: { live: false },
   failed: { live: false },
