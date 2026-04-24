@@ -66,6 +66,33 @@ export interface IntentAnalysisConfig {
   skills: string[]
 }
 
+/**
+ * ActivityConfig — chunk-driven inactivity thresholds.
+ *
+ * These drive `withStreamActivity` (util/stream-activity.ts) at every
+ * streaming boundary. They are TCP-level "no-byte-moved" deadlines,
+ * NOT agent-level turn budgets. Rule of thumb when tuning:
+ *
+ *   session_llm_idle_ms      < executor_events_idle_ms < goal_run_idle_ms
+ *
+ * so the LLM-stream gate trips first (producing a clean AbortError
+ * the session loop already knows how to unwind), the executor-event
+ * gate only trips when the LLM layer failed to do so, and the
+ * goal-run DB scanner is the last-resort cleanup path.
+ *
+ * `task_queue_run_timeout_ms` is the absolute wall-clock cap on a
+ * single queue task's total runtime — measured from claim() to
+ * either completion or the last *observed* chunk (chunk-driven
+ * heartbeat), NOT from an unconditional setInterval. See
+ * scheduler/task-queue-service.ts.
+ */
+export interface ActivityConfig {
+  session_llm_idle_ms: number
+  executor_events_idle_ms: number
+  goal_run_idle_ms: number
+  task_queue_run_timeout_ms: number
+}
+
 export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
@@ -73,6 +100,7 @@ export interface EngineConfigType {
   delivery: DeliveryConfig
   design_analyst: DesignAnalystConfig
   intent_analysis: IntentAnalysisConfig
+  activity: ActivityConfig
   max_runs: number
   max_fix_runs: number
   max_executor_groups: number
@@ -126,6 +154,24 @@ const DEFAULTS: EngineConfigType = {
     // exploration, that is the job of downstream agents, not this one.
     max_steps: 20,
     skills: [],
+  },
+  activity: {
+    // Reasoning models can stream reasoning deltas every few seconds;
+    // 3 min of zero chunks is already anomalous (observed cases: TCP
+    // hang to alibaba-coding-plan-cn, NAT-silenced connection).
+    session_llm_idle_ms: 180_000,
+    // Executor event queue aggregates LLM streams + tool updates. Gets
+    // one tier of slack on top of LLM to avoid races between the two
+    // gates firing at the same instant.
+    executor_events_idle_ms: 240_000,
+    // Last-resort DB-level scanner for goal_run rows whose stream died
+    // silently above both gates. Generous window to avoid false kills
+    // during legitimate multi-minute reasoning thinkblocks.
+    goal_run_idle_ms: 480_000,
+    // TaskQueueService recover() compares against this. The scheduler
+    // heartbeat is chunk-driven now, so this is a real deadline, not
+    // a self-fed timer.
+    task_queue_run_timeout_ms: 600_000,
   },
   max_runs: 15,            // was 10
   max_fix_runs: 20,
@@ -196,6 +242,16 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     intent_analysis: {
       max_steps: user?.intent_analysis?.max_steps ?? DEFAULTS.intent_analysis.max_steps,
       skills: user?.intent_analysis?.skills ?? DEFAULTS.intent_analysis.skills,
+    },
+    activity: {
+      session_llm_idle_ms:
+        user?.activity?.session_llm_idle_ms ?? DEFAULTS.activity.session_llm_idle_ms,
+      executor_events_idle_ms:
+        user?.activity?.executor_events_idle_ms ?? DEFAULTS.activity.executor_events_idle_ms,
+      goal_run_idle_ms:
+        user?.activity?.goal_run_idle_ms ?? DEFAULTS.activity.goal_run_idle_ms,
+      task_queue_run_timeout_ms:
+        user?.activity?.task_queue_run_timeout_ms ?? DEFAULTS.activity.task_queue_run_timeout_ms,
     },
     max_runs: user?.max_runs ?? DEFAULTS.max_runs,
     max_fix_runs: user?.max_fix_runs ?? DEFAULTS.max_fix_runs,
