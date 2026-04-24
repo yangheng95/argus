@@ -14,17 +14,17 @@
  * requirements → goals → plan → execute → eval → delivery verify → publish
  * All other agents (requirements, architect, plan, eval, delivery) are subordinate workers.
  */
-import { stepCountIs } from "ai"
 import { Provider } from "@/provider/provider"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
-import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
+import type { Message } from "@/session/message"
+import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { sessionStreamHooks } from "@/agent/runtime"
 import { createOrchestratorTools } from "./tools"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -44,7 +44,8 @@ import { describeTask, renderTaskDescription } from "@/engine/describe"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
 
 const log = Log.create({ service: "orchestrator" })
-const MAX_STEPS = 20
+// MAX_STEPS lives on agent.orchestrator.steps in src/agent/agent.ts. SessionLoop
+// reads that directly via Agent.get("orchestrator") — no local constant needed.
 
 // ---------------------------------------------------------------------------
 // Wake event — free-form hint about WHY the orchestrator is being woken.
@@ -102,8 +103,8 @@ export namespace Orchestrator {
     const ctrl = new AbortController()
     running.set(taskID, ctrl)
 
-    let contentHooks: ReturnType<typeof sessionStreamHooks> | undefined
     let stopSignal: AbortSignal | undefined
+    let agentSessionID: string | undefined
     try {
       const task = requireTask(taskID)
       if (!task.session_id) {
@@ -147,22 +148,18 @@ export namespace Orchestrator {
       })
       if (!model) return
 
-      // 2. Create child session + streaming hooks.
-      //    Each processTask invocation uses a fresh child session.
-      //    LLM context is reconstructed from DB state (goals, runs, deliveries,
-      //    decision log) via buildSystemParts on each invocation — the session
-      //    is only for UI/audit persistence, not for LLM context accumulation.
+      // 2. Create child session. Each processTask invocation uses a fresh
+      //    child session. LLM context is reconstructed from DB state (goals,
+      //    runs, deliveries, decision log) via buildSystemParts on each
+      //    invocation — the session is only for UI / audit persistence, not
+      //    for LLM context accumulation.
       const agentSession = await Session.createNext({
         kind: "orchestrator",
         parentID: task.session_id,
         title: `Agent: ${task.title}`,
         directory: Instance.directory,
       })
-      contentHooks = sessionStreamHooks({
-        sessionID: agentSession.id,
-        taskID,
-        stage: "orchestrator",
-      })
+      agentSessionID = agentSession.id
 
 
       // 3. Create tools (agentSessionID passed so tool sessions become children)
@@ -176,18 +173,9 @@ export namespace Orchestrator {
       })
       stopSignal = dispatchSignal
       const guard = toolGuard(tools)
-      const onStepFinish = async (_step: unknown) => {
-        try {
-        } finally {
-          const stopReason = finalizeDeferredStop()
-          if (stopReason) {
-            log.info("orchestrator deferred stop finalized", {
-              taskID,
-              reason: stopReason,
-            })
-          }
-        }
-      }
+      const enableMap: Record<string, boolean> = Object.fromEntries(
+        Object.keys(guard.tools).map((name) => [name, true]),
+      )
 
       // 4. Build prompt. First wake uses the task's original request as the
       //    user message (the user's actual intent). Subsequent wakes use the
@@ -223,9 +211,31 @@ export namespace Orchestrator {
           "\n\nDo NOT attempt to read these yourself — invoke the appropriate sub-agent (requirements / design_analysis / architect) which receives the attachments and can read them via its `read` tool."
         : ""
       const enrichedUserText = userText + referenceText
-      const userContent = attachmentParts.length
-        ? [{ type: "text" as const, text: enrichedUserText }, ...attachmentParts]
-        : enrichedUserText
+      // Build PromptInput.parts. Text first, then any multimodal attachments
+      // as FilePart (data URL) so Session.saveMessage can persist the part
+      // without re-resolving a local file path.
+      const parts: Array<
+        | { type: "text"; text: string }
+        | { type: "file"; url: string; mime: string; filename?: string }
+      > = [{ type: "text", text: enrichedUserText }]
+      for (const fp of attachmentParts) {
+        if ("image" in fp && fp.image) {
+          const data = typeof fp.image === "string" ? fp.image : undefined
+          if (data) parts.push({ type: "file", url: data, mime: "image/*" })
+          continue
+        }
+        if ("file" in fp && fp.file) {
+          const f = fp.file as { data?: string | Uint8Array; mediaType?: string; filename?: string }
+          if (typeof f.data === "string") {
+            parts.push({ type: "file", url: f.data, mime: f.mediaType ?? "application/octet-stream", filename: f.filename })
+          } else if (f.data instanceof Uint8Array) {
+            const base64 = Buffer.from(f.data).toString("base64")
+            const mime = f.mediaType ?? "application/octet-stream"
+            parts.push({ type: "file", url: `data:${mime};base64,${base64}`, mime, filename: f.filename })
+          }
+        }
+      }
+      const partsWithIds = parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 
       log.info("orchestrator starting", {
         taskID,
@@ -236,73 +246,84 @@ export namespace Orchestrator {
         toolCount: Object.keys(tools).length,
       })
 
-      // 5. Run through AgentRuntime — unified failure / persistence wiring.
-      const runResult = await AgentRuntime.run({
-        agent: "orchestrator",
-        model,
-        system,
-        messages: [{ role: "user" as const, content: userContent }],
-        tools: guard.tools as any,
-        stopWhen: stepCountIs(MAX_STEPS),
-        cacheKey: `task-${taskID}`,
-        sessionID: agentSession.id,
-        taskID,
-        stage: "orchestrator",
-        signal: AbortSignal.any([ctrl.signal, stopSignal]),
-        onStepFinish,
-        hooks: contentHooks,
-        policies: {
-          // Root agent: surface child failures as collected state; the task
-          // loop handles escalation, not the runtime.
-          failurePolicy: "collect",
-        },
+      // Abort hooks: both ctrl.signal (external interrupt) and stopSignal
+      // (deferred-stop from dispatch tools) translate to SessionPrompt.cancel
+      // on the child session so the loop releases its processor cleanly.
+      const abortPrompt = () => {
+        try {
+          SessionPrompt.cancel(agentSession.id)
+        } catch {
+          /* session may already be stopped */
+        }
+      }
+      ctrl.signal.addEventListener("abort", abortPrompt, { once: true })
+      const stopSignalListener = stopSignal
+        ? () => abortPrompt()
+        : undefined
+      if (stopSignal && stopSignalListener) {
+        stopSignal.addEventListener("abort", stopSignalListener, { once: true })
+      }
+
+      // Subscribe to session-level errors so critical stream failures still
+      // flip the task to failed. SessionLoop publishes Session.Event.Error on
+      // provider / processor faults; collecting them here reproduces the
+      // AgentRuntime.failures snapshot at a coarser granularity.
+      const streamErrors: Array<{ reason: string; errorName?: string }> = []
+      const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
+        const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
+        if (props.sessionID !== agentSession.id) return
+        const msg = props.error?.message ?? "unknown session error"
+        streamErrors.push({ reason: msg, errorName: props.error?.name })
       })
-      const resultText = runResult.text
-      const resultSteps = runResult.steps
-      const resultFinishReason = runResult.finishReason
-      const toolCallCount = runResult.toolCallCount
+
+      // 5. Run the orchestrator session — tools via withExtraTools, deferred
+      //    stop via withStepHook. Step limit lives on agent.orchestrator.steps.
+      let finalMessage: Message.WithParts | undefined
+      try {
+        await SessionPrompt.withExtraTools(agentSession.id, guard.tools as any, async () => {
+          await SessionPrompt.withStepHook(agentSession.id, () => {
+            const stopReason = finalizeDeferredStop()
+            if (stopReason) {
+              log.info("orchestrator deferred stop finalized", { taskID, reason: stopReason })
+            }
+          }, async () => {
+            finalMessage = (await SessionPrompt.prompt({
+              sessionID: agentSession.id,
+              model: { providerID: model.providerID, modelID: model.api.id },
+              agent: "orchestrator",
+              system: Array.isArray(system) ? system.join("\n\n") : system,
+              tools: enableMap,
+              parts: partsWithIds,
+            })) as Message.WithParts
+          })
+        })
+      } finally {
+        errorUnsub()
+        ctrl.signal.removeEventListener("abort", abortPrompt)
+        if (stopSignal && stopSignalListener) stopSignal.removeEventListener("abort", stopSignalListener)
+      }
+
+      const assistantInfo = finalMessage?.info as Message.Assistant | undefined
       log.info("orchestrator finished", {
         taskID,
         note: event?.note,
-        steps: resultSteps.length,
-        toolCalls: toolCallCount,
-        finishReason: resultFinishReason,
-        textLength: resultText?.length ?? 0,
-        streamFailures: runResult.failures.count,
+        sessionID: agentSession.id,
+        finishReason: assistantInfo?.finish,
+        streamErrors: streamErrors.length,
       })
 
-      // Critical stream failures (mid-stream protocol violations, persist
-      // failures, provider onError) mean the
-      // agent's view of the run is incoherent and we must fail the task.
-      // Excluded from critical:
-      //   - `flush`: cleanup-path persistence hiccup after the LLM already
-      //     returned; doesn't retroactively invalidate a successful run.
-      //   - `tool-input-validation`: AI-SDK rejected a tool call's input
-      //     against its Zod inputSchema; the SDK has already fed the error
-      //     back to the model as the tool result, so the model self-corrects
-      //     on the next step. Bounded by stopWhen=stepCountIs — unrecoverable
-      //     models still loud-fail via step-cap, not silently. Failing hard
-      //     here would short-circuit the "Orchestrator is the sole decision-
-      //     maker, independent reasoning" design (01-agents.md).
-      const critical = runResult.failures.items.filter(
-        (item) => item.kind !== "flush" && item.kind !== "tool-input-validation",
-      )
-      const flushOnly = runResult.failures.items.filter((item) => item.kind === "flush")
-      if (flushOnly.length > 0) {
-        log.warn("orchestrator: post-stream flush hiccup (non-fatal)", {
-          taskID,
-          flushFailures: flushOnly.length,
-          firstFlushKind: flushOnly[0]?.chunkType,
-          firstFlushReason: flushOnly[0]?.reason,
-        })
-      }
-      if (critical.length > 0) {
-        const first = critical[0]
-        const reason = first ? `${first.kind}: ${first.reason}` : "unknown stream failure"
+      // Critical stream failures (mid-stream protocol violations, provider
+      // onError) mean the agent's view of the run is incoherent and we must
+      // fail the task. The Session.Event.Error subscription above is the
+      // post-migration replacement for AgentRuntime's failures snapshot —
+      // SessionLoop publishes its own errors through that bus event.
+      if (streamErrors.length > 0) {
+        const first = streamErrors[0]
+        const reason = `${first?.errorName ?? "stream-error"}: ${first?.reason ?? "unknown"}`
         log.warn("orchestrator surfaced stream failures", {
           taskID,
-          criticalCount: critical.length,
-          firstFailureKind: first?.kind,
+          criticalCount: streamErrors.length,
+          firstFailureName: first?.errorName,
         })
         const current = requireTask(taskID)
         if (current.status !== "completed" && current.status !== "failed" && current.status !== "cancelled") {
@@ -314,8 +335,8 @@ export namespace Orchestrator {
       }
 
     } catch (error) {
-      // Finalize any tool parts stuck in running/pending before returning
-      await contentHooks?.flush().catch(() => undefined)
+      // SessionLoop persists its own assistant parts; no explicit flush
+      // equivalent for the post-phase-3 AgentRuntime hooks path.
       if (ctrl.signal.aborted) {
         log.info("orchestrator was aborted", { taskID })
         return

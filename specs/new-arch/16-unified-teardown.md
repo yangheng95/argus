@@ -310,15 +310,15 @@ await SessionPrompt.prompt({
     2. `createDeliveryOutputTools({requiredTools})` 工厂参数的 requiredTools 需要分流：schema 层（zod .superRefine）能检查 tool_call_evidence 内容，但 requiredTools 依赖 skill 注入的动态列表——需要在 agent.ts 把 requiredTools 穿透到 schema 工厂（`createDeliveryVerdictSchema(requiredTools): zod`）。
     3. delivery 并非 incremental 收集 + terminal close 模型，它的所有状态都在 submit_verdict 单次 payload 里 → StructuredOutput 正是天然匹配；但 ~11 条 .refine 规则（accept branch）+ 3 条（reject branch）需要仔细移植，每条返回具体指导 LLM 如何修正的 message。
     4. `finalizeVerdict(llmVerdict, metric, goalIds)` 外层硬门（数值视觉 gate）不变 —— 它在 agent 返回后运行，与迁移正交。
-  - [ ] **orchestrator**（pending — 规模最大）：`orchestrator/agent.ts` 782 行，阶段 2 已把 trigger enum 迁除，但 `Orchestrator.processTask` 仍走 `AgentRuntime.run` + `createOrchestratorTools` 注入若干 tool（含 dispatch_goal / submit_execution / retry_goal / restart_from_stage / deliver / ...）。迁移路径：child session 已有，把 AgentRuntime.run 换成 SessionPrompt.prompt + withExtraTools(orchestrator tools)，orchestrator 本身**不需要 json_schema / StructuredOutput**（它的"终态"是通过工具调用发出的，没有结构化返回）。
-
-  **迁移难点（必须先解决才能动手）**：
-    1. `finalizeDeferredStop + stopSignal + onStepFinish`：tools.ts 注入的 `dispatchSignal` 用于让 LLM 调用 dispatch_goal / submit_execution 后立即停止（避免继续生成无用输出）。AgentRuntime 通过 `onStepFinish` 钩子 + `AbortSignal.any([ctrl.signal, stopSignal])` 实现；SessionPrompt 没有等价钩子。两种备选方案：(a) 给 `SessionLoop.loop` 加 `onStepFinish` 回调（需要入参扩展 + 类型）；(b) 让工具在 execute 内直接调用 `SessionPrompt.cancel(sessionID)`（更 local，但需要工具能拿到 sessionID — 当前已通过 context 传入）。
-    2. `MAX_STEPS = 20`：AgentRuntime 通过 `stopWhen: stepCountIs(MAX_STEPS)` 硬限；SessionLoop 读 `agent.steps` from Agent registry。迁移前需在 `src/agent/agent.ts` 的 orchestrator config 加 `steps: 20`。
-    3. `runResult.failures.items` 的 critical filter（line 287-314）：当前把非 flush / tool-input-validation 失败视为任务级 failure。SessionLoop 不暴露这种 flat list；需要订阅 `Session.Event.Error` Bus 事件做等价收集。
-    4. `contentHooks.flush()` catch block：SessionPrompt 内部已持久化，无需显式 flush；可以删。
-
-  当前保留 AgentRuntime 的合法理由：orchestrator 一旦出问题影响全栈，任何未验证的改动都不可接受。deliver + architect + fidelity 也有类似考虑。建议按 simpler → harder 顺序：deliver（.refine 纯 schema 改造） → orchestrator（需 SessionLoop 基建补全）→ 3-c。
+  - [x] **orchestrator**（2026-04-24 commit 待定）：agent.ts 的 `AgentRuntime.run` 替换为 `SessionPrompt.withExtraTools(guard.tools) + SessionPrompt.withStepHook(finalizeDeferredStop) + SessionPrompt.prompt({ system, parts, tools: enableMap })`。所有先前描述的 4 个阻塞都已实装：
+    - ① `finalizeDeferredStop`：由新增的 `SessionLoop.withStepHook` 驱动（commit `a103f6488`, 3-a-4）
+    - ② `MAX_STEPS=20`：`agent.orchestrator.steps = 20` 写进 `src/agent/agent.ts`
+    - ③ critical failures：订阅 `Session.Event.Error` + 过滤匹配 sessionID，等价于旧 `runResult.failures.items`
+    - ④ `contentHooks.flush()`：SessionLoop 持久化自带，整段删除
+    - 新增 abort 通路：ctrl.signal + stopSignal → `SessionPrompt.cancel(agentSession.id)` 双向 wire
+    - 多模态 userContent → `PromptInput.parts[]`（FilePart data URL）
+    - orchestrator 不需 json_schema：终态通过工具调用发出
+    - typecheck 通过；216 session+engine 测试通过（5 failures 预存）
 - orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / design_analysis / build / deliver` 只允许作为 tool-opened child session 存在。
 - **阶段 3-c**：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端。
 - **阶段 3-d**：**删除 `packages/opencorvus/src/agent/runtime/` 目录**。此步独立 PR，确认无残留引用。
