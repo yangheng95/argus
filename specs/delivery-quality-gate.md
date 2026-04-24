@@ -254,16 +254,25 @@ Phase 3（依赖 Phase 2）
 | P2 → P0-B | replay 需要 score 字段 |
 | P2 → P0-C.1/.4 | replay 需要 round 表（commit_sha + rollback_from_round） |
 
-### 并行前先对齐的契约（stub 先行）
+### 并行前先对齐的契约（stub 先行） · ✅ 已完成（2026-04-24）
 
 **Phase 1 开跑前 1-2 小时**，由一个人合入 4 个 stub（仅 type / JSON schema / 空函数），之后各 stream 平行推进：
 
-| 契约 | 定义位置 | 消费者 |
-|---|---|---|
-| `VisualMetric` TS 类型 | `src/delivery/visual-metric.ts` | P0-B、P0-C.4、P2 |
-| `CaptureManifest` JSON schema | `src/design-analyst/capture-gate.ts` | P1-B、P1-A（复用 puppeteer helper） |
-| `delivery_round` 表 schema | `src/storage/schema.sql.ts` | P0-C.1/.4 写、P2 读 |
-| Multimodal `ToolResult` 约定 | `src/delivery/tools.ts` 的工具签名 | P0-0 全部子项 |
+| 契约 | 定义位置 | 消费者 | 状态 |
+|---|---|---|---|
+| `VisualMetric` TS 类型 | `src/delivery/visual-metric.ts` | P0-B、P0-C.4、P2 | ✅ stub merged |
+| `CaptureManifest` JSON schema | `src/design-analyst/capture-gate.ts` | P1-B、P1-A（复用 puppeteer helper） | ✅ stub merged |
+| `delivery_round` 表 schema | `src/delivery/delivery.sql.ts`（经 `src/storage/schema.ts` 统一 re-export，遵循现有 domain-local sql 约定） | P0-C.1/.4 写、P2 读 | ✅ stub merged |
+| Multimodal `ToolResult` 约定 | `src/delivery/tool-result.ts`（新建 sibling，避免 Stream A 提前改 `tools.ts` 与 C 冲突） | P0-0 全部子项 | ✅ stub merged |
+
+stub 交付物（Stream A–G 可直接 import，未实现部分以 `throw NotImplemented` 暴露路径，禁 fallback）：
+
+- `VisualMetricResult` / `VisualThresholds` / `computeVisualMetric` / `loadVisualThresholds` 类型 + 常量 `VISUAL_THRESHOLDS_RELATIVE`
+- `CaptureManifest` zod + `enforceCaptureGate` + `CAPTURE_GATE_THRESHOLDS`
+- `EngineDeliveryRoundTable` drizzle 定义（`commit_sha notNull`、`(delivery_id, round_index)` unique），已在 `storage/schema.ts` 中 re-export
+- `DeliveryMultimodalToolOutput` + `buildMultimodalToolResult`（对齐 `session/message.ts::toModelOutput` 既有 attachment 约定，与 `design-analyst/url-screenshot-tool.ts` 的成熟形状一致）
+
+验证：`bun run tsc --noEmit` 通过；未触碰 `src/delivery/tools.ts`、`src/delivery/agent.ts`、`src/delivery/verdict.ts`、`src/orchestrator/tools.ts`，保证 Stream A–G 开工时零 merge 冲突。
 
 ### 并行陷阱（必须约束，否则 merge conflict）
 
