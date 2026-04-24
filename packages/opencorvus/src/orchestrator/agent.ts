@@ -15,7 +15,6 @@
  * All other agents (requirements, architect, plan, eval, delivery) are subordinate workers.
  */
 import { Provider } from "@/provider/provider"
-import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { resolveAgentModel } from "@/agent/model"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"

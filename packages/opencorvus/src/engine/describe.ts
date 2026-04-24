@@ -40,7 +40,6 @@ import {
   findActiveRunForTask,
   findActiveSpecForTask,
   findLatestDeliveryVerdictArtifact,
-  findRun,
   findRuns,
   findTask,
   listGoalRunsByGoal,
