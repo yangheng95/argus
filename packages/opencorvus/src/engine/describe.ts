@@ -23,7 +23,7 @@
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
-import { isRunOrphan } from "./recovery"
+import { isRunOrphan } from "./orphan"
 import { deriveTaskStatus } from "./task-status"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
@@ -302,9 +302,9 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const activeRunForTask = findActiveRunForTask(task.id)
   if (activeRunForTask) {
     activeRunStatus = activeRunForTask.status
-    // Fact-only orphan probe. Does not write the run's status — the abort
-    // brake in engine/recovery.ts#cleanupOrphanExecutionArtifacts still
-    // handles the physical teardown during process startup.
+    // Fact-only orphan probe from engine/orphan.ts. Phase-7 removed the
+    // abort-brake-on-startup path; the LLM reads `run_orphan` and
+    // decides whether to retry / restart_from_stage / drop.
     runOrphan = isRunOrphan(task.project_id, activeRunForTask.id)
   }
 

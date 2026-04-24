@@ -1,5 +1,7 @@
 # 状态机全砍（facts-only + LLM 决策）重构计划
 
+> **DEPRECATED — 2026-04-25**：本文档是 16-unified-teardown.md 的前身；阶段 7 完成后归档。请以 `specs/new-arch/16-unified-teardown.md` 为准，该文档在此规划基础上纳入了 GoalPool / AgentRuntime / 读模型切换 / schema 清零 / recovery.ts 删除的完整落地。
+
 - 日期：2026-04-24
 - 分支起点：`rc-2026-04-13 @ 1c07ee2d1`（wip: checkpoint before state-machine teardown）
 - 触发事件：task `tsk_dbe77dfce001Lh8rA66fISdbGF` 卡死。引擎重启后 `recoverOrphanRuns` 把 run 标 `aborted`，但 task 仍 `active`，goal#4 永远不会被调度。

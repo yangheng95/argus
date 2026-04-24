@@ -464,17 +464,18 @@ await SessionPrompt.prompt({
   - 不存在引用旧表名的遗留 SQL 或类型
   - `opencorvus db reset --force` 真实清空并重建 schema，后续 task 创建正常工作
 
-### 阶段 7（recovery.ts 整文件删除 + 收尾）
+### 阶段 7（recovery.ts 整文件删除 + 收尾）— ✅ 2026-04-25
 
-- 依赖阶段 4/5/6：没有旧 gate、没有旧表，orphan run 才真正只剩会话尾迹语义
-- OS 级清理（worktree 孤儿、僵尸子进程）已在阶段 1 建立并独立于 recovery.ts；阶段 6 仅确认其调用点不再经由 `recovery.ts`
-- 删 `recoverProjectExecution` 调用点
-- **删除本次重构启动的 5 分钟 cron**（规则 0，禁止留无意义 cron）
-- **归档 `specs/new-arch/15-no-fsm.md`**：移动到 `specs/archive/15-no-fsm.md` 或在文件头部加 `> DEPRECATED — 以 16-unified-teardown.md 为准`，并 grep 全仓确认无其他规划文档仍引用 15
+- [x] 删 `src/engine/engine/recovery.ts`（272 行）。纯 fact helpers（`observeOrphanRuns` / `isRunOrphan`）提到新 `src/engine/orphan.ts`（~45 行，无 abort brake）；`describe.ts` import 切到 orphan.ts；engine/index.ts 的 barrel 不再 re-export recovery，改 re-export `orphan` + `task-status`
+- [x] 删 `task-api/index.ts` 里的 `recoverProjectExecution` 启动调用点（phase-7 无主动 startup recovery；post-phase-5 build 模型在单个 orchestrator wake 内同步，无跨进程残留物需要清理；orphan run 下次唤醒由 LLM 通过 `run_orphan` 自行决策）
+- [x] 删 `test/engine/recovery.test.ts`（测试的 cleanup/abort brake 路径已删除）
+- [x] 删除本次 session 启动的 5 分钟 [CRON] 提醒（CronDelete cf02e9fa）
+- [x] `specs/new-arch/15-no-fsm.md` 头部加 `> DEPRECATED — 2026-04-25` banner；`rg 15-no-fsm specs/` 只在本文件 + 16 的元引用中命中
+- [x] typecheck 绿
 - **交付**：
-  - `packages/opencorvus/src/engine/recovery.ts` 不存在
-  - `crontab -l` / session cron 列表中不存在本次以 `[CRON]` 开头的提醒
-  - `rg "15-no-fsm" specs/` 只在归档位置命中
+  - `packages/opencorvus/src/engine/recovery.ts` 不存在 ✓
+  - session cron 列表不再包含 `[CRON]` 开头的提醒 ✓
+  - `specs/new-arch/15-no-fsm.md` 明示废止 ✓
 
 ---
 
