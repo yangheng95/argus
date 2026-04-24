@@ -23,7 +23,6 @@ import { Event } from "./model"
 import {
   EngineArtifactTable,
   EngineDeliveryTable,
-  EngineEvaluationTable,
   EngineExecutorSessionTable,
   EngineGoalTable,
   EngineGoalRunTable,
@@ -33,6 +32,7 @@ import {
   type EngineDeliveryStatus,
   type EngineArtifactKind,
 } from "./engine.sql"
+import { persistEvidence } from "@/verification/persist"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
 import { findGoal, findGoalRun, findLatestTipGoalRun, findPlan, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
@@ -879,10 +879,10 @@ export function persistGoalDelivery(input: {
 
 // Task-level delivery: produced by orchestrator's `deliver` tool after all
 // goal_runs complete. Writes the aggregated delivery row (goal_run_id=NULL) +
-// one `scope='delivery'` evaluation row pending. The evaluation is the
-// 1:1 counterpart the delivery-agent settles via
-// updateEvaluationFromDeliveryVerdict() — the invariant referenced elsewhere
-// in this file lives here and nowhere else.
+// one pending scope='delivery' evidence artifact. The delivery-agent settles
+// it later by appending a new evidence artifact (append-only — queries take
+// the latest via time_created desc). Post-phase-6 evidence lives in
+// engine_artifact (kind="verification-evidence"); see verification/persist.ts.
 export function persistTaskDelivery(input: {
   task: TaskRow
   run: RunRow
@@ -890,55 +890,43 @@ export function persistTaskDelivery(input: {
   delivery: DeliveryInput
   now: number
 }) {
-  const evaluationID = Identifier.ascending("evaluation")
   Database.transaction((db) => {
     writeDeliveryRow(db, input)
-    db.insert(EngineEvaluationTable)
-      .values({
-        id: evaluationID,
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: null,
-        delivery_id: input.deliveryID,
-        // Invariant: scope='delivery' ⇒ delivery_id NOT NULL and
-        // goal_run_id IS NULL — only task-level deliveries create evals.
-        // Trivially held: persistTaskDelivery is the only writer of
-        // scope='delivery' rows and it passes goal_run_id=null above.
-        scope: "delivery",
-        status: "pending",
-        verdict: "inconclusive",
-        summary: input.delivery.summary,
-        checks: [],
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
     Database.effect(() =>
       EngineProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
     )
   })
+  persistEvidence({
+    taskID: input.task.id,
+    runID: input.run.id,
+    deliveryID: input.deliveryID,
+    scope: "delivery",
+    status: "pending",
+    verdict: "inconclusive",
+    summary: input.delivery.summary,
+    checks: [],
+    now: input.now,
+  })
 }
 
 /**
- * Update the pending evaluation row attached to a task-level delivery.
- * Requires the row created by persistTaskDelivery() to exist — throws loudly
- * when it does not, because the 1:1 task-delivery↔evaluation invariant is
- * the whole reason the evaluation-never-created stall is fixable. A missing
- * row means either (a) the caller passed a per-goal delivery id (per-goal
- * deliveries have no eval by design), or (b) something inserted a
- * task-level delivery without going through persistTaskDelivery(). Both are
- * bugs that must be surfaced, not silently patched.
+ * Settle the pending scope='delivery' evidence for a task-level delivery by
+ * appending a new evidence artifact row. Artifact rows are append-only so
+ * this function inserts a fresh row rather than mutating the pending one —
+ * `findLatestDeliveryEvidence(taskID)` naturally surfaces the newest row via
+ * `time_created desc`. Throws when the pending row never existed, because
+ * that implies `persistTaskDelivery()` was bypassed (or the caller passed a
+ * per-goal delivery id — per-goal deliveries carry no evidence by design).
+ *
+ * The `checks` parameter semantics match the pre-artifact behaviour: when
+ * supplied, replaces the previous check set wholesale; when OMITTED, the
+ * prior check set is preserved (used by `publish_delivery` which runs after
+ * `deliver` has already written the structured checks). Pass [] to clear.
  */
 export function updateEvaluationFromDeliveryVerdict(input: {
   deliveryID: string
   verdict: "accepted" | "rejected" | "inconclusive"
   summary: string
-  /** Structured checks for the evaluation row. When supplied replaces the
-   *  existing array wholesale; when OMITTED the existing checks are
-   *  preserved (used by `publish_delivery` which runs after `deliver` has
-   *  already written the structured check set). Pass [] to explicitly
-   *  clear. No `issues` parameter exists — callers must either build their
-   *  own structured EngineEvaluationCheck[] or omit `checks` to preserve. */
   checks?: import("./engine.sql").EngineEvaluationCheck[]
   now?: number
 }) {
@@ -952,35 +940,40 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   const existing = Database.use((db) =>
     db
       .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.delivery_id, input.deliveryID))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.delivery_id, input.deliveryID),
+          eq(EngineArtifactTable.kind, "verification-evidence"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
   if (!existing) {
     throw new Error(
-      `updateEvaluationFromDeliveryVerdict: no evaluation row found for delivery ${input.deliveryID}. ` +
+      `updateEvaluationFromDeliveryVerdict: no evidence row found for delivery ${input.deliveryID}. ` +
       `Either persistTaskDelivery() was bypassed, or the caller passed a per-goal delivery id ` +
-      `(per-goal deliveries have no evaluation row — only task-level deliveries are 1:1 with an evaluation).`,
+      `(per-goal deliveries have no evidence row — only task-level deliveries are 1:1 with evidence).`,
     )
   }
-  const existingChecks: import("./engine.sql").EngineEvaluationCheck[] = Array.isArray(existing.checks)
-    ? (existing.checks as import("./engine.sql").EngineEvaluationCheck[])
-    : []
+  const existingPayload = (existing.payload ?? {}) as {
+    checks?: import("./engine.sql").EngineEvaluationCheck[]
+  }
+  const existingChecks = Array.isArray(existingPayload.checks) ? existingPayload.checks : []
   const checks = input.checks ?? existingChecks
-  Database.use((db) =>
-    db
-      .update(EngineEvaluationTable)
-      .set({
-        status,
-        verdict: input.verdict,
-        summary: input.summary,
-        checks,
-        time_completed: now,
-        time_updated: now,
-      })
-      .where(eq(EngineEvaluationTable.id, existing.id))
-      .run(),
-  )
+  persistEvidence({
+    taskID: existing.task_id,
+    runID: existing.run_id,
+    deliveryID: input.deliveryID,
+    scope: "delivery",
+    status,
+    verdict: input.verdict,
+    summary: input.summary,
+    checks,
+    timeCompleted: now,
+    now,
+  })
 }
 
 export function persistFailedRunEvaluation(input: {
@@ -990,31 +983,14 @@ export function persistFailedRunEvaluation(input: {
   error: string
   now: number
 }) {
+  // Post-phase-6: run-level failures no longer write a standalone evaluation row.
+  // `run.error` already carries the failure text (set by updateRun in runtime.ts),
+  // and the on-disk snapshot below preserves the structured view for operator
+  // drill-down. The pre-phase-6 evaluation insert was invariant-violating
+  // anyway (wrote scope='delivery' with delivery_id=null) — we don't resurrect
+  // that shape in artifact land. Goal-run-scoped failures remain handled at the
+  // goal-run site (dispatch_goal/retry_goal persist evidence before failing).
   const evaluationID = Identifier.ascending("evaluation")
-  Database.use((db) =>
-    db
-      .insert(EngineEvaluationTable)
-      .values({
-        id: evaluationID,
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        status: "failed",
-        verdict: "rejected",
-        summary: input.error,
-        checks: [
-          {
-            name: "executor_completion",
-            status: "failed",
-            evidence: input.error,
-          },
-        ],
-        time_completed: input.now,
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run(),
-  )
   writeEvaluationSnapshot({
     task: input.task,
     run: input.run,

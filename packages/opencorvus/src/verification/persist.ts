@@ -1,26 +1,26 @@
 /**
- * Verification evidence persistence — reads & writes on `engine_evaluation`.
+ * Verification evidence persistence — artifact-backed (phase 6-b).
  *
- * Post-DAM Phase 5: this table carries the delivery-agent verdict summary
- * only. Signature-based convergence detection has been removed —
- * convergence now lives in the metric trajectory (src/metrics/arbiter.ts).
- * The `engine_evaluation` row is just a verdict wrapper.
+ * Pre-phase-6: wrote to `engine_evaluation`.
+ * Post-phase-6: writes a single `engine_artifact` row per evidence with
+ *   kind="verification-evidence", label="evidence-<scope>". The payload
+ *   carries the full VerificationEvidence shape so reads reconstruct
+ *   the same structure without a JOIN-heavy schema.
  *
- * Post-unified-teardown Phase 5-f / Phase 6: `engine_evaluation` is slated
- * for deletion. Evidence persistence moves to the artifact stream
- * (`engine_artifact` with label="verification-evidence"), which is the
- * single source of truth this refactor elected. This module stays as the
- * read / write API while the table exists; phase 6 reset-DB swaps the
- * backing store to artifacts and the public signatures
- * (`persistEvidence` / `queryEvidence` / `findLatestGoalRunEvidence` / …)
- * stay stable so callers (`delivery/tools.ts`) do not churn. No runtime
- * change lands in 5-f — this comment is the cutover marker.
+ * Public API (`persistEvidence / queryEvidence / findLatestGoalRunEvidence /
+ * findGoalRunEvidence / findLatestDeliveryEvidence / findPreviousDeliveryEvidence`)
+ * signatures stay stable through the migration — the single consumer
+ * (`delivery/tools.ts`) does not need to churn.
+ *
+ * Post-DAM Phase 5 note: signature-based convergence detection lives in
+ * `src/metrics/arbiter.ts`; this module is only the delivery-agent
+ * verdict wrapper.
  */
 import { and, desc, eq } from "drizzle-orm"
 import { Database } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import {
-  EngineEvaluationTable,
+  EngineArtifactTable,
   EngineGoalRunTable,
   type EngineEvaluationCheck,
   type EngineEvaluationScope,
@@ -28,7 +28,13 @@ import {
   type EngineEvaluationVerdict,
 } from "@/engine/engine.sql"
 
-/** A "verification evidence" — the domain name for an `engine_evaluation` row. */
+/** Artifact-table kind + label pair that marks a row as verification evidence. */
+const ARTIFACT_KIND = "verification-evidence" as const
+function labelForScope(scope: EngineEvaluationScope): string {
+  return `evidence-${scope}`
+}
+
+/** A "verification evidence" — the domain name for a verification-evidence artifact row. */
 export interface VerificationEvidence {
   id: string
   taskID: string
@@ -45,33 +51,40 @@ export interface VerificationEvidence {
   timeUpdated: number
 }
 
-function rowToEvidence(row: {
-  id: string
-  task_id: string
-  run_id: string
-  goal_run_id: string | null
-  delivery_id: string | null
+/** Serialisation shape persisted in `engine_artifact.payload`. */
+type EvidencePayload = {
   scope: EngineEvaluationScope
   status: EngineEvaluationStatus
   verdict: EngineEvaluationVerdict
   summary: string
-  checks: EngineEvaluationCheck[] | null
+  checks: EngineEvaluationCheck[]
   time_completed: number | null
+} & Record<string, unknown>
+
+function rowToEvidence(row: {
+  id: string
+  task_id: string
+  run_id: string | null
+  goal_run_id: string | null
+  delivery_id: string | null
+  payload: unknown
   time_created: number
   time_updated: number
-}): VerificationEvidence {
+}): VerificationEvidence | undefined {
+  const payload = row.payload as EvidencePayload | null
+  if (!payload || typeof payload !== "object") return undefined
   return {
     id: row.id,
     taskID: row.task_id,
-    runID: row.run_id,
+    runID: row.run_id ?? "",
     goalRunID: row.goal_run_id ?? undefined,
     deliveryID: row.delivery_id ?? undefined,
-    scope: row.scope,
-    status: row.status,
-    verdict: row.verdict,
-    summary: row.summary,
-    checks: Array.isArray(row.checks) ? row.checks : [],
-    timeCompleted: row.time_completed ?? undefined,
+    scope: payload.scope,
+    status: payload.status,
+    verdict: payload.verdict,
+    summary: payload.summary,
+    checks: Array.isArray(payload.checks) ? payload.checks : [],
+    timeCompleted: payload.time_completed ?? undefined,
     timeCreated: row.time_created,
     timeUpdated: row.time_updated,
   }
@@ -93,9 +106,10 @@ export interface PersistEvidenceInput {
   now?: number
 }
 
-/** Insert one new evidence row. Returns the persisted `VerificationEvidence`.
- *  Does NOT update goal_run / delivery status — callers own those state
- *  transitions; this function only owns the evaluation row. */
+/** Insert one new evidence row as an engine_artifact. Returns the persisted
+ *  `VerificationEvidence`. Does NOT update goal_run / delivery status —
+ *  callers own those state transitions; this function only owns the
+ *  artifact row. */
 export function persistEvidence(input: PersistEvidenceInput): VerificationEvidence {
   if (input.scope === "goal_run" && !input.goalRunID) {
     throw new Error("persistEvidence: scope='goal_run' requires goalRunID")
@@ -104,61 +118,84 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
     throw new Error("persistEvidence: scope='delivery' requires deliveryID")
   }
   const now = input.now ?? Date.now()
-  const id = Identifier.ascending("evaluation")
-  const row = {
-    id,
-    task_id: input.taskID,
-    run_id: input.runID,
-    goal_run_id: input.goalRunID ?? null,
-    delivery_id: input.deliveryID ?? null,
+  const id = Identifier.ascending("artifact")
+  const payload: EvidencePayload = {
     scope: input.scope,
     status: input.status,
     verdict: input.verdict,
     summary: input.summary,
     checks: input.checks ?? [],
     time_completed: input.timeCompleted ?? null,
-    time_created: now,
-    time_updated: now,
   }
-  Database.use((db) => db.insert(EngineEvaluationTable).values(row).run())
-  return rowToEvidence(row as any)
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        run_id: input.runID,
+        goal_run_id: input.goalRunID ?? null,
+        delivery_id: input.deliveryID ?? null,
+        kind: ARTIFACT_KIND,
+        label: labelForScope(input.scope),
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  return {
+    id,
+    taskID: input.taskID,
+    runID: input.runID,
+    goalRunID: input.goalRunID,
+    deliveryID: input.deliveryID,
+    scope: input.scope,
+    status: input.status,
+    verdict: input.verdict,
+    summary: input.summary,
+    checks: input.checks ?? [],
+    timeCompleted: input.timeCompleted,
+    timeCreated: now,
+    timeUpdated: now,
+  }
 }
 
 /** Latest evidence for a given goal (across all goal_runs for that goal).
  *  Returns undefined when the goal has never been evaluated. Shared by the
- *  retry-prompt builder and delivery's short-circuit check. */
+ *  retry-prompt builder and delivery's short-circuit check.
+ *
+ *  Joins against `engine_goal_run` to resolve goal → goal_run; the JOIN
+ *  dependency goes away in phase 6-d when that table is removed in favour
+ *  of session + artifact projection. */
 export function findLatestGoalRunEvidence(goalID: string): VerificationEvidence | undefined {
   const row = Database.use((db) =>
     db
       .select({
-        id: EngineEvaluationTable.id,
-        task_id: EngineEvaluationTable.task_id,
-        run_id: EngineEvaluationTable.run_id,
-        goal_run_id: EngineEvaluationTable.goal_run_id,
-        delivery_id: EngineEvaluationTable.delivery_id,
-        scope: EngineEvaluationTable.scope,
-        status: EngineEvaluationTable.status,
-        verdict: EngineEvaluationTable.verdict,
-        summary: EngineEvaluationTable.summary,
-        checks: EngineEvaluationTable.checks,
-        time_completed: EngineEvaluationTable.time_completed,
-        time_created: EngineEvaluationTable.time_created,
-        time_updated: EngineEvaluationTable.time_updated,
+        id: EngineArtifactTable.id,
+        task_id: EngineArtifactTable.task_id,
+        run_id: EngineArtifactTable.run_id,
+        goal_run_id: EngineArtifactTable.goal_run_id,
+        delivery_id: EngineArtifactTable.delivery_id,
+        payload: EngineArtifactTable.payload,
+        time_created: EngineArtifactTable.time_created,
+        time_updated: EngineArtifactTable.time_updated,
       })
-      .from(EngineEvaluationTable)
-      .innerJoin(EngineGoalRunTable, eq(EngineEvaluationTable.goal_run_id, EngineGoalRunTable.id))
+      .from(EngineArtifactTable)
+      .innerJoin(EngineGoalRunTable, eq(EngineArtifactTable.goal_run_id, EngineGoalRunTable.id))
       .where(
         and(
           eq(EngineGoalRunTable.goal_id, goalID),
-          eq(EngineEvaluationTable.scope, "goal_run"),
+          eq(EngineArtifactTable.kind, ARTIFACT_KIND),
+          eq(EngineArtifactTable.label, labelForScope("goal_run")),
         ),
       )
-      .orderBy(desc(EngineEvaluationTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .limit(1)
       .get(),
   )
   if (!row) return undefined
-  return rowToEvidence(row as any)
+  return rowToEvidence(row)
 }
 
 /** Latest evidence for a specific goal_run. Useful during delivery when the
@@ -167,19 +204,20 @@ export function findGoalRunEvidence(goalRunID: string): VerificationEvidence | u
   const row = Database.use((db) =>
     db
       .select()
-      .from(EngineEvaluationTable)
+      .from(EngineArtifactTable)
       .where(
         and(
-          eq(EngineEvaluationTable.goal_run_id, goalRunID),
-          eq(EngineEvaluationTable.scope, "goal_run"),
+          eq(EngineArtifactTable.goal_run_id, goalRunID),
+          eq(EngineArtifactTable.kind, ARTIFACT_KIND),
+          eq(EngineArtifactTable.label, labelForScope("goal_run")),
         ),
       )
-      .orderBy(desc(EngineEvaluationTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .limit(1)
       .get(),
   )
   if (!row) return undefined
-  return rowToEvidence(row as any)
+  return rowToEvidence(row)
 }
 
 /** Latest delivery-scope evidence for a task. */
@@ -187,19 +225,20 @@ export function findLatestDeliveryEvidence(taskID: string): VerificationEvidence
   const row = Database.use((db) =>
     db
       .select()
-      .from(EngineEvaluationTable)
+      .from(EngineArtifactTable)
       .where(
         and(
-          eq(EngineEvaluationTable.task_id, taskID),
-          eq(EngineEvaluationTable.scope, "delivery"),
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, ARTIFACT_KIND),
+          eq(EngineArtifactTable.label, labelForScope("delivery")),
         ),
       )
-      .orderBy(desc(EngineEvaluationTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .limit(1)
       .get(),
   )
   if (!row) return undefined
-  return rowToEvidence(row as any)
+  return rowToEvidence(row)
 }
 
 /** Second-most-recent delivery-scope evidence for a task. */
@@ -207,22 +246,22 @@ export function findPreviousDeliveryEvidence(
   taskID: string,
   excludeEvidenceID: string,
 ): VerificationEvidence | undefined {
-  const row = Database.use((db) =>
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineEvaluationTable)
+      .from(EngineArtifactTable)
       .where(
         and(
-          eq(EngineEvaluationTable.task_id, taskID),
-          eq(EngineEvaluationTable.scope, "delivery"),
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, ARTIFACT_KIND),
+          eq(EngineArtifactTable.label, labelForScope("delivery")),
         ),
       )
-      .orderBy(desc(EngineEvaluationTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .limit(2)
       .all(),
   )
-  const prior = row.find((r) => r.id !== excludeEvidenceID)
+  const prior = rows.find((r) => r.id !== excludeEvidenceID)
   if (!prior) return undefined
-  return rowToEvidence(prior as any)
+  return rowToEvidence(prior)
 }
-

@@ -108,6 +108,7 @@ export type EngineArtifactKind =
   | "verdict"
   | "evaluation"
   | "pr"
+  | "verification-evidence"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
@@ -622,34 +623,11 @@ export const EngineArtifactTable = sqliteTable(
   ],
 )
 
-export const EngineEvaluationTable = sqliteTable(
-  "engine_evaluation",
-  {
-    id: text().primaryKey(),
-    task_id: text()
-      .notNull()
-      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    run_id: text()
-      .notNull()
-      .references(() => EngineRunTable.id, { onDelete: "cascade" }),
-    goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
-    delivery_id: text().references(() => EngineDeliveryTable.id, { onDelete: "set null" }),
-    /** Scope marker. App-layer invariant:
-     *    scope="goal_run" ⇒ goal_run_id NOT NULL
-     *    scope="delivery" ⇒ delivery_id NOT NULL */
-    scope: text().$type<EngineEvaluationScope>().notNull().default("delivery"),
-    status: text().notNull().$type<EngineEvaluationStatus>().default("pending"),
-    verdict: text().notNull().$type<EngineEvaluationVerdict>().default("inconclusive"),
-    summary: text().notNull(),
-    checks: text({ mode: "json" }).$type<EngineEvaluationCheck[]>(),
-    time_completed: integer(),
-    ...Timestamps,
-  },
-  (table) => [
-    index("engine_evaluation_run_idx").on(table.run_id),
-    index("engine_evaluation_scope_task_idx").on(table.task_id, table.scope),
-  ],
-)
+// Phase-6-b: `engine_evaluation` was removed in favour of `engine_artifact` rows
+// with kind="verification-evidence". See verification/persist.ts for the writer
+// and engine/store.ts for the EvaluationRow shape that preserves the historical
+// read-model. EngineEvaluationScope/Status/Verdict types above are still used
+// inside the artifact payload.
 
 export const EngineProgressSnapshotTable = sqliteTable(
   "engine_progress_snapshot",

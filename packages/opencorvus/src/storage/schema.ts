@@ -25,7 +25,6 @@ export {
   EngineInteractionRequestTable,
   EngineArtifactTable,
   EngineDeliveryTable,
-  EngineEvaluationTable,
   EngineProgressSnapshotTable,
   EngineExecutorSessionTable,
   EngineChannelBindingTable,

@@ -8,8 +8,8 @@ import {
   sql,
 } from "../../src/storage/db"
 import {
+  EngineArtifactTable,
   EngineDeliveryTable,
-  EngineEvaluationTable,
   EngineGoalRunTable,
 } from "../../src/engine/engine.sql"
 
@@ -26,25 +26,32 @@ import {
  * is off".
  */
 describe("engine state invariants", () => {
-  test("every delivery has exactly one evaluation row (1:1)", () => {
-    // delivery.id is unique, so each delivery should appear exactly once in
-    // evaluation rows. persistDelivery creates them in the same transaction —
-    // a missing row means a writer bypassed persistDelivery.
+  test("every delivery has at least one evidence artifact row", () => {
+    // Post-phase-6-b: evidence lives in engine_artifact (kind='verification-evidence').
+    // Evidence is append-only so the 1:1 invariant was relaxed to "at least one" —
+    // persistTaskDelivery writes a pending row and updateEvaluationFromDeliveryVerdict
+    // appends a settled row. findLatestDeliveryEvidence surfaces the newest.
+    // A delivery with zero evidence rows means persistTaskDelivery was bypassed.
     const deliveries = Database.use((db) =>
       db.select({ id: EngineDeliveryTable.id }).from(EngineDeliveryTable).all(),
     )
-    if (deliveries.length === 0) return // no data to check
-    const violations: Array<{ deliveryID: string; evaluationCount: number }> = []
+    if (deliveries.length === 0) return
+    const violations: Array<{ deliveryID: string; evidenceCount: number }> = []
     for (const d of deliveries) {
       const rows = Database.use((db) =>
         db
-          .select({ id: EngineEvaluationTable.id })
-          .from(EngineEvaluationTable)
-          .where(eq(EngineEvaluationTable.delivery_id, d.id))
+          .select({ id: EngineArtifactTable.id })
+          .from(EngineArtifactTable)
+          .where(
+            and(
+              eq(EngineArtifactTable.delivery_id, d.id),
+              eq(EngineArtifactTable.kind, "verification-evidence"),
+            ),
+          )
           .all(),
       )
-      if (rows.length !== 1) {
-        violations.push({ deliveryID: d.id, evaluationCount: rows.length })
+      if (rows.length < 1) {
+        violations.push({ deliveryID: d.id, evidenceCount: rows.length })
       }
     }
     expect(violations).toEqual([])

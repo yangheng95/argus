@@ -691,30 +691,10 @@ CREATE TABLE IF NOT EXISTS engine_artifact (
 CREATE INDEX IF NOT EXISTS engine_artifact_run_idx      ON engine_artifact (run_id);
 CREATE INDEX IF NOT EXISTS engine_artifact_delivery_idx ON engine_artifact (delivery_id);
 
-CREATE TABLE IF NOT EXISTS engine_evaluation (
-  id             text PRIMARY KEY,
-  task_id        text NOT NULL,
-  run_id         text NOT NULL,
-  goal_run_id    text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
-  delivery_id    text,
-  -- Scope marker. App-layer invariant: scope='goal_run' ⇒ goal_run_id NOT NULL;
-  -- scope='delivery' ⇒ delivery_id NOT NULL.
-  scope          text NOT NULL DEFAULT 'delivery',
-  status         text NOT NULL DEFAULT 'pending',
-  verdict        text NOT NULL DEFAULT 'inconclusive',
-  summary        text NOT NULL,
-  checks         text,
-  lease_until    integer,
-  time_started   integer,
-  time_completed integer,
-  time_created   integer NOT NULL,
-  time_updated   integer NOT NULL,
-  FOREIGN KEY (task_id)     REFERENCES engine_task(id)     ON DELETE CASCADE,
-  FOREIGN KEY (run_id)      REFERENCES engine_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (delivery_id) REFERENCES engine_delivery(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS engine_evaluation_run_idx       ON engine_evaluation (run_id);
-CREATE INDEX IF NOT EXISTS engine_evaluation_scope_task_idx ON engine_evaluation (task_id, scope);
+-- Phase-6-b: engine_evaluation was removed in favour of engine_artifact rows
+-- with kind='verification-evidence'. See verification/persist.ts for the writer
+-- and engine/store.ts (EvaluationRow) for the read-model that reconstructs the
+-- historical shape from the artifact payload.
 
 CREATE TABLE IF NOT EXISTS engine_progress_snapshot (
   id           text PRIMARY KEY,

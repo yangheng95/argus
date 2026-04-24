@@ -10,7 +10,6 @@ import {
   EngineArtifactTable,
   EngineDeliveryTable,
   EngineExecutorSessionTable,
-  EngineEvaluationTable,
   EngineGoalTable,
   EngineGoalRunTable,
   EngineGoalSnapshotTable,
@@ -27,6 +26,9 @@ import {
   type EngineBudget,
   type EngineExecutorRef,
   type EngineEvaluationCheck,
+  type EngineEvaluationScope,
+  type EngineEvaluationStatus,
+  type EngineEvaluationVerdict,
 } from "./engine.sql"
 import { ACTIVE_GOAL_RUN_STATUSES, DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
 
@@ -38,7 +40,25 @@ export type RunRow = typeof EngineRunTable.$inferSelect
 export type InteractionRow = typeof EngineInteractionRequestTable.$inferSelect
 export type DeliveryRow = typeof EngineDeliveryTable.$inferSelect
 export type ArtifactRow = typeof EngineArtifactTable.$inferSelect
-export type EvaluationRow = typeof EngineEvaluationTable.$inferSelect
+/** Phase-6 artifact-backed evaluation shape. Was `typeof EngineEvaluationTable.$inferSelect`
+ *  until `engine_evaluation` was deleted in favour of `engine_artifact` rows with
+ *  kind="verification-evidence". Field names stay snake_case so old consumers do
+ *  not churn. Reconstructed via `artifactRowToEvaluationRow()` below. */
+export type EvaluationRow = {
+  id: string
+  task_id: string
+  run_id: string
+  goal_run_id: string | null
+  delivery_id: string | null
+  scope: EngineEvaluationScope
+  status: EngineEvaluationStatus
+  verdict: EngineEvaluationVerdict
+  summary: string
+  checks: EngineEvaluationCheck[] | null
+  time_completed: number | null
+  time_created: number
+  time_updated: number
+}
 export type ProgressRow = typeof EngineProgressSnapshotTable.$inferSelect
 export type ExecutorSessionRow = typeof EngineExecutorSessionTable.$inferSelect
 export type RequirementRow = typeof EngineRequirementTable.$inferSelect
@@ -257,17 +277,24 @@ export function findDeliveryByGoalRun(goalRunID: string) {
   )
 }
 
-/** Latest evaluation row for a goal_run (newest first, single row). */
-export function findLatestEvaluationForGoalRun(goalRunID: string) {
-  return Database.use((db) =>
+/** Latest evaluation row for a goal_run (newest first, single row).
+ *  Reads `engine_artifact` rows with kind="verification-evidence" + scope="goal_run". */
+export function findLatestEvaluationForGoalRun(goalRunID: string): EvaluationRow | undefined {
+  const row = Database.use((db) =>
     db
       .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.goal_run_id, goalRunID))
-      .orderBy(desc(EngineEvaluationTable.time_created))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.goal_run_id, goalRunID),
+          eq(EngineArtifactTable.kind, "verification-evidence"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .limit(1)
       .get(),
   )
+  return row ? artifactRowToEvaluationRow(row) : undefined
 }
 
 export function listGoalRunsForTask(taskID: string) {
@@ -310,15 +337,21 @@ export function findLatestTipGoalRun(goalID: string) {
   return rows.find((r) => !supersededIDs.has(r.id))
 }
 
-export function findEvaluationByRun(runID: string) {
-  return Database.use((db) =>
+export function findEvaluationByRun(runID: string): EvaluationRow | undefined {
+  const row = Database.use((db) =>
     db
       .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.run_id, runID))
-      .orderBy(desc(EngineEvaluationTable.time_created))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.run_id, runID),
+          eq(EngineArtifactTable.kind, "verification-evidence"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .get(),
   )
+  return row ? artifactRowToEvaluationRow(row) : undefined
 }
 
 export function findExecutorSessionByRun(runID: string) {
@@ -843,49 +876,38 @@ export function findArtifacts(runID: string) {
   )
 }
 
-export function findEvaluations(runID: string) {
-  return Database.use((db) =>
+export function findEvaluations(runID: string): EvaluationRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.run_id, runID))
-      .orderBy(desc(EngineEvaluationTable.time_created))
-      .all(),
-  )
-}
-
-export function findEvaluationsByTask(taskID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.task_id, taskID))
-      .orderBy(desc(EngineEvaluationTable.time_created))
-      .all(),
-  )
-}
-
-/** Returns the most recent rejected evaluation for a given goal (across all goal runs). */
-export function findLatestFailedEvalForGoal(goalID: string) {
-  return Database.use((db) =>
-    db
-      .select({
-        verdict: EngineEvaluationTable.verdict,
-        summary: EngineEvaluationTable.summary,
-        checks: EngineEvaluationTable.checks,
-      })
-      .from(EngineEvaluationTable)
-      .innerJoin(EngineGoalRunTable, eq(EngineEvaluationTable.goal_run_id, EngineGoalRunTable.id))
+      .from(EngineArtifactTable)
       .where(
         and(
-          eq(EngineGoalRunTable.goal_id, goalID),
-          eq(EngineEvaluationTable.verdict, "rejected"),
+          eq(EngineArtifactTable.run_id, runID),
+          eq(EngineArtifactTable.kind, "verification-evidence"),
         ),
       )
-      .orderBy(desc(EngineEvaluationTable.time_created))
-      .limit(1)
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
+  return rows.map(artifactRowToEvaluationRow)
+}
+
+export function findEvaluationsByTask(taskID: string): EvaluationRow[] {
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "verification-evidence"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .all(),
+  )
+  return rows.map(artifactRowToEvaluationRow)
 }
 
 export function listSnapshots(taskID: string) {
@@ -1188,4 +1210,35 @@ function arrayOfChecks(input: unknown): EngineEvaluationCheck[] {
     const parsed = EvaluationCheck.safeParse(item)
     return parsed.success ? [parsed.data] : []
   })
+}
+
+/** Reconstruct an `EvaluationRow` (historical `engine_evaluation` shape) from an
+ *  `engine_artifact` row whose `kind === "verification-evidence"`. The payload
+ *  written by `verification/persist.ts` carries scope/status/verdict/summary/checks
+ *  plus time_completed; everything else (task_id, run_id, goal_run_id, delivery_id,
+ *  timestamps) comes from the artifact columns. */
+function artifactRowToEvaluationRow(row: typeof EngineArtifactTable.$inferSelect): EvaluationRow {
+  const payload = (row.payload ?? {}) as {
+    scope?: EngineEvaluationScope
+    status?: EngineEvaluationStatus
+    verdict?: EngineEvaluationVerdict
+    summary?: string
+    checks?: EngineEvaluationCheck[]
+    time_completed?: number | null
+  }
+  return {
+    id: row.id,
+    task_id: row.task_id,
+    run_id: row.run_id,
+    goal_run_id: row.goal_run_id ?? null,
+    delivery_id: row.delivery_id ?? null,
+    scope: payload.scope ?? "delivery",
+    status: payload.status ?? "pending",
+    verdict: payload.verdict ?? "inconclusive",
+    summary: payload.summary ?? "",
+    checks: Array.isArray(payload.checks) ? payload.checks : null,
+    time_completed: payload.time_completed ?? null,
+    time_created: row.time_created,
+    time_updated: row.time_updated,
+  }
 }
