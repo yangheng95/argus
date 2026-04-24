@@ -45,7 +45,6 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             id: taskID,
             project_id: Instance.project.id,
             active_spec_version_id: specID,
-            active_plan_version_id: null,
             active_run_id: null,
             source: "api",
             title: "Export coverage",

@@ -35,6 +35,7 @@ import {
   updateEvaluationFromDeliveryVerdict,
 } from "@/engine/persist"
 import {
+  findActivePlanForTask,
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
@@ -183,7 +184,7 @@ export function createOrchestratorTools(input: {
     if (input.workflow?.id !== "pipeline") return
 
     const task = requireTask(taskID)
-    if (task.active_plan_version_id || task.active_run_id) return
+    if (findActivePlanForTask(task.id) || task.active_run_id) return
     if (listGoals(taskID).length > 0) return
 
     const direct = WorkflowRegistry.resolveSync("direct")
@@ -372,7 +373,6 @@ export function createOrchestratorTools(input: {
     await updateTask(
       requireTask(taskID),
       {
-        active_plan_version_id: planID,
         active_run_id: runID,
         status: "active",
       },
@@ -1621,7 +1621,8 @@ export function createOrchestratorTools(input: {
       }),
       execute: async ({ stage, reason }) => {
         const task = requireTask(taskID)
-        const plan = restartStagePlan(stage, Boolean(task.active_plan_version_id))
+        const activePlanAtStart = findActivePlanForTask(task.id)
+        const plan = restartStagePlan(stage, Boolean(activePlanAtStart))
         const now = Date.now()
         const runError = `restart_from_stage(${stage}): ${reason}`
         const {
@@ -1672,10 +1673,10 @@ export function createOrchestratorTools(input: {
             }
           }
 
-          if (plan.clearPlan && task.active_plan_version_id) {
+          if (plan.clearPlan && activePlanAtStart) {
             db.update(EnginePlanVersionTable)
               .set({ status: "superseded", time_updated: now })
-              .where(eq(EnginePlanVersionTable.id, task.active_plan_version_id))
+              .where(eq(EnginePlanVersionTable.id, activePlanAtStart.id))
               .run()
           }
 
@@ -1687,11 +1688,11 @@ export function createOrchestratorTools(input: {
           }
         })
 
-        if (plan.queueFreshRun && task.active_plan_version_id) {
+        if (plan.queueFreshRun && activePlanAtStart) {
           const executor = task.executor
           freshRun = createRun({
             taskID,
-            planVersionID: task.active_plan_version_id,
+            planVersionID: activePlanAtStart.id,
             sessionID: task.session_id ?? null,
             executor,
             status: "queued",
@@ -1713,7 +1714,6 @@ export function createOrchestratorTools(input: {
             error: null,
             blocking_reason: null,
             active_spec_version_id: plan.clearSpec ? null : currentTask.active_spec_version_id,
-            active_plan_version_id: plan.clearPlan ? null : currentTask.active_plan_version_id,
             active_run_id: freshRun?.id ?? null,
           },
           `restart_from_stage(${stage})`,

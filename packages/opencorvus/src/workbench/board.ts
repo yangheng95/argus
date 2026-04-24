@@ -2,6 +2,7 @@ import z from "zod"
 import { createDecisionLog } from "@/decision-log"
 import { goalStatusByID } from "@/engine/describe"
 import {
+  findActivePlanForTask,
   findLatestTipGoalRun,
   findDeliveriesForTask,
   findEvaluationsByTask,
@@ -64,12 +65,10 @@ export function boardTag(input: { taskID: string }) {
 
 function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
   const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-  const plan = task.active_plan_version_id
-    ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, task.active_plan_version_id!)).get())
-    : undefined
+  const plan = findActivePlanForTask(task.id)
   // Query goals by plan if available, otherwise fall back to task_id so that
   // goals created during decomposition are visible before create_run sets
-  // active_plan_version_id.
+  // the plan status to active.
   const goals = plan
     ? Database.use((db) =>
         db
@@ -207,7 +206,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
         projectID: task.project_id,
         directory: Instance.directory,
         sessionID: task.session_id ?? undefined,
-        activePlanVersionID: task.active_plan_version_id ?? undefined,
+        activePlanVersionID: plan?.id ?? undefined,
         activeRunID: task.active_run_id ?? undefined,
         requestID: task.request_id ?? undefined,
         source: task.source,
@@ -345,9 +344,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
 
 function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
   const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-  const plan = task.active_plan_version_id
-    ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, task.active_plan_version_id!)).get())
-    : undefined
+  const plan = findActivePlanForTask(task.id)
   const goals = Database.use((db) =>
     db
       .select({
@@ -714,7 +711,7 @@ function boardOverview(input: {
     nextStep,
     controls: {
       canRetry: canResume,
-      canReplan: canResume && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
+      canReplan: canResume && Boolean(findActivePlanForTask(input.task.id) ?? input.run?.plan_version_id),
       canCancel: Boolean(input.run) && ["queued", "active"].includes(input.task.status),
     },
   }

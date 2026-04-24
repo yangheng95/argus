@@ -94,9 +94,7 @@ function executorSessionStatusesWhere(
 
 export const LIVE_GOAL_RUN_STATUSES = goalRunStatusesWhere((meta) => meta.liveness === "live")
 export const ACTIVE_GOAL_RUN_STATUSES = LIVE_GOAL_RUN_STATUSES.filter((status) => status !== "queued") as EngineGoalRunStatus[]
-export const RETRIABLE_GOAL_RUN_STATUSES = goalRunStatusesWhere((meta) => meta.liveness === "retriable")
 export const GOAL_RUN_RESETTABLE_STATUSES = goalRunStatusesWhere((meta) => meta.resettable)
-export const GOAL_RUN_SUCCESS_STATUSES = goalRunStatusesWhere((meta) => meta.satisfiesGoal)
 
 export const LIVE_RUN_STATUSES = runStatusesWhere((meta) => meta.live)
 export const DISPATCHABLE_RUN_STATUSES = runStatusesWhere((meta) => meta.dispatchable)
@@ -108,16 +106,8 @@ export function isLiveGoalRunStatus(status?: EngineGoalRunStatus | null): status
   return !!status && GOAL_RUN_STATUS_CATALOG[status].liveness === "live"
 }
 
-export function isRetriableGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
-  return !!status && GOAL_RUN_STATUS_CATALOG[status].liveness === "retriable"
-}
-
 export function doesGoalRunSatisfyGoal(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
   return !!status && GOAL_RUN_STATUS_CATALOG[status].satisfiesGoal
-}
-
-export function isResettableGoalRunStatus(status?: EngineGoalRunStatus | null): status is EngineGoalRunStatus {
-  return !!status && GOAL_RUN_STATUS_CATALOG[status].resettable
 }
 
 export function isLiveRunStatus(status?: EngineRunStatus | null): status is EngineRunStatus {
@@ -126,10 +116,4 @@ export function isLiveRunStatus(status?: EngineRunStatus | null): status is Engi
 
 export function isDispatchableRunStatus(status?: EngineRunStatus | null): status is EngineRunStatus {
   return !!status && RUN_STATUS_CATALOG[status].dispatchable
-}
-
-export function isLiveExecutorSessionStatus(
-  status?: EngineExecutorSessionStatus | null,
-): status is EngineExecutorSessionStatus {
-  return !!status && EXECUTOR_SESSION_STATUS_CATALOG[status].live
 }

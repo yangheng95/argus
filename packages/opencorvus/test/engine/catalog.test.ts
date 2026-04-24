@@ -3,27 +3,21 @@ import {
   DISPATCHABLE_RUN_STATUSES,
   EXECUTOR_ACTIVE_RUN_STATUSES,
   GOAL_RUN_RESETTABLE_STATUSES,
-  GOAL_RUN_SUCCESS_STATUSES,
   LIVE_EXECUTOR_SESSION_STATUSES,
   LIVE_GOAL_RUN_STATUSES,
   LIVE_RUN_STATUSES,
   RUNTIME_MONITORED_RUN_STATUSES,
   doesGoalRunSatisfyGoal,
   isDispatchableRunStatus,
-  isLiveExecutorSessionStatus,
   isLiveGoalRunStatus,
   isLiveRunStatus,
-  isResettableGoalRunStatus,
-  isRetriableGoalRunStatus,
 } from "../../src/engine/catalog"
 
 describe("engine status catalog", () => {
   test("goal-run liveness catalog is internally consistent", () => {
     // `live` means in-flight only. `completed` is a distinct `terminal`
-    // class because the dispatch gate (agent.ts) must release on
-    // completion — merging completed into `live` deadlocked the
-    // orchestrator when a successful goal finished. Dispatch-dedup call
-    // sites (readyGoalNodes, blockedGoalDiagnostics) explicitly combine
+    // class — merging completed into `live` deadlocked the orchestrator
+    // when a successful goal finished. Dispatch-dedup call sites combine
     // `live ∪ satisfies` instead of relying on an over-inclusive `live`.
     expect(LIVE_GOAL_RUN_STATUSES).toEqual([
       "queued",
@@ -33,7 +27,6 @@ describe("engine status catalog", () => {
       "evaluating",
       "blocked",
     ])
-    expect(GOAL_RUN_SUCCESS_STATUSES).toEqual(["completed"])
     // `completed` is intentionally NOT resettable: the success record +
     // verification evidence are preserved across contract changes; retry
     // proceeds by creating a new goal_run and supersede-annotating the old.
@@ -49,9 +42,6 @@ describe("engine status catalog", () => {
     expect(isLiveGoalRunStatus("planning")).toBe(true)
     expect(isLiveGoalRunStatus("completed")).toBe(false)
     expect(isLiveGoalRunStatus("failed")).toBe(false)
-    expect(isRetriableGoalRunStatus("aborted")).toBe(true)
-    expect(isRetriableGoalRunStatus("completed")).toBe(false)
-    expect(isResettableGoalRunStatus("completed")).toBe(false)
     expect(doesGoalRunSatisfyGoal("completed")).toBe(true)
     expect(doesGoalRunSatisfyGoal("running")).toBe(false)
   })
@@ -69,8 +59,8 @@ describe("engine status catalog", () => {
   })
 
   test("executor-session liveness has a single live state", () => {
+    // Phase-6-f-prep: isLiveExecutorSessionStatus was unused externally and
+    // removed. LIVE_EXECUTOR_SESSION_STATUSES is still exported for direct use.
     expect(LIVE_EXECUTOR_SESSION_STATUSES).toEqual(["active"])
-    expect(isLiveExecutorSessionStatus("active")).toBe(true)
-    expect(isLiveExecutorSessionStatus("aborted")).toBe(false)
   })
 })

@@ -587,9 +587,10 @@ export namespace EngineRuntime {
     }
     const { createRun } = await import("./writer")
     const { updateTask } = await import("./state")
+    const { findActivePlanForTask } = await import("./store")
     const created = createRun({
       taskID: task.id,
-      planVersionID: task.active_plan_version_id,
+      planVersionID: findActivePlanForTask(task.id)?.id ?? null,
       sessionID: run.session_id ?? null,
       executor: run.executor,
       status: "queued",

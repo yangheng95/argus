@@ -72,6 +72,7 @@ import {
   findDeliveryByRun,
   findLatestDeliveryForRun,
   findExecutorSessionByRun,
+  findActivePlanForTask,
   findEvaluationByRun,
   findEvaluations,
   findInteractionByExternal,
@@ -292,7 +293,7 @@ function taskSummary(rows: Array<{ time_started: number | null; time_completed: 
 function taskItems(rows: TaskListRow[]) {
   return rows.map((item) => {
     const task = item.task
-    const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+    const plan = findActivePlanForTask(task.id)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending").length
@@ -650,7 +651,7 @@ export namespace EngineService {
     // which blocks for minutes and causes request timeouts. The poll loop drives state advancement.
     const task = requireTask(taskID)
     const item = listTaskRows([task])[0]
-    const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+    const plan = findActivePlanForTask(task.id)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     const delivery = run ? findDeliveryByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
@@ -690,7 +691,7 @@ export namespace EngineService {
     return compileBrief({
       taskID: task.id,
       runID: input.runID ?? task.active_run_id ?? undefined,
-      planVersionID: task.active_plan_version_id ?? undefined,
+      planVersionID: findActivePlanForTask(task.id)?.id,
       sessionID: task.session_id ?? undefined,
     })
   }

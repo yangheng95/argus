@@ -5,9 +5,9 @@ import { Session } from "@/session"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import {
+  findActivePlanForTask,
   findDeliveryByRun,
   findEvaluationByRun,
-  findPlan,
   findRuns,
   listGoalsByPlan,
   listInteractions,
@@ -66,7 +66,7 @@ export const ExportRoutes = lazy(() =>
       async (c) => {
         const taskID = c.req.valid("param").taskID
         const task = requireTask(taskID)
-        const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+        const plan = findActivePlanForTask(task.id)
         const goals = plan ? listGoalsByPlan(plan.id) : []
         const milestones = listMilestones(taskID)
         const runs = findRuns(taskID)
