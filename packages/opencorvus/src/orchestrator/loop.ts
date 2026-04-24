@@ -96,6 +96,17 @@ function combineSignals(signals: Array<AbortSignal | undefined>): AbortSignal | 
 export function interruptTaskLoop(taskID: string, reason = "task loop interrupted") {
   taskLoopAbort.get(taskID)?.abort(reason)
   Orchestrator.abort(taskID)
+  // Detach the chain tail. If the aborted inner loop is hung on a non
+  // signal-aware await (observed in benchmarks: LLM streams that acknowledge
+  // abort by setting a flag but never reject the outer Promise), a subsequent
+  // runTaskLoop() would chain `prev.then()` onto that zombie Promise and wait
+  // forever for the operator_message / delivery_rejected trigger to fire.
+  // Dropping the Map entry here means the NEXT runTaskLoop() starts from
+  // Promise.resolve() instead — the old loop's cleanup still runs when its
+  // Promise eventually resolves, it just no longer gates later triggers.
+  // processTask's own `abort(taskID)` preamble serialises any brief overlap
+  // between the old tail and the new head.
+  taskLoopChain.delete(taskID)
 }
 
 export type TaskLoopTrigger = OrchestratorTrigger
