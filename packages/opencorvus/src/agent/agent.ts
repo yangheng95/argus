@@ -326,9 +326,10 @@ export namespace Agent {
         name: "design-analyst",
         description: "Design analyst agent. Analyzes visual references (images, URLs) to produce structured design specifications.",
         prompt: DESIGN_ANALYST_CORE,
-        // design-analyst also uses a dedicated webfetch tool in its factory; shared planner
-        // tools listed here, webfetch + output tools bypass the filter.
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        // design-analyst uses dedicated url_screenshot + read_attachment/output
+        // tools in its factory; shared planner tools listed here are the only
+        // ones filtered by include/exclude.
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot"] },
         options: {},
         mode: "primary",
         native: true,

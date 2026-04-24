@@ -12,8 +12,8 @@
  * ✗ Cannot modify files or execute code
  * ✗ Cannot call other agents
  * ✓ Reads codebase to discover existing design patterns/component libraries
- * ✓ Works from multimodal attachments (screenshots, PDF) and the shared
- *   mirror cache at `mirror/extracted-page.json`; does NOT fetch URLs directly.
+ * ✓ Works from multimodal attachments (screenshots, PDF) and can capture a
+ *   live webpage PNG via `url_screenshot` when the brief includes a visual URL.
  * ✓ Emits specs via register_*_spec tools + finalize_design_requirements
  */
 import { stepCountIs } from "ai"
@@ -29,10 +29,10 @@ import { EngineConfig } from "@/engine"
 import { loadStageSkills } from "@/engine/skill-inject"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
-import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import type { VisualSpec } from "./types"
 import { createDesignOutputTools } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
+import { createUrlScreenshotTool } from "./url-screenshot-tool"
 
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
 
@@ -49,11 +49,11 @@ export namespace DesignAnalystAgent {
     title: string
     request: string
     /**
-     * The complete visual input. Any URL the caller resolved is already
-     * captured as a PNG attachment here (intent="visual_reference"). The
-     * agent never receives raw URLs — that is a deliberate single-source
-     * rule: the orchestrator side is responsible for turning URL / Figma /
-     * material references into PNG bytes before calling analyze().
+     * The complete visual input available at dispatch time. Callers may have
+     * already resolved URLs into PNG attachments here (intent="visual_reference").
+     * The agent may additionally capture a live http(s) webpage via its
+     * dedicated `url_screenshot` tool when the brief contains an uncaptured
+     * visual URL, but it never uses webfetch.
      */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
     taskID?: string
@@ -123,12 +123,14 @@ async function run(input: {
   if (input.signal?.aborted) throw new Error("design analyst aborted after model resolution")
 
   const plannerTools = await filterAgentTools(createPlannerTools(), "design-analyst")
+  const screenshotToolKit = createUrlScreenshotTool()
   const outputToolKit = createDesignOutputTools()
   const projectID = (() => {
     try { return Instance.project.id } catch { return "" }
   })()
   const guard = toolGuard({
     ...plannerTools,
+    ...screenshotToolKit,
     ...createReadAttachmentTool(projectID),
     ...outputToolKit.tools,
   })
@@ -215,6 +217,7 @@ function buildUserPrompt(input: {
   attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
 }): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+  const hasLiveHttpUrl = /https?:\/\/\S+/i.test(input.request)
 
   const visualAttachments = (input.attachments ?? []).filter(
     (a) => (a.intent ?? "") === "visual_reference" || a.mime.startsWith("image/") || a.mime === "application/pdf",
@@ -228,17 +231,20 @@ function buildUserPrompt(input: {
     sections.push(
       `# Visual References (already attached)\n\n${lines}\n\n` +
       "These files are attached to this message as multimodal content — read " +
-      "the pixels directly. Do NOT try to fetch anything over the network. " +
-      "Design-analyst has no webfetch / webpage_extract / network tool: the " +
-      "orchestrator already turned every URL / Figma frame / local material " +
-      "into one of these PNGs before dispatching you. Your whole job is to " +
-      "derive the visual contract from what is in front of you.",
+      "the pixels directly. Do NOT use webfetch. Prefer these attached " +
+      "screenshots over re-capturing the same page. " +
+      (hasLiveHttpUrl
+        ? "If the brief includes an additional live http(s) webpage URL that is not already represented here, call `url_screenshot` first to capture it as a PNG. "
+        : "") +
+      "Your whole job is to derive the visual contract from what is in front of you.",
     )
   } else {
     sections.push(
       "# No visual references attached\n\n" +
-      "No screenshots, mockups, or design materials were provided. Extract " +
-      "the visual contract from the textual brief only; register specs that " +
+      (hasLiveHttpUrl
+        ? "No screenshots, mockups, or design materials were attached yet. If the request includes a live http(s) webpage URL, call `url_screenshot` first to capture a PNG visual reference. If capture fails, work from the textual brief only. "
+        : "No screenshots, mockups, or design materials were provided. ") +
+      "Extract the visual contract from the textual brief only when no visual input is available; register specs that " +
       "can be inferred from the request wording (e.g. named brand palettes, " +
       "explicit typography, explicit component mentions). Do NOT invent " +
       "specifics that have no source in the brief.",
@@ -251,12 +257,12 @@ function buildUserPrompt(input: {
     "`read_attachment` — do NOT ignore or hallucinate their contents.",
   )
 
-  try {
-    const mirrorSection = buildMirrorToolsPromptSection({ cwd: Instance.directory })
-    if (mirrorSection.trim().length > 0) sections.push(mirrorSection)
-  } catch {
-    // Instance not initialised — advisory section, skip.
-  }
+  sections.push(
+    "# Live URL Capture\n\n" +
+    "For visual webpage URLs, use `url_screenshot` — not `webfetch`. " +
+    "`url_screenshot` returns a PNG as a multimodal tool result so you can inspect the pixels directly. " +
+    "Do NOT use `webpage_extract`; that mirror pipeline belongs to later build-stage cloning work, not this design-analysis step.",
+  )
 
   sections.push(
     "Extract the visual contract as a list of advisory VisualSpec entries. " +
