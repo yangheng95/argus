@@ -613,7 +613,7 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   -- last_progress_at: wall-clock stamp bumped only on observed executor
   -- chunk/event (pipeline/executor.ts streamExecutorEvents). Unlike
   -- time_updated it is NOT refreshed by bookkeeping writes. The
-  -- goal-run-watchdog scanner compares `now - last_progress_at` against
+  -- goal-run-watchdog scanner compares now - last_progress_at against
   -- EngineConfig.activity.goal_run_idle_ms to detect silent SSE death.
   last_progress_at    integer,
   time_started        integer,
