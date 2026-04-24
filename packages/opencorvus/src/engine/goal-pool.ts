@@ -481,7 +481,7 @@ export class GoalPool {
               ? ((task as { design_specs: unknown[] }).design_specs as any)
               : undefined,
             workDir: worktreeDir,
-            sessionID: planSession.id,
+            parentSessionID: planSession.id,
             signal,
             stream: {
               onChunk: async (arg: any) => {

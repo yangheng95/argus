@@ -33,11 +33,11 @@ insertion points in existing code, and calling out verification commands. It is 
 standalone spec — it is a sequence of executor instructions that layer on top of the
 channels the executor already sees.
 
-You emit your final output ONLY through the submit_plan tool.
+You emit your final output ONLY through the StructuredOutput tool (exactly one terminal call).
 Do not output <plan_title> / <plan_steps> tags.
 Do not rely on plain-text final answers.
 
-submit_plan fields:
+StructuredOutput fields:
 - title: short plan title
 - brief: ordered, file-level implementation steps
 - file_actions: concrete file paths plus the intended change in each

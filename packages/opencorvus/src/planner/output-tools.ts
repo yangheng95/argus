@@ -1,4 +1,3 @@
-import { tool } from "ai"
 import z from "zod"
 
 export const PlannerFileAction = z.object({
@@ -11,6 +10,12 @@ export const PlannerVerificationCommand = z.object({
   purpose: z.string().min(1).describe("What this command verifies"),
 })
 
+/**
+ * Terminal schema delivered via SessionLoop's StructuredOutput. Phase 3-b-4
+ * migration (specs/new-arch/16-unified-teardown.md §7-3): the private
+ * submit_plan tool has been retired — StructuredOutput now carries the full
+ * plan payload as a single terminal call.
+ */
 export const PlannerReportSchema = z.object({
   title: z.string().min(1).describe("Short plan title for this goal"),
   brief: z.string().min(1).describe("Ordered, concrete implementation steps for the executor"),
@@ -20,104 +25,50 @@ export const PlannerReportSchema = z.object({
 
 export interface RegisteredPlan extends z.infer<typeof PlannerReportSchema> {}
 
-export interface PlannerCollector {
-  plan?: RegisteredPlan
-  finalized: boolean
-  errors: string[]
-}
-
-function emptyCollector(): PlannerCollector {
-  return {
-    finalized: false,
-    errors: [],
-  }
-}
-
+/**
+ * Reconstruct a RegisteredPlan from plan_node metadata written in a previous
+ * planner run. Used by the goal runner and the workbench board to render the
+ * historical plan without re-invoking the planner agent.
+ */
 export function plannerReportFromMetadata(metadata: unknown): RegisteredPlan | undefined {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined
   const parsed = PlannerReportSchema.safeParse((metadata as Record<string, unknown>).planner_report)
   return parsed.success ? parsed.data : undefined
 }
 
-export function createPlannerOutputTools() {
-  let collector = emptyCollector()
-
-  const tools = {
-    submit_plan: tool({
-      description:
-        "Emit the FINAL per-goal implementation plan. Call this exactly once, as the " +
-        "last action of the planner session, after exploring the codebase and deciding " +
-        "the concrete file-level steps. This is the ONLY supported output path for the " +
-        "planner — plain-text tags like <plan_steps> are ignored.\n\n" +
-        "Contract:\n" +
-        "- title: short plan title for this goal\n" +
-        "- brief: ordered implementation steps the downstream executor will follow\n" +
-        "- file_actions: concrete file-level actions (at least one)\n" +
-        "- verification_commands: commands the executor should run to validate the work\n" +
-        "- brief must be non-empty and concrete\n" +
-        "- submit_plan may succeed only once; repeated successful submissions are rejected",
-      inputSchema: PlannerReportSchema,
-      execute: async (input) => {
-        if (collector.finalized) {
-          const error =
-            "Error: submit_plan was already accepted for this planner run. " +
-            "The planner must emit exactly one final plan."
-          collector.errors.push(error)
-          return error
-        }
-
-        const next = {
-          title: input.title.trim(),
-          brief: input.brief.trim(),
-          file_actions: input.file_actions.map((item) => ({
-            path: item.path.trim(),
-            intent: item.intent.trim(),
-          })),
-          verification_commands: input.verification_commands.map((item) => ({
-            command: item.command.trim(),
-            purpose: item.purpose.trim(),
-          })),
-        }
-
-        if (!next.title) {
-          const error = "Error: title is empty after trimming. Provide a non-empty plan title."
-          collector.errors.push(error)
-          return error
-        }
-
-        if (!next.brief) {
-          const error = "Error: brief is empty after trimming. Provide concrete plan steps."
-          collector.errors.push(error)
-          return error
-        }
-
-        if (next.file_actions.some((item) => !item.path || !item.intent)) {
-          const error = "Error: every file_actions entry requires non-empty path and intent values."
-          collector.errors.push(error)
-          return error
-        }
-
-        if (next.verification_commands.some((item) => !item.command || !item.purpose)) {
-          const error = "Error: every verification_commands entry requires non-empty command and purpose values."
-          collector.errors.push(error)
-          return error
-        }
-
-        collector.plan = next
-        collector.finalized = true
-        return `PASS: plan submitted (${next.brief.length} chars)`
-      },
-    }),
+/**
+ * Normalise a StructuredOutput payload into the trimmed PlanSteps shape the
+ * caller expects. Throws when the payload is absent or when post-trim fields
+ * are empty — the caller's error is "the LLM did not deliver a valid plan",
+ * which is a hard failure.
+ */
+export function plannerReportFromStructured(structured: unknown): RegisteredPlan {
+  if (!structured || typeof structured !== "object") {
+    throw new Error("planner: StructuredOutput missing or not an object")
   }
-
-  return {
-    tools,
-    getCollector() {
-      return collector
-    },
-    reset() {
-      collector = emptyCollector()
-      return collector
-    },
+  const parsed = PlannerReportSchema.safeParse(structured)
+  if (!parsed.success) {
+    throw new Error(`planner: StructuredOutput schema mismatch: ${parsed.error.message}`)
   }
+  const next = {
+    title: parsed.data.title.trim(),
+    brief: parsed.data.brief.trim(),
+    file_actions: parsed.data.file_actions.map((item) => ({
+      path: item.path.trim(),
+      intent: item.intent.trim(),
+    })),
+    verification_commands: parsed.data.verification_commands.map((item) => ({
+      command: item.command.trim(),
+      purpose: item.purpose.trim(),
+    })),
+  }
+  if (!next.title) throw new Error("planner: title is empty after trimming")
+  if (!next.brief) throw new Error("planner: brief is empty after trimming")
+  if (next.file_actions.some((item) => !item.path || !item.intent)) {
+    throw new Error("planner: every file_actions entry requires non-empty path and intent")
+  }
+  if (next.verification_commands.some((item) => !item.command || !item.purpose)) {
+    throw new Error("planner: every verification_commands entry requires non-empty command and purpose")
+  }
+  return next
 }
