@@ -357,7 +357,11 @@ await SessionPrompt.prompt({
     - 复用现有 `build` agent registry entry（默认 coding agent，tools exclude planner/panel/tui 等），system prompt 由 call-site 覆盖为 build-core
     - 新增 `src/prompt/core/build-core.txt` 明示：读-写-验-提交-StructuredOutput，禁跨 owned_paths，禁 fabricate tests，禁 WIP 脏 worktree
     - typecheck clean，232 session+engine+build-agent 测试通过；0 retrogression
-  - **5-b-3**（pending）：real-LLM smoke test 仿 intent-analysis 套路，gated by `OPENCORVUS_RUN_BUILD_SMOKE=1`，验证 BuildAgent.run 产出合规 BuildResult + 真实 commit_ref + worktree teardown 完成
+  - **5-b-3**（✅ 2026-04-24）：real-LLM smoke test 通过（alibaba-coding-plan-cn/kimi-k2.5）：
+    - 请求："Create a file named HELLO.md with the single line 'hello from build smoke'. Commit and report"
+    - 结果：status=passed / commit_ref=`e846fa3` / testCount=0 / worktreeBranch=`opencorvus/build-create-a-file-named-hello-md-wit`
+    - 生命周期：Instance.dispose → Worktree.remove → removeSandbox → ownership.clear 全部 ok，175ms 清理干净
+    - gated by `OPENCORVUS_RUN_BUILD_SMOKE=1`；`BuildAgent.run` API 契约由真实 LLM 调用验证通过
 - **5-c**：orchestrator prompt 改为使用 `build`（单 goal / 多 goal 并行均经此路径）；`dispatch_goal / exec_goal / submit_execution / retry_goal` 从 LLM 可见工具列表移除（实现保留，便于回滚）
 - **5-d**：GoalPool 驱动路径删除（orchestrator/loop.ts 不再 pool.drain()）；worktree 创建 / teardown 由 build tool 内部 try/finally 管理
 - **5-e**：读模型切换：`describe.ts` / `task-api` / `workbench/board.ts` 统一 projection 入口；overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
