@@ -332,7 +332,6 @@ describe("orchestrator deferred stop", () => {
         request: "Verify task-level build switches workflow when pipeline has not decomposed into goals yet",
         status: "active",
         priority: "normal",
-        workflow_state: workflowState as any,
         time_created: now,
         time_updated: now,
       }).run()
@@ -346,6 +345,10 @@ describe("orchestrator deferred stop", () => {
           parts: [{ type: "text", text: "Build succeeded." }],
         } as any)
 
+        // Phase-6-f-3-bis-b: workflow_state is no longer persisted. The
+        // switch-to-direct happens in-memory on the passed `workflowState`
+        // and is reflected via EngineEvent.WorkflowSelected; we assert the
+        // mutation on the shared reference rather than on a DB row.
         const { tools } = createOrchestratorTools({
           taskID,
           agentSessionID: parent.id,
@@ -359,15 +362,12 @@ describe("orchestrator deferred stop", () => {
           reason: "Pipeline preconditions failed before architect, so direct build is required.",
         }, {} as any)
 
-        const task = requireTask(taskID)
-        const nextState = task.workflow_state as any
-
         expect(result).toContain("Build agent finished")
-        expect(nextState.workflowID).toBe("direct")
-        expect(nextState.taskSteps.build?.status).toBe("completed")
-        expect(nextState.taskSteps.deliver?.status).toBe("pending")
-        expect(nextState.currentStepID).toBe("deliver")
-        expect(nextState.taskSteps.architect).toBeUndefined()
+        expect(workflowState.workflowID).toBe("direct")
+        expect(workflowState.taskSteps.build?.status).toBe("completed")
+        expect(workflowState.taskSteps.deliver?.status).toBe("pending")
+        expect(workflowState.currentStepID).toBe("deliver")
+        expect(workflowState.taskSteps.architect).toBeUndefined()
       },
     })
   })

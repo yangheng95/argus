@@ -14,7 +14,6 @@ import { Provider } from "@/provider/provider"
 import { ProtocolStore } from "@/protocol/store"
 import { EngineProtocol } from "@/engine/protocol"
 import { ensureGitignore } from "@/engine/git"
-import { WorkflowRegistry, createWorkflowState } from "@/engine/workflow"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
@@ -417,28 +416,12 @@ export namespace EngineService {
       ...(Object.keys(resolvedChecks).length > 0 ? { checks: resolvedChecks } : {}),
     } as Record<string, unknown>
 
-    // Initialize workflow state synchronously at task creation, not later in
-    // the agent's trigger=created path. Without this, queued tasks (waiting
-    // for the serial queue) and any task whose agent never reaches its
-    // created trigger end up with workflow_state=NULL, which makes board.ts
-    // buildWorkflowFields return {} and the entire new panel suite
-    // (WorkflowProgressBar / RequirementsPanel / ArchitectPanel /
-    // GoalWorkflowList) silently disappears for that task.
-    //
-    // Initialized to the configured default workflow's pending state. The
-    // orchestrator may still skip the pipeline by calling its `build` tool —
-    // the workflow state here is a scaffold that the agent chooses whether
-    // to use.
-    let workflowState: import("@/engine/workflow").WorkflowState | undefined
-    {
-      const defaultID = await WorkflowRegistry.defaultID()
-      const defaultWorkflow =
-        (await WorkflowRegistry.resolve(defaultID)) ??
-        WorkflowRegistry.resolveSync("pipeline")
-      if (defaultWorkflow) {
-        workflowState = createWorkflowState(defaultWorkflow)
-      }
-    }
+    // Phase-6-f-3-bis-b: workflow_state is no longer persisted. The
+    // orchestrator resolves the default workflow fresh on each wake and
+    // projects step status from side-effects (spec / goals / runs /
+    // delivery presence). board.ts::buildWorkflowFields likewise no
+    // longer reads task.workflow_state — it always defaults to pipeline
+    // and projects step status from DB rows.
 
     const cfg = await Config.get()
     const tp = cfg.tool_permissions ?? {}
@@ -487,7 +470,6 @@ export namespace EngineService {
         attachments: attachmentRefs.length ? attachmentRefs : undefined,
         requestID, source: input.source,
         priority: input.priority, kind: input.kind, budget: input.budget, metadata,
-        workflowState,
         channelBinding: input.channelBinding,
         projectID: Instance.project.id,
       })

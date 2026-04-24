@@ -32,7 +32,7 @@ import {
   TaskBoardGoalStepPayload,
   WorkflowRegistry,
 } from "@/engine"
-import { projectGoalSteps, type MiniWorkflowStep } from "@/engine/workflow"
+import { projectGoalSteps, projectTaskSteps, type MiniWorkflowStep } from "@/engine/workflow"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
 import { Database, and, desc, eq, sql } from "@/storage/db"
@@ -194,7 +194,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
   )
 
   // Workflow-structured fields (workflow, goalWorkflows, requirements, architect).
-  // Returns empty object when task has no workflow_state.
+  // Step status is projected fresh from DB rows each render (no FSM cache).
   const workflowFields = buildWorkflowFields(task, goals)
 
   return {
@@ -721,23 +721,24 @@ function boardOverview(input: {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// MiniWorkflow board fields — workflow state, per-goal workflows,
-// requirements list, and architect summary. Empty when task has no
-// workflow_state (e.g. simple tasks that skip requirements analysis).
+// MiniWorkflow board fields — workflow shape, per-goal workflows,
+// requirements list, and architect summary. Workflow template always
+// defaults to pipeline; task-scope step status is projected from
+// side-effects (spec / goals / runs / delivery presence), goal-scope
+// step status from the goal_run chain.
 // ═══════════════════════════════════════════════════════════════════
 
 function buildWorkflowFields(
   task: typeof EngineTaskTable.$inferSelect,
   goals: Array<typeof EngineGoalTable.$inferSelect>,
 ) {
-  const ws = task.workflow_state ?? undefined
-  const workflow = ws
-    ? WorkflowRegistry.resolveSync(ws.workflowID)
-    : WorkflowRegistry.resolveSync("pipeline")
+  // Phase-6-f-3-bis-b: workflow_state no longer persisted. Default to the
+  // pipeline workflow; if the task is direct-eligible (no goals, no spec,
+  // build already ran) the orchestrator's `switchToDirectWorkflowIfEligible`
+  // swaps in-memory — the board's role here is to provide a stable render
+  // shape, not to authoritatively select which workflow owns the task.
+  const workflow = WorkflowRegistry.resolveSync("pipeline")
 
-  // Final safety net: if even the pipeline workflow can't be resolved (which
-  // would be a serious config bug), still return an explicit empty shape
-  // rather than {} so the frontend gets a stable contract.
   if (!workflow) {
     return {
       workflow: { id: "pipeline", name: "Pipeline", steps: [], goalLoopStepIDs: [] },
@@ -747,12 +748,12 @@ function buildWorkflowFields(
     }
   }
 
-  // Goal-scope step status is projected from engine_goal_run (see
-  // engine/workflow.ts::projectGoalSteps). Task-scope steps remain persisted
-  // in task.workflow_state.taskSteps as before.
+  // Both task-scope and goal-scope step status are projected from DB rows
+  // — task-scope from known side-effects (spec / goals / runs / delivery /
+  // design_specs presence), goal-scope from the goal_run chain.
   const projectedGoalSteps = projectGoalSteps(task.id, workflow)
+  const projectedTaskSteps = projectTaskSteps(task.id, workflow)
 
-  // Simple tasks without workflow_state get reported with all steps "pending".
   const workflowBoard = {
     id: workflow.id,
     name: workflow.name,
@@ -763,7 +764,7 @@ function buildWorkflowFields(
       scope: step.scope as "task" | "goal",
       skippable: step.skippable,
       status: (step.scope === "task"
-        ? (ws ? ws.taskSteps[step.id]?.status ?? "pending" : "pending")
+        ? (projectedTaskSteps[step.id]?.status ?? "pending")
         : deriveGoalScopeStatusFromProjection(projectedGoalSteps, step.id)) as "pending" | "running" | "completed" | "skipped" | "failed",
       ...(step.phases && step.phases.length > 0
         ? { phases: step.phases.map(p => ({ id: p.id, label: p.label, sessionKind: p.sessionKind })) }
