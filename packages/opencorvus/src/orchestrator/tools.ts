@@ -414,7 +414,7 @@ export function createOrchestratorTools(input: {
     }
 
     if (run.status === "queued") {
-      await updateTask(task, { status: "active", error: null, blocking_reason: null }, "Execution submitted")
+      await updateTask(task, { status: "active", error: null }, "Execution submitted")
       await updateRun(run, { status: "running" }, "Execution submitted")
       activatedRun = true
       task = requireTask(taskID)
@@ -1712,7 +1712,6 @@ export function createOrchestratorTools(input: {
           {
             status: "active",
             error: null,
-            blocking_reason: null,
             active_spec_version_id: plan.clearSpec ? null : currentTask.active_spec_version_id,
           },
           `restart_from_stage(${stage})`,
@@ -2466,7 +2465,7 @@ export function createOrchestratorTools(input: {
                 }
                 const finalized = await EngineGit.complete(current, currentPlan, published)
                 if (finalized.error) {
-                  await updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: completed }, finalized.error)
+                  await updateTask(current, { status: "failed", error: finalized.error, time_completed: completed }, finalized.error)
                   return `Git finalization failed: ${finalized.error}`
                 }
                 // Ensure task is in "active" before completing (recovery may have reset to "queued")
@@ -2475,14 +2474,14 @@ export function createOrchestratorTools(input: {
                   await updateTask(preComplete, { status: "active" }, "Activating for completion")
                 }
                 const readyTask = requireTask(taskID)
-                await updateTask(readyTask, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
+                await updateTask(readyTask, { status: "completed", error: null, time_completed: completed }, "Task completed")
                 const { Plugin } = await import("@/plugin")
                 await Plugin.trigger("delivery.ready", { taskID, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(err => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
                 EngineMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan })
                   .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
                 return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
               }
-              await updateTask(currentTask, { status: "failed", blocking_reason: null, error: publishResult.summary, time_completed: completed }, publishResult.summary)
+              await updateTask(currentTask, { status: "failed", error: publishResult.summary, time_completed: completed }, publishResult.summary)
               return `Publish returned non-delivered status: ${publishResult.summary}`
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
@@ -2757,10 +2756,10 @@ export function createOrchestratorTools(input: {
 
           const finalized = await EngineGit.complete(current, currentPlan, published)
           if (finalized.error) {
-            await updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: completed }, finalized.error)
+            await updateTask(current, { status: "failed", error: finalized.error, time_completed: completed }, finalized.error)
             return `Git finalization failed: ${finalized.error}`
           }
-          await updateTask(finalized.task, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
+          await updateTask(finalized.task, { status: "completed", error: null, time_completed: completed }, "Task completed")
           const { Plugin } = await import("@/plugin")
           await Plugin.trigger("delivery.ready", { taskID: task.id, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(() => undefined)
           // Flush task learnings to memory (fire-and-forget)
@@ -2789,7 +2788,7 @@ export function createOrchestratorTools(input: {
           return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
         }
 
-        await updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
+        await updateTask(task, { status: "failed", error: result.summary, time_completed: completed }, result.summary)
         return `Publish returned non-delivered status: ${result.summary}`
       },
     }),

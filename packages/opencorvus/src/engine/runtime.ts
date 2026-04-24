@@ -483,24 +483,23 @@ export namespace EngineRuntime {
               .run(),
           )
         }
+        // Phase-6-f-4: task.blocking_reason cache column removed. Blocking is
+        // a run-scoped signal now (run.blocking_reason + pending interactions).
         const stillPending = findPendingInteractions(run.id)
         if (stillPending.length === 0) {
-          await Promise.all([
-            run.status === "blocked" ? hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected") : undefined,
-            task.status === "active" && task.blocking_reason ? hooks.updateTask(task, { status: "active", blocking_reason: null }, "Stale interactions auto-rejected") : undefined,
-          ])
+          if (run.status === "blocked") {
+            await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected")
+          }
         } else {
-          await Promise.all([
-            run.status !== "blocked" ? hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked") : undefined,
-            !task.blocking_reason ? hooks.updateTask(task, { status: "active", blocking_reason: stillPending[0].request_type }, "Awaiting user input") : undefined,
-          ])
+          if (run.status !== "blocked") {
+            await hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked")
+          }
           return
         }
       } else {
-        await Promise.all([
-          run.status !== "blocked" ? hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked") : undefined,
-          !task.blocking_reason ? hooks.updateTask(task, { status: "active", blocking_reason: pending[0].request_type }, "Awaiting user input") : undefined,
-        ])
+        if (run.status !== "blocked") {
+          await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
+        }
         return
       }
     }
@@ -534,9 +533,7 @@ export namespace EngineRuntime {
       if (run.status === "blocked") {
         await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
       }
-      if (task.blocking_reason) {
-        await hooks.updateTask(task, { status: "active", blocking_reason: null }, "Run resumed")
-      }
+      // Phase-6-f-4: task.blocking_reason cache removed — run-scoped only.
       return
     }
 
@@ -556,7 +553,8 @@ export namespace EngineRuntime {
         await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
       }
       if (task.status !== "active") {
-        await hooks.updateTask(task, { status: "active", blocking_reason: null }, "Run executing")
+        // Phase-6-f-4: task.blocking_reason cache removed (run-scoped only).
+        await hooks.updateTask(task, { status: "active" }, "Run executing")
       }
       return
     }
@@ -609,7 +607,6 @@ export namespace EngineRuntime {
       {
         status: "active",
         error: null,
-        blocking_reason: null,
         time_completed: null,
       },
       "Operator note queued a follow-up run",

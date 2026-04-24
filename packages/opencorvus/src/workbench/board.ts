@@ -215,7 +215,8 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
         request: task.request,
         status: task.status,
         priority: task.priority,
-        blockingReason: task.blocking_reason ?? undefined,
+        // Phase-6-f-4: blocking lives on run (or none when no active run).
+        blockingReason: run?.blocking_reason ?? undefined,
         error: task.error ?? undefined,
         budget: task.budget
           ? {
@@ -614,10 +615,12 @@ function boardFailure(input: {
       checks: undefined,
     }
   }
-  const blocking = input.task.blocking_reason ?? input.run?.blocking_reason
+  // Phase-6-f-4: blocking is a run-scoped signal; task-level blocking_reason
+  // cache column removed. Fall back to nothing when no run is live.
+  const blocking = input.run?.blocking_reason
   if (!blocking) return undefined
   return {
-    source: input.run?.blocking_reason ? ("run" as const) : ("task" as const),
+    source: "run" as const,
     title: "Task is blocked",
     summary: clipBoard(blocking),
     checks: undefined,
@@ -652,7 +655,7 @@ function boardOverview(input: {
           : input.task.status === "cancelled"
             ? "Task was cancelled"
             : input.task.status === "active"
-              ? input.task.blocking_reason
+              ? input.run?.blocking_reason
                 ? "Task is blocked"
                 : "Task is actively progressing"
               : "Task is queued"
