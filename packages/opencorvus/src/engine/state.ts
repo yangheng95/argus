@@ -39,20 +39,17 @@ export async function updateTask(
   // legacy FSM gate that fought the autonomous-agent design. Callers are
   // responsible for setting coherent values; bad writes surface as runtime
   // misbehaviour, not DB errors.
-  const nextBlocking = values.blocking_reason === undefined ? row.blocking_reason : values.blocking_reason
   const nextError = values.error === undefined ? row.error : values.error
   const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
   const nextCompleted = values.time_completed === undefined ? row.time_completed : values.time_completed
-  // No-op guard: bail only when the caller supplied *only* the 5 guarded fields
+  // No-op guard: bail only when the caller supplied *only* the 4 guarded fields
   // AND none of them changed. If the caller passed any other field (metadata,
-  // title, active_plan_version_id, …) we MUST write — otherwise metadata-only
-  // updates (workflow step tracking, operator notes, etc.) get silently dropped.
-  const guardedKeys = new Set(["status", "blocking_reason", "error", "time_started", "time_completed"])
+  // title, …) we MUST write — otherwise metadata-only updates get silently dropped.
+  const guardedKeys = new Set(["status", "error", "time_started", "time_completed"])
   const hasOtherWrite = Object.keys(values).some((key) => !guardedKeys.has(key))
   if (
     !hasOtherWrite &&
     nextStatus === row.status &&
-    nextBlocking === row.blocking_reason &&
     nextError === row.error &&
     nextStarted === row.time_started &&
     nextCompleted === row.time_completed
@@ -102,7 +99,6 @@ export async function updateTask(
         summary,
         payload: {
           status: nextStatus,
-          blockingReason: nextBlocking,
           error: nextError,
         },
         time_created: now,

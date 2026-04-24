@@ -1028,7 +1028,6 @@ export namespace EngineService {
       {
         status: "cancelled",
         error: "task cancelled",
-        blocking_reason: null,
         time_completed: Date.now(),
       },
       "Task cancelled",
@@ -1085,7 +1084,7 @@ export namespace EngineService {
       throw new Error(`task ${taskID} is already active`)
     }
     // Reset to queued and hand scheduling back to the single queue/coordinator entry.
-    await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "Retry requested by operator")
+    await updateTask(task, { status: "queued", error: null }, "Retry requested by operator")
     void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
     return viewTask(requireTask(taskID))
   }
@@ -1276,7 +1275,7 @@ export namespace EngineService {
     abortExecutorSessionForRun(runID)
     const task = requireTask(run.task_id)
     if (findActiveRunForTask(task.id)?.id === run.id) {
-      await updateTask(task, { status: "failed", error: "run aborted", blocking_reason: null, time_completed: Date.now() }, "Run aborted")
+      await updateTask(task, { status: "failed", error: "run aborted", time_completed: Date.now() }, "Run aborted")
     }
     return true
   }

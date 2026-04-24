@@ -1185,7 +1185,9 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     status: row.status,
     priority: row.priority,
     kind: row.kind ?? "workflow",
-    blockingReason: row.blocking_reason ?? undefined,
+    // Phase-6-f-4: task.blocking_reason cache removed; derive from the active
+    // run when rendering.
+    blockingReason: findActiveRunForTask(row.id)?.blocking_reason ?? undefined,
     error: row.error ?? undefined,
     budget: budgetModel(row.budget),
     metadata: row.metadata ?? undefined,

@@ -240,7 +240,8 @@ export const EngineTaskTable = sqliteTable(
     kind: text().notNull().$type<"workflow" | "build">().default("workflow"),
     status: text().notNull().$type<EngineTaskStatus>().default("queued"),
     priority: text().notNull().$type<EngineTaskPriority>().default("normal"),
-    blocking_reason: text(),
+    /** Phase-6-f-4: `blocking_reason` cache column removed. Blocking is a
+     *  run-scoped signal (run.blocking_reason + pending interactions). */
     error: text(),
     budget: text({ mode: "json" }).$type<EngineBudget>(),
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),

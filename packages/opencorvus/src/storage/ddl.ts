@@ -368,7 +368,8 @@ CREATE TABLE IF NOT EXISTS engine_task (
   kind                   text NOT NULL DEFAULT 'workflow',
   status                 text NOT NULL DEFAULT 'queued',
   priority               text NOT NULL DEFAULT 'normal',
-  blocking_reason        text,
+  -- Phase-6-f-4: blocking_reason cache column removed. Blocking is a
+  -- run-scoped signal (run.blocking_reason + pending interactions).
   error                  text,
   budget                 text,
   metadata               text,
