@@ -1,31 +1,37 @@
 /**
- * P0-B · Delivery 硬数值门契约（stub，先于 Stream C 合入）。
+ * P0-B · Delivery 硬数值门。
  *
- * 该文件仅定义 VisualMetric 的 TS 类型 + thresholds 加载约定；
- * 实际计算（pHash / SSIM / chart-region 密度 / 唯一色比 / 命中率 / 复合 score）
- * 由 Stream C（P0-B）在 packages/opencorvus/src/delivery/ 下实现。
+ * LLM 无权推翻肉眼可见的差距：verdict 前先跑这里的 5 条硬门，任一 fail
+ * 直接 rejected。LLM judge 只负责硬门通过后的软性瑕疵判定。
  *
- * 消费者：P0-B（verdict 硬门）、P0-C.4（LKG score-driven 回滚）、P2（replay）。
+ * 硬门清单（见 visual-thresholds.json 对应阈值）：
+ *  1. phash_hamming          — 8x8 aHash 汉明距离 ≤ T1，卡整体结构
+ *  2. ssim                   — ssim.js mean SSIM ≥ T2，卡纹理/细节
+ *  3. chart_region_density   — 非白像素密度 ≥ reference × 0.6，卡空骨架
+ *  4. unique_color_ratio     — 唯一色桶数 ≥ reference × 0.5，卡单色页
+ *  5. text_hit_ratio         — reference OCR 文本在 rendered 的命中率 ≥ 0.7
  *
- * 契约要点（不可变）：
- *  - 数值门在 LLM judge 之前；任一 gate fail ⇒ verdict=rejected，LLM 无权推翻。
- *  - 阈值以 JSON 落盘，允许按样本标定刷新，但文件结构恒定（VisualThresholds）。
- *  - 复合 score 单调：越大越好；用于 LKG 回滚比较。
+ * 第 5 条的 OCR/anchor 来自 P1-B (Stream F) 的 CaptureManifest.reference_strings。
+ * 在 F 未 merge 前，caller 不提供 referenceStrings，此条硬门 skip（passed=true,
+ * value=NaN），并从复合 score 权重中按比例摊到前三条上——保持 score 单调有意义。
+ *
+ * 消费者：P0-B（verdict 硬门）、P0-C.4（LKG 回滚比较 score）、P2（replay 曲线）。
  */
 import z from "zod"
-import path from "node:path"
+import { PNG } from "pngjs"
+import fs from "node:fs/promises"
+import ssim from "ssim.js"
+import thresholdsJson from "./visual-thresholds.json" with { type: "json" }
 
-/** 每一条硬门的判定记录。通过即 passed=true；失败时 value 须给出实际观测。 */
+/** 每一条硬门的判定记录。 */
 export interface VisualGateResult {
   name: VisualGateName
   passed: boolean
   threshold: number
   value: number
-  /** 人类可读的失败原因；passed=true 时应为空串。 */
   note: string
 }
 
-/** 硬门名称白名单（stub 阶段写死；若扩展须先改 VisualThresholds 结构，避免 drift）。 */
 export type VisualGateName =
   | "phash_hamming"
   | "ssim"
@@ -33,37 +39,22 @@ export type VisualGateName =
   | "unique_color_ratio"
   | "text_hit_ratio"
 
-/** 单次渲染 vs reference 的全部硬门结果 + 复合分数。 */
 export interface VisualMetricResult {
-  /** 所有硬门都 passed 才为 true。 */
   passed: boolean
-  /** 复合评分，用于 LKG 比较。单调：越大越好，范围 [0,1]。 */
   score: number
-  /** 每条硬门的逐项结果（顺序与 VisualGateName 一致）。 */
   gates: VisualGateResult[]
-  /** 被高亮的差异区域图路径（若该轮生成），供 verdict 附在 rejection 里。 */
   diffRegionPath?: string
-  /** 当轮 rendered PNG 绝对路径（作为 LKG 快照 anchor）。 */
   renderedPath: string
-  /** 对比用的 reference PNG 绝对路径。 */
   referencePath: string
-  /** 采集时间戳，ms。 */
   capturedAt: number
 }
 
-/** 阈值文件 schema。Stream C 合入时需在 visual-thresholds.json 中填具体数值。 */
 export const VisualThresholds = z.object({
-  phash_hamming_max: z.number().int().min(0).max(64)
-    .describe("pHash 汉明距离上限（越小越相似）"),
-  ssim_min: z.number().min(0).max(1)
-    .describe("SSIM 下限（越大越相似）"),
-  chart_region_density_min_ratio: z.number().min(0).max(1)
-    .describe("chart 区非白像素密度下限（相对 reference 的比例，默认 0.6 卡空骨架）"),
-  unique_color_ratio_min: z.number().min(0).max(1)
-    .describe("唯一色数占 reference 的比例下限（默认 0.5 卡单色页）"),
-  text_hit_ratio_min: z.number().min(0).max(1)
-    .describe("reference 文字串在 rendered 的命中率下限（默认 0.7 卡占位文案）"),
-  /** 复合 score 的加权系数，须相加为 1（运行时校验）。 */
+  phash_hamming_max: z.number().int().min(0).max(64),
+  ssim_min: z.number().min(0).max(1),
+  chart_region_density_min_ratio: z.number().min(0).max(1),
+  unique_color_ratio_min: z.number().min(0).max(1),
+  text_hit_ratio_min: z.number().min(0).max(1),
   score_weights: z.object({
     phash: z.number().min(0).max(1),
     ssim: z.number().min(0).max(1),
@@ -73,50 +64,319 @@ export const VisualThresholds = z.object({
 })
 export type VisualThresholdsType = z.infer<typeof VisualThresholds>
 
-/** 阈值文件标准落盘路径（相对 opencorvus 源码根）。 */
 export const VISUAL_THRESHOLDS_RELATIVE = "src/delivery/visual-thresholds.json"
 
 /**
- * 加载并校验阈值配置。Stub 实现：未准备就绪时抛错，不提供 fallback 默认值
- * （符合 CLAUDE.md rule 1：禁 fallback）。Stream C 合入时由其补齐文件。
+ * 同步加载阈值（静态 import，打包进 Bun 二进制，避免运行时 cwd 定位）。
+ * 权重相加必须为 1，校验失败即抛——P0-B 的复合 score 单调语义依赖此不变式。
  */
-export async function loadVisualThresholds(absolutePath?: string): Promise<VisualThresholdsType> {
-  const target = absolutePath ?? path.resolve(process.cwd(), "packages/opencorvus", VISUAL_THRESHOLDS_RELATIVE)
-  const fs = await import("node:fs/promises")
-  let raw: string
-  try {
-    raw = await fs.readFile(target, "utf8")
-  } catch (err) {
-    throw new Error(
-      `visual-metric: thresholds file missing at ${target}. ` +
-      `P0-B (Stream C) must commit ${VISUAL_THRESHOLDS_RELATIVE} before numeric gate can run. ` +
-      `Cause: ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-  const parsed = VisualThresholds.parse(JSON.parse(raw))
-  const sum = parsed.score_weights.phash + parsed.score_weights.ssim +
-    parsed.score_weights.density + parsed.score_weights.text_hit
+export function loadVisualThresholds(): VisualThresholdsType {
+  const parsed = VisualThresholds.parse(thresholdsJson)
+  const { phash, ssim: ssimW, density, text_hit } = parsed.score_weights
+  const sum = phash + ssimW + density + text_hit
   if (Math.abs(sum - 1) > 1e-6) {
     throw new Error(`visual-metric: score_weights must sum to 1, got ${sum.toFixed(4)}`)
   }
   return parsed
 }
 
+// ---------------------------------------------------------------------------
+// 核心计算
+// ---------------------------------------------------------------------------
+
+interface DecodedImage {
+  width: number
+  height: number
+  data: Buffer
+}
+
+async function decodePNG(filePath: string): Promise<DecodedImage> {
+  const buf = await fs.readFile(filePath)
+  return new Promise<DecodedImage>((resolve, reject) => {
+    const png = new PNG()
+    png.parse(buf, (err, parsed) => {
+      if (err) reject(err)
+      else resolve({ width: parsed.width, height: parsed.height, data: parsed.data })
+    })
+  })
+}
+
+/** Bilinear resize for 8-bit RGBA. 用于 aHash 与 SSIM 尺寸归一。 */
+function resizeRGBA(src: DecodedImage, targetW: number, targetH: number): DecodedImage {
+  if (src.width === targetW && src.height === targetH) return src
+  const out = Buffer.alloc(targetW * targetH * 4)
+  const xRatio = src.width / targetW
+  const yRatio = src.height / targetH
+  for (let y = 0; y < targetH; y++) {
+    const sy = y * yRatio
+    const y0 = Math.floor(sy)
+    const y1 = Math.min(y0 + 1, src.height - 1)
+    const yT = sy - y0
+    for (let x = 0; x < targetW; x++) {
+      const sx = x * xRatio
+      const x0 = Math.floor(sx)
+      const x1 = Math.min(x0 + 1, src.width - 1)
+      const xT = sx - x0
+      for (let c = 0; c < 4; c++) {
+        const p00 = src.data[(y0 * src.width + x0) * 4 + c]
+        const p01 = src.data[(y0 * src.width + x1) * 4 + c]
+        const p10 = src.data[(y1 * src.width + x0) * 4 + c]
+        const p11 = src.data[(y1 * src.width + x1) * 4 + c]
+        const top = p00 * (1 - xT) + p01 * xT
+        const bot = p10 * (1 - xT) + p11 * xT
+        out[(y * targetW + x) * 4 + c] = Math.round(top * (1 - yT) + bot * yT)
+      }
+    }
+  }
+  return { width: targetW, height: targetH, data: out }
+}
+
+/** 8x8 平均哈希。返回 64 位值（BigInt），可与另一个 hash 用 popcount(XOR) 求汉明距离。 */
+function averageHash(img: DecodedImage): bigint {
+  const small = resizeRGBA(img, 8, 8)
+  const gray = new Float32Array(64)
+  let sum = 0
+  for (let i = 0; i < 64; i++) {
+    const r = small.data[i * 4]
+    const g = small.data[i * 4 + 1]
+    const b = small.data[i * 4 + 2]
+    // Rec. 601 luma，与浏览器默认 tone mapping 接近。
+    const y = 0.299 * r + 0.587 * g + 0.114 * b
+    gray[i] = y
+    sum += y
+  }
+  const avg = sum / 64
+  let hash = 0n
+  for (let i = 0; i < 64; i++) {
+    if (gray[i] > avg) hash |= 1n << BigInt(i)
+  }
+  return hash
+}
+
+function hammingDistance(a: bigint, b: bigint): number {
+  let x = a ^ b
+  let count = 0
+  while (x > 0n) {
+    if (x & 1n) count++
+    x >>= 1n
+  }
+  return count
+}
+
 /**
- * 计算 rendered vs reference 的硬门结果 + 复合 score。
- * Stub：抛 NotImplementedError，Stream C (P0-B) 合入真实实现。
+ * 非白像素密度：一个像素只要 max(r,g,b) < 250 就记为"有内容"。
+ * 空骨架页几乎全白 → 密度极低 → ratio 必然 < threshold，卡掉 ainvest 事故那类退化。
  */
-export async function computeVisualMetric(_input: {
+function nonWhiteDensity(
+  img: DecodedImage,
+  region?: { x: number; y: number; width: number; height: number },
+): number {
+  const x0 = region ? Math.max(0, Math.min(img.width, region.x)) : 0
+  const y0 = region ? Math.max(0, Math.min(img.height, region.y)) : 0
+  const x1 = region ? Math.max(0, Math.min(img.width, region.x + region.width)) : img.width
+  const y1 = region ? Math.max(0, Math.min(img.height, region.y + region.height)) : img.height
+  if (x1 <= x0 || y1 <= y0) return 0
+  let nonWhite = 0
+  let total = 0
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const idx = (y * img.width + x) * 4
+      const r = img.data[idx]
+      const g = img.data[idx + 1]
+      const b = img.data[idx + 2]
+      const a = img.data[idx + 3]
+      // 完全透明像素视为背景——否则 dist/ 截图的 alpha 边缘会被错当成内容。
+      if (a < 16) {
+        total++
+        continue
+      }
+      const maxCh = r > g ? (r > b ? r : b) : g > b ? g : b
+      if (maxCh < 250) nonWhite++
+      total++
+    }
+  }
+  return total === 0 ? 0 : nonWhite / total
+}
+
+/**
+ * 4 bit/channel 桶装唯一色：总桶数 4096。卡「页面只有灰度占位」那种退化。
+ * 桶而非原始 RGB 是为了抵抗 JPEG/PNG 量化噪声——若用 256^3 则全部截图都"独特"。
+ */
+function uniqueColorBucketCount(img: DecodedImage): number {
+  const buckets = new Set<number>()
+  for (let i = 0; i < img.data.length; i += 4) {
+    const a = img.data[i + 3]
+    if (a < 16) continue
+    const r = img.data[i] >> 4
+    const g = img.data[i + 1] >> 4
+    const b = img.data[i + 2] >> 4
+    buckets.add((r << 8) | (g << 4) | b)
+  }
+  return buckets.size
+}
+
+/**
+ * reference OCR 文本在 rendered 的命中率。Stream C 不内嵌 OCR；调用方通过
+ * renderedText 传入：Stream A (P0-0) 附带 rendered 页的 innerText 即可；
+ * P1-B 合入后 referenceStrings 由 CaptureManifest 权威产出。两者任一缺失该门 skip。
+ */
+function textHitRatio(
+  referenceStrings: readonly string[] | undefined,
+  renderedText: string | undefined,
+): number | null {
+  if (!referenceStrings || referenceStrings.length === 0) return null
+  if (typeof renderedText !== "string") return null
+  const haystack = renderedText.toLowerCase()
+  let hits = 0
+  for (const s of referenceStrings) {
+    const needle = s.trim().toLowerCase()
+    if (needle.length === 0) continue
+    if (haystack.includes(needle)) hits++
+  }
+  return hits / referenceStrings.length
+}
+
+export async function computeVisualMetric(input: {
   renderedPath: string
   referencePath: string
-  /** reference 的 chart 区域 bbox（由 CaptureManifest 提供）；缺失则退化为全图密度比较。 */
   chartRegion?: { x: number; y: number; width: number; height: number }
-  /** reference 文字串（由 CaptureManifest.reference_strings 提供）；缺失则 text_hit_ratio gate 跳过。 */
   referenceStrings?: string[]
+  renderedText?: string
   thresholds: VisualThresholdsType
 }): Promise<VisualMetricResult> {
-  throw new Error(
-    "visual-metric: computeVisualMetric not yet implemented — P0-B (Stream C) scope. " +
-    "This stub exists only to lock the return-type contract for P0-C.4 (LKG) and P2 (replay).",
+  const [rendered, reference] = await Promise.all([
+    decodePNG(input.renderedPath),
+    decodePNG(input.referencePath),
+  ])
+  const t = input.thresholds
+
+  // ---- 1. pHash 汉明距离 -------------------------------------------------
+  const hashR = averageHash(rendered)
+  const hashRef = averageHash(reference)
+  const hamming = hammingDistance(hashR, hashRef)
+  const phashGate: VisualGateResult = {
+    name: "phash_hamming",
+    passed: hamming <= t.phash_hamming_max,
+    threshold: t.phash_hamming_max,
+    value: hamming,
+    note: hamming <= t.phash_hamming_max ? "" : `aHash hamming=${hamming} > ${t.phash_hamming_max} — 整体结构与 reference 偏差过大`,
+  }
+
+  // ---- 2. SSIM -----------------------------------------------------------
+  // ssim.js 要求相同尺寸——rendered 强制归一到 reference。
+  const rendForSsim = resizeRGBA(rendered, reference.width, reference.height)
+  const { mssim } = ssim(
+    { data: rendForSsim.data as unknown as Uint8ClampedArray, width: rendForSsim.width, height: rendForSsim.height },
+    { data: reference.data as unknown as Uint8ClampedArray, width: reference.width, height: reference.height },
+  )
+  const ssimGate: VisualGateResult = {
+    name: "ssim",
+    passed: mssim >= t.ssim_min,
+    threshold: t.ssim_min,
+    value: mssim,
+    note: mssim >= t.ssim_min ? "" : `SSIM=${mssim.toFixed(3)} < ${t.ssim_min} — 纹理/细节差距过大`,
+  }
+
+  // ---- 3. chart-region 非白密度比 ---------------------------------------
+  const refDensity = nonWhiteDensity(reference, input.chartRegion)
+  const rendDensity = nonWhiteDensity(
+    // density 对 reference 的 bbox 适用；rendered 归一到 reference 尺寸后用同 bbox。
+    rendForSsim,
+    input.chartRegion,
+  )
+  const densityRatio = refDensity === 0 ? 0 : rendDensity / refDensity
+  const densityGate: VisualGateResult = {
+    name: "chart_region_density",
+    passed: densityRatio >= t.chart_region_density_min_ratio,
+    threshold: t.chart_region_density_min_ratio,
+    value: densityRatio,
+    note:
+      densityRatio >= t.chart_region_density_min_ratio
+        ? ""
+        : `rendered 非白像素密度=${rendDensity.toFixed(3)} vs reference=${refDensity.toFixed(3)} → ratio=${densityRatio.toFixed(3)} < ${t.chart_region_density_min_ratio}（疑似空骨架）`,
+  }
+
+  // ---- 4. 唯一色桶比 -----------------------------------------------------
+  const refColors = uniqueColorBucketCount(reference)
+  const rendColors = uniqueColorBucketCount(rendForSsim)
+  const colorRatio = refColors === 0 ? 0 : rendColors / refColors
+  const colorGate: VisualGateResult = {
+    name: "unique_color_ratio",
+    passed: colorRatio >= t.unique_color_ratio_min,
+    threshold: t.unique_color_ratio_min,
+    value: colorRatio,
+    note:
+      colorRatio >= t.unique_color_ratio_min
+        ? ""
+        : `唯一色桶数 rendered=${rendColors} / reference=${refColors} → ratio=${colorRatio.toFixed(3)} < ${t.unique_color_ratio_min}（疑似单色/占位页）`,
+  }
+
+  // ---- 5. text hit ratio (P1-B 提供 anchors 后生效) ---------------------
+  const textValue = textHitRatio(input.referenceStrings, input.renderedText)
+  const textGate: VisualGateResult =
+    textValue === null
+      ? {
+          name: "text_hit_ratio",
+          passed: true,
+          threshold: t.text_hit_ratio_min,
+          value: Number.NaN,
+          note: "skipped: referenceStrings/renderedText 未提供（等待 P1-B capture-fingerprint 落地）",
+        }
+      : {
+          name: "text_hit_ratio",
+          passed: textValue >= t.text_hit_ratio_min,
+          threshold: t.text_hit_ratio_min,
+          value: textValue,
+          note:
+            textValue >= t.text_hit_ratio_min
+              ? ""
+              : `reference 字符串命中率=${(textValue * 100).toFixed(1)}% < ${(t.text_hit_ratio_min * 100).toFixed(0)}%（疑似占位文案）`,
+        }
+
+  const gates = [phashGate, ssimGate, densityGate, colorGate, textGate]
+  const passed = gates.every((g) => g.passed)
+
+  // ---- 复合 score (LKG 回滚比较用，越大越好，范围 [0,1]) --------------
+  const phashNorm = Math.max(0, 1 - hamming / 32) // 32 位差异 = 0 分
+  const ssimNorm = Math.max(0, Math.min(1, mssim))
+  const densityNorm = Math.max(0, Math.min(1, densityRatio))
+  let wP = t.score_weights.phash
+  let wS = t.score_weights.ssim
+  let wD = t.score_weights.density
+  let textComponent = 0
+  if (textValue === null) {
+    // 权重再分配：缺 anchor 时把 text_hit 的权重按比例摊给前三项，保持 score 可比。
+    const rem = wP + wS + wD
+    if (rem > 0) {
+      wP /= rem
+      wS /= rem
+      wD /= rem
+    }
+  } else {
+    textComponent = t.score_weights.text_hit * Math.max(0, Math.min(1, textValue))
+  }
+  const score = wP * phashNorm + wS * ssimNorm + wD * densityNorm + textComponent
+
+  return {
+    passed,
+    score,
+    gates,
+    renderedPath: input.renderedPath,
+    referencePath: input.referencePath,
+    capturedAt: Date.now(),
+  }
+}
+
+/**
+ * 格式化成一行人类可读摘要，嵌入 verdict.rejection_details[].error 里。
+ */
+export function summarizeVisualMetric(metric: VisualMetricResult): string {
+  const failed = metric.gates.filter((g) => !g.passed)
+  if (failed.length === 0) {
+    return `visual gate passed (score=${metric.score.toFixed(3)})`
+  }
+  return (
+    `visual gate FAILED (score=${metric.score.toFixed(3)}): ` +
+    failed.map((g) => `${g.name}=${g.value} vs ${g.threshold}`).join("; ")
   )
 }
