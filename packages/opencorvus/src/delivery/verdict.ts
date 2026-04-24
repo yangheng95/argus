@@ -6,6 +6,7 @@
  * import with agent.ts.
  */
 import z from "zod"
+import type { VisualMetricResult } from "./visual-metric"
 
 export const StartupVerification = z.object({
   attempted: z.boolean().describe("Whether startup verification was attempted"),
@@ -75,3 +76,85 @@ export const DeliveryVerdict = z.object({
 })
 
 export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
+
+/**
+ * 数值硬门（P0-B）对 LLM verdict 的最终裁定。
+ *
+ * 流程：LLM 先独立出 verdict，service 层再对 rendered.png + reference.png
+ * 跑 `computeVisualMetric`。任一硬门未过 ⇒ finalizeVerdict 把 LLM 的
+ * `accepted` 翻为 `rejected`，并把具体指标写进 rejection_details；LLM 无权
+ * 推翻（CLAUDE.md rule 12：视觉有关的 benchmark 必须以视觉呈现）。
+ *
+ * 调用语义：
+ *  - metric.passed === true  → 原封不动返回 LLM verdict（软性瑕疵由 LLM 判）
+ *  - metric.passed === false + LLM verdict === "rejected" → 合并 gate 失败
+ *    到 issues_found，保持 rejected
+ *  - metric.passed === false + LLM verdict === "accepted" → 强制翻为 rejected
+ *
+ * `goalIds` 来源：调用方在 service 层传入 `input.goals.map(g => g.id)`。
+ * 视觉硬门是 delivery 级失败，归因到全部 goal（任一 goal 都可能是 empty
+ * skeleton 的产生源，由下游 executor 自查）。
+ */
+export function finalizeVerdict(
+  llmVerdict: DeliveryVerdictType,
+  metric: VisualMetricResult,
+  goalIds: readonly string[],
+): DeliveryVerdictType {
+  if (metric.passed) return llmVerdict
+
+  const failedGates = metric.gates.filter((g) => !g.passed)
+  const gateErrorLines = failedGates.map(
+    (g) => `[visual-gate/${g.name}] ${g.note}`,
+  )
+  const headline =
+    `Numeric visual gate failed (score=${metric.score.toFixed(3)}). ` +
+    `Rendered vs reference 在 ${failedGates.length} 条硬门上未达标，LLM 的 accept 被硬门覆盖。`
+
+  const mergedIssues = Array.from(
+    new Set([...(llmVerdict.issues_found ?? []), ...gateErrorLines]),
+  )
+
+  // LLM 本来就判 rejected：保留其归因，只追加硬门证据到 issues。
+  if (llmVerdict.verdict === "rejected") {
+    return {
+      ...llmVerdict,
+      issues_found: mergedIssues,
+      summary: llmVerdict.summary
+        ? `${llmVerdict.summary}\n\n${headline}`
+        : headline,
+    }
+  }
+
+  // LLM 判了 accepted，但硬门拒绝：强制翻转为 rejected。
+  const visualRejection = failedGates.map((g) => ({
+    goal_id: goalIds[0] ?? "unknown-goal",
+    category: "visual" as const,
+    error: `${g.name}: ${g.note || `value=${g.value} threshold=${g.threshold}`}`,
+    suggestion:
+      g.name === "chart_region_density" || g.name === "unique_color_ratio"
+        ? "Render 结果过于接近空骨架——检查是否真的把数据渲染到了 DOM/canvas，而不是仅 scaffold。"
+        : g.name === "phash_hamming" || g.name === "ssim"
+          ? "整体布局/配色偏离 reference——对照 reference 重新对齐主要区块。"
+          : "对照 reference_strings 检查关键文案是否渲染到位。",
+  }))
+
+  // 额外归因到每一个 goalId，便于 orchestrator 分配 repair（与 rejection_details[].goal_id 对齐）。
+  const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
+  const detailsPerGoal = allGoalIds.flatMap((gid) =>
+    failedGates.map((g) => ({
+      goal_id: gid,
+      category: "visual" as const,
+      error: `${g.name}: ${g.note || `value=${g.value} threshold=${g.threshold}`}`,
+      suggestion: visualRejection[0]?.suggestion,
+    })),
+  )
+
+  return {
+    ...llmVerdict,
+    verdict: "rejected",
+    summary: `${headline}\n\nLLM 原 summary: ${llmVerdict.summary}`,
+    issues_found: mergedIssues,
+    affected_goal_ids: allGoalIds,
+    rejection_details: [...(llmVerdict.rejection_details ?? []), ...detailsPerGoal],
+  }
+}

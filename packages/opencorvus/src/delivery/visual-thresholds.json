@@ -1,0 +1,14 @@
+{
+  "_note": "P0-B 数值硬门阈值 + 复合 score 权重。阈值按 dev/ accept/reject 样本标定；改动需同步刷 replay 基线。weights 必须相加为 1（loadVisualThresholds 会校验）。",
+  "phash_hamming_max": 18,
+  "ssim_min": 0.55,
+  "chart_region_density_min_ratio": 0.6,
+  "unique_color_ratio_min": 0.5,
+  "text_hit_ratio_min": 0.7,
+  "score_weights": {
+    "phash": 0.25,
+    "ssim": 0.35,
+    "density": 0.25,
+    "text_hit": 0.15
+  }
+}
