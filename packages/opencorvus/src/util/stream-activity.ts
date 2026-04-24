@@ -76,9 +76,8 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
     if (disposed) return
     if (timer !== null) clearTimeout(timer)
     timer = setTimeout(trip, options.idleMs)
-    // Don't keep the event loop alive just for this timer — the gate
-    // is advisory, not a liveness proof.
-    timer.unref?.()
+    // Timer is intentionally ref'd: unref would let Bun idle out while an
+    // async iterator is parked on `await new Promise`, defeating the gate.
   }
 
   schedule()
