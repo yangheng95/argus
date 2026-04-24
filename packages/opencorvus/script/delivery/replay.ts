@@ -22,10 +22,14 @@ import {
   listDeliveryRoundsByTask,
   type DeliveryRoundRow,
 } from "../../src/delivery/round-store"
+import type { VisualGateName, VisualGateResult } from "../../src/delivery/visual-metric"
 
-const taskID = process.argv[2]
+const args = process.argv.slice(2)
+const taskID = args.find((a) => !a.startsWith("--"))
+const showGateDetail = args.includes("--gates")
 if (!taskID) {
-  console.error("usage: bun run script/delivery/replay.ts <taskID>")
+  console.error("usage: bun run script/delivery/replay.ts <taskID> [--gates]")
+  console.error("  --gates  print per-gate breakdown after each row")
   process.exit(2)
 }
 
@@ -50,6 +54,54 @@ function scoreBar(score: number | null, width = 12): string {
   const clamped = Math.max(0, Math.min(1, score))
   const filled = Math.round(clamped * width)
   return "█".repeat(filled) + "░".repeat(width - filled)
+}
+
+/**
+ * 5 条硬门状态压到单列："p:✓ s:✗ d:✓ u:✓ t:-"
+ *  ✓ passed / ✗ failed / - gate 未参与（例如 text_hit_ratio 在 P1-B referenceStrings
+ *    缺失时 skip 并从 score 权重中扣除）
+ * metrics=null 或 gates 字段缺失时返回空串。
+ */
+const GATE_LABEL: Record<VisualGateName, string> = {
+  phash_hamming: "p",
+  ssim: "s",
+  chart_region_density: "d",
+  unique_color_ratio: "u",
+  text_hit_ratio: "t",
+}
+
+function gateBadges(row: DeliveryRoundRow): string {
+  const gates = row.metrics?.gates
+  if (!gates || gates.length === 0) return ""
+  const order: VisualGateName[] = [
+    "phash_hamming",
+    "ssim",
+    "chart_region_density",
+    "unique_color_ratio",
+    "text_hit_ratio",
+  ]
+  const byName = new Map(gates.map((g) => [g.name, g]))
+  return order
+    .map((name) => {
+      const g = byName.get(name)
+      const label = GATE_LABEL[name]
+      if (!g) return `${label}:-`
+      if (Number.isNaN(g.value)) return `${label}:-`
+      return `${label}:${g.passed ? "✓" : "✗"}`
+    })
+    .join(" ")
+}
+
+function formatGateDetail(row: DeliveryRoundRow): string[] {
+  const gates = row.metrics?.gates
+  if (!gates || gates.length === 0) return []
+  return gates.map((g: VisualGateResult) => {
+    const valueStr = Number.isNaN(g.value) ? "   skip" : g.value.toFixed(3).padStart(7)
+    const thresholdStr = g.threshold.toFixed(3).padStart(7)
+    const status = g.passed ? "✓" : (Number.isNaN(g.value) ? "·" : "✗")
+    const note = g.note ? `  ${g.note}` : ""
+    return `      [${status}] ${g.name.padEnd(22)} value=${valueStr}  threshold=${thresholdStr}${note}`
+  })
 }
 
 /** 退化检测：遍历时维护 running best，score 严格下降标 ▼。 */
@@ -92,6 +144,7 @@ const header = [
   "verdict".padEnd(11),
   "score",
   "trajectory".padEnd(12),
+  "gates".padEnd(19),
   "commit".padEnd(9),
   "rollback",
   "markers",
@@ -110,6 +163,7 @@ for (const a of annotated) {
 
   const commitShort = r.commit_sha.slice(0, 8)
   const rollback = r.rollback_from_round === null ? "  —  " : String(r.rollback_from_round).padStart(5)
+  const gates = gateBadges(r)
 
   console.log(
     [
@@ -118,11 +172,16 @@ for (const a of annotated) {
       r.verdict.padEnd(11),
       fmtScore(r),
       scoreBar(r.score),
+      gates.padEnd(19),
       commitShort.padEnd(9),
       rollback,
       markers.join(" "),
     ].join("  "),
   )
+
+  if (showGateDetail) {
+    for (const line of formatGateDetail(r)) console.log(line)
+  }
 }
 
 // 汇总：best / 总 score drop 次数 / 是否以 accepted 结尾
