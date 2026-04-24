@@ -261,6 +261,13 @@ export namespace Agent {
       delivery: {
         name: "delivery",
         description: "Delivery verification agent. Verifies runtime behavior, fixes bugs, and makes final acceptance decisions.",
+        // Hard step budget. Mirrors EngineConfig.delivery.max_steps (default
+        // 160); SessionLoop reads this value directly. Operators that tune
+        // EngineConfig.delivery.max_steps should also update this — an
+        // EngineConfig-linked dynamic read here would couple the Agent
+        // registry to runtime state (CLAUDE.md rule 26), so we keep both
+        // in sync by convention.
+        steps: 160,
         // `task` is INTENTIONALLY not excluded: delivery dispatches per-goal
         // review subagents (Phase 2.5 in DELIVERY_AGENT_SYSTEM) to deepen its
         // otherwise thin per-goal verification. Adversarial review across 3+

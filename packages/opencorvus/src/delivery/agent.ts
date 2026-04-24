@@ -10,13 +10,16 @@
  * 4. Re-verify after fixes to confirm the application works
  * 5. Make a final acceptance decision before publishing
  */
-import { stepCountIs } from "ai"
 import { resolveAgentModel } from "@/agent/model"
-import { AgentRuntime } from "@/agent/runtime"
 import { createDeliveryTools } from "./tools"
 import { createDeliveryOutputTools } from "./output-tools"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
+import { Provider } from "@/provider/provider"
+import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
+import { Bus } from "@/bus"
+import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
 import { type TextHooks } from "@/llm/api"
@@ -56,6 +59,9 @@ type VerifyInput = {
    *  `file` content part so it can actually see the target — text-only read_file
    *  on a PNG returns UTF-8 garbage and is not a substitute. */
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
+  /** Explicit model override (provider/model). Skips `resolveAgentModel`. */
+  model?: { providerID: string; modelID: string }
+  /** Legacy passthrough; not wired after the SessionPrompt migration. */
   stream?: TextHooks
   signal?: AbortSignal
 }
@@ -65,16 +71,26 @@ export namespace DeliveryAgent {
     // Per-agent model override: if config sets agent.delivery.model, honor it;
     // otherwise inherit the user's most recent in-session model pick from the
     // task session; otherwise fall through to Provider.defaultModel().
-    const model = await resolveAgentModel("delivery", { sessionID: input.task.sessionID })
+    let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
+    if (input.model) {
+      model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
+    } else {
+      model = await resolveAgentModel("delivery", { sessionID: input.task.sessionID }).catch(() => undefined)
+    }
+    if (!model) throw new Error("no LLM model available for delivery agent")
+
     const deliveryCfg = (await EngineConfig.get()).delivery
 
     const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
     const systemResolved = await deliveryAgentSystem(input)
     const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
     const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
+    const enableMap: Record<string, boolean> = Object.fromEntries(
+      Object.keys(guard.tools).map((name) => [name, true]),
+    )
     const context = prefetchDeliveryContext(input)
     const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
-    const userPrompt = await buildMultimodalPrompt(textPrompt, input.attachments)
+    const parts = await buildPromptParts(textPrompt, input.attachments)
     const systemPrompt = systemResolved.prompt
 
     log.info("delivery agent starting", {
@@ -85,25 +101,17 @@ export namespace DeliveryAgent {
       config: deliveryCfg,
     })
 
-    // Stream hooks the caller (DeliveryService) supplied — tunneled through
-    // AgentRuntime so the same chunk/step callbacks reach this run.
-    const passthroughHooks = {
-      onChunk: input.stream?.onChunk,
-      onError: input.stream?.onError,
-      flush: async () => {},
-      failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
-    } as any
-
     const externalSignal = input.signal
 
     const MAX_RETRIES = deliveryCfg.max_retries
     let verdict: DeliveryVerdictType | undefined
     let lastError: Error | undefined
 
-    // Retry loop covers missing-finalize failures — the agent ran but did not
-    // call submit_verdict before the step budget ended. Stream-level failures
-    // are surfaced directly by AgentRuntime; we propagate them as thrown
-    // errors and only retry the finalize-missed path.
+    // Retry loop covers missing-submit_verdict failures — the agent ran but did
+    // not call submit_verdict before the step budget ended. Same shape as the
+    // pre-migration loop; wraps SessionPrompt.prompt instead of AgentRuntime.run.
+    // Each attempt opens its own child session so the collector state on retry
+    // is not entangled with a prior attempt's message history.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (attempt > 0) {
         if (externalSignal?.aborted) break
@@ -111,40 +119,65 @@ export namespace DeliveryAgent {
         outputToolKit.reset()
       }
 
-      let runResult: Awaited<ReturnType<typeof AgentRuntime.run>>
+      const agentSession = await Session.createNext({
+        kind: "delivery",
+        parentID: input.task.sessionID,
+        title: `Delivery: ${input.task.title}`,
+        directory: Instance.directory,
+      })
+      const abortPrompt = () => {
+        try {
+          SessionPrompt.cancel(agentSession.id)
+        } catch {
+          /* session may already be stopped */
+        }
+      }
+      externalSignal?.addEventListener("abort", abortPrompt, { once: true })
+
+      const streamErrors: Array<{ reason: string; name?: string }> = []
+      const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
+        const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
+        if (props.sessionID !== agentSession.id) return
+        streamErrors.push({ reason: props.error?.message ?? "unknown error", name: props.error?.name })
+      })
+
       try {
-        runResult = await AgentRuntime.run({
-          agent: "delivery",
-          model,
-          system: systemPrompt,
-          messages: [{ role: "user" as const, content: userPrompt }],
-          tools: guard.tools,
-          stopWhen: stepCountIs(deliveryCfg.max_steps),
-          cacheKey: `task-${input.task.id}-delivery`,
-          sessionID: input.task.sessionID ?? "",
-          taskID: input.task.id,
-          stage: "delivery",
-          signal: externalSignal,
-          hooks: passthroughHooks,
-          policies: {
-            failurePolicy: "collect",
-          },
+        await SessionPrompt.withExtraTools(agentSession.id, guard.tools as any, async () => {
+          await SessionPrompt.prompt({
+            sessionID: agentSession.id,
+            model: { providerID: model!.providerID, modelID: model!.api.id },
+            agent: "delivery",
+            system: systemPrompt,
+            tools: enableMap,
+            parts,
+          })
         })
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         const isAborted = externalSignal?.aborted || (err instanceof Error && err.name === "AbortError")
         log.warn("delivery agent run failed", { attempt, error: lastError.message, aborted: isAborted })
         if (isAborted && externalSignal?.aborted) break
+        errorUnsub()
+        externalSignal?.removeEventListener("abort", abortPrompt)
         continue
+      } finally {
+        errorUnsub()
+        externalSignal?.removeEventListener("abort", abortPrompt)
       }
 
       log.info("delivery agent finished", {
         attempt,
-        steps: runResult.steps.length,
-        toolCalls: runResult.toolCallCount,
-        finishReason: runResult.finishReason,
-        streamFailures: runResult.failures.count,
+        sessionID: agentSession.id,
+        streamErrors: streamErrors.length,
       })
+
+      if (streamErrors.length > 0) {
+        lastError = new Error(
+          `delivery: session stream error: ${streamErrors[0].name ?? "error"}: ${streamErrors[0].reason}`,
+        )
+        log.warn("delivery: stream error, will retry", { attempt, error: lastError.message })
+        continue
+      }
 
       const collector = outputToolKit.getCollector()
       if (collector.finalized && collector.verdict) {
@@ -155,10 +188,7 @@ export namespace DeliveryAgent {
       lastError = new Error(
         "delivery agent did not call submit_verdict before the step budget ran out",
       )
-      log.warn("delivery: submit_verdict not called, will retry", {
-        attempt,
-        finishReason: runResult.finishReason,
-      })
+      log.warn("delivery: submit_verdict not called, will retry", { attempt })
     }
 
     if (!verdict) {
@@ -211,24 +241,26 @@ function prefetchDeliveryContext(input: {
 // ---------------------------------------------------------------------------
 
 /**
- * Merge the text prompt with any visual-reference attachments into the
- * multimodal user content the LLM expects. Falls back to the plain string
- * when there are no image attachments so non-vision stages are unchanged.
+ * Build SessionPrompt-compatible message parts. Text first, then inline
+ * multimodal attachments (images / audio / video / PDFs) so delivery can
+ * actually see the visual reference. Post-phase-3-b migration the shape
+ * matches PromptInput.parts — FilePart uses data URLs instead of Buffer
+ * so Session.saveMessage can persist without re-resolving a local path.
  */
-async function buildMultimodalPrompt(
+async function buildPromptParts(
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
-): Promise<string | Array<{ type: "text"; text: string } | { type: "file"; data: Buffer; mediaType: string; filename?: string }>> {
-  if (!attachments?.length) return text
-  // Mirror orchestrator / requirements / design-analyst routing: only inline
-  // MIMEs the provider actually accepts as multimodal (image / audio / video
-  // / PDF). The previous image-only filter dropped PDFs that delivery agents
-  // legitimately need to inspect.
-  const inlineable = attachments.filter((a) => AttachmentStore.isMultimodalSupported(typeof a.mime === "string" ? a.mime : ""))
-  if (inlineable.length === 0) return text
-  const parts: Array<{ type: "text"; text: string } | { type: "file"; data: Buffer; mediaType: string; filename?: string }> = [
-    { type: "text", text },
-  ]
+) {
+  const parts: Array<
+    | { type: "text"; text: string }
+    | { type: "file"; url: string; mime: string; filename?: string }
+  > = [{ type: "text", text }]
+
+  if (!attachments?.length) return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
+
+  const inlineable = attachments.filter((a) =>
+    AttachmentStore.isMultimodalSupported(typeof a.mime === "string" ? a.mime : ""),
+  )
   for (const a of inlineable) {
     const located = AttachmentStore.nameFromUrl(a.url)
     if (!located) {
@@ -237,17 +269,19 @@ async function buildMultimodalPrompt(
     }
     try {
       const bytes = await AttachmentStore.read(located.projectID, located.name)
+      const base64 = Buffer.from(bytes).toString("base64")
       parts.push({
         type: "file",
-        data: bytes,
-        mediaType: a.mime,
-        ...(a.filename ? { filename: a.filename } : {}),
+        url: `data:${a.mime};base64,${base64}`,
+        mime: a.mime,
+        filename: a.filename,
       })
     } catch (err) {
       log.warn("delivery: attachment read failed", { url: a.url, filename: a.filename, err: String(err) })
     }
   }
-  return parts.length > 1 ? parts : text
+
+  return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 }
 
 function buildUserPrompt(
