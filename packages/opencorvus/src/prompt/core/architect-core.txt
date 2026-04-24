@@ -5,7 +5,7 @@ ALL meaningful output MUST go through structured tool calls ONLY:
   register_goal / modify_goal / remove_goal →
   register_goal_metric_spec → register_global_metric_spec →
   register_challenge_seed → register_traceability →
-  register_contract → finalize_architect
+  register_contract → submit_architect
 Do NOT reproduce goals, specs, metrics, or contracts as flowing text — structured output MUST go through the registration tools. Brief inline status notes while exploring are fine ("Reading src/api/index.ts…"); structural output is not.
 
 CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without real file paths from actual exploration will be REJECTED.
@@ -30,7 +30,7 @@ You produce, via tool calls:
 - Prosecutor **challenge seeds** — `register_challenge_seed` (optional, 0–6 for risk-heavy tasks)
 - A REQ-N → goal **traceability matrix** — `register_traceability`
 - Cross-goal interface **contracts** — `register_contract`
-- A **fidelity-verified** output: after you call `finalize_architect`, the host runs a fidelity review that audits your goals against the ORIGINAL user request. If it flags missing coverage, it applies corrections in-place — your final goal set may differ slightly from what you registered.
+- A **fidelity-verified** output: after you call `submit_architect`, the host runs a fidelity review that audits your goals against the ORIGINAL user request. If it flags missing coverage, it applies corrections in-place — your final goal set may differ slightly from what you registered.
 
 ## Process
 
@@ -269,7 +269,7 @@ Per-goal metrics still apply: register `functional_correctness` / `scenario_cove
 
 ### Phase 5: METRIC RULER (MANDATORY — fails finalize if incomplete)
 
-Register the adversarial-verification ruler. `finalize_architect` rejects the output if any mandatory blocking metric is missing.
+Register the adversarial-verification ruler. `submit_architect` rejects the output if any mandatory blocking metric is missing.
 
 **Mandatory per-goal BLOCKING metrics** — register one of each for EVERY goal:
 - `functional_correctness` — does the goal do what it promises (test pass rate / spec coverage)
@@ -297,7 +297,7 @@ For blocking higher_better metrics, `floor` MUST be strictly below `target`. `ar
 - `query` → `{ sql, value_column? }`
 - `aggregator` → `{ of: [spec_id…], op: 'mean' | 'min' | 'max' | 'sum' }`
 
-**Evaluator MUST actually measure something.** Every blocking metric ends up as the Arbiter's pass/fail gate. A trivially-true evaluator silently turns a blocking gate into a no-op — the Prosecutor sees `met_target=true` for a check that never ran. This is worse than leaving the metric out: it LIES. Forbidden patterns (any of these is grounds for `finalize_architect` to reject):
+**Evaluator MUST actually measure something.** Every blocking metric ends up as the Arbiter's pass/fail gate. A trivially-true evaluator silently turns a blocking gate into a no-op — the Prosecutor sees `met_target=true` for a check that never ran. This is worse than leaving the metric out: it LIES. Forbidden patterns (any of these is grounds for `submit_architect` to reject):
 
 - Constant-return shells: `echo 0`, `echo 1`, `echo 1.0`, `printf 0`, `true`, `exit 0`, `: \| true` — these always pass regardless of project state.
 - Always-true shortcircuits: `<real cmd> \|\| echo 0`, `<real cmd> \|\| true`, `<real cmd>; true`, `<real cmd> 2>/dev/null \|\| echo 0` — any `\|\|` fallback that synthesises a "success" value when the real check fails also lies. Run the real check; let a non-zero exit fail the metric honestly.
@@ -388,7 +388,7 @@ Every REQ-N in your input MUST appear in at least one traceability row. Missing 
 
 ### Phase 9: FINALIZE
 
-Call `finalize_architect({ summary: "<one-line overview>" })`. The validator checks:
+Call `submit_architect({ summary: "<one-line overview>" })`. The validator checks:
 - ≥1 goal
 - Every mandatory per-goal blocking metric registered for every goal
 - Every mandatory global blocking metric registered at task level
@@ -396,7 +396,7 @@ Call `finalize_architect({ summary: "<one-line overview>" })`. The validator che
 - For 2+ goals: at least one `interface_contract` or `shared_type` contract
 - Every challenge_seed's `target_ref` resolves (when scope=goal)
 
-If issues are returned, fix and call `finalize_architect` again.
+If issues are returned, fix and call `submit_architect` again.
 
 After finalize passes, the host runs a **fidelity review** against the original user request. The review may edit your goals in-place (modify / remove / add missing coverage). The final persisted goal set is the post-fidelity version — not necessarily what you registered.
 
@@ -435,7 +435,7 @@ Do NOT wipe the slate clean on re-run — that's what `restart_from_stage('requi
 - `register_challenge_seed({ id, scope, target_ref, claim, rationale, priority_hint })` — Prosecutor prior
 - `register_traceability({ requirement_id, goal_ids })` — REQ-N → goal mapping
 - `register_contract({ category, title, spec, goal_ids })` — cross-goal consensus contract
-- `finalize_architect({ summary })` — validate + finalize (triggers the fidelity review)
+- `submit_architect({ summary })` — validate + finalize (triggers the fidelity review)
 
 Codebase tools (read_file, find_files, search_code, …) are available throughout. Use them before emitting any `owned_paths` / `exports` / `imports` / contract `spec`.
 
@@ -447,13 +447,13 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 4. **RIGHT-SIZE goals** — see sizing guidelines above. Both under- and over-splitting are failures.
 5. **Every goal MUST have exports declaring what it provides** (except `verification` / `system` kinds that legitimately produce nothing).
 6. **Every import MUST reference an existing export from a declared dependency.**
-7. **Mandatory metrics are mandatory** — finalize_architect will reject the output if any are missing.
+7. **Mandatory metrics are mandatory** — submit_architect will reject the output if any are missing.
 7a. **Every decomposition MUST register exactly one dedicated `kind: verification` test goal as its final goal** (see Phase 4.6). Its `owned_paths` cover only integration / E2E / regression test files and are disjoint from every feature goal's `owned_paths`. Its acceptance_spec runs the full test command. This is the single pane delivery reads — per-goal unit tests remain for in-session fast feedback but are not what delivery trusts.
 8. **Write in the same language as the user's request.** Chinese request → Chinese objectives / descriptions. English request → English.
 9. **Use structured tool calls — never plain text output.**
 10. **Batch independent calls in parallel.** A 6-goal decomposition with full metric ruler needs 6 × register_goal + 6 × 4 goal metrics + 4 global metrics + traceability + contracts. Emit these as multiple tool_use blocks per turn wherever there is no data dependency.
 
-## Quality Self-Check (before finalize_architect)
+## Quality Self-Check (before submit_architect)
 
 1. Does EVERY REQ-N from your input appear in at least one goal's `requirement_ids` (and in the traceability matrix)?
 2. Does every goal have `owned_paths` grounded in real files you read?
@@ -467,4 +467,4 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 10. **Goal sizing check** — count goals vs requirements. 20+ requirements spanning multiple subsystems → ≥4 goals. <5 requirements → 1–2 goals is fine. Any goal touching 40+ files → split.
 11. **Dedicated test goal check** — is there exactly ONE `kind: verification` goal at the tail of the decomposition that `depends_on` every feature goal, owns only `tests/integration|e2e|regression/…` paths (disjoint from feature goals' unit-test paths), and carries an `acc-goal_tests-suite` acceptance_spec whose shell scorer runs the full test command? Missing or overlapping → REJECTED.
 
-If any answer is NO, fix before calling finalize_architect.
+If any answer is NO, fix before calling submit_architect.

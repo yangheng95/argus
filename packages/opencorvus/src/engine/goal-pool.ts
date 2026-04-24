@@ -50,7 +50,6 @@ import {
 import { EngineGoalTable, EnginePlanNodeTable } from "./engine.sql"
 import { clarificationTranscriptSection, goalRowToContract, operatorNotesSection } from "./helpers"
 import { buildGoalPrompt, createBuildSession, createExecutorSession } from "@/goal/runner"
-import { sessionStreamHooks } from "@/agent/runtime"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { projectExecutorEventToSession } from "./runtime"
@@ -465,7 +464,6 @@ export class GoalPool {
           title: `Plan: ${entry.goal.title}`,
           directory: Instance.directory,
         })
-        const planHooks = sessionStreamHooks({ sessionID: planSession.id, taskID: task.id, stage: "plan" })
         try {
           const { planGoal } = await import("@/planner/agent")
           const plannerDL = createDecisionLog(task.id)
@@ -474,6 +472,9 @@ export class GoalPool {
           // call above (step 2c-pre), which throws on failure so reaching this
           // point means the bundle is present and will still be present when
           // the executor starts after this planner finishes.
+          //
+          // Post-phase-3-b the planner runs via SessionPrompt and owns its own
+          // session persistence — no caller-side stream hook forwarding.
           const planSteps = await planGoal({
             contract: planContract,
             decisionLog: plannerDL,
@@ -483,17 +484,6 @@ export class GoalPool {
             workDir: worktreeDir,
             parentSessionID: planSession.id,
             signal,
-            stream: {
-              onChunk: async (arg: any) => {
-                const chunk = (arg as any)?.chunk
-                if (chunk?.type === "text-delta") {
-                  if (planHooks.onChunk) await planHooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-                } else {
-                  if (planHooks.onChunk) await planHooks.onChunk(arg as any)
-                }
-              },
-              onError: planHooks.onError,
-            },
           })
           planNodeTitle = planSteps.title
           planNodeBrief = planSteps.brief

@@ -8,7 +8,7 @@
  * pollution (zero-width chars, code-fence drift) that previously masqueraded
  * as "empty verdict" failures.
  *
- * Mirrors the architect pattern (output-tools.ts + finalize_architect).
+ * Mirrors the architect pattern (output-tools.ts + submit_architect).
  */
 import { tool } from "ai"
 import {

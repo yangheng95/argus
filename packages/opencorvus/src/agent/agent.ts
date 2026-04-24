@@ -318,6 +318,9 @@ export namespace Agent {
         description: "Architect agent. Resolves cross-goal interfaces, file layout, and shared types into binding Decision Log entries.",
         prompt: ARCHITECT_CORE,
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        // Mirrors EngineConfig.architect.max_steps (default 60). SessionLoop
+        // reads this directly; keep in sync with EngineConfig by convention.
+        steps: 60,
         options: {},
         mode: "primary",
         native: true,
@@ -359,6 +362,10 @@ export namespace Agent {
       fidelity: {
         name: "fidelity",
         description: "Fidelity review stage. Verifies that the produced goal set covers the original user request; system prompt is built per-call in architect/fidelity.ts.",
+        // Fidelity is a single-tool-call review: one shot + up to two
+        // schema-retry self-corrections is enough. Matches the
+        // pre-migration stepCountIs(3) budget.
+        steps: 3,
         options: {},
         mode: "primary",
         native: true,
@@ -367,6 +374,8 @@ export namespace Agent {
       prosecutor: {
         name: "prosecutor",
         description: "Prosecutor stage. Adversarial half of the delivery Dynamic Adversarial Metrics loop; files counterexamples against the defender (delivery) verdict.",
+        // Matches the pre-migration PROSECUTOR_MAX_STEPS = 8.
+        steps: 8,
         options: {},
         mode: "primary",
         native: true,
