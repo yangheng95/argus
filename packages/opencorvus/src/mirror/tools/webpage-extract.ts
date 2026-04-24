@@ -34,7 +34,7 @@ Writes to the output directory (defaults to the worktree):
 
 Returns a compact summary (title, viewport, element count, artifact paths). The agent should 'read' extracted-page.json or page-ir.xml (via webpage_compile) rather than inline the tree in context.
 
-Use this as step 1 of the webpage-clone workflow. Requires network access to the target URL.`,
+Use this as step 1 of the webpage-generate workflow. Requires network access to the target URL.`,
   parameters: z.object({
     url: z.string().describe("The webpage to extract. Must start with http:// or https://."),
     outputDir: z

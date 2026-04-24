@@ -23,7 +23,7 @@ Reads \`<outputDir>/extracted-page.json\` (from webpage_extract). Writes \`<outp
 
 This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
 
-Use as step 2 of the webpage-clone workflow. Pure function, no network or browser.`,
+Use as step 2 of the webpage-generate workflow. Pure function, no network or browser.`,
   parameters: z.object({
     outputDir: z
       .string()

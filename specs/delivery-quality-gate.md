@@ -202,7 +202,7 @@ Publisher 里 `workspaceExportAdapter` 仅把 `delivery.patch` 写进 `Global.Pa
 > - `renderPage` 扩展返回 `dom: {textLength, nodeCount, isEmptyRootShell, hasBodyChildren}`——与 screenshot 同一轮 puppeteer 采集，runtime-evidence 与 P0-B 硬门共享这一次 render（rule 22）
 > - `verdict.ts` 加 `synthesizeRuntimeRejection`——runtime 未过直接合成 rejected（category="runtime" + 每 goalId 逐条归因），不召唤 LLM
 > - `service.ts` verify 流重排为 `runtime-evidence → LLM verdict → P0-B 硬门`；视觉硬门复用 `runtimeReport.evidence.renderedPngPath`，删掉 Stream C 版的独立 `resolveRenderedPath`
-> - Skill 侧：`webpage-clone.md` 加 P1-A hard rule（SPA 抓不下来 → STOP escalate，禁改用 visual contract 糊 scaffold）；`delivery-verify-web.md` 说明 service-level pre-gate 存在，LLM 不能糊弄
+> - Skill 侧：`webpage-generate.md` 加 P1-A hard rule（SPA 抓不下来 → STOP escalate，禁改用 visual contract 糊 scaffold）；`delivery-verify-web.md` 说明 service-level pre-gate 存在，LLM 不能糊弄
 > - **并行陷阱遵守**：未动 `engine/git.ts`（Stream C' 领地）、`orchestrator/tools.ts`（A/C'/D 轮流领地）、`delivery/agent.ts`（C' / A）、`delivery/tools.ts`（Stream A）
 
 **目标**：goal 不得只产 "文本脚手架" 就算完成。
@@ -300,7 +300,7 @@ Phase 1（5 条 stream 并行，无共享代码路径）
           src/delivery/checks/visual.ts（renderPage 扩 dom metrics）
           src/delivery/service.ts（runtime → LLM → P0-B 硬门，单次 render）
           src/delivery/verdict.ts（synthesizeRuntimeRejection）
-          src/skill/builtin/{webpage-clone,delivery-verify-web}.md（prompt 禁 fallback）
+          src/skill/builtin/{webpage-generate,delivery-verify-web}.md（prompt 禁 fallback）
 
 Phase 2（依赖 Phase 1）
 ├── Stream C' · P0-C.4 · LKG score-driven rollback  ✅ DONE (2026-04-24)

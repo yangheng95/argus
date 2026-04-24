@@ -4,7 +4,7 @@
  *
  *   1. ToolRegistry lists the 5 mirror tool ids
  *   2. Each tool's init() returns a valid Zod `parameters` schema
- *   3. The `webpage-clone` skill is discoverable via Skill.list()
+ *   3. The `webpage-generate` skill is discoverable via Skill.list()
  *   4. The skill's frontmatter parses (name/description/priority)
  */
 
@@ -55,17 +55,17 @@ await Instance.provide({
 
     // 3. skill discoverability
     const skills = await Skill.all()
-    const clone = skills.find((s) => s.name === "webpage-clone")
-    if (!clone) throw new Error("webpage-clone skill not found in Skill.list()")
-    console.log(`✅ skill found: ${clone.name} (priority=${clone.priority}, builtin=${clone.builtin})`)
+    const skill = skills.find((s) => s.name === "webpage-generate")
+    if (!skill) throw new Error("webpage-generate skill not found in Skill.list()")
+    console.log(`✅ skill found: ${skill.name} (priority=${skill.priority}, builtin=${skill.builtin})`)
 
     // 4. frontmatter sanity
-    if (!clone.description || clone.description.length < 50) {
-      throw new Error(`webpage-clone description missing or too short: ${clone.description}`)
+    if (!skill.description || skill.description.length < 50) {
+      throw new Error(`webpage-generate description missing or too short: ${skill.description}`)
     }
     for (const keyword of ["webpage_extract", "webpage_compile", "webpage_analyze", "webpage_render", "webpage_evaluate"]) {
-      if (!clone.content.includes(keyword)) {
-        throw new Error(`webpage-clone skill body does not mention tool '${keyword}'`)
+      if (!skill.content.includes(keyword)) {
+        throw new Error(`webpage-generate skill body does not mention tool '${keyword}'`)
       }
     }
     console.log(`✅ skill body references every mirror tool`)

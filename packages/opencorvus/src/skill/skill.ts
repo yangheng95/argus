@@ -19,7 +19,7 @@ import specResearchMd from "./builtin/spec-research.md" with { type: "text" }
 import prdSpecMd from "./builtin/prd-spec.md" with { type: "text" }
 import deliveryVerifyWebMd from "./builtin/delivery-verify-web.md" with { type: "text" }
 import deliveryVerifyApiMd from "./builtin/delivery-verify-api.md" with { type: "text" }
-import webpageCloneMd from "./builtin/webpage-clone.md" with { type: "text" }
+import webpageGenerateMd from "./builtin/webpage-generate.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -96,7 +96,7 @@ export namespace Skill {
     { skill: prdSpecMd, files: {} },
     { skill: deliveryVerifyWebMd, files: {} },
     { skill: deliveryVerifyApiMd, files: {} },
-    { skill: webpageCloneMd, files: {} },
+    { skill: webpageGenerateMd, files: {} },
   ] as const
 
   async function install(id: string, skill: string, files: Readonly<Record<string, string>>) {

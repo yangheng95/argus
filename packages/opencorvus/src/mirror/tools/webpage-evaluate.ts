@@ -24,7 +24,7 @@ Formula: \`round(ssim * 50 + (100 - pixelDiff%) * 0.5)\`.
 
 Writes a diff-heatmap PNG (red where pixels differ). Returns score, SSIM, pixelDiff%, and paths.
 
-Use as step 6 of the webpage-clone workflow. Feed the diff image path back to the agent as context for the next edit round.`,
+Use as step 6 of the webpage-generate workflow. Feed the diff image path back to the agent as context for the next edit round.`,
   parameters: z.object({
     reference: z
       .string()

@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 /**
- * Skill-driven webpage-clone e2e benchmark.
+ * Skill-driven webpage-generate e2e benchmark.
  *
  * The previous benchmark (`mirror-baidu-clone.ts`) acted as the skill itself,
  * calling each mirror algorithm from TypeScript. This one invokes the agent
- * with the *real* `webpage-clone` skill registered in
- * `src/skill/builtin/webpage-clone.md`, exercising the production end-to-end
+ * with the *real* `webpage-generate` skill registered in
+ * `src/skill/builtin/webpage-generate.md`, exercising the production end-to-end
  * path an actual user would hit:
  *
  *     user prompt → skill activation → webpage_extract → webpage_compile
@@ -17,7 +17,7 @@
  * score). All artifacts go through the tool shells.
  *
  * Usage:
- *   bun script/benchmark/skill-webpage-clone.ts \
+ *   bun script/benchmark/skill-webpage-generate.ts \
  *     [--url=<url>] [--target-score=95] [--agent-timeout-ms=1800000] \
  *     [--output-dir=<path>]
  *
@@ -59,7 +59,7 @@ const TARGET_SCORE = Number(flag("--target-score", "95"))
 const AGENT_TIMEOUT_MS = Number(flag("--agent-timeout-ms", String(60 * 60 * 1000)))
 const OUTPUT_DIR =
   flag("--output-dir") ??
-  mkdtempSync(path.join(os.tmpdir(), `skill-webpage-clone-${Date.now()}-`))
+  mkdtempSync(path.join(os.tmpdir(), `skill-webpage-generate-${Date.now()}-`))
 
 interface Report {
   startedAt: string
@@ -113,8 +113,8 @@ async function main() {
   await fs.writeFile(reportFile, JSON.stringify(report, null, 2))
 
   const userPrompt = URL
-    ? `Clone this webpage as a static HTML skeleton with visual similarity ≥ ${TARGET_SCORE}%: ${URL}\n\nUse the webpage-clone skill. Write the final \`index.html\` in the current working directory.`
-    : `Clone ${SUBJECT}'s homepage as a static HTML skeleton with visual similarity ≥ ${TARGET_SCORE}%.\n\nUse the webpage-clone skill — since I did not provide a URL, the skill should websearch the canonical URL first. Write the final \`index.html\` in the current working directory.`
+    ? `Clone this webpage as a static HTML skeleton with visual similarity ≥ ${TARGET_SCORE}%: ${URL}\n\nUse the webpage-generate skill. Write the final \`index.html\` in the current working directory.`
+    : `Clone ${SUBJECT}'s homepage as a static HTML skeleton with visual similarity ≥ ${TARGET_SCORE}%.\n\nUse the webpage-generate skill — since I did not provide a URL, the skill should websearch the canonical URL first. Write the final \`index.html\` in the current working directory.`
 
   let agentResponse = ""
   try {
@@ -184,7 +184,7 @@ async function main() {
   // Self-contained rescore: re-extract the reference URL, re-render the
   // surviving index.html, and compare. Works regardless of whether the
   // skill cleaned up its intermediate artifacts (which it should have on
-  // success, per webpage-clone skill step 8).
+  // success, per webpage-generate skill step 8).
   if (report.indexHtmlExists && URL) {
     try {
       const rescoreRefDir = mkdtempSync(path.join(os.tmpdir(), `rescore-ref-${Date.now()}-`))

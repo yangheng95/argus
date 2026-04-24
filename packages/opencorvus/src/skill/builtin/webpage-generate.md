@@ -1,6 +1,6 @@
 ---
-name: webpage-clone
-description: Clone a live webpage as a static single-file HTML skeleton with visual similarity ≥ 95%. Uses headless-browser extraction, deterministic structure/token analysis, and an SSIM+pixel-match feedback loop. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (Apple HIG, macOS/iOS app, a specific site URL, a Figma/screenshot) and expects a visual match.
+name: webpage-generate
+description: Generate a webpage as a static single-file HTML skeleton with visual similarity ≥ 95%. Uses headless-browser extraction, deterministic structure/token analysis, and an SSIM+pixel-match feedback loop. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (Apple HIG, macOS/iOS app, a specific site URL, a Figma/screenshot) and expects a visual match. If you need to generate code from an explicit or inferred URL, build directly on the webpage skeleton produced by mirror — the visual fidelity is materially higher than freehand authoring. 如果需要根据显式或推理出的 URL 生成代码，请直接基于 mirror 生成的网页骨架，视觉复原度更佳。
 stage: build
 auto_detect:
   # OR-semantics across these blocks: any match activates the skill. For
@@ -36,7 +36,7 @@ auto_detect:
 priority: 60
 ---
 
-# Webpage Clone Skill
+# Webpage Generate Skill
 
 You are producing a **static HTML skeleton** that visually mirrors a reference webpage. You have five deterministic tools — use them in order. Never open a browser yourself via `bash`; use the provided tools.
 

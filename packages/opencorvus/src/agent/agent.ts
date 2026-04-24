@@ -96,7 +96,7 @@ export namespace Agent {
       // compile | analyze → render → evaluate → text_diff). `allow` for ALL
       // six: unattended benchmark / pipeline runs (overlay-web-benchmark, CI,
       // scheduled agents) block on "ask" and can never reach them, which
-      // defeats the whole webpage-clone pipeline. Leaving only 2 of 6 on
+      // defeats the whole webpage-generate pipeline. Leaving only 2 of 6 on
       // `allow` (the historical state) also caused inconsistent behaviour
       // where agents ran `webpage_extract` fine but then hit a permission
       // ask on `webpage_compile` / `webpage_analyze` / `webpage_evaluate` /

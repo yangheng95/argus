@@ -2,7 +2,7 @@
 /**
  * Self-contained rescore — given a cleaned worktree that only contains
  * `index.html` + `images/`, freshly extract the reference URL, render the
- * clone, and compute the score. Works after the webpage-clone skill has
+ * clone, and compute the score. Works after the webpage-generate skill has
  * deleted its intermediate artifacts.
  */
 import path from "node:path"

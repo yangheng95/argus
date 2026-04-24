@@ -9,7 +9,7 @@
  *   - webpage_render      index.html → PNG screenshot
  *   - webpage_evaluate    (reference, rendered) → score + diff PNG
  *
- * A skill (\`src/skill/builtin/webpage-clone.md\`) composes them for the
+ * A skill (\`src/skill/builtin/webpage-generate.md\`) composes them for the
  * agent; no tool calls another tool internally.
  */
 
