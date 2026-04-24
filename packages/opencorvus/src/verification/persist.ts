@@ -248,27 +248,3 @@ export function findLatestDeliveryEvidence(taskID: string): VerificationEvidence
   return rowToEvidence(row)
 }
 
-/** Second-most-recent delivery-scope evidence for a task. */
-export function findPreviousDeliveryEvidence(
-  taskID: string,
-  excludeEvidenceID: string,
-): VerificationEvidence | undefined {
-  const rows = Database.use((db) =>
-    db
-      .select()
-      .from(EngineArtifactTable)
-      .where(
-        and(
-          eq(EngineArtifactTable.task_id, taskID),
-          eq(EngineArtifactTable.kind, ARTIFACT_KIND),
-          eq(EngineArtifactTable.label, labelForScope("delivery")),
-        ),
-      )
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .limit(2)
-      .all(),
-  )
-  const prior = rows.find((r) => r.id !== excludeEvidenceID)
-  if (!prior) return undefined
-  return rowToEvidence(prior)
-}
