@@ -38,12 +38,9 @@ export type {
   EngineExecutor,
   EngineRunStatus,
   EngineRunPhase,
-  EngineInteractionType,
   EngineInteractionStatus,
   EngineArtifactKind,
   EngineDeliveryStatus,
   EngineEvaluationStatus,
-  EngineSpecSnapshotStatus,
-  EngineSpecItemStatus,
   EngineGoalRunStatus,
 } from "./engine.sql"
