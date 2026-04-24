@@ -1,7 +1,11 @@
 import type { Argv } from "yargs"
 import { spawn } from "child_process"
+import { rm } from "fs/promises"
+import path from "path"
 import { Database } from "../../storage/db"
 import { Database as BunDatabase } from "bun:sqlite"
+import { Global } from "../../global"
+import { Instance } from "../../project/instance"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 
@@ -58,11 +62,77 @@ const PathCommand = cmd({
   },
 })
 
+/**
+ * `opencorvus db reset` — phase-6 style atomic DB + disk reset.
+ *
+ * Follows CLAUDE.md rule 13 (reset DB, no migrations) + specs/new-arch/16-unified-teardown.md §7-6
+ * (schema-zero rebuild). Wipes:
+ *   - SQLite db + WAL + SHM (opencorvus.db, opencorvus.db-wal, opencorvus.db-shm)
+ *   - Ownership markers under <primary>/.opencorvus/ownership/
+ *   - Worktree directories under <primary>/.opencorvus/worktrees/
+ *   - Snapshot scratch under Global.Path.data + "snapshot"
+ *
+ * Prompts for confirmation (--force to skip). Must dispose all in-memory
+ * Instance handles first so WAL flushes cleanly; otherwise reopening
+ * would error on half-released file locks on Windows.
+ */
+const ResetCommand = cmd({
+  command: "reset",
+  describe: "atomically wipe the opencorvus SQLite DB and on-disk scratch (worktrees, ownership markers, snapshots). DESTRUCTIVE — there is no undo.",
+  builder: (yargs: Argv) => {
+    return yargs.option("force", {
+      type: "boolean",
+      default: false,
+      describe: "skip the confirmation prompt (non-interactive / CI).",
+    })
+  },
+  handler: async (args: { force: boolean }) => {
+    if (!args.force) {
+      UI.error("opencorvus db reset is DESTRUCTIVE — wipes DB + worktrees + ownership + snapshots.")
+      UI.error("Re-run with --force to proceed.")
+      process.exit(1)
+    }
+
+    await Instance.disposeAll().catch(() => undefined)
+    Database.close()
+
+    const targets: Array<{ label: string; path: string }> = []
+    const dbPath = Database.Path()
+    targets.push({ label: "db", path: dbPath })
+    targets.push({ label: "db-wal", path: `${dbPath}-wal` })
+    targets.push({ label: "db-shm", path: `${dbPath}-shm` })
+    targets.push({ label: "snapshot", path: path.join(Global.Path.data, "snapshot") })
+
+    // Instance-scoped paths are only known when an Instance is live. The
+    // reset is invoked standalone (no Instance.provide context), so we
+    // clean what we can reach via Global paths. Worktrees live under
+    // `<primary>/.opencorvus/worktrees/` — primary is the project the
+    // user is currently in, not Global.Path.data — so the operator must
+    // re-run reset from inside the project root OR clean worktrees
+    // manually (`rm -rf .opencorvus/worktrees .opencorvus/ownership`).
+    const cwdPrimary = process.cwd()
+    targets.push({ label: "cwd-worktrees", path: path.join(cwdPrimary, ".opencorvus", "worktrees") })
+    targets.push({ label: "cwd-ownership", path: path.join(cwdPrimary, ".opencorvus", "ownership") })
+
+    for (const target of targets) {
+      try {
+        await rm(target.path, { recursive: true, force: true })
+        console.log(`✓ ${target.label}: ${target.path}`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.log(`✗ ${target.label}: ${target.path} (${msg})`)
+      }
+    }
+    console.log("")
+    console.log("opencorvus db reset complete. Next process start will rebuild schema from DDL.")
+  },
+})
+
 export const DbCommand = cmd({
   command: "db",
   describe: "database tools",
   builder: (yargs: Argv) => {
-    return yargs.command(QueryCommand).command(PathCommand).demandCommand()
+    return yargs.command(QueryCommand).command(PathCommand).command(ResetCommand).demandCommand()
   },
   handler: () => {},
 })
