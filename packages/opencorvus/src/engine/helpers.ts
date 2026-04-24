@@ -8,8 +8,7 @@ import {
   type EngineBudget,
   type EngineTaskStatus,
 } from "./engine.sql"
-import type { TaskRow, GoalRow } from "./store"
-import type { GoalContractFields } from "@/pipeline/types"
+import type { TaskRow } from "./store"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 500
 
@@ -199,20 +198,3 @@ export function clarificationTranscriptSection(taskID: string): string {
   ].join("\n")
 }
 
-export function goalRowToContract(row: GoalRow | ({ id: string; title: string } & Record<string, unknown>)): GoalContractFields & Record<string, unknown> {
-  const r = row as Record<string, unknown>
-  return {
-    ...row,
-    id: row.id,
-    title: row.title,
-    objective: (r.objective as string) ?? "",
-    acceptance_specs: (r.acceptance_specs as import("@/acceptance/types").AcceptanceSpec[]) ?? [],
-    owned_paths: (r.owned_paths as string[]) ?? [],
-    depends_on: (r.depends_on as string[]) ?? [],
-    priority: ((r.priority as string) ?? "blocking") as "blocking" | "advisory",
-    kind: (r.kind as string) ?? "feature",
-    requirement_ids: (r.requirement_ids as string[]) ?? [],
-    exports: (r.exports as string[]) ?? [],
-    imports: (r.imports as string[]) ?? [],
-  }
-}
