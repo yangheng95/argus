@@ -7,6 +7,7 @@
  */
 import z from "zod"
 import type { VisualMetricResult } from "./visual-metric"
+import type { RuntimeEvidenceReport } from "./checks/runtime-evidence"
 
 export const StartupVerification = z.object({
   attempted: z.boolean().describe("Whether startup verification was attempted"),
@@ -156,5 +157,58 @@ export function finalizeVerdict(
     issues_found: mergedIssues,
     affected_goal_ids: allGoalIds,
     rejection_details: [...(llmVerdict.rejection_details ?? []), ...detailsPerGoal],
+  }
+}
+
+/**
+ * P1-A · 合成一个纯 runtime-evidence 触发的 rejected verdict——不跑 LLM，
+ * 直接把 violations 写成 rejection_details。用于 delivery 开始就发现 goal
+ * 只产出了 scaffold/空壳的场景，避免把无意义的会话丢给 LLM 浪费 token。
+ *
+ * 保留与 DeliveryVerdictType 完全一致的 schema，因此下游 publisher / DB / UI
+ * 走同一条路径。`startup_verification` / `frontend_check` 填 attempted=true
+ * 但 success=false，让调用方统一按 rejected 处理。
+ */
+export function synthesizeRuntimeRejection(
+  report: RuntimeEvidenceReport,
+  goalIds: readonly string[],
+): DeliveryVerdictType {
+  const headline = `Runtime-evidence gate rejected delivery: ${report.violations.length} violation(s).`
+  const issues = report.violations.map((v) => `[runtime/${v.kind}] ${v.detail}`)
+  const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
+  const detailsPerGoal = allGoalIds.flatMap((gid) =>
+    report.violations.map((v) => ({
+      goal_id: gid,
+      category: "runtime" as const,
+      error: `${v.kind}: ${v.detail}`,
+      suggestion:
+        v.kind === "no_build_artifact"
+          ? "Goal 必须产出真实可运行的前端：跑通 build（dist/ / build/ / .next/）或暴露 bun run start|preview|server，禁止仅 mirror/scaffold.json + App.tsx 文本。"
+          : v.kind === "empty_root_shell"
+            ? "根 mount 点未 hydrate。排查 React/Next 构建失败、main.tsx 未引用 App、路由为空等；确保 puppeteer networkidle 后 body 有内容。"
+            : v.kind === "render_failed"
+              ? "Build artifact 存在但渲染失败。检查 bun run preview / start 是否可启动、资产路径是否正确（chunk 404 会让页面空白）。"
+              : "DOM 体积/文本过薄。确认主内容区真的把数据渲染到了 DOM/canvas，而不是只放了占位。",
+    })),
+  )
+  return {
+    verdict: "rejected",
+    summary: headline,
+    startup_verification: {
+      attempted: true,
+      success: false,
+      output: report.evidence.buildArtifactPath
+        ? `index.html=${report.evidence.buildArtifactPath} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
+        : "no build artifact",
+    },
+    frontend_check: {
+      attempted: true,
+      renders_correctly: false,
+      issues: issues.slice(0, 10),
+    },
+    issues_found: issues,
+    affected_goal_ids: allGoalIds,
+    rejection_details: detailsPerGoal,
+    tool_call_evidence: [],
   }
 }

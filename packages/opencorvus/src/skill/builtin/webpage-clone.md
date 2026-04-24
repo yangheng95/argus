@@ -89,6 +89,25 @@ Call `webpage_extract` with the URL. Defaults (1440×900 viewport, `body` scope)
 
 Network access to the URL is required. The tool will ask for permission.
 
+### P1-A hard rule: no text-only fallback
+
+If `webpage_extract` cannot resolve the reference (SPA behind a login wall,
+pixel-free canvas, JS-only shell), **STOP and escalate to the user** —
+report the specific failure mode and ask for a different URL or a
+pre-extracted PNG. You MUST NOT:
+
+- Continue by reading `mirror/scaffold.json` + `mirror/App.tsx` and writing
+  an invented `index.html` from the visual-contract text alone.
+- Fabricate screenshots, DOM snapshots, or `webpage_evaluate` scores.
+- Call `submit_verdict(accepted)` on a deliverable whose build artifact
+  cannot be rendered — the delivery runtime-evidence gate (P1-A) re-runs
+  puppeteer against `dist/`/`build/` independently and will reject any
+  empty-root-shell (`<div id="root"></div>` only) or thin-DOM output with
+  `category="runtime"` regardless of your verdict text.
+
+This is the ainvest-style failure the gate exists to stop. "Static scaffold
+because dynamic capture failed" is a hard-no.
+
 ## Step 2 — Compile the XML IR
 
 Call `webpage_compile` **only after step 1 completed successfully**. It reads `mirror/extracted-page.json` and emits `mirror/page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
