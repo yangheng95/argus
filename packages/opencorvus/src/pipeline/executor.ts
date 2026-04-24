@@ -18,7 +18,7 @@
  */
 
 import { Log } from "@/util/log"
-import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistGoalDelivery } from "@/engine"
+import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistGoalDelivery, stampGoalRunProgress } from "@/engine"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromWorktree } from "@/goal/runner"
@@ -38,6 +38,14 @@ const log = Log.create({ service: "goal-executor" })
 
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000
 const HEARTBEAT_INTERVAL_MS = 30_000
+/**
+ * Minimum interval between `last_progress_at` writes. Reasoning-delta
+ * chunks can fire hundreds of times per second — writing the DB on
+ * every one would starve other writers. 1s is coarse enough to spare
+ * SQLite, fine enough for the goal-run-watchdog scanner's tens-of-
+ * seconds resolution.
+ */
+const PROGRESS_STAMP_INTERVAL_MS = 1_000
 
 /**
  * Execute a single goal: stream executor events, extract delivery.
@@ -182,11 +190,21 @@ async function* streamExecutorEvents(
   })()
 
   let lastHeartbeat = Date.now()
+  let lastProgressStamp = 0
   for await (const event of executor.events({ goalID: goal.id, sessionID, queueTaskID, signal: combinedSignal })) {
     if (combinedSignal.aborted) break
+    // Chunk-driven wall-clock progress marker for the orphan scanner in
+    // engine/goal-run-watchdog.ts. time_updated is polluted by bookkeeping
+    // writes (status changes, protocol effects); last_progress_at moves
+    // only on actual executor events. Throttled to ~1Hz so reasoning-
+    // delta storms don't starve SQLite.
+    const now = Date.now()
+    if (now - lastProgressStamp >= PROGRESS_STAMP_INTERVAL_MS) {
+      lastProgressStamp = now
+      stampGoalRunProgress(goalRunID, now)
+    }
     yield { type: "executor_event", event }
 
-    const now = Date.now()
     if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
       lastHeartbeat = now
       EngineProtocol.emit(Event.GoalProgress, {

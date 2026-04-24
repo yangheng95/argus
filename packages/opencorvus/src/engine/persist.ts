@@ -640,6 +640,29 @@ export function startNewAttempt(input: {
   return { supersededTipID, resetWorkspace }
 }
 
+/**
+ * Narrow chunk-progress writer for engine_goal_run.last_progress_at.
+ *
+ * Called from pipeline/executor.ts on every observed executor event.
+ * Intentionally bypasses updateGoalRun's status / transition / effect
+ * plumbing — this is a wall-clock liveness stamp, not a state change.
+ * The goal-run-watchdog scanner reads `last_progress_at` and compares
+ * against EngineConfig.activity.goal_run_idle_ms to surface hangs.
+ *
+ * Callers throttle on their side (see pipeline/executor.ts): reasoning
+ * deltas can fire hundreds per second and hammering SQLite here would
+ * starve every other writer in the Instance.
+ */
+export function stampGoalRunProgress(goalRunID: string, now: number = Date.now()) {
+  Database.use((db) =>
+    db
+      .update(EngineGoalRunTable)
+      .set({ last_progress_at: now })
+      .where(eq(EngineGoalRunTable.id, goalRunID))
+      .run(),
+  )
+}
+
 export function updateGoalRun(
   goalRunID: string,
   values: Partial<typeof EngineGoalRunTable.$inferInsert>,

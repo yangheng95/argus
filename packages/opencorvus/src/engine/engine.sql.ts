@@ -534,6 +534,12 @@ export const EngineGoalRunTable = sqliteTable(
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),
     time_started: integer(),
     time_completed: integer(),
+    /** Wall-clock timestamp of the most recent observed executor chunk /
+     *  event for this run. Independent of time_updated (which can be bumped
+     *  by metadata writes with no actual progress). The orphan scanner in
+     *  engine/goal-run-watchdog.ts compares this against
+     *  EngineConfig.activity.goal_run_idle_ms to detect silent hangs. */
+    last_progress_at: integer(),
     ...Timestamps,
   },
   (table) => [
@@ -542,6 +548,7 @@ export const EngineGoalRunTable = sqliteTable(
     index("engine_goal_run_coordinator_idx").on(table.coordinator_run_id),
     index("engine_goal_run_status_idx").on(table.status),
     index("engine_goal_run_supersede_of_idx").on(table.supersede_of),
+    index("engine_goal_run_last_progress_idx").on(table.last_progress_at),
   ],
 )
 
