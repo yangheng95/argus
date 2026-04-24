@@ -12,9 +12,11 @@ import { Plugin } from "@/plugin"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
+import { EngineConfig } from "@/engine/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { withStreamActivity } from "@/util/stream-activity"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -49,14 +51,26 @@ export namespace SessionProcessor {
         log.info("process")
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
+        const idleMs = (await EngineConfig.get()).activity.session_llm_idle_ms
         while (true) {
+          // Per-attempt activity gate: a fresh idle timer for every LLM.stream
+          // call so retries are not poisoned by the previous attempt's state.
+          // gate.signal composes input.abort with its own inactivity
+          // controller; passing it in as `abort` is the single place this
+          // session surface learns about either kind of cancellation.
+          const gate = withStreamActivity({
+            idleMs,
+            signal: input.abort,
+            label: `session-llm:${input.sessionID}`,
+          })
           try {
             let currentText: Message.TextPart | undefined
             let reasoningMap: Record<string, Message.ReasoningPart> = {}
-            const stream = await LLM.stream(streamInput)
+            const stream = await LLM.stream({ ...streamInput, abort: gate.signal })
 
             for await (const value of stream.fullStream) {
-              input.abort.throwIfAborted()
+              gate.observe()
+              gate.signal.throwIfAborted()
               switch (value.type) {
                 case "start":
                   SessionStatus.set(input.sessionID, { type: "busy" })
@@ -432,6 +446,8 @@ export namespace SessionProcessor {
               error: input.assistantMessage.error,
             })
             SessionStatus.set(input.sessionID, { type: "idle" })
+          } finally {
+            gate.dispose()
           }
           if (snapshot) {
             const patch = await Snapshot.patch(snapshot)
