@@ -260,21 +260,53 @@ Claude Code 的答案：重启 = 新会话。opencorvus 采用相同语义：
 - 若**不存在**：先单独作为阶段 3a 实现此能力并通过单测，阶段 3b 再做 agent 迁移；禁止在同一 PR 里同时"建基础设施 + 迁 6 个 agent"
 - 若存在：直接进入 agent 迁移
 
-**迁移动作**：
+**前置结论（2026-04-24 调研）**：
 
-- 先固化一条约束：**所有新定义的 stage agent 都必须复用 session agent 基建**，不得再引入独立 runtime、独立 stream hook 栈、独立 tool resolve 路径或独立 session 持久化逻辑
-- 阶段 3a：确认 / 补建 `StructuredOutput` 的 schema 约束、失败自纠、单测
-- 阶段 3b：普通 stage agent 迁移：`intent-analysis → design-analyst → requirements → planner → deliver → orchestrator`
-- 每个 agent：`AgentRuntime.run({ agent, tools, ... })` → `SessionPrompt.prompt(child, { tools + StructuredOutput(schema), ... })`
-- 每个 agent 的 `finalize_*` 私有 tool 改用 SessionLoop 的 `StructuredOutput`
-- orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / design_analysis / build / deliver` 只允许作为 tool-opened child session 存在
-- 阶段 3c：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端
-- **删除 `packages/opencorvus/src/agent/runtime/` 目录**
-- **交付**：
+阶段 3a 的基建「`SessionLoop.createStructuredOutputTool` + `format: { type: "json_schema", schema }` 会自动把 `StructuredOutput` tool 注入、按 schema 强约束、失败由 LLM 自纠」**已经存在于** `packages/opencorvus/src/session/loop.ts:331` 并被 `SessionPrompt.prompt` 消费。阶段 3a 不需要写新代码，只需在 agent 迁移的第一 PR 里补一个针对 `createStructuredOutputTool` 的单测并扩 `SessionPrompt` 的文档。
+
+**但**：`SessionPrompt.prompt` 的 `tools` 参数是 `Record<string, boolean>`（开关），真正的 tool 对象由 `resolveTools` 从全局 Agent 注册表解析；而 6 个 stage agent **都在运行时注入自定义 tool 对象**（`extract_slot` / `flag_missing_info` / `register_requirement` / `register_decision` / `submit_verdict` / `submit_fidelity_verdict` …），这些 tool 不在 Agent 注册表里，也不应该放进去（它们只对单个 agent 生命周期有意义，会污染全局命名空间）。
+
+因此阶段 3b 不是纯机械替换。**必须先决策工具注入模型**：
+
+1. （推荐）给 `SessionPrompt.prompt` 新增 `extraTools?: Record<string, Tool>` 参数（以及对应的 `resolveTools` 合并路径），让调用方显式传入一次性的 per-agent 工具；新参数保留现有 `tools: Record<string, boolean>` 启用语义，新增参数只用于注入 per-invocation 工具对象。
+2. （备选）以 `SessionLoop.LoopInput` + 直接 `SessionLoop.loop` 跳过 `SessionPrompt.prompt`，在调用方完全接管 user message 构造 + tool 注入。但这样会回到"每个 agent 再写一套 runtime"的老路，**违反本阶段"统一基建"的核心约束**。
+
+选定方案 1 后，阶段 3b 的模板：
+```ts
+await SessionPrompt.prompt({
+  sessionID: child.id,
+  parts: [{ type: "text", text: userPrompt }],
+  system: systemPrompt,
+  format: { type: "json_schema", schema: FinalSchema },
+  tools: { ...enabledAgentTools },
+  extraTools: { extract_slot, flag_missing_info, ... },   // 新 API
+})
+// 结构化结果读 child session 最新 assistant message 的 .info.structured 字段
+```
+
+原 `finalize_*` 工具与 `collector.finalized` 守卫一起删除；结构化终态由 `StructuredOutput` 经 schema 验证收到。
+
+**迁移动作**（方案 1 落地路径）：
+
+- **阶段 3-a-1**：给 `SessionPrompt.prompt` / `SessionLoop.loop` / `SessionLoop.resolveTools` 加 `extraTools` 通道 + 单测。此步**单独成 PR**，不得同时迁移 agent。
+- **阶段 3-a-2**：补 `createStructuredOutputTool` 的 schema 约束 + 失败自纠 + 单测（若现有覆盖不够）。
+- 固化规则：**所有新定义的 stage agent 都必须复用 session agent 基建**，不得再引入独立 runtime、独立 stream hook 栈、独立 tool resolve 路径或独立 session 持久化逻辑。
+- **阶段 3-b**：普通 stage agent 迁移：`intent-analysis → design-analyst → requirements → planner → deliver → orchestrator`。每个 agent 独立 PR：
+  - `AgentRuntime.run(...)` → `SessionPrompt.prompt(child, { extraTools, format, system, parts })`
+  - `finalize_*` 删除；结果从 `child` 会话最新 assistant message 的 `.info.structured` 取。
+  - 保持 incremental 工具（extract_slot 等）不变；它们通过 `extraTools` 注入。
+  - 测试：原本覆盖 agent 行为的测试全部通过；新增一条「finalize_* 调用不被识别」回归。
+- orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / design_analysis / build / deliver` 只允许作为 tool-opened child session 存在。
+- **阶段 3-c**：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端。
+- **阶段 3-d**：**删除 `packages/opencorvus/src/agent/runtime/` 目录**。此步独立 PR，确认无残留引用。
+
+**交付**：
+
   - `rg "AgentRuntime|agent/runtime/" packages/opencorvus/src/` = 0
   - `rg "finalize_" packages/opencorvus/src/(agent|orchestrator|delivery|requirements|architect|planner|design)` = 0
-  - 新增 stage agent 的模板 / 脚手架 / 文档只指向 session agent 基建，不再示范专用 runtime
+  - 新增 stage agent 的模板 / 脚手架 / 文档只指向 session agent 基建 + `extraTools` 通道，不再示范专用 runtime
   - fidelity session 仍能正确产出 verdict，并被 overlay / event 流消费
+  - 每次 stage agent 迁移前后，该 agent 的单测（以及其在 integration test / benchmark 中的下游行为）都必须 pass
 
 ### 阶段 4（`active_run_id` / queue / runtime / restart gate 退场）
 
