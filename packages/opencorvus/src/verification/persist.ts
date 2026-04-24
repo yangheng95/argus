@@ -16,12 +16,11 @@
  * `src/metrics/arbiter.ts`; this module is only the delivery-agent
  * verdict wrapper.
  */
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Database } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import {
   EngineArtifactTable,
-  EngineGoalRunTable,
   type EngineEvaluationCheck,
   type EngineEvaluationScope,
   type EngineEvaluationStatus,
@@ -169,23 +168,31 @@ export function persistEvidence(input: PersistEvidenceInput): VerificationEviden
  *  dependency goes away in phase 6-d when that table is removed in favour
  *  of session + artifact projection. */
 export function findLatestGoalRunEvidence(goalID: string): VerificationEvidence | undefined {
-  const row = Database.use((db) =>
+  // Phase-6-d: goal_run rows are append-only artifacts; the logical goal_run_id
+  // is carried on each row. Filter to artifacts whose goal_run_id appears in
+  // the goal_run_attempt rows for the given goal_id, then pick the newest.
+  const goalRunIDs = Database.use((db) =>
     db
-      .select({
-        id: EngineArtifactTable.id,
-        task_id: EngineArtifactTable.task_id,
-        run_id: EngineArtifactTable.run_id,
-        goal_run_id: EngineArtifactTable.goal_run_id,
-        delivery_id: EngineArtifactTable.delivery_id,
-        payload: EngineArtifactTable.payload,
-        time_created: EngineArtifactTable.time_created,
-        time_updated: EngineArtifactTable.time_updated,
-      })
+      .selectDistinct({ goal_run_id: EngineArtifactTable.goal_run_id })
       .from(EngineArtifactTable)
-      .innerJoin(EngineGoalRunTable, eq(EngineArtifactTable.goal_run_id, EngineGoalRunTable.id))
       .where(
         and(
-          eq(EngineGoalRunTable.goal_id, goalID),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.goal_id') = ${goalID}`,
+        ),
+      )
+      .all()
+      .map((r) => r.goal_run_id)
+      .filter((x): x is string => !!x),
+  )
+  if (goalRunIDs.length === 0) return undefined
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          inArray(EngineArtifactTable.goal_run_id, goalRunIDs),
           eq(EngineArtifactTable.kind, ARTIFACT_KIND),
           eq(EngineArtifactTable.label, labelForScope("goal_run")),
         ),

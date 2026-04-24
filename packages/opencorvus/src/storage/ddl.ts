@@ -580,57 +580,16 @@ CREATE TABLE IF NOT EXISTS engine_run (
 CREATE INDEX IF NOT EXISTS engine_run_task_idx   ON engine_run (task_id);
 CREATE INDEX IF NOT EXISTS engine_run_status_idx ON engine_run (status);
 
-CREATE TABLE IF NOT EXISTS engine_goal_run (
-  id                  text PRIMARY KEY,
-  task_id             text NOT NULL,
-  goal_id             text NOT NULL,
-  plan_node_id        text,
-  coordinator_run_id  text NOT NULL,
-  session_id          text,
-  status              text NOT NULL DEFAULT 'queued',
-  retry_count         integer NOT NULL DEFAULT 0,
-  blocking_reason     text,
-  error               text,
-  workspace_dir       text,
-  base_ref            text,
-  merge_ref           text,
-  -- supersede_of: when an operator retry needs to re-execute an already-terminal
-  -- goal_run (the FSM keeps completed/failed immutable), a NEW goal_run row is
-  -- inserted with supersede_of pointing at the old row. The goal-readiness /
-  -- dispatch-gate / satisfies-dep queries walk this chain and only treat the
-  -- LAST link as authoritative. This lets retry re-dispatch without mutating
-  -- history and without collapsing the live/terminal/retriable catalog.
-  supersede_of        text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
-  -- superseded_reason: free-text label naming why a terminal goal_run was
-  -- superseded. Rendered into describe output for the orchestrator LLM; code
-  -- only reads its presence (NULL vs non-NULL) to project terminal tips back
-  -- to 'pending' for re-dispatch. Per rule 23 (no state-machine enums), no
-  -- CHECK constraint — the specific string is documentation, not a code gate.
-  superseded_reason   text,
-  superseded_at       integer,
-  metadata            text,
-  lease_until          integer,
-  -- last_progress_at: wall-clock stamp bumped only on observed executor
-  -- chunk/event (pipeline/executor.ts streamExecutorEvents). Unlike
-  -- time_updated it is NOT refreshed by bookkeeping writes. The
-  -- goal-run-watchdog scanner compares now - last_progress_at against
-  -- EngineConfig.activity.goal_run_idle_ms to detect silent SSE death.
-  last_progress_at    integer,
-  time_started        integer,
-  time_completed      integer,
-  time_created        integer NOT NULL,
-  time_updated        integer NOT NULL,
-  FOREIGN KEY (task_id)            REFERENCES engine_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (goal_id)            REFERENCES engine_goal(id) ON DELETE CASCADE,
-  FOREIGN KEY (coordinator_run_id) REFERENCES engine_run(id)  ON DELETE CASCADE,
-  FOREIGN KEY (session_id)         REFERENCES session(id)           ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS engine_goal_run_task_idx          ON engine_goal_run (task_id);
-CREATE INDEX IF NOT EXISTS engine_goal_run_goal_idx          ON engine_goal_run (goal_id);
-CREATE INDEX IF NOT EXISTS engine_goal_run_last_progress_idx ON engine_goal_run (last_progress_at);
-CREATE INDEX IF NOT EXISTS engine_goal_run_coordinator_idx   ON engine_goal_run (coordinator_run_id);
-CREATE INDEX IF NOT EXISTS engine_goal_run_status_idx        ON engine_goal_run (status);
-CREATE INDEX IF NOT EXISTS engine_goal_run_supersede_of_idx  ON engine_goal_run (supersede_of);
+-- Phase-6-d: engine_goal_run was removed in favour of engine_artifact rows
+-- with kind='goal_run_attempt'. See engine/persist.ts for the writer (first
+-- insert uses the logical goal_run_id as artifact row id; updates append
+-- new artifact rows with the same goal_run_id) and engine/store.ts
+-- (GoalRunRow / artifactRowToGoalRunRow / latestPerGoalRun) for the
+-- read-model. Append-only — status transitions + supersede marks are new
+-- rows per logical goal_run_id; queries take the newest via
+-- time_created desc. Other tables (engine_artifact.goal_run_id,
+-- engine_executor_session.goal_run_id, engine_metric_result.goal_run_id,
+-- protocol_event.goal_run_id) are plain text pointers now (no FK).
 
 CREATE TABLE IF NOT EXISTS engine_interaction_request (
   id            text PRIMARY KEY,
@@ -665,7 +624,7 @@ CREATE TABLE IF NOT EXISTS engine_artifact (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
   run_id       text NOT NULL,
-  goal_run_id  text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
+  goal_run_id  text,
   delivery_id  text,
   kind         text NOT NULL,
   label        text NOT NULL,
@@ -699,7 +658,7 @@ CREATE TABLE IF NOT EXISTS engine_executor_session (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   run_id           text NOT NULL,
-  goal_run_id      text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
+  goal_run_id      text,
   provider         text NOT NULL,
   protocol         text NOT NULL,
   protocol_version text NOT NULL,
@@ -789,8 +748,7 @@ CREATE TABLE IF NOT EXISTS engine_metric_result (
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
   FOREIGN KEY (metric_spec_id) REFERENCES engine_metric_spec(id) ON DELETE CASCADE,
-  FOREIGN KEY (task_id)        REFERENCES engine_task(id)        ON DELETE CASCADE,
-  FOREIGN KEY (goal_run_id)    REFERENCES engine_goal_run(id)    ON DELETE SET NULL
+  FOREIGN KEY (task_id)        REFERENCES engine_task(id)        ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS engine_metric_result_task_iter_idx ON engine_metric_result (task_id, iteration);
 CREATE INDEX IF NOT EXISTS engine_metric_result_spec_idx      ON engine_metric_result (metric_spec_id);
@@ -924,7 +882,7 @@ CREATE TABLE IF NOT EXISTS protocol_event (
   aggregate_id    text NOT NULL,
   task_id         text REFERENCES engine_task(id) ON DELETE CASCADE,
   run_id          text REFERENCES engine_run(id) ON DELETE SET NULL,
-  goal_run_id     text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
+  goal_run_id     text,
   session_id      text REFERENCES session(id) ON DELETE SET NULL,
   interaction_id  text REFERENCES engine_interaction_request(id) ON DELETE SET NULL,
   stream_id       text,

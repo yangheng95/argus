@@ -20,7 +20,6 @@ export {
   EnginePlanNodeTable,
   EngineMilestoneTable,
   EngineGoalTable,
-  EngineGoalRunTable,
   EngineRunTable,
   EngineInteractionRequestTable,
   EngineArtifactTable,

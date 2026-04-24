@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
-  EngineGoalRunTable,
+  EngineArtifactTable,
   EngineGoalTable,
   EngineRunTable,
   EngineTaskTable,
@@ -83,26 +83,45 @@ function seedBaseline() {
   })
 }
 
+// Phase-6-d: goal_run rows live in engine_artifact (kind="goal_run_attempt").
+// First row id = logical goal_run_id; subsequent appends use the shared helper
+// in persist.ts (appendGoalRunArtifact). Test fixtures insert the initial row
+// directly with the goal_run-shaped payload.
 function insertGoalRun(input: {
   id: string
   status: "queued" | "running" | "completed" | "failed" | "aborted" | "evaluating" | "blocked" | "accepted" | "planning"
   supersedeOf?: string
 }) {
   const now = Date.now()
+  const terminal = input.status === "completed" || input.status === "failed" || input.status === "aborted"
   Database.use((db) =>
-    db.insert(EngineGoalRunTable).values({
+    db.insert(EngineArtifactTable).values({
       id: input.id,
       task_id: taskID,
-      goal_id: goalID,
-      coordinator_run_id: runID,
-      status: input.status,
-      retry_count: 0,
-      supersede_of: input.supersedeOf ?? null,
+      run_id: runID,
+      goal_run_id: input.id,
+      kind: "goal_run_attempt",
+      label: `attempt-${input.status}`,
+      payload: {
+        goal_id: goalID,
+        plan_node_id: null,
+        session_id: null,
+        status: input.status,
+        retry_count: 0,
+        blocking_reason: null,
+        error: null,
+        workspace_dir: null,
+        base_ref: null,
+        merge_ref: null,
+        supersede_of: input.supersedeOf ?? null,
+        superseded_reason: null,
+        superseded_at: null,
+        metadata: null,
+        time_started: null,
+        time_completed: terminal ? now : null,
+      },
       time_created: now,
       time_updated: now,
-      ...(input.status === "completed" || input.status === "failed" || input.status === "aborted"
-        ? { time_completed: now }
-        : {}),
     }).run(),
   )
 }
