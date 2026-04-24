@@ -2431,6 +2431,40 @@ export type Config = {
       skills?: Array<string>
     }
     /**
+     * P0-B delivery visual numeric hard-gate thresholds. Change values then rebaseline via script/delivery/replay.ts.
+     */
+    delivery_visual?: {
+      /**
+       * P0-B hard gate: pHash Hamming distance upper bound (structure)
+       */
+      phash_hamming_max?: number
+      /**
+       * P0-B hard gate: mean SSIM lower bound (texture/detail)
+       */
+      ssim_min?: number
+      /**
+       * P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)
+       */
+      chart_region_density_min_ratio?: number
+      /**
+       * P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)
+       */
+      unique_color_ratio_min?: number
+      /**
+       * P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)
+       */
+      text_hit_ratio_min?: number
+      /**
+       * Composite score weights; four values must sum to 1 (runtime-enforced)
+       */
+      score_weights?: {
+        phash?: number
+        ssim?: number
+        density?: number
+        text_hit?: number
+      }
+    }
+    /**
      * Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent."design-analyst".model.
      */
     design_analyst?: {
@@ -2455,6 +2489,27 @@ export type Config = {
        * Additional skill paths for intent-analysis agent
        */
       skills?: Array<string>
+    }
+    /**
+     * Chunk-driven inactivity gates. Single source of truth for every streaming layer (session LLM, executor events, goal_run scanner, task queue).
+     */
+    activity?: {
+      /**
+       * Max idle (no stream chunk) window for session LLM streams, ms
+       */
+      session_llm_idle_ms?: number
+      /**
+       * Max idle window for the executor event queue, ms
+       */
+      executor_events_idle_ms?: number
+      /**
+       * Max idle window scanned against engine_goal_run.last_progress_at, ms
+       */
+      goal_run_idle_ms?: number
+      /**
+       * Total wall-clock cap for a single queued task run, ms
+       */
+      task_queue_run_timeout_ms?: number
     }
     /**
      * Maximum total task runs

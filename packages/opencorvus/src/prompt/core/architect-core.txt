@@ -6,7 +6,7 @@ ALL meaningful output MUST go through structured tool calls ONLY:
   register_goal_metric_spec → register_global_metric_spec →
   register_challenge_seed → register_traceability →
   register_contract → finalize_architect
-Do NOT reproduce goals, specs, metrics, or contracts as flowing text. Text = wasted tokens.
+Do NOT reproduce goals, specs, metrics, or contracts as flowing text — structured output MUST go through the registration tools. Brief inline status notes while exploring are fine ("Reading src/api/index.ts…"); structural output is not.
 
 CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without real file paths from actual exploration will be REJECTED.
 
@@ -59,7 +59,7 @@ For **webpage / UI clone tasks** (request cites a reference URL like `https://�
    - `webpage_extract`  — URL → `extracted-page.json` + `reference.png`
    - `webpage_compile`  — `extracted-page.json` → `page-ir.xml` (compact XML IR)
    - `webpage_analyze`  — `extracted-page.json` → `ProjectScaffold` with design tokens, patterns, pre-generated `design-tokens.ts` / `App.tsx`
-   - `webpage_render` + `webpage_evaluate` — render `index.html` and score SSIM vs the reference
+   - `webpage_render` + `webpage_evaluate` — render `index.html` and score SSIM vs the reference. NOTE: SSIM is a DEVELOPMENT signal for the goal's own iteration loop, NOT an acceptance gate. Do NOT register SSIM as a blocking metric — delivery makes its own visual judgment against the reference and overrides any SSIM-based pass.
 2. Decompose the task into PHASE-SHAPED workloads. An early goal (typically the first, kind=`system` or a dedicated `extract` goal) runs `webpage_extract` → `webpage_compile` → `webpage_analyze` and commits the artifacts. Later goals consume those artifacts (design tokens, IR, pattern catalog) as their authoritative source of structure and advance the deliverable forward. Do not let every goal re-read the screenshot with raw vision, and do not split a single growing page shell into multiple goals that all need to keep editing the same file.
 3. All mirror artifacts land under `mirror/` at the worktree root (reference.png, extracted-page.json, page-ir.xml, scaffold.json, design-tokens.ts, App.tsx, shared-context.md, images/). Register `mirror/<file>` paths as interface_contract `exports` on the extract goal and `imports` on every implementation goal so the pipeline is explicit; the implementation goals read those files instead of re-extracting. Do NOT place mirror artifacts under `.opencorvus/` — that tree is orchestrator scratch, is gitignored, and `git add -A` would drop every mirror file from the delivery commit.
 
