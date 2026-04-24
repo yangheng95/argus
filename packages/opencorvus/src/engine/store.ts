@@ -220,6 +220,27 @@ export function findActiveRunForTask(taskID: string): RunRow | undefined {
   return findRuns(taskID)[0]
 }
 
+/** Phase-6-f-5: return the single non-superseded spec snapshot for a task,
+ *  derived from `engine_spec_snapshot.status != 'superseded'`. Replaces the
+ *  `task.active_spec_version_id` cache column. Writers preserve the
+ *  at-most-one invariant by marking the prior active spec superseded before
+ *  inserting the new one. Returns undefined when the task has no specs. */
+export function findActiveSpecForTask(taskID: string): SpecSnapshotRow | undefined {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineSpecSnapshotTable)
+      .where(
+        and(
+          eq(EngineSpecSnapshotTable.task_id, taskID),
+          sql`${EngineSpecSnapshotTable.status} != 'superseded'`,
+        ),
+      )
+      .orderBy(desc(EngineSpecSnapshotTable.version))
+      .get(),
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Spec store functions
 // ---------------------------------------------------------------------------
@@ -1171,7 +1192,9 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     projectID: row.project_id,
     directory: input?.directory,
     sessionID: row.session_id ?? undefined,
-    activeSpecVersionID: row.active_spec_version_id ?? undefined,
+    /** Phase-6-f-5: derived live from engine_spec_snapshot.status != 'superseded'
+     *  (was a cache column on engine_task). */
+    activeSpecVersionID: findActiveSpecForTask(row.id)?.id,
     /** Phase-6-f: derived live from engine_plan_version.status = 'active'
      *  (was a cache column on engine_task). */
     activePlanVersionID: findActivePlanForTask(row.id)?.id,

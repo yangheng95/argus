@@ -349,7 +349,8 @@ CREATE TABLE IF NOT EXISTS engine_task (
   id                     text PRIMARY KEY,
   project_id             text NOT NULL,
   session_id             text,
-  active_spec_version_id text,
+  -- Phase-6-f-5: active_spec_version_id cache column removed. Derive via
+  -- engine_spec_snapshot.status != 'superseded' (findActiveSpecForTask in store.ts).
   -- Phase-6-f: active_plan_version_id cache column removed. Derive via
   -- engine_plan_version.status = 'active' (findActivePlanForTask in store.ts).
   -- Phase-6-f-3: active_run_id cache column removed. Derive via the newest

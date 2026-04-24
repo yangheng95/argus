@@ -170,7 +170,9 @@ export const EngineTaskTable = sqliteTable(
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    active_spec_version_id: text(),
+    /** Phase-6-f-5: `active_spec_version_id` cache column removed. Derive via
+     *  `findActiveSpecForTask(taskID)` (engine_spec_snapshot.status != 'superseded').
+     *  Rule 22 — single source in the spec status column. */
     /** Phase-6-f: `active_plan_version_id` cache column removed. Derive via
      *  `findActivePlanForTask(taskID)` (engine_plan_version.status='active').
      *  Rule 22 — single source in the plan status column. */
