@@ -46,14 +46,6 @@ interface DeliveryConfig {
   max_steps: number
   max_retries: number
   skills: string[]
-  /** How many merge-conflict resolution passes the orchestrator may hand to
-   *  executor before failing the goal. Each pass dispatches a build-agent
-   *  session against the goal worktree — either with conflict markers
-   *  present or with a retained merged tip that still fails post-merge
-   *  build — and asks it to reconcile both goals' intents. Hit the cap → decision_log
-   *  `merge_conflict_cap_reached` + goal failed (`retry_goal` can
-   *  still re-dispatch the goal under a fresh baseRef on a later run). */
-  merge_conflict_max_retries: number
 }
 
 interface DesignAnalystConfig {
@@ -174,7 +166,6 @@ const DEFAULTS: EngineConfigType = {
     max_steps: 160,        // was 80
     max_retries: 2,
     skills: [],
-    merge_conflict_max_retries: 2,
   },
   delivery_visual: {
     // 经验值基线（ainvest 事故复盘 2026-04-24）。后续用 dev/ accept/reject
@@ -275,8 +266,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,
       max_retries: user?.delivery?.max_retries ?? DEFAULTS.delivery.max_retries,
       skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
-      merge_conflict_max_retries:
-        user?.delivery?.merge_conflict_max_retries ?? DEFAULTS.delivery.merge_conflict_max_retries,
     },
     delivery_visual: {
       phash_hamming_max:

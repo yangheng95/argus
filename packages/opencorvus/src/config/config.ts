@@ -1192,7 +1192,6 @@ export namespace Config {
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),
               max_retries: z.number().int().min(0).optional().describe("Maximum delivery generation retries"),
-              merge_conflict_max_retries: z.number().int().min(1).optional().describe("Maximum merge-resolver retry attempts per conflicted file before aborting"),
               skills: z.array(z.string()).optional().describe("Additional skill paths for delivery agent"),
             })
             .optional()

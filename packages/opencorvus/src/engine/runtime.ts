@@ -1,14 +1,10 @@
-import { existsSync } from "fs"
-import path from "path"
 import { Config } from "@/config/config"
 import { ExecutorRegistry } from "@/executor/registry"
 
 import { Instance } from "@/project/instance"
-import { Database, and, eq, inArray } from "@/storage/db"
+import { Database, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 import {
-  EngineArtifactTable,
-  EngineGoalTable,
   EngineInteractionRequestTable,
   EngineTaskTable,
 } from "./engine.sql"
@@ -31,43 +27,29 @@ import {
   findRun,
   findActiveRunForTask,
   findTask,
-  goalRunQueueTaskID,
   listActiveGoalRunsForRun,
   listGoalRunsForRun,
   listLiveRunsForProject,
-  listPlanNodesByPlan,
-  requireRun,
   requireTask,
-  type GoalRunRow,
-  type PlanRow,
   type RunRow,
   type TaskRow,
 } from "./store"
-import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
 import { EXECUTOR_ACTIVE_RUN_STATUSES, RUNTIME_MONITORED_RUN_STATUSES } from "./catalog"
+import { PerRunState } from "./per-run-state"
 
 const log = Log.create({ service: "engine-runtime" })
 const DELIVERY_FETCH_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_DELIVERY_FETCH_TIMEOUT_MS || "300000", 10) // 5 min for executor.delivery() (git operations can be slow on Windows with large repos)
 const SYNC_RUN_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_SYNC_RUN_TIMEOUT_MS || String(DELIVERY_FETCH_TIMEOUT_MS + 15 * 60 * 1000), 10) // must exceed fetch + Orchestrator eval/verify/publish time
 const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
-const GOAL_HEARTBEAT_INTERVAL_MS = 30_000 // emit progress heartbeat every 30s per goal
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
-
-import { PerRunState } from "./per-run-state"
-
-async function serializedMerge(runID: string, fn: () => Promise<void>) {
-  return PerRunState.serializedMerge(runID, fn)
-}
-
 
 // Stale-interaction thresholds. Per-interaction-type auto-rejection is gated
 // by `experimental.auto_permission` / `experimental.auto_question` — this
 // constant is just the "how long before an unanswered interaction is
 // considered stale" timer. Both auto_* switches can be flipped independently.
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
-const PIPELINE_STALE_MS = 10 * 60 * 1000 // 10 min — pipeline tasks stuck longer without in-memory tracking are recovered
 
 
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
@@ -336,148 +318,6 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     log.info("run failed, task loop will detect and re-decide", { taskID: task.id, runID: run.id })
   }
 }
-
-function requirementIDsFromMetadata(metadata: unknown): string[] {
-  if (!metadata || typeof metadata !== "object") return []
-  const value = (metadata as Record<string, unknown>).source_requirement_ids
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && item.length > 0)
-  const ids = (metadata as Record<string, unknown>).requirement_ids
-  if (Array.isArray(ids)) return ids.filter((item): item is string => typeof item === "string" && item.length > 0)
-  return []
-}
-
-
-/**
- * Merge goal delivery to main workspace (orchestrator responsibility).
- * Serialized per-run. Commits merged files to advance HEAD for subsequent worktrees.
- *
- * Integration is driven by `delivery.commitRef` alone:
- *   - The goal's delivery commit is cherry-picked into the main worktree.
- *   - Owned-paths validation and merge verification read the authoritative file
- *     list via `filesChangedByCommit(commitRef)` — NEVER from `delivery.diffs`.
- *     `delivery.diffs` is display/audit only and must not re-enter the merge path.
- */
-export async function mergeGoalDelivery(
-  task: TaskRow, run: RunRow, plan: PlanRow, goalRun: GoalRunRow,
-  delivery: { commitRef?: string },
-  hooks: RuntimeHooks,
-) {
-  const goalRow = goalRun.goal_id ? Database.use((db) =>
-    db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalRun.goal_id)).get(),
-  ) : undefined
-  const ownedPaths = Array.isArray(goalRow?.owned_paths) ? goalRow.owned_paths : []
-  const commitRef = typeof (delivery as { commitRef?: unknown }).commitRef === "string"
-    ? (delivery as { commitRef?: string }).commitRef?.trim()
-    : undefined
-
-  if (!commitRef) {
-    throw new Error(`mergeGoalDelivery: missing commitRef for goalRun ${goalRun.id}`)
-  }
-
-  const { filesChangedByCommit, validateOwnedPaths, getMerger } = await import("@/goal/merge")
-  const committedFiles = await filesChangedByCommit(commitRef, Instance.directory)
-
-  if (ownedPaths.length > 0) {
-    const validation = validateOwnedPaths(
-      committedFiles.map((f) => f.file),
-      ownedPaths,
-    )
-    if (!validation.valid) {
-      log.warn("goal merge: files outside owned_paths", {
-        goalRunID: goalRun.id,
-        violations: validation.violations,
-        ownedPaths,
-      })
-    }
-  }
-
-  await serializedMerge(run.id, async () => {
-    const { $ } = await import("bun")
-    await Worktree.lock(async () => {
-      const cherryPick = await $`git cherry-pick -x ${commitRef}`.quiet().cwd(Instance.directory).nothrow()
-      if (cherryPick.exitCode !== 0) {
-        const stderr = cherryPick.stderr.toString().trim() || cherryPick.stdout.toString().trim() || "git cherry-pick failed"
-
-        // Capture main tip BEFORE abort so the resolver has the exact ref
-        // executor needs to merge in. `git rev-parse HEAD` in the primary
-        // worktree — a --abort'd cherry-pick rewinds to this same HEAD,
-        // so we intentionally read it post-conflict for determinism even
-        // though in principle pre/post are equivalent here.
-        await $`git cherry-pick --abort`.quiet().cwd(Instance.directory).nothrow()
-        const mainTipResult = await $`git rev-parse HEAD`.cwd(Instance.directory).quiet().nothrow()
-        const mainTip = mainTipResult.stdout.toString().trim()
-        if (mainTipResult.exitCode !== 0 || !mainTip) {
-          throw new Error(
-            `goal merge conflict for ${goalRun.id}: ${stderr} ` +
-              `(and failed to read primary worktree HEAD — cannot dispatch resolver)`,
-          )
-        }
-
-        if (!goalRow) {
-          throw new Error(
-            `goal merge conflict for ${goalRun.id}: ${stderr} ` +
-              `(no goal row found — cannot dispatch resolver)`,
-          )
-        }
-        const goalWorkDir = typeof goalRow.workspace_dir === "string" ? goalRow.workspace_dir : ""
-        if (!goalWorkDir) {
-          throw new Error(
-            `goal merge conflict for ${goalRun.id}: ${stderr} ` +
-              `(goal ${goalRow.id} has no workspace_dir — cannot dispatch resolver)`,
-          )
-        }
-
-        // P2 merge-conflict resolution: hand the goal worktree to executor.
-        // Must stay inside the Worktree.lock() window — the resolver does
-        // a `git merge --ff-only` back into primary that assumes no other
-        // goal has advanced main in the meantime.
-        const { resolveMergeConflict } = await import("./merge-resolver")
-        const resolved = await resolveMergeConflict({
-          task,
-          goalRun,
-          goal: {
-            id: goalRow.id,
-            title: goalRow.title ?? "(untitled)",
-            objective: goalRow.objective ?? undefined,
-            workspace_dir: goalWorkDir,
-          },
-          commitRef,
-          goalWorkDir,
-          primaryWorkDir: Instance.directory,
-          mainTip,
-          initialStderr: stderr,
-        })
-
-        if (!resolved.resolved) {
-          // Resolver already reset primary to mainTip + wrote decision_log on cap.
-          throw new Error(
-            `goal merge conflict for ${goalRun.id} unresolved: ${resolved.error ?? "unknown reason"}`,
-          )
-        }
-        log.info("merged goal delivery via conflict resolver", {
-          goalRunID: goalRun.id, commitRef, resolvedTip: resolved.newGoalBranchTip,
-        })
-        return
-      }
-      log.info("merged goal delivery by cherry-pick", { goalRunID: goalRun.id, commitRef, files: committedFiles.length })
-    })
-  })
-
-  // Verify merge: every non-deleted, non-skip file in the commit must now
-  // exist on disk in the main workspace. Source of truth is the commit itself,
-  // not the delivery object.
-  const expected = committedFiles
-    .filter((f) => f.status !== "deleted" && getMerger(f.file) !== "skip")
-    .map((f) => ({ rel: f.file, abs: path.resolve(Instance.directory, f.file) }))
-  const missing = expected.filter((f) => !existsSync(f.abs))
-  if (missing.length > 0) {
-    log.error("merge verification failed", { goalRunID: goalRun.id, missing: missing.length, files: missing.map((m) => m.rel) })
-    // Non-fatal for pipeline flow — delivery was already persisted, goal_run already completed
-    // The overall evaluator will catch integration issues
-  }
-}
-
-
 
 /** Stop the event bridge for a run (called when run completes/fails/aborts). */
 function stopEventBridge(runID: string) {
