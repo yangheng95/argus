@@ -22,6 +22,7 @@ import { Session } from "@/session"
 import { Database, eq } from "@/storage/db"
 import { Worktree } from "@/worktree"
 import { ExecutorRegistry } from "@/executor/registry"
+import { Ownership } from "./ownership"
 import { runGoalPipeline } from "@/pipeline"
 import { EngineConfig } from "./config"
 import { createDecisionLog } from "@/decision-log"
@@ -375,6 +376,23 @@ export class GoalPool {
       // ── 2. Acquire goal-scoped workspace ──
       const worktreeInfo = await acquireGoalWorkspace(entry.goal)
       worktreeDir = worktreeInfo.directory
+
+      // ── 2a. Record OS-level ownership marker for this worktree ──
+      // Primary consumer is restart recovery (engine/recovery.ts + Ownership
+      // registry): the owner PID in the marker lets a fresh process
+      // identify directories whose owner died and reclaim them without
+      // having to query engine_goal.workspace_dir / engine_run status.
+      // Re-recording on every acquire (including the reuse path above)
+      // ensures the marker always points at the current owner PID even
+      // when a restart reused an existing worktree.
+      await Ownership.Worktree.record({
+        primaryWorktreeDir: Instance.worktree,
+        worktreeDir: worktreeInfo.directory,
+        taskID: task.id,
+        sessionID,
+        goalID: entry.goal.id,
+        runID: run.id,
+      })
 
       // ── 2b-pre. Mount the intent bundle at .opencorvus/intent/ BEFORE planning ──
       // Every subsequent stage (per-goal planner, executor) runs inside this

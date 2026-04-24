@@ -16,6 +16,7 @@ import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
 import { Worktree } from "@/worktree"
+import { Ownership } from "@/engine/ownership"
 import { Identifier } from "@/id/id"
 import { plannerReportFromMetadata } from "@/planner/output-tools"
 import z from "zod"
@@ -228,6 +229,12 @@ export async function cleanupGoalWorkspace(directory?: string) {
     }
   }
   await timed("removeSandbox", () => Project.removeSandbox(projectID, directory))
+  await timed("ownership.clear", () =>
+    Ownership.Worktree.clear({
+      primaryWorktreeDir: Instance.worktree,
+      worktreeDir: directory,
+    }),
+  )
 
   const allOk = steps.every((s) => s.ok)
   const summary = {
