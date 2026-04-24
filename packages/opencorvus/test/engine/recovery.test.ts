@@ -54,10 +54,10 @@ function seedActiveExecution() {
       source: "test",
       title: "active task",
       request: "recover this task",
-      status: "active",
       priority: "normal",
       time_created: now,
       time_updated: now,
+      time_started: now,
     }).run()
     db.insert(EngineGoalTable).values({
       id: goalID,
@@ -166,7 +166,6 @@ function seedQueuedTask() {
       source: "test",
       title: "queued task",
       request: "run queued work",
-      status: "queued",
       priority: "normal",
       time_created: now,
       time_updated: now,
