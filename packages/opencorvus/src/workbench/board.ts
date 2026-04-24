@@ -32,7 +32,6 @@ import {
   TaskBoardGoalStepPayload,
   WorkflowRegistry,
 } from "@/engine"
-import type { WorkflowState } from "@/engine"
 import { projectGoalSteps, type MiniWorkflowStep } from "@/engine/workflow"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"

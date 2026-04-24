@@ -24,7 +24,6 @@ import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
 import { isRunOrphan } from "./recovery"
-import { taskRewindCursor } from "./rewind"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
  *  The column it used to shadow (engine_goal.status) is gone; this is
