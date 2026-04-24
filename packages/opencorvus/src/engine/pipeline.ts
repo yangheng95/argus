@@ -90,7 +90,6 @@ export function persistQueuedTask(input: {
         attachments: input.attachments?.length ? input.attachments : undefined,
         executor: input.executor,
         kind: input.kind ?? "workflow",
-        status: "queued",
         priority: input.priority ?? "normal",
         budget: budgetRow(input.budget),
         metadata: input.metadata,

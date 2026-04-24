@@ -50,6 +50,7 @@ import {
 } from "@/pipeline/goal-contract.schema"
 import type { EngineBudget } from "@/engine/engine.sql"
 import { updateRun, updateTask } from "@/engine/state"
+import { deriveTaskStatus, isTaskQueued } from "@/engine/task-status"
 
 import { createWorkflowState, findStepByTool, WorkflowRegistry, type WorkflowState, type MiniWorkflow } from "@/engine/workflow"
 import { Question } from "@/question"
@@ -569,7 +570,7 @@ export function createOrchestratorTools(input: {
             Database.effect(() =>
               EngineProtocol.emit(
                 EngineEvent.TaskUpdated,
-                { taskID, status: task.status, summary: "Requirements parsed" },
+                { taskID, status: deriveTaskStatus(task), summary: "Requirements parsed" },
                 { source: "orchestrator.requirements" },
               ),
             )
@@ -1249,7 +1250,7 @@ export function createOrchestratorTools(input: {
             Database.effect(() =>
               EngineProtocol.emit(
                 EngineEvent.TaskUpdated,
-                { taskID, status: task.status, summary: "Goals decomposed by Architect" },
+                { taskID, status: deriveTaskStatus(task), summary: "Goals decomposed by Architect" },
                 { source: "orchestrator.architect" },
               ),
             )
@@ -2479,7 +2480,7 @@ export function createOrchestratorTools(input: {
                 }
                 // Ensure task is in "active" before completing (recovery may have reset to "queued")
                 const preComplete = requireTask(taskID)
-                if (preComplete.status === "queued") {
+                if (isTaskQueued(preComplete)) {
                   await updateTask(preComplete, { status: "active" }, "Activating for completion")
                 }
                 const readyTask = requireTask(taskID)

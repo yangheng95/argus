@@ -62,6 +62,14 @@ import { EngineInteraction } from "@/engine/interaction"
 import { AutoPermission } from "@/engine/auto-permission"
 import { EngineRuntime } from "@/engine/runtime"
 import { hooks, updateRun, updateTask, upsertTaskCriteria as upsertTaskCriteriaImpl } from "@/engine/state"
+import {
+  deriveTaskStatus,
+  isTaskActive,
+  isTaskCancelled,
+  isTaskCompleted,
+  isTaskFailed,
+  isTaskTerminal,
+} from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
 import { Orchestrator } from "@/orchestrator/agent"
 import {
@@ -156,7 +164,7 @@ async function continueTaskMessage(
   return {
     mode: "scheduler" as const,
     resumed: true,
-    status: task.status as string,
+    status: deriveTaskStatus(task) as string,
   }
 }
 
@@ -270,7 +278,12 @@ async function prepareProject(project?: string) {
   throw new Error(`project mismatch: expected ${Instance.project.id}, got ${project}`)
 }
 
-function taskSummary(rows: Array<{ time_started: number | null; time_completed: number | null; status: string }>) {
+function taskSummary(rows: Array<{
+  time_started: number | null
+  time_completed: number | null
+  error?: string | null
+  metadata?: Record<string, unknown> | null
+}>) {
   const completed = rows
     .filter((row) => typeof row.time_started === "number" && typeof row.time_completed === "number")
     .map((row) => (row.time_completed ?? 0) - (row.time_started ?? 0))
@@ -279,12 +292,12 @@ function taskSummary(rows: Array<{ time_started: number | null; time_completed: 
 
   return {
     total_tasks: rows.length,
-    open_tasks: rows.filter((row) => !["completed", "failed", "cancelled"].includes(row.status)).length,
-    running_tasks: rows.filter((row) => row.status === "active").length,
+    open_tasks: rows.filter((row) => !isTaskTerminal(row)).length,
+    running_tasks: rows.filter((row) => isTaskActive(row)).length,
     blocked_tasks: 0,
-    completed_tasks: rows.filter((row) => row.status === "completed").length,
-    failed_tasks: rows.filter((row) => row.status === "failed").length,
-    cancelled_tasks: rows.filter((row) => row.status === "cancelled").length,
+    completed_tasks: rows.filter((row) => isTaskCompleted(row)).length,
+    failed_tasks: rows.filter((row) => isTaskFailed(row)).length,
+    cancelled_tasks: rows.filter((row) => isTaskCancelled(row)).length,
     median_completion_ms:
       completed.length === 0 ? undefined : completed[Math.floor((completed.length - 1) / 2)],
   }
@@ -822,7 +835,7 @@ export namespace EngineService {
   export async function deleteTask(taskID: string) {
     const task = requireTask(taskID)
     // Cancel if still active
-    if (!["completed", "failed", "cancelled"].includes(task.status)) {
+    if (!isTaskTerminal(task)) {
       await cancelTask(taskID)
     }
     // Wait for any in-progress pipeline stage to settle after abort
@@ -862,7 +875,7 @@ export namespace EngineService {
     )
     await Bus.publish(Event.TaskUpdated, {
       taskID,
-      status: task.status,
+      status: deriveTaskStatus(task),
       summary: "Task budget updated",
     })
     return true
@@ -1029,7 +1042,7 @@ export namespace EngineService {
     if (input?.deleteTasks) {
       const tasks = Database.use((db) =>
         db
-          .select({ id: EngineTaskTable.id, status: EngineTaskTable.status })
+          .select()
           .from(EngineTaskTable)
           .where(
             and(
@@ -1040,7 +1053,7 @@ export namespace EngineService {
           .all(),
       )
       for (const item of tasks) {
-        if (["completed", "failed", "cancelled"].includes(item.status)) continue
+        if (isTaskTerminal(item)) continue
         await cancelTask(item.id)
       }
       Database.use((db) => {
@@ -1062,7 +1075,7 @@ export namespace EngineService {
 
   export async function retryTask(taskID: string) {
     const task = requireTask(taskID)
-    if (["queued", "active"].includes(task.status)) {
+    if (!isTaskTerminal(task)) {
       throw new Error(`task ${taskID} is already active`)
     }
     // Reset to queued and hand scheduling back to the single queue/coordinator entry.
@@ -1081,7 +1094,7 @@ export namespace EngineService {
         .values({
           id: Identifier.ascending("progress"),
           task_id: task.id,
-          status: progressStatus(task.status),
+          status: progressStatus(deriveTaskStatus(task)),
           summary: "Operator note recorded",
           payload: {
             note,
@@ -1093,10 +1106,10 @@ export namespace EngineService {
         .run(),
     )
     if (!run) {
-      return { resumed: false, status: task.status }
+      return { resumed: false, status: deriveTaskStatus(task) }
     }
-    if (["completed", "cancelled"].includes(task.status)) {
-      return { resumed: false, status: task.status }
+    if (isTaskCompleted(task) || isTaskCancelled(task)) {
+      return { resumed: false, status: deriveTaskStatus(task) }
     }
     if (["accepted", "running"].includes(run.status)) {
       return { resumed: false, status: run.status }
@@ -1110,7 +1123,7 @@ export namespace EngineService {
     const input = TaskMessageInput.parse(raw)
     const task = requireTask(taskID)
 
-    if (task.status === "failed") {
+    if (isTaskFailed(task)) {
       return {
         kind: "note" as const,
         message: "Task is failed. Retry the task before sending more guidance. This message was not recorded.",
@@ -1207,7 +1220,7 @@ export namespace EngineService {
     const context = [
       `title: ${task.title}`,
       `request: ${(task.request ?? "").slice(0, 400)}`,
-      `status: ${task.status}`,
+      `status: ${deriveTaskStatus(task)}`,
       task.error ? `error: ${String(task.error).slice(0, 240)}` : "",
       run?.blocking_reason ? `blocking: ${run.blocking_reason}` : "",
       transcript.length > 0 ? `transcript:\n${transcript.join("\n")}` : "",

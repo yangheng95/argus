@@ -18,6 +18,7 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
+import { isTaskActive, isTaskQueued } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
 
 const log = Log.create({ service: "engine.queue" })
@@ -113,12 +114,14 @@ export function taskCwd(taskID: string): string {
  */
 export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefined {
   if (!cwd) return undefined
+  // Phase-6-f-2: no status column. Queued = time_started IS NULL (never
+  // picked up). Active = time_started IS NOT NULL AND time_completed IS NULL.
+  // Terminal = time_completed IS NOT NULL.
   const result = Database.use((db) =>
     db
       .update(EngineTaskTable)
       .set({
-        status: "active",
-        time_started: sql`COALESCE(${EngineTaskTable.time_started}, ${now})`,
+        time_started: now,
         time_updated: now,
       })
       .where(
@@ -127,14 +130,14 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
           FROM engine_task t
           LEFT JOIN session s ON s.id = t.session_id
           LEFT JOIN project p ON p.id = t.project_id
-          WHERE t.status = 'queued'
+          WHERE t.time_started IS NULL AND t.time_completed IS NULL
             AND COALESCE(s.directory, p.worktree) = ${cwd}
             AND NOT EXISTS (
               SELECT 1
               FROM engine_task t2
               LEFT JOIN session s2 ON s2.id = t2.session_id
               LEFT JOIN project p2 ON p2.id = t2.project_id
-              WHERE t2.status = 'active'
+              WHERE t2.time_started IS NOT NULL AND t2.time_completed IS NULL
                 AND COALESCE(s2.directory, p2.worktree) = ${cwd}
             )
           ORDER BY
@@ -162,7 +165,8 @@ export function listActiveForCwd(cwd: string): TaskRow[] {
       .leftJoin(ProjectTable, eq(ProjectTable.id, EngineTaskTable.project_id))
       .where(
         and(
-          eq(EngineTaskTable.status, "active"),
+          sql`${EngineTaskTable.time_started} IS NOT NULL`,
+          sql`${EngineTaskTable.time_completed} IS NULL`,
           sql`COALESCE(${SessionTable.directory}, ${ProjectTable.worktree}) = ${cwd}`,
         ),
       )
@@ -187,7 +191,8 @@ export function listQueuedCwdsInProject(projectID: string): string[] {
       .where(
         and(
           eq(EngineTaskTable.project_id, projectID),
-          eq(EngineTaskTable.status, "queued"),
+          sql`${EngineTaskTable.time_started} IS NULL`,
+          sql`${EngineTaskTable.time_completed} IS NULL`,
         ),
       )
       .all(),
@@ -207,7 +212,8 @@ export function listOrphanedActiveInProject(projectID: string): TaskRow[] {
       .where(
         and(
           eq(EngineTaskTable.project_id, projectID),
-          eq(EngineTaskTable.status, "active"),
+          sql`${EngineTaskTable.time_started} IS NOT NULL`,
+          sql`${EngineTaskTable.time_completed} IS NULL`,
         ),
       )
       .all(),
@@ -245,7 +251,7 @@ export async function dispatchTaskLoop(input: {
     return
   }
 
-  if (task.status === "queued") {
+  if (isTaskQueued(task)) {
     if (input.event) queuedTaskEvents.set(task.id, input.event)
     await advanceQueue(cwd)
     return
@@ -270,7 +276,7 @@ export async function resumeActiveTaskLoop(taskID: string): Promise<void> {
   if (loopInFlight.has(taskID)) return
   const task = findTask(taskID)
   if (!task) return
-  if (task.status !== "active") return
+  if (!isTaskActive(task)) return
   const cwd = taskCwd(taskID)
   if (!cwd) {
     log.warn("resumeActiveTaskLoop: task has no cwd", { taskID })

@@ -28,6 +28,7 @@ import { Log } from "@/util/log"
 import type { RuntimeHooks } from "@/engine/runtime-hooks"
 import { Orchestrator, OrchestratorEventNote, type OrchestratorEvent } from "@/orchestrator/agent"
 import { findTask } from "@/engine"
+import { deriveTaskStatus, isTaskActive, isTaskQueued, isTaskTerminal } from "@/engine/task-status"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
@@ -143,7 +144,7 @@ async function runTaskLoopInner(input: {
   {
     const { updateTask } = await import("@/engine/state")
     const task = findTask(taskID)
-    if (task && task.status === "queued") {
+    if (task && isTaskQueued(task)) {
       await updateTask(task, { status: "active" }, "Task loop started — marking active for serial queue")
     }
   }
@@ -181,9 +182,8 @@ async function runTaskLoopInner(input: {
     // caller-supplied event.note and must be allowed to wake a terminal
     // task so the orchestrator can revive it; bare state-read wakes must
     // not, or the loop burns turns on nothing.
-    const terminal = task.status === "completed" || task.status === "failed" || task.status === "cancelled"
-    if (terminal && !event) {
-      log.info("task in terminal state, exiting loop", { taskID, status: task.status })
+    if (isTaskTerminal(task) && !event) {
+      log.info("task in terminal state, exiting loop", { taskID, status: deriveTaskStatus(task) })
       break
     }
 
@@ -225,10 +225,10 @@ async function runTaskLoopInner(input: {
 
     const taskAfter = findTask(taskID)
     if (!taskAfter) break
-    if (taskAfter.status === "completed" || taskAfter.status === "failed" || taskAfter.status === "cancelled") {
+    if (isTaskTerminal(taskAfter)) {
       log.info("task entered terminal state after decision", {
         taskID,
-        status: taskAfter.status,
+        status: deriveTaskStatus(taskAfter),
       })
       break
     }
@@ -244,7 +244,7 @@ async function runTaskLoopInner(input: {
     // Keyed on the verdict artifact — NOT on goal_run.superseded_reason
     // string matching. Per rule 23 we do not branch on enum label values;
     // the artifact is the first-class delivery output.
-    if (taskAfter.status === "active") {
+    if (isTaskActive(taskAfter)) {
       const { findRecentDeliveryRejection } = await import("@/engine/store")
       const verdictArt = findRecentDeliveryRejection(taskID, lastReworkSeenAt)
       if (verdictArt) {
@@ -273,7 +273,7 @@ async function runTaskLoopInner(input: {
     // (operator message, scheduler tick, ownership recovery) re-enter.
     log.info(
       "orchestrator pass ended with no auto-rewake signal — loop exiting",
-      { taskID, iteration: decisionTurn, taskStatus: taskAfter.status },
+      { taskID, iteration: decisionTurn, taskStatus: deriveTaskStatus(taskAfter) },
     )
     break
   }

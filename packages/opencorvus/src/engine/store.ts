@@ -31,6 +31,7 @@ import {
   type EngineMetadata,
 } from "./engine.sql"
 import { ACTIVE_GOAL_RUN_STATUSES, DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
+import { deriveTaskStatus } from "./task-status"
 
 export type TaskRow = typeof EngineTaskTable.$inferSelect
 export type PlanRow = typeof EnginePlanVersionTable.$inferSelect
@@ -953,7 +954,7 @@ export function searchProjectTasks(
 ) {
   const conditions = [eq(EngineTaskTable.project_id, projectID)]
   if (opts.status) {
-    conditions.push(eq(EngineTaskTable.status, opts.status as typeof EngineTaskTable.$inferSelect.status))
+    conditions.push(taskStatusCondition(opts.status))
   }
   if (opts.query) {
     conditions.push(like(EngineTaskTable.title, `%${opts.query}%`))
@@ -967,6 +968,44 @@ export function searchProjectTasks(
       .limit(opts.limit ?? 50)
       .all(),
   )
+}
+
+/**
+ * Translate a logical task-status filter (queued / active / completed /
+ * failed / cancelled) into a fact-field SQL condition now that the status
+ * column is gone. Unknown statuses resolve to `1=0` so a caller's typo
+ * returns zero rows rather than all rows.
+ */
+function taskStatusCondition(status: string): SQL {
+  const cancelledMark = sql`json_extract(${EngineTaskTable.metadata}, '$.cancelled') = 1`
+  switch (status) {
+    case "queued":
+      return and(
+        isNull(EngineTaskTable.time_started),
+        isNull(EngineTaskTable.time_completed),
+      )!
+    case "active":
+      return and(
+        isNotNull(EngineTaskTable.time_started),
+        isNull(EngineTaskTable.time_completed),
+      )!
+    case "completed":
+      return and(
+        isNotNull(EngineTaskTable.time_completed),
+        isNull(EngineTaskTable.error),
+        sql`(${cancelledMark}) IS NOT TRUE`,
+      )!
+    case "failed":
+      return and(
+        isNotNull(EngineTaskTable.time_completed),
+        isNotNull(EngineTaskTable.error),
+        sql`(${cancelledMark}) IS NOT TRUE`,
+      )!
+    case "cancelled":
+      return cancelledMark
+    default:
+      return sql`1 = 0`
+  }
 }
 
 export function listGlobalTasks(input?: {
@@ -985,7 +1024,7 @@ export function listGlobalTasks(input?: {
     conditions.push(lt(EngineTaskTable.time_updated, input.cursor))
   }
   if (input?.status) {
-    conditions.push(eq(EngineTaskTable.status, input.status as typeof EngineTaskTable.$inferSelect.status))
+    conditions.push(taskStatusCondition(input.status))
   }
   if (input?.query) {
     conditions.push(like(EngineTaskTable.title, `%${input.query}%`))
@@ -1135,7 +1174,7 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     source: row.source,
     title: row.title,
     request: row.request,
-    status: row.status,
+    status: deriveTaskStatus(row),
     priority: row.priority,
     kind: row.kind ?? "workflow",
     // Phase-6-f-4: task.blocking_reason cache removed; derive from the active

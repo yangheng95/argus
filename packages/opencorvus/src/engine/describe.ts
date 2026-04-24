@@ -24,6 +24,7 @@ import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
 import { isRunOrphan } from "./recovery"
+import { deriveTaskStatus } from "./task-status"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
  *  The column it used to shadow (engine_goal.status) is gone; this is
@@ -320,7 +321,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   return {
     id: task.id,
     title: task.title,
-    status: task.status,
+    status: deriveTaskStatus(task),
     request: task.request,
     error: task.error ?? undefined,
     spec_summary: specSummary,

@@ -325,7 +325,8 @@ export namespace Orchestrator {
           firstFailureName: first?.errorName,
         })
         const current = requireTask(taskID)
-        if (current.status !== "completed" && current.status !== "failed" && current.status !== "cancelled") {
+        const { isTaskTerminal } = await import("@/engine/task-status")
+        if (!isTaskTerminal(current)) {
           await updateTask(current, {
             status: "failed",
             error: `Orchestrator stream failure: ${reason}`,
@@ -352,7 +353,8 @@ export namespace Orchestrator {
       // Don't change task status — let orphan recovery decide the next step.
       try {
         const current = requireTask(taskID)
-        if (current.status !== "completed" && current.status !== "failed" && current.status !== "cancelled") {
+        const { isTaskTerminal } = await import("@/engine/task-status")
+        if (!isTaskTerminal(current)) {
           await updateTask(current, { error: `Orchestrator error: ${msg}` }, `Orchestrator failed: ${msg}`)
         }
       } catch { /* task may have been deleted */ }
