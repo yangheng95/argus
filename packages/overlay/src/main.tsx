@@ -1227,23 +1227,41 @@ disposers.push(createRoot((dispose) => {
     }
   });
 
-  // ── Elapsed duration (standalone interval, decoupled from reactive updates) ──
-  const elapsedInterval = setInterval(() => {
+  // ── Elapsed duration ──
+  // Only tick while the task is live AND the window is visible; otherwise the
+  // text is a static snapshot (completed tasks never change; hidden overlay
+  // doesn't need per-second updates). This eliminates an unconditional 1 Hz
+  // CPU wake + DOM reflow across the backdrop layers.
+  const [isVisible, setIsVisible] = createSignal(document.visibilityState === "visible");
+  const onVisibility = () => setIsVisible(document.visibilityState === "visible");
+  document.addEventListener("visibilitychange", onVisibility);
+  onCleanup(() => document.removeEventListener("visibilitychange", onVisibility));
+
+  createEffect(() => {
     const elapsedEl = document.getElementById("taskElapsed");
     if (!elapsedEl) return;
     const task = (boardStore.board as any)?.task;
     const startTime = task?.time?.created || 0;
+    const status = task?.status || "idle";
+    const completedTime = task?.time?.completed || 0;
+    const isLive = ["active", "queued"].includes(status);
+
     if (!boardStore.selectedTaskID || !startTime) {
       if (elapsedEl.textContent) elapsedEl.textContent = "";
       return;
     }
-    const completedTime = task?.time?.completed || 0;
-    const status = task?.status || "idle";
-    const isActive = ["active", "queued"].includes(status);
-    const end = completedTime && !isActive ? completedTime : Date.now();
-    elapsedEl.textContent = formatDuration(end - startTime);
-  }, 1000);
-  onCleanup(() => clearInterval(elapsedInterval));
+    if (!isLive) {
+      elapsedEl.textContent = formatDuration((completedTime || Date.now()) - startTime);
+      return;
+    }
+    // Live task: paint once immediately, then tick 1 Hz only while visible.
+    elapsedEl.textContent = formatDuration(Date.now() - startTime);
+    if (!isVisible()) return;
+    const handle = setInterval(() => {
+      elapsedEl.textContent = formatDuration(Date.now() - startTime);
+    }, 1000);
+    onCleanup(() => clearInterval(handle));
+  });
 
  // interactionBridge.renderInteractions removed — the unified InteractionCard
  // renders the UI in both inline conversation and sidebar surfaces, and
