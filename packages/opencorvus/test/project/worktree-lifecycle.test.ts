@@ -83,6 +83,11 @@ describe("Worktree lifecycle", () => {
   })
 
   test("reset fails when startup scripts fail", async () => {
+    // Bun's default 5s timeout is tight for this test on Windows: reset spawns
+    // ~10 sequential git/cmd processes (worktree list, remote probe, two
+    // show-ref checks, reset --hard, clean -ffdx, three submodule operations,
+    // status) plus the cmd.exe startup-script probe; each spawn is ~300ms on
+    // Windows. 30s is comfortable headroom without masking real regressions.
     await using tmp = await tmpdir({ git: true })
     const projectID = await projectIDFor(tmp.path)
     await Project.update({
@@ -115,5 +120,5 @@ describe("Worktree lifecycle", () => {
         message: expect.stringMatching(/startup scripts failed/i),
       },
     })
-  })
+  }, 30_000)
 })

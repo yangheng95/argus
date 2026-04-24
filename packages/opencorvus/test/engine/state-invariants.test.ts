@@ -10,10 +10,8 @@ import {
 import {
   EngineDeliveryTable,
   EngineEvaluationTable,
-  EngineGoalTable,
   EngineGoalRunTable,
 } from "../../src/engine/engine.sql"
-import { deriveGoalStatus } from "../../src/engine/goal-status"
 
 /**
  * Cross-table state invariants. These are the properties the Phase 1-6
@@ -47,25 +45,6 @@ describe("engine state invariants", () => {
       )
       if (rows.length !== 1) {
         violations.push({ deliveryID: d.id, evaluationCount: rows.length })
-      }
-    }
-    expect(violations).toEqual([])
-  })
-
-  test("engine_goal.status equals derived from goal_run chain tip (or default)", () => {
-    const goals = Database.use((db) =>
-      db.select().from(EngineGoalTable).all(),
-    )
-    const violations: Array<{ goalID: string; stored: string; derived: string | undefined }> = []
-    for (const g of goals) {
-      const derived = deriveGoalStatus(g.id)
-      // deriveGoalStatus returns undefined when there is no goal_run yet.
-      // The stored status in that case is whatever the initial insert said
-      // (usually "pending"); we do not enforce a specific value, only that
-      // once derivation has something to say, the stored value matches.
-      if (derived === undefined) continue
-      if (g.status !== derived) {
-        violations.push({ goalID: g.id, stored: g.status, derived })
       }
     }
     expect(violations).toEqual([])

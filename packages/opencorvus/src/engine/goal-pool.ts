@@ -70,20 +70,48 @@ async function acquireGoalWorkspace(goal: GoalRow) {
     if (!existsSync(goal.workspace_dir)) {
       throw new Error(goalWorkspaceMissingMessage(goal))
     }
-    if (!goal.workspace_branch) {
-      throw new Error(`goal ${goal.id} recorded workspace ${goal.workspace_dir} without workspace_branch`)
+    // The directory being present is NOT sufficient: on Windows, a partial
+    // teardown (`git worktree remove --force` succeeds in deleting .git +
+    // registry but fs.rm fails on locked node_modules) leaves files behind
+    // with no git linkage. Reusing that residue makes every subsequent
+    // `git` command climb up to the primary repo and land commits on
+    // master — the goal branch never advances and retries write into a
+    // workspace that never feeds back. Validate before reuse; if the
+    // linkage is gone, drop the stale pointer and fall through to create.
+    const validation = await Worktree.isValid(goal.workspace_dir)
+    if (validation.valid) {
+      if (!goal.workspace_branch) {
+        throw new Error(`goal ${goal.id} recorded workspace ${goal.workspace_dir} without workspace_branch`)
+      }
+      const reused = {
+        name: path.basename(goal.workspace_dir),
+        branch: goal.workspace_branch,
+        directory: goal.workspace_dir,
+      }
+      log.info("reusing workspace dir", {
+        goalID: goal.id,
+        directory: reused.directory,
+        branch: reused.branch,
+      })
+      return reused
     }
-    const reused = {
-      name: path.basename(goal.workspace_dir),
-      branch: goal.workspace_branch,
-      directory: goal.workspace_dir,
-    }
-    log.info("reusing workspace dir", {
+
+    log.warn("goal workspace dir is not a live git worktree; reclaiming before create", {
       goalID: goal.id,
-      directory: reused.directory,
-      branch: reused.branch,
+      directory: goal.workspace_dir,
+      reason: validation.reason,
     })
-    return reused
+    // Teardown disposes LSP + fsmonitor + nulls the DB pointer. Errors are
+    // swallowed here because Worktree.create's reclaimBase path will hit
+    // the same residue next and is the contract that's allowed to fail
+    // loud with an operator-actionable message.
+    await cleanupGoalWorkspaceForGoal(goal.id).catch((error) => {
+      log.warn("cleanupGoalWorkspaceForGoal failed while reclaiming stale worktree", {
+        goalID: goal.id,
+        directory: goal.workspace_dir,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
   }
 
   // Worktree name = `goal-<slug>-<id-suffix>`. `goal.slug` is already the

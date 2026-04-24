@@ -10,6 +10,7 @@ import {
   EngineGoalRunTable,
 } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
+import { goalSlug } from "../../src/engine/persist"
 import { buildRetryFeedbackSection, buildGoalPrompt } from "../../src/goal/runner"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -70,8 +71,8 @@ function seed() {
       task_id: taskID,
       plan_version_id: planID,
       title: "Implement add()",
+      slug: goalSlug("Implement add()"),
       objective: "Add an `add(a, b)` function that returns a + b",
-      done_definition: "bun test passes",
       owned_paths: ["src/math.ts", "test/math.test.ts"],
       depends_on: [],
       exports: [],
@@ -80,7 +81,6 @@ function seed() {
       requirement_ids: [],
       priority: "blocking",
       source: "test",
-      status: "pending",
       retry_count: 0,
       order_index: 0,
       time_created: now,

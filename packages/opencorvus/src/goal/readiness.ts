@@ -12,7 +12,6 @@
  */
 import type { GoalRow, GoalRunRow } from "@/engine"
 import { doesGoalRunSatisfyGoal, isLiveGoalRunStatus } from "@/engine/catalog"
-import { isDispatchableGoal } from "@/goal/kind"
 
 /**
  * The "tips" of the supersede chain — goal_runs that are NOT pointed at by
@@ -35,7 +34,6 @@ function authoritativeTip(goalID: string, goalRuns: GoalRunRow[]): GoalRunRow | 
 
 export function isQueuedGoalRunStartable(goalRun: GoalRunRow, goal: GoalRow, goalRuns: GoalRunRow[]): boolean {
   if (goalRun.status !== "queued") return false
-  if (!isDispatchableGoal(goal)) return false
   const tip = authoritativeTip(goal.id, goalRuns)
   if (!tip || tip.id !== goalRun.id) return false
   return unsatisfiedDependencyGoalIDs(goal, goalRuns).length === 0
@@ -65,12 +63,8 @@ export function unsatisfiedDependencyGoalIDs(goal: GoalRow, goalRuns: GoalRunRow
  * is terminal-but-superseded (an attempt cycle was opened under retry /
  * delivery_rework / modify_contract / restart_stage). The LLM's
  * describe layer surfaces `needs_redispatch` for this case.
- *
- * Advisory goals that failed are not dispatchable (pipeline moves on);
- * system goals are not dispatchable (setup/teardown runs elsewhere).
  */
 export function isGoalDispatchable(goal: GoalRow, goalRuns: GoalRunRow[]): boolean {
-  if (!isDispatchableGoal(goal)) return false
   if (unsatisfiedDependencyGoalIDs(goal, goalRuns).length > 0) return false
   const tip = authoritativeTip(goal.id, goalRuns)
   if (!tip) return true
@@ -85,7 +79,6 @@ export function isGoalDispatchable(goal: GoalRow, goalRuns: GoalRunRow[]): boole
  * by the pool to skip IDs the LLM re-submitted after they already ran.
  */
 export function isGoalAlreadyDispatched(goal: GoalRow, goalRuns: GoalRunRow[]): boolean {
-  if (!isDispatchableGoal(goal)) return false
   const tip = authoritativeTip(goal.id, goalRuns)
   if (!tip) return false
   if (isLiveGoalRunStatus(tip.status)) return true

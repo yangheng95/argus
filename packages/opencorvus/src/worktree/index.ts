@@ -586,6 +586,46 @@ export namespace Worktree {
     return withGitLock(fn)
   }
 
+  /**
+   * Verify that `directory` is a *live* git worktree: both the per-worktree
+   * `.git` linkage (file or dir) is present on disk AND the primary repo's
+   * `git worktree list` still has it registered.
+   *
+   * Exists because Windows cleanup has a partial-failure mode that silently
+   * creates "zombie" worktrees: `git worktree remove --force` deletes the
+   * per-worktree `.git` link + the primary repo's `.git/worktrees/<name>/`
+   * metadata in one step, then tries to `rm -rf` the directory. If a child
+   * process (bun test runner, fsmonitor, vite dev server, MSVC-file-locked
+   * `node_modules/*.dll`) still holds a handle, the rm fails — but the two
+   * git-level deletes already succeeded. Residue on disk: everything except
+   * `.git`. The fallback `fs.rm` in cleanupGoalWorkspace swallows the same
+   * error. On the next dispatch, `existsSync(workspace_dir)` still returns
+   * true, so the reuse path reuses a directory whose git operations now
+   * walk up and land on the PRIMARY repo's `.git` — commits go to master,
+   * the goal branch never advances, every retry silently overwrites itself.
+   * Callers that intend to reuse a recorded workspace_dir must gate on this.
+   */
+  export async function isValid(directory: string): Promise<{ valid: boolean; reason?: string }> {
+    const gitLink = path.join(directory, ".git")
+    if (!(await exists(gitLink))) {
+      return { valid: false, reason: `missing .git linkage at ${gitLink}` }
+    }
+    const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
+    if (list.exitCode !== 0) {
+      return { valid: false, reason: errorText(list) || "git worktree list failed" }
+    }
+    const target = await canonical(directory)
+    const lines = outputText(list.stdout).split("\n")
+    for (const line of lines) {
+      if (!line.startsWith("worktree ")) continue
+      const entryPath = line.slice("worktree ".length).trim()
+      if (!entryPath) continue
+      const entryKey = await canonical(entryPath)
+      if (entryKey === target) return { valid: true }
+    }
+    return { valid: false, reason: `directory not registered in 'git worktree list'` }
+  }
+
   export const remove = fn(RemoveInput, async (input) => {
     if (!Project.isGitRepo(Instance.directory)) {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
