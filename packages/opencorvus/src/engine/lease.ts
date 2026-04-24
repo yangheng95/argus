@@ -13,7 +13,7 @@ type Lease = {
 
 const OWNER = `${process.pid}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
 
-export const EXECUTOR_LEASE_MS = timeout("OPENCORVUS_EXECUTOR_LEASE_MS", 30_000, 5_000)
+const EXECUTOR_LEASE_MS = timeout("OPENCORVUS_EXECUTOR_LEASE_MS", 30_000, 5_000)
 
 export function executorLeaseOwner() {
   return OWNER

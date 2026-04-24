@@ -351,7 +351,7 @@ async function commitDeliveryRound(input: {
  * writer; per-goal worktrees do not own LKG (only the merged worktree
  * has a meaningful visual score).
  */
-export interface DeliveryLKG {
+interface DeliveryLKG {
   best_score: number
   best_commit_sha: string
   best_round: number
