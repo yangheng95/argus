@@ -19,6 +19,7 @@ import { Log } from "@/util/log"
 import { EngineService } from "@/task-api"
 import { findTask } from "@/engine/store"
 import { renderPage, findBrowserExecutable } from "@/delivery/checks/visual"
+import { buildMultimodalToolResult } from "@/delivery/tool-result"
 
 const TASK_CHAIN_DEPTH_LIMIT = 3
 
@@ -412,9 +413,9 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         "citing this call in submit_verdict.tool_call_evidence. The tool returns the shot's size " +
         "(bytes + dimensions) and a pixel-variance signal — a near-zero variance means the page " +
         "rendered blank/uniform (JSON error, pre-hydration stub, loading state) and the capture " +
-        "itself does NOT count as a passed check. When you need to view the image contents, pass " +
-        "the returned path to read_file on the next iteration (delivery retries inject prior-run " +
-        "screenshots back as multimodal input).",
+        "itself does NOT count as a passed check. " +
+        "P0-0: the captured PNG is attached to this tool result as multimodal image content — you " +
+        "see it directly in your next reasoning step, no read_file required.",
       inputSchema: z.object({
         url: z.string().describe("Absolute http(s) URL, file:// URL, or absolute local path to an HTML file. The file path form launches a short-lived static/project server so ES-module scripts resolve correctly — same logic as the pipeline's visual-diff helper."),
         viewport_width: z.number().int().min(100).max(4096).default(1440).describe("Viewport width in CSS pixels."),
@@ -441,23 +442,32 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
             await fs.copyFile(rendered.renderedPath, finalPath)
           })
           await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined)
-          return JSON.stringify({
-            ok: true,
-            path: finalPath,
-            sha,
-            bytes: buf.length,
-            width: rendered.size.width,
-            height: rendered.size.height,
-            viewport: rendered.viewport,
-            pixel_variance: Number(variance.toFixed(2)),
-            degenerate: variance < 25,
-            note: variance < 25
-              ? "Pixel variance < 25 — the screenshot is near-uniform (blank page, JSON error body, or unhydrated shell). Do NOT count as a passed visual check."
-              : undefined,
-          }, null, 2)
+          // P0-0 — return the PNG as multimodal image content so the LLM sees
+          // the screenshot in THIS reasoning step instead of having to chain
+          // read_file on a path it almost never invokes.
+          return await buildMultimodalToolResult({
+            text: JSON.stringify({
+              ok: true,
+              path: finalPath,
+              sha,
+              bytes: buf.length,
+              width: rendered.size.width,
+              height: rendered.size.height,
+              viewport: rendered.viewport,
+              pixel_variance: Number(variance.toFixed(2)),
+              degenerate: variance < 25,
+              note: variance < 25
+                ? "Pixel variance < 25 — the screenshot is near-uniform (blank page, JSON error body, or unhydrated shell). Do NOT count as a passed visual check."
+                : undefined,
+            }, null, 2),
+            images: [{ path: finalPath, mime: "image/png", filename: `${safeLabel}-${sha}.png` }],
+          })
         } catch (err) {
           log.warn("screenshot failed", { url, err })
           await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined)
+          // P0-0: failures stay text-only — there is no PNG to attach. Do NOT
+          // return a stale prior-run image (rule 1: no fallback that lies
+          // about what was captured this turn).
           return `screenshot failed: ${err instanceof Error ? err.message : String(err)}`
         }
       },
@@ -648,7 +658,24 @@ export function createDeliveryTools(input?: { sessionID?: string; taskID?: strin
         } finally {
           await browser.close().catch(() => undefined)
         }
-        return JSON.stringify(report, null, 2)
+        // P0-0 — attach the layer-5 screenshot as multimodal image content so
+        // the LLM sees the rendered page in THIS reasoning step instead of
+        // chaining read_file on the screenshot_path field it never reads.
+        // Skip the attachment when the screenshot was never produced (early
+        // crash before layer 5) — text-only is the correct shape there.
+        const shotPath = report.layers.pixel.screenshot_path
+        const text = JSON.stringify(report, null, 2)
+        if (shotPath) {
+          try {
+            return await buildMultimodalToolResult({
+              text,
+              images: [{ path: shotPath, mime: "image/png", filename: path.basename(shotPath) }],
+            })
+          } catch (err) {
+            log.warn("verify_page_integrity: failed to attach screenshot", { shotPath, err })
+          }
+        }
+        return text
       },
     }),
 

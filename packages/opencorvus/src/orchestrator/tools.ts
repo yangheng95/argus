@@ -2210,6 +2210,15 @@ export function createOrchestratorTools(input: {
         let renderedAttachment:
           | { sha: string; url: string; mime: string; size: number; filename?: string; intent: "rendered_output"; source: "puppeteer" }
           | undefined
+        // P0-0.B — for any task that ships visual references (user attachments
+        // or design-analysis screenshots), rendering the merged worktree to a
+        // PNG is a HARD prerequisite, not a best-effort. Failure to render a
+        // visual deliverable means the delivery agent can never see what was
+        // built — judging only against the reference is the exact "LLM only
+        // sees reference" downgrade path the spec forbids (rule 1, no
+        // fallback). We surface the failure as a structured reject signal and
+        // skip the agent run entirely.
+        let renderFailure: { kind: "no_index" | "render_threw"; detail: string } | undefined
         try {
           const liveTask = requireTask(taskID)
           // Visual references for sizing the render viewport: union of user
@@ -2233,9 +2242,10 @@ export function createOrchestratorTools(input: {
             const { AttachmentStore } = await import("@/storage/attachment-store")
             const renderedHtml = await findRenderedIndex(Instance.directory)
             if (!renderedHtml) {
-              log.warn("deliver: no index.html found under merged worktree — skipping render", {
-                taskID, dir: Instance.directory,
-              })
+              renderFailure = {
+                kind: "no_index",
+                detail: `merged worktree at ${Instance.directory} has no index.html — visual deliverable cannot be rendered`,
+              }
             } else {
               // Pick the first image attachment to size the viewport. All
               // references are later shown to the delivery LLM multimodally
@@ -2291,8 +2301,139 @@ export function createOrchestratorTools(input: {
             }
           }
         } catch (renderErr) {
-          log.warn("deliver: render step failed — delivery agent will see reference only", {
-            taskID, error: renderErr instanceof Error ? renderErr.message : String(renderErr),
+          renderFailure = {
+            kind: "render_threw",
+            detail: renderErr instanceof Error ? renderErr.message : String(renderErr),
+          }
+        }
+
+        // P0-0.B — short-circuit on render failure. Constructs a rejected
+        // verdict locally (no LLM call), opens a fresh attempt on every goal
+        // (visual failures cross-cut), and returns. Goes through the SAME
+        // engine_iteration / startNewAttempt / yieldResult plumbing the
+        // normal rejected path uses, so the orchestrator's next turn reads
+        // identical signals — the only difference is `summary` cites the
+        // render failure instead of LLM-authored issues.
+        if (renderFailure) {
+          await trackStepComplete("deliver", undefined, true)
+          const { computeIterationSnapshot } = await import("@/metrics/score")
+          const {
+            readCounterexamplesForTask,
+            readIterationHistory,
+            readPreviousAggregateScore,
+            readResultsForIteration,
+            readSpecsForTask,
+            writeIterationSnapshot,
+          } = await import("@/metrics/store")
+          const priorIterations = readIterationHistory(taskID)
+          const iteration = priorIterations.length
+          const snapshot = computeIterationSnapshot({
+            task_id: taskID,
+            iteration,
+            specs: readSpecsForTask(taskID),
+            currentResults: readResultsForIteration(taskID, iteration),
+            previousResults: iteration > 0 ? readResultsForIteration(taskID, iteration - 1) : [],
+            counterexamples: readCounterexamplesForTask(taskID),
+            previousAggregateScore: readPreviousAggregateScore(taskID, iteration),
+          })
+          writeIterationSnapshot({ ...snapshot, arbiter_verdict: "continue" as const })
+
+          const summary =
+            renderFailure.kind === "no_index"
+              ? `Delivery rejected: ${renderFailure.detail}. Build a runnable index.html in the merged worktree before re-attempting delivery.`
+              : `Delivery rejected: render of merged worktree failed (${renderFailure.detail}). Visual deliverables require a working puppeteer render before the delivery agent can see what was built.`
+
+          const { EngineArtifactTable } = await import("@/engine/engine.sql")
+          const verdictArtifactId = Identifier.ascending("artifact")
+          const renderRejectVerdict = {
+            verdict: "rejected" as const,
+            summary,
+            launch_command: undefined,
+            startup_verification: { attempted: false, success: false, output: renderFailure.detail },
+            frontend_check: { attempted: false, renders_correctly: false, issues: [renderFailure.detail] },
+            issues_found: [summary],
+            affected_goal_ids: goals.map((g) => g.id),
+            rejection_details: goals.map((g) => ({
+              goal_id: g.id,
+              category: "visual" as const,
+              error: renderFailure!.detail,
+              suggestion:
+                renderFailure!.kind === "no_index"
+                  ? "Produce a runnable index.html under the project root (or a path findRenderedIndex can locate)."
+                  : "Fix the build so puppeteer can load and render the merged worktree.",
+            })),
+            deferred_checks: [],
+          }
+          Database.use((db) =>
+            db
+              .insert(EngineArtifactTable)
+              .values({
+                id: verdictArtifactId,
+                task_id: taskID,
+                run_id: run.id,
+                delivery_id: deliveryID,
+                kind: "verdict",
+                label: "delivery-agent-verdict",
+                payload: renderRejectVerdict,
+                time_created: Date.now(),
+                time_updated: Date.now(),
+              })
+              .run(),
+          )
+
+          updateEvaluationFromDeliveryVerdict({
+            deliveryID,
+            verdict: "rejected",
+            summary,
+            checks: [
+              {
+                name: "render_prerequisite",
+                status: "failed" as const,
+                evidence: renderFailure.detail,
+                scorer_kind: "delivery_verdict" as const,
+              },
+            ],
+            now: Date.now(),
+          })
+
+          const { startNewAttempt } = await import("@/engine/persist")
+          for (const g of goals) {
+            startNewAttempt({
+              goalID: g.id,
+              reason: "delivery_rework",
+              feedback: {
+                value: `Delivery rejected before agent run (iteration ${iteration}): ${summary}`,
+                reason: `render_prerequisite_failed:${renderFailure.kind}`,
+              },
+            })
+          }
+
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            createDecisionLog(taskID).append({
+              phase: "delivery",
+              key: `delivery_render_rejected_${iteration}`,
+              value: summary,
+              reason: renderFailure.kind,
+            })
+          } catch {
+            /* best effort */
+          }
+
+          log.info("deliver: render prerequisite failed — short-circuit reject", {
+            taskID, iteration, kind: renderFailure.kind,
+            reset_goals: goals.length,
+          })
+
+          requestStopAfterCurrentStep("delivery_render_rejected")
+          return SubAgentProtocol.yieldResult({
+            headline: `Delivery rejected — render prerequisite failed (${renderFailure.kind})`,
+            fields: [
+              ["render_failure_kind", renderFailure.kind],
+              ["iteration", String(iteration)],
+              ["affected_goals", String(goals.length)],
+            ],
+            pointer: `verdict artifact ${verdictArtifactId}; render must succeed before next deliver`,
           })
         }
 
