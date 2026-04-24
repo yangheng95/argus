@@ -415,16 +415,31 @@ await SessionPrompt.prompt({
 
 ### 阶段 6（schema 清零）[reset DB]
 
-- 删表：`engine_run / engine_goal_run / engine_delivery / engine_evaluation`
-- `engine_task` 瘦身为 `task_pointer`：仅 `id, session_id, title, request, time_created, time_completed, error`
-- `describe.ts` 从 session + artifact 现算所有"派生状态"
-- 显式删除 `active_run_id / active_plan_version_id / workflow_state / status / blocking_reason / criteria_results` 这类旧控制面 / 旧读模型列
-- **reset DB = 清空包括 `session / session_messages / artifact / attachment / task_pointer` 在内的所有表**，从空库重建；不得保留旧 session 里的旧 verdict 语义 tool_result（会造成 describe.ts 读到悬空语义）
-- reset DB 同时清理磁盘上所有遗留 worktree 目录、pidfile、snapshot 临时目录（与 DB 同步归零）
-- **交付**：
+**规模审计**（2026-04-24）：
+  - `EngineRunTable / EngineGoalRunTable / EngineDeliveryTable / EngineEvaluationTable` 引用分布：store.ts (79 refs) / persist.ts (38) / verification/persist.ts (33) / workbench/board.ts (20) / engine.sql.ts (16) / runtime.ts (10) / writer.ts (6) / state.ts (6)，其他 ≤ 5
+  - `engine_evaluation` 3 处写：engine/persist.ts::persistFailedRunEvaluation / engine/persist.ts::persistGoalDelivery / verification/persist.ts::persistEvidence
+  - 跨越 engine/storage/verification/workbench/task-api/delivery/metrics/protocol 八个模块。单 PR 全删不可行
+
+**子阶段分解**（顺序执行，每步独立 PR）：
+
+- **6-a**（✅ 2026-04-24）：`opencorvus db reset [--force]` CLI 命令（`src/cli/cmd/db.ts`）— 按 rule 13 原子清零 SQLite（db + WAL + SHM）+ 磁盘 scratch（`<cwd>/.opencorvus/worktrees/` + `<cwd>/.opencorvus/ownership/`）+ `snapshot/` 目录；`Instance.disposeAll` + `Database.close` 前置以保证 WAL flush 干净；无 `--force` 打印 warning 并退出非零码防误触
+- **6-b**：`verification/persist.ts` 重写为 artifact-backed — `persistEvidence` 写 `engine_artifact` 表（`kind="verification-evidence"` + label 区分 scope）；`queryEvidence / findLatestGoalRunEvidence / findLatestDeliveryEvidence / findPreviousDeliveryEvidence / findGoalRunEvidence` 改为 artifact 查询；同 PR 删除 `EngineEvaluationTable` 定义 + schema.ts 中的 `evaluation` table export + `engine/persist.ts::persistFailedRunEvaluation` + `persistGoalDelivery` 里 evaluation insert；`delivery/tools.ts` 无签名变化
+- **6-c**：`EngineDeliveryTable` 删除 — `engine/persist.ts::persistGoalDelivery` body 改为只写 artifact（`delivery-summary / workspace-diff / delivery-commit / changed_file` 标签已存在）；`store.ts::findDelivery* / findDeliveriesForTask / findDeliveryByGoalRun / findDeliveryByRun / findLatestDeliveryForRun` 全部 artifact-derived；`workbench/board.ts` typeof inference 切到 artifact row 类型；`delivery/delivery.sql.ts` 删除
+- **6-d**：`EngineGoalRunTable` 删除 — 这是最深的依赖。`persist.ts` 10+ goal-run writer（startNewAttempt / updateGoalRun / stampGoalRunProgress / updateGoalRunExecutorSessionStatus / superseded chain ...）全删；`describe.ts::describeGoal` 不再读 goal_run chain tip，改为现算 `goal.state` 字段（goal table 保留，但它本身也要重读）；`goal-status.ts / goal-run-watchdog.ts / merge-resolver.ts` 全删或重写
+- **6-e**：`EngineRunTable` 删除 — `state.ts::updateRun / findRuns / ...` 全删；`runtime.ts::syncRun / syncTask / createOperatorRun` 全删；`orchestrator/agent.ts::buildSystemParts` 中 `task.active_run_id` 读取全部重写为 session + artifact projection
+- **6-f**：`EngineTaskTable` 瘦身 — 删列 `active_run_id / active_plan_version_id / workflow_state / status / blocking_reason / criteria_results / budget / rewind_cursor_time / source_requirement_ids / design_specs / metadata` 中与旧状态机相关项；保留 `id, session_id, title, request, time_created, time_completed, error`（+ 少数 UI 需要项）；`EngineTaskTable` 改名为 `TaskPointer`（可选；保留 EngineTaskTable 不强制）
+- **6-g**：`describe.ts` 全文重写 — 基于 session + artifact projection 现算所有派生状态；冷启动空库回 empty；最终 `rg "status:|phase:|verdict:|blocking_reason:" packages/opencorvus/src/engine/*.sql.ts` = 0；`bun test` 通过 reset-DB 冷启动路径的 regression
+
+**风险**：
+  - 每一步（6-b..6-g）都是 ≥100 行级别的改动；贸然合并会导致 typecheck 大范围失败或 runtime 死路
+  - 6-d 最危险：goal_run chain 是多个 consumer（describe / goal-status / merge-resolver / persist / dispatch）的核心事实；删除前必须先让它们全部改读 goal row 的现算视图
+  - phase 6 执行期间，`bun test` 会持续红（直到子步骤打完才能全绿）—— 这是已知状态，每步的 commit 只要保证 typecheck pass 即可
+
+**交付**：
   - DB schema 中不存在 status / phase / verdict / blocking_reason 任何列
   - 冷启动后 `describe.ts` 对空库返回 empty 而不是崩溃
   - 不存在引用旧表名的遗留 SQL 或类型
+  - `opencorvus db reset --force` 真实清空并重建 schema，后续 task 创建正常工作
 
 ### 阶段 7（recovery.ts 整文件删除 + 收尾）
 
