@@ -392,7 +392,13 @@ await SessionPrompt.prompt({
   - `verification/persist.ts` + `verification/index.ts` 头部注释明示 `engine_evaluation` 下 phase 6 删表、evidence 将切到 artifact stream；public API（`persistEvidence / queryEvidence / findLatestGoalRunEvidence / ...`）承诺签名不变，callers（`delivery/tools.ts`）不需要改
   - 运行时不改，避免在 phase 6 reset DB 前引入双源（rule 22）
   - 实际 artifact 迁移（`persistEvidence` body 切到 `engine_artifact` label=verification-evidence）与 `engine_evaluation` 删表一起在 phase 6 完成
-- **5-g**：删除 deprecated tools 实现 + GoalPool 剩余骨架（lease / coordinator_run_id / live_goal_run 管理）
+- **5-g**（✅ 2026-04-24）：
+  - `orchestrator/tools.ts` 删除 `retry_goal` (97 行) + `exec_goal` (47 行) + `dispatch_goal` (72 行) + `create_run` (12 行) + `submit_execution` (43 行) 共 **~271 行**
+  - 同步删除 `DEPRECATED_TOOL_NAMES` 过滤器（5-c 留的"rollback buffer"不再需要）；返回 tools 直接是 full object
+  - 删除 `packages/opencorvus/src/engine/goal-pool.ts`（936 行）和 `packages/opencorvus/src/orchestrator/dispatch-queue.ts`（0 importer）
+  - `rg "from [\"'].*goal-pool\\|dispatch-queue" packages/opencorvus/src` = 0 ✓
+  - `rg "\"dispatch_goal\"|\"exec_goal\"|\"submit_execution\"|\"retry_goal\"|\"create_run\"" packages/opencorvus/src/orchestrator/tools.ts` = 0 ✓
+  - `orchestrator/tools.ts` 3453→3165 行（-288）；typecheck clean，232 session+engine+build-agent 测试通过，0 regression
 
 **关键风险**：
   - `build` 内部 SessionLoop 必须**流式**（CLAUDE.md rule 27）。SessionPrompt.prompt 已是流式基建（LLM.stream + processor）；禁止在 build 内部再写一套 ProviderLLM.stream 调用
