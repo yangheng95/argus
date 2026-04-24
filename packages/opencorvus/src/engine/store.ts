@@ -212,6 +212,14 @@ export function findActivePlanForTask(taskID: string): PlanRow | undefined {
   )
 }
 
+/** Phase-6-f-3: return the newest run for a task (by logical run_id
+ *  time_created desc), derived from `engine_artifact` kind="run" stream.
+ *  Replaces the `task.active_run_id` cache column. Returns undefined when
+ *  the task has no runs yet. */
+export function findActiveRunForTask(taskID: string): RunRow | undefined {
+  return findRuns(taskID)[0]
+}
+
 // ---------------------------------------------------------------------------
 // Spec store functions
 // ---------------------------------------------------------------------------
@@ -1167,7 +1175,9 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     /** Phase-6-f: derived live from engine_plan_version.status = 'active'
      *  (was a cache column on engine_task). */
     activePlanVersionID: findActivePlanForTask(row.id)?.id,
-    activeRunID: row.active_run_id ?? undefined,
+    /** Phase-6-f-3: derived live from engine_artifact kind="run" stream
+     *  (was a cache column on engine_task). */
+    activeRunID: findActiveRunForTask(row.id)?.id,
     requestID: row.request_id ?? undefined,
     source: row.source,
     title: row.title,

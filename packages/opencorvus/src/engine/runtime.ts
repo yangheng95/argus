@@ -33,6 +33,7 @@ import {
   findInteractionByExternal,
   findPendingInteractions,
   findRun,
+  findActiveRunForTask,
   findTask,
   goalRunQueueTaskID,
   listActiveGoalRunsForRun,
@@ -434,8 +435,9 @@ export namespace EngineRuntime {
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
     const task = findTask(taskID)
     if (!task) throw new Error(`Task not found: ${taskID}`)
-    if (!task.active_run_id) return
-    await syncRun(task.active_run_id, hooks)
+    const activeRun = findActiveRunForTask(task.id)
+    if (!activeRun) return
+    await syncRun(activeRun.id, hooks)
   }
 
   export async function syncRun(runID: string, hooks: RuntimeHooks) {
@@ -605,7 +607,6 @@ export namespace EngineRuntime {
     await updateTask(
       task,
       {
-        active_run_id: created.id,
         status: "active",
         error: null,
         blocking_reason: null,
@@ -641,7 +642,7 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   await hooks.updateRun(run, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
   // Task loop detects run failure via task status check and re-enters Decision Point.
   // No fire-and-forget trigger needed.
-  if (task.active_run_id === run.id) {
+  if (findActiveRunForTask(task.id)?.id === run.id) {
     log.info("run failed, task loop will detect and re-decide", { taskID: task.id, runID: run.id })
   }
 }

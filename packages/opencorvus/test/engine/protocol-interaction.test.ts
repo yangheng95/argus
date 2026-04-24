@@ -44,7 +44,6 @@ describe("protocol interaction resolution", () => {
             id: taskID,
             project_id: Instance.project.id,
             session_id: session.id,
-            active_run_id: runID,
             source: "test",
             title: "protocol interaction",
             request: "protocol interaction",

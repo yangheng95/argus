@@ -36,6 +36,7 @@ import {
 } from "@/engine/persist"
 import {
   findActivePlanForTask,
+  findActiveRunForTask,
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
@@ -184,7 +185,7 @@ export function createOrchestratorTools(input: {
     if (input.workflow?.id !== "pipeline") return
 
     const task = requireTask(taskID)
-    if (findActivePlanForTask(task.id) || task.active_run_id) return
+    if (findActivePlanForTask(task.id) || findActiveRunForTask(task.id)) return
     if (listGoals(taskID).length > 0) return
 
     const direct = WorkflowRegistry.resolveSync("direct")
@@ -373,7 +374,6 @@ export function createOrchestratorTools(input: {
     await updateTask(
       requireTask(taskID),
       {
-        active_run_id: runID,
         status: "active",
       },
       `create_run: planID=${planID} runID=${runID}`,
@@ -387,14 +387,14 @@ export function createOrchestratorTools(input: {
     let createdRun = false
     let activatedRun = false
 
-    if (!task.active_run_id) {
+    if (!findActiveRunForTask(task.id)) {
       const created = await createExecutionRunRecord()
       if ("error" in created) return { error: created.error } as const
       createdRun = true
       task = requireTask(taskID)
     }
 
-    let run = task.active_run_id ? requireRun(task.active_run_id) : undefined
+    let run = findActiveRunForTask(task.id)
     if (!run || !run.plan_version_id || !isLiveRunStatus(run.status)) {
       const created = await createExecutionRunRecord()
       if ("error" in created) return { error: created.error } as const
@@ -1714,7 +1714,6 @@ export function createOrchestratorTools(input: {
             error: null,
             blocking_reason: null,
             active_spec_version_id: plan.clearSpec ? null : currentTask.active_spec_version_id,
-            active_run_id: freshRun?.id ?? null,
           },
           `restart_from_stage(${stage})`,
         )
@@ -1739,10 +1738,11 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        if (!task.active_run_id) return "No active run. Execute goals first."
+        const activeRun = findActiveRunForTask(task.id)
+        if (!activeRun) return "No active run. Execute goals first."
 
         await trackStepStart("deliver")
-        const run = requireRun(task.active_run_id)
+        const run = activeRun
 
         const goals = listGoals(taskID)
 
@@ -2697,7 +2697,7 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        const run = task.active_run_id ? requireRun(task.active_run_id) : undefined
+        const run = findActiveRunForTask(task.id)
         if (!run) return "No active run."
 
         // No blocking-failed gate here — the LLM reads the describe layer and

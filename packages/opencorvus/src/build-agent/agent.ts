@@ -36,7 +36,7 @@ import { Worktree } from "@/worktree"
 import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
 import { cleanupGoalWorkspace } from "@/goal/runner"
-import type { TaskRow } from "@/engine/store"
+import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
@@ -111,7 +111,7 @@ export namespace BuildAgent {
           worktreeDir,
           taskID: input.task.id,
           sessionID: input.parentSessionID ?? "",
-          runID: input.task.active_run_id ?? undefined,
+          runID: findActiveRunForTask(input.task.id)?.id,
           goalID: input.target.kind === "goal" ? input.target.id : undefined,
         })
       }

@@ -43,7 +43,6 @@ function seedBaseline() {
       title: "t",
       request: "t",
       status: "active",
-      active_run_id: runID,
       priority: "normal",
       time_created: now,
       time_updated: now,
