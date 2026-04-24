@@ -282,9 +282,13 @@ export namespace Agent {
       orchestrator: {
         name: "orchestrator",
         description: "Orchestrator (master) agent. Drives the end-to-end task lifecycle through one of the two built-in workflows (direct or pipeline).",
-        // Prompt is constructed dynamically per-trigger in src/orchestrator/agent.ts
-        // (see buildSystemParts + describeTrigger). No static core prompt — the
-        // orchestrator's context depends on live task/goal/run state.
+        // Prompt is constructed dynamically per-wake in src/orchestrator/agent.ts
+        // (buildSystemParts). No static core prompt — the orchestrator's
+        // context depends on live task/goal/run state.
+        // steps=20 matches the MAX_STEPS budget used by the pre-phase-3
+        // AgentRuntime path. SessionLoop reads this as the `stopWhen`
+        // equivalent for the orchestrator's child session.
+        steps: 20,
         options: {},
         mode: "primary",
         native: true,
