@@ -347,7 +347,7 @@ await SessionPrompt.prompt({
 
 **子阶段分解**（每项独立 PR，顺序执行）：
 
-- **5-a**：并行上限查现状 → `effectiveMaxExecutorGroups(task)` 已读 `config.max_executor_groups`（基建就位）。新增 semaphore 装饰层，`build` tool 将来调用时直接读这个 semaphore
+- **5-a**（✅ 2026-04-24）：`engine/build-semaphore.ts` — `BuildSemaphore.acquire(task) / withSlot(task, fn) / inFlight(id) / waiting(id) / reset()`；per-task 计数，FIFO waiter 队列；limit 每次 acquire 动态读 `effectiveMaxExecutorGroups(task)`；空 entry 自动 GC；in-memory only（rule 23 / 26 合规：无 FSM、无持久化）；6 单测覆盖立即获取 / 排队 / 多任务隔离 / withSlot ok+throw / reset 排空
 - **5-b**：实现 `build(goal_or_request, cwd)` tool — 内部流式跑子 SessionLoop（build agent），流式事件通过 parent session 转发，返回 `{ patch, commit_ref, tests, error? }`。此步**只新增，不删除**（双源容忍期）；orchestrator prompt 未切换，dispatch_goal 仍为主路径
 - **5-c**：orchestrator prompt 改为使用 `build`（单 goal / 多 goal 并行均经此路径）；`dispatch_goal / exec_goal / submit_execution / retry_goal` 从 LLM 可见工具列表移除（实现保留，便于回滚）
 - **5-d**：GoalPool 驱动路径删除（orchestrator/loop.ts 不再 pool.drain()）；worktree 创建 / teardown 由 build tool 内部 try/finally 管理
