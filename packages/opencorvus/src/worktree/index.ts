@@ -578,15 +578,6 @@ export namespace Worktree {
   })
 
   /**
-   * Acquire the per-project git mutex. Exported so that callers performing
-   * git operations on the shared .git (e.g., mergeGoalDelivery) can serialize
-   * against worktree create/remove operations.
-   */
-  export async function lock<T>(fn: () => Promise<T>): Promise<T> {
-    return withGitLock(fn)
-  }
-
-  /**
    * Verify that `directory` is a *live* git worktree: both the per-worktree
    * `.git` linkage (file or dir) is present on disk AND the primary repo's
    * `git worktree list` still has it registered.
