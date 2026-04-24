@@ -38,6 +38,7 @@ import {
 } from "./helpers"
 import {
   findActivePlanForTask,
+  findActiveRunForTask,
   findLatestDeliveryVerdictArtifact,
   findRun,
   findRuns,
@@ -323,14 +324,13 @@ export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
 
   let activeRunStatus: string | undefined
   let runOrphan: boolean | undefined
-  if (task.active_run_id) {
-    const run = findRun(task.active_run_id)
-    activeRunStatus = run?.status
+  const activeRunForTask = findActiveRunForTask(task.id)
+  if (activeRunForTask) {
+    activeRunStatus = activeRunForTask.status
     // Fact-only orphan probe. Does not write the run's status — the abort
     // brake in engine/recovery.ts#cleanupOrphanExecutionArtifacts still
-    // handles the physical teardown during process startup. This exposure
-    // is what phase 4+ will use to replace the status-based gates.
-    runOrphan = isRunOrphan(task.project_id, task.active_run_id)
+    // handles the physical teardown during process startup.
+    runOrphan = isRunOrphan(task.project_id, activeRunForTask.id)
   }
 
   const totalRuns = findRuns(task.id).length
@@ -338,8 +338,7 @@ export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     effectiveMaxRuns(task),
     effectiveMaxFixRuns(task),
   ])
-  const activeRun = task.active_run_id ? findRun(task.active_run_id) : undefined
-  const fixCount = activeRun?.retry_count ?? 0
+  const fixCount = activeRunForTask?.retry_count ?? 0
 
   const history = readHistory(task.id)
   const verdict = describeVerdict(task.id)
@@ -352,7 +351,7 @@ export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     error: task.error ?? undefined,
     spec_summary: specSummary,
     plan_summary: planSummary,
-    active_run_id: task.active_run_id ?? undefined,
+    active_run_id: activeRunForTask?.id,
     active_run_status: activeRunStatus,
     run_orphan: runOrphan,
     clarifications: clarificationTranscriptSection(task.id) || undefined,

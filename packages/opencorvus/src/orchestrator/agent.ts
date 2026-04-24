@@ -30,6 +30,7 @@ import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { readIterationHistory as readHistForPrompt } from "@/metrics/store"
 import {
+  findActiveRunForTask,
   findDeliveryByRun,
   findEvaluationByRun,
   requireTask,
@@ -769,7 +770,7 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
   // The yielded summary is framed as a sub-agent-protocol message with the
   // same per-message ceiling as a tool return; full content stays in the
   // delivery / evaluation rows referenced via the pointer.
-  const activeRunID = task.active_run_id ?? undefined
+  const activeRunID = findActiveRunForTask(task.id)?.id
   if (activeRunID) {
     const delivery = findDeliveryByRun(activeRunID)
     const evaluation = findEvaluationByRun(activeRunID)

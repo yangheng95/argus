@@ -73,6 +73,7 @@ import {
   findLatestDeliveryForRun,
   findExecutorSessionByRun,
   findActivePlanForTask,
+  findActiveRunForTask,
   findEvaluationByRun,
   findEvaluations,
   findInteractionByExternal,
@@ -294,7 +295,7 @@ function taskItems(rows: TaskListRow[]) {
   return rows.map((item) => {
     const task = item.task
     const plan = findActivePlanForTask(task.id)
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const run = findActiveRunForTask(task.id)
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending").length
     return {
@@ -652,7 +653,7 @@ export namespace EngineService {
     const task = requireTask(taskID)
     const item = listTaskRows([task])[0]
     const plan = findActivePlanForTask(task.id)
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const run = findActiveRunForTask(task.id)
     const delivery = run ? findDeliveryByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
@@ -690,7 +691,7 @@ export namespace EngineService {
     const task = requireTask(input.taskID)
     return compileBrief({
       taskID: task.id,
-      runID: input.runID ?? task.active_run_id ?? undefined,
+      runID: input.runID ?? findActiveRunForTask(task.id)?.id,
       planVersionID: findActivePlanForTask(task.id)?.id,
       sessionID: task.session_id ?? undefined,
     })
@@ -1003,7 +1004,7 @@ export namespace EngineService {
       cleanupGoalWorkspaces: true,
       includeRuns: false,
     })
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const run = findActiveRunForTask(task.id)
     if (run) {
       await ExecutorRegistry.require(run.executor).abort({
         sessionID: run.session_id ?? undefined,
@@ -1091,7 +1092,7 @@ export namespace EngineService {
 
   export async function recordOperatorNote(taskID: string, note: string) {
     const task = requireTask(taskID)
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const run = findActiveRunForTask(task.id)
     const now = Date.now()
     Database.use((db) =>
       db
@@ -1188,7 +1189,7 @@ export namespace EngineService {
    */
   export async function injectMessage(taskID: string, message: string) {
     const task = requireTask(taskID)
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const run = findActiveRunForTask(task.id)
     if (!run) throw new Error(`No active run for task ${taskID}`)
     const resumed = await injectRunningTaskMessage(task, run, message)
     if (resumed) return { resumed: true, status: "active" as const }
@@ -1221,7 +1222,7 @@ export namespace EngineService {
       })
       .slice(-6)
 
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const run = findActiveRunForTask(task.id)
     const context = [
       `title: ${task.title}`,
       `request: ${(task.request ?? "").slice(0, 400)}`,
@@ -1274,7 +1275,7 @@ export namespace EngineService {
     const { abortExecutorSessionForRun } = await import("@/engine/writer")
     abortExecutorSessionForRun(runID)
     const task = requireTask(run.task_id)
-    if (task.active_run_id === run.id) {
+    if (findActiveRunForTask(task.id)?.id === run.id) {
       await updateTask(task, { status: "failed", error: "run aborted", blocking_reason: null, time_completed: Date.now() }, "Run aborted")
     }
     return true

@@ -184,11 +184,11 @@ export async function updateRun(
         time_updated: effectiveNow,
       })
       .run()
+    // Phase-6-f-3: task.active_run_id deleted — derive via
+    // findActiveRunForTask(taskID) from the run artifact stream. Keep the
+    // time_updated bump so task listings refresh on run writes.
     db.update(EngineTaskTable)
-      .set({
-        active_run_id: row.id,
-        time_updated: effectiveNow,
-      })
+      .set({ time_updated: effectiveNow })
       .where(eq(EngineTaskTable.id, row.task_id))
       .run()
     Database.effect(() =>

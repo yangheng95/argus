@@ -352,7 +352,8 @@ CREATE TABLE IF NOT EXISTS engine_task (
   active_spec_version_id text,
   -- Phase-6-f: active_plan_version_id cache column removed. Derive via
   -- engine_plan_version.status = 'active' (findActivePlanForTask in store.ts).
-  active_run_id          text,
+  -- Phase-6-f-3: active_run_id cache column removed. Derive via the newest
+  -- engine_artifact kind='run' per task (findActiveRunForTask in store.ts).
   request_id             text,
   source                 text NOT NULL DEFAULT 'api',
   title                  text NOT NULL,

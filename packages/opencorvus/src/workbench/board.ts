@@ -3,12 +3,12 @@ import { createDecisionLog } from "@/decision-log"
 import { goalStatusByID } from "@/engine/describe"
 import {
   findActivePlanForTask,
+  findActiveRunForTask,
   findLatestTipGoalRun,
   findDeliveriesForTask,
   findEvaluationsByTask,
   findDeliveryByGoalRun,
   findLatestEvaluationForGoalRun,
-  findRun,
   listGoalRunsByGoal,
   type DeliveryRow,
   type EvaluationRow,
@@ -64,7 +64,7 @@ export function boardTag(input: { taskID: string }) {
 }
 
 function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
-  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+  const run = findActiveRunForTask(task.id)
   const plan = findActivePlanForTask(task.id)
   // Query goals by plan if available, otherwise fall back to task_id so that
   // goals created during decomposition are visible before create_run sets
@@ -207,7 +207,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
         directory: Instance.directory,
         sessionID: task.session_id ?? undefined,
         activePlanVersionID: plan?.id ?? undefined,
-        activeRunID: task.active_run_id ?? undefined,
+        activeRunID: run?.id ?? undefined,
         requestID: task.request_id ?? undefined,
         source: task.source,
         kind: task.kind,
@@ -343,7 +343,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
 }
 
 function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
-  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+  const run = findActiveRunForTask(task.id)
   const plan = findActivePlanForTask(task.id)
   const goals = Database.use((db) =>
     db

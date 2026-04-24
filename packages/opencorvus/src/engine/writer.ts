@@ -114,8 +114,11 @@ export function createRun(input: CreateRunInput): RunRow {
       })
       .run()
     if (input.linkAsActive) {
+      // Phase-6-f-3: task.active_run_id deleted — new runs are the active
+      // one by virtue of being the latest artifact. Keep a time_updated
+      // bump so task listings sort newer.
       db.update(EngineTaskTable)
-        .set({ active_run_id: runID, time_updated: now })
+        .set({ time_updated: now })
         .where(eq(EngineTaskTable.id, input.taskID))
         .run()
     }
