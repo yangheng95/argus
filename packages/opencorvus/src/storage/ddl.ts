@@ -610,6 +610,12 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
   superseded_at       integer,
   metadata            text,
   lease_until          integer,
+  -- last_progress_at: wall-clock stamp bumped only on observed executor
+  -- chunk/event (pipeline/executor.ts streamExecutorEvents). Unlike
+  -- time_updated it is NOT refreshed by bookkeeping writes. The
+  -- goal-run-watchdog scanner compares `now - last_progress_at` against
+  -- EngineConfig.activity.goal_run_idle_ms to detect silent SSE death.
+  last_progress_at    integer,
   time_started        integer,
   time_completed      integer,
   time_created        integer NOT NULL,
@@ -621,6 +627,7 @@ CREATE TABLE IF NOT EXISTS engine_goal_run (
 );
 CREATE INDEX IF NOT EXISTS engine_goal_run_task_idx          ON engine_goal_run (task_id);
 CREATE INDEX IF NOT EXISTS engine_goal_run_goal_idx          ON engine_goal_run (goal_id);
+CREATE INDEX IF NOT EXISTS engine_goal_run_last_progress_idx ON engine_goal_run (last_progress_at);
 CREATE INDEX IF NOT EXISTS engine_goal_run_coordinator_idx   ON engine_goal_run (coordinator_run_id);
 CREATE INDEX IF NOT EXISTS engine_goal_run_status_idx        ON engine_goal_run (status);
 CREATE INDEX IF NOT EXISTS engine_goal_run_supersede_of_idx  ON engine_goal_run (supersede_of);
