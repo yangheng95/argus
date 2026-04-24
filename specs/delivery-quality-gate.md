@@ -200,7 +200,14 @@ Publisher 里 `workspaceExportAdapter` 仅把 `delivery.patch` 写进 `Global.Pa
 
 ---
 
-### P1-B · Goal acceptance 去 `test -f`，换内容指纹（`src/orchestrator/checks/` + 新增 `evaluator/content-fingerprint.ts`）
+### P1-B · Goal acceptance 去 `test -f`，换内容指纹（`src/orchestrator/checks/` + 新增 `evaluator/content-fingerprint.ts`） · 🟡 F.1 DONE，F.2 allowlist 接入待跟进
+
+> **实现要点**（Stream F.1，本轮）：
+> - 新建 `src/delivery/checks/content-fingerprint.ts`（路径偏离 spec 原拟：`evaluator/` 目录项目里不存在，对齐现有 `src/delivery/checks/` 与 `src/check/policy.ts` 双层抽象更合适 —— 实际检查逻辑归 delivery/checks，check 选择器枚举归 check/policy）。
+> - 对外 API：`loadContentAnchors(manifestPath)` / `evaluateContentFingerprint(input)` / 以及三条独立指标 `computeStringHitRatio` / `computePaletteJaccard` / `computeLayoutOverlap`。
+> - 实现策略与 CLAUDE.md 对齐：锚点完全来自 P0-A 的 `CaptureManifestType`，缺失即抛；layout 采用 IoU（缺区域记 IoU=0，空骨架必然拉低 averageIoU）；palette 用 Jaccard 集合比较（消费方需先用 `util/pixel-stats.topKPalette` 预处理，rule 22 不重复实现）；string 命中做 lowercase+whitespace normalize 字面匹配，不 fuzzy / 不关键字自推（rule 11）。
+> - **F.2 allowlist（未接入）**：`src/check/policy.ts::CheckSelector` 枚举即为允许列表，目前 `test -f` / 自造 grep 并未在枚举中——但 goal-agent 仍能在 `checks_run` 数组里写任意 shell；真正落地需在 `src/delivery/agent.ts` 处理 `checks_run` 时把每条 command 过一遍 allowlist 校验，不合规直接拒录。本轮未改 delivery/agent.ts（Stream A.C 可能仍在迭代其首 prompt 格式），留作独立工单。
+> - 无 goal-acceptance 入口接入；消费者是后续工单（goal-check 重构或 delivery agent 硬门扩展）。
 
 **目标**：goal 验收锚点来自外部事实，不得自造。
 
