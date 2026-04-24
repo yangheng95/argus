@@ -36,8 +36,8 @@ export const MetricWriteError = NamedError.create(
   z.object({ message: z.string(), code: z.string() }),
 )
 
-export const MAX_CHALLENGE_PER_ITER = 1
-export const MAX_CHALLENGE_PER_TASK = 3
+const MAX_CHALLENGE_PER_ITER = 1
+const MAX_CHALLENGE_PER_TASK = 3
 
 // ---------------------------------------------------------------------------
 // Architect bulk persist — take the RequirementsResult metric specs and
@@ -45,7 +45,7 @@ export const MAX_CHALLENGE_PER_TASK = 3
 // for the Prosecutor to read in Phase 4.
 // ---------------------------------------------------------------------------
 
-export interface ArchitectMetricsInput {
+interface ArchitectMetricsInput {
   task_id: string
   /** Architect-level goal id → DB goal id (from orchestrator's llmToDBID map). */
   goal_id_map: ReadonlyMap<string, string>
@@ -142,7 +142,7 @@ export function persistArchitectMetrics(input: ArchitectMetricsInput): {
 // Baseline specs (Architect only)
 // ---------------------------------------------------------------------------
 
-export interface BaselineSpecInput {
+interface BaselineSpecInput {
   task_id: string
   scope: "goal" | "global"
   goal_id: string | null
@@ -167,7 +167,7 @@ export interface BaselineSpecInput {
  *
  * Baseline rows are immutable after insert; the SQL trigger enforces this.
  */
-export function registerBaselineSpec(input: BaselineSpecInput): MetricSpec {
+function registerBaselineSpec(input: BaselineSpecInput): MetricSpec {
   validateScopeInvariant(input.scope, input.goal_id)
   return Database.transaction((tx) => {
     const iterExists = tx
@@ -212,7 +212,7 @@ export function registerBaselineSpec(input: BaselineSpecInput): MetricSpec {
 // Challenge specs (Prosecutor only)
 // ---------------------------------------------------------------------------
 
-export interface ChallengeSpecInput {
+interface ChallengeSpecInput {
   task_id: string
   scope: "goal" | "global"
   goal_id: string | null
@@ -306,7 +306,7 @@ export function addChallengeMetric(input: ChallengeSpecInput): MetricSpec {
 // Metric results
 // ---------------------------------------------------------------------------
 
-export interface MetricResultInput {
+interface MetricResultInput {
   metric_spec_id: string
   task_id: string
   iteration: number
@@ -344,7 +344,7 @@ export function writeMetricResult(input: MetricResultInput): MetricResult {
 // Counterexamples
 // ---------------------------------------------------------------------------
 
-export interface CounterexampleInput {
+interface CounterexampleInput {
   task_id: string
   iteration_found: number
   novelty_hash: string
