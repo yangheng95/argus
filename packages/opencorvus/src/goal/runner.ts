@@ -718,6 +718,84 @@ export async function stripNestedGitDirs(worktreeDir: string): Promise<string[]>
 }
 
 /**
+ * Stage everything the executor produced, guard against accidental submodule
+ * pointers (gitlinks), and record the delivery commit on the worktree's own
+ * branch. Returns the commit SHA, or `undefined` if `git add -A` produced
+ * nothing to commit (no-op goal — the caller treats that as `mergeRef ==
+ * baseRef`).
+ *
+ * `diffs` is an *informational* hint retained in the signature so callers
+ * and tests can state what the executor is expected to have changed; the
+ * actual staging is always `git add -A` so a scaffolded file the executor
+ * wrote but forgot to declare in `diffs` still lands in the commit.
+ *
+ * Gitlink guard: a staged entry in mode 160000 captures only a SHA pointer
+ * to some other repo, not the files themselves. If we ship one, the later
+ * cherry-pick into the main project produces an empty submodule stub and
+ * the user sees no generated code. When this happens, it means
+ * `stripNestedGitDirs` missed a nested `.git` (typically a `.git` *file*
+ * pointer left by a `git worktree add` in a scaffolded subdir). Fail loud
+ * — the scaffold path has to be fixed; we must not silently ship the stub.
+ *
+ * Caller contract: wrap with `Instance.provide({ directory: worktreeDir })`
+ * so `$.cwd(Instance.directory)` runs in the worktree's own git.
+ */
+export async function createGoalDeliveryCommit(
+  diffs: Array<{ file: string; status: string }>,
+  prefix: string,
+): Promise<string | undefined> {
+  const cwd = Instance.directory
+
+  const addResult = await $`git add -A`.quiet().cwd(cwd).nothrow()
+  if (addResult.exitCode !== 0) {
+    const stderr = addResult.stderr.toString().trim() || addResult.stdout.toString().trim() || "git add failed"
+    throw new Error(`createGoalDeliveryCommit: git add -A failed: ${stderr}`)
+  }
+
+  const status = (await $`git status --porcelain`.quiet().cwd(cwd).nothrow().text()).trim()
+  if (status.length === 0) {
+    return undefined
+  }
+
+  const lsResult = await $`git ls-files --stage`.quiet().cwd(cwd).nothrow()
+  const gitlinks = lsResult.stdout
+    .toString()
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("160000 "))
+    .map((l) => l.split("\t")[1] ?? "")
+    .filter(Boolean)
+  if (gitlinks.length > 0) {
+    throw new Error(
+      `createGoalDeliveryCommit: delivery contains submodule pointer(s) instead of real files: ${gitlinks.join(", ")}. This happens when a nested .git survived stripNestedGitDirs(). Fix the stripping logic; do not commit gitlinks.`,
+    )
+  }
+
+  const commitMessage = `${prefix} delivery`
+  const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${commitMessage}`
+    .quiet()
+    .cwd(cwd)
+    .nothrow()
+  if (commitResult.exitCode !== 0) {
+    const stderr = commitResult.stderr.toString().trim() || commitResult.stdout.toString().trim() || "git commit failed"
+    throw new Error(`createGoalDeliveryCommit: git commit failed: ${stderr}`)
+  }
+
+  const head = (await $`git rev-parse HEAD`.quiet().cwd(cwd).nothrow().text()).trim()
+  if (!head) {
+    throw new Error("createGoalDeliveryCommit: git rev-parse HEAD returned empty after commit")
+  }
+
+  log.info("goal delivery commit", {
+    commit: head,
+    prefix,
+    diffHint: diffs.length,
+  })
+
+  return head
+}
+
+/**
  * Extract goal delivery from the worktree's own git.
  *
  * The per-goal worktree is already a proper git worktree (see
@@ -761,63 +839,9 @@ export async function deliveryFromWorktree(
   }
   const cwd = Instance.directory
 
-  // Stage EVERY change the executor made — tracked modifications AND
-  // untracked files. `-A` is deliberate: if we only staged modified, a
-  // file the executor created anew (common case) would never show up
-  // in the commit and silently become "zero file changes".
-  const addResult = await $`git add -A`.quiet().cwd(cwd).nothrow()
-  if (addResult.exitCode !== 0) {
-    const stderr = addResult.stderr.toString().trim() || addResult.stdout.toString().trim() || "git add failed"
-    throw new Error(`deliveryFromWorktree: git add -A failed: ${stderr}`)
-  }
-
-  // Anything actually staged?
-  const status = (
-    await $`git status --porcelain`.quiet().cwd(cwd).nothrow().text()
-  ).trim()
-
-  let mergeRef: string = baseRef
-  let commitRef: string | undefined
-
-  if (status.length > 0) {
-    // Gitlink safety: a staged entry in mode 160000 is a submodule pointer,
-    // which captures a SHA only — not the underlying files. Reaching this
-    // with gitlinks present means `stripNestedGitDirs` missed a nested
-    // `.git` (e.g. a .git *file* pointer from `git worktree add` inside a
-    // scaffolded subdir). Fail loud: the scaffold path must be fixed, not
-    // silently shipped as an empty pointer.
-    const lsResult = await $`git ls-files --stage`.quiet().cwd(cwd).nothrow()
-    const gitlinks = lsResult.stdout
-      .toString()
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("160000 "))
-      .map((l) => l.split("\t")[1] ?? "")
-      .filter(Boolean)
-    if (gitlinks.length > 0) {
-      throw new Error(
-        `deliveryFromWorktree: delivery contains submodule pointer(s) instead of real files: ${gitlinks.join(", ")}. This happens when a nested .git survived stripNestedGitDirs(). Fix the stripping logic; do not commit gitlinks.`,
-      )
-    }
-
-    const commitMessage = `${prefix} delivery`
-    const commitResult = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m ${commitMessage}`
-      .quiet()
-      .cwd(cwd)
-      .nothrow()
-    if (commitResult.exitCode !== 0) {
-      const stderr = commitResult.stderr.toString().trim() || commitResult.stdout.toString().trim() || "git commit failed"
-      throw new Error(`deliveryFromWorktree: git commit failed: ${stderr}`)
-    }
-    const head = (
-      await $`git rev-parse HEAD`.quiet().cwd(cwd).nothrow().text()
-    ).trim()
-    if (!head) {
-      throw new Error("deliveryFromWorktree: git rev-parse HEAD returned empty after commit")
-    }
-    mergeRef = head
-    commitRef = head
-  }
+  const diffHint: { file: string; status: string }[] = []
+  const commitRef = await createGoalDeliveryCommit(diffHint, prefix)
+  const mergeRef: string = commitRef ?? baseRef
 
   const rawDiffs = mergeRef !== baseRef
     ? await collectWorktreeFileDiffs(cwd, baseRef, mergeRef)

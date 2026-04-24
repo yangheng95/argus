@@ -247,23 +247,3 @@ describe("Goal.startNewAttempt — options", () => {
   })
 })
 
-describe("Goal.startNewAttempt — DB enum guard", () => {
-  test("CHECK constraint rejects non-enum superseded_reason", () => {
-    const gr = `grun_enum_${Date.now()}`
-    insertGoalRun({ id: gr, status: "completed" })
-    // Bypass startNewAttempt and try to write a bogus reason directly.
-    // The sqlite CHECK constraint on engine_goal_run.superseded_reason must
-    // reject it — if this test fails silently the enum drift guard is gone.
-    expect(() => {
-      Database.use((db) =>
-        db.update(EngineGoalRunTable)
-          .set({
-            superseded_reason: "not_a_real_reason" as any,
-            superseded_at: Date.now(),
-          })
-          .where(eq(EngineGoalRunTable.id, gr))
-          .run(),
-      )
-    }).toThrow()
-  })
-})

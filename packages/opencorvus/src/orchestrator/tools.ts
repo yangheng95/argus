@@ -25,7 +25,6 @@ import { withStageRetry } from "@/util/retry"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineConfig } from "@/engine/config"
 import { EngineProtocol } from "@/engine/protocol"
-import { isDispatchableGoal } from "@/goal/kind"
 import {
   EngineGoalTable,
   EngineTaskTable,
@@ -1606,9 +1605,6 @@ export function createOrchestratorTools(input: {
       execute: async ({ goalID, reason }) => {
         const goal = listGoals(taskID).find((item) => item.id === goalID)
         if (!goal) return `Goal ${goalID} not found.`
-        if (!isDispatchableGoal(goal)) {
-          return `Goal ${goalID} is verification-only and does not dispatch to an executor. Re-run delivery to evaluate it on the merged worktree, or modify_goal to convert it into a dispatchable build goal.`
-        }
 
         const status = goalStatusByID(goalID)
         if (status === "running") return `Goal ${goalID} is already running.`
@@ -1681,38 +1677,24 @@ export function createOrchestratorTools(input: {
 
         // If nothing queued, tell the LLM WHY — otherwise dispatch_goal silently
         // no-ops and the orchestrator loop re-prompts with the same goal IDs
-        // forever. The common cause observed in benchmarks is a verification
-        // goal being fed here instead of `deliver`. Itemize so the LLM sees
-        // exactly which IDs need a different tool (rule 28: surface the
-        // systemic signal, do not patch the symptom).
+        // forever.
         if (queuedGoalIDs.length === 0) {
           requestStopAfterCurrentStep("dispatch_goal")
           const allGoals = listGoals(taskID)
           const allGoalsByID = new Map(allGoals.map((g) => [g.id, g]))
           const requestedGoals = goalIDs.map((id) => ({ id, goal: allGoalsByID.get(id) }))
-          const verificationIDs = requestedGoals
-            .filter((r) => r.goal && !isDispatchableGoal(r.goal))
-            .map((r) => r.id)
           const notFoundIDs = requestedGoals.filter((r) => !r.goal).map((r) => r.id)
 
           const parts: string[] = [`dispatch_goal queued 0 of ${goalIDs.length} requested goal(s).`]
-          if (verificationIDs.length > 0) {
-            parts.push(
-              `Verification-only goals cannot be executor-dispatched (kind="verification"): ` +
-              `${verificationIDs.join(", ")}. ` +
-              `These run as part of the aggregated delivery verdict — call \`deliver\` when the ` +
-              `implementation goals they depend on have passed.`,
-            )
-          }
           if (notFoundIDs.length > 0) {
             parts.push(`Not found in this task: ${notFoundIDs.join(", ")}.`)
           }
           const remainderIDs = requestedGoals
-            .filter((r) => r.goal && isDispatchableGoal(r.goal))
+            .filter((r) => r.goal)
             .map((r) => r.id)
           if (remainderIDs.length > 0) {
             parts.push(
-              `Dispatchable but skipped by the pool (already running / satisfied / blocked by ` +
+              `Skipped by the pool (already running / satisfied / blocked by ` +
               `unsatisfied dependencies): ${remainderIDs.join(", ")}. ` +
               `Check with read_context(scope="goals") before retrying.`,
             )
