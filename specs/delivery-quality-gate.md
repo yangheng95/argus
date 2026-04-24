@@ -36,6 +36,12 @@ tools.ts:416 原话："When you need to view the image contents, pass the return
 
 ### P0-0 · Delivery LLM 必须真正看到自己的渲染图（`src/delivery/tools.ts` + `src/orchestrator/tools.ts`）
 
+> **状态（2026-04-24）**：Stream A.A（tool 返回 multimodal）+ A.B（render 失败强制 reject）✅ 已交付。
+> 实现要点：
+> - `delivery/tools.ts:screenshot` / `verify_page_integrity` 改用 `buildMultimodalToolResult`（来自 Phase 1 stub `delivery/tool-result.ts`）。tool result 现包含 `text`（结构化 JSON）+ `attachments[{type:"file", mime:"image/png", url:"data:image/png;base64,…"}]`，与 `session/message.ts:toModelOutput` 既有约定对齐 → LLM 在**当轮**就看到 PNG，不再依赖永远不会触发的 read_file 自助。失败路径仍 text-only（绝不附带过期截图，rule 1）。
+> - `orchestrator/tools.ts:deliver()` 把 render 提升为视觉任务的硬前置：无 `index.html` / puppeteer 抛错 → 立即构造 verdict=rejected（category=visual，attribute 到全部 goal）写 verdict artifact + evaluation + 新 attempt + 决策日志 + `requestStopAfterCurrentStep("delivery_render_rejected")`，**完全跳过 DeliveryAgent.verify**。彻底堵掉 "LLM only sees reference" 降级路径。
+> - 未触及 `delivery/agent.ts` picky-loop 内部：每轮 repair 后重新渲染那条还需要 Stream C'（LKG repair loop）一并设计，避免双源改 agent.ts。
+
 **目标**：消除"LLM 只看数字不看图"的架构缺陷。没有这一条，后面所有基于"LLM 视觉判决"的条款都是空的。
 
 违反 CLAUDE.md rule 12（"视觉有关的 benchmark 必须以视觉呈现"）：当前工具把视觉产出降维成数值报告再交给 LLM，相当于 headless overlay。
@@ -246,9 +252,9 @@ Goal acceptance 的 checks_run 必须：
 
 ```
 Phase 1（5 条 stream 并行，无共享代码路径）
-├── Stream A · P0-0 · Delivery LLM 多模态
-│     └── src/delivery/tools.ts（tool result 改 multimodal）
-│         src/orchestrator/tools.ts（首 prompt 强制 rendered_output）
+├── Stream A · P0-0 · Delivery LLM 多模态  ✅ DONE A.A + A.B (2026-04-24)
+│     └── src/delivery/tools.ts（screenshot / verify_page_integrity 改 multimodal）
+│         src/orchestrator/tools.ts（render 失败短路 reject；每轮重渲染留给 Stream C'）
 ├── Stream B · P0-A · Capture 真实性闸  ✅ DONE (commit 7f53a3de6)
 │     └── src/design-analyst/capture-gate.ts（新）
 │         src/util/pixel-stats.ts（新，与 P0-B 共享）
