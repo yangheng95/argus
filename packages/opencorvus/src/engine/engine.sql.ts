@@ -110,6 +110,7 @@ export type EngineArtifactKind =
   | "pr"
   | "verification-evidence"
   | "delivery"
+  | "goal_run_attempt"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
