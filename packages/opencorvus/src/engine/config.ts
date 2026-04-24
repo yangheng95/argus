@@ -98,7 +98,7 @@ export interface ActivityConfig {
  *
  * 单源化：所有阈值都在 EngineConfig 下统一管理（rule 25 禁散配置文件），
  * 用户可通过 opencorvus.jsonc `assistant.delivery_visual` 覆盖。改动阈值
- * 后需用 `script/delivery/replay.ts` 刷 accept/reject 样本基线。
+ * 后需在下一次 benchmark 跑中重新评估 accept/reject 分布。
  *
  * score_weights 四项相加必须为 1（运行时校验）；score 的单调性是 P0-C.4
  * LKG 回滚比较的语义基础，禁止破坏。

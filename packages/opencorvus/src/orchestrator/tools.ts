@@ -2407,46 +2407,14 @@ export function createOrchestratorTools(input: {
             } catch { /* best effort */ }
           }
 
-          // P2 / Stream G — persist this round into engine_delivery_round so
-          // replay.ts can rebuild the picky-loop trajectory without parsing
-          // git log. Skipped only when no commit anchor exists (DB notNull
-          // on commit_sha; no synthetic shas, rule 1). LKG outcome decides
-          // the verdict tag — a regressed-then-rolled-back round writes
-          // verdict='rolled_back' so replay can mark it ↺ instead of ✗.
-          if (roundCommit.commit) {
-            try {
-              const { insertDeliveryRound } = await import("@/delivery/round-store")
-              const isRolledBack = lkgOutcome?.kind === "regressed"
-              const rowVerdict = isRolledBack
-                ? ("rolled_back" as const)
-                : (verdict.verdict as "accepted" | "rejected")
-              const rollbackFromRound =
-                lkgOutcome && "previous" in lkgOutcome && isRolledBack
-                  ? lkgOutcome.previous.best_round
-                  : null
-              insertDeliveryRound({
-                task_id: taskID,
-                delivery_id: deliveryID,
-                round_index: iteration,
-                commit_sha: roundCommit.commit,
-                verdict: rowVerdict,
-                score: lkgMetric ? lkgMetric.score : null,
-                metrics: lkgMetric ?? null,
-                llm_rationale: verdict.summary || null,
-                screenshot_path: lkgRenderedPath ?? null,
-                rollback_from_round: rollbackFromRound,
-              })
-            } catch (insertErr) {
-              // (delivery_id, round_index) collisions or transient DB issues
-              // never block the deliver flow — the verdict path is the source
-              // of truth, replay is observability only.
-              log.warn("deliver: failed to write delivery_round row (non-fatal)", {
-                taskID, iteration,
-                error: insertErr instanceof Error ? insertErr.message : String(insertErr),
-              })
-            }
-          }
-          void lkgOutcome  // recorded above; consumer is delivery_round + decision log
+          // Phase-6-c: engine_delivery_round was an observability side-channel
+          // (writer: this site; reader: script/delivery/replay.ts). Per
+          // specs/new-arch/16-unified-teardown.md §7-6-c + rule 22 (禁双源),
+          // picky-loop verdict signal lives in decision_log + artifact stream
+          // (`changed_file` / `report` / `verdict` kinds), so the parallel
+          // delivery_round table was removed. Rolled-back / regressed outcomes
+          // still get surfaced via the decision log appended above.
+          void lkgOutcome
 
           if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")

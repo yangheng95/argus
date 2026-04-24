@@ -1215,7 +1215,7 @@ export namespace Config {
                 .describe("Composite score weights; four values must sum to 1 (runtime-enforced)"),
             })
             .optional()
-            .describe("P0-B delivery visual numeric hard-gate thresholds. Change values then rebaseline via script/delivery/replay.ts."),
+            .describe("P0-B delivery visual numeric hard-gate thresholds."),
           design_analyst: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),
