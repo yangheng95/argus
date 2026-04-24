@@ -1,12 +1,15 @@
 import z from "zod"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
 import { BusEvent } from "@/bus/bus-event"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionTable } from "@/session/session.sql"
+import { Message } from "@/session/message"
 import { Database, and, eq, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
+import { EngineConfig } from "@/engine/config"
 import { Scheduler } from "./index"
 import { TaskQueueTable } from "./task-queue.sql"
 
@@ -34,10 +37,6 @@ export namespace TaskQueueService {
   const log = Log.create({ service: "task-queue-service" })
 
   const POLL_INTERVAL_MS = 500
-  const RUN_TIMEOUT_ENV = "OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS"
-  const RUN_TIMEOUT_MS = 30 * 60 * 1000
-  const HEARTBEAT_ENV = "OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS"
-  const HEARTBEAT_MS = 15 * 1000
   const BATCH_SIZE = 10
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
@@ -120,7 +119,7 @@ export namespace TaskQueueService {
 
   async function run(now: number): Promise<Promise<void>[]> {
     const current = state()
-    recover(now)
+    await recover(now)
     const limit = Math.max(0, concurrency() - current.inFlight.size)
     if (limit === 0) return []
     const queued = pending(limit)
@@ -273,25 +272,42 @@ export namespace TaskQueueService {
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
     }
-    const timer = setInterval(() => {
+    // Chunk-driven heartbeat: touch() only fires when SessionPrompt actually
+    // makes progress (message.part.delta / message.part.updated). Replaces
+    // the old unconditional setInterval(touch, 15s) which kept time_updated
+    // fresh even while the upstream LLM stream was dead — defeating the
+    // recover() staleness gate. GlobalBus subscription covers worktree
+    // Instances too (session lives in one, executor in another).
+    const handler = (msg: { payload: any }) => {
+      const event = msg.payload
+      if (!event || typeof event.type !== "string") return
+      if (event.type !== Message.Event.PartDelta.type && event.type !== Message.Event.PartUpdated.type) return
+      const props = event.properties ?? {}
+      const sid =
+        (typeof props.sessionID === "string" && props.sessionID) ||
+        (typeof props.part === "object" && props.part && typeof props.part.sessionID === "string" && props.part.sessionID) ||
+        undefined
+      if (sid !== task.session_id) return
       try {
         touch(task.id)
       } catch (error) {
-        log.warn("task heartbeat update failed", {
+        log.warn("task progress touch failed", {
           id: task.id,
           sessionID: task.session_id,
           error: message(error),
         })
       }
-    }, heartbeat())
-    timer.unref()
-    await executePrompt({
-      sessionID: task.session_id,
-      prompt: metadata.data.input,
-      source: "task-queue-service",
-    }).finally(() => {
-      clearInterval(timer)
-    })
+    }
+    GlobalBus.on("event", handler)
+    try {
+      await executePrompt({
+        sessionID: task.session_id,
+        prompt: metadata.data.input,
+        source: "task-queue-service",
+      })
+    } finally {
+      GlobalBus.off("event", handler)
+    }
     const now = Date.now()
     Database.use((db) =>
       db
@@ -309,8 +325,8 @@ export namespace TaskQueueService {
     Bus.publish(TaskQueueEvent.Completed, { queueTaskID: task.id, sessionID: task.session_id })
   }
 
-  function recover(now: number) {
-    const timeout = runTimeout()
+  async function recover(now: number) {
+    const timeout = await runTimeout()
     const stale = Database.use((db) =>
       db
         .select()
@@ -399,22 +415,12 @@ export namespace TaskQueueService {
     )
   }
 
-  function runTimeout() {
-    const raw = process.env[RUN_TIMEOUT_ENV]
-    if (!raw) return RUN_TIMEOUT_MS
-    const value = Number(raw)
-    if (!Number.isFinite(value)) return RUN_TIMEOUT_MS
-    if (value < 1000) return 1000
-    return Math.floor(value)
-  }
-
-  function heartbeat() {
-    const raw = process.env[HEARTBEAT_ENV]
-    if (!raw) return HEARTBEAT_MS
-    const value = Number(raw)
-    if (!Number.isFinite(value)) return HEARTBEAT_MS
-    if (value < 1000) return 1000
-    return Math.floor(value)
+  async function runTimeout() {
+    // Single source: engine/config.ts ActivityConfig.task_queue_run_timeout_ms.
+    // No OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS env — assistant.activity in
+    // opencorvus.jsonc is the one place to adjust it (CLAUDE.md #25).
+    const cfg = await EngineConfig.get()
+    return cfg.activity.task_queue_run_timeout_ms
   }
 }
 
