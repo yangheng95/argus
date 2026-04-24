@@ -138,6 +138,15 @@ LLM judge 只能在硬门通过后判 "accept with minor issues" 或 "reject on 
 
 ### P0-C · 单调改进 + Last-Known-Good 回滚（`src/delivery/agent.ts` picky loop）
 
+> **状态（2026-04-24）**：Stream C'（P0-C.4 LKG score-driven rollback）✅ 已交付。
+> 实现要点：
+> - LKG 状态落 `task.metadata.git.delivery_lkg = { best_score, best_commit_sha, best_round, recorded_at }`，与既有 `task.metadata.git.{baseline,result}` 同源，无新表。
+> - `engine/git.ts` 新增 `EngineGit.evaluateAndApplyLKG`：first round / improved（>+ε）/ held（±ε 内）/ regressed（<-ε）四态；regressed 必走 `git reset --hard best_commit_sha`，reset 失败抛错（不静默 fallback，rule 1）；ε 默认 0.01。`EngineGit.readLKG` 给 publisher / replay 读快照。
+> - `orchestrator/tools.ts:deliver()` 在 `commitDeliveryRound` 之后插入 LKG 评估：从 `task.system_artifacts` 取 `intent=rendered_output`、从 `attachments + system_artifacts` 取 reference image，二者齐 → `computeVisualMetric(...)` → `evaluateAndApplyLKG(...)`；任一缺失（lib/api 任务）静默 skip；评估抛错 → log error + 写决策日志 `delivery_lkg_failed_N`，verdict 流程继续以避免单轮抖动卡死全任务。
+> - 每轮"重新渲染 merged worktree"已天然由 deliver tool 入口 render 块满足（每次 orchestrator 调 deliver 都会刷 `rendered_output` attachment），不需要额外动 `agent.ts` —— spec bullet 3 兜实。
+> - **未做**：连续 K 轮无改进 → 升级模型 / 重跑 planner（spec 第 5 步）。这部分属 picky budget 决策，归 orchestrator LLM（rule 23 禁状态机硬编码），后续以 prompt 引导而非代码 gate 实现。
+> - **遗留**：`engine_iteration` snapshot 暂未带 `lkg.outcome` 字段；Stream G 的 `delivery_round` 表落地时再串联。
+
 > **状态（2026-04-24）**：Stream D（P0-C.1 + .2 + .3 — Commit & Diff 纠偏，3 项捆绑契约）✅ 已交付。
 > 实现要点：
 > - `engine/git.ts` 新增 `EngineGit.commitDeliveryRound`：每轮 `git add -A` + `git commit --no-gpg-sign --allow-empty`，subject=`delivery round N | verdict=X | issues=Y`，body 带 verdict.summary。`--allow-empty` 保证"该轮无代码改动"也有时间锚点。
@@ -283,9 +292,10 @@ Phase 1（5 条 stream 并行，无共享代码路径）
           src/evaluator/runtime-evidence.ts（新，共用 puppeteer helper）
 
 Phase 2（依赖 Phase 1）
-├── Stream C' · P0-C.4 · LKG score-driven rollback
+├── Stream C' · P0-C.4 · LKG score-driven rollback  ✅ DONE (2026-04-24)
 │     depends on: Stream C 的 VisualMetric
-│     └── delivery/agent.ts 的 repair loop 接入 score + reset --hard
+│     └── engine/git.ts:evaluateAndApplyLKG (state in task.metadata.git.delivery_lkg) +
+│         orchestrator/tools.ts:deliver (computeVisualMetric → evaluateAndApplyLKG)
 └── Stream F · P1-B · 内容指纹
       depends on: Stream B 的 CaptureManifest
       └── evaluator/content-fingerprint.ts + 扩 goal checks allowlist

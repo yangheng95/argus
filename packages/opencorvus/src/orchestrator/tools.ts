@@ -2658,6 +2658,87 @@ export function createOrchestratorTools(input: {
             commit: roundCommit.commit, error: roundCommit.error,
           })
 
+          // P0-C.4 — Last-Known-Good rollback. Compute the visual score for
+          // this round, compare against task.metadata.git.delivery_lkg, and
+          // either advance the LKG anchor (improvement) or reset --hard back
+          // to it (regression past tolerance). Skipped silently for tasks
+          // that have no rendered_output + reference pair (lib/api projects
+          // do not have a meaningful visual score). Score / outcome flow
+          // into the verdict artifact + decision log so Stream G's replay
+          // reads them without a separate table.
+          let lkgOutcome: import("@/engine/git").LKGOutcome | undefined
+          try {
+            const taskAfterRound = requireTask(taskID)
+            const renderedRef = (taskAfterRound.system_artifacts ?? [])
+              .find((a: any) => a?.intent === "rendered_output" && typeof a?.url === "string") as
+                | { url: string } | undefined
+            const referencePool = [
+              ...((taskAfterRound.attachments ?? []) as any[]),
+              ...((taskAfterRound.system_artifacts ?? []) as any[]),
+            ].filter((a) => a?.intent !== "rendered_output" && typeof a?.mime === "string"
+              && a.mime.startsWith("image/") && typeof a?.url === "string")
+            const tagged = referencePool.filter((a) => a?.intent === "visual_reference")
+            const referenceRef = (tagged[0] ?? referencePool[0]) as { url: string } | undefined
+
+            if (renderedRef && referenceRef) {
+              const { AttachmentStore } = await import("@/storage/attachment-store")
+              const { computeVisualMetric, loadVisualThresholds } = await import("@/delivery/visual-metric")
+              const renderedLoc = AttachmentStore.nameFromUrl(renderedRef.url)
+              const referenceLoc = AttachmentStore.nameFromUrl(referenceRef.url)
+              const renderedPath = renderedLoc ? AttachmentStore.resolveAbsolute(renderedLoc.projectID, renderedLoc.name) : undefined
+              const referencePath = referenceLoc ? AttachmentStore.resolveAbsolute(referenceLoc.projectID, referenceLoc.name) : undefined
+              if (renderedPath && referencePath) {
+                const metric = await computeVisualMetric({
+                  renderedPath,
+                  referencePath,
+                  thresholds: loadVisualThresholds(),
+                })
+                const lkg = await EngineGit.evaluateAndApplyLKG({
+                  task: taskAfterRound,
+                  iteration,
+                  score: metric.score,
+                  roundCommitSha: roundCommit.commit,
+                })
+                lkgOutcome = lkg.outcome
+                log.info("deliver: LKG outcome", {
+                  taskID, iteration, kind: lkg.outcome.kind,
+                  score: metric.score.toFixed(3),
+                  best_score: "previous" in lkg.outcome ? lkg.outcome.previous.best_score.toFixed(3) : undefined,
+                  rolledBackTo: "rolledBackTo" in lkg.outcome ? lkg.outcome.rolledBackTo : undefined,
+                })
+                try {
+                  const { createDecisionLog } = await import("@/decision-log")
+                  createDecisionLog(taskID).append({
+                    phase: "delivery",
+                    key: `delivery_lkg_${iteration}`,
+                    value: `score=${metric.score.toFixed(3)} outcome=${lkg.outcome.kind}`,
+                    reason: "rolledBackTo" in lkg.outcome ? `rollback_to=${lkg.outcome.rolledBackTo}` : "",
+                  })
+                } catch { /* best effort */ }
+              }
+            }
+          } catch (lkgErr) {
+            // Rollback failure is structural — surface loudly but do NOT
+            // silently swallow it. The next iteration would compound the bad
+            // state. Log error and continue: verdict still records the
+            // (untrustworthy) state, and the orchestrator LLM sees the
+            // rollback failure in the decision log on its next turn.
+            log.error("deliver: LKG evaluation/rollback failed", {
+              taskID, iteration,
+              error: lkgErr instanceof Error ? lkgErr.message : String(lkgErr),
+            })
+            try {
+              const { createDecisionLog } = await import("@/decision-log")
+              createDecisionLog(taskID).append({
+                phase: "delivery",
+                key: `delivery_lkg_failed_${iteration}`,
+                value: lkgErr instanceof Error ? lkgErr.message : String(lkgErr),
+                reason: "lkg_evaluation_threw",
+              })
+            } catch { /* best effort */ }
+          }
+          void lkgOutcome  // recorded above; consumer is the decision log
+
           if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")
             log.info("deliver: agent accepted, auto-publishing", { taskID, runID: run.id, deliveryID })
