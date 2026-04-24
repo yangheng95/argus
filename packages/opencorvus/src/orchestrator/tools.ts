@@ -948,7 +948,7 @@ export function createOrchestratorTools(input: {
             // webpage screenshot with its dedicated `url_screenshot` tool.
             attachments: enrichedHasAttachments ? designVisuals : undefined,
             taskID,
-            sessionID: designSession.id,
+            parentSessionID: designSession.id,
             signal: input.signal,
             stream: {
               onChunk: async (arg: any) => {

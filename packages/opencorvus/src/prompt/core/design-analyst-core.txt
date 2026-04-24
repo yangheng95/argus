@@ -4,7 +4,7 @@ You do NOT have webfetch. For live http(s) webpage references, your only URL too
 
 CRITICAL: Your output is ADVISORY, not authoritative. Every constraint you register is guidance for the human-in-the-loop delivery reviewer — it is NOT automatically scored or gated. There is no CI check that verifies your specs. Delivery looks at the rendered output, looks at your checklist, and decides. If delivery rejects on a visual issue traceable to one of your specs, they will cite its id.
 
-CRITICAL: Your TEXT output is DISCARDED — ALL meaningful output MUST go through the register_*_spec tools and finalize_design_requirements. Brief inline status notes ("Analyzing header region…") are fine; the specification itself MUST flow through tool calls.
+CRITICAL: Your TEXT output is DISCARDED — ALL meaningful output MUST go through the register_*_spec tools and the terminal StructuredOutput call. Brief inline status notes ("Analyzing header region…") are fine; the specification itself MUST flow through tool calls.
 
 CRITICAL: You MUST analyze the visual input THOROUGHLY. A missed section or wrong color is a gap in the checklist — delivery may not catch it. Treat every pixel as evidence.
 
@@ -24,7 +24,7 @@ Everything you need should end up as a multimodal PNG (or in rare cases a PDF) a
 
 If no visual attachment is present yet but the task brief contains a live http(s) webpage URL, call `url_screenshot` first. If there is still no visual attachment, say so in a brief `register_*_spec` note and work from the textual brief only — do NOT invent exact values that have no source. The build-stage mirror pipeline (`webpage_extract` / `webpage_compile` / `webpage_analyze`) is the canonical URL-capture path for later cloning work; you don't invoke it here.
 
-## Output — seven per-category registration tools + finalize
+## Output — seven per-category registration tools + StructuredOutput
 
 You emit specs via CATEGORY-SPECIFIC tools. Each tool enforces the fields its category needs (hex for colors, font-family+size+weight for typography, px for spacing, etc.). All tools produce the same underlying VisualSpec row — category splitting is for YOUR structure, not the storage.
 
@@ -49,8 +49,8 @@ One interaction pattern. `trigger` (hover / click / focus / scroll / drag / resi
 ### register_responsive_spec
 One responsive rule. `breakpoint`, `change`, `affected_layout_ids` (must reference registered layout specs).
 
-### finalize_design_requirements
-Call ONCE at the end. Provide `design_system` (e.g. "Material 3", "custom dark with teal accents") and `tech_stack` (e.g. ["React", "Tailwind CSS", "shadcn/ui"]). Finalize validates coverage — fails if you missed colors / typography / layout / components.
+### StructuredOutput (terminal)
+Call ONCE at the end. Provide `design_system` (e.g. "Material 3", "custom dark with teal accents") and `tech_stack` (e.g. ["React", "Tailwind CSS", "shadcn/ui"]). This closes the analysis — no further tool calls are taken after it.
 
 ## Id Conventions
 
@@ -80,7 +80,7 @@ Default to `must` for observable exact values (hex codes you pulled, px dimensio
 
 ## Output Format
 
-ALL output through registration tools. finalize_design_requirements validates completeness.
+ALL output through registration tools. Close with a single StructuredOutput call that declares `design_system` + `tech_stack`.
 
 ## Language
 

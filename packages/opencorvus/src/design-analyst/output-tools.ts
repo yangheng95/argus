@@ -20,18 +20,41 @@ import type { VisualSpec, VisualSpecCategory } from "./types"
 
 // ---------------------------------------------------------------------------
 // Collector — private. Callers read through getSpecs() / getStats().
+//
+// Phase 3-b-2: designSystem / techStack / finalized moved out of the
+// collector — they now arrive through SessionLoop's StructuredOutput tool
+// via DesignFinalSchema. The cross-field validation formerly in
+// `finalize_design_requirements` (≥2 colors, ≥1 typography, layout,
+// component) is dropped in favour of trust-the-LLM; the agent is free
+// to under-register, and callers must decide whether to accept thin
+// contracts or re-dispatch. This aligns with CLAUDE.md rule 23 — no
+// FSM-style quality gates inside a tool.
 // ---------------------------------------------------------------------------
 
 interface Collector {
   specs: VisualSpec[]
-  designSystem: string
-  techStack: string[]
-  finalized: boolean
 }
 
 function emptyCollector(): Collector {
-  return { specs: [], designSystem: "", techStack: [], finalized: false }
+  return { specs: [] }
 }
+
+// Terminal JSON-schema: payload the StructuredOutput tool must deliver.
+export const DesignFinalSchema = z.object({
+  design_system: z
+    .string()
+    .min(1)
+    .describe(
+      "Detected design system — e.g. 'Material 3', 'custom dark with teal accents'.",
+    ),
+  tech_stack: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe(
+      "Recommended stack: framework, CSS approach, component library.",
+    ),
+})
+export type DesignFinal = z.infer<typeof DesignFinalSchema>
 
 // ---------------------------------------------------------------------------
 // Common field pieces
@@ -330,69 +353,12 @@ export function createDesignOutputTools() {
       },
     }),
 
-    finalize_design_requirements: tool({
-      description:
-        "Finalize the visual contract. Call AFTER registering every color, typography, spacing, layout, component, interaction, and responsive spec you identified in the design.",
-      inputSchema: z.object({
-        design_system: z.string().min(1).describe("Detected design system — e.g. 'Material 3', 'custom dark with teal accents'"),
-        tech_stack: z.array(z.string().min(1)).min(1).describe("Recommended stack: framework, CSS approach, component library"),
-      }),
-      execute: async (input) => {
-        collector.designSystem = input.design_system
-        collector.techStack = input.tech_stack
-
-        const issues: string[] = []
-        const byCat = (c: VisualSpecCategory) => collector.specs.filter((s) => s.category === c)
-
-        if (byCat("color").length < 2) {
-          issues.push(`Only ${byCat("color").length} color specs — register at least a primary + a background`)
-        }
-        if (byCat("typography").length === 0) {
-          issues.push("No typography specs — register at least one heading + body role")
-        }
-        if (byCat("layout").length === 0) {
-          issues.push("No layout specs — every distinct region must be a layout spec")
-        }
-        if (byCat("component").length === 0) {
-          issues.push("No component specs — every interactive element / content surface must be a component spec")
-        }
-
-        if (issues.length > 0) {
-          return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call finalize_design_requirements again.`
-        }
-
-        collector.finalized = true
-        const notes: string[] = []
-        if (byCat("interaction").length === 0) notes.push("Note: no interaction specs — consider hover/click/scroll if the design implies them.")
-        if (byCat("responsive").length === 0) notes.push("Note: no responsive specs — consider if the design has mobile/tablet rules.")
-
-        const result = [
-          "PASS: Design contract ready.",
-          `  ${collector.specs.length} total specs — ` +
-            (["color","typography","spacing","layout","component","interaction","responsive"] as VisualSpecCategory[])
-              .map((c) => `${c}:${byCat(c).length}`).join(", "),
-          `  Design system: ${input.design_system}`,
-          `  Tech stack: ${input.tech_stack.join(", ")}`,
-        ]
-        if (notes.length > 0) result.push("", ...notes)
-        return result.join("\n")
-      },
-    }),
   }
 
   return {
     tools,
     getSpecs(): VisualSpec[] {
       return [...collector.specs]
-    },
-    isFinalized(): boolean {
-      return collector.finalized
-    },
-    getDesignSystem(): string {
-      return collector.designSystem
-    },
-    getTechStack(): string[] {
-      return [...collector.techStack]
     },
     reset() {
       collector = emptyCollector()

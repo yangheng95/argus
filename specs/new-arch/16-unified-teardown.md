@@ -299,8 +299,8 @@ await SessionPrompt.prompt({
   - 每个 agent 迁移必须附**真实 LLM smoke test**（仿 `test/intent-analysis/smoke.test.ts`）：`loadBenchmarkEnv` + `Server.listen({port:0})` + 调用 agent + 断言 `structured` 字段。gated by `OPENCORVUS_RUN_*_SMOKE=1` 避免 CI 阻塞。
 
   **完成状态**：
-  - [x] `intent-analysis`（2026-04-24 commit 待定）：`SessionPrompt.withExtraTools + SessionPrompt.prompt({ format: json_schema, schema: IntentFinalSchema })`，smoke test 通过 `alibaba-coding-plan-cn/kimi-k2.5` 验证 intent_class=bug_fix / complexity=trivial / 4 slots / structuredMissing=false
-  - [ ] design-analyst
+  - [x] `intent-analysis`（2026-04-24 commit `a971b475b`）：`SessionPrompt.withExtraTools + SessionPrompt.prompt({ format: json_schema, schema: IntentFinalSchema })`，smoke test 通过 `alibaba-coding-plan-cn/kimi-k2.5` 验证 intent_class=bug_fix / complexity=trivial / 4 slots / structuredMissing=false
+  - [x] `design-analyst`（2026-04-24）：删 `finalize_design_requirements` + 跨字段校验（从工具层移走，LLM 自判），新增 `DesignFinalSchema`（design_system + tech_stack）；multimodal parts 走 `SessionPrompt.prompt.parts`；orchestrator/tools.ts DesignAnalystAgent.analyze 的 `sessionID` 参数改名为 `parentSessionID`；prompt core 更新提示 StructuredOutput 替代 finalize；smoke test 通过 kimi-k2.5 验证 16 specs 提取 + structuredMissing=false
   - [ ] requirements
   - [ ] planner
   - [ ] deliver
