@@ -376,7 +376,6 @@ CREATE TABLE IF NOT EXISTS engine_task (
   metadata               text,
   time_started           integer,
   time_completed         integer,
-  time_status_changed    integer,
   -- rewind_cursor_time: when set, UI-facing event queries filter out rows
   -- with time_created > cursor. Append-only history stays intact; this is
   -- a projection cursor, not a delete marker. Written by rewindTask API.

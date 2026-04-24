@@ -230,7 +230,7 @@ async function resumeRecoveredTaskLoops(input: {
 
   const resumedTaskIDs: string[] = []
   const orphaned = [...listOrphanedActiveInProject(input.projectID)]
-    .sort((left, right) => (right.time_status_changed ?? 0) - (left.time_status_changed ?? 0))
+    .sort((left, right) => (right.time_updated ?? 0) - (left.time_updated ?? 0))
   for (const task of orphaned) {
     await resumeActiveTaskLoop(task.id)
     resumedTaskIDs.push(task.id)
@@ -254,7 +254,7 @@ async function resumeRecoveredTaskLoopsWithHooks(input: {
   startTaskLoop: (taskID: string) => Promise<void> | void
 }) {
   const activeTask = [...listOrphanedActiveInProject(input.projectID)]
-    .sort((left, right) => (right.time_status_changed ?? 0) - (left.time_status_changed ?? 0))[0]
+    .sort((left, right) => (right.time_updated ?? 0) - (left.time_updated ?? 0))[0]
   if (activeTask && !input.isTaskLoopActive?.(activeTask.id)) {
     await input.startTaskLoop(activeTask.id)
     return [activeTask.id]
