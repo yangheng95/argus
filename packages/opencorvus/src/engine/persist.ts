@@ -440,23 +440,6 @@ export function updateGoalWorkspace(input: {
   )
 }
 
-/** Set or clear the goal-scoped baseRef without touching workspace_dir /
- *  workspace_branch. Used by dispatchGoal to persist the first-attempt
- *  Snapshot.track() result exactly once per goal (see goal-pool.ts). */
-export function updateGoalWorkspaceBaseRef(goalID: string, baseRef: string | null, now = Date.now()) {
-  const goal = Database.use((db) =>
-    db.select().from(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).get(),
-  )
-  if (!goal) {
-    throw new Error(`updateGoalWorkspaceBaseRef: goal ${goalID} not found`)
-  }
-  Database.use((db) =>
-    db.update(EngineGoalTable)
-      .set({ workspace_base_ref: baseRef, time_updated: now } as any)
-      .where(eq(EngineGoalTable.id, goalID))
-      .run(),
-  )
-}
 
 /**
  * Batch reset every goal in a task back to the "pending" projection by:
