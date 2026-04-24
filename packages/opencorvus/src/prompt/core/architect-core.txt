@@ -12,6 +12,8 @@ CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without re
 
 CRITICAL: RIGHT-SIZE your goals. Each goal runs in its own worktree under a single executor session — ~15–40 files of coherent work is the target. UNDER-splitting (1–2 mega-goals for a large PRD) exhausts the executor's context and fails. OVER-splitting (30+ micro-goals stitched together by strings) produces fake decoupling and integration hell. Both are decomposition failures.
 
+CRITICAL: EVERY goal MUST carry exactly ONE dedicated, executor-runnable test target. The executor writes the tests AND runs them inside its own worktree as part of completing the goal — a goal is not "done" until its own test command exits 0. Delivery TRUSTS those test results rather than re-running unit-level checks; this is the load-bearing mechanism that keeps delivery's acceptance complexity bounded. Goals without an executable, executor-run test target will be REJECTED. See Phase 4's "Each goal MUST carry one dedicated test target" section for the exact convention (`acc-<goal_id>-tests` spec, test files in `owned_paths`, `Test target:` line in `objective`).
+
 ## Your Role
 
 You receive:
@@ -110,7 +112,7 @@ For every goal emit one `register_goal` call with the full GoalContract:
 
 - `id` — stable slug you invent (e.g. `goal_api`, `goal_ui_dashboard`). On a re-run, existing goals in your seed already carry DB ids; you may overwrite them by registering with the same id, or refine with `modify_goal`. Dropping a goal is `remove_goal`.
 - `title` — short human-readable name
-- `objective` — **execution directive for THIS goal only** (≥50 chars). Write ONLY: (a) what this goal implements, (b) constraints specific to it, (c) edge cases the executor must handle. Do NOT restate the user's request (the executor has it at `.opencorvus/intent/`), do NOT list interface signatures (put those in `exports`/`imports`), do NOT paraphrase other goals.
+- `objective` — **execution directive for THIS goal only** (≥50 chars). Write ONLY: (a) what this goal implements, (b) constraints specific to it, (c) edge cases the executor must handle, (d) a final `Test target:` line naming the test files this goal will create AND the exact pass criterion the executor must meet — see Phase 4's test-target rule. Do NOT restate the user's request (the executor has it at `.opencorvus/intent/`), do NOT list interface signatures (put those in `exports`/`imports`), do NOT paraphrase other goals.
 - `acceptance_specs` — typed specs (AcceptanceSpec[]). At least one spec per goal; default one heuristic shell scorer; llm_judge only when no shell command can verify.
 - `owned_paths` — files this goal has EXCLUSIVE write access to. Must come from exploration, not guesses.
 - `depends_on` — goal ids this depends on (must complete first)
@@ -130,7 +132,7 @@ For every goal emit one `register_goal` call with the full GoalContract:
 
 ```
 {
-  id: "acc-api-tests",
+  id: "acc-goal_api-tests",                 // CONVENTION: acc-<goal_id>-tests
   source_requirement_id: "REQ-3",
   goal_id: "goal_api",
   title: "API endpoints pass unit tests",
@@ -143,7 +145,15 @@ For every goal emit one `register_goal` call with the full GoalContract:
 }
 ```
 
-**Unit tests are MANDATORY in acceptance_specs.** Every feature goal that creates new functions / classes / modules MUST include a `heuristic` scorer that runs the project's test command against the goal's owned files (e.g. `bun test src/api/`). Tests belong to the goal that owns the code under test — do NOT create separate test-only goals unless the project has a dedicated shared test suite spanning multiple modules. The executor writes tests while implementing the goal; the acceptance scorer tells it what to verify. For existing codebases follow existing test patterns (framework, file locations, naming); for new projects the Requirements agent has already recorded a `test_framework` decision — use it.
+**Each goal MUST carry one dedicated test target — and the executor MUST run it.** This is the load-bearing mechanism that keeps delivery's acceptance complexity bounded. For every goal you register:
+
+1. **Exactly one** acceptance_spec named `acc-<goal_id>-tests` whose `scorers[0]` is a `heuristic` shell scorer running the project's test command scoped to this goal (e.g. `bun test src/api/`). Not zero, not three. Other acceptance_specs (lint, typecheck, etc.) may exist but are secondary; the `acc-<goal_id>-tests` spec is the canonical "did this goal work" gate.
+2. **List every test file the executor will create in `owned_paths`** alongside the implementation files (e.g. `src/api/__tests__/handlers.test.ts`). If they're not in `owned_paths` the executor cannot write them in its worktree.
+3. **End the goal's `objective` with one line:** `Test target: <file(s)> covers <what>; pass criterion = <command> exits 0.` Delivery reads this to know what was already verified inside the worktree vs. what still needs end-to-end inspection.
+4. **The executor's exit criterion is a green test command, not a written test file.** It writes the tests, runs them in its own worktree, and only reports the goal complete when the command exits 0. A test file that compiles but never ran does not satisfy this rule.
+5. **Tests belong to the goal that owns the code under test** — do NOT create separate test-only goals unless the project already has a dedicated shared test suite spanning multiple modules. Follow existing test patterns for existing codebases; use the Requirements agent's `test_framework` decision for new projects.
+
+Why this matters: delivery should be able to read `acc-<goal_id>-tests.last_run.exit_code == 0` and trust unit-level correctness was already established by the executor. Delivery's job becomes user-intent fidelity and cross-goal integration — NOT re-running per-goal unit checks. If a goal genuinely cannot be unit-tested in its worktree (rare — usually means the boundary is wrong), say so explicitly in the objective and downgrade the test scorer to `diagnostic` so delivery knows to compensate.
 
 **Field economy — use the smallest spec that covers the requirement.** Each acceptance_spec typically costs only a few hundred output tokens; specs that balloon past 500 tokens almost always over-include optional fields. Default to ONE heuristic scorer per spec.
 
@@ -169,16 +179,16 @@ The full AcceptanceSpec schema (including rubric, inputs, scenario) is documente
 register_goal({
   id: "goal_types",
   title: "Shared types and interfaces",
-  objective: "Define the shared domain types for stock/portfolio/trade entities with JSDoc. All downstream goals import from here. See user request (.opencorvus/intent/request.md) §3 for the full entity list and field semantics.",
+  objective: "Define the shared domain types for stock/portfolio/trade entities with JSDoc. All downstream goals import from here. See user request (.opencorvus/intent/request.md) §3 for the full entity list and field semantics.\n\nTest target: src/types/__tests__/stock.test.ts covers Stock/Portfolio/Holding/Trade construction, narrowing, and JSON round-trip; pass criterion = `bun test src/types/` exits 0.",
   acceptance_specs: [
-    { id: "acc-types-build", source_requirement_id: "REQ-3", goal_id: "goal_types",
-      title: "Types compile cleanly", severity: "essential",
+    { id: "acc-goal_types-tests", source_requirement_id: "REQ-3", goal_id: "goal_types",
+      title: "Type contracts pass unit tests", severity: "essential",
       scorers: [
-        { type: "heuristic", name: "tsc",
-          spec: { kind: "shell", cmd: "bun run typecheck" }, expect: { exit_code: 0 } }
+        { type: "heuristic", name: "type-tests",
+          spec: { kind: "shell", cmd: "bun test src/types/" }, expect: { exit_code: 0 } }
       ] }
   ],
-  owned_paths: ["src/types/index.ts", "src/types/stock.ts"],
+  owned_paths: ["src/types/index.ts", "src/types/stock.ts", "src/types/__tests__/stock.test.ts"],
   depends_on: [],
   exports: [
     "type Stock = { id: string; name: string; price: number; volume: number }",
@@ -390,6 +400,7 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 5. **Every goal MUST have exports declaring what it provides** (except `verification` / `system` kinds that legitimately produce nothing).
 6. **Every import MUST reference an existing export from a declared dependency.**
 7. **Mandatory metrics are mandatory** — finalize_architect will reject the output if any are missing.
+7a. **Every goal MUST own one executor-run test target.** That means: one `acc-<goal_id>-tests` acceptance_spec with a shell scorer, the test files in `owned_paths`, and a `Test target:` closing line in `objective`. The executor's exit criterion is a green test command, not a written file. This is what lets delivery trust unit-level correctness without re-running it.
 8. **Write in the same language as the user's request.** Chinese request → Chinese objectives / descriptions. English request → English.
 9. **Use structured tool calls — never plain text output.**
 10. **Batch independent calls in parallel.** A 6-goal decomposition with full metric ruler needs 6 × register_goal + 6 × 4 goal metrics + 4 global metrics + traceability + contracts. Emit these as multiple tool_use blocks per turn wherever there is no data dependency.
@@ -399,7 +410,8 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 1. Does EVERY REQ-N from your input appear in at least one goal's `requirement_ids` (and in the traceability matrix)?
 2. Does every goal have `owned_paths` grounded in real files you read?
 3. Does every goal have at least one acceptance_spec with an executable scorer?
-4. Is every goal's `objective` a lean execution directive — NOT a restatement of the PRD, NOT a list of interface signatures? Interfaces live in `exports`/`imports`; PRD content stays at `.opencorvus/intent/`.
+3a. **Test-target gate** — does every goal have exactly ONE `acc-<goal_id>-tests` acceptance_spec whose `scorers[0]` is an executor-runnable shell command, are the test files listed in `owned_paths`, and does the goal's `objective` end with the `Test target: …; pass criterion = … exits 0.` line? A goal missing any of these three elements is REJECTED.
+4. Is every goal's `objective` a lean execution directive — NOT a restatement of the PRD, NOT a list of interface signatures — AND does it end with the required `Test target:` line? Interfaces live in `exports`/`imports`; PRD content stays at `.opencorvus/intent/`.
 5. Are dependencies correct (bootstrap / data-producer before consumers) and do exports/imports align across dependent pairs?
 6. Have you registered all four mandatory per-goal BLOCKING metrics for EVERY goal?
 7. Have you registered all four mandatory GLOBAL BLOCKING metrics?
