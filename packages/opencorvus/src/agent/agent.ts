@@ -39,7 +39,7 @@ export namespace Agent {
       color: z.string().optional(),
       // Permission ruleset — consumed only by SessionProcessor / SessionPrompt
       // flow (build / spec / plan / general / explore / compaction / title).
-      // Stage agents dispatched through AgentRuntime (orchestrator / requirements /
+      // Stage agents dispatched through SessionPrompt (orchestrator / requirements /
       // architect / planner / design-analyst / delivery / summary) do NOT consult
       // permission; they may omit this field. Code that iterates Agent.Info
       // permission must therefore handle `undefined`.
@@ -239,8 +239,8 @@ export namespace Agent {
         ),
         prompt: PROMPT_TITLE,
       },
-      // ── Stage agents (dispatched through AgentRuntime, not SessionPrompt) ─
-      // These do NOT consume `permission` — AgentRuntime never consults the
+      // ── Stage agents (dispatched through SessionPrompt) ─
+      // These do NOT consume `permission` — the stage-agent path never consults the
       // ruleset and tool execution inside stage agents bypasses the
       // SessionProcessor / tool-resolver permission gates. The field is
       // omitted to stop misleading users into thinking
@@ -293,7 +293,7 @@ export namespace Agent {
         // (buildSystemParts). No static core prompt — the orchestrator's
         // context depends on live task/goal/run state.
         // steps=20 matches the MAX_STEPS budget used by the pre-phase-3
-        // AgentRuntime path. SessionLoop reads this as the `stopWhen`
+        // pre-migration path. SessionLoop reads this as the `stopWhen`
         // equivalent for the orchestrator's child session.
         steps: 20,
         options: {},

@@ -14,7 +14,6 @@ import path from "node:path"
 import { DeliveryAgent, type DeliveryVerdictType } from "./agent"
 import type { GoalInfo, DeliveryInfo } from "./checks"
 import { Log } from "@/util/log"
-import { type TextHooks } from "@/llm/api"
 import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -57,7 +56,10 @@ export namespace DeliveryService {
     delivery: DeliveryInfo
     attachments?: AttachmentLike[]
     signal?: AbortSignal
-    stream?: TextHooks
+    /** Parent session for the delivery child session. Post-phase-3-b the
+     *  delivery agent creates its own child session; this is only an
+     *  optional parent pointer. */
+    parentSessionID?: string
   }): Promise<DeliveryVerdictType> {
     log.info("delivery service verify starting", {
       title: input.task.title,
@@ -109,7 +111,6 @@ export namespace DeliveryService {
         goals: input.goals,
         delivery: input.delivery,
         attachments: input.attachments,
-        stream: input.stream,
         signal: input.signal,
       })
     } catch (error) {

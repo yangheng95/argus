@@ -17,7 +17,7 @@
  *   ✓ Only produces IntentAnalysisResult via structured tool calls
  *
  * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): runs via
- * SessionPrompt.prompt + extraTools instead of AgentRuntime.run + a private
+ * SessionPrompt.prompt + extraTools instead of SessionPrompt.prompt + a private
  * finalize_intent tool. Terminal fields arrive through SessionLoop's
  * StructuredOutput tool driven by `format: { type: "json_schema", schema }`;
  * incremental slots / missing / clarifications are collected by agent-scoped

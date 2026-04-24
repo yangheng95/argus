@@ -15,7 +15,7 @@ import type { Provider } from "@/provider/provider"
 import { textForModel } from "./part-visibility"
 import { isDecodableText } from "./text-mime"
 import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
-import { normalizeToolInput } from "@/agent/runtime/protocol-norm"
+import { normalizeToolInput } from "./tool-input-norm"
 
 /** Coerce a persisted tool_use.input into a dict for outbound AI-SDK messages.
  *  Downstream gateways (notably hexin → litellm → Bedrock) reject tool_use

@@ -315,7 +315,13 @@ await SessionPrompt.prompt({
     - typecheck 通过；216 session+engine 测试通过（5 failures 预存）
 - orchestrator 仍是唯一入口 agent；迁移后的 `requirements / architect / design_analysis / build / deliver` 只允许作为 tool-opened child session 存在。
 - **阶段 3-c**：`architect` 与 **fidelity reviewer** 单独迁移；`submit_fidelity_verdict` 及其 session/event 语义必须在新运行时下逐项复核，禁止和普通 `finalize_*` 一锅端。
-- **阶段 3-d**：**删除 `packages/opencorvus/src/agent/runtime/` 目录**。此步独立 PR，确认无残留引用。
+- **阶段 3-d**（✅ 2026-04-24）：`packages/opencorvus/src/agent/runtime/` 目录整体删除
+  - orchestrator/tools.ts 去掉 requirements/design/architect/delivery 四处 dead sessionStreamHooks 调用（对应 agent 已不消费 stream 参数）
+  - orchestrator/tools.ts 里 refine tool 从 `ProviderLLM.stream` 直接驱动迁到 `SessionPrompt.prompt`
+  - delivery/service.ts 去 `stream: TextHooks` 参数
+  - session/message.ts 的 `normalizeToolInput` 依赖从 `@/agent/runtime/protocol-norm` 迁到本地 `./tool-input-norm`
+  - `rg "AgentRuntime|@/agent/runtime|agent/runtime/" packages/opencorvus/src` = 0 ✓
+  - typecheck clean，216 session+engine 测试通过
 
 **交付**：
 
