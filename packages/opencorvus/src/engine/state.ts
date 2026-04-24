@@ -6,28 +6,6 @@ import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } fro
 import { findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { Identifier } from "@/id/id"
 
-/**
- * Raised by updateTask/updateRun when the caller's row snapshot is stale:
- * the row's status changed between the caller's read and the write.
- *
- * Callers must either retry (refetch + reapply) or bail. Silently swallowing
- * this error will reintroduce the race conditions this CAS pattern was added
- * to fix — do not catch-and-ignore.
- */
-export class StaleRowError extends Error {
-  readonly kind = "StaleRow" as const
-  constructor(
-    readonly entity: "task" | "run" | "goal_run",
-    readonly id: string,
-    readonly expectedStatus: string,
-    readonly attemptedStatus: string,
-  ) {
-    super(
-      `${entity} ${id} is stale: expected status '${expectedStatus}', attempted write to '${attemptedStatus}'`,
-    )
-  }
-}
-
 export async function updateTask(
   row: TaskRow,
   values: Partial<typeof EngineTaskTable.$inferInsert>,
@@ -89,7 +67,13 @@ export async function updateTask(
       // caller must decide (refetch+retry or bail). Throw so every write in
       // this tx rolls back together.
       // For metadata-only updates: the row was deleted — also a caller bug.
-      throw new StaleRowError("task", row.id, row.status, nextStatus)
+      // Compare-and-swap failed: the row's status changed between this
+      // caller's read and the write. Throw so the whole transaction rolls
+      // back; callers must refetch and retry (or bail). Silent swallow
+      // re-introduces the race conditions the CAS was added to prevent.
+      throw new Error(
+        `task ${row.id} is stale: expected status '${row.status}', attempted write to '${nextStatus}'`,
+      )
     }
     db.insert(EngineProgressSnapshotTable)
       .values({

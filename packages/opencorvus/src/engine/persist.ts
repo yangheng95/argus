@@ -46,7 +46,7 @@ export function goalSlug(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "goal"
 }
 
-export interface GoalRowInput {
+interface GoalRowInput {
   goalID?: string
   title: string
   objective: string
@@ -1069,18 +1069,6 @@ function executorLeaseConflict(row: typeof EngineExecutorSessionTable.$inferSele
   return `executor session ${row.id} could not be claimed`
 }
 
-export function claimExecutorSessionLease(input: { executorSessionID: string; now?: number }) {
-  const now = input.now ?? Date.now()
-  return Database.use((db) =>
-    db
-      .update(EngineExecutorSessionTable)
-      .set(leaseWindow(now))
-      .where(claimExecutorSessionLeaseWhere(input.executorSessionID, now))
-      .returning()
-      .get(),
-  )
-}
-
 export function ensureExecutorSession(input: {
   taskID: string
   runID: string
@@ -1226,25 +1214,6 @@ export function updateGoalRunExecutorSessionStatus(
   if (!row) return
   return updateExecutorSessionStatusByID(row.id, status)
 }
-
-export function renewExecutorSessionLease(input: { executorSessionID: string; now?: number }) {
-  const now = input.now ?? Date.now()
-  return Database.use((db) =>
-    db
-      .update(EngineExecutorSessionTable)
-      .set(leaseWindow(now))
-      .where(
-        and(
-          eq(EngineExecutorSessionTable.id, input.executorSessionID),
-          eq(EngineExecutorSessionTable.status, "active"),
-          eq(EngineExecutorSessionTable.lease_owner, executorLeaseOwner()),
-        ),
-      )
-      .returning()
-      .get(),
-  )
-}
-
 
 /** Phase-6-c: delivery rows are append-only `engine_artifact` rows with
  *  kind="delivery". `markDeliveryPublishing` / `finalizeDeliveryResult` now
