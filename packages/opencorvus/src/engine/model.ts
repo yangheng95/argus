@@ -20,8 +20,8 @@ export const ChannelBinding = z.object({
   payload: z.record(z.string(), z.any()).optional(),
 })
 
-export const PlanningProvider = z.enum(["opencorvus", "executor"])
-export const EvaluationProvider = z.enum(["opencorvus", "hybrid"])
+const PlanningProvider = z.enum(["opencorvus", "executor"])
+const EvaluationProvider = z.enum(["opencorvus", "hybrid"])
 
 export const StageRouting = z.object({
   spec: PlanningProvider.optional(),
@@ -184,7 +184,7 @@ export const CheckConfig = z.object({
  * The orchestrator decodes them exactly once at task-creation time, writes them
  * to AttachmentStore, and never carries base64 further into the system.
  */
-export const TaskAttachmentInput = z.object({
+const TaskAttachmentInput = z.object({
   /** MIME type, e.g. "image/png", "application/pdf", "audio/mpeg" */
   mime: z.string(),
   /** Base64-encoded file bytes (no data-URL prefix) */
@@ -210,7 +210,7 @@ export const TaskAttachmentInput = z.object({
  * the field free-form keeps that extension cheap. Missing intent defaults
  * to `visual_reference` for image MIMEs and `spec_artifact` otherwise.
  */
-export const TaskAttachment = z.object({
+const TaskAttachment = z.object({
   /** sha256 hex digest of the file bytes */
   sha: z.string(),
   /** Server-relative URL the overlay (and AI SDK) can GET to fetch the bytes */
@@ -342,7 +342,7 @@ export const Milestone = z.object({
   }),
 })
 
-export const ExecutorRef = z.object({
+const ExecutorRef = z.object({
   sessionID: Identifier.schema("session").optional(),
   queueTaskID: Identifier.schema("task").optional(),
 })
@@ -472,7 +472,7 @@ export const Evaluation = z.object({
   }),
 })
 
-export const ProgressSnapshot = z.object({
+const ProgressSnapshot = z.object({
   id: Identifier.schema("progress"),
   taskID: Identifier.schema("task"),
   status: z.enum(["created", "active", "completed", "failed", "cancelled"]),
