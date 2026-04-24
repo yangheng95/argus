@@ -388,7 +388,10 @@ await SessionPrompt.prompt({
   - `latestEvaluationForGoalRun` 本地函数变为 `const latestEvaluationForGoalRun = findLatestEvaluationForGoalRun`（单一 projection 入口）
   - 剩余 `EngineDeliveryTable / EngineEvaluationTable` 引用均为 `typeof ...$inferSelect` 类型注解（只读类型，不是 SQL 查询），这部分在 phase 6 reset DB 后可自然替换为 store 层返回类型
   - typecheck clean，232 session+engine+build-agent 测试通过；0 regression
-- **5-f**：verification 从 `engine_evaluation` 长期证据表改为只读 artifact stream
+- **5-f**（✅ 2026-04-24 cutover 标注）：verification 模块的长期证据读写语义已由前置 DAM Phase 5 移出 `engine_evaluation`（convergence → `metrics/arbiter.ts`；`engine_evaluation` 仅剩 "verdict wrapper" 角色）。phase 5-f 做了三件事：
+  - `verification/persist.ts` + `verification/index.ts` 头部注释明示 `engine_evaluation` 下 phase 6 删表、evidence 将切到 artifact stream；public API（`persistEvidence / queryEvidence / findLatestGoalRunEvidence / ...`）承诺签名不变，callers（`delivery/tools.ts`）不需要改
+  - 运行时不改，避免在 phase 6 reset DB 前引入双源（rule 22）
+  - 实际 artifact 迁移（`persistEvidence` body 切到 `engine_artifact` label=verification-evidence）与 `engine_evaluation` 删表一起在 phase 6 完成
 - **5-g**：删除 deprecated tools 实现 + GoalPool 剩余骨架（lease / coordinator_run_id / live_goal_run 管理）
 
 **关键风险**：

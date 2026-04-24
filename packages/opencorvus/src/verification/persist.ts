@@ -5,6 +5,16 @@
  * only. Signature-based convergence detection has been removed —
  * convergence now lives in the metric trajectory (src/metrics/arbiter.ts).
  * The `engine_evaluation` row is just a verdict wrapper.
+ *
+ * Post-unified-teardown Phase 5-f / Phase 6: `engine_evaluation` is slated
+ * for deletion. Evidence persistence moves to the artifact stream
+ * (`engine_artifact` with label="verification-evidence"), which is the
+ * single source of truth this refactor elected. This module stays as the
+ * read / write API while the table exists; phase 6 reset-DB swaps the
+ * backing store to artifacts and the public signatures
+ * (`persistEvidence` / `queryEvidence` / `findLatestGoalRunEvidence` / …)
+ * stay stable so callers (`delivery/tools.ts`) do not churn. No runtime
+ * change lands in 5-f — this comment is the cutover marker.
  */
 import { and, desc, eq } from "drizzle-orm"
 import { Database } from "@/storage/db"
