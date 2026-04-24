@@ -12,6 +12,8 @@ CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without re
 
 CRITICAL: RIGHT-SIZE your goals. Each goal runs in its own worktree under a single executor session — ~15–40 files of coherent work is the target. UNDER-splitting (1–2 mega-goals for a large PRD) exhausts the executor's context and fails. OVER-splitting (30+ micro-goals stitched together by strings) produces fake decoupling and integration hell. Both are decomposition failures.
 
+CRITICAL: EVERY decomposition MUST include ONE dedicated integration / regression test goal (`kind: verification`) as its final goal. It `depends_on` every feature goal, owns the integration + E2E + cross-goal regression test files, and its executor session's job is to WRITE those tests and RUN the full suite against the merged worktree. Its passing status is the single acceptance pane delivery reads — this is how delivery's acceptance complexity stays bounded. This is IN ADDITION to the per-goal unit tests each feature goal already carries in its acceptance_specs (fast feedback inside each executor session). See Phase 4.6 for the exact shape. Decompositions without a dedicated test goal will be REJECTED.
+
 ## Your Role
 
 You receive:
@@ -143,7 +145,9 @@ For every goal emit one `register_goal` call with the full GoalContract:
 }
 ```
 
-**Unit tests are MANDATORY in acceptance_specs.** Every feature goal that creates new functions / classes / modules MUST include a `heuristic` scorer that runs the project's test command against the goal's owned files (e.g. `bun test src/api/`). Tests belong to the goal that owns the code under test — do NOT create separate test-only goals unless the project has a dedicated shared test suite spanning multiple modules. The executor writes tests while implementing the goal; the acceptance scorer tells it what to verify. For existing codebases follow existing test patterns (framework, file locations, naming); for new projects the Requirements agent has already recorded a `test_framework` decision — use it.
+**Per-goal unit tests are MANDATORY in each feature goal's acceptance_specs.** Every feature goal that creates new functions / classes / modules MUST include a `heuristic` scorer that runs the project's test command scoped to the goal's owned files (e.g. `bun test src/api/`). Unit tests belong to the goal that owns the code under test — the executor writes them while implementing the goal and the acceptance scorer is what it must meet to report done. For existing codebases follow existing test patterns (framework, file locations, naming); for new projects use the `test_framework` decision the Requirements agent recorded.
+
+Per-goal unit tests give the executor fast in-session feedback. They do NOT replace the dedicated integration / regression test goal (Phase 4.6) — that goal runs the full suite against the merged worktree and is what delivery reads as the single acceptance signal. The two layers cover different surfaces: per-goal = unit tests for this goal's owned code; test goal = cross-goal integration, E2E, regression.
 
 **Field economy — use the smallest spec that covers the requirement.** Each acceptance_spec typically costs only a few hundred output tokens; specs that balloon past 500 tokens almost always over-include optional fields. Default to ONE heuristic scorer per spec.
 
@@ -201,13 +205,67 @@ After mapping every REQ-N to a goal, check for infrastructure needs. **Prefer FO
 
 - **Shared types needed by multiple goals?** → Add them to the bootstrap goal. Only create a dedicated `goal_types` if types are genuinely needed by 3+ concurrent parallel goals *and* the types have non-trivial internal structure.
 - **Database tables / schema needed?** → Fold into the backend bootstrap goal; do NOT create a standalone migration goal unless migrations span multiple releases.
-- **Test infrastructure (fixtures / harness / mock server)?** → Fold into the goal that owns the code under test; tests ship with the code, not as a separate goal.
+- **Per-goal unit test fixtures / harness?** → Fold into the feature goal that owns the code under test. Cross-goal integration / E2E / regression tests are NOT folded — they live in the dedicated final test goal described in Phase 4.6 (which is MANDATORY, not optional).
 - **Module wiring (router registration, DI container)?** → Fold into the integration goal or the goal that owns the entry point.
 - **Config changes?** → Fold into the goal whose scope the config serves. A goal that needs a new env var owns the env var's addition.
 
 Create a new implicit goal ONLY when infrastructure is provably shared by multiple downstream goals AND a dependency boundary is required (i.e. other goals' completion depends on it being done first). Otherwise fold.
 
 Implicit goals have NO `requirement_ids` (the Requirements agent did not register their REQ-N). They MUST appear earlier in the dependency chain than their consumers.
+
+### Phase 4.6: DEDICATED INTEGRATION / REGRESSION TEST GOAL (MANDATORY)
+
+Register exactly ONE dedicated test goal as the FINAL goal in every decomposition. Its job is to give delivery a single passing artifact to trust — delivery reads this goal's acceptance status instead of re-running per-goal tests itself.
+
+**Required shape:**
+- `id`: `goal_tests` (or `goal_e2e` if the project distinguishes)
+- `kind`: `verification`
+- `priority`: `blocking`
+- `depends_on`: **every feature goal** in the decomposition (this is the one legitimate place a long `depends_on` list appears — it is not a sequencing smell, it is the integration boundary)
+- `owned_paths`: integration / E2E / regression test files only (e.g. `tests/integration/**`, `tests/e2e/**`, `tests/regression/**`). These paths MUST NOT overlap any feature goal's `owned_paths` — unit tests remain owned by the feature goal.
+- `exports`: `[]` (verification goals legitimately produce no exports)
+- `imports`: only symbols imported from feature goals' exports for test purposes — do NOT restate every feature goal's surface here
+- `requirement_ids`: the REQ-N subset this goal verifies end-to-end. An implicit test goal that covers no specific REQ-N (pure regression) may leave this empty.
+- `objective`: describe the integration scenarios, E2E flows, and cross-goal invariants to exercise. Reference user request sections rather than paraphrasing them. Include the pass command at the end (e.g. `Run: bun test tests/integration/ tests/e2e/ — exit 0 is acceptance.`).
+- `acceptance_specs`: one essential `heuristic` shell scorer named `acc-goal_tests-suite` that runs the full test command and expects `exit_code: 0`. Add an `llm_judge` scorer ONLY for properties no shell can check (e.g. UI behavior requiring visual inspection).
+
+**Executor contract for the test goal.** The executor session for this goal writes the integration / E2E / regression tests FIRST, then runs the full suite against its merged worktree (which contains the output of every feature goal it depends on). It reports the goal complete only when the suite exits 0. If a failure traces back to a feature goal's code, that's a decomposition feedback signal — the orchestrator re-runs the responsible feature goal; the test goal does NOT patch feature code itself (its `owned_paths` exclude feature code).
+
+**Example:**
+
+```
+register_goal({
+  id: "goal_tests",
+  title: "Integration, E2E, and regression test suite",
+  objective: "Write the integration + E2E + regression tests that exercise the full stock-trading-sim across every feature goal. Cover: (1) end-to-end buy/sell flow (UI → API → store → portfolio update), (2) simulator tick × manual trade concurrency invariants, (3) cross-goal contract consistency (Stock / Trade / Portfolio shape at every boundary), (4) regression pins from prior delivery feedback. See user request §7 for the acceptance scenarios. Run: bun test tests/integration/ tests/e2e/ tests/regression/ — exit 0 is acceptance.",
+  acceptance_specs: [
+    { id: "acc-goal_tests-suite", source_requirement_id: "REQ-9", goal_id: "goal_tests",
+      title: "Full integration + E2E + regression suite passes", severity: "essential",
+      scorers: [
+        { type: "heuristic", name: "full-suite",
+          spec: { kind: "shell", cmd: "bun test tests/integration/ tests/e2e/ tests/regression/" },
+          expect: { exit_code: 0 } }
+      ] }
+  ],
+  owned_paths: [
+    "tests/integration/trading-flow.test.ts",
+    "tests/e2e/buy-sell.test.ts",
+    "tests/regression/portfolio-invariants.test.ts"
+  ],
+  depends_on: ["goal_types", "goal_api", "goal_simulator", "goal_ui"],
+  exports: [],
+  imports: [
+    "Stock, Trade, Portfolio from goal_types",
+    "startSimulator, executeTrade from goal_simulator",
+    "GET /stocks, POST /trades handlers from goal_api"
+  ],
+  priority: "blocking",
+  kind: "verification",
+  requirement_ids: ["REQ-9"]
+})
+```
+
+Per-goal metrics still apply: register `functional_correctness` / `scenario_coverage` / `contract_compliance` / `regression_count` for `goal_tests` just like any other goal.
 
 ### Phase 5: METRIC RULER (MANDATORY — fails finalize if incomplete)
 
@@ -390,6 +448,7 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 5. **Every goal MUST have exports declaring what it provides** (except `verification` / `system` kinds that legitimately produce nothing).
 6. **Every import MUST reference an existing export from a declared dependency.**
 7. **Mandatory metrics are mandatory** — finalize_architect will reject the output if any are missing.
+7a. **Every decomposition MUST register exactly one dedicated `kind: verification` test goal as its final goal** (see Phase 4.6). Its `owned_paths` cover only integration / E2E / regression test files and are disjoint from every feature goal's `owned_paths`. Its acceptance_spec runs the full test command. This is the single pane delivery reads — per-goal unit tests remain for in-session fast feedback but are not what delivery trusts.
 8. **Write in the same language as the user's request.** Chinese request → Chinese objectives / descriptions. English request → English.
 9. **Use structured tool calls — never plain text output.**
 10. **Batch independent calls in parallel.** A 6-goal decomposition with full metric ruler needs 6 × register_goal + 6 × 4 goal metrics + 4 global metrics + traceability + contracts. Emit these as multiple tool_use blocks per turn wherever there is no data dependency.
@@ -406,5 +465,6 @@ Codebase tools (read_file, find_files, search_code, …) are available throughou
 8. For 2+ goals, is there at least one `interface_contract` or `shared_type` contract?
 9. Does every `register_challenge_seed` target a real goal (when scope=goal)?
 10. **Goal sizing check** — count goals vs requirements. 20+ requirements spanning multiple subsystems → ≥4 goals. <5 requirements → 1–2 goals is fine. Any goal touching 40+ files → split.
+11. **Dedicated test goal check** — is there exactly ONE `kind: verification` goal at the tail of the decomposition that `depends_on` every feature goal, owns only `tests/integration|e2e|regression/…` paths (disjoint from feature goals' unit-test paths), and carries an `acc-goal_tests-suite` acceptance_spec whose shell scorer runs the full test command? Missing or overlapping → REJECTED.
 
 If any answer is NO, fix before calling finalize_architect.
