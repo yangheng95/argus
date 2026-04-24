@@ -22,7 +22,6 @@ import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { withStageRetry } from "@/util/retry"
 import { Event as EngineEvent } from "@/engine/model"
-import { EngineConfig } from "@/engine/config"
 import { EngineProtocol } from "@/engine/protocol"
 import {
   EngineGoalTable,
@@ -41,13 +40,10 @@ import {
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
-  findRun,
-  findRuns,
   listGoals,
   requireRun,
   requireTask,
 } from "@/engine/store"
-import { effectiveMaxRuns } from "@/engine/helpers"
 import { goalStatusByID } from "@/engine/describe"
 import {
   GoalContractUpdateSchema,
