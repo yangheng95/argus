@@ -192,6 +192,26 @@ export function findPlans(taskID: string) {
   )
 }
 
+/** Phase-6-f: return the single active plan version for a task, derived
+ *  from `engine_plan_version.status = 'active'`. Replaces the
+ *  `task.active_plan_version_id` cache column. Returns undefined when the
+ *  task has no active plan. */
+export function findActivePlanForTask(taskID: string): PlanRow | undefined {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EnginePlanVersionTable)
+      .where(
+        and(
+          eq(EnginePlanVersionTable.task_id, taskID),
+          eq(EnginePlanVersionTable.status, "active"),
+        ),
+      )
+      .orderBy(desc(EnginePlanVersionTable.version))
+      .get(),
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Spec store functions
 // ---------------------------------------------------------------------------
@@ -1144,7 +1164,9 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     directory: input?.directory,
     sessionID: row.session_id ?? undefined,
     activeSpecVersionID: row.active_spec_version_id ?? undefined,
-    activePlanVersionID: row.active_plan_version_id ?? undefined,
+    /** Phase-6-f: derived live from engine_plan_version.status = 'active'
+     *  (was a cache column on engine_task). */
+    activePlanVersionID: findActivePlanForTask(row.id)?.id,
     activeRunID: row.active_run_id ?? undefined,
     requestID: row.request_id ?? undefined,
     source: row.source,

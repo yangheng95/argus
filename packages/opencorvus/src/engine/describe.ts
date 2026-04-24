@@ -37,8 +37,8 @@ import {
   operatorNotesSection,
 } from "./helpers"
 import {
+  findActivePlanForTask,
   findLatestDeliveryVerdictArtifact,
-  findPlan,
   findRun,
   findRuns,
   findSpecSnapshot,
@@ -316,9 +316,9 @@ export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   }
 
   let planSummary: string | undefined
-  if (task.active_plan_version_id) {
-    const plan = findPlan(task.active_plan_version_id)
-    planSummary = plan?.summary
+  const activePlan = findActivePlanForTask(task.id)
+  if (activePlan) {
+    planSummary = activePlan.summary
   }
 
   let activeRunStatus: string | undefined

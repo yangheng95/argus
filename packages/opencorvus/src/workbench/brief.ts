@@ -3,6 +3,7 @@ import { Memory } from "@/memory"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { Database, desc, eq } from "@/storage/db"
 import { EngineGoalTable, EnginePlanVersionTable, EngineTaskTable } from "@/engine"
+import { findActivePlanForTask } from "@/engine/store"
 import { WorkbenchBriefSnapshotTable, WorkbenchTaskNoteTable } from "./workbench.sql"
 
 const BRIEF_VERSION = "brief-v2"
@@ -15,7 +16,7 @@ export function compileBrief(input: {
 }) {
   const task = Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
-  const planID = input.planVersionID ?? task.active_plan_version_id ?? undefined
+  const planID = input.planVersionID ?? findActivePlanForTask(task.id)?.id
   const plan = planID
     ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, planID)).get())
     : undefined
