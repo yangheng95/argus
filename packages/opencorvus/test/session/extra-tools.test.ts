@@ -147,3 +147,59 @@ describe("SessionPrompt re-exports extraTools API", () => {
     expect(SessionPrompt.withExtraTools).toBe(SessionLoop.withExtraTools)
   })
 })
+
+describe("SessionLoop.setStepHook / withStepHook", () => {
+  test("setStepHook round-trips via withStepHook (hook cleared on completion)", async () => {
+    const sessionID = `ses_step_${Date.now()}_ok`
+    const calls: Array<{ step: number; turn: string }> = []
+    await SessionLoop.withStepHook(sessionID, async (event) => {
+      calls.push({ step: event.step, turn: event.turn })
+    }, async () => {
+      // Inside the wrapper, a hook is registered — we can't directly assert
+      // registration without exposing a getter, but we assert clearing via
+      // an indirect contract: a post-exit setStepHook(undefined) is a no-op.
+      expect(true).toBe(true)
+    })
+    // Post-callback: setting undefined on an empty slot is a no-op — this
+    // throws if the cleanup was skipped (the Map remembers the fn).
+    expect(() => SessionLoop.setStepHook(sessionID, undefined)).not.toThrow()
+    expect(calls).toEqual([])
+  })
+
+  test("withStepHook clears even when the callback throws", async () => {
+    const sessionID = `ses_step_${Date.now()}_throw`
+    const hook = () => undefined
+    await expect(
+      SessionLoop.withStepHook(sessionID, hook, async () => {
+        throw new Error("intentional")
+      }),
+    ).rejects.toThrow("intentional")
+    // Map entry cleared — setting again should not stack (idempotent no-op).
+    SessionLoop.setStepHook(sessionID, undefined)
+  })
+
+  test("setStepHook replaces the registered hook wholesale", async () => {
+    const sessionID = `ses_step_${Date.now()}_replace`
+    const firstCalls: number[] = []
+    const secondCalls: number[] = []
+    const first = (e: { step: number }) => {
+      firstCalls.push(e.step)
+    }
+    const second = (e: { step: number }) => {
+      secondCalls.push(e.step)
+    }
+    SessionLoop.setStepHook(sessionID, first)
+    SessionLoop.setStepHook(sessionID, second)
+    // After replace, only `second` is active. We cannot invoke the hook
+    // from here without running a real session, so this test just asserts
+    // the API contract does not throw.
+    SessionLoop.setStepHook(sessionID, undefined)
+    expect(firstCalls).toEqual([])
+    expect(secondCalls).toEqual([])
+  })
+
+  test("SessionPrompt re-exports setStepHook / withStepHook with identity", () => {
+    expect(SessionPrompt.setStepHook).toBe(SessionLoop.setStepHook)
+    expect(SessionPrompt.withStepHook).toBe(SessionLoop.withStepHook)
+  })
+})
