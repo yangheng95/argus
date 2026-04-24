@@ -32,10 +32,10 @@ function seedProjectAndTask() {
       source: "test",
       title: "helpers caps",
       request: "caps test",
-      status: "active",
       priority: "normal",
       time_created: now,
       time_updated: now,
+      time_started: now,
     }).run(),
   )
 }

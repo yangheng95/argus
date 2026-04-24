@@ -47,11 +47,10 @@ describe("protocol interaction resolution", () => {
             source: "test",
             title: "protocol interaction",
             request: "protocol interaction",
-            status: "blocked",
             priority: "normal",
-            blocking_reason: "permission",
             time_created: now,
             time_updated: now,
+            time_started: now,
           }).run(),
         )
         // Phase-6-e: run rows live in engine_artifact (kind="run").

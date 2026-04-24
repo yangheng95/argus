@@ -82,11 +82,11 @@ describe("BuildAgent.run (real-LLM smoke)", () => {
               source: "test",
               title: "build smoke",
               request: "add README",
-              status: "active",
               priority: "normal",
               budget: { max_executor_groups: 1 } as any,
               time_created: now,
               time_updated: now,
+              time_started: now,
             }).run(),
           )
           const task = findTask(taskID)

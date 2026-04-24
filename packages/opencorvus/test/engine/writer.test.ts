@@ -49,10 +49,10 @@ describe("engine writer goal workspace cleanup", () => {
             source: "test",
             title: "writer cleanup task",
             request: "cleanup workspace",
-            status: "active",
             priority: "normal",
             time_created: now,
             time_updated: now,
+            time_started: now,
           }).run()
 
           db.insert(EngineGoalTable).values({

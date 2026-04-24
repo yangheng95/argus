@@ -37,10 +37,10 @@ describe("task conversation routes", () => {
             source: "panel",
             title: "hydrate fidelity replay",
             request: "hydrate fidelity replay",
-            status: "active",
             priority: "normal",
             time_created: now,
             time_updated: now,
+            time_started: now,
           }).run(),
         )
 

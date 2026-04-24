@@ -47,10 +47,10 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             source: "api",
             title: "Export coverage",
             request: "Export the full task state",
-            status: "completed",
             priority: "normal",
             time_created: now,
             time_updated: now,
+            time_started: now,
             time_completed: now,
           })
           .run()
