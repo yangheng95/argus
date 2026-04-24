@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { advanceQueue, dispatchTaskLoop, taskCwd } from "../../src/engine/queue"
-import { EngineRunTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
@@ -166,12 +166,27 @@ describe("engine queue", () => {
             time_created: now,
             time_updated: now,
           }).run()
-          db.insert(EngineRunTable).values({
+          // Phase-6-e: run rows live in engine_artifact (kind="run").
+          db.insert(EngineArtifactTable).values({
             id: runID,
             task_id: taskID,
-            executor: "opencode",
-            status: "failed",
-            phase: "dispatch",
+            run_id: runID,
+            kind: "run",
+            label: "run-failed",
+            payload: {
+              plan_version_id: null,
+              session_id: null,
+              executor: "opencode",
+              status: "failed",
+              phase: "dispatch",
+              blocking_reason: null,
+              error: null,
+              retry_count: 0,
+              executor_ref: null,
+              metadata: null,
+              time_started: null,
+              time_completed: now,
+            },
             time_created: now,
             time_updated: now,
           }).run()

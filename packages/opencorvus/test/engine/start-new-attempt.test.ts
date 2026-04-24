@@ -4,7 +4,6 @@ import { ProjectTable } from "../../src/project/project.sql"
 import {
   EngineArtifactTable,
   EngineGoalTable,
-  EngineRunTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { startNewAttempt } from "../../src/engine/persist"
@@ -49,13 +48,27 @@ function seedBaseline() {
       time_created: now,
       time_updated: now,
     }).run()
-    db.insert(EngineRunTable).values({
+    // Phase-6-e: run rows live in engine_artifact (kind="run").
+    db.insert(EngineArtifactTable).values({
       id: runID,
       task_id: taskID,
-      executor: "opencode",
-      status: "running",
-      phase: "execute",
-      retry_count: 0,
+      run_id: runID,
+      kind: "run",
+      label: "run-running",
+      payload: {
+        plan_version_id: null,
+        session_id: null,
+        executor: "opencode",
+        status: "running",
+        phase: "execute",
+        blocking_reason: null,
+        error: null,
+        retry_count: 0,
+        executor_ref: null,
+        metadata: null,
+        time_started: now,
+        time_completed: null,
+      },
       time_created: now,
       time_updated: now,
     }).run()

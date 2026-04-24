@@ -1,5 +1,5 @@
 import { integer, sqliteTable, text, index } from "drizzle-orm/sqlite-core"
-import { EnginePlanVersionTable, EngineRunTable, EngineTaskTable } from "@/engine"
+import { EnginePlanVersionTable, EngineTaskTable } from "@/engine"
 import { Timestamps } from "@/storage/schema.sql"
 
 export type WorkbenchNoteKind =
@@ -17,7 +17,7 @@ export const WorkbenchTaskNoteTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => EngineRunTable.id, { onDelete: "set null" }),
+    run_id: text(),
     kind: text().notNull().$type<WorkbenchNoteKind>(),
     source: text().notNull().default("user_message"),
     user_id: text(),
@@ -40,7 +40,7 @@ export const WorkbenchBriefSnapshotTable = sqliteTable(
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
     plan_version_id: text().references(() => EnginePlanVersionTable.id, { onDelete: "set null" }),
-    run_id: text().references(() => EngineRunTable.id, { onDelete: "set null" }),
+    run_id: text(),
     content: text().notNull(),
     inputs: text({ mode: "json" }).$type<Record<string, unknown>>(),
     ...Timestamps,

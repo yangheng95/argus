@@ -10,9 +10,9 @@ import { Message } from "@/session"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import {
+  EngineArtifactTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
-  EngineRunTable,
   EngineTaskTable,
 } from "./engine.sql"
 import { Event } from "./model"
@@ -37,6 +37,7 @@ import {
   goalRunQueueTaskID,
   listActiveGoalRunsForRun,
   listGoalRunsForRun,
+  listLiveRunsForProject,
   listPlanNodesByPlan,
   requireRun,
   requireTask,
@@ -378,17 +379,10 @@ function toNumber(value: unknown) {
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
 export function hasActiveSessions(): boolean {
   try {
-    return Database.use((db) =>
-      db.select({ id: EngineRunTable.id })
-        .from(EngineRunTable)
-        .innerJoin(EngineTaskTable, eq(EngineRunTable.task_id, EngineTaskTable.id))
-        .where(and(
-          eq(EngineTaskTable.project_id, Instance.project.id),
-          inArray(EngineRunTable.status, EXECUTOR_ACTIVE_RUN_STATUSES),
-        ))
-        .limit(1)
-        .get(),
-    ) !== undefined
+    const runs = listLiveRunsForProject(Instance.project.id)
+    return runs.some((r) =>
+      (EXECUTOR_ACTIVE_RUN_STATUSES as readonly string[]).includes(r.status),
+    )
   } catch {
     return false
   }
@@ -406,19 +400,9 @@ export namespace EngineRuntime {
     if (current.syncing) return
     current.syncing = true
     try {
-      const rows = Database.use((db) =>
-        db
-          .select({ id: EngineRunTable.id })
-          .from(EngineRunTable)
-          .innerJoin(EngineTaskTable, eq(EngineRunTable.task_id, EngineTaskTable.id))
-          .where(
-            and(
-              eq(EngineTaskTable.project_id, Instance.project.id),
-              inArray(EngineRunTable.status, RUNTIME_MONITORED_RUN_STATUSES),
-            ),
-          )
-          .all(),
-      )
+      const rows = listLiveRunsForProject(Instance.project.id)
+        .filter((r) => (RUNTIME_MONITORED_RUN_STATUSES as readonly string[]).includes(r.status))
+        .map((r) => ({ id: r.id }))
       await Promise.allSettled(
         rows.map((row) =>
           Promise.race([
@@ -820,7 +804,7 @@ type RuntimeHooks = {
   ) => Promise<TaskRow>
   updateRun: (
     row: RunRow,
-    values: Partial<typeof EngineRunTable.$inferInsert>,
+    values: Partial<RunRow>,
     summary: string,
   ) => Promise<RunRow>
 }

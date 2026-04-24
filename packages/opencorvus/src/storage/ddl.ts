@@ -556,29 +556,15 @@ CREATE INDEX IF NOT EXISTS engine_plan_node_task_idx ON engine_plan_node (task_i
 CREATE INDEX IF NOT EXISTS engine_plan_node_plan_idx ON engine_plan_node (plan_version_id);
 CREATE INDEX IF NOT EXISTS engine_plan_node_goal_idx ON engine_plan_node (goal_id);
 
-CREATE TABLE IF NOT EXISTS engine_run (
-  id              text PRIMARY KEY,
-  task_id         text NOT NULL,
-  plan_version_id text,
-  session_id      text,
-  executor        text NOT NULL DEFAULT 'opencode',
-  status          text NOT NULL DEFAULT 'queued',
-  phase           text NOT NULL DEFAULT 'execute',
-  blocking_reason text,
-  error           text,
-  retry_count     integer NOT NULL DEFAULT 0,
-  executor_ref    text,
-  metadata        text,
-  time_started    integer,
-  time_completed  integer,
-  time_created    integer NOT NULL,
-  time_updated    integer NOT NULL,
-  FOREIGN KEY (task_id)         REFERENCES engine_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES engine_plan_version(id) ON DELETE SET NULL,
-  FOREIGN KEY (session_id)      REFERENCES session(id)                   ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS engine_run_task_idx   ON engine_run (task_id);
-CREATE INDEX IF NOT EXISTS engine_run_status_idx ON engine_run (status);
+-- Phase-6-e: engine_run was removed in favour of engine_artifact rows with
+-- kind='run'. See engine/writer.ts (createRun) + engine/state.ts (updateRun)
+-- for the writer and engine/store.ts (RunRow / artifactRowToRunRow /
+-- latestPerRun) for the read-model. Append-only — status transitions are new
+-- rows per logical run_id; findRun takes the newest via time_created desc +
+-- id desc tiebreak. Other tables (engine_artifact.run_id NOT NULL,
+-- engine_interaction_request.run_id, engine_executor_session.run_id NOT NULL,
+-- protocol_event.run_id, workbench_task_note.run_id, workbench_brief_snapshot.run_id)
+-- are plain text pointers now (no FK).
 
 -- Phase-6-d: engine_goal_run was removed in favour of engine_artifact rows
 -- with kind='goal_run_attempt'. See engine/persist.ts for the writer (first
@@ -607,7 +593,6 @@ CREATE TABLE IF NOT EXISTS engine_interaction_request (
   time_created  integer NOT NULL,
   time_updated  integer NOT NULL,
   FOREIGN KEY (task_id)    REFERENCES engine_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)     REFERENCES engine_run(id)  ON DELETE CASCADE,
   FOREIGN KEY (session_id) REFERENCES session(id)           ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS engine_interaction_run_idx      ON engine_interaction_request (run_id);
@@ -631,8 +616,7 @@ CREATE TABLE IF NOT EXISTS engine_artifact (
   payload      text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id)     REFERENCES engine_task(id)     ON DELETE CASCADE,
-  FOREIGN KEY (run_id)      REFERENCES engine_run(id)      ON DELETE CASCADE
+  FOREIGN KEY (task_id)     REFERENCES engine_task(id)     ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS engine_artifact_run_idx      ON engine_artifact (run_id);
 CREATE INDEX IF NOT EXISTS engine_artifact_delivery_idx ON engine_artifact (delivery_id);
@@ -673,8 +657,7 @@ CREATE TABLE IF NOT EXISTS engine_executor_session (
   time_completed   integer,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES engine_run(id)  ON DELETE CASCADE
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS engine_executor_session_task_idx     ON engine_executor_session (task_id);
 CREATE INDEX IF NOT EXISTS engine_executor_session_run_idx ON engine_executor_session (run_id);
@@ -832,8 +815,7 @@ CREATE TABLE IF NOT EXISTS workbench_task_note (
   metadata     text,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES engine_run(id)  ON DELETE SET NULL
+  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS workbench_task_note_task_idx ON workbench_task_note (task_id);
 CREATE INDEX IF NOT EXISTS workbench_task_note_run_idx  ON workbench_task_note (run_id);
@@ -849,8 +831,7 @@ CREATE TABLE IF NOT EXISTS workbench_brief_snapshot (
   time_created    integer NOT NULL,
   time_updated    integer NOT NULL,
   FOREIGN KEY (task_id)         REFERENCES engine_task(id)         ON DELETE CASCADE,
-  FOREIGN KEY (plan_version_id) REFERENCES engine_plan_version(id) ON DELETE SET NULL,
-  FOREIGN KEY (run_id)          REFERENCES engine_run(id)          ON DELETE SET NULL
+  FOREIGN KEY (plan_version_id) REFERENCES engine_plan_version(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS workbench_brief_task_idx ON workbench_brief_snapshot (task_id);
 CREATE INDEX IF NOT EXISTS workbench_brief_run_idx  ON workbench_brief_snapshot (run_id);
@@ -881,7 +862,7 @@ CREATE TABLE IF NOT EXISTS protocol_event (
   aggregate_type  text NOT NULL,
   aggregate_id    text NOT NULL,
   task_id         text REFERENCES engine_task(id) ON DELETE CASCADE,
-  run_id          text REFERENCES engine_run(id) ON DELETE SET NULL,
+  run_id          text,
   goal_run_id     text,
   session_id      text REFERENCES session(id) ON DELETE SET NULL,
   interaction_id  text REFERENCES engine_interaction_request(id) ON DELETE SET NULL,

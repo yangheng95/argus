@@ -17,7 +17,6 @@ import {
   EnginePlanVersionTable,
   EngineProgressSnapshotTable,
   EngineRequirementTable,
-  EngineRunTable,
   EngineSpecItemTable,
   EngineSpecSnapshotTable,
   EngineTaskTable,
@@ -38,7 +37,29 @@ export type TaskRow = typeof EngineTaskTable.$inferSelect
 export type PlanRow = typeof EnginePlanVersionTable.$inferSelect
 export type GoalRow = typeof EngineGoalTable.$inferSelect
 export type MilestoneRow = typeof EngineMilestoneTable.$inferSelect
-export type RunRow = typeof EngineRunTable.$inferSelect
+/** Phase-6-e artifact-backed run shape. Was `typeof EngineRunTable.$inferSelect`
+ *  until `engine_run` was deleted in favour of `engine_artifact` rows with
+ *  kind="run". Field names stay snake_case so old consumers do not churn.
+ *  Reconstructed via `artifactRowToRunRow()` below. Append-only: each status
+ *  transition writes a new artifact row with the same logical run_id. */
+export type RunRow = {
+  id: string
+  task_id: string
+  plan_version_id: string | null
+  session_id: string | null
+  executor: import("./engine.sql").EngineExecutor
+  status: import("./engine.sql").EngineRunStatus
+  phase: import("./engine.sql").EngineRunPhase
+  blocking_reason: string | null
+  error: string | null
+  retry_count: number
+  executor_ref: import("./engine.sql").EngineExecutorRef | null
+  metadata: EngineMetadata | null
+  time_started: number | null
+  time_completed: number | null
+  time_created: number
+  time_updated: number
+}
 export type InteractionRow = typeof EngineInteractionRequestTable.$inferSelect
 /** Phase-6-c artifact-backed delivery shape. Was `typeof EngineDeliveryTable.$inferSelect`
  *  until `engine_delivery` was deleted in favour of `engine_artifact` rows with
@@ -252,8 +273,23 @@ export function viewSpecItem(row: SpecItemRow) {
 
 // ---------------------------------------------------------------------------
 
-export function findRun(runID: string) {
-  return Database.use((db) => db.select().from(EngineRunTable).where(eq(EngineRunTable.id, runID)).get())
+export function findRun(runID: string): RunRow | undefined {
+  // Phase-6-e: run rows are engine_artifact kind="run", append-only per
+  // logical run_id. Tie-break on id so same-ms appends resolve deterministically.
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.run_id, runID),
+          eq(EngineArtifactTable.kind, "run"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .get(),
+  )
+  return row ? artifactRowToRunRow(row) : undefined
 }
 
 export function findInteraction(interactionID: string) {
@@ -728,33 +764,42 @@ export function listMilestones(taskID: string) {
   )
 }
 
-export function findRuns(taskID: string) {
-  return Database.use((db) =>
+export function findRuns(taskID: string): RunRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineRunTable)
-      .where(eq(EngineRunTable.task_id, taskID))
-      .orderBy(desc(EngineRunTable.time_created))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "run"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all(),
   )
+  return latestPerRun(rows).map(artifactRowToRunRow)
 }
 
-export function listLiveRunsForProject(projectID: string) {
-  return Database.use((db) =>
+export function listLiveRunsForProject(projectID: string): RunRow[] {
+  const rows = Database.use((db) =>
     db
-      .select({ run: EngineRunTable })
-      .from(EngineRunTable)
-      .innerJoin(EngineTaskTable, eq(EngineRunTable.task_id, EngineTaskTable.id))
+      .select({ artifact: EngineArtifactTable })
+      .from(EngineArtifactTable)
+      .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
       .where(
         and(
           eq(EngineTaskTable.project_id, projectID),
-          inArray(EngineRunTable.status, LIVE_RUN_STATUSES),
+          eq(EngineArtifactTable.kind, "run"),
         ),
       )
-      .orderBy(desc(EngineRunTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .all()
-      .map((row) => row.run),
+      .map((row) => row.artifact),
   )
+  return latestPerRun(rows)
+    .map(artifactRowToRunRow)
+    .filter((r) => (LIVE_RUN_STATUSES as readonly string[]).includes(r.status))
 }
 
 export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
@@ -1066,23 +1111,30 @@ export function listSnapshots(taskID: string) {
   )
 }
 
-export function activeRunBySession(sessionID: string) {
-  const row = Database.use((db) =>
+export function activeRunBySession(sessionID: string): RunRow | undefined {
+  // Phase-6-e: run rows live in engine_artifact (kind="run"). Filter to
+  // artifacts whose payload.session_id matches, then pick the latest per
+  // logical run_id in a DISPATCHABLE_RUN_STATUSES state.
+  const rows = Database.use((db) =>
     db
-      .select({ run: EngineRunTable })
-      .from(EngineRunTable)
-      .innerJoin(EngineTaskTable, eq(EngineRunTable.task_id, EngineTaskTable.id))
+      .select({ artifact: EngineArtifactTable })
+      .from(EngineArtifactTable)
+      .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
       .where(
         and(
-          eq(EngineRunTable.session_id, sessionID),
           eq(EngineTaskTable.project_id, Instance.project.id),
-          inArray(EngineRunTable.status, DISPATCHABLE_RUN_STATUSES),
+          eq(EngineArtifactTable.kind, "run"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.session_id') = ${sessionID}`,
         ),
       )
-      .orderBy(desc(EngineRunTable.time_created))
-      .get(),
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
+      .all()
+      .map((row) => row.artifact),
   )
-  return row?.run
+  const collapsed = latestPerRun(rows).map(artifactRowToRunRow)
+  return collapsed.find((r) =>
+    (DISPATCHABLE_RUN_STATUSES as readonly string[]).includes(r.status),
+  )
 }
 
 export function viewTask(row: TaskRow, input?: { directory?: string }) {
@@ -1354,6 +1406,59 @@ function arrayOfChecks(input: unknown): EngineEvaluationCheck[] {
     const parsed = EvaluationCheck.safeParse(item)
     return parsed.success ? [parsed.data] : []
   })
+}
+
+/** Phase-6-e helper: collapse the append-only run artifact stream into
+ *  one row per logical run_id (the newest). Input must arrive sorted
+ *  `time_created desc, id desc` so first-seen = newest. */
+function latestPerRun(
+  rows: Array<typeof EngineArtifactTable.$inferSelect>,
+): Array<typeof EngineArtifactTable.$inferSelect> {
+  const seen = new Set<string>()
+  const result: Array<typeof EngineArtifactTable.$inferSelect> = []
+  for (const row of rows) {
+    const key = row.run_id
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(row)
+  }
+  return result
+}
+
+/** Reconstruct a `RunRow` from an `engine_artifact` row with kind="run". */
+function artifactRowToRunRow(row: typeof EngineArtifactTable.$inferSelect): RunRow {
+  const payload = (row.payload ?? {}) as {
+    plan_version_id?: string | null
+    session_id?: string | null
+    executor?: import("./engine.sql").EngineExecutor
+    status?: import("./engine.sql").EngineRunStatus
+    phase?: import("./engine.sql").EngineRunPhase
+    blocking_reason?: string | null
+    error?: string | null
+    retry_count?: number
+    executor_ref?: import("./engine.sql").EngineExecutorRef | null
+    metadata?: EngineMetadata | null
+    time_started?: number | null
+    time_completed?: number | null
+  }
+  return {
+    id: row.run_id,
+    task_id: row.task_id,
+    plan_version_id: payload.plan_version_id ?? null,
+    session_id: payload.session_id ?? null,
+    executor: payload.executor ?? "opencode",
+    status: payload.status ?? "queued",
+    phase: payload.phase ?? "dispatch",
+    blocking_reason: payload.blocking_reason ?? null,
+    error: payload.error ?? null,
+    retry_count: payload.retry_count ?? 0,
+    executor_ref: payload.executor_ref ?? null,
+    metadata: payload.metadata ?? null,
+    time_started: payload.time_started ?? null,
+    time_completed: payload.time_completed ?? null,
+    time_created: row.time_created,
+    time_updated: row.time_updated,
+  }
 }
 
 /** Phase-6-d helper: collapse the append-only goal_run artifact stream into

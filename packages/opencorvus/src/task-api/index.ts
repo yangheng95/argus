@@ -33,7 +33,6 @@ import {
   EngineGoalTable,
   EngineInteractionRequestTable,
   EngineProgressSnapshotTable,
-  EngineRunTable,
   EngineTaskTable,
   type EngineInteractionStatus,
   type EngineMetadata,

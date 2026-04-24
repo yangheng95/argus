@@ -20,7 +20,7 @@ import { Log } from "@/util/log"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { GOAL_RUN_RESETTABLE_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
-import { EngineRunTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
+import { EngineArtifactTable, EngineTaskTable, type EngineRunStatus } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import {
@@ -30,6 +30,7 @@ import {
 } from "./persist"
 import {
   findGoal,
+  findRun,
   findRuns,
   goalRunQueueTaskID,
   listGoals,
@@ -79,22 +80,35 @@ export interface CreateRunInput {
  * transaction — matches the behavior the tools previously inlined.
  */
 export function createRun(input: CreateRunInput): RunRow {
+  // Phase-6-e: run rows live in engine_artifact (kind="run"). First insert
+  // sets id = run_id (self-reference) so other tables' plain-text run_id
+  // pointers resolve to a valid artifact row.
   const runID = Identifier.ascending("run")
   const now = input.now ?? Date.now()
   const summary = input.summary ?? `run created (${input.status})`
-  let inserted: RunRow | undefined
+  const payload = {
+    plan_version_id: input.planVersionID ?? null,
+    session_id: input.sessionID ?? null,
+    executor: input.executor,
+    status: input.status,
+    phase: input.phase ?? "dispatch",
+    retry_count: input.retryCount ?? 0,
+    blocking_reason: null,
+    error: null,
+    executor_ref: null,
+    metadata: input.metadata ?? {},
+    time_started: null,
+    time_completed: null,
+  }
   Database.transaction((db) => {
-    db.insert(EngineRunTable)
+    db.insert(EngineArtifactTable)
       .values({
         id: runID,
         task_id: input.taskID,
-        plan_version_id: input.planVersionID ?? null,
-        session_id: input.sessionID ?? null,
-        executor: input.executor,
-        status: input.status,
-        phase: input.phase ?? "dispatch",
-        retry_count: input.retryCount ?? 0,
-        metadata: input.metadata ?? {},
+        run_id: runID,
+        kind: "run",
+        label: `run-${input.status}`,
+        payload,
         time_created: now,
         time_updated: now,
       })
@@ -105,11 +119,6 @@ export function createRun(input: CreateRunInput): RunRow {
         .where(eq(EngineTaskTable.id, input.taskID))
         .run()
     }
-    inserted = db
-      .select()
-      .from(EngineRunTable)
-      .where(eq(EngineRunTable.id, runID))
-      .get()
     Database.effect(() =>
       EngineProtocol.emit(
         Event.RunCreated,
@@ -118,6 +127,7 @@ export function createRun(input: CreateRunInput): RunRow {
       ),
     )
   })
+  const inserted = findRun(runID)
   if (!inserted) throw new Error(`createRun: inserted run ${runID} not found after insert`)
   return inserted
 }

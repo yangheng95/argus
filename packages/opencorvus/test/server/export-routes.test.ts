@@ -5,7 +5,6 @@ import {
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
-  EngineRunTable,
   EngineSpecSnapshotTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
@@ -114,31 +113,54 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_updated: now,
           })
           .run()
-        db.insert(EngineRunTable)
+        // Phase-6-e: run rows live in engine_artifact (kind="run").
+        db.insert(EngineArtifactTable)
           .values([
             {
               id: oldRunID,
               task_id: taskID,
-              plan_version_id: planID,
-              executor: "opencode",
-              status: "failed",
-              phase: "dispatch",
-              retry_count: 0,
+              run_id: oldRunID,
+              kind: "run",
+              label: "run-failed",
+              payload: {
+                plan_version_id: planID,
+                session_id: null,
+                executor: "opencode",
+                status: "failed",
+                phase: "dispatch",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: null,
+                time_completed: now - 900,
+              },
               time_created: now - 1000,
               time_updated: now - 1000,
-              time_completed: now - 900,
             },
             {
               id: runID,
               task_id: taskID,
-              plan_version_id: planID,
-              executor: "opencode",
-              status: "completed",
-              phase: "deliver",
-              retry_count: 0,
+              run_id: runID,
+              kind: "run",
+              label: "run-completed",
+              payload: {
+                plan_version_id: planID,
+                session_id: null,
+                executor: "opencode",
+                status: "completed",
+                phase: "deliver",
+                blocking_reason: null,
+                error: null,
+                retry_count: 0,
+                executor_ref: null,
+                metadata: null,
+                time_started: null,
+                time_completed: now,
+              },
               time_created: now,
               time_updated: now,
-              time_completed: now,
             },
           ])
           .run()
