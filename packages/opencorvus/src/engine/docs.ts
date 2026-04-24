@@ -140,52 +140,6 @@ function counts(goals: GoalRow[]) {
   }
 }
 
-function goalText(input: {
-  task: Pick<TaskRow, "id" | "title" | "request">
-  plan: Pick<PlanRow, "id" | "version" | "summary">
-  goals: GoalRow[]
-  milestones: MilestoneRow[]
-  createdAt: number
-}) {
-  const summary = counts(input.goals)
-  const lines = [
-    "# Goal Snapshot",
-    "",
-    `- Task: ${input.task.title}`,
-    `- Task ID: ${input.task.id}`,
-    `- Plan ID: ${input.plan.id}`,
-    `- Plan Version: v${input.plan.version}`,
-    `- Snapshot At: ${iso(input.createdAt)}`,
-    `- Total Goals: ${summary.total}`,
-    `- Passed: ${summary.passed}`,
-    `- Failed: ${summary.failed}`,
-    `- Pending: ${summary.pending}`,
-    "",
-    "## Plan Summary",
-    "",
-    input.plan.summary.trim(),
-    "",
-    "## Goals",
-    "",
-  ]
-
-  if (input.goals.length === 0) {
-    lines.push("- No goals recorded.")
-    return lines.join("\n")
-  }
-
-  for (const [index, goal] of input.goals.entries()) {
-    const meta = obj(goal.metadata)
-    const checks = selectors(meta)
-    const origin = text(meta?.origin)
-    lines.push(`${index + 1}. [${goalStatusByID(goal.id)}] [${goal.priority}] ${goal.title}`)
-    lines.push(`   - Acceptance:\n${indent(renderSpecsAsText(goal.acceptance_specs ?? []), 5)}`)
-    if (checks.length > 0) lines.push(`   - Checks: ${checks.join(", ")}`)
-    if (origin) lines.push(`   - Origin: ${origin}`)
-  }
-
-  return lines.join("\n")
-}
 
 function evaluationText(input: {
   task: Pick<TaskRow, "id" | "title" | "request">
@@ -288,23 +242,6 @@ function evaluationText(input: {
   }
 
   return lines.join("\n")
-}
-
-export function writeGoalSnapshot(input: {
-  task: Pick<TaskRow, "id" | "title" | "request">
-  plan: Pick<PlanRow, "id" | "version" | "summary">
-  goals: GoalRow[]
-  milestones: MilestoneRow[]
-  createdAt: number
-}) {
-  return save({
-    kind: "goals",
-    taskID: input.task.id,
-    ref: `goal-snapshot-v${input.plan.version}`,
-    title: input.task.title,
-    createdAt: input.createdAt,
-    content: goalText(input),
-  })
 }
 
 export function writeEvaluationSnapshot(input: {

@@ -16,7 +16,7 @@ export interface Requirement {
   metadata?: Record<string, unknown>
 }
 import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
-import { writeEvaluationSnapshot, writeGoalSnapshot } from "@/engine/docs"
+import { writeEvaluationSnapshot } from "@/engine/docs"
 import { Database, and, desc, eq, inArray, isNull, lte, or } from "@/storage/db"
 import { Log } from "@/util/log"
 import { Event } from "./model"

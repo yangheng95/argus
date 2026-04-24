@@ -14,7 +14,6 @@ export {
   EngineSpecSnapshotTable,
   EngineSpecItemTable,
   EngineRequirementTable,
-  EngineGoalSnapshotTable,
   EngineTaskTable,
   EnginePlanVersionTable,
   EnginePlanNodeTable,
