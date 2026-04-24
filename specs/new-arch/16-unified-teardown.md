@@ -343,15 +343,29 @@ await SessionPrompt.prompt({
 
 ### 阶段 5（GoalPool → parallel tool call + 读模型切换）
 
-- 合并 `dispatch_goal / exec_goal / submit_execution / retry_goal` → 单一 `build(goal | request, cwd)` tool
-- `build` tool **内部必须以流式方式跑子 SessionLoop**（遵守规则 27），聚合流式事件后对父 session 返回一次结构化 `tool_result`；禁止任何形式的非流式 LLM 调用
-- Orchestrator 要并行多 goal = 同一 step 发多个 `build` tool_call
-- **并行上限**必须可配置（通过 config 注入 semaphore，默认值读配置），禁止硬编码（规则 25）；超出上限的 tool_call 排队等待；防止 benchmark/资源受限场景被 LLM 自发 fork 打爆
-- 删 GoalPool 的 dispatch 调度器 / lease / coordinator_run_id / live_goal_run 逻辑
-- 同阶段完成**读模型切换**：
-  - `describe.ts` / `task-api` / `workbench/board.ts` 改为统一 projection 入口
-  - overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
-  - verification 不再把 `engine_evaluation` 当长期正式证据表
+**规模**：`engine/goal-pool.ts` 936 行，`workbench/board.ts` 1048 行，`pipeline/executor.ts` 348 行，加 5 个 orchestrator tools (`create_run / submit_execution / dispatch_goal / exec_goal / retry_goal`)。跨 engine / pipeline / workbench / overlay 四层包。
+
+**子阶段分解**（每项独立 PR，顺序执行）：
+
+- **5-a**：并行上限查现状 → `effectiveMaxExecutorGroups(task)` 已读 `config.max_executor_groups`（基建就位）。新增 semaphore 装饰层，`build` tool 将来调用时直接读这个 semaphore
+- **5-b**：实现 `build(goal_or_request, cwd)` tool — 内部流式跑子 SessionLoop（build agent），流式事件通过 parent session 转发，返回 `{ patch, commit_ref, tests, error? }`。此步**只新增，不删除**（双源容忍期）；orchestrator prompt 未切换，dispatch_goal 仍为主路径
+- **5-c**：orchestrator prompt 改为使用 `build`（单 goal / 多 goal 并行均经此路径）；`dispatch_goal / exec_goal / submit_execution / retry_goal` 从 LLM 可见工具列表移除（实现保留，便于回滚）
+- **5-d**：GoalPool 驱动路径删除（orchestrator/loop.ts 不再 pool.drain()）；worktree 创建 / teardown 由 build tool 内部 try/finally 管理
+- **5-e**：读模型切换：`describe.ts` / `task-api` / `workbench/board.ts` 统一 projection 入口；overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
+- **5-f**：verification 从 `engine_evaluation` 长期证据表改为只读 artifact stream
+- **5-g**：删除 deprecated tools 实现 + GoalPool 剩余骨架（lease / coordinator_run_id / live_goal_run 管理）
+
+**关键风险**：
+  - `build` 内部 SessionLoop 必须**流式**（CLAUDE.md rule 27）。SessionPrompt.prompt 已是流式基建（LLM.stream + processor）；禁止在 build 内部再写一套 ProviderLLM.stream 调用
+  - 并行多 goal：AI-SDK parallel tool_calls 天然支持同一 step 发 N 个 tool_call，orchestrator prompt 需显式引导；semaphore 在 build 工具内部用 `p-limit` 或自建 AsyncSemaphore 实现
+  - worktree 生命周期：现在由 goal-pool.ts::executeAndEval 在 `acquireGoalWorkspace` 与 `cleanupGoalWorkspace` 之间管理；build 内部 try/finally 复刻
+  - 读模型切换触发 overlay 前端改造，属**跨包** PR，与 engine 改动分开提交
+
+**交付**：
+  - `rg "dispatch_goal|exec_goal|submit_execution|retry_goal" packages/opencorvus/src/orchestrator/tools.ts` = 0
+  - `packages/opencorvus/src/engine/goal-pool.ts` 不存在或只剩 worktree 生命周期 helper
+  - overlay 只消费 describe/projection 接口，不直接 SQL 查 engine_*
+  - `rg "engine_evaluation" packages/opencorvus/src/verification` = 0 (改为 artifact 查询)
 - 保留物理 worktree 生命周期（由 build tool 内部管理）
 
 ### 阶段 6（schema 清零）[reset DB]
