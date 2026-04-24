@@ -5,7 +5,6 @@ import { progressStatus } from "./helpers"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { Identifier } from "@/id/id"
-import { assertTransition, type TaskStatus } from "./state-machine"
 
 /**
  * Raised by updateTask/updateRun when the caller's row snapshot is stale:
@@ -35,11 +34,11 @@ export async function updateTask(
   summary: string,
 ) {
   const nextStatus = values.status ?? row.status
-  // Validate the requested transition against the formal state machine.
-  // This catches callers constructing illegal transitions (queued → completed etc.).
-  if (nextStatus !== row.status) {
-    assertTransition(row.status as TaskStatus, nextStatus as TaskStatus)
-  }
+  // Phase-6-f: rule 23 — no state-machine transition gate. The LLM
+  // orchestrator drives task.status; illegal transition enforcement was a
+  // legacy FSM gate that fought the autonomous-agent design. Callers are
+  // responsible for setting coherent values; bad writes surface as runtime
+  // misbehaviour, not DB errors.
   const nextBlocking = values.blocking_reason === undefined ? row.blocking_reason : values.blocking_reason
   const nextError = values.error === undefined ? row.error : values.error
   const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
