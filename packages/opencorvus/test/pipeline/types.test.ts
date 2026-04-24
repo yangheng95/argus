@@ -14,10 +14,8 @@ describe("pipeline module exports", () => {
     expect(typeof planGoal).toBe("function")
   })
 
-  test("evaluateGoal is a function", async () => {
-    const { evaluateGoal } = await import("../../src/pipeline")
-    expect(typeof evaluateGoal).toBe("function")
-  })
+  // evaluateGoal was removed on 2026-04-20 — the delivery agent owns
+  // per-goal verification via acceptance_specs + run_command + subagents.
 
   test("type re-exports are importable (compile-time check)", async () => {
     const mod = await import("../../src/pipeline/types")
