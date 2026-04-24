@@ -29,20 +29,24 @@ echo ""
 echo "=== GOAL RUNS (incl supersede_of) ==="
 sqlite3 -cmd ".mode column" "$DB" "SELECT id, goal_id, status, coalesce(supersede_of,'') AS supersedes, substr(coalesce(error,''),1,60) AS error FROM engine_goal_run WHERE task_id='$TASK' ORDER BY time_created"
 echo ""
-echo "=== DELIVERIES ==="
-sqlite3 -cmd ".mode column" "$DB" "SELECT id, status, substr(summary,1,60) AS summary FROM engine_delivery WHERE task_id='$TASK' ORDER BY time_created"
+echo "=== DELIVERIES (kind='delivery' artifacts; append-only, latest per delivery_id) ==="
+sqlite3 -cmd ".mode column" "$DB" "SELECT delivery_id, json_extract(payload,'$.status') AS status, substr(json_extract(payload,'$.summary'),1,60) AS summary FROM engine_artifact WHERE task_id='$TASK' AND kind='delivery' ORDER BY time_created"
 echo ""
-echo "=== EVALUATIONS (should be 1:1 with deliveries) ==="
-sqlite3 -cmd ".mode column" "$DB" "SELECT id, delivery_id, status, verdict, substr(summary,1,60) AS summary FROM engine_evaluation WHERE task_id='$TASK' ORDER BY time_created"
+echo "=== EVIDENCE (kind='verification-evidence' artifacts) ==="
+sqlite3 -cmd ".mode column" "$DB" "SELECT id, delivery_id, json_extract(payload,'$.status') AS status, json_extract(payload,'$.verdict') AS verdict, substr(json_extract(payload,'$.summary'),1,60) AS summary FROM engine_artifact WHERE task_id='$TASK' AND kind='verification-evidence' ORDER BY time_created"
 echo ""
 
-echo "=== INVARIANT 1: delivery count == evaluation count ==="
-D=$(sqlite3 "$DB" "SELECT count(*) FROM engine_delivery WHERE task_id='$TASK'")
-E=$(sqlite3 "$DB" "SELECT count(*) FROM engine_evaluation WHERE task_id='$TASK'")
-echo "  deliveries=$D evaluations=$E $([ "$D" = "$E" ] && echo "PASS" || echo "FAIL")"
-
-echo "=== INVARIANT 2: deliveries w/o evaluation row ==="
-sqlite3 "$DB" "SELECT d.id FROM engine_delivery d LEFT JOIN engine_evaluation e ON e.delivery_id=d.id WHERE d.task_id='$TASK' AND e.id IS NULL"
+echo "=== INVARIANT 1: every logical delivery has ≥1 evidence artifact ==="
+sqlite3 "$DB" "
+WITH logical_deliveries AS (
+  SELECT DISTINCT delivery_id FROM engine_artifact
+  WHERE task_id='$TASK' AND kind='delivery' AND delivery_id IS NOT NULL
+)
+SELECT ld.delivery_id FROM logical_deliveries ld
+WHERE NOT EXISTS (
+  SELECT 1 FROM engine_artifact e
+  WHERE e.delivery_id=ld.delivery_id AND e.kind='verification-evidence'
+)"
 
 echo "=== INVARIANT 3: goal.status vs goal_run tip (Phase 4 derivation) ==="
 sqlite3 "$DB" "

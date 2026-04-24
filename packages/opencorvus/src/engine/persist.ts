@@ -22,7 +22,6 @@ import { Log } from "@/util/log"
 import { Event } from "./model"
 import {
   EngineArtifactTable,
-  EngineDeliveryTable,
   EngineExecutorSessionTable,
   EngineGoalTable,
   EngineGoalRunTable,
@@ -771,21 +770,31 @@ function writeDeliveryRow(
     },
     { additions: 0, deletions: 0 },
   )
-  db.insert(EngineDeliveryTable)
+  // Phase-6-c: the delivery row itself is now an `engine_artifact` with
+  // kind="delivery" + label="delivery-<scope>" (task vs goal_run). Payload
+  // carries the full DeliveryRow shape so the read-model can reconstruct it
+  // without a JOIN. `deliveryID` is the artifact row id — consumers that
+  // reference `delivery_id` on other artifact rows still point at a valid id.
+  db.insert(EngineArtifactTable)
     .values({
       id: input.deliveryID,
       task_id: input.task.id,
       run_id: input.run.id,
       goal_run_id: input.goalRunID,
-      status: "candidate",
-      summary: input.delivery.summary,
-      result: {
+      delivery_id: input.deliveryID,
+      kind: "delivery",
+      label: input.goalRunID ? "delivery-goal_run" : "delivery-task",
+      payload: {
+        status: "candidate",
         summary: input.delivery.summary,
-        commit_ref: input.delivery.commitRef,
-        changed_files: input.delivery.diffs.map((item) => item.file),
-        diffs: input.delivery.diffs,
-        stats,
-        report: input.delivery.report,
+        result: {
+          summary: input.delivery.summary,
+          commit_ref: input.delivery.commitRef,
+          changed_files: input.delivery.diffs.map((item) => item.file),
+          diffs: input.delivery.diffs,
+          stats,
+          report: input.delivery.report,
+        },
       },
       time_created: input.now,
       time_updated: input.now,
@@ -1228,15 +1237,33 @@ export function renewExecutorSessionLease(input: { executorSessionID: string; no
 }
 
 
+/** Phase-6-c: delivery rows are append-only `engine_artifact` rows with
+ *  kind="delivery". `markDeliveryPublishing` / `finalizeDeliveryResult` now
+ *  insert a new artifact row carrying the updated payload; queries pick the
+ *  latest via `time_created desc`. The artifact row id stays stable across
+ *  a delivery's lifecycle by referencing `delivery_id` in the artifact
+ *  column (FK intentionally decoupled — see engine.sql.ts). */
 export function markDeliveryPublishing(deliveryId: string, now: number) {
+  const existing = findLatestDeliveryArtifact(deliveryId)
+  if (!existing) {
+    throw new Error(`markDeliveryPublishing: no delivery artifact found for ${deliveryId}`)
+  }
+  const payload = (existing.payload ?? {}) as Record<string, unknown>
   Database.use((db) =>
     db
-      .update(EngineDeliveryTable)
-      .set({
-        status: "publishing",
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: existing.task_id,
+        run_id: existing.run_id,
+        goal_run_id: existing.goal_run_id ?? null,
+        delivery_id: deliveryId,
+        kind: "delivery",
+        label: existing.label,
+        payload: { ...payload, status: "publishing" },
+        time_created: now,
         time_updated: now,
       })
-      .where(eq(EngineDeliveryTable.id, deliveryId))
       .run(),
   )
 }
@@ -1254,23 +1281,38 @@ export function finalizeDeliveryResult(input: {
   }
   now: number
 }) {
+  const existing = findLatestDeliveryArtifact(input.deliveryId)
+  if (!existing) {
+    throw new Error(`finalizeDeliveryResult: no delivery artifact found for ${input.deliveryId}`)
+  }
+  const existingPayload = (existing.payload ?? {}) as Record<string, unknown>
+  const existingResult = (existingPayload.result ?? input.delivery.result ?? {}) as Record<string, unknown>
   Database.transaction((db) => {
-    db.update(EngineDeliveryTable)
-      .set({
-        status: input.result.status,
-        summary: input.result.summary,
-        result: {
-          ...(input.delivery.result ?? {}),
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskId,
+        run_id: input.runId,
+        goal_run_id: existing.goal_run_id ?? null,
+        delivery_id: input.deliveryId,
+        kind: "delivery",
+        label: existing.label,
+        payload: {
+          status: input.result.status,
           summary: input.result.summary,
-          artifacts: input.result.artifacts.map((item) => ({
-            kind: item.kind,
-            label: item.label,
-          })),
-          publish: input.result.publish,
+          result: {
+            ...existingResult,
+            summary: input.result.summary,
+            artifacts: input.result.artifacts.map((item) => ({
+              kind: item.kind,
+              label: item.label,
+            })),
+            publish: input.result.publish,
+          },
         },
+        time_created: input.now,
         time_updated: input.now,
       })
-      .where(eq(EngineDeliveryTable.id, input.deliveryId))
       .run()
     for (const artifact of input.result.artifacts) {
       db.insert(EngineArtifactTable)
@@ -1288,6 +1330,24 @@ export function finalizeDeliveryResult(input: {
         .run()
     }
   })
+}
+
+/** Phase-6-c internal: find the latest delivery artifact row by delivery_id.
+ *  Newer rows supersede older ones (append-only semantics). */
+function findLatestDeliveryArtifact(deliveryId: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.delivery_id, deliveryId),
+          eq(EngineArtifactTable.kind, "delivery"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
 }
 
 
