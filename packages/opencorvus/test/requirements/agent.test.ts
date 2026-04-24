@@ -48,10 +48,10 @@ describe("RequirementsAgent prompt precedence", () => {
             source: "test",
             title: "复刻百度主页",
             request: "复刻百度主页",
-            status: "active",
             priority: "normal",
             time_created: now,
             time_updated: now,
+            time_started: now,
           }).run()
 
           db.insert(EngineInteractionRequestTable).values({

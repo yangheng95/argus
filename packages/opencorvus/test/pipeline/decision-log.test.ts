@@ -63,10 +63,10 @@ describe("DecisionLog.toPromptSection truncation", () => {
         source: "test",
         title: "trunc test",
         request: "decision log truncation",
-        status: "active",
         priority: "normal",
         time_created: now,
         time_updated: now,
+        time_started: now,
       }).run(),
     )
   }
@@ -183,10 +183,10 @@ describe("DecisionLog.phasePromptSectionForGoal bounded", () => {
         source: "test",
         title: "phase test",
         request: "phase prompt section test",
-        status: "active",
         priority: "normal",
         time_created: now,
         time_updated: now,
+        time_started: now,
       }).run(),
     )
   }

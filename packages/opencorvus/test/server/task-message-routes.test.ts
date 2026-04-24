@@ -35,11 +35,12 @@ describe("task message routes", () => {
             source: "panel",
             title: "retry through message",
             request: "retry through message",
-            status: "failed",
             priority: "normal",
             error: "initial failure",
             time_created: now,
             time_updated: now,
+            time_started: now,
+            time_completed: now,
           }).run(),
         )
 
@@ -72,10 +73,16 @@ describe("task message routes", () => {
           interrupt: true,
         })
 
+        // Phase-6-f-2: task.status is a derived view, not a column.
+        // The row still carries the "failed" shape: time_completed set + error non-null.
         const row = Database.use((db) =>
-          db.select({ status: EngineTaskTable.status }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+          db.select({
+            time_completed: EngineTaskTable.time_completed,
+            error: EngineTaskTable.error,
+          }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row?.status).toBe("failed")
+        expect(row?.time_completed).not.toBeNull()
+        expect(row?.error).toBe("initial failure")
       },
     })
   })
@@ -98,10 +105,10 @@ describe("task message routes", () => {
             source: "panel",
             title: "attachment message",
             request: "attachment message",
-            status: "active",
             priority: "normal",
             time_created: now,
             time_updated: now,
+            time_started: now,
           }).run(),
         )
 

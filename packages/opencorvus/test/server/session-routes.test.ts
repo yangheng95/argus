@@ -75,10 +75,12 @@ describe("session routes", () => {
             source: "panel",
             title: "delete bound task",
             request: "delete bound task",
-            status: "cancelled",
             priority: "normal",
+            metadata: { cancelled: true },
             time_created: now,
             time_updated: now,
+            time_started: now,
+            time_completed: now,
           }).run(),
         )
 
@@ -118,10 +120,11 @@ describe("session routes", () => {
             source: "panel",
             title: "keep bound task",
             request: "keep bound task",
-            status: "completed",
             priority: "normal",
             time_created: now,
             time_updated: now,
+            time_started: now,
+            time_completed: now,
           }).run(),
         )
 

@@ -2,6 +2,12 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { advanceQueue, dispatchTaskLoop, taskCwd } from "../../src/engine/queue"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
+import { deriveTaskStatus } from "../../src/engine/task-status"
+
+function taskStatus(id: string): string | undefined {
+  const t = findTask(id)
+  return t ? deriveTaskStatus(t) : undefined
+}
 import { Instance } from "../../src/project/instance"
 import * as TaskLoop from "../../src/orchestrator/loop"
 import { Database, eq } from "../../src/storage/db"
@@ -34,7 +40,6 @@ describe("engine queue", () => {
             source: "test",
             title: "queued created task",
             request: "dispatch through queue",
-            status: "queued",
             priority: "normal",
             time_created: now,
             time_updated: now,
@@ -49,7 +54,7 @@ describe("engine queue", () => {
           taskID,
           event: { note: "caller-supplied note" },
         })
-        expect(findTask(taskID)?.status).toBe("active")
+        expect(taskStatus(taskID)).toBe("active")
       },
     })
   })
@@ -81,7 +86,7 @@ describe("engine queue", () => {
               Database.use((db) =>
                 db
                   .update(EngineTaskTable)
-                  .set({ status: "completed", time_completed: Date.now() })
+                  .set({ time_completed: Date.now() })
                   .where(eq(EngineTaskTable.id, activeID))
                   .run(),
               )
@@ -96,7 +101,6 @@ describe("engine queue", () => {
             source: "test",
             title: "active task",
             request: "holds the cwd lock until loop exits",
-            status: "queued",
             priority: "normal",
             time_created: now,
             time_updated: now,
@@ -107,7 +111,6 @@ describe("engine queue", () => {
             source: "test",
             title: "queued sibling",
             request: "must flip to active after the leader's loop exits",
-            status: "queued",
             priority: "normal",
             time_created: now + 1,
             time_updated: now + 1,
@@ -118,10 +121,10 @@ describe("engine queue", () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(findTask(activeID)?.status).toBe("active")
+        expect(taskStatus(activeID)).toBe("active")
         // Sibling stays queued while the leader's loop is still running —
         // the cwd lock is held.
-        expect(findTask(siblingID)?.status).toBe("queued")
+        expect(taskStatus(siblingID)).toBe("queued")
 
         // Release the loop: the real loop exit → `.finally` → advanceQueue
         // should now flip the sibling to active. Without the fix, advance
@@ -132,10 +135,10 @@ describe("engine queue", () => {
         // few turns to settle.
         for (let i = 0; i < 10; i++) {
           await new Promise((resolve) => setTimeout(resolve, 0))
-          if (findTask(siblingID)?.status === "active") break
+          if (taskStatus(siblingID) === "active") break
         }
 
-        expect(findTask(siblingID)?.status).toBe("active")
+        expect(taskStatus(siblingID)).toBe("active")
         expect(runTaskLoop).toHaveBeenCalledTimes(2)
         expect(runTaskLoop.mock.calls[1]?.[0]).toMatchObject({ taskID: siblingID })
       },
@@ -160,7 +163,6 @@ describe("engine queue", () => {
             source: "test",
             title: "queued retry task",
             request: "advanceQueue must forward without deriving a trigger from the latest run",
-            status: "queued",
             priority: "normal",
             time_created: now,
             time_updated: now,

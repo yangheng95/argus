@@ -42,10 +42,10 @@ function seedBaseline() {
       source: "test",
       title: "t",
       request: "t",
-      status: "active",
       priority: "normal",
       time_created: now,
       time_updated: now,
+      time_started: now,
     }).run()
     // Phase-6-e: run rows live in engine_artifact (kind="run").
     db.insert(EngineArtifactTable).values({

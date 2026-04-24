@@ -55,10 +55,10 @@ describe("orchestrator deferred stop", () => {
         source: "test",
         title: "Deferred stop task",
         request: "Verify dispatch stop timing",
-        status: "active",
         priority: "normal",
         time_created: now,
         time_updated: now,
+        time_started: now,
       }).run()
       db.insert(EnginePlanVersionTable).values({
         id: planID,
@@ -180,10 +180,10 @@ describe("orchestrator deferred stop", () => {
             source: "test",
             title: "Exec goal task",
             request: "Verify exec_goal bootstraps a run and queues the goal",
-            status: "active",
             priority: "normal",
             time_created: now,
             time_updated: now,
+            time_started: now,
           }).run()
           db.insert(EngineGoalTable).values({
             id: goalID,
@@ -252,7 +252,6 @@ describe("orchestrator deferred stop", () => {
         source: "test",
         title: "Deferred submit stop task",
         request: "Verify submit stop timing",
-        status: "queued",
         priority: "normal",
         time_created: now,
         time_updated: now,
@@ -330,10 +329,10 @@ describe("orchestrator deferred stop", () => {
         source: "test",
         title: "Build workflow switch task",
         request: "Verify task-level build switches workflow when pipeline has not decomposed into goals yet",
-        status: "active",
         priority: "normal",
         time_created: now,
         time_updated: now,
+        time_started: now,
       }).run()
     })
 

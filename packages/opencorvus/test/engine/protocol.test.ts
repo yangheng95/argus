@@ -39,7 +39,6 @@ function seedTask() {
       source: "test",
       title: "Protocol task",
       request: "Verify protocol persistence",
-      status: "queued",
       priority: "normal",
       time_created: now,
       time_updated: now,
