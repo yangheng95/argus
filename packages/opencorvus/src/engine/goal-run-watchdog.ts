@@ -19,15 +19,15 @@
  */
 
 import { Scheduler } from "@/scheduler"
-import { Database, and, eq, inArray, sql, lt } from "@/storage/db"
+import { Database, and, inArray, sql } from "@/storage/db"
 import { EngineGoalRunTable } from "./engine.sql"
 import { updateGoalRun } from "./persist"
 import { EngineConfig } from "./config"
+import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "goal-run-watchdog" })
 const SCAN_INTERVAL_MS = 60_000
-const LIVE_STATUSES = ["queued", "running", "retrying", "evaluating", "planning"] as const
 
 export namespace GoalRunWatchdog {
   export function init() {
@@ -55,7 +55,7 @@ export namespace GoalRunWatchdog {
         .from(EngineGoalRunTable)
         .where(
           and(
-            inArray(EngineGoalRunTable.status, [...LIVE_STATUSES]),
+            inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
             sql`(
               (${EngineGoalRunTable.last_progress_at} IS NOT NULL AND ${EngineGoalRunTable.last_progress_at} < ${cutoff})
               OR (${EngineGoalRunTable.last_progress_at} IS NULL AND ${EngineGoalRunTable.time_started} IS NOT NULL AND ${EngineGoalRunTable.time_started} < ${cutoff})
