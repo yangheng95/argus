@@ -9,7 +9,6 @@ import {
 } from "../../src/storage/db"
 import {
   EngineArtifactTable,
-  EngineDeliveryTable,
   EngineGoalRunTable,
 } from "../../src/engine/engine.sql"
 
@@ -27,13 +26,18 @@ import {
  */
 describe("engine state invariants", () => {
   test("every delivery has at least one evidence artifact row", () => {
-    // Post-phase-6-b: evidence lives in engine_artifact (kind='verification-evidence').
-    // Evidence is append-only so the 1:1 invariant was relaxed to "at least one" —
-    // persistTaskDelivery writes a pending row and updateEvaluationFromDeliveryVerdict
-    // appends a settled row. findLatestDeliveryEvidence surfaces the newest.
-    // A delivery with zero evidence rows means persistTaskDelivery was bypassed.
+    // Post-phase-6-c: deliveries live in engine_artifact (kind='delivery') and
+    // evidence too (kind='verification-evidence'). Evidence is append-only so
+    // the 1:1 invariant was relaxed to "at least one" — persistTaskDelivery
+    // writes a pending row and updateEvaluationFromDeliveryVerdict appends a
+    // settled row. A delivery with zero evidence rows means persistTaskDelivery
+    // was bypassed.
     const deliveries = Database.use((db) =>
-      db.select({ id: EngineDeliveryTable.id }).from(EngineDeliveryTable).all(),
+      db
+        .select({ id: EngineArtifactTable.id })
+        .from(EngineArtifactTable)
+        .where(eq(EngineArtifactTable.kind, "delivery"))
+        .all(),
     )
     if (deliveries.length === 0) return
     const violations: Array<{ deliveryID: string; evidenceCount: number }> = []

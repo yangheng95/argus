@@ -655,23 +655,11 @@ CREATE INDEX IF NOT EXISTS engine_interaction_run_idx      ON engine_interaction
 CREATE INDEX IF NOT EXISTS engine_interaction_external_idx ON engine_interaction_request (external_id);
 CREATE INDEX IF NOT EXISTS engine_interaction_status_idx   ON engine_interaction_request (status);
 
-CREATE TABLE IF NOT EXISTS engine_delivery (
-  id           text PRIMARY KEY,
-  task_id      text NOT NULL,
-  run_id       text NOT NULL,
-  goal_run_id  text REFERENCES engine_goal_run(id) ON DELETE SET NULL,
-  status       text NOT NULL DEFAULT 'ready',
-  summary      text NOT NULL,
-  result       text,
-  lease_until  integer,
-  time_started integer,
-  time_completed integer,
-  time_created integer NOT NULL,
-  time_updated integer NOT NULL,
-  FOREIGN KEY (task_id) REFERENCES engine_task(id) ON DELETE CASCADE,
-  FOREIGN KEY (run_id)  REFERENCES engine_run(id)  ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS engine_delivery_run_idx ON engine_delivery (run_id);
+-- Phase-6-c: engine_delivery was removed in favour of engine_artifact rows
+-- with kind='delivery'. See engine/persist.ts for the writer and
+-- engine/store.ts (DeliveryRow) for the read-model. delivery_id below is
+-- now a plain text pointer (no FK) to the id of the latest delivery-kind
+-- artifact row for the logical delivery.
 
 CREATE TABLE IF NOT EXISTS engine_artifact (
   id           text PRIMARY KEY,
@@ -685,8 +673,7 @@ CREATE TABLE IF NOT EXISTS engine_artifact (
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
   FOREIGN KEY (task_id)     REFERENCES engine_task(id)     ON DELETE CASCADE,
-  FOREIGN KEY (run_id)      REFERENCES engine_run(id)      ON DELETE CASCADE,
-  FOREIGN KEY (delivery_id) REFERENCES engine_delivery(id) ON DELETE SET NULL
+  FOREIGN KEY (run_id)      REFERENCES engine_run(id)      ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS engine_artifact_run_idx      ON engine_artifact (run_id);
 CREATE INDEX IF NOT EXISTS engine_artifact_delivery_idx ON engine_artifact (delivery_id);

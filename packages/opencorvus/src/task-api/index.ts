@@ -30,7 +30,6 @@ import { recordNote } from "@/workbench/note-store"
 import {
   EngineArtifactTable,
   EngineChannelBindingTable,
-  EngineDeliveryTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
   EngineProgressSnapshotTable,

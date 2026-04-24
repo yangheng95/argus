@@ -7,6 +7,7 @@ import {
   findEvaluationsByTask,
   findDeliveryByGoalRun,
   findLatestEvaluationForGoalRun,
+  type DeliveryRow,
   type EvaluationRow,
 } from "@/engine/store"
 import {
@@ -14,7 +15,6 @@ import {
   viewSpecSnapshot,
   EngineArtifactTable,
   EngineChannelBindingTable,
-  EngineDeliveryTable,
   EngineExecutorSessionTable,
   EngineGoalRunTable,
   EngineGoalTable,
@@ -516,9 +516,7 @@ function boardChecks(input: unknown) {
 }
 
 function viewBoardDelivery(
-  row:
-    | (typeof EngineDeliveryTable.$inferSelect)
-    | undefined,
+  row: DeliveryRow | undefined,
 ) {
   if (!row) return undefined
   const result = (row.result ?? {}) as Record<string, unknown>
@@ -631,8 +629,8 @@ function boardOverview(input: {
   task: typeof EngineTaskTable.$inferSelect
   run: (typeof EngineRunTable.$inferSelect) | undefined
   pendingInteractions: Array<typeof EngineInteractionRequestTable.$inferSelect>
-  candidateDelivery: (typeof EngineDeliveryTable.$inferSelect) | undefined
-  acceptedDelivery: (typeof EngineDeliveryTable.$inferSelect) | undefined
+  candidateDelivery: DeliveryRow | undefined
+  acceptedDelivery: DeliveryRow | undefined
   evaluation: EvaluationRow | undefined
   currentFailure:
     | {

@@ -8,7 +8,6 @@ import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 import { EvaluationCheck } from "./model"
 import {
   EngineArtifactTable,
-  EngineDeliveryTable,
   EngineExecutorSessionTable,
   EngineGoalTable,
   EngineGoalRunTable,
@@ -23,7 +22,9 @@ import {
   EngineSpecItemTable,
   EngineSpecSnapshotTable,
   EngineTaskTable,
+  type DeliveryResult,
   type EngineBudget,
+  type EngineDeliveryStatus,
   type EngineExecutorRef,
   type EngineEvaluationCheck,
   type EngineEvaluationScope,
@@ -38,7 +39,21 @@ export type GoalRow = typeof EngineGoalTable.$inferSelect
 export type MilestoneRow = typeof EngineMilestoneTable.$inferSelect
 export type RunRow = typeof EngineRunTable.$inferSelect
 export type InteractionRow = typeof EngineInteractionRequestTable.$inferSelect
-export type DeliveryRow = typeof EngineDeliveryTable.$inferSelect
+/** Phase-6-c artifact-backed delivery shape. Was `typeof EngineDeliveryTable.$inferSelect`
+ *  until `engine_delivery` was deleted in favour of `engine_artifact` rows with
+ *  kind="delivery". Field names stay snake_case so old consumers do not churn.
+ *  Reconstructed via `artifactRowToDeliveryRow()` below. */
+export type DeliveryRow = {
+  id: string
+  task_id: string
+  run_id: string
+  goal_run_id: string | null
+  status: EngineDeliveryStatus
+  summary: string
+  result: DeliveryResult | null
+  time_created: number
+  time_updated: number
+}
 export type ArtifactRow = typeof EngineArtifactTable.$inferSelect
 /** Phase-6 artifact-backed evaluation shape. Was `typeof EngineEvaluationTable.$inferSelect`
  *  until `engine_evaluation` was deleted in favour of `engine_artifact` rows with
@@ -229,52 +244,116 @@ export function findInteractionByExternal(externalID: string) {
   )
 }
 
-export function findDeliveryByRun(runID: string) {
-  return Database.use((db) =>
+/** Task-level delivery (goal_run_id IS NULL) for a run. Reads `engine_artifact`
+ *  kind="delivery" rows — append-only, so latest row per delivery_id wins. */
+export function findDeliveryByRun(runID: string): DeliveryRow | undefined {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineDeliveryTable)
-      .where(and(
-        eq(EngineDeliveryTable.run_id, runID),
-        isNull(EngineDeliveryTable.goal_run_id),
-      ))
-      .orderBy(desc(EngineDeliveryTable.time_created))
-      .get(),
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.run_id, runID),
+          eq(EngineArtifactTable.kind, "delivery"),
+          isNull(EngineArtifactTable.goal_run_id),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .all(),
   )
+  const latest = latestPerDelivery(rows)[0]
+  return latest ? artifactRowToDeliveryRow(latest) : undefined
 }
 
 /** Find the most recent delivery for a run, including goal-run deliveries. */
-export function findLatestDeliveryForRun(runID: string) {
-  return Database.use((db) =>
+export function findLatestDeliveryForRun(runID: string): DeliveryRow | undefined {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineDeliveryTable)
-      .where(eq(EngineDeliveryTable.run_id, runID))
-      .orderBy(desc(EngineDeliveryTable.time_created))
-      .get(),
-  )
-}
-
-export function findDeliveriesForTask(taskID: string) {
-  return Database.use((db) =>
-    db
-      .select()
-      .from(EngineDeliveryTable)
-      .where(eq(EngineDeliveryTable.task_id, taskID))
-      .orderBy(desc(EngineDeliveryTable.time_created))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.run_id, runID),
+          eq(EngineArtifactTable.kind, "delivery"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
+  const latest = latestPerDelivery(rows)[0]
+  return latest ? artifactRowToDeliveryRow(latest) : undefined
 }
 
-export function findDeliveryByGoalRun(goalRunID: string) {
-  return Database.use((db) =>
+export function findDeliveriesForTask(taskID: string): DeliveryRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineDeliveryTable)
-      .where(eq(EngineDeliveryTable.goal_run_id, goalRunID))
-      .orderBy(desc(EngineDeliveryTable.time_created))
-      .get(),
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "delivery"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .all(),
   )
+  return latestPerDelivery(rows).map(artifactRowToDeliveryRow)
+}
+
+export function findDeliveryByGoalRun(goalRunID: string): DeliveryRow | undefined {
+  const rows = Database.use((db) =>
+    db
+      .select()
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.goal_run_id, goalRunID),
+          eq(EngineArtifactTable.kind, "delivery"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .all(),
+  )
+  const latest = latestPerDelivery(rows)[0]
+  return latest ? artifactRowToDeliveryRow(latest) : undefined
+}
+
+/** Phase-6-c helper: collapse the append-only delivery artifact stream into
+ *  one row per delivery_id (the newest, since input arrives `time_created desc`).
+ *  Preserves input order so callers that want "latest delivery overall" just
+ *  take [0]. */
+function latestPerDelivery(
+  rows: Array<typeof EngineArtifactTable.$inferSelect>,
+): Array<typeof EngineArtifactTable.$inferSelect> {
+  const seen = new Set<string>()
+  const result: Array<typeof EngineArtifactTable.$inferSelect> = []
+  for (const row of rows) {
+    const key = row.delivery_id ?? row.id
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(row)
+  }
+  return result
+}
+
+function artifactRowToDeliveryRow(row: typeof EngineArtifactTable.$inferSelect): DeliveryRow {
+  const payload = (row.payload ?? {}) as {
+    status?: EngineDeliveryStatus
+    summary?: string
+    result?: DeliveryResult | null
+  }
+  return {
+    id: row.delivery_id ?? row.id,
+    task_id: row.task_id,
+    run_id: row.run_id,
+    goal_run_id: row.goal_run_id ?? null,
+    status: payload.status ?? "candidate",
+    summary: payload.summary ?? "",
+    result: payload.result ?? null,
+    time_created: row.time_created,
+    time_updated: row.time_updated,
+  }
 }
 
 /** Latest evaluation row for a goal_run (newest first, single row).

@@ -109,6 +109,7 @@ export type EngineArtifactKind =
   | "evaluation"
   | "pr"
   | "verification-evidence"
+  | "delivery"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
@@ -579,26 +580,13 @@ export const EngineInteractionRequestTable = sqliteTable(
   ],
 )
 
-export const EngineDeliveryTable = sqliteTable(
-  "engine_delivery",
-  {
-    id: text().primaryKey(),
-    task_id: text()
-      .notNull()
-      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    run_id: text()
-      .notNull()
-      .references(() => EngineRunTable.id, { onDelete: "cascade" }),
-    goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
-    status: text().notNull().$type<EngineDeliveryStatus>().default("candidate"),
-    summary: text().notNull(),
-    result: text({ mode: "json" }).$type<DeliveryResult>(),
-    ...Timestamps,
-  },
-  (table) => [
-    index("engine_delivery_run_idx").on(table.run_id),
-  ],
-)
+// Phase-6-c: `engine_delivery` was removed in favour of `engine_artifact` rows
+// with kind="delivery". See engine/persist.ts (writeDeliveryRow /
+// markDeliveryPublishing / finalizeDeliveryResult) for the writer and
+// engine/store.ts (DeliveryRow) for the read-model that reconstructs the
+// historical shape from the artifact payload. Append-only — status
+// transitions (candidate → publishing → delivered/failed) are new rows per
+// delivery_id and `findDelivery*` take the newest via `time_created desc`.
 
 export const EngineArtifactTable = sqliteTable(
   "engine_artifact",
@@ -611,7 +599,12 @@ export const EngineArtifactTable = sqliteTable(
       .notNull()
       .references(() => EngineRunTable.id, { onDelete: "cascade" }),
     goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
-    delivery_id: text().references(() => EngineDeliveryTable.id, { onDelete: "set null" }),
+    /** Phase-6-c: delivery_id used to FK onto engine_delivery(id). With that
+     *  table deleted, the column is a plain text pointer to the id of the
+     *  latest delivery-kind artifact row for the logical delivery. Still set
+     *  to that id by writers so downstream consumers can group artifact
+     *  rows by delivery without a FK constraint. */
+    delivery_id: text(),
     kind: text().notNull().$type<EngineArtifactKind>(),
     label: text().notNull(),
     payload: text({ mode: "json" }).$type<EngineMetadata>(),

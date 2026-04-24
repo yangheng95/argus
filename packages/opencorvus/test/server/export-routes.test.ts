@@ -2,7 +2,6 @@ import { afterEach, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import {
   EngineArtifactTable,
-  EngineDeliveryTable,
   EngineGoalRunTable,
   EngineGoalTable,
   EnginePlanNodeTable,
@@ -159,19 +158,27 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             time_completed: now,
           })
           .run()
-        db.insert(EngineDeliveryTable)
+        // Phase-6-c: deliveries live in engine_artifact (kind='delivery').
+        // Each delivery is one row; the id equals delivery_id so other artifacts
+        // can reference it the same way the old FK did.
+        db.insert(EngineArtifactTable)
           .values([
             {
               id: deliveryID,
               task_id: taskID,
               run_id: runID,
-              status: "delivered",
-              summary: "Coordinator delivery",
-              result: {
+              delivery_id: deliveryID,
+              kind: "delivery",
+              label: "delivery-task",
+              payload: {
+                status: "delivered",
                 summary: "Coordinator delivery",
-                changed_files: ["src/export.ts"],
-                diffs: [],
-                artifacts: [],
+                result: {
+                  summary: "Coordinator delivery",
+                  changed_files: ["src/export.ts"],
+                  diffs: [],
+                  artifacts: [],
+                },
               },
               time_created: now,
               time_updated: now,
@@ -181,13 +188,18 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
               task_id: taskID,
               run_id: runID,
               goal_run_id: goalRunID,
-              status: "candidate",
-              summary: "Goal delivery",
-              result: {
+              delivery_id: goalDeliveryID,
+              kind: "delivery",
+              label: "delivery-goal_run",
+              payload: {
+                status: "candidate",
                 summary: "Goal delivery",
-                changed_files: ["src/export.ts"],
-                diffs: [],
-                artifacts: [],
+                result: {
+                  summary: "Goal delivery",
+                  changed_files: ["src/export.ts"],
+                  diffs: [],
+                  artifacts: [],
+                },
               },
               time_created: now,
               time_updated: now,
