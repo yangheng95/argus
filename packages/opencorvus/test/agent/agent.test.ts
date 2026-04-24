@@ -419,6 +419,21 @@ test("webfetch is allowed by default", async () => {
   })
 })
 
+test("design-analyst advertises url_screenshot and omits webfetch", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const designAnalyst = await Agent.get("design-analyst")
+      expect(designAnalyst?.tools?.include).toContain("url_screenshot")
+      expect(designAnalyst?.tools?.include).not.toContain("webfetch")
+
+      const { createUrlScreenshotTool } = await import("../../src/design-analyst/url-screenshot-tool")
+      expect(Object.keys(createUrlScreenshotTool())).toEqual(["url_screenshot"])
+    },
+  })
+})
+
 test("unknown permission defaults to ask", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
