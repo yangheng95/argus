@@ -4,6 +4,7 @@ import { goalStatusByID } from "@/engine/describe"
 import {
   findActivePlanForTask,
   findActiveRunForTask,
+  findActiveSpecForTask,
   findLatestTipGoalRun,
   findDeliveriesForTask,
   findEvaluationsByTask,
@@ -179,7 +180,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
     currentFailure,
   })
 
-  const specRow = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
+  const specRow = findActiveSpecForTask(task.id)
   const specSnapshot = specRow ? viewSpecSnapshot(specRow) : undefined
 
   // lastSequence: must use the same sequence space as protocol_event.seq
@@ -819,7 +820,7 @@ function buildWorkflowFields(
     }
   })
 
-  const requirements = task.active_spec_version_id
+  const requirements = findActiveSpecForTask(task.id)
     ? buildRequirements(task.id)
     : []
 

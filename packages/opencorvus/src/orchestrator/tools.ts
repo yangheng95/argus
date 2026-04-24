@@ -10,7 +10,7 @@ import path from "node:path"
 import { Session } from "@/session"
 import { resolveAgentModel } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
-import { Database, eq, and, inArray } from "@/storage/db"
+import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
@@ -37,6 +37,7 @@ import {
 import {
   findActivePlanForTask,
   findActiveRunForTask,
+  findActiveSpecForTask,
   findDeliveryByRun,
   findEvaluationByRun,
   findPlan,
@@ -303,7 +304,7 @@ export function createOrchestratorTools(input: {
       db.insert(EnginePlanVersionTable).values({
         id: planID,
         task_id: taskID,
-        spec_snapshot_id: task.active_spec_version_id ?? null,
+        spec_snapshot_id: findActiveSpecForTask(taskID)?.id ?? null,
         version: 1,
         status: "active",
         summary: `${dbGoals.length} goals`,
@@ -455,9 +456,9 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         let task = requireTask(taskID)
-        log.info("requirements guard check", { taskID, hasSpec: !!task.active_spec_version_id })
+        log.info("requirements guard check", { taskID, hasSpec: !!findActiveSpecForTask(task.id) })
         // Rule 23: no status gate. LLM may choose to re-parse requirements
-        // (overwrites active_spec_version_id with a new v1 snapshot).
+        // (supersedes the prior spec and inserts a new v1 snapshot).
 
         // No design-analysis gate here: per rule 23, phase ordering is an LLM
         // decision (the orchestrator prompt explains when to call
@@ -520,6 +521,20 @@ export function createOrchestratorTools(input: {
           ].join("\n")
 
           try { Database.transaction((db) => {
+            // Phase-6-f-5: maintain the "at most one non-superseded spec per
+            // task" invariant explicitly. Previously this was tracked via
+            // task.active_spec_version_id; now findActiveSpecForTask derives
+            // from spec.status != 'superseded', so writers must supersede
+            // prior specs before inserting a new one.
+            db.update(EngineSpecSnapshotTable)
+              .set({ status: "superseded", time_updated: now })
+              .where(
+                and(
+                  eq(EngineSpecSnapshotTable.task_id, taskID),
+                  sql`${EngineSpecSnapshotTable.status} != 'superseded'`,
+                ),
+              )
+              .run()
             db.insert(EngineSpecSnapshotTable).values({
               id: specSnapshotID,
               task_id: taskID,
@@ -550,7 +565,6 @@ export function createOrchestratorTools(input: {
 
             db.update(EngineTaskTable)
               .set({
-                active_spec_version_id: specSnapshotID,
                 time_updated: now,
               })
               .where(eq(EngineTaskTable.id, taskID))
@@ -1088,9 +1102,8 @@ export function createOrchestratorTools(input: {
           // the decision log phase=requirements section the Requirements
           // agent already seeded.
           const { findRequirements } = await import("@/engine/store")
-          const reqRows = task.active_spec_version_id
-            ? findRequirements(task.active_spec_version_id)
-            : []
+          const activeSpec = findActiveSpecForTask(task.id)
+          const reqRows = activeSpec ? findRequirements(activeSpec.id) : []
           const requirements = reqRows.map((r) => {
             const meta = (r.metadata ?? {}) as Record<string, unknown>
             const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
@@ -1146,7 +1159,7 @@ export function createOrchestratorTools(input: {
           const { persistArchitectMetrics } = await import("@/metrics/store")
           const now = Date.now()
           const newSpecSnapshotID = Identifier.ascending("spec")
-          const priorSpecSnapshotID = task.active_spec_version_id
+          const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
 
           const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
           const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
@@ -1231,7 +1244,6 @@ export function createOrchestratorTools(input: {
 
             db.update(EngineTaskTable)
               .set({
-                active_spec_version_id: newSpecSnapshotID,
                 architect_challenge_seeds: result.challengeSeeds as unknown as Record<string, unknown>[],
                 time_updated: now,
               })
@@ -1622,6 +1634,7 @@ export function createOrchestratorTools(input: {
       execute: async ({ stage, reason }) => {
         const task = requireTask(taskID)
         const activePlanAtStart = findActivePlanForTask(task.id)
+        const activeSpecAtStart = findActiveSpecForTask(task.id)
         const plan = restartStagePlan(stage, Boolean(activePlanAtStart))
         const now = Date.now()
         const runError = `restart_from_stage(${stage}): ${reason}`
@@ -1680,10 +1693,10 @@ export function createOrchestratorTools(input: {
               .run()
           }
 
-          if (plan.clearSpec && task.active_spec_version_id) {
+          if (plan.clearSpec && activeSpecAtStart) {
             db.update(EngineSpecSnapshotTable)
               .set({ status: "superseded", time_updated: now })
-              .where(eq(EngineSpecSnapshotTable.id, task.active_spec_version_id))
+              .where(eq(EngineSpecSnapshotTable.id, activeSpecAtStart.id))
               .run()
           }
         })
@@ -1712,7 +1725,6 @@ export function createOrchestratorTools(input: {
           {
             status: "active",
             error: null,
-            active_spec_version_id: plan.clearSpec ? null : currentTask.active_spec_version_id,
           },
           `restart_from_stage(${stage})`,
         )

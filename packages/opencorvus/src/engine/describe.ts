@@ -39,10 +39,10 @@ import {
 import {
   findActivePlanForTask,
   findActiveRunForTask,
+  findActiveSpecForTask,
   findLatestDeliveryVerdictArtifact,
   findRun,
   findRuns,
-  findSpecSnapshot,
   findTask,
   listGoalRunsByGoal,
   listGoals,
@@ -311,9 +311,9 @@ export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const goals = goalRows.map((g) => describeGoal(g, rewindCursor))
 
   let specSummary: string | undefined
-  if (task.active_spec_version_id) {
-    const spec = findSpecSnapshot(task.active_spec_version_id)
-    specSummary = spec?.summary
+  const activeSpec = findActiveSpecForTask(task.id)
+  if (activeSpec) {
+    specSummary = activeSpec.summary
   }
 
   let planSummary: string | undefined
