@@ -287,6 +287,152 @@ export function createOrchestratorTools(input: {
     } catch { /* best effort */ }
   }
 
+  async function createExecutionRunRecord() {
+    const task = requireTask(taskID)
+    const dbGoals = listGoals(taskID)
+    if (dbGoals.length === 0) return { error: "No goals found. Run requirements first." } as const
+
+    const now = Date.now()
+    const executor = task.executor
+    const sessionID = task.session_id!
+    const planID = Identifier.ascending("plan")
+    const { EnginePlanVersionTable, EnginePlanNodeTable, EngineGoalTable } =
+      await import("@/engine/engine.sql")
+
+    Database.transaction((db) => {
+      db.insert(EnginePlanVersionTable).values({
+        id: planID,
+        task_id: taskID,
+        spec_snapshot_id: task.active_spec_version_id ?? null,
+        version: 1,
+        status: "active",
+        summary: `${dbGoals.length} goals`,
+        prompt: task.request,
+        metadata: {},
+        time_created: now,
+        time_updated: now,
+      }).run()
+
+      const goalToPlanNode = new Map<string, string>()
+      const planNodeIDs: string[] = []
+      for (const goal of dbGoals) {
+        const pnID = Identifier.ascending("plan_node")
+        planNodeIDs.push(pnID)
+        goalToPlanNode.set(goal.id, pnID)
+      }
+
+      for (const [index, goal] of dbGoals.entries()) {
+        const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID: string) => {
+          const pnID = goalToPlanNode.get(depGoalID)
+          if (!pnID) {
+            log.warn("create_run: goal.depends_on references unknown goal ID — dropping", {
+              goalID: goal.id,
+              goalTitle: goal.title,
+              unknownDep: depGoalID,
+            })
+          }
+          return pnID ? [pnID] : []
+        })
+
+        db.insert(EnginePlanNodeTable).values({
+          id: planNodeIDs[index],
+          task_id: taskID,
+          plan_version_id: planID,
+          kind: "goal",
+          goal_id: goal.id,
+          title: goal.title,
+          brief: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]),
+          depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
+          order_index: index,
+          metadata: {},
+          time_created: now,
+          time_updated: now,
+        }).run()
+      }
+
+      for (const goal of dbGoals) {
+        db.update(EngineGoalTable)
+          .set({ plan_version_id: planID, time_updated: now })
+          .where(eq(EngineGoalTable.id, goal.id))
+          .run()
+      }
+    })
+
+    const { createRun } = await import("@/engine/writer")
+    const created = createRun({
+      taskID,
+      planVersionID: planID,
+      sessionID,
+      executor,
+      status: "queued",
+      phase: "dispatch",
+      summary: `create_run: ${dbGoals.length} goals queued`,
+      now,
+    })
+    const runID = created.id
+
+    await updateTask(
+      requireTask(taskID),
+      {
+        active_plan_version_id: planID,
+        active_run_id: runID,
+        status: "active",
+      },
+      `create_run: planID=${planID} runID=${runID}`,
+    )
+
+    return { runID, planID, goalsCount: dbGoals.length } as const
+  }
+
+  async function ensureDispatchableRunForSingleGoal() {
+    let task = requireTask(taskID)
+    let createdRun = false
+    let activatedRun = false
+
+    if (!task.active_run_id) {
+      const created = await createExecutionRunRecord()
+      if ("error" in created) return { error: created.error } as const
+      createdRun = true
+      task = requireTask(taskID)
+    }
+
+    let run = task.active_run_id ? requireRun(task.active_run_id) : undefined
+    if (!run || !run.plan_version_id || !isLiveRunStatus(run.status)) {
+      const created = await createExecutionRunRecord()
+      if ("error" in created) return { error: created.error } as const
+      createdRun = true
+      task = requireTask(taskID)
+      run = requireRun(created.runID)
+    }
+
+    const planVersionID = run.plan_version_id
+    if (!planVersionID) {
+      return { error: `Run ${run.id} has no plan_version_id. Create a fresh run before dispatching goals.` } as const
+    }
+
+    let plan = findPlan(planVersionID)
+    if (!plan) {
+      return { error: `No plan found for run ${run.id}. Create a fresh run before dispatching goals.` } as const
+    }
+
+    if (run.status === "queued") {
+      await updateTask(task, { status: "active", error: null, blocking_reason: null }, "Execution submitted")
+      await updateRun(run, { status: "running" }, "Execution submitted")
+      activatedRun = true
+      task = requireTask(taskID)
+      run = requireRun(run.id)
+      plan = findPlan(planVersionID) ?? plan
+    }
+
+    if (!isRunReadyForGoalDispatch({ status: run.status, planVersionID: run.plan_version_id })) {
+      return {
+        error: `Run ${run.id} is ${run.status}. Only accepted/running/blocked runs may dispatch goals. Create a fresh run if this one is terminal.`,
+      } as const
+    }
+
+    return { task, run, plan, createdRun, activatedRun } as const
+  }
+
   /** ensureGoalInWorkflow was the workflow_state.goalSteps pre-allocator. The
    *  shadow table is gone — goal step status is derived from engine_goal_run
    *  at read time. This remains as a no-op for callers still referencing it;
@@ -526,8 +672,7 @@ export function createOrchestratorTools(input: {
             "Any number of design-reference URLs: live pages, design-tool share links " +
             "(Sketch Cloud / Adobe XD / Framer / InVision / Zeplin / Penpot), docs, etc. " +
             "Non-Figma URLs are screenshot-rendered via headless Chromium and attached as visual_reference; " +
-            "Figma URLs use the REST API path. design-analyst then works from those PNGs only — " +
-            "it does not re-fetch the URLs (no webfetch, no network tool).",
+            "Figma URLs use the REST API path. design-analyst receives those PNGs directly and does not use webfetch.",
           ),
         figma_url: z.string().optional().describe(
           "Figma file URL rendered via the Figma REST API (figma.com/file/... or figma.com/design/...). " +
@@ -767,8 +912,9 @@ export function createOrchestratorTools(input: {
             request: task.request,
             // Single-source visual input: every URL / Figma frame / local
             // material the orchestrator resolved has already been turned
-            // into a PNG in `designVisuals`. Raw URLs are not passed down;
-            // design-analyst has no network tool and works from pixels.
+            // into a PNG in `designVisuals`. Prefer those pixels; design-analyst
+            // does not use webfetch, though it may capture an additional live
+            // webpage screenshot with its dedicated `url_screenshot` tool.
             attachments: enrichedHasAttachments ? designVisuals : undefined,
             taskID,
             sessionID: designSession.id,
@@ -1416,6 +1562,56 @@ export function createOrchestratorTools(input: {
       },
     }),
 
+    exec_goal: tool({
+      description:
+        "Dispatch a single pending goal for execution in an isolated worktree. " +
+        "Restores the former execute_goal flow on top of the current durable queued goal_run scheduler. " +
+        "If no active dispatchable run exists, this tool creates or activates one first. STOP after calling this.",
+      inputSchema: z.object({
+        goalID: z.string().describe("The goal ID to execute"),
+        reason: z.string().optional().describe("Why you decided to execute this goal now"),
+      }),
+      execute: async ({ goalID, reason }) => {
+        const goal = listGoals(taskID).find((item) => item.id === goalID)
+        if (!goal) return `Goal ${goalID} not found.`
+        if (!isDispatchableGoal(goal)) {
+          return `Goal ${goalID} is verification-only and does not dispatch to an executor. Re-run delivery to evaluate it on the merged worktree, or modify_goal to convert it into a dispatchable build goal.`
+        }
+
+        const status = goalStatusByID(goalID)
+        if (status === "running") return `Goal ${goalID} is already running.`
+        if (status === "passed") {
+          return `Goal ${goalID} is already passed (terminal success state). To change its contract, use modify_goal(${goalID}, ...) which will reset it to pending automatically. exec_goal does not re-run passed goals.`
+        }
+        if (status === "failed") {
+          return `Goal ${goalID} is in status=failed. Retry failed goals via retry_goal with a concrete root_cause / failure_class / expected_fix analysis, or modify_goal first if the contract itself needs changing.`
+        }
+
+        const runResult = await ensureDispatchableRunForSingleGoal()
+        if ("error" in runResult) return runResult.error
+
+        const { queueDispatchGoals } = await import("./dispatch-queue")
+        const queuedGoalIDs = queueDispatchGoals(taskID, [goalID])
+        if (queuedGoalIDs.length === 0) {
+          return `Goal "${goal.title}" (${goalID}) was not queued. Check depends_on / Attempts — dispatch only happens when dependencies are currently satisfied and the goal still needs execution.`
+        }
+
+        await trackStepStart("dispatch_goal", goalID)
+        requestStopAfterCurrentStep("exec_goal")
+
+        const notes: string[] = []
+        if (runResult.createdRun) notes.push(`created run ${runResult.run.id}`)
+        if (runResult.activatedRun) notes.push(`activated run ${runResult.run.id}`)
+
+        return (
+          `Goal "${goal.title}" (${goalID}) queued for execution via run ${runResult.run.id}. ` +
+          `STOP HERE — task loop will run the pool and re-trigger you when the batch drains.` +
+          (notes.length > 0 ? `\nRun setup: ${notes.join(", ")}.` : "") +
+          (reason ? `\nReason: ${reason}` : "")
+        )
+      },
+    }),
+
     dispatch_goal: tool({
       description:
         "Dispatch specific goals for parallel execution in isolated worktrees. " +
@@ -1573,102 +1769,9 @@ export function createOrchestratorTools(input: {
         reason: z.string().optional().describe("Why you decided to create a run"),
       }),
       execute: async () => {
-        const task = requireTask(taskID)
-        const dbGoals = listGoals(taskID)
-        if (dbGoals.length === 0) return "No goals found. Run requirements first."
-
-        // Rule 23: no idempotency / budget gates. The LLM may choose to open
-        // a new run while a prior one is still live (old run becomes
-        // orphaned for GoalPool to notice), and budget numbers are surfaced
-        // to the prompt via the describe layer instead of refused here.
-
-        const now = Date.now()
-        const executor = task.executor
-        const sessionID = task.session_id!
-
-        // Create a lightweight plan version (goals as plan nodes, no global planner)
-        const planID = Identifier.ascending("plan")
-        const { EnginePlanVersionTable, EnginePlanNodeTable, EngineGoalTable } =
-          await import("@/engine/engine.sql")
-
-        // Plan + plan_nodes + goal linkage go in one transaction (they're
-        // domain-local to the plan snapshot). The run insert goes through
-        // the writer layer afterwards so RunCreated is emitted and the
-        // writer is the single insertion site.
-        Database.transaction((db) => {
-          db.insert(EnginePlanVersionTable).values({
-            id: planID, task_id: taskID, spec_snapshot_id: task.active_spec_version_id ?? null,
-            version: 1, status: "active",
-            summary: `${dbGoals.length} goals`,
-            prompt: task.request,
-            metadata: {},
-            time_created: now, time_updated: now,
-          }).run()
-
-          const goalToPlanNode = new Map<string, string>()
-          const planNodeIDs: string[] = []
-          for (const goal of dbGoals) {
-            const pnID = Identifier.ascending("plan_node")
-            planNodeIDs.push(pnID)
-            goalToPlanNode.set(goal.id, pnID)
-          }
-
-          for (const [index, goal] of dbGoals.entries()) {
-            const resolvedDeps = (goal.depends_on ?? []).flatMap((depGoalID: string) => {
-              const pnID = goalToPlanNode.get(depGoalID)
-              if (!pnID) log.warn("create_run: goal.depends_on references unknown goal ID — dropping", { goalID: goal.id, goalTitle: goal.title, unknownDep: depGoalID })
-              return pnID ? [pnID] : []
-            })
-
-            db.insert(EnginePlanNodeTable).values({
-              id: planNodeIDs[index],
-              task_id: taskID,
-              plan_version_id: planID,
-              kind: "goal",
-              goal_id: goal.id,
-              title: goal.title,
-              brief: renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]),
-              depends_on_ids: resolvedDeps.length > 0 ? resolvedDeps : undefined,
-              order_index: index,
-              metadata: {},
-              time_created: now, time_updated: now,
-            }).run()
-          }
-
-          for (const goal of dbGoals) {
-            db.update(EngineGoalTable)
-              .set({ plan_version_id: planID, time_updated: now })
-              .where(eq(EngineGoalTable.id, goal.id))
-              .run()
-          }
-        })
-
-        const { createRun } = await import("@/engine/writer")
-        const created = createRun({
-          taskID,
-          planVersionID: planID,
-          sessionID,
-          executor,
-          status: "queued",
-          phase: "dispatch",
-          summary: `create_run: ${dbGoals.length} goals queued`,
-          now,
-        })
-        const runID = created.id
-
-        // Link task to the new run/plan via updateTask so the transition is
-        // CAS-guarded and emits TaskUpdated.
-        await updateTask(
-          requireTask(taskID),
-          {
-            active_plan_version_id: planID,
-            active_run_id: runID,
-            status: "active",
-          },
-          `create_run: planID=${planID} runID=${runID}`,
-        )
-
-        return `Run created. runID=${runID}, planID=${planID}, ${dbGoals.length} goals as plan nodes. Call submit_execution(runID=${runID}) to activate dispatch.`
+        const created = await createExecutionRunRecord()
+        if ("error" in created) return created.error
+        return `Run created. runID=${created.runID}, planID=${created.planID}, ${created.goalsCount} goals as plan nodes. Call submit_execution(runID=${created.runID}) to activate dispatch.`
       },
     }),
 

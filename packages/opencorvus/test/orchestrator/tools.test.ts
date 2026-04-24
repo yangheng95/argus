@@ -140,6 +140,82 @@ describe("orchestrator deferred stop", () => {
     })
   })
 
+  test("exec_goal creates or activates a run and queues a single goal", async () => {
+    const now = Date.now()
+    const stamp = now.toString(16)
+    const projectID = `project_exec_${stamp}`
+    const taskID = `tsk_exec_${stamp}`
+    const goalID = `goal_exec_${stamp}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "Exec goal test" })
+
+        Database.use((db) => {
+          db.insert(ProjectTable).values({
+            id: projectID,
+            worktree: process.cwd(),
+            name: "Exec tools test",
+            sandboxes: "[]",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: projectID,
+            session_id: session.id,
+            source: "test",
+            title: "Exec goal task",
+            request: "Verify exec_goal bootstraps a run and queues the goal",
+            status: "active",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineGoalTable).values({
+            id: goalID,
+            task_id: taskID,
+            title: "Exec goal",
+            slug: "exec-goal",
+            objective: "Verify exec_goal creates a run and durable queued goal_run.",
+            acceptance_specs: [],
+            owned_paths: ["src/exec-goal.ts"],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "spec",
+            status: "pending",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+        })
+
+        const { tools, stopSignal, finalizeDeferredStop } = createOrchestratorTools({
+          taskID,
+          agentSessionID: "ses_exec_goal_test",
+          signal: new AbortController().signal,
+        })
+
+        const result = await tools.exec_goal.execute({ goalID }, {} as any)
+
+        const task = requireTask(taskID)
+        const runID = task.active_run_id!
+        expect(result).toContain(`Goal "Exec goal" (${goalID}) queued for execution via run ${runID}.`)
+        expect(runID).toBeTruthy()
+        expect(requireRun(runID).status).toBe("running")
+        expect(listQueuedGoalRunsForRun(runID).map((goalRun) => goalRun.goal_id)).toEqual([goalID])
+        expect(stopSignal.aborted).toBe(false)
+        expect(finalizeDeferredStop()).toBe("exec_goal")
+        expect(stopSignal.aborted).toBe(true)
+      },
+    })
+  })
+
   test("submit_execution defers stop abort until the current step is finalized", async () => {
     const now = Date.now()
     const stamp = now.toString(16)

@@ -11,6 +11,7 @@ import { createGoalRun } from "@/engine/persist"
 import {
   findPlan,
   findTask,
+  findLatestTipGoalRun,
   listGoalRunsForDispatch,
   listGoalsByPlan,
   listPlanNodesByPlan,
@@ -55,6 +56,27 @@ export function queueDispatchGoals(taskID: string, goalIDs: string[]): string[] 
   }
 
   return queuedGoalIDs
+}
+
+/**
+ * Materialize fresh queued goal_run rows for goals whose current tip carries
+ * explicit redispatch intent (superseded_reason). This closes the loop for
+ * delivery_rework / manual_retry / modify_contract paths after the old
+ * terminal tip was marked superseded but no queued dispatch fact exists yet.
+ *
+ * Dependency ordering still goes through queueDispatchGoals/isGoalDispatchable,
+ * so only currently ready goals are queued; blocked dependents remain for a
+ * later loop turn once their prerequisites complete.
+ */
+export function queueRedispatchGoals(taskID: string, goalIDs: string[]): string[] {
+  if (goalIDs.length === 0) return []
+  const dedupedGoalIDs = [...new Set(goalIDs)]
+  const redispatchableGoalIDs = dedupedGoalIDs.filter((goalID) => {
+    const tip = findLatestTipGoalRun(goalID)
+    return !!tip?.superseded_reason
+  })
+  if (redispatchableGoalIDs.length === 0) return []
+  return queueDispatchGoals(taskID, redispatchableGoalIDs)
 }
 
 /** Current queued dispatch facts for this task's active run. */

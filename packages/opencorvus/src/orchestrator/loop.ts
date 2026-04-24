@@ -374,8 +374,24 @@ async function runTaskLoopInner(input: {
     // dispatch_goal / submit_execution now materialize dispatch immediately as
     // queued goal_run rows. The pool consumes those authoritative queued tips;
     // there is no separate in-memory channel to recover after restart.
-    const { listQueuedDispatchGoalIDs } = await import("./dispatch-queue")
-    const pendingDispatch = listQueuedDispatchGoalIDs(taskID)
+    const { listQueuedDispatchGoalIDs, queueRedispatchGoals } = await import("./dispatch-queue")
+    let pendingDispatch = listQueuedDispatchGoalIDs(taskID)
+
+    if (pendingDispatch.length === 0 && !hasActive) {
+      const redispatchGoalIDs = goals
+        .filter((g) => g.needs_redispatch)
+        .map((g) => g.id)
+      if (redispatchGoalIDs.length > 0) {
+        const queuedRedispatchGoalIDs = queueRedispatchGoals(taskID, redispatchGoalIDs)
+        if (queuedRedispatchGoalIDs.length > 0) {
+          pendingDispatch = queuedRedispatchGoalIDs
+          log.info("materialized redispatch queue entries", {
+            taskID,
+            queuedGoalIDs: queuedRedispatchGoalIDs,
+          })
+        }
+      }
+    }
 
     if (pendingDispatch.length > 0) {
       const concurrency = await effectiveMaxExecutorGroups(taskAfter)
