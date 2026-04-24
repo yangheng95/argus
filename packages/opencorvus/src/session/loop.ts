@@ -51,6 +51,68 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 export namespace SessionLoop {
   const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
 
+  // ---------------------------------------------------------------------------
+  // Ephemeral per-session tools (phase 3-a-1 of specs/new-arch/16-unified-teardown.md)
+  //
+  // Some stage agents (intent-analysis, requirements, architect, delivery,
+  // fidelity reviewer, ...) need to expose agent-scoped tool objects
+  // (`extract_slot`, `register_requirement`, `submit_verdict`, ...) for a
+  // single prompt invocation. These tools do not belong in the global Agent
+  // registry because their meaning is bounded to one agent's lifetime, and
+  // persisting them per-message would require serialising function bodies.
+  //
+  // The solution is a process-local Map keyed by sessionID. Callers register
+  // the tools before `SessionPrompt.prompt()` runs the loop and clear them
+  // when the prompt resolves. `resolveTools` merges the registered tools on
+  // top of the registry- and MCP-sourced ones.
+  //
+  // Scope rules:
+  //   - One entry per sessionID. Overwriting replaces the prior set.
+  //   - Tools survive only within a single agent invocation; callers MUST
+  //     clear on both success and failure paths.
+  //   - The registry is IN-MEMORY only. Crash recovery re-enters the child
+  //     session from DB-persisted messages; the extra tools would be gone,
+  //     and the matching stage-agent caller must either re-register or
+  //     abandon the session.
+  // ---------------------------------------------------------------------------
+  const ephemeralTools = new Map<string, Record<string, AITool>>()
+
+  /**
+   * Register a map of agent-scoped tool objects for the given session.
+   *
+   * Passing `undefined` clears any previously registered entry.
+   * Subsequent calls replace the map wholesale; there is no partial merge
+   * so callers can reason about the exact surface the LLM will see.
+   */
+  export function setExtraTools(sessionID: string, tools: Record<string, AITool> | undefined): void {
+    if (!tools || Object.keys(tools).length === 0) {
+      ephemeralTools.delete(sessionID)
+      return
+    }
+    ephemeralTools.set(sessionID, tools)
+  }
+
+  /** Read back the currently registered tools. Returns an empty record
+   *  when nothing is registered. Used by `resolveTools`. */
+  export function getExtraTools(sessionID: string): Record<string, AITool> {
+    return ephemeralTools.get(sessionID) ?? {}
+  }
+
+  /** Convenience wrapper: set the tools, run `fn`, always clear afterwards
+   *  regardless of whether `fn` resolved or threw. */
+  export async function withExtraTools<T>(
+    sessionID: string,
+    tools: Record<string, AITool>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    setExtraTools(sessionID, tools)
+    try {
+      return await fn()
+    } finally {
+      setExtraTools(sessionID, undefined)
+    }
+  }
+
   function collectLoopState(msgs: Message.WithParts[]) {
     let lastUser: Message.User | undefined
     let lastAssistant: Message.Assistant | undefined
@@ -948,6 +1010,15 @@ export namespace SessionLoop {
         }
       }
       tools[key] = item
+    }
+
+    // Merge per-session ephemeral tools last so agent-scoped callers can
+    // shadow a built-in name if they deliberately want to (e.g. a stage
+    // agent that replaces `read` with a sandboxed variant). Shadowing is
+    // bounded to the session's lifetime — see setExtraTools doc comment.
+    const extras = getExtraTools(input.session.id)
+    for (const [name, extraTool] of Object.entries(extras)) {
+      tools[name] = extraTool
     }
 
     return tools

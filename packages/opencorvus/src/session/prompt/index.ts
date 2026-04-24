@@ -34,7 +34,15 @@ export namespace SessionPrompt {
   export const assertNotBusy = SessionPromptState.assertNotBusy
   export const cancel = SessionPromptState.cancel
 
-  export const { LoopInput, loop, resolveTools, createStructuredOutputTool } = SessionLoop
+  export const {
+    LoopInput,
+    loop,
+    resolveTools,
+    createStructuredOutputTool,
+    setExtraTools,
+    getExtraTools,
+    withExtraTools,
+  } = SessionLoop
   export const { ShellInput, shell } = SessionShell
   export type ShellInput = SessionShell.ShellInput
   export const { CommandInput, command } = SessionCommand
