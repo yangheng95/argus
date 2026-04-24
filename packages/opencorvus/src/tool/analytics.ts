@@ -1,6 +1,6 @@
 import { Instance } from "@/project/instance"
 import { Database, desc, eq, and, like } from "@/storage/db"
-import { EngineTaskTable, EngineEvaluationTable, EngineGoalTable } from "@/engine"
+import { EngineArtifactTable, EngineTaskTable, EngineGoalTable } from "@/engine"
 import { goalStatusByID } from "@/engine/describe"
 import { Tool } from "./tool"
 import z from "zod"
@@ -52,17 +52,26 @@ export const AnalyticsTool = Tool.define("analytics", {
         .sort((a, b) => a - b)
       const median = durations.length > 0 ? durations[Math.floor((durations.length - 1) / 2)] : null
 
-      // 评估通过率
+      // 评估通过率 — phase-6 artifact-backed: read engine_artifact rows with
+      // kind="verification-evidence". Payload carries {status,...}. Filter to
+      // project via JOIN on engine_task.
       const evals = Database.use((db) =>
         db
-          .select()
-          .from(EngineEvaluationTable)
-          .innerJoin(EngineTaskTable, eq(EngineEvaluationTable.task_id, EngineTaskTable.id))
-          .where(eq(EngineTaskTable.project_id, projectID))
+          .select({ payload: EngineArtifactTable.payload })
+          .from(EngineArtifactTable)
+          .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
+          .where(
+            and(
+              eq(EngineTaskTable.project_id, projectID),
+              eq(EngineArtifactTable.kind, "verification-evidence"),
+            ),
+          )
           .all(),
       )
       const totalEvals = evals.length
-      const passedEvals = evals.filter((e) => e.engine_evaluation.status === "passed").length
+      const passedEvals = evals.filter(
+        (e) => (e.payload as { status?: string } | null)?.status === "passed",
+      ).length
 
       return {
         title: "Project Analytics Summary",

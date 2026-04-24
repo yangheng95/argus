@@ -11,7 +11,7 @@
  * 读取方：
  *  - P2 replay.ts：按 task_id / delivery_id ASC 拉出 score 曲线
  *
- * App-layer invariants（与 EngineEvaluationTable.scope 同风格）：
+ * App-layer invariants（与 verification-evidence artifact scope 同风格）：
  *  - 每一行必须对应一个真实 commit_sha（rule 21：禁空转，每轮必 commit）
  *  - (task_id, delivery_id, round_index) 唯一；round_index 从 0 递增
  *  - rollback_from_round=null 表示该轮为正向推进；非 null 表示该轮是从历史 best 回滚回来重来

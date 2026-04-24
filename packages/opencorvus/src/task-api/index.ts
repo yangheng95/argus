@@ -31,7 +31,6 @@ import {
   EngineArtifactTable,
   EngineChannelBindingTable,
   EngineDeliveryTable,
-  EngineEvaluationTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
   EngineProgressSnapshotTable,

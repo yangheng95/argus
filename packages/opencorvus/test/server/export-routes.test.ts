@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import {
+  EngineArtifactTable,
   EngineDeliveryTable,
-  EngineEvaluationTable,
   EngineGoalRunTable,
   EngineGoalTable,
   EnginePlanNodeTable,
@@ -194,33 +194,30 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             },
           ])
           .run()
-        db.insert(EngineEvaluationTable)
+        // Phase-6-b: evidence lives in engine_artifact (kind='verification-evidence').
+        // The payload mirrors the old engine_evaluation fields.
+        db.insert(EngineArtifactTable)
           .values([
             {
               id: evaluationID,
               task_id: taskID,
               run_id: runID,
               delivery_id: deliveryID,
-              status: "passed",
-              verdict: "accepted",
-              summary: "Coordinator evaluation",
-              checks: [
-                {
-                  name: "build",
-                  status: "passed",
-                  family: "build",
-                  label: "Build",
-                },
-                {
-                  name: "goal_check",
-                  status: "passed",
-                  family: "goal_check",
-                  label: "Goal Check",
-                },
-              ],
+              kind: "verification-evidence",
+              label: "evidence-delivery",
+              payload: {
+                scope: "delivery",
+                status: "passed",
+                verdict: "accepted",
+                summary: "Coordinator evaluation",
+                checks: [
+                  { name: "build", status: "passed", family: "build", label: "Build" },
+                  { name: "goal_check", status: "passed", family: "goal_check", label: "Goal Check" },
+                ],
+                time_completed: now,
+              },
               time_created: now,
               time_updated: now,
-              time_completed: now,
             },
             {
               id: goalEvaluationID,
@@ -228,20 +225,20 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
               run_id: runID,
               goal_run_id: goalRunID,
               delivery_id: goalDeliveryID,
-              status: "passed",
-              verdict: "accepted",
-              summary: "Goal evaluation",
-              checks: [
-                {
-                  name: "spec_check",
-                  status: "passed",
-                  family: "spec_check",
-                  label: "Spec Check",
-                },
-              ],
+              kind: "verification-evidence",
+              label: "evidence-goal_run",
+              payload: {
+                scope: "goal_run",
+                status: "passed",
+                verdict: "accepted",
+                summary: "Goal evaluation",
+                checks: [
+                  { name: "spec_check", status: "passed", family: "spec_check", label: "Spec Check" },
+                ],
+                time_completed: now,
+              },
               time_created: now,
               time_updated: now,
-              time_completed: now,
             },
           ])
           .run()

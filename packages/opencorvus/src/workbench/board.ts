@@ -7,6 +7,7 @@ import {
   findEvaluationsByTask,
   findDeliveryByGoalRun,
   findLatestEvaluationForGoalRun,
+  type EvaluationRow,
 } from "@/engine/store"
 import {
   findSpecSnapshot,
@@ -15,7 +16,6 @@ import {
   EngineChannelBindingTable,
   EngineDeliveryTable,
   EngineExecutorSessionTable,
-  EngineEvaluationTable,
   EngineGoalRunTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
@@ -555,9 +555,7 @@ function viewBoardDelivery(
 }
 
 function viewBoardEvaluation(
-  row:
-    | (typeof EngineEvaluationTable.$inferSelect)
-    | undefined,
+  row: EvaluationRow | undefined,
 ) {
   if (!row) return undefined
   return {
@@ -581,7 +579,7 @@ function boardFailure(input: {
   task: typeof EngineTaskTable.$inferSelect
   run: (typeof EngineRunTable.$inferSelect) | undefined
   interactions: Array<typeof EngineInteractionRequestTable.$inferSelect>
-  evaluation: (typeof EngineEvaluationTable.$inferSelect) | undefined
+  evaluation: EvaluationRow | undefined
 }) {
   const interaction = input.interactions[0]
   if (interaction) {
@@ -635,7 +633,7 @@ function boardOverview(input: {
   pendingInteractions: Array<typeof EngineInteractionRequestTable.$inferSelect>
   candidateDelivery: (typeof EngineDeliveryTable.$inferSelect) | undefined
   acceptedDelivery: (typeof EngineDeliveryTable.$inferSelect) | undefined
-  evaluation: (typeof EngineEvaluationTable.$inferSelect) | undefined
+  evaluation: EvaluationRow | undefined
   currentFailure:
     | {
         source: "task" | "run" | "interaction" | "evaluation"
