@@ -350,7 +350,14 @@ await SessionPrompt.prompt({
 - **5-a**（✅ 2026-04-24）：`engine/build-semaphore.ts` — `BuildSemaphore.acquire(task) / withSlot(task, fn) / inFlight(id) / waiting(id) / reset()`；per-task 计数，FIFO waiter 队列；limit 每次 acquire 动态读 `effectiveMaxExecutorGroups(task)`；空 entry 自动 GC；in-memory only（rule 23 / 26 合规：无 FSM、无持久化）；6 单测覆盖立即获取 / 排队 / 多任务隔离 / withSlot ok+throw / reset 排空
 - **5-b** 拆为两步以缩小单 PR 风险：
   - **5-b-1**（✅ 2026-04-24）：`src/build-agent/types.ts`（目录名避开 `.gitignore` 的 `build/` 条目）— `BuildResultSchema`（status=passed|failed / summary / patch_summary / commit_ref? / tests / error?）+ `BuildTarget` 区分 request-path 与 goal-path + `BuildTestResult`；9 zod shape 单测锁死。API 合约定义完毕，5-b-2 实现不再反复重改
-  - **5-b-2**（pending）：`src/build-agent/agent.ts` 实现 `BuildAgent.run({target, task, parentSessionID, signal, model?}): Promise<BuildResult>`；内部 `BuildSemaphore.withSlot` 限流；`Worktree.create` + `Ownership.Worktree.record` 管理 worktree 生命周期；SessionPrompt.prompt 带 `format: {type:"json_schema", schema: BuildResultSchema}`；finally 块调 `cleanupGoalWorkspace`；prompt core `src/prompt/core/build-core.txt` + `agent.build` registry entry（tools include: read/write/edit/bash/find_files/search_code；steps=80 默认）。real-LLM smoke 仿 intent-analysis 套路
+  - **5-b-2**（✅ 2026-04-24 代码完成，real-LLM smoke 留 5-b-3）：`src/build-agent/agent.ts` 实现 `BuildAgent.run({target, task, parentSessionID, model?, signal?, workDir?}): Promise<{result, sessionID, worktreeDir?}>`
+    - 内部调用链：`BuildSemaphore.withSlot` → `Worktree.create`（`ownsWorktree = !input.workDir` 时自动建，否则用 caller 的）→ `Ownership.Worktree.record`（marker）→ `Session.createNext({kind:"build", directory: worktreeDir})` → `SessionPrompt.prompt({ agent:"build", system: BUILD_CORE, format: json_schema(BuildResultSchema) })`
+    - finally 块：`signal.removeEventListener(abortPrompt)`；若 ownsWorktree 自动调 `cleanupGoalWorkspace(worktreeDir)`
+    - 返回值：从 `finalMessage.info.structured` zod safeParse 到 `BuildResult`；校验失败 throw（StructuredOutput 契约失败属于 infra 故障）
+    - 复用现有 `build` agent registry entry（默认 coding agent，tools exclude planner/panel/tui 等），system prompt 由 call-site 覆盖为 build-core
+    - 新增 `src/prompt/core/build-core.txt` 明示：读-写-验-提交-StructuredOutput，禁跨 owned_paths，禁 fabricate tests，禁 WIP 脏 worktree
+    - typecheck clean，232 session+engine+build-agent 测试通过；0 retrogression
+  - **5-b-3**（pending）：real-LLM smoke test 仿 intent-analysis 套路，gated by `OPENCORVUS_RUN_BUILD_SMOKE=1`，验证 BuildAgent.run 产出合规 BuildResult + 真实 commit_ref + worktree teardown 完成
 - **5-c**：orchestrator prompt 改为使用 `build`（单 goal / 多 goal 并行均经此路径）；`dispatch_goal / exec_goal / submit_execution / retry_goal` 从 LLM 可见工具列表移除（实现保留，便于回滚）
 - **5-d**：GoalPool 驱动路径删除（orchestrator/loop.ts 不再 pool.drain()）；worktree 创建 / teardown 由 build tool 内部 try/finally 管理
 - **5-e**：读模型切换：`describe.ts` / `task-api` / `workbench/board.ts` 统一 projection 入口；overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
