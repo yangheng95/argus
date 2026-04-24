@@ -1,6 +1,6 @@
 import path from "path"
-import { createTwoFilesPatch } from "diff"
 import { Global } from "@/global"
+import { Instance } from "@/project/instance"
 import { Vcs } from "@/project/vcs"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
@@ -83,39 +83,82 @@ export namespace DeliveryPipeline {
 // 内置适配器
 // ---------------------------------------------------------------------------
 
+// P0-C.3 — single source of truth for the patch + changed-file list is
+// `git diff <baseRef>..HEAD` against the main worktree. The previous version
+// read `ctx.delivery.result.{changed_files,diffs}`, a snapshot captured at
+// goal-merge time. The aborted-recovery path never populated it (resulting in
+// `changed_files: []` published over real work) and even on the happy path it
+// missed every edit the delivery picky loop committed per round (P0-C.1).
 const workspaceExportAdapter: DeliveryAdapter = {
   id: "workspace_export",
   async execute(ctx) {
-    const result = ctx.delivery.result ?? {}
-    const diffs = Array.isArray(result.diffs) ? result.diffs : []
-    const changedFiles = Array.isArray(result.changed_files)
-      ? result.changed_files.filter((item): item is string => typeof item === "string")
-      : []
-    const patch = diffs
-      .map((item) =>
-        createTwoFilesPatch(item.file, item.file, item.before ?? "", item.after ?? "", "before", "after"),
-      )
-      .join("\n")
+    const baseRef = readBaselineCommit(ctx.task)
+    const cwd = Instance.directory
+    const { changedFiles, patch } = await collectMainWorktreeDiff(cwd, baseRef)
     const out = path.join(Global.Path.data, "delivery", `${ctx.delivery.id}.patch`)
     await Filesystem.write(out, patch || "")
+    const summary =
+      changedFiles.length > 0
+        ? `Exported workspace patch (${changedFiles.length} file${changedFiles.length === 1 ? "" : "s"} since baseline ${baseRef ?? "n/a"}).`
+        : "Workspace clean since baseline; empty patch exported."
     return {
       id: "workspace_export",
       status: "delivered",
-      summary: "Workspace patch and changed-file summary exported.",
+      summary,
       artifacts: [
         {
           kind: "patch" as const,
           label: "delivery.patch",
-          payload: { file: out, changed_files: changedFiles, patch },
+          payload: { file: out, changed_files: changedFiles, patch, base_ref: baseRef },
         },
         {
           kind: "report" as const,
           label: "delivery.export",
-          payload: { changed_files: changedFiles, summary: ctx.delivery.summary },
+          payload: { changed_files: changedFiles, summary: ctx.delivery.summary, base_ref: baseRef },
         },
       ],
     }
   },
+}
+
+function readBaselineCommit(task: TaskRow): string | undefined {
+  const meta = task.metadata
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return
+  const git = (meta as Record<string, unknown>).git
+  if (!git || typeof git !== "object" || Array.isArray(git)) return
+  const baseline = (git as Record<string, unknown>).baseline
+  if (!baseline || typeof baseline !== "object" || Array.isArray(baseline)) return
+  const commit = (baseline as Record<string, unknown>).commit
+  return typeof commit === "string" && commit ? commit : undefined
+}
+
+async function collectMainWorktreeDiff(
+  cwd: string,
+  baseRef: string | undefined,
+): Promise<{ changedFiles: string[]; patch: string }> {
+  const { $ } = await import("bun")
+  // EngineGit.prepare is the contract that puts task.metadata.git.baseline.commit
+  // in place; reaching here without it means the task bypassed prepare. Emit a
+  // loud warning and fall through to the working-tree diff so a misconfigured
+  // task still ships a non-empty patch when the agent left dirty edits.
+  if (!baseRef) {
+    log.warn("publisher: workspace_export missing baseline commit — falling back to working-tree diff", { cwd })
+  }
+  const range = baseRef ? `${baseRef}..HEAD` : "HEAD"
+  const namesResult = await $`git -c core.quotepath=false diff --no-ext-diff --name-only ${range}`
+    .cwd(cwd)
+    .quiet()
+    .nothrow()
+  const changedFiles = namesResult.stdout
+    .toString()
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const patchResult = await $`git -c core.quotepath=false diff --no-ext-diff ${range}`
+    .cwd(cwd)
+    .quiet()
+    .nothrow()
+  return { changedFiles, patch: patchResult.stdout.toString() }
 }
 
 const gitPreviewAdapter: DeliveryAdapter = {

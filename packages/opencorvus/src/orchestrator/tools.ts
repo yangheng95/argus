@@ -2013,6 +2013,34 @@ export function createOrchestratorTools(input: {
         // Goal statuses are still read below for aggregation, but no branch
         // here rejects the call based on them.
 
+        // P0-C.2 — reclaim per-goal delivery commits left detached on goal
+        // worktree branches when a previous run was aborted before
+        // mergeGoalDelivery cherry-picked them into main. Aggregating against
+        // a main HEAD that is missing executor work would silently squash an
+        // empty diff over real commits. If any commit cannot be reclaimed the
+        // task is failed — squashing past detached commits is forbidden.
+        const reclaim = await EngineGit.reclaimDetachedGoalCommits({ taskID, runID: run.id })
+        if (reclaim.reclaimed.length > 0 || reclaim.unreclaimable.length > 0) {
+          log.info("deliver: reclaim detached goal commits", {
+            taskID, runID: run.id,
+            reclaimed: reclaim.reclaimed.length,
+            unreclaimable: reclaim.unreclaimable.length,
+          })
+        }
+        if (reclaim.unreclaimable.length > 0) {
+          await trackStepComplete("deliver", undefined, true)
+          const detail = reclaim.unreclaimable
+            .map((u) => `${u.goalRunID}@${u.commitRef.slice(0, 8)}: ${u.reason}`)
+            .join("; ")
+          const summary = `Cannot deliver: ${reclaim.unreclaimable.length} detached goal-run commit(s) could not be cherry-picked into main`
+          await updateTask(
+            task,
+            { status: "failed", blocking_reason: null, error: `${summary}. ${detail}`, time_completed: Date.now() },
+            summary,
+          )
+          return `${summary}. ${detail}. Resolve the conflicts by hand or fail the task.`
+        }
+
         // Aggregate per-goal deliveries
         const { listGoalRunsForRun, findDeliveryByGoalRun } = await import("@/engine/store")
         const goalRuns = listGoalRunsForRun(run.id)
@@ -2440,6 +2468,21 @@ export function createOrchestratorTools(input: {
             agentVerdict: verdict.verdict,
             aggregate_score: snapshot.aggregate_score.toFixed(3),
             blocking_unmet: snapshot.blocking_unmet_count,
+          })
+
+          // P0-C.1 — anchor every delivery picky-loop iteration in git so
+          // (a) the LKG rollback (P0-C.4) has commits to reset to, (b) the
+          // publisher computes changedFiles from git history (P0-C.3), and
+          // (c) `git log --grep="delivery round"` reads the round timeline.
+          // Allow-empty so a "no edits this round" verdict still anchors.
+          const roundCommit = await EngineGit.commitDeliveryRound({
+            task: requireTask(taskID),
+            iteration,
+            verdict,
+          })
+          log.info("deliver: round commit", {
+            taskID, iteration, mode: roundCommit.mode,
+            commit: roundCommit.commit, error: roundCommit.error,
           })
 
           if (verdict.verdict === "accepted") {
