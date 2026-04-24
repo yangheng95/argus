@@ -2,9 +2,18 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Session } from "../../src/session"
 import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
-import { EngineGoalRunTable, EngineGoalTable, EngineRunTable, EngineTaskTable } from "../../src/engine/engine.sql"
+import {
+  EngineGoalRunTable,
+  EngineGoalTable,
+  EnginePlanNodeTable,
+  EnginePlanVersionTable,
+  EngineRunTable,
+  EngineTaskTable,
+} from "../../src/engine/engine.sql"
+import { GoalPool } from "../../src/engine/goal-pool"
+import { startNewAttempt } from "../../src/engine/persist"
 import { hooks, updateTask } from "../../src/engine/state"
-import { requireTask } from "../../src/engine/store"
+import { listQueuedGoalRunsForRun, requireTask } from "../../src/engine/store"
 import { Orchestrator } from "../../src/orchestrator/agent"
 import { interruptTaskLoop, runTaskLoop } from "../../src/orchestrator/loop"
 import { Log } from "../../src/util/log"
@@ -120,7 +129,7 @@ describe("orchestrator loop", () => {
 
         await first
 
-        expect(seen).toEqual(["batch_complete", "operator_message"])
+        expect(seen).toEqual(["operator_message"])
         expect(elapsedMs).toBeLessThan(1_000)
       },
     })
@@ -164,6 +173,124 @@ describe("orchestrator loop", () => {
         })
 
         expect(seen).toEqual(["operator_message"])
+      },
+    })
+  })
+
+  test("batch_complete materializes queued redispatch runs before entering GoalPool", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ kind: "root", title: "Redispatch loop test" })
+        const now = Date.now()
+        const taskID = `tsk_loop_redispatch_${now}`
+        const runID = `run_loop_redispatch_${now}`
+        const planID = `plan_loop_redispatch_${now}`
+        const goalID = `goal_loop_redispatch_${now}`
+        const goalRunID = `goalrun_loop_redispatch_${now}`
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: session.id,
+            source: "test",
+            title: "Loop redispatch task",
+            request: "Verify delivery_rework gets re-queued before GoalPool",
+            status: "active",
+            priority: "normal",
+            active_run_id: runID,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EnginePlanVersionTable).values({
+            id: planID,
+            task_id: taskID,
+            version: 1,
+            status: "active",
+            summary: "Redispatch loop plan",
+            prompt: "Redispatch loop prompt",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineRunTable).values({
+            id: runID,
+            task_id: taskID,
+            session_id: session.id,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineGoalTable).values({
+            id: goalID,
+            task_id: taskID,
+            plan_version_id: planID,
+            title: "Loop redispatch goal",
+            slug: "loop-redispatch-goal",
+            objective: "Requeue a superseded completed goal before GoalPool runs.",
+            acceptance_specs: [],
+            owned_paths: ["src/loop-redispatch.ts"],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "spec",
+            status: "pending",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EnginePlanNodeTable).values({
+            id: `node_loop_redispatch_${now}`,
+            task_id: taskID,
+            plan_version_id: planID,
+            kind: "goal",
+            goal_id: goalID,
+            title: "Loop redispatch goal",
+            brief: "Redispatch goal node",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineGoalRunTable).values({
+            id: goalRunID,
+            task_id: taskID,
+            goal_id: goalID,
+            coordinator_run_id: runID,
+            executor: "opencode",
+            status: "completed",
+            time_started: now - 2_000,
+            time_completed: now - 1_000,
+            time_created: now - 2_000,
+            time_updated: now - 1_000,
+          }).run()
+        })
+
+        startNewAttempt({ goalID, reason: "delivery_rework" })
+
+        const loopAbort = new AbortController()
+
+        spyOn(Orchestrator, "processTask").mockImplementation(async () => {})
+        spyOn(GoalPool.prototype, "submit").mockImplementation(() => {
+          expect(listQueuedGoalRunsForRun(runID).map((goalRun) => goalRun.goal_id)).toEqual([goalID])
+          loopAbort.abort("loop-test-complete")
+        })
+
+        await runTaskLoop({
+          taskID,
+          trigger: { kind: "batch_complete", runID, summary: { passed: 0, failed: 0, total: 1 } },
+          signal: loopAbort.signal,
+          hooks: hooks(),
+        })
+
+        expect(listQueuedGoalRunsForRun(runID).map((goalRun) => goalRun.goal_id)).toEqual([goalID])
       },
     })
   })
