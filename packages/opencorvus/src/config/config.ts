@@ -1197,6 +1197,25 @@ export namespace Config {
             })
             .optional()
             .describe("Delivery agent configuration"),
+          delivery_visual: z
+            .object({
+              phash_hamming_max: z.number().int().min(0).max(64).optional().describe("P0-B hard gate: pHash Hamming distance upper bound (structure)"),
+              ssim_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: mean SSIM lower bound (texture/detail)"),
+              chart_region_density_min_ratio: z.number().min(0).max(1).optional().describe("P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)"),
+              unique_color_ratio_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)"),
+              text_hit_ratio_min: z.number().min(0).max(1).optional().describe("P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)"),
+              score_weights: z
+                .object({
+                  phash: z.number().min(0).max(1).optional(),
+                  ssim: z.number().min(0).max(1).optional(),
+                  density: z.number().min(0).max(1).optional(),
+                  text_hit: z.number().min(0).max(1).optional(),
+                })
+                .optional()
+                .describe("Composite score weights; four values must sum to 1 (runtime-enforced)"),
+            })
+            .optional()
+            .describe("P0-B delivery visual numeric hard-gate thresholds. Change values then rebaseline via script/delivery/replay.ts."),
           design_analyst: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for design analyst agent"),

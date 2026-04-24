@@ -4,7 +4,7 @@
  * LLM 无权推翻肉眼可见的差距：verdict 前先跑这里的 5 条硬门，任一 fail
  * 直接 rejected。LLM judge 只负责硬门通过后的软性瑕疵判定。
  *
- * 硬门清单（见 visual-thresholds.json 对应阈值）：
+ * 硬门清单（阈值由 EngineConfig.delivery_visual 统一管理，单源，rule 25）：
  *  1. phash_hamming          — 8x8 aHash 汉明距离 ≤ T1，卡整体结构
  *  2. ssim                   — ssim.js mean SSIM ≥ T2，卡纹理/细节
  *  3. chart_region_density   — 非白像素密度 ≥ reference × 0.6，卡空骨架
@@ -19,7 +19,7 @@
  */
 import z from "zod"
 import ssim from "ssim.js"
-import thresholdsJson from "./visual-thresholds.json" with { type: "json" }
+import { EngineConfig } from "@/engine/config"
 import {
   decodePNG,
   nonWhiteDensity,
@@ -68,14 +68,17 @@ export const VisualThresholds = z.object({
 })
 export type VisualThresholdsType = z.infer<typeof VisualThresholds>
 
-export const VISUAL_THRESHOLDS_RELATIVE = "src/delivery/visual-thresholds.json"
-
 /**
- * 同步加载阈值（静态 import，打包进 Bun 二进制，避免运行时 cwd 定位）。
- * 权重相加必须为 1，校验失败即抛——P0-B 的复合 score 单调语义依赖此不变式。
+ * 从 EngineConfig.delivery_visual 读取阈值，zod 校验 + score_weights sum-to-1 校验。
+ * 单源配置（rule 22 / rule 25）。
+ *
+ * 故意用同步 `getDefaults()`：保持既有调用处 `loadVisualThresholds()` 签名
+ * 不变，避免跨文件协同改 await。DEFAULTS 即是唯一事实源；待需要支持
+ * opencorvus.jsonc 实时覆盖时再改 async + 同步更新两个调用点。
  */
 export function loadVisualThresholds(): VisualThresholdsType {
-  const parsed = VisualThresholds.parse(thresholdsJson)
+  const cfg = EngineConfig.getDefaults().delivery_visual
+  const parsed = VisualThresholds.parse(cfg)
   const { phash, ssim: ssimW, density, text_hit } = parsed.score_weights
   const sum = phash + ssimW + density + text_hit
   if (Math.abs(sum - 1) > 1e-6) {
