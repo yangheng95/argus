@@ -18,17 +18,17 @@ import type { MiniWorkflow } from "./workflow"
 // 类型定义
 // ═══════════════════════════════════════════════════════════════════
 
-export interface RequirementsConfig {
+interface RequirementsConfig {
   max_steps: number
   skills: string[]
 }
 
-export interface ArchitectConfig {
+interface ArchitectConfig {
   max_steps: number
   skills: string[]
 }
 
-export interface PlannerConfig {
+interface PlannerConfig {
   max_steps: number
   skills: string[]
 }
@@ -42,7 +42,7 @@ export interface PlannerConfig {
  * runner config: which check tier to apply and whether to run them inside
  * the goal-pool dispatch loop.
  */
-export interface DeliveryConfig {
+interface DeliveryConfig {
   max_steps: number
   max_retries: number
   skills: string[]
@@ -56,12 +56,12 @@ export interface DeliveryConfig {
   merge_conflict_max_retries: number
 }
 
-export interface DesignAnalystConfig {
+interface DesignAnalystConfig {
   max_steps: number
   skills: string[]
 }
 
-export interface IntentAnalysisConfig {
+interface IntentAnalysisConfig {
   max_steps: number
   skills: string[]
 }
@@ -88,7 +88,7 @@ export interface IntentAnalysisConfig {
  * heartbeat), NOT from an unconditional setInterval. See
  * scheduler/task-queue-service.ts.
  */
-export interface ActivityConfig {
+interface ActivityConfig {
   session_llm_idle_ms: number
   executor_events_idle_ms: number
   task_queue_run_timeout_ms: number
@@ -104,7 +104,7 @@ export interface ActivityConfig {
  * score_weights 四项相加必须为 1（运行时校验）；score 的单调性是 P0-C.4
  * LKG 回滚比较的语义基础，禁止破坏。
  */
-export interface DeliveryVisualConfig {
+interface DeliveryVisualConfig {
   /** aHash 8×8 汉明距离上限；越小越相似。 */
   phash_hamming_max: number
   /** mean SSIM 下限；越大越相似。 */
