@@ -66,7 +66,18 @@ import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { parseSSE } from "../../src/util/sse"
-import { inactivityAgeMs } from "../../src/util/activity-timeout"
+// Inlined from the now-deleted util/activity-timeout (orphan cleanup commit
+// a0402f173). Benchmark is the only remaining caller — keeping it local here
+// avoids resurrecting a whole module for two uses (rule 26) and avoids a
+// shim that would violate rule 22 (dual source).
+function inactivityAgeMs(now: number, ...values: Array<number | null | undefined>): number {
+  let latest = 0
+  for (const v of values) {
+    if (typeof v === "number" && Number.isFinite(v) && v > latest) latest = v
+  }
+  if (latest < 1) return Number.POSITIVE_INFINITY
+  return Math.max(0, now - latest)
+}
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
 // Accept either `--name=value` or `--name value`. The old version quietly
