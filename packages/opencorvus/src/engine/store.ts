@@ -257,6 +257,19 @@ export function findDeliveryByGoalRun(goalRunID: string) {
   )
 }
 
+/** Latest evaluation row for a goal_run (newest first, single row). */
+export function findLatestEvaluationForGoalRun(goalRunID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineEvaluationTable)
+      .where(eq(EngineEvaluationTable.goal_run_id, goalRunID))
+      .orderBy(desc(EngineEvaluationTable.time_created))
+      .limit(1)
+      .get(),
+  )
+}
+
 export function listGoalRunsForTask(taskID: string) {
   return Database.use((db) =>
     db

@@ -1,7 +1,13 @@
 import z from "zod"
 import { createDecisionLog } from "@/decision-log"
 import { goalStatusByID } from "@/engine/describe"
-import { findLatestTipGoalRun } from "@/engine/store"
+import {
+  findLatestTipGoalRun,
+  findDeliveriesForTask,
+  findEvaluationsByTask,
+  findDeliveryByGoalRun,
+  findLatestEvaluationForGoalRun,
+} from "@/engine/store"
 import {
   findSpecSnapshot,
   viewSpecSnapshot,
@@ -110,24 +116,15 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
     ["goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
   )
   const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
-  const allDeliveries = Database.use((db) =>
-    db
-      .select()
-      .from(EngineDeliveryTable)
-      .where(eq(EngineDeliveryTable.task_id, task.id))
-      .orderBy(EngineDeliveryTable.time_created)
-      .all(),
-  )
+  // Phase 5-e: board reads through the engine/store projection helpers
+  // instead of issuing its own SQL against EngineDelivery / EngineEvaluation.
+  // The store helpers return newest-first; board callers below still want
+  // oldest-first order (semantic matches the previous `orderBy(time_created)`
+  // ascending + `.at(-1)` pattern), so reverse once here.
+  const allDeliveries = [...findDeliveriesForTask(task.id)].reverse()
   const delivery = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
   const latestDelivery = delivery ?? allDeliveries.at(-1)
-  const allEvaluations = Database.use((db) =>
-    db
-      .select()
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.task_id, task.id))
-      .orderBy(EngineEvaluationTable.time_created)
-      .all(),
-  )
+  const allEvaluations = [...findEvaluationsByTask(task.id)].reverse()
   const evaluation = run ? allEvaluations.filter((item) => item.run_id === run.id).at(-1) : undefined
   const latestEvaluation = evaluation ?? allEvaluations.at(-1)
   const acceptedEvaluation = [...allEvaluations]
@@ -398,26 +395,20 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
       .where(eq(EngineInteractionRequestTable.task_id, task.id))
       .get(),
   )
-  const deliveries = Database.use((db) =>
-    db
-      .select({
-        count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${EngineDeliveryTable.time_updated}), 0)`,
-      })
-      .from(EngineDeliveryTable)
-      .where(eq(EngineDeliveryTable.task_id, task.id))
-      .get(),
-  )
-  const evaluations = Database.use((db) =>
-    db
-      .select({
-        count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${EngineEvaluationTable.time_updated}), 0)`,
-      })
-      .from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.task_id, task.id))
-      .get(),
-  )
+  // Phase 5-e: derive {count, updated} from the same projection helpers the
+  // board already reads for full rows. Two small arrays instead of two
+  // aggregate SQL queries — acceptable overhead, eliminates the direct-SQL
+  // coupling to EngineDelivery / EngineEvaluation tables here.
+  const allDeliveriesForTag = findDeliveriesForTask(task.id)
+  const deliveries = {
+    count: allDeliveriesForTag.length,
+    updated: allDeliveriesForTag.reduce((max, row) => Math.max(max, row.time_updated ?? 0), 0),
+  }
+  const allEvaluationsForTag = findEvaluationsByTask(task.id)
+  const evaluations = {
+    count: allEvaluationsForTag.length,
+    updated: allEvaluationsForTag.reduce((max, row) => Math.max(max, row.time_updated ?? 0), 0),
+  }
   const artifacts = Database.use((db) =>
     db
       .select({
@@ -898,15 +889,9 @@ function currentGoalRun(goalID: string) {
   return currentGoalRunFromRows(rows)
 }
 
-/** Latest evaluation row for a goal_run, ordered by time_created desc. */
-function latestEvaluationForGoalRun(goalRunID: string) {
-  return Database.use((db) =>
-    db.select().from(EngineEvaluationTable)
-      .where(eq(EngineEvaluationTable.goal_run_id, goalRunID))
-      .orderBy(desc(EngineEvaluationTable.time_created))
-      .limit(1).get(),
-  )
-}
+// Phase 5-e: latest-evaluation-for-goal_run lives in engine/store as
+// `findLatestEvaluationForGoalRun`. Local alias kept for readability.
+const latestEvaluationForGoalRun = findLatestEvaluationForGoalRun
 
 /** Build per-step summary text (e.g., "5 steps", "12 files", "3/4 checks").
  *  Only applies to goal-scope steps that own the plan + build + evaluate
@@ -919,12 +904,7 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
 
   const goalRun = currentGoalRun(goalID)
   if (goalRun) {
-    const delivery = Database.use((db) =>
-      db.select().from(EngineDeliveryTable)
-        .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
-        .orderBy(desc(EngineDeliveryTable.time_created))
-        .limit(1).get(),
-    )
+    const delivery = findDeliveryByGoalRun(goalRun.id)
     if (delivery) {
       const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
       const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
@@ -991,12 +971,7 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   if (goalRun) {
     buildSessionID = goalRun.session_id ?? undefined
     workspaceDir = goalRun.workspace_dir ?? undefined
-    const delivery = Database.use((db) =>
-      db.select().from(EngineDeliveryTable)
-        .where(eq(EngineDeliveryTable.goal_run_id, goalRun.id))
-        .orderBy(desc(EngineDeliveryTable.time_created))
-        .limit(1).get(),
-    )
+    const delivery = findDeliveryByGoalRun(goalRun.id)
     const result = delivery?.result as { changed_files?: string[]; diffs?: { file?: string }[]; stats?: { additions?: number; deletions?: number } } | null
     changedFiles = result?.changed_files
       ?? (Array.isArray(result?.diffs)

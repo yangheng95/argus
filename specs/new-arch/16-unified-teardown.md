@@ -380,7 +380,14 @@ await SessionPrompt.prompt({
   - 新模型：build tool 在 orchestrator 单 step 内**同步**执行（SessionPrompt + parallel tool_calls），所以 loop 不再需要"调度 → poll → 唤醒"三段结构——orchestrator 一次决策跑完就 return，loop 根据 artifact 水位做一次 auto-rewake 或退出
   - 文件从 597 行减到 290 行（-307 lines，约 -51%）；依然 typecheck 通过 + 232 测试全过
   - `waitForGoalCompletion` / `DECISION_INACTIVITY_MS` / `listActiveGoalRunsForRun` 从此文件 100% 消失（phase 5-g 时可从整个 src 搜 `GoalPool` 确认最后清零）
-- **5-e**：读模型切换：`describe.ts` / `task-api` / `workbench/board.ts` 统一 projection 入口；overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
+- **5-e**（✅ 2026-04-24）：`workbench/board.ts` 的 4 处直查 `EngineDeliveryTable` / `EngineEvaluationTable` 全部改走 `engine/store` projection helpers：
+  - 新增 `findLatestEvaluationForGoalRun` 到 `engine/store.ts`（补齐 goal_run → evaluation 的查询 API）
+  - board.ts 的 `allDeliveries` / `allEvaluations` full-row 拉取改用 `findDeliveriesForTask` + `findEvaluationsByTask`（需 `.reverse()` 因为 helpers 是 newest-first，board 原语义是 oldest-first + `.at(-1)`）
+  - board.ts 的 `deliveries.count` / `updated` 聚合 SQL 改为拉全行 reduce 计算（小表代价可忽略）
+  - `buildStepSummary` + `compileGoalStep` 两处 per-goal-run delivery 查询改用 `findDeliveryByGoalRun`
+  - `latestEvaluationForGoalRun` 本地函数变为 `const latestEvaluationForGoalRun = findLatestEvaluationForGoalRun`（单一 projection 入口）
+  - 剩余 `EngineDeliveryTable / EngineEvaluationTable` 引用均为 `typeof ...$inferSelect` 类型注解（只读类型，不是 SQL 查询），这部分在 phase 6 reset DB 后可自然替换为 store 层返回类型
+  - typecheck clean，232 session+engine+build-agent 测试通过；0 regression
 - **5-f**：verification 从 `engine_evaluation` 长期证据表改为只读 artifact stream
 - **5-g**：删除 deprecated tools 实现 + GoalPool 剩余骨架（lease / coordinator_run_id / live_goal_run 管理）
 
