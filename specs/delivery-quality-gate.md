@@ -72,7 +72,16 @@ tools.ts:416 原话："When you need to view the image contents, pass the return
 
 ---
 
-### P0-B · 数值门前置于 LLM judge（`src/delivery/verdict.ts` + 新增 `src/delivery/visual-metric.ts`）
+### P0-B · 数值门前置于 LLM judge（`src/delivery/verdict.ts` + 新增 `src/delivery/visual-metric.ts`） ✅ DONE (Stream C, commit 0b4c60582, 2026-04-24)
+
+> **实现要点**：
+> - `visual-metric.ts` 真实计算 5 条硬门：pHash(aHash 8×8) / SSIM / non-white density ratio / 4bit-bucket unique color ratio / text hit ratio
+> - `text_hit_ratio` 等 P1-B (Stream F) 的 `reference_strings` 落地后生效；当前自动 skip 并把权重按比例摊到前三条（score 单调性不变）
+> - `visual-thresholds.json` 静态 import（Bun compile 可打包进二进制，无 cwd 依赖），权重 sum-to-1 运行时校验
+> - `verdict.ts` 新增 `finalizeVerdict(llm, metric, goalIds)`：gate 未过且 LLM 判 accepted ⇒ 强制翻为 rejected，把每条失败硬门写入 `rejection_details[]`（category="visual"，逐 goal 归因）
+> - `service.ts` 单源 rendered：仅现场 `renderPage(findRenderedIndex(Instance.directory))`，不读 Stream A 的 rendered_output attachment 避免双源（rule 22）。有 reference 却渲染不出 ⇒ 直接 `DeliveryFailureError`
+> - **并行陷阱约束遵守**：未动 `agent.ts`；verdict 函数签名归 C 所有；Stream D.3 合入 publisher 时与此无交集
+> - **未决项**：阈值按经验值写入，尚未用 dev/ 样本标定；P0-C.4 LKG 会复用 `VisualMetricResult.score`；P2 replay 直接读 gates[] 与 score
 
 **目标**：LLM 无权推翻肉眼可见的差距——且即使 P0-0 让 LLM 看得见图，它仍可能判错，数值门是**兜底**。
 
@@ -218,9 +227,10 @@ Phase 1（5 条 stream 并行，无共享代码路径）
 ├── Stream B · P0-A · Capture 真实性闸
 │     └── src/design-analyst/capture-gate.ts（新）
 │         产出契约：CaptureManifest
-├── Stream C · P0-B · 数值门
+├── Stream C · P0-B · 数值门  ✅ DONE (commit 0b4c60582)
 │     └── src/delivery/visual-metric.ts（新）
 │         src/delivery/verdict.ts（接入硬门）
+│         src/delivery/service.ts（gate 串进 verify 流）
 │         产出契约：VisualMetric 类型 + thresholds.json
 ├── Stream D · P0-C.1/.2/.3 · Commit & Diff 纠偏（不依赖 score）
 │     ├── .1 每轮 repair 强制 git commit            → delivery/agent.ts
@@ -294,7 +304,7 @@ stub 交付物（Stream A–G 可直接 import，未实现部分以 `throw NotIm
 | # | 项 | 杠杆 | 工作量 | 依赖 |
 |---|---|---|---|---|
 | **P0-0** | **Delivery LLM 真正看到渲染图** | **极高（无此项后续全空）** | 中 | 无 |
-| P0-B | 数值门前置 | 极高 | 中 | 无 |
+| P0-B ✅ | 数值门前置 | 极高 | 中 | 无 |
 | P0-C | LKG 回滚 + 每轮 commit | 高 | 中 | P0-B（需要 score） |
 | P0-A | Reference 真实性 | 高 | 小 | 无 |
 | P1-A | 禁静态脚手架退路 | 高 | 小 | P0-A（共用 runtime evidence 能力） |
