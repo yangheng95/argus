@@ -15,7 +15,6 @@ import { Truncate } from "../tool/truncation"
 import { CronService } from "../scheduler/cron-service"
 import { EventService } from "../scheduler/event-service"
 import { TaskQueueService } from "../scheduler/task-queue-service"
-import { GoalRunWatchdog } from "@/engine/goal-run-watchdog"
 import { EngineService } from "@/task-api"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { Config } from "@/config/config"
@@ -35,7 +34,6 @@ export async function InstanceBootstrap() {
   CronService.init()
   EventService.init()
   TaskQueueService.init()
-  GoalRunWatchdog.init()
   EngineService.init()
   ensureTaskMessageProtocolBridge()
   await ChannelSupervisor.sync(await Config.get()).catch((error) => {

@@ -73,12 +73,14 @@ export interface IntentAnalysisConfig {
  * streaming boundary. They are TCP-level "no-byte-moved" deadlines,
  * NOT agent-level turn budgets. Rule of thumb when tuning:
  *
- *   session_llm_idle_ms      < executor_events_idle_ms < goal_run_idle_ms
+ *   session_llm_idle_ms      < executor_events_idle_ms
  *
  * so the LLM-stream gate trips first (producing a clean AbortError
- * the session loop already knows how to unwind), the executor-event
- * gate only trips when the LLM layer failed to do so, and the
- * goal-run DB scanner is the last-resort cleanup path.
+ * the session loop already knows how to unwind), and the executor-event
+ * gate only trips when the LLM layer failed to do so.
+ *
+ * Phase-6-d-0: `goal_run_idle_ms` + goal-run-watchdog scanner deleted
+ * (rule 23 FSM wall-clock driver duplicating the two inner gates).
  *
  * `task_queue_run_timeout_ms` is the absolute wall-clock cap on a
  * single queue task's total runtime — measured from claim() to
@@ -89,7 +91,6 @@ export interface IntentAnalysisConfig {
 export interface ActivityConfig {
   session_llm_idle_ms: number
   executor_events_idle_ms: number
-  goal_run_idle_ms: number
   task_queue_run_timeout_ms: number
 }
 
@@ -210,10 +211,6 @@ const DEFAULTS: EngineConfigType = {
     // one tier of slack on top of LLM to avoid races between the two
     // gates firing at the same instant.
     executor_events_idle_ms: 240_000,
-    // Last-resort DB-level scanner for goal_run rows whose stream died
-    // silently above both gates. Generous window to avoid false kills
-    // during legitimate multi-minute reasoning thinkblocks.
-    goal_run_idle_ms: 480_000,
     // TaskQueueService recover() compares against this. The scheduler
     // heartbeat is chunk-driven now, so this is a real deadline, not
     // a self-fed timer.
@@ -321,8 +318,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
         user?.activity?.session_llm_idle_ms ?? DEFAULTS.activity.session_llm_idle_ms,
       executor_events_idle_ms:
         user?.activity?.executor_events_idle_ms ?? DEFAULTS.activity.executor_events_idle_ms,
-      goal_run_idle_ms:
-        user?.activity?.goal_run_idle_ms ?? DEFAULTS.activity.goal_run_idle_ms,
       task_queue_run_timeout_ms:
         user?.activity?.task_queue_run_timeout_ms ?? DEFAULTS.activity.task_queue_run_timeout_ms,
     },
