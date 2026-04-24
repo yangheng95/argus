@@ -93,11 +93,42 @@ export interface ActivityConfig {
   task_queue_run_timeout_ms: number
 }
 
+/**
+ * DeliveryVisualConfig — P0-B 数值硬门阈值 + 复合 score 权重。
+ *
+ * 单源化：所有阈值都在 EngineConfig 下统一管理（rule 25 禁散配置文件），
+ * 用户可通过 opencorvus.jsonc `assistant.delivery_visual` 覆盖。改动阈值
+ * 后需用 `script/delivery/replay.ts` 刷 accept/reject 样本基线。
+ *
+ * score_weights 四项相加必须为 1（运行时校验）；score 的单调性是 P0-C.4
+ * LKG 回滚比较的语义基础，禁止破坏。
+ */
+export interface DeliveryVisualConfig {
+  /** aHash 8×8 汉明距离上限；越小越相似。 */
+  phash_hamming_max: number
+  /** mean SSIM 下限；越大越相似。 */
+  ssim_min: number
+  /** chart 区非白像素密度相对 reference 的下限；卡空骨架关键指标。 */
+  chart_region_density_min_ratio: number
+  /** 4bit-bucket 唯一色数比例下限；卡单色占位页。 */
+  unique_color_ratio_min: number
+  /** reference_strings 在 rendered 的命中率下限；卡占位文案。 */
+  text_hit_ratio_min: number
+  /** 复合 score 加权（sum-to-1 强制）。 */
+  score_weights: {
+    phash: number
+    ssim: number
+    density: number
+    text_hit: number
+  }
+}
+
 export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
   planner: PlannerConfig
   delivery: DeliveryConfig
+  delivery_visual: DeliveryVisualConfig
   design_analyst: DesignAnalystConfig
   intent_analysis: IntentAnalysisConfig
   activity: ActivityConfig
@@ -143,6 +174,21 @@ const DEFAULTS: EngineConfigType = {
     max_retries: 2,
     skills: [],
     merge_conflict_max_retries: 2,
+  },
+  delivery_visual: {
+    // 经验值基线（ainvest 事故复盘 2026-04-24）。后续用 dev/ accept/reject
+    // 样本标定时，改这里即可，其它代码路径不需要改。
+    phash_hamming_max: 18,
+    ssim_min: 0.85,
+    chart_region_density_min_ratio: 0.6,
+    unique_color_ratio_min: 0.5,
+    text_hit_ratio_min: 0.7,
+    score_weights: {
+      phash: 0.25,
+      ssim: 0.35,
+      density: 0.25,
+      text_hit: 0.15,
+    },
   },
   design_analyst: {
     max_steps: 80,         // was 50
@@ -234,6 +280,33 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
       skills: user?.delivery?.skills ?? DEFAULTS.delivery.skills,
       merge_conflict_max_retries:
         user?.delivery?.merge_conflict_max_retries ?? DEFAULTS.delivery.merge_conflict_max_retries,
+    },
+    delivery_visual: {
+      phash_hamming_max:
+        user?.delivery_visual?.phash_hamming_max ?? DEFAULTS.delivery_visual.phash_hamming_max,
+      ssim_min: user?.delivery_visual?.ssim_min ?? DEFAULTS.delivery_visual.ssim_min,
+      chart_region_density_min_ratio:
+        user?.delivery_visual?.chart_region_density_min_ratio ??
+        DEFAULTS.delivery_visual.chart_region_density_min_ratio,
+      unique_color_ratio_min:
+        user?.delivery_visual?.unique_color_ratio_min ??
+        DEFAULTS.delivery_visual.unique_color_ratio_min,
+      text_hit_ratio_min:
+        user?.delivery_visual?.text_hit_ratio_min ?? DEFAULTS.delivery_visual.text_hit_ratio_min,
+      score_weights: {
+        phash:
+          user?.delivery_visual?.score_weights?.phash ??
+          DEFAULTS.delivery_visual.score_weights.phash,
+        ssim:
+          user?.delivery_visual?.score_weights?.ssim ??
+          DEFAULTS.delivery_visual.score_weights.ssim,
+        density:
+          user?.delivery_visual?.score_weights?.density ??
+          DEFAULTS.delivery_visual.score_weights.density,
+        text_hit:
+          user?.delivery_visual?.score_weights?.text_hit ??
+          DEFAULTS.delivery_visual.score_weights.text_hit,
+      },
     },
     design_analyst: {
       max_steps: user?.design_analyst?.max_steps ?? DEFAULTS.design_analyst.max_steps,

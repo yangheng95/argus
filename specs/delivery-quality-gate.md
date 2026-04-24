@@ -92,7 +92,7 @@ tools.ts:416 原话："When you need to view the image contents, pass the return
 > **实现要点**：
 > - `visual-metric.ts` 真实计算 5 条硬门：pHash(aHash 8×8) / SSIM / non-white density ratio / 4bit-bucket unique color ratio / text hit ratio
 > - `text_hit_ratio` 等 P1-B (Stream F) 的 `reference_strings` 落地后生效；当前自动 skip 并把权重按比例摊到前三条（score 单调性不变）
-> - `visual-thresholds.json` 静态 import（Bun compile 可打包进二进制，无 cwd 依赖），权重 sum-to-1 运行时校验
+> - **阈值单源化**（2026-04-24 重构，rule 22 / rule 25）：原 `src/delivery/visual-thresholds.json` 已删除，全部迁入 `src/engine/config.ts::EngineConfig.delivery_visual`（`phash_hamming_max / ssim_min / chart_region_density_min_ratio / unique_color_ratio_min / text_hit_ratio_min / score_weights{phash,ssim,density,text_hit}`）；用户可在 `opencorvus.jsonc` 的 `assistant.delivery_visual` 覆盖，schema 已在 `Config.Info` 注册。`loadVisualThresholds()` 保留同步签名（内部调 `EngineConfig.getDefaults()`），sum-to-1 运行时校验不变，所有既有调用点零改动。
 > - `verdict.ts` 新增 `finalizeVerdict(llm, metric, goalIds)`：gate 未过且 LLM 判 accepted ⇒ 强制翻为 rejected，把每条失败硬门写入 `rejection_details[]`（category="visual"，逐 goal 归因）
 > - `service.ts` 单源 rendered：仅现场 `renderPage(findRenderedIndex(Instance.directory))`，不读 Stream A 的 rendered_output attachment 避免双源（rule 22）。有 reference 却渲染不出 ⇒ 直接 `DeliveryFailureError`
 > - **并行陷阱约束遵守**：未动 `agent.ts`；verdict 函数签名归 C 所有；Stream D.3 合入 publisher 时与此无交集
@@ -122,7 +122,7 @@ rendered.png + reference.png
 | unique-color-count ratio | ≥ 0.5 | 卡单色页面 |
 | text-string hit ratio | ≥ 0.7 | 卡占位文案 |
 
-阈值以 dev/ 目录下已知 accept/reject 样本标定，落 `packages/opencorvus/src/delivery/visual-thresholds.json`。
+阈值以 dev/ 目录下已知 accept/reject 样本标定，落 `packages/opencorvus/src/engine/config.ts::DEFAULTS.delivery_visual`（统一配置，用户可在 `opencorvus.jsonc` 的 `assistant.delivery_visual` 覆盖）。
 
 任一硬门失败：
 
