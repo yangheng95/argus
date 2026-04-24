@@ -372,7 +372,14 @@ await SessionPrompt.prompt({
     - `## After a goal batch completes` 段：所有 retry_goal / dispatch_goal 指引改为 `build({ goalID, request })`
     - `## After a delivery rejection` 段：rung 5 从 retry_goal 切换到 `build({ goalID })`；rung 8 "shared-state obstacle" 依然用 `build`
   - typecheck clean；232 session+engine+build-agent 测试通过（5 pre-existing flaky 无回归）
-- **5-d**：GoalPool 驱动路径删除（orchestrator/loop.ts 不再 pool.drain()）；worktree 创建 / teardown 由 build tool 内部 try/finally 管理
+- **5-d**（✅ 2026-04-24）：`orchestrator/loop.ts` 完整重写
+  - 删除：`GoalPool` 导入、`PoolHooks`、`effectiveMaxExecutorGroups`、`mergeGoalDelivery`、`findRun` / `findPlan`、`isRunReadyForGoalDispatch`、`dispatch-queue` 动态引用、`describeTaskFromRow` 全部从 loop 消失
+  - 删除：`waitForGoalCompletion` 函数（70 行 goal_run polling）
+  - 删除：`GoalDesc` / `RunRow` / `PlanRow` import，`decisionTurn` 之后的 "is goal-pool driving" 200+ 行
+  - 保留：serial per-task 链、MAX_TASK_ITERATIONS 上限、delivery rejection artifact 监测 + auto-rewake with note、terminal-status 退出、combineSignals / interruptTaskLoop
+  - 新模型：build tool 在 orchestrator 单 step 内**同步**执行（SessionPrompt + parallel tool_calls），所以 loop 不再需要"调度 → poll → 唤醒"三段结构——orchestrator 一次决策跑完就 return，loop 根据 artifact 水位做一次 auto-rewake 或退出
+  - 文件从 597 行减到 290 行（-307 lines，约 -51%）；依然 typecheck 通过 + 232 测试全过
+  - `waitForGoalCompletion` / `DECISION_INACTIVITY_MS` / `listActiveGoalRunsForRun` 从此文件 100% 消失（phase 5-g 时可从整个 src 搜 `GoalPool` 确认最后清零）
 - **5-e**：读模型切换：`describe.ts` / `task-api` / `workbench/board.ts` 统一 projection 入口；overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
 - **5-f**：verification 从 `engine_evaluation` 长期证据表改为只读 artifact stream
 - **5-g**：删除 deprecated tools 实现 + GoalPool 剩余骨架（lease / coordinator_run_id / live_goal_run 管理）

@@ -1,45 +1,35 @@
 /**
  * Task Control Loop — the single entry point for task lifecycle.
  *
- * Post-unified-teardown §2 model: there is no typed trigger enum. The loop
- * wakes the Orchestrator with an optional `OrchestratorEvent.note` hint,
- * synthesises wake events from state reads (active goal runs, verdict
- * artifacts) between Orchestrator turns, and exits when the task reaches
- * a terminal status. No typed trigger enum appears here anymore — what
- * used to be batch-complete / delivery-rejected / operator-message triggers
- * carrying structured payload are today just free-form event notes authored
- * via `OrchestratorEventNote.*` helpers, all derived from data the describe
- * layer surfaces on its own.
+ * Post-phase-5 model: the GoalPool is gone. The orchestrator dispatches work
+ * via the `build` tool which runs SYNCHRONOUSLY inside one orchestrator
+ * step (SessionPrompt + parallel tool_calls). One processTask invocation
+ * can therefore drive the full build → deliver → publish cycle in one
+ * decision pass. The outer loop's job shrinks to:
  *
- * What this still owns:
- *   - Serial per-taskID execution (one loop per task at a time).
- *   - GoalPool drive (until phase 5 folds build into a parallel tool).
- *   - Delivery-rejection detection via artifact watermark.
- *   - Iteration ceiling + inactivity-driven goal wait.
+ *   1. Mark the task active and bound decision rounds against runaway.
+ *   2. Wake the orchestrator with an optional caller-supplied event note.
+ *   3. After processTask returns, check:
+ *      - task terminal → exit
+ *      - delivery-agent verdict artifact was newly rejected → auto-rewake
+ *        with the structured rejection note so the orchestrator gets an
+ *        ergonomic re-entry point without the operator typing anything
+ *      - otherwise exit; the next wake comes from an operator event or a
+ *        scheduler tick.
  *
  * What this does NOT own:
- *   - Deciding what the orchestrator does on wake (the LLM reads describe).
- *   - Constructing typed triggers (they no longer exist).
- *   - Managing active_run_id as control-plane truth (phase 4 dismantles).
+ *   - Deciding what the orchestrator does on wake (LLM reads describe).
+ *   - Dispatching goals to sub-workers (the `build` tool body handles that).
+ *   - Polling goal_run rows (phase 5 removed the pool; build is blocking).
+ *   - Constructing typed triggers (phase 2 removed the enum).
  */
 
 import { Log } from "@/util/log"
-import { GoalPool, type PoolHooks } from "@/engine/goal-pool"
 import type { RuntimeHooks } from "@/engine/runtime-hooks"
 import { Orchestrator, OrchestratorEventNote, type OrchestratorEvent } from "@/orchestrator/agent"
-import { effectiveMaxExecutorGroups, findTask, findRun, findPlan } from "@/engine"
-import type { TaskRow, RunRow, PlanRow } from "@/engine"
-import { mergeGoalDelivery } from "@/engine/runtime"
-import { describeTaskFromRow } from "@/engine/describe"
-import type { GoalDesc } from "@/engine/describe"
-import { isRunReadyForGoalDispatch } from "./scheduler"
+import { findTask } from "@/engine"
 
 const log = Log.create({ service: "orchestrator-loop" })
-
-/** Inactivity timeout for the Orchestrator Decision Point (no hard timeout). */
-const DECISION_INACTIVITY_MS = parseInt(
-  process.env.OPENCORVUS_DECISION_INACTIVITY_MS || String(10 * 60 * 1000), 10,
-) // 10 min default — if Orchestrator produces no streaming tokens for 10 min, abort
 
 const LOOP_SLEEP_TICK_MS = 50
 
@@ -149,18 +139,25 @@ export async function runTaskLoop(input: {
 /**
  * Run the full task lifecycle as a blocking loop.
  *
- * Returns when the task reaches a terminal state (completed, failed) or when
- * the signal is aborted. Concurrent entries for the same task are serialised
+ * Returns when the task reaches a terminal state (completed / failed /
+ * cancelled), when the iteration budget is exhausted, or when no
+ * auto-rewake condition (delivery rejection) is observed after an
+ * orchestrator pass. Concurrent entries for the same task are serialised
  * by `runTaskLoop` above.
  */
 async function runTaskLoopInner(input: {
   taskID: string
   event?: OrchestratorEvent
   signal?: AbortSignal
-  hooks: RuntimeHooks
+  // Retained for API compatibility; the post-phase-5 loop no longer threads
+  // hooks into a pool driver. Left in the signature so dispatchTaskLoop's
+  // callers stay unchanged.
+  hooks?: RuntimeHooks
 }) {
-  const { taskID, signal, hooks } = input
+  const { taskID, signal } = input
   let event = input.event
+
+  void input.hooks
 
   // Immediately mark the task as active so the cwd-scoped queue can observe
   // that this task now owns execution for its workspace before the first
@@ -175,7 +172,7 @@ async function runTaskLoopInner(input: {
 
   log.info("task loop started", { taskID, note: event?.note })
 
-  // ── Main loop: Decision → Pool → Decision ──
+  // ── Main loop: Decision → (optional auto-rewake on delivery rejection) → Decision ──
   let decisionTurn = 0
   /** Absolute task-level iteration budget — the sole runaway guard on this
    *  loop. Per LLM-autonomous redesign the loop does not classify "stuck"
@@ -197,7 +194,10 @@ async function runTaskLoopInner(input: {
 
   while (!signal?.aborted) {
     const task = findTask(taskID)
-    if (!task) { log.error("task not found, exiting loop", { taskID }); break }
+    if (!task) {
+      log.error("task not found, exiting loop", { taskID })
+      break
+    }
 
     // Terminal-state exit. Operator messages / retry requests arrive as a
     // caller-supplied event.note and must be allowed to wake a terminal
@@ -209,29 +209,9 @@ async function runTaskLoopInner(input: {
       break
     }
 
-    // State-only wait: if any goal_run is still live, do not burn an
-    // orchestrator decision turn — wait for the pool to finish. The
-    // describe layer's is_running flag is derived from the goal_run chain
-    // tip so this check is authoritative without reading goal.status.
-    if (task.status === "active" && task.active_run_id) {
-      const { listActiveGoalRunsForRun } = await import("@/engine/store")
-      const activeGoalRuns = listActiveGoalRunsForRun(task.active_run_id)
-      if (activeGoalRuns.length > 0) {
-        log.info("active goal runs still executing before decision, waiting", {
-          taskID,
-          runID: task.active_run_id,
-          activeGoalRuns: activeGoalRuns.length,
-          goalRunIDs: activeGoalRuns.map((goalRun) => goalRun.id),
-        })
-        await sleep(5_000, signal)
-        if (signal?.aborted) break
-        continue
-      }
-    }
-
     decisionTurn++
     // Task-level iteration budget (hard ceiling) counts only actual
-    // Orchestrator decision turns, not passive wait-loop polls.
+    // Orchestrator decision turns.
     if (decisionTurn > MAX_TASK_ITERATIONS) {
       const { updateTask } = await import("@/engine/state")
       log.error("task iteration budget exhausted — failing task", {
@@ -245,11 +225,11 @@ async function runTaskLoopInner(input: {
       break
     }
 
-    // ── Phase 1: Decision Point ──
-    // Call Orchestrator with current event note. It decides what to do:
-    //   - dispatch goals → calls dispatch_goal/submit_execution tool → self-aborts
-    //   - complete/fail task → calls fail_task/deliver tool → exits
-    //   - no action → finishReason=stop with no dispatch
+    // ── Decision Point ──
+    // Call Orchestrator with the current event note. Post-phase-5 a single
+    // processTask pass can drive build (possibly in parallel) + deliver +
+    // publish in one AI-SDK step chain, so the outer loop does NOT need
+    // to schedule goal dispatch itself.
     log.info("decision point", { taskID, iteration: decisionTurn, note: event?.note })
 
     try {
@@ -257,13 +237,14 @@ async function runTaskLoopInner(input: {
     } catch (err) {
       if (signal?.aborted) break
       log.error("orchestrator error at decision point", { taskID, error: String(err) })
-      // Don't break — re-check task status and maybe retry
+      // Don't break immediately — the auto-rewake check below may still
+      // find a delivery-rejection artifact worth acting on; otherwise the
+      // loop exits normally at the end of this iteration.
     }
     // Consume the event: subsequent iterations synthesise their own wake
     // notes from state reads below. The caller's initial event is one-shot.
     event = undefined
 
-    // Re-read task state after agent decision
     const taskAfter = findTask(taskID)
     if (!taskAfter) break
     if (taskAfter.status === "completed" || taskAfter.status === "failed" || taskAfter.status === "cancelled") {
@@ -274,22 +255,17 @@ async function runTaskLoopInner(input: {
       break
     }
 
-    // ── Delivery rejection detection ──
-    // When the deliver tool rejects it writes a verdict artifact
-    // (label="delivery-agent-verdict", payload.verdict="rejected") and calls
-    // startNewAttempt on the goals the delivery agent attributed the rejection
-    // to (verdict.affected_goal_ids). This block watermarks the artifact
-    // stream so the orchestrator agent gets a rejection wake with structured
-    // feedback on its next decision point. The orchestrator reads
-    // affected_goal_ids + rejection_details to decide strategy
-    // (modify_goal vs re-run architect vs let-it-redispatch).
+    // ── Delivery rejection detection (auto-rewake) ──
+    // When `deliver` rejects it writes a verdict artifact
+    // (label="delivery-agent-verdict", payload.verdict="rejected"). If the
+    // orchestrator ran deliver and then STOPPED without calling build+deliver
+    // again, this auto-rewake gives it one more cycle with the rejection
+    // payload surfaced as a wake note. The artifact watermark makes a given
+    // rejection fire at most once.
     //
     // Keyed on the verdict artifact — NOT on goal_run.superseded_reason
     // string matching. Per rule 23 we do not branch on enum label values;
-    // the artifact is the first-class delivery output. The event.note is
-    // synthesised here; the orchestrator's buildSystemParts renders the
-    // same payload separately from the persistent artifact so omitting
-    // the note still produces correct behaviour.
+    // the artifact is the first-class delivery output.
     if (taskAfter.status === "active") {
       const { findRecentDeliveryRejection } = await import("@/engine/store")
       const verdictArt = findRecentDeliveryRejection(taskID, lastReworkSeenAt)
@@ -313,285 +289,21 @@ async function runTaskLoopInner(input: {
       }
     }
 
-    // ── Phase 2: Check if goals were dispatched ──
-    // If Orchestrator called dispatch tools, goals are now running.
-    // We need to wait for them to complete.
-    const run = taskAfter.active_run_id ? findRun(taskAfter.active_run_id) : undefined
-
-    // Guard: if active goal runs exist (dispatch gate suppressed Orchestrator),
-    // wait before re-checking instead of busy-looping. Active goal runs mean
-    // the executor is still working — poll every 5s until they complete or fail.
-    if (run) {
-      const { listActiveGoalRunsForRun } = await import("@/engine/store")
-      const activeRuns = listActiveGoalRunsForRun(run.id)
-      if (activeRuns.length > 0) {
-        log.info("active goal runs present, waiting before re-check", {
-          taskID, activeGoalRuns: activeRuns.length,
-          goalRunIDs: activeRuns.map(gr => gr.id),
-        })
-        await sleep(5_000, signal)
-        if (signal?.aborted) break
-        // No event note needed — the next iteration's state read drives
-        // orchestrator directly; it will see the updated goal_run tips.
-        continue
-      }
-    }
-    if (!run || !run.plan_version_id) {
-      // No run or no plan — Orchestrator didn't dispatch anything.
-      // Could be: still in spec/requirements/architect phase.
-      // The Orchestrator's tool calls (spec, requirements, etc.) are handled within processTask.
-      // Loop back to decision point without a synthesised event.
-      log.info("no active run with plan, re-waking", { taskID })
-      continue
-    }
-
-    const plan = findPlan(run.plan_version_id)
-    if (!plan) {
-      log.warn("plan not found", { taskID, planID: run.plan_version_id })
-      continue
-    }
-
-    if (!isRunReadyForGoalDispatch({ status: run.status, planVersionID: run.plan_version_id })) {
-      log.info("active run is not dispatchable yet", {
-        taskID,
-        runID: run.id,
-        status: run.status,
-      })
-      continue
-    }
-
-    // Check if there are any active/pending goals to wait for. Read from
-    // the describe layer (event-sourced projection) instead of engine_goal.status
-    // — the cache is going away in Phase 3, and this loop is where the
-    // "stale status cache → deadlock" class of bugs lived.
-    const snapshot = await describeTaskFromRow(taskAfter)
-    const goals: GoalDesc[] = snapshot.goals
-    const hasActive = goals.some((g) => g.is_running)
-    const hasPending = goals.some((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted)
-
-    if (!hasActive && !hasPending) {
-      // All goals are in terminal state. Feed results back to Orchestrator
-      // as a free-form batch-summary note.
-      const passed = goals.filter((g) => g.is_terminal_ok).length
-      const failed = goals.filter((g) => g.is_terminal_fail).length
-      log.info("all goals in terminal state", { taskID, passed, failed })
-      event = {
-        note: OrchestratorEventNote.batchComplete({
-          runID: run.id,
-          passed,
-          failed,
-          total: goals.length,
-        }),
-      }
-      continue
-    }
-
-    // ── Phase 3: GoalPool — execute durable dispatch facts ──
-    // dispatch_goal / submit_execution now materialize dispatch immediately as
-    // queued goal_run rows. The pool consumes those authoritative queued tips;
-    // there is no separate in-memory channel to recover after restart.
-    const { listQueuedDispatchGoalIDs, queueRedispatchGoals } = await import("./dispatch-queue")
-    let pendingDispatch = listQueuedDispatchGoalIDs(taskID)
-
-    if (pendingDispatch.length === 0 && !hasActive) {
-      const redispatchGoalIDs = goals
-        .filter((g) => g.needs_redispatch)
-        .map((g) => g.id)
-      if (redispatchGoalIDs.length > 0) {
-        const queuedRedispatchGoalIDs = queueRedispatchGoals(taskID, redispatchGoalIDs)
-        if (queuedRedispatchGoalIDs.length > 0) {
-          pendingDispatch = queuedRedispatchGoalIDs
-          log.info("materialized redispatch queue entries", {
-            taskID,
-            queuedGoalIDs: queuedRedispatchGoalIDs,
-          })
-        }
-      }
-    }
-
-    if (pendingDispatch.length > 0) {
-      const concurrency = await effectiveMaxExecutorGroups(taskAfter)
-      log.info("goal pool starting", {
-        taskID, concurrency,
-        dispatching: pendingDispatch.length,
-        ids: pendingDispatch,
-      })
-
-      const poolHooks: PoolHooks = {
-        mergeDelivery: (t, r, p, gr, delivery) => mergeGoalDelivery(t, r, p, gr, delivery, hooks),
-        updateRun: async (run, update, reason) => {
-          await hooks.updateRun(run, update as any, reason)
-        },
-        onGoalResult: (result) => {
-          log.info("goal result", { taskID, goalID: result.goalID, status: result.status, verdict: result.verdict })
-        },
-      }
-
-      const pool = new GoalPool({
-        task: taskAfter,
-        run,
-        plan,
-        concurrency,
-        signal,
-        hooks: poolHooks,
-      })
-
-      pool.submit(pendingDispatch)
-
-      if (pool.activeCount > 0 || pool.queuedCount > 0) {
-        const results = await pool.drain()
-        log.info("goal pool drained", {
-          taskID, results: results.length,
-          passed: results.filter(r => r.status === "passed").length,
-          failed: results.filter(r => r.status === "failed").length,
-        })
-      } else {
-        log.info("pool had nothing to run — all requested IDs skipped by idempotency", {
-          taskID, requested: pendingDispatch,
-        })
-      }
-    } else if (hasActive) {
-      // Goals from a previous iteration are still running — wait via polling
-      log.info("waiting for already-running goals", { taskID })
-      await waitForGoalCompletion(taskID, run, plan, signal)
-    } else {
-      // No active pool submissions, no running goals: pool returned no
-      // dispatchable IDs this iteration. Feed back to the Orchestrator —
-      // the describe layer shows WHY each goal isn't dispatchable (running /
-      // terminal_ok / never_dispatched / needs_redispatch / unsatisfied
-      // depends_on flags on each GoalDesc), so the LLM can decide whether
-      // to retry, modify, add, or give up without a per-goal diagnostics
-      // block injected from the loop.
-      log.info("no dispatchable goals", { taskID, pending: hasPending })
-      if (hasPending) {
-        const passed = goals.filter((g) => g.is_terminal_ok).length
-        const failed = goals.filter((g) => g.is_terminal_fail).length
-        log.warn("pending goals present but none dispatched — re-waking Orchestrator", {
-          taskID, passed, failed,
-          pending: goals.filter((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted).length,
-        })
-
-        // No stale-state circuit breaker here — the LLM reads the same
-        // goal / goal_run state via describe on the next decision turn
-        // and decides whether to retry, modify a goal, fail, or wait.
-        // The deterministic `MAX_STALE_ITERATIONS` breaker was an FSM
-        // verdict over a goal_run snapshot string (CLAUDE.md #23) and
-        // masked real failures as "stuck" rather than routing them to
-        // the LLM for classification.
-
-        event = {
-          note: OrchestratorEventNote.batchComplete({
-            runID: run.id,
-            passed,
-            failed,
-            total: goals.length,
-          }),
-        }
-        continue
-      }
-      // All goals terminal — will be handled at top of next iteration
-    }
-
-    // Dependency cascade removed — Orchestrator decides whether to retry, skip,
-    // or fail dependent goals. Automatic cascade masks the real failure and
-    // prevents the agent from attempting recovery strategies.
-    const snapshotAfter = await describeTaskFromRow(taskAfter)
-    const goalsAfter: GoalDesc[] = snapshotAfter.goals
-
-    // ── Phase 5: Collect results and loop back ──
-    const failedGoals = goalsAfter.filter((g) => g.is_terminal_fail)
-    const passedGoals = goalsAfter.filter((g) => g.is_terminal_ok)
-    const pendingGoals = goalsAfter.filter((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted)
-
-    log.info("goal batch complete", {
-      taskID,
-      passed: passedGoals.length,
-      failed: failedGoals.length,
-      pending: pendingGoals.length,
-    })
-
-    event = {
-      note: OrchestratorEventNote.batchComplete({
-        runID: run.id,
-        passed: passedGoals.length,
-        failed: failedGoals.length,
-        total: goalsAfter.length,
-      }),
-    }
+    // No auto-rewake signal detected. The orchestrator either stopped mid
+    // task (pending operator input, awaiting external trigger) or finished
+    // without marking terminal. Exit and let the next external wake
+    // (operator message, scheduler tick, ownership recovery) re-enter.
+    log.info(
+      "orchestrator pass ended with no auto-rewake signal — loop exiting",
+      { taskID, iteration: decisionTurn, taskStatus: taskAfter.status },
+    )
+    break
   }
 
   log.info("task loop exited", { taskID, iteration: decisionTurn })
   // Queue progression is owned by engine/queue.ts. This loop only owns one
   // task's lifecycle and leaves sibling dispatch to the cwd queue.
-}
 
-/**
- * Wait for all currently-running goals to reach terminal state.
- *
- * Polls goal_run status (not just goal status) because goals stay "running"
- * until the executor pipeline completes. Goal_run status transitions
- * (accepted → running → completed/failed) happen in real-time.
- *
- * Uses inactivity detection: if no goal_run changes status for DECISION_INACTIVITY_MS,
- * we break out and let the loop re-decide.
- */
-async function waitForGoalCompletion(
-  taskID: string,
-  run: RunRow,
-  plan: PlanRow,
-  signal?: AbortSignal,
-) {
-  const { listGoalRunsForRun, listActiveGoalRunsForRun } = await import("@/engine/store")
-
-  const POLL_INTERVAL = 5_000 // 5 seconds
-  let lastChange = Date.now()
-  let lastSnapshot = ""
-
-  while (!signal?.aborted) {
-    await sleep(POLL_INTERVAL, signal)
-    if (signal?.aborted) break
-
-    // Check goal_run status (more granular than goal status)
-    const activeGoalRuns = listActiveGoalRunsForRun(run.id)
-    const allGoalRuns = listGoalRunsForRun(run.id)
-    const snapshot = allGoalRuns.map(gr => `${gr.id}:${gr.status}`).join(",")
-
-    if (snapshot !== lastSnapshot) {
-      lastSnapshot = snapshot
-      lastChange = Date.now()
-    }
-
-    // All goal_runs done?
-    if (activeGoalRuns.length === 0) {
-      // Cross-check: even without active goal_runs, the derive layer may
-      // still report a goal as running if its tip row is in a live state
-      // that the store query didn't return (transactional race). Treat
-      // that as "still settling" and keep polling instead of declaring
-      // completion prematurely.
-      const task = findTask(taskID)
-      if (!task) return
-      const descAfter = await describeTaskFromRow(task)
-      const runningGoals = descAfter.goals.filter((g) => g.is_running)
-      if (runningGoals.length === 0) {
-        log.info("all goals completed", { taskID })
-        return
-      }
-      continue
-    }
-
-    // Inactivity check
-    const inactiveMs = Date.now() - lastChange
-    if (inactiveMs > DECISION_INACTIVITY_MS) {
-      log.warn("goal completion wait timed out (inactivity)", {
-        taskID, inactiveMs, activeGoalRuns: activeGoalRuns.length,
-      })
-      return
-    }
-
-    // Re-check task status
-    const task = findTask(taskID)
-    if (!task || task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
-      return
-    }
-  }
+  // Suppress unused-import warnings for intentionally retained utility.
+  void sleep
 }
