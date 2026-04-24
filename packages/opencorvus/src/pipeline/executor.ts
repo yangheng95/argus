@@ -18,7 +18,7 @@
  */
 
 import { Log } from "@/util/log"
-import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistGoalDelivery, stampGoalRunProgress } from "@/engine"
+import { Event, EngineProtocol, updateGoalRun, updateGoalRunExecutorSessionStatus, persistGoalDelivery } from "@/engine"
 import { Database, eq, and } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { deliveryFromWorktree } from "@/goal/runner"
@@ -45,7 +45,6 @@ const HEARTBEAT_INTERVAL_MS = 30_000
  * SQLite, fine enough for the goal-run-watchdog scanner's tens-of-
  * seconds resolution.
  */
-const PROGRESS_STAMP_INTERVAL_MS = 1_000
 
 /**
  * Execute a single goal: stream executor events, extract delivery.
@@ -190,19 +189,13 @@ async function* streamExecutorEvents(
   })()
 
   let lastHeartbeat = Date.now()
-  let lastProgressStamp = 0
   for await (const event of executor.events({ goalID: goal.id, sessionID, queueTaskID, signal: combinedSignal })) {
     if (combinedSignal.aborted) break
-    // Chunk-driven wall-clock progress marker for the orphan scanner in
-    // engine/goal-run-watchdog.ts. time_updated is polluted by bookkeeping
-    // writes (status changes, protocol effects); last_progress_at moves
-    // only on actual executor events. Throttled to ~1Hz so reasoning-
-    // delta storms don't starve SQLite.
+    // Phase-6-d-0: goal-run-watchdog was deleted (rule 23 — wall-clock FSM
+    // driver duplicating the session-llm + executor-events gates). With it
+    // gone, `last_progress_at` has no reader, so the per-chunk stamp write
+    // is dead work; dropped. Stall detection lives in the inner gates.
     const now = Date.now()
-    if (now - lastProgressStamp >= PROGRESS_STAMP_INTERVAL_MS) {
-      lastProgressStamp = now
-      stampGoalRunProgress(goalRunID, now)
-    }
     yield { type: "executor_event", event }
 
     if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {

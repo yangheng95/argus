@@ -1234,11 +1234,10 @@ export namespace Config {
             .object({
               session_llm_idle_ms: z.number().int().min(1000).optional().describe("Max idle (no stream chunk) window for session LLM streams, ms"),
               executor_events_idle_ms: z.number().int().min(1000).optional().describe("Max idle window for the executor event queue, ms"),
-              goal_run_idle_ms: z.number().int().min(1000).optional().describe("Max idle window scanned against engine_goal_run.last_progress_at, ms"),
               task_queue_run_timeout_ms: z.number().int().min(1000).optional().describe("Total wall-clock cap for a single queued task run, ms"),
             })
             .optional()
-            .describe("Chunk-driven inactivity gates. Single source of truth for every streaming layer (session LLM, executor events, goal_run scanner, task queue)."),
+            .describe("Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue)."),
           max_runs: z.number().int().min(1).optional().describe("Maximum total task runs"),
           max_fix_runs: z.number().int().min(0).optional().describe("Maximum fix runs after failure"),
           max_executor_groups: z.number().int().min(1).optional().describe("Maximum parallel executor groups"),
