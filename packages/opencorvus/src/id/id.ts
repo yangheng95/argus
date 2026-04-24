@@ -23,6 +23,7 @@ export namespace Identifier {
     artifact: "art",
     attachment: "att",
     delivery: "dlv",
+    delivery_round: "dlr",
     evaluation: "evl",
     binding: "bnd",
     progress: "prg",
