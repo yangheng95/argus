@@ -98,7 +98,6 @@ export function persistQueuedTask(input: {
         metadata: input.metadata,
         time_created: input.now,
         time_updated: input.now,
-        time_status_changed: input.now,
       })
       .run()
     if (input.channelBinding) {

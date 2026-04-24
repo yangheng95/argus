@@ -120,7 +120,6 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
         status: "active",
         time_started: sql`COALESCE(${EngineTaskTable.time_started}, ${now})`,
         time_updated: now,
-        time_status_changed: now,
       })
       .where(
         sql`${EngineTaskTable.id} = (
@@ -167,7 +166,7 @@ export function listActiveForCwd(cwd: string): TaskRow[] {
           sql`COALESCE(${SessionTable.directory}, ${ProjectTable.worktree}) = ${cwd}`,
         ),
       )
-      .orderBy(desc(EngineTaskTable.time_status_changed))
+      .orderBy(desc(EngineTaskTable.time_updated))
       .all(),
   ).map((r) => r.task)
 }

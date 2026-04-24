@@ -57,7 +57,6 @@ export async function updateTask(
       .set({
         ...values,
         time_updated: now,
-        ...(statusChanged ? { time_status_changed: now } : {}),
       })
       .where(whereClause)
       .returning()

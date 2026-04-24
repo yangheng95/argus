@@ -249,9 +249,6 @@ export const EngineTaskTable = sqliteTable(
     metadata: text({ mode: "json" }).$type<EngineMetadata>(),
     time_started: integer(),
     time_completed: integer(),
-    /** Timestamp when the task's status last changed. Used by stranded-task recovery
-     *  to measure time-in-current-status without being reset by incidental DB writes. */
-    time_status_changed: integer(),
     /** Rewind cursor: when non-null, all UI-facing event queries filter events
      *  with `time_created > rewind_cursor_time` OUT. This is how "rewind to a
      *  specific message card" works without deleting history — the filter is
