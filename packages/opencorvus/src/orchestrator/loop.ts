@@ -31,8 +31,6 @@ import { findTask } from "@/engine"
 
 const log = Log.create({ service: "orchestrator-loop" })
 
-const LOOP_SLEEP_TICK_MS = 50
-
 // Per-taskID serial chain. A second runTaskLoop() call for the same task
 // waits for the in-flight loop to finish, then runs a fresh decision pass —
 // which reads the freshly-appended session message. Replaces the previous
@@ -40,26 +38,6 @@ const LOOP_SLEEP_TICK_MS = 50
 // recordOperatorNote and was the root of the "queued, no resume" bug.
 const taskLoopChain = new Map<string, Promise<void>>()
 const taskLoopAbort = new Map<string, AbortController>()
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (ms <= 0) return Promise.resolve()
-  return new Promise((resolve) => {
-    const deadline = Date.now() + ms
-    function tick() {
-      if (signal?.aborted) {
-        resolve()
-        return
-      }
-      const remaining = deadline - Date.now()
-      if (remaining <= 0) {
-        resolve()
-        return
-      }
-      setTimeout(tick, Math.min(LOOP_SLEEP_TICK_MS, remaining))
-    }
-    tick()
-  })
-}
 
 function combineSignals(signals: Array<AbortSignal | undefined>): AbortSignal | undefined {
   const active = signals.filter((signal): signal is AbortSignal => !!signal)
@@ -303,7 +281,4 @@ async function runTaskLoopInner(input: {
   log.info("task loop exited", { taskID, iteration: decisionTurn })
   // Queue progression is owned by engine/queue.ts. This loop only owns one
   // task's lifecycle and leaves sibling dispatch to the cwd queue.
-
-  // Suppress unused-import warnings for intentionally retained utility.
-  void sleep
 }
