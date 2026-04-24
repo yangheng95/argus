@@ -461,7 +461,27 @@ function buildUserPrompt(
       if (r.checks_run.length > 0) {
         parts.push("")
         parts.push("### Checks the Executor Ran")
-        for (const c of r.checks_run) parts.push(`- **${c.name}** \`${c.command}\` → exit ${c.exit_code}`)
+        let forbiddenSeen = 0
+        for (const c of r.checks_run) {
+          // P1-B / Stream F.2 — flag self-fabricated acceptance evidence
+          // (test -f path, grep keyword, ls -l, find … -name) inline so the
+          // delivery LLM cannot count them as evidence. The pipeline ainvest
+          // event hinged on goal-agent self-passing via `test -f` — it must
+          // never be a positive signal again.
+          const forbidden = forbiddenCheckReason(c.command)
+          if (forbidden) {
+            forbiddenSeen += 1
+            parts.push(`- ❌ **${c.name}** \`${c.command}\` → exit ${c.exit_code}  _[FORBIDDEN: ${forbidden}; not acceptance evidence]_`)
+          } else {
+            parts.push(`- **${c.name}** \`${c.command}\` → exit ${c.exit_code}`)
+          }
+        }
+        if (forbiddenSeen > 0) {
+          parts.push("")
+          parts.push(
+            `> ${forbiddenSeen} of ${r.checks_run.length} check(s) above are self-fabricated acceptance evidence (file-existence / keyword grep). Treat this goal as acceptance-unverified and REJECT with category="quality"; cite the forbidden command(s) in rejection_details so the executor's next attempt rewrites the spec to use external anchors (reference_strings / palette / layout from CaptureManifest).`,
+          )
+        }
       }
       if (r.blockers.length > 0) {
         parts.push("")
@@ -477,7 +497,8 @@ function buildUserPrompt(
       `1. For each \`implementation_approach\`, read enough of the diff to confirm the claim is backed by the code. A claim the diff does not support (missing layer, unused API, unmentioned file) is a REJECTION — report it under Rejection Details with category="quality".\n` +
       `2. For each \`design_decisions[].reason\`, challenge the reasoning. If the reason restates the choice without explaining why it won over the alternative, it's a REJECTION. If the code contradicts the stated reason (e.g. reason says "avoided shared state" but diff adds shared state), it's a REJECTION.\n` +
       `3. Every file in \`Files Claimed Changed\` must appear in the actual Changed files list; every file in the actual Changed files list that does real work must be acknowledged in a claim (silent scope creep is a REJECTION).\n` +
-      `4. Executor claims never override deterministic check results. Passing claims cannot rescue a failed Core Check.\n\n` +
+      `4. Executor claims never override deterministic check results. Passing claims cannot rescue a failed Core Check.\n` +
+      `5. Any \`checks_run\` entry rendered with **❌ FORBIDDEN** is self-fabricated acceptance evidence (file-existence / self-keyword grep). It is NOT evidence — the goal is acceptance-unverified until a real external-anchor check (CaptureManifest reference_strings / palette / layout, runtime DOM observation, behavioural test) replaces it. REJECT with category="quality" and cite the forbidden command(s).\n\n` +
       blocks.join("\n\n---\n\n"),
     )
   }
@@ -541,6 +562,49 @@ function renderGoalContractDetails(goal: GoalInfo): string {
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text
   return text.slice(0, maxLen) + "\n... (truncated)"
+}
+
+/**
+ * P1-B / Stream F.2 — `checks_run` allowlist (negative form).
+ *
+ * The acceptance contract demands evidence drawn from external anchors
+ * (CaptureManifest.{reference_strings, palette, layout} after Stream B,
+ * runtime-evidence after Stream E) — NOT from "the file I wrote exists" or
+ * "my own keyword appears in my own scaffold". When the executor reports a
+ * check whose command matches one of these self-fabrication patterns, return
+ * a short reason string so the renderer can flag it inline; the delivery LLM
+ * is instructed to treat the entire goal as acceptance-unverified.
+ *
+ * Pattern matching is deliberately narrow — we only flag the ainvest-class
+ * smoking guns. A real `bun test`, `vitest`, `pytest`, `cargo test`, etc.
+ * passes through untouched. False positives are worse than false negatives
+ * here: an over-broad regex would block legitimate verification commands.
+ */
+function forbiddenCheckReason(rawCommand: string): string | undefined {
+  const command = rawCommand.trim()
+  if (!command) return
+  // Drop leading wrappers like `bash -c "..."` so the pattern check sees the
+  // actual program. Single layer is enough — nested wrapping is rare and the
+  // outer wrapper rarely changes the verdict.
+  const stripped = command
+    .replace(/^bash\s+-c\s+(['"])(.+)\1\s*$/, "$2")
+    .replace(/^sh\s+-c\s+(['"])(.+)\1\s*$/, "$2")
+    .trim()
+  // `test -f|-d|-e ...` — file existence is not acceptance evidence.
+  if (/^\[?\s*test\s+-[fdeLhsr]\b/.test(stripped)) return "test -f / file-existence is not acceptance evidence"
+  if (/^\[\s+-[fdeLhsr]\b/.test(stripped)) return "[ -f ] / file-existence is not acceptance evidence"
+  // `grep "<self-chosen keyword>" path/to/own/file` — keyword self-grep
+  // against the executor's own output rounds back to "I wrote what I wrote".
+  if (/^(?:grep|egrep|fgrep|rg|ripgrep)\b/.test(stripped)) return "self-keyword grep on own artifacts is not acceptance evidence"
+  // `find ... -name '...'` — file discovery is the same shape as `test -f`,
+  // it only proves a path exists, never that the artifact is correct.
+  if (/^find\b[^|;&]*-name\b/.test(stripped)) return "find -name / file-discovery is not acceptance evidence"
+  // `ls -l path/to/file` — ditto, presence not behaviour.
+  if (/^ls\b\s+(-[a-zA-Z]+\s+)?\S+/.test(stripped) && !/[|;&]/.test(stripped)) return "ls / file-listing is not acceptance evidence"
+  // `cat path/to/own/file` to "show it works" — content of a file the
+  // executor itself wrote does not verify acceptance against external anchors.
+  if (/^cat\b/.test(stripped) && !/[|;&]/.test(stripped)) return "cat of own artifact is not acceptance evidence"
+  return
 }
 
 // ---------------------------------------------------------------------------
