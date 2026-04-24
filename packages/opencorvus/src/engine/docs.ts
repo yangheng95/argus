@@ -1,7 +1,6 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
 import type { GoalJudgmentType } from "@/delivery/checks"
-import { goalStatusByID } from "@/engine/describe"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -130,16 +129,6 @@ function selectors(input?: Record<string, unknown> | null) {
     return value ? [value] : []
   })
 }
-
-function counts(goals: GoalRow[]) {
-  return {
-    total: goals.length,
-    passed: goals.filter((item) => goalStatusByID(item.id) === "passed").length,
-    failed: goals.filter((item) => goalStatusByID(item.id) === "failed").length,
-    pending: goals.filter((item) => goalStatusByID(item.id) === "pending").length,
-  }
-}
-
 
 function evaluationText(input: {
   task: Pick<TaskRow, "id" | "title" | "request">

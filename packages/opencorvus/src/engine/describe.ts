@@ -242,30 +242,6 @@ export function goalStatusByID(goalID: string): EngineGoalStatus {
   return deriveGoalStatus(goalID) ?? "pending"
 }
 
-/**
- * Collapse a GoalDesc's derived boolean flags back into a single enum value
- * compatible with the legacy `engine_goal.status` string. Kept so call-sites
- * that used to filter `goals.filter(g => g.status === "pending")` can move to
- * `goals.filter(g => statusOf(g) === "pending")` without touching their
- * comparison logic. The mapping is a pure projection of the tip state:
- *
- *   is_running       → "running"
- *   is_terminal_ok   → "passed"
- *   is_terminal_fail → "failed"
- *   never_dispatched | needs_redispatch | is_aborted → "pending"
- *
- * This is the same mapping `deriveGoalStatus` uses on the live chain, just
- * expressed on the already-derived flags so callers don't re-hit the DB.
- */
-export function statusOf(g: GoalDesc): EngineGoalStatus {
-  if (g.is_running) return "running"
-  if (g.is_terminal_ok) return "passed"
-  if (g.is_terminal_fail) return "failed"
-  // never_dispatched + needs_redispatch + is_aborted all project as
-  // "pending" — the goal may dispatch on the next turn.
-  return "pending"
-}
-
 // ---------------------------------------------------------------------------
 // Task description
 // ---------------------------------------------------------------------------
@@ -296,7 +272,7 @@ export async function describeTask(taskID: string): Promise<TaskDesc> {
   return describeTaskFromRow(task)
 }
 
-export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
+async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   // Rewind cursor: filters events with time_created > cursor from every
   // derived view below (goal attempts, iterations, verdict). Goals
   // themselves are kept regardless — a rewound task still has its goals
