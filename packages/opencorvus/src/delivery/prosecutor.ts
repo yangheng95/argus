@@ -20,14 +20,18 @@
  * agent loop around these tools is Phase 5's job; the tools themselves are
  * fully usable and tested in isolation here.
  */
-import { stepCountIs, tool } from "ai"
+import { tool } from "ai"
 import { createHash } from "node:crypto"
 import z from "zod"
-import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
 import { toolGuard } from "@/util/tool-guard"
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
+import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
+import { Instance } from "@/project/instance"
+import { Identifier } from "@/id/id"
+import type { Message } from "@/session/message"
 import {
   addChallengeMetric,
   MetricWriteError,
@@ -354,36 +358,33 @@ export async function runProsecutor(
     architectSeeds: input.architectSeeds ?? [],
   })
 
-  const passthroughHooks = {
-    onChunk: input.stream?.onChunk,
-    onError: input.stream?.onError,
-    flush: async () => {},
-    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
-  } as any
-
   let rationale = ""
   try {
-    const runResult = await AgentRuntime.run({
-      agent: "prosecutor",
-      model,
-      system: PROSECUTOR_SYSTEM,
-      messages: [{ role: "user" as const, content: brief }],
-      tools: guard.tools,
-      stopWhen: stepCountIs(PROSECUTOR_MAX_STEPS),
-      cacheKey: `task-${input.task.id}-prosecutor-iter-${input.iteration}`,
-      sessionID: input.task.sessionID ?? "",
-      taskID: input.task.id,
-      stage: "prosecutor",
-      signal: input.signal,
-      hooks: passthroughHooks,
-      policies: { failurePolicy: "collect" },
+    const prosecutorSession = await Session.createNext({
+      kind: "evaluator",
+      parentID: input.task.sessionID,
+      title: `Prosecutor: ${input.task.title} (iter ${input.iteration})`,
+      directory: Instance.directory,
     })
-    rationale = extractRationaleText(runResult)
+    const enableMap: Record<string, boolean> = Object.fromEntries(
+      Object.keys(guard.tools).map((name) => [name, true]),
+    )
+    let finalMessage: Message.WithParts | undefined
+    await SessionPrompt.withExtraTools(prosecutorSession.id, guard.tools as any, async () => {
+      finalMessage = (await SessionPrompt.prompt({
+        sessionID: prosecutorSession.id,
+        model: { providerID: model.providerID, modelID: model.api.id },
+        agent: "prosecutor",
+        system: PROSECUTOR_SYSTEM,
+        tools: enableMap,
+        parts: [{ type: "text", text: brief, id: Identifier.ascending("part") }],
+      })) as Message.WithParts
+    })
+    rationale = extractRationaleFromMessage(finalMessage)
     log.info("prosecutor finished", {
       task: input.task.id,
       iteration: input.iteration,
-      steps: runResult.steps.length,
-      toolCalls: runResult.toolCallCount,
+      sessionID: prosecutorSession.id,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -410,13 +411,15 @@ export async function runProsecutor(
   }
 }
 
-function extractRationaleText(runResult: any): string {
-  // AgentRuntime returns steps[]; pull text chunks from each step.
-  const steps = runResult?.steps ?? []
+function extractRationaleFromMessage(message: Message.WithParts | undefined): string {
+  // SessionPrompt returns the final Message.WithParts. Text parts carry the
+  // prose rationale; accumulate them in order.
+  if (!message) return ""
   const lines: string[] = []
-  for (const step of steps) {
-    const text = step?.text
-    if (typeof text === "string" && text.trim()) lines.push(text.trim())
+  for (const part of message.parts ?? []) {
+    if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+      lines.push(part.text.trim())
+    }
   }
   return lines.join("\n\n").slice(0, 8000)
 }

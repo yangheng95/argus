@@ -417,7 +417,7 @@ export function createArchitectOutputTools(input: {
       },
     }),
 
-    finalize_architect: tool({
+    submit_architect: tool({
       description:
         "Validate the full Architect output (goals + metric specs + seeds + " +
         "traceability + contracts) and finalize. Call AFTER every register/modify " +
@@ -535,7 +535,7 @@ export function createArchitectOutputTools(input: {
           ].join("\n")
         }
 
-        return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call finalize_architect again.`
+        return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call submit_architect again.`
       },
     }),
   }

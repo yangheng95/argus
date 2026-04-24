@@ -20,20 +20,22 @@
  * ✗ Cannot call other agents
  * ✗ Cannot modify engine_requirement rows (those are owned by Requirements)
  */
-import { stepCountIs } from "ai"
 import type { TextHooks } from "@/llm/api"
 import { createPlannerTools } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
-import { AgentRuntime } from "@/agent/runtime"
 import { resolveAgentModel } from "@/agent/model"
-import { EngineConfig } from "@/engine"
 import { Config } from "@/config/config"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { Instance } from "@/project/instance"
+import { Provider } from "@/provider/provider"
+import { Session } from "@/session"
+import { SessionPrompt } from "@/session/prompt"
+import { Bus } from "@/bus"
+import { Identifier } from "@/id/id"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -83,7 +85,12 @@ export namespace ArchitectAgent {
     retryContext?: ArchitectRetryContext
     /** SessionID for fidelity event correlation. */
     sessionID?: string
+    /** Parent session — a child "architect" session is created under it. */
+    parentSessionID?: string
+    /** Explicit model override (provider/model). Skips `resolveAgentModel`. */
+    model?: { providerID: string; modelID: string }
     signal?: AbortSignal
+    /** Legacy passthrough; not wired after the SessionPrompt migration. */
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
   }): Promise<ArchitectResult> {
@@ -106,16 +113,21 @@ async function run(input: {
   designSpecs?: VisualSpec[]
   retryContext?: ArchitectRetryContext
   sessionID?: string
+  parentSessionID?: string
+  model?: { providerID: string; modelID: string }
   signal?: AbortSignal
   stream?: TextHooks
   onStatus?: (summary: string) => void | Promise<void>
 }): Promise<ArchitectResult> {
   if (input.signal?.aborted) throw new Error("architect agent aborted")
 
-  const orchCfg = await EngineConfig.get()
-  const { max_steps: MAX_STEPS } = orchCfg.architect
-
-  const model = await resolveAgentModel("architect", { taskID: input.taskID })
+  let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
+  if (input.model) {
+    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
+  } else {
+    model = await resolveAgentModel("architect", { taskID: input.taskID }).catch(() => undefined)
+  }
+  if (!model) throw new Error("no LLM model available for architect agent")
 
   if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
 
@@ -135,6 +147,9 @@ async function run(input: {
   const outputToolKit = createArchitectOutputTools({ existingGoals: seedGoals })
   const plannerTools = await filterAgentTools(createPlannerTools(), "architect")
   const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
+  const enableMap: Record<string, boolean> = Object.fromEntries(
+    Object.keys(guard.tools).map((name) => [name, true]),
+  )
 
   await input.onStatus?.("Architect agent: coordinating cross-goal contracts")
 
@@ -149,53 +164,62 @@ async function run(input: {
     model: model.id,
   })
 
-  const passthroughHooks = {
-    onChunk: input.stream?.onChunk,
-    onError: input.stream?.onError,
-    flush: async () => {},
-    failures: { snapshot: () => ({ count: 0, items: [] as any[] }) },
-  } as any
-  const runResult = await AgentRuntime.run({
-    agent: "architect",
-    model,
-    system: systemPrompt,
-    messages: [{ role: "user" as const, content: userPrompt }],
-    tools: guard.tools,
-    stopWhen: stepCountIs(MAX_STEPS),
-    cacheKey: input.taskID ? `task-${input.taskID}-architect` : undefined,
-    sessionID: input.sessionID ?? "",
-    taskID: input.taskID,
-    stage: "architect",
-    signal: input.signal,
-    hooks: passthroughHooks,
-    policies: {
-      failurePolicy: "collect",
-    },
+  const agentSession = await Session.createNext({
+    kind: "architect",
+    parentID: input.parentSessionID,
+    title: `Architect: ${input.taskTitle}`,
+    directory: Instance.directory,
   })
-  const resultText = runResult.text
-  const resultSteps = runResult.steps
-  const resultFinishReason = runResult.finishReason
-  const toolCallCount = runResult.toolCallCount
+
+  const abortPrompt = () => {
+    try {
+      SessionPrompt.cancel(agentSession.id)
+    } catch {
+      /* session may already be stopped */
+    }
+  }
+  input.signal?.addEventListener("abort", abortPrompt, { once: true })
+
+  const streamErrors: Array<{ reason: string; name?: string }> = []
+  const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
+    const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
+    if (props.sessionID !== agentSession.id) return
+    streamErrors.push({ reason: props.error?.message ?? "unknown error", name: props.error?.name })
+  })
+
+  try {
+    await SessionPrompt.withExtraTools(agentSession.id, guard.tools as any, async () => {
+      await SessionPrompt.prompt({
+        sessionID: agentSession.id,
+        model: { providerID: model!.providerID, modelID: model!.api.id },
+        agent: "architect",
+        system: systemPrompt,
+        tools: enableMap,
+        parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
+      })
+    })
+  } finally {
+    errorUnsub()
+    input.signal?.removeEventListener("abort", abortPrompt)
+  }
 
   log.info("architect agent finished", {
-    steps: resultSteps.length,
-    finishReason: resultFinishReason,
-    textLength: (resultText?.trim() || "").length,
-    toolCalls: toolCallCount,
+    sessionID: agentSession.id,
+    streamErrors: streamErrors.length,
   })
 
   const collector = outputToolKit.getCollector()
 
   if (!collector.finalized) {
-    log.warn("architect agent: finalize_architect not called", {
+    log.warn("architect agent: submit_architect not called", {
       taskID: input.taskID,
       goalCount: collector.goals.length,
-      finishReason: resultFinishReason,
+      streamErrors: streamErrors.length,
     })
     throw new Error(
-      "Architect agent did not call finalize_architect. " +
+      "Architect agent did not call submit_architect. " +
       "The model must register goals, metrics, seeds, traceability, and " +
-      "contracts via tools, then call finalize_architect to validate. " +
+      "contracts via tools, then call submit_architect to validate. " +
       "Check the prompt and model behaviour.",
     )
   }
@@ -404,7 +428,7 @@ function buildUserPrompt(input: {
   sections.push(
     "Explore the codebase, then register (or refine) the final goal set — " +
     "including metric specs, challenge seeds, traceability, and cross-goal " +
-    "contracts. Call finalize_architect when done; the validator will list " +
+    "contracts. Call submit_architect when done; the validator will list " +
     "anything still missing.",
   )
 
