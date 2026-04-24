@@ -2667,6 +2667,8 @@ export function createOrchestratorTools(input: {
           // into the verdict artifact + decision log so Stream G's replay
           // reads them without a separate table.
           let lkgOutcome: import("@/engine/git").LKGOutcome | undefined
+          let lkgMetric: import("@/delivery/visual-metric").VisualMetricResult | undefined
+          let lkgRenderedPath: string | undefined
           try {
             const taskAfterRound = requireTask(taskID)
             const renderedRef = (taskAfterRound.system_artifacts ?? [])
@@ -2693,6 +2695,8 @@ export function createOrchestratorTools(input: {
                   referencePath,
                   thresholds: loadVisualThresholds(),
                 })
+                lkgMetric = metric
+                lkgRenderedPath = renderedPath
                 const lkg = await EngineGit.evaluateAndApplyLKG({
                   task: taskAfterRound,
                   iteration,
@@ -2737,7 +2741,47 @@ export function createOrchestratorTools(input: {
               })
             } catch { /* best effort */ }
           }
-          void lkgOutcome  // recorded above; consumer is the decision log
+
+          // P2 / Stream G — persist this round into engine_delivery_round so
+          // replay.ts can rebuild the picky-loop trajectory without parsing
+          // git log. Skipped only when no commit anchor exists (DB notNull
+          // on commit_sha; no synthetic shas, rule 1). LKG outcome decides
+          // the verdict tag — a regressed-then-rolled-back round writes
+          // verdict='rolled_back' so replay can mark it ↺ instead of ✗.
+          if (roundCommit.commit) {
+            try {
+              const { insertDeliveryRound } = await import("@/delivery/round-store")
+              const isRolledBack = lkgOutcome?.kind === "regressed"
+              const rowVerdict = isRolledBack
+                ? ("rolled_back" as const)
+                : (verdict.verdict as "accepted" | "rejected")
+              const rollbackFromRound =
+                lkgOutcome && "previous" in lkgOutcome && isRolledBack
+                  ? lkgOutcome.previous.best_round
+                  : null
+              insertDeliveryRound({
+                task_id: taskID,
+                delivery_id: deliveryID,
+                round_index: iteration,
+                commit_sha: roundCommit.commit,
+                verdict: rowVerdict,
+                score: lkgMetric ? lkgMetric.score : null,
+                metrics: lkgMetric ?? null,
+                llm_rationale: verdict.summary || null,
+                screenshot_path: lkgRenderedPath ?? null,
+                rollback_from_round: rollbackFromRound,
+              })
+            } catch (insertErr) {
+              // (delivery_id, round_index) collisions or transient DB issues
+              // never block the deliver flow — the verdict path is the source
+              // of truth, replay is observability only.
+              log.warn("deliver: failed to write delivery_round row (non-fatal)", {
+                taskID, iteration,
+                error: insertErr instanceof Error ? insertErr.message : String(insertErr),
+              })
+            }
+          }
+          void lkgOutcome  // recorded above; consumer is delivery_round + decision log
 
           if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")
