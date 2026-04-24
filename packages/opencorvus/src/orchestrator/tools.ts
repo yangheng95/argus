@@ -3340,68 +3340,75 @@ export function createOrchestratorTools(input: {
           await trackStepStart("build")
         }
 
-        const buildSession = await Session.createNext({
-          kind: "build",
-          goalID: attachedGoalID,
-          parentID: input.agentSessionID,
-          title: `Build: ${task.title}`,
-          directory: Instance.directory,
-          // Build is a worker, not an orchestrator. Deny orchestration tools so
-          // the build agent codes directly instead of dispatching to sub-agents
-          // via the task tool.
-          permission: [
-            { permission: "task", pattern: "*", action: "deny" as const },
-          ],
-        })
-
+        // Phase 5-c: delegate to BuildAgent.run. It owns the child session
+        // (kind=build), creates an isolated worktree (parallel-safe for
+        // multi-goal fan-out), gates concurrency via BuildSemaphore, and
+        // returns a structured BuildResult the orchestrator can judge.
+        //
+        // For goalID path, build the structured BuildTarget from the DB row
+        // so the agent receives acceptance_specs / owned_paths / depends_on
+        // directly. For pure request path, the LLM-supplied `request` is
+        // the user message.
         try {
-          // CRITICAL: capture the build agent's final message. Without this,
-          // the orchestrator sees only a hardcoded "Build agent completed"
-          // string and re-invokes build on the same broken state after each
-          // delivery rejection — the classic build/deliver death spiral
-          // ("助手 delivery 拒绝后试图用 build 解决问题，死循环"). The build
-          // agent's own summary lives in the last text part of its session
-          // reply; we forward it (capped) so the orchestrator can judge
-          // whether build actually addressed the prior rejection before
-          // re-dispatching.
-          const { Agent: AgentForBuild } = await import("@/agent/agent")
-          const { Provider: ProviderForBuild } = await import("@/provider/provider")
-          const buildAgent = await AgentForBuild.get("build")
-          const buildModel = buildAgent?.model ?? (await ProviderForBuild.defaultModel())
-          const result = await SessionPrompt.prompt({
-            sessionID: buildSession.id,
-            agent: "build",
-            // Explicit model — this is a newly-created buildSession with no
-            // message history, so the SessionPrompt fallback chain would
-            // otherwise bottom out at Provider.defaultModel() deep inside and
-            // lose context. Resolve up front for clean diagnostics.
-            model: { providerID: buildModel.providerID, modelID: buildModel.modelID },
-            parts: [{ type: "text", text: request, kind: "user_content" }],
-          })
-          await Session.touch(buildSession.id).catch(err => log.warn("Session.touch failed (non-fatal metadata update)", { sessionID: buildSession.id, error: String(err) }))
+          const { BuildAgent } = await import("@/build-agent/agent")
+          let target: import("@/build-agent/types").BuildTarget
+          if (attachedGoalID) {
+            const { findGoal } = await import("@/engine/store")
+            const goal = findGoal(attachedGoalID)
+            if (!goal) {
+              if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+              return `build: goal ${attachedGoalID} not found; register via architect first.`
+            }
+            target = {
+              kind: "goal",
+              id: goal.id,
+              title: goal.title,
+              objective: request.trim().length > 0 ? request : goal.objective,
+              acceptance_specs: Array.isArray(goal.acceptance_specs)
+                ? (goal.acceptance_specs as Array<string | { description?: string }>).map((spec) =>
+                    typeof spec === "string" ? spec : (spec.description ?? JSON.stringify(spec)),
+                  )
+                : [],
+              owned_paths: Array.isArray(goal.owned_paths) ? (goal.owned_paths as string[]) : [],
+              exports: Array.isArray(goal.exports) ? (goal.exports as string[]) : [],
+              imports: Array.isArray(goal.imports) ? (goal.imports as string[]) : [],
+              depends_on: Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : [],
+            }
+          } else {
+            target = { kind: "request", text: request }
+          }
 
-          const resultParts = Array.isArray((result as any)?.parts) ? (result as any).parts : []
-          const lastText = [...resultParts].reverse().find((p) => p?.type === "text")?.text ?? ""
-          const toolCallCount = resultParts.filter((p: any) => p?.type === "tool" || p?.type === "tool_call").length
-          const summary = lastText.length > 0
-            ? (lastText.length > 2000 ? lastText.slice(0, 2000) + "…(truncated)" : lastText)
-            : "(build agent produced no text summary — check session for raw tool calls)"
+          const { result, sessionID, worktreeDir } = await BuildAgent.run({
+            target,
+            task,
+            parentSessionID: input.agentSessionID,
+            signal: input.signal,
+          })
 
           if (isTaskLevelBuild) await trackStepComplete("build")
 
           // Build does NOT mark the task complete — deliver must accept.
-          // Returning the actual build output (not a hardcoded string) is
-          // what lets the orchestrator detect "build looped without fixing
-          // the rejected thing" and call fail_task or modify_goal instead
-          // of re-dispatching build indefinitely.
+          // Return the structured payload so the orchestrator can judge
+          // whether build actually addressed the prior rejection before
+          // re-dispatching (avoids the build/deliver death spiral).
+          const testLines = result.tests.length > 0
+            ? result.tests.map((t) => `  - ${t.passed ? "✓" : "✗"} ${t.name}${t.detail ? `: ${t.detail}` : ""}`).join("\n")
+            : "  (none reported)"
+          const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
+          const errorLine = result.error ? `\n- error: ${result.error}` : ""
+          const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
           return (
-            `Build agent finished (session ${buildSession.id}, ${toolCallCount} tool calls).\n\n` +
-            `### Build agent's final summary\n${summary}\n\n` +
+            `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +
+            `### Build report\n` +
+            `- summary: ${result.summary}\n` +
+            `- patch_summary: ${result.patch_summary || "(empty)"}\n` +
+            `${commitLine}${errorLine}${worktreeLine}\n` +
+            `- tests:\n${testLines}\n\n` +
             `### Next step\n` +
-            `Call \`deliver\` to run the metric executor + Arbiter.\n` +
-            `If the Arbiter rejects, COMPARE this summary against the rejection details — ` +
+            `Call \`deliver\` to run the adversarial verification + Arbiter.\n` +
+            `If the Arbiter rejects, compare this report against the rejection_details — ` +
             `did build actually address the cited issues? If yes but deliver still rejects, ` +
-            `the goal contract may need modify_goal. If no, call build again with *more specific* ` +
+            `the goal contract may need modify_goal. If no, call build again with more specific ` +
             `instructions citing what was missed (re-invoking build with the same prompt is a ` +
             `deadlock; iteration budget will terminate the task).`
           )
@@ -3409,17 +3416,37 @@ export function createOrchestratorTools(input: {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })
           if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-          // Build itself failed (LLM error, tool guard fault, etc.) — distinct
-          // from deliver-rejection. Surface the error and let the orchestrator
-          // decide (retry build vs fail_task).
+          // Build itself failed (LLM error, tool guard fault, worktree
+          // creation failed, etc.) — distinct from deliver-rejection.
+          // Surface the error so the orchestrator decides (retry / fail_task).
           throw err
         }
       },
     }),
   }
 
+  // Phase 5-c: hide the pre-migration dispatch pipeline from the LLM's
+  // tool list. The orchestrator prompt now steers single-goal / multi-goal
+  // work through `build` exclusively (direct path uses build without a
+  // goalID, pipeline path uses build with a goalID — see build.description).
+  // We keep the implementations intact so a feature-flag rollback only
+  // needs to flip this filter, not restore hundreds of lines. The
+  // corresponding prompt updates are in ORCHESTRATOR_INSTRUCTIONS
+  // (orchestrator/agent.ts) — this file only controls what the AI SDK
+  // advertises.
+  const DEPRECATED_TOOL_NAMES = new Set<keyof typeof tools>([
+    "dispatch_goal",
+    "exec_goal",
+    "submit_execution",
+    "retry_goal",
+    "create_run",
+  ])
+  const visibleTools = Object.fromEntries(
+    Object.entries(tools).filter(([name]) => !(DEPRECATED_TOOL_NAMES as Set<string>).has(name)),
+  ) as typeof tools
+
   return {
-    tools,
+    tools: visibleTools,
     stopSignal: stopAfterDispatch.signal,
     finalizeDeferredStop,
   }

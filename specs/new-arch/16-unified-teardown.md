@@ -362,7 +362,16 @@ await SessionPrompt.prompt({
     - 结果：status=passed / commit_ref=`e846fa3` / testCount=0 / worktreeBranch=`opencorvus/build-create-a-file-named-hello-md-wit`
     - 生命周期：Instance.dispose → Worktree.remove → removeSandbox → ownership.clear 全部 ok，175ms 清理干净
     - gated by `OPENCORVUS_RUN_BUILD_SMOKE=1`；`BuildAgent.run` API 契约由真实 LLM 调用验证通过
-- **5-c**：orchestrator prompt 改为使用 `build`（单 goal / 多 goal 并行均经此路径）；`dispatch_goal / exec_goal / submit_execution / retry_goal` 从 LLM 可见工具列表移除（实现保留，便于回滚）
+- **5-c**（✅ 2026-04-24）：orchestrator prompt 重写 + build 工具重接
+  - `orchestrator/tools.ts` 既有 `build` tool 的 execute 体改写为 `await BuildAgent.run(...)`：pipeline 路径从 DB 加载 goal（acceptance_specs / owned_paths / exports / imports / depends_on）构造 `BuildTarget`；direct 路径走 request-shape。worktree 生命周期 100% 由 BuildAgent.run 的 try/finally 管理，每次 build 自动隔离
+  - 返回给 orchestrator 的 tool_result 改为富结构化报告（status / summary / patch_summary / commit_ref / tests[] / error / worktreeDir），LLM 可直接判断 build 是否真的修了前轮 delivery 拒因
+  - `createOrchestratorTools` 末尾新增 `DEPRECATED_TOOL_NAMES` 过滤器：`dispatch_goal / exec_goal / submit_execution / retry_goal / create_run` 从 AI SDK 广告的工具列表移除（实现 280+ 行代码仍在 tools.ts 内，改回滚只需删过滤 Set）
+  - `agent.ts` 的 `ORCHESTRATOR_INSTRUCTIONS` 重写：
+    - `## Tools` 段：build 描述扩展为双 shape（direct 无 goalID / pipeline 带 goalID），明确 "multi-goal parallel = 同一 step 多个 build tool_call"
+    - `## New task — execution` 段：pipeline 流程 `create_run → submit_execution → wait` → `build({ goalID })` 批量 + `deliver`
+    - `## After a goal batch completes` 段：所有 retry_goal / dispatch_goal 指引改为 `build({ goalID, request })`
+    - `## After a delivery rejection` 段：rung 5 从 retry_goal 切换到 `build({ goalID })`；rung 8 "shared-state obstacle" 依然用 `build`
+  - typecheck clean；232 session+engine+build-agent 测试通过（5 pre-existing flaky 无回归）
 - **5-d**：GoalPool 驱动路径删除（orchestrator/loop.ts 不再 pool.drain()）；worktree 创建 / teardown 由 build tool 内部 try/finally 管理
 - **5-e**：读模型切换：`describe.ts` / `task-api` / `workbench/board.ts` 统一 projection 入口；overlay 不再直接 SQL 查 `engine_delivery / engine_evaluation`
 - **5-f**：verification 从 `engine_evaluation` 长期证据表改为只读 artifact stream
