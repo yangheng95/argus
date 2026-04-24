@@ -346,62 +346,6 @@ async function commitDeliveryRound(input: {
 }
 
 /**
- * P0-C.2 — reclaim per-goal delivery commits left detached on goal-worktree
- * branches when a run is aborted before `mergeGoalDelivery` cherry-picks them
- * into main. Without this, the next deliver cycle aggregates against a main
- * HEAD that does not contain the executor's work; the publisher then squashes
- * an empty diff over real commits and the operator silently loses the round.
- *
- * Detection is conservative — already-ancestor commits AND already-`-x`-cherry-
- * picked commits are skipped, so re-running this is idempotent. Cherry-pick
- * conflicts are surfaced as `unreclaimable`; callers MUST fail the task on a
- * non-empty unreclaimable list (per spec: "走不通直接任务 failed，禁止 squash 绕过").
- */
-async function reclaimDetachedGoalCommits(input: {
-  taskID: string
-  runID: string
-}): Promise<{
-  reclaimed: Array<{ goalRunID: string; commitRef: string; newCommit?: string }>
-  unreclaimable: Array<{ goalRunID: string; commitRef: string; reason: string }>
-}> {
-  const { listGoalRunsForRun, findDeliveryByGoalRun } = await import("./store")
-  const cwd = Instance.directory
-  const goalRuns = listGoalRunsForRun(input.runID)
-  const reclaimed: Array<{ goalRunID: string; commitRef: string; newCommit?: string }> = []
-  const unreclaimable: Array<{ goalRunID: string; commitRef: string; reason: string }> = []
-
-  for (const gr of goalRuns) {
-    const delivery = findDeliveryByGoalRun(gr.id)
-    const result = delivery?.result as { commit_ref?: unknown } | undefined
-    const commitRef = typeof result?.commit_ref === "string" ? result.commit_ref : undefined
-    if (!commitRef) continue
-
-    const ancestor = await git(["merge-base", "--is-ancestor", commitRef, "HEAD"], { cwd })
-    if (ancestor.exitCode === 0) continue
-
-    const grep = await git(
-      ["log", `--grep=cherry picked from commit ${commitRef}`, "--format=%H", "-1"],
-      { cwd },
-    )
-    if (grep.exitCode === 0 && grep.text().trim().length > 0) continue
-
-    const pick = await git(
-      ["cherry-pick", "--no-gpg-sign", "-x", commitRef],
-      { cwd, env: env() },
-    )
-    if (pick.exitCode !== 0) {
-      const err = pick.stderr.toString().trim() || pick.stdout.toString().trim() || "git cherry-pick failed"
-      // Roll the working tree back so the next iteration is not stuck mid-pick.
-      await git(["cherry-pick", "--abort"], { cwd })
-      unreclaimable.push({ goalRunID: gr.id, commitRef, reason: err })
-      continue
-    }
-    reclaimed.push({ goalRunID: gr.id, commitRef, newCommit: await head() })
-  }
-  return { reclaimed, unreclaimable }
-}
-
-/**
  * P0-C.4 LKG state lives in `task.metadata.git.delivery_lkg`.
  * One slot per task — the task-level delivery picky loop is the only
  * writer; per-goal worktrees do not own LKG (only the merged worktree
@@ -542,8 +486,6 @@ async function evaluateAndApplyLKG(input: {
 export namespace EngineGit {
   export const commitDeliveryRound = (input: Parameters<typeof commitDeliveryRound>[0]) =>
     commitDeliveryRound(input)
-  export const reclaimDetachedGoalCommits = (input: Parameters<typeof reclaimDetachedGoalCommits>[0]) =>
-    reclaimDetachedGoalCommits(input)
   export const evaluateAndApplyLKG = (input: Parameters<typeof evaluateAndApplyLKG>[0]) =>
     evaluateAndApplyLKG(input)
   export const readLKG = (task: TaskRow) => readDeliveryLKG(task)

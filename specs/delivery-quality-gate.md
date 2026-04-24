@@ -150,8 +150,8 @@ LLM judge 只能在硬门通过后判 "accept with minor issues" 或 "reject on 
 > **状态（2026-04-24）**：Stream D（P0-C.1 + .2 + .3 — Commit & Diff 纠偏，3 项捆绑契约）✅ 已交付。
 > 实现要点：
 > - `engine/git.ts` 新增 `EngineGit.commitDeliveryRound`：每轮 `git add -A` + `git commit --no-gpg-sign --allow-empty`，subject=`delivery round N | verdict=X | issues=Y`，body 带 verdict.summary。`--allow-empty` 保证"该轮无代码改动"也有时间锚点。
-> - `engine/git.ts` 新增 `EngineGit.reclaimDetachedGoalCommits`：扫所有 goal-run 的 `delivery.result.commit_ref`，`merge-base --is-ancestor` + `log --grep=cherry picked from commit X` 双重判已合，未合则 `git cherry-pick -x`；冲突则 `--abort` 并归到 `unreclaimable`。
-> - `orchestrator/tools.ts:deliver()`：执行入口先 reclaim，`unreclaimable.length > 0` → 任务直接 `failed`（禁 squash 绕过）；verdict 落库后立即调 `commitDeliveryRound`，accept / reject 两条路径都走，commit_sha 通过 `log.info` 留痕（待 Stream G 接 `delivery_round` 表）。
+> - ~~`engine/git.ts` 新增 `EngineGit.reclaimDetachedGoalCommits`~~：**已回滚（2026-04-24）**。此函数与 `engine/runtime.ts:mergeGoalDelivery` 构成双源 cherry-pick（违反 CLAUDE.md #22）：`mergeGoalDelivery` 冲突分支会通过 `merge-resolver` 产生**新 hash** 的合并 commit，既不是原 `commitRef` 的 ancestor，也不一定带 `-x` 的 "cherry picked from commit X" annotation；reclaim 的两条幂等判据因此漏判已合的 goal，每次 deliver 入口都会重放 resolver 处理过的 commit，触发假冲突 → `unreclaimable` → 任务直接 `failed`。**唯一 goal→main 入口**恢复为 `mergeGoalDelivery`（goal-pool 的 `mergeDelivery` hook，带 `Worktree.lock` 序列化 + resolver 兜底）。"run 被 abort 在 mergeGoalDelivery 之前"的窄窗口由 run 恢复逻辑负责重放缺失 goal，不在 deliver 入口用 git 日志盲扫兜底。
+> - `orchestrator/tools.ts:deliver()`：~~执行入口先 reclaim，`unreclaimable.length > 0` → 任务直接 `failed`~~（reclaim 已回滚，见上一条）；verdict 落库后立即调 `commitDeliveryRound`，accept / reject 两条路径都走，commit_sha 通过 `log.info` 留痕（待 Stream G 接 `delivery_round` 表）。
 > - `engine/publisher.ts:workspaceExportAdapter`：`changedFiles` / `patch` 改由 `git diff baseRef..HEAD` 计算（baseRef 取 `task.metadata.git.baseline.commit`）。彻底废弃 `ctx.delivery.result.{changed_files,diffs}` 与 `createTwoFilesPatch` 旧路径，aborted 路径再也不会 `[]`。
 > - 未触及 Stream C / Stream A 的 verdict / agent / tools 文件——遵守"Stream C 拥有 verdict 函数签名 / Stream A 只动 render step 区块"的并行契约。
 > - **遗留**：commit message 的 `score=` 字段需 Stream C' 的 LKG score 接入后补；`delivery_round` 表写入由 Stream G 拉起。本 stream 只做契约 1/2/3，契约 4（Overlay Board）在后端契约满足后无需改动。
@@ -173,7 +173,7 @@ Publisher 里 `workspaceExportAdapter` 仅把 `delivery.patch` 写进 `Global.Pa
 **系统性契约（必须同时满足）**：
 
 1. Delivery repair loop 每轮结束强制 `git commit`（本节主体，下文已描述）
-2. Run aborted 恢复路径必须把 detached goal-run 的 commits 回收进主任务历史（`engine/git.ts` 增加 `reclaim_detached_goal_commits`；走不通直接任务 `failed`，禁止 squash 绕过）
+2. ~~Run aborted 恢复路径必须把 detached goal-run 的 commits 回收进主任务历史（`engine/git.ts` 增加 `reclaim_detached_goal_commits`；走不通直接任务 `failed`，禁止 squash 绕过）~~ — **回滚 2026-04-24**：该契约原本靠 deliver 入口 grep `git log` 作兜底 cherry-pick，但与 `mergeGoalDelivery` 构成双源、且幂等判据对 `merge-resolver` 产物失效（见上方状态块），每次 deliver 都误判已合 goal 未合、重放冲突 → 任务直接 failed。恢复到单源：goal→main 只走 `engine/runtime.ts:mergeGoalDelivery`（pool hook，Worktree.lock 序列化 + resolver）。窄窗口的 aborted 恢复属于 run 级重放范畴，不再由 deliver 入口盲扫兜底。
 3. `delivery.result.changedFiles` / `diffs` 必须由 publisher 从 **当轮 commit 的 `git diff baseRef..HEAD`** 计算，不再信赖上游 `ctx.delivery.result.changed_files` 是否被填（当前 aborted 路径没人填就 `[]`）
 4. Overlay `Board.tsx` 显示逻辑不变，但后端契约保证：只要有 commit，`changedFiles` 就不为空——否则是后端 bug，不是 UI 判断
 
@@ -293,7 +293,7 @@ Phase 1（5 条 stream 并行，无共享代码路径）
 │         产出契约：VisualMetric 类型 + thresholds.json
 ├── Stream D · P0-C.1/.2/.3 · Commit & Diff 纠偏（不依赖 score）  ✅ DONE (2026-04-24)
 │     ├── .1 每轮 repair 强制 git commit            → engine/git.ts:commitDeliveryRound + orchestrator/tools.ts:deliver
-│     ├── .2 aborted 恢复回收 detached goal-run commits → engine/git.ts:reclaimDetachedGoalCommits
+│     ├── .2 aborted 恢复回收 detached goal-run commits → ~~engine/git.ts:reclaimDetachedGoalCommits~~（回滚 2026-04-24：与 mergeGoalDelivery 双源，删）
 │     └── .3 publisher 从 commit 算 changedFiles     → engine/publisher.ts:workspaceExportAdapter (git diff baseRef..HEAD)
 └── Stream E · P1-A · 禁静态脚手架退路  ✅ DONE (commit 032fcebe9)
       └── src/delivery/checks/runtime-evidence.ts（新；src/evaluator/ 已删，归并到 delivery/checks/）
