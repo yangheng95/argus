@@ -301,7 +301,7 @@ await SessionPrompt.prompt({
   **完成状态**：
   - [x] `intent-analysis`（2026-04-24 commit `a971b475b`）：`SessionPrompt.withExtraTools + SessionPrompt.prompt({ format: json_schema, schema: IntentFinalSchema })`，smoke test 通过 `alibaba-coding-plan-cn/kimi-k2.5` 验证 intent_class=bug_fix / complexity=trivial / 4 slots / structuredMissing=false
   - [x] `design-analyst`（2026-04-24）：删 `finalize_design_requirements` + 跨字段校验（从工具层移走，LLM 自判），新增 `DesignFinalSchema`（design_system + tech_stack）；multimodal parts 走 `SessionPrompt.prompt.parts`；orchestrator/tools.ts DesignAnalystAgent.analyze 的 `sessionID` 参数改名为 `parentSessionID`；prompt core 更新提示 StructuredOutput 替代 finalize；smoke test 通过 kimi-k2.5 验证 16 specs 提取 + structuredMissing=false
-  - [ ] requirements
+  - [x] `requirements`（2026-04-24）：删 `finalize_requirements` + 其嵌入校验（≥1 requirement、≥2 decisions 下放到调用方检查），新增 `RequirementsFinalSchema`（summary）；RequirementsService + orchestrator/tools.ts `sessionID` → `parentSessionID`；prompt core 替换 finalize_requirements 引用；smoke test 通过 kimi-k2.5 验证 7 requirements / 5 decisions / structuredMissing=false
   - [ ] planner
   - [ ] deliver
   - [ ] orchestrator
