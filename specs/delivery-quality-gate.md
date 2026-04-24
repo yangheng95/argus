@@ -214,7 +214,14 @@ Goal acceptance 的 checks_run 必须：
 
 ---
 
-### P2 · Delivery Round 可观测（DB schema + 回放脚本）
+### P2 · Delivery Round 可观测（DB schema + 回放脚本） · 🟡 G.1 + G.2 DONE，G.3 write-site 待接入
+
+> **实现要点**（Stream G.1 + G.2，commit 3d5f1d94b + 本轮）：
+> - `src/delivery/delivery.sql.ts`：`EngineDeliveryRoundTable` 已 merged（contract stub 预合 638464d32，schema.ts re-export）。列：id / task_id / delivery_id / round_index / commit_sha (notNull) / verdict / score / metrics_json / llm_rationale / screenshot_path / diff_region_path / rollback_from_round / timestamps。uniqueIndex(delivery_id, round_index)。
+> - `src/delivery/round-store.ts`：CRUD 层 —— `insertDeliveryRound` / `listByDelivery` / `listByTask` / `findBestDeliveryRound` / `findLatestDeliveryRound` / `markDeliveryRoundRollback`。采用 `Database.transaction` / `Database.use`，与 `engine/persist.ts` 同风格。
+> - `src/id/id.ts`：注册 `delivery_round` 前缀（`dlr`）。
+> - `script/delivery/replay.ts <taskID>`：按 task 拉全部 round，ASCII 表输出（delivery_id / rnd / verdict / score / trajectory bar / commit / rollback / markers），best 标 `★`、退化轮标 `▼`、回滚轮标 `↺from=N`。结尾汇总 total/scored/degradation_hits/final_verdict/best_score。
+> - **G.3 未接入（待跟进）**：Stream D (2b156ceb4) 已实装 `EngineGit.commitDeliveryRound` 并在 `orchestrator/tools.ts:2510` 调用，但 **未调用 `insertDeliveryRound` 写 DB 行**。当前 replay.ts 对真实任务读出空集。修法：在 `orchestrator/tools.ts` 该调用后追加一次 `insertDeliveryRound({ taskID, deliveryID, round_index=iteration, commit_sha=roundCommit.commit, verdict=verdict.verdict, llm_rationale=verdict.summary })`，score / metrics 等 P0-C.4 LKG 接入时再补。此文件当前被其他 agent 占用，本轮未改。
 
 **目标**：26 轮迭代的完整轨迹可结构化查询、可回放。
 
