@@ -19,9 +19,19 @@ import z from "zod"
 export interface RequirementsCollector {
   requirements: RegisteredRequirement[]
   decisions: RegisteredDecision[]
-  summary: string
-  finalized: boolean
 }
+
+/** Terminal schema for SessionLoop's StructuredOutput (phase 3-b migration). */
+export const RequirementsFinalSchema = z.object({
+  summary: z
+    .string()
+    .min(5)
+    .describe(
+      "One-line summary of the parsed requirements — what the user wants, " +
+        "in plain prose, under ~25 words.",
+    ),
+})
+export type RequirementsFinal = z.infer<typeof RequirementsFinalSchema>
 
 export interface RegisteredRequirement {
   id: string
@@ -39,8 +49,6 @@ function emptyCollector(): RequirementsCollector {
   return {
     requirements: [],
     decisions: [],
-    summary: "",
-    finalized: false,
   }
 }
 
@@ -83,38 +91,6 @@ export function createRequirementsOutputTools() {
       },
     }),
 
-    finalize_requirements: tool({
-      description:
-        "Validate the parsed requirement + decision set and finalize. Call AFTER " +
-        "registering all requirements and decisions. Returns quality issues if any — " +
-        "fix them and call again. Downstream, the Architect takes over decomposition.",
-      inputSchema: z.object({
-        summary: z.string().min(5).describe("One-line summary of the parsed requirements"),
-      }),
-      execute: async ({ summary }) => {
-        collector.summary = summary
-        const issues: string[] = []
-
-        if (collector.requirements.length === 0) {
-          issues.push("No requirements registered — at least one REQ-N entry is required")
-        }
-        if (collector.decisions.length < 2) {
-          issues.push(
-            `Only ${collector.decisions.length} decisions — record at least runtime + framework (Architect depends on this foundation)`,
-          )
-        }
-
-        if (issues.length === 0) {
-          collector.finalized = true
-          return [
-            "PASS: Requirements parsed.",
-            `  ${collector.requirements.length} requirements, ${collector.decisions.length} decisions.`,
-          ].join("\n")
-        }
-
-        return `ISSUES (${issues.length}):\n${issues.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n\nFix and call finalize_requirements again.`
-      },
-    }),
   }
 
   return {

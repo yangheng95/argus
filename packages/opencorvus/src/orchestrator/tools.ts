@@ -492,7 +492,7 @@ export function createOrchestratorTools(input: {
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
               designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
               taskID,
-              sessionID: requirementsSession.id,
+              parentSessionID: requirementsSession.id,
               signal: input.signal,
               decisionLog,
               stream: {

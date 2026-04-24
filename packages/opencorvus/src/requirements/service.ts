@@ -37,8 +37,10 @@ export namespace RequirementsService {
     /** Advisory visual contract produced by design_analysis. */
     designSpecs?: VisualSpec[]
     taskID?: string
-    sessionID?: string
+    /** Parent session — a child "requirements" session is created under it. */
+    parentSessionID?: string
     signal?: AbortSignal
+    /** Legacy passthrough; not wired after the SessionPrompt migration. */
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
     decisionLog?: DecisionLog
@@ -56,7 +58,7 @@ export namespace RequirementsService {
         attachments: input.attachments,
         designSpecs: input.designSpecs,
         taskID: input.taskID,
-        sessionID: input.sessionID,
+        parentSessionID: input.parentSessionID,
         signal: input.signal,
         stream: input.stream,
         onStatus: input.onStatus,
