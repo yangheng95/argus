@@ -29055,6 +29055,68 @@
                   }
                 }
               },
+              "delivery_visual": {
+                "description": "P0-B delivery visual numeric hard-gate thresholds. Change values then rebaseline via script/delivery/replay.ts.",
+                "type": "object",
+                "properties": {
+                  "phash_hamming_max": {
+                    "description": "P0-B hard gate: pHash Hamming distance upper bound (structure)",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64
+                  },
+                  "ssim_min": {
+                    "description": "P0-B hard gate: mean SSIM lower bound (texture/detail)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "chart_region_density_min_ratio": {
+                    "description": "P0-B hard gate: chart-region non-white density ratio lower bound (anti empty-skeleton)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "unique_color_ratio_min": {
+                    "description": "P0-B hard gate: unique-color ratio lower bound (anti monochrome placeholder)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "text_hit_ratio_min": {
+                    "description": "P0-B hard gate: reference_strings hit ratio lower bound (anti placeholder copy)",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "score_weights": {
+                    "description": "Composite score weights; four values must sum to 1 (runtime-enforced)",
+                    "type": "object",
+                    "properties": {
+                      "phash": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "ssim": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "density": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "text_hit": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    }
+                  }
+                }
+              },
               "design_analyst": {
                 "description": "Design analyst agent configuration — analyzes visual references (images, URLs). Model is configured via agent.\"design-analyst\".model.",
                 "type": "object",
@@ -29090,6 +29152,36 @@
                     "items": {
                       "type": "string"
                     }
+                  }
+                }
+              },
+              "activity": {
+                "description": "Chunk-driven inactivity gates. Single source of truth for every streaming layer (session LLM, executor events, goal_run scanner, task queue).",
+                "type": "object",
+                "properties": {
+                  "session_llm_idle_ms": {
+                    "description": "Max idle (no stream chunk) window for session LLM streams, ms",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
+                  },
+                  "executor_events_idle_ms": {
+                    "description": "Max idle window for the executor event queue, ms",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
+                  },
+                  "goal_run_idle_ms": {
+                    "description": "Max idle window scanned against engine_goal_run.last_progress_at, ms",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
+                  },
+                  "task_queue_run_timeout_ms": {
+                    "description": "Total wall-clock cap for a single queued task run, ms",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
                   }
                 }
               },
