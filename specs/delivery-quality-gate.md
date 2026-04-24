@@ -123,6 +123,15 @@ LLM judge 只能在硬门通过后判 "accept with minor issues" 或 "reject on 
 
 ### P0-C · 单调改进 + Last-Known-Good 回滚（`src/delivery/agent.ts` picky loop）
 
+> **状态（2026-04-24）**：Stream D（P0-C.1 + .2 + .3 — Commit & Diff 纠偏，3 项捆绑契约）✅ 已交付。
+> 实现要点：
+> - `engine/git.ts` 新增 `EngineGit.commitDeliveryRound`：每轮 `git add -A` + `git commit --no-gpg-sign --allow-empty`，subject=`delivery round N | verdict=X | issues=Y`，body 带 verdict.summary。`--allow-empty` 保证"该轮无代码改动"也有时间锚点。
+> - `engine/git.ts` 新增 `EngineGit.reclaimDetachedGoalCommits`：扫所有 goal-run 的 `delivery.result.commit_ref`，`merge-base --is-ancestor` + `log --grep=cherry picked from commit X` 双重判已合，未合则 `git cherry-pick -x`；冲突则 `--abort` 并归到 `unreclaimable`。
+> - `orchestrator/tools.ts:deliver()`：执行入口先 reclaim，`unreclaimable.length > 0` → 任务直接 `failed`（禁 squash 绕过）；verdict 落库后立即调 `commitDeliveryRound`，accept / reject 两条路径都走，commit_sha 通过 `log.info` 留痕（待 Stream G 接 `delivery_round` 表）。
+> - `engine/publisher.ts:workspaceExportAdapter`：`changedFiles` / `patch` 改由 `git diff baseRef..HEAD` 计算（baseRef 取 `task.metadata.git.baseline.commit`）。彻底废弃 `ctx.delivery.result.{changed_files,diffs}` 与 `createTwoFilesPatch` 旧路径，aborted 路径再也不会 `[]`。
+> - 未触及 Stream C / Stream A 的 verdict / agent / tools 文件——遵守"Stream C 拥有 verdict 函数签名 / Stream A 只动 render step 区块"的并行契约。
+> - **遗留**：commit message 的 `score=` 字段需 Stream C' 的 LKG score 接入后补；`delivery_round` 表写入由 Stream G 拉起。本 stream 只做契约 1/2/3，契约 4（Overlay Board）在后端契约满足后无需改动。
+
 **目标**：picky loop 不得比上一轮更差；回滚必须有 commit 可依。
 
 **强制前置**：每一轮 repair 结束必须 `git commit`（对应 CLAUDE.md rule 21）。ainvest 事故里 7 个"delivery" commit 都只含 `mirror/*` 脚手架，`src/*` 直到最终空骨架版才首次 commit——意味着 22:30 那版最佳 UI 从未落盘，无任何 last-known-good 可回滚。这是退化不可恢复的物理原因。
@@ -232,10 +241,10 @@ Phase 1（5 条 stream 并行，无共享代码路径）
 │         src/delivery/verdict.ts（接入硬门）
 │         src/delivery/service.ts（gate 串进 verify 流）
 │         产出契约：VisualMetric 类型 + thresholds.json
-├── Stream D · P0-C.1/.2/.3 · Commit & Diff 纠偏（不依赖 score）
-│     ├── .1 每轮 repair 强制 git commit            → delivery/agent.ts
-│     ├── .2 aborted 恢复回收 detached goal-run commits → engine/git.ts
-│     └── .3 publisher 从 commit 算 changedFiles     → engine/publisher.ts
+├── Stream D · P0-C.1/.2/.3 · Commit & Diff 纠偏（不依赖 score）  ✅ DONE (2026-04-24)
+│     ├── .1 每轮 repair 强制 git commit            → engine/git.ts:commitDeliveryRound + orchestrator/tools.ts:deliver
+│     ├── .2 aborted 恢复回收 detached goal-run commits → engine/git.ts:reclaimDetachedGoalCommits
+│     └── .3 publisher 从 commit 算 changedFiles     → engine/publisher.ts:workspaceExportAdapter (git diff baseRef..HEAD)
 └── Stream E · P1-A · 禁静态脚手架退路
       └── src/executor/opencode.ts（prompt）
           src/evaluator/runtime-evidence.ts（新，共用 puppeteer helper）
