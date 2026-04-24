@@ -41,3 +41,4 @@ export {
   EngineCounterexampleTable,
   EngineIterationTable,
 } from "../metrics/metrics.sql"
+export { EngineDeliveryRoundTable } from "../delivery/delivery.sql"
