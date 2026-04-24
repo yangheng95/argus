@@ -1,15 +1,19 @@
 /**
- * Zod-validated tool calls for Intent Analysis Agent structured output.
+ * Zod-validated tool calls for Intent Analysis Agent incremental recording.
  *
- * The agent emits 4 tool kinds:
- *   - extract_slot      — one call per extracted requirement element
- *   - flag_missing_info — one call per missing-but-important piece
- *   - ask_clarification — one call per clarification question
- *   - finalize_intent   — exactly one call to close analysis with class/complexity/confidence/summary
+ * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): the
+ * terminal `finalize_intent` tool is gone — final intent_class, complexity,
+ * confidence, and summary now arrive through SessionLoop's StructuredOutput
+ * tool driven by the agent's `format: { type: "json_schema", schema }` input.
  *
- * Small tool schemas mirror the architect pattern — avoids the streaming
- * buffering issues of monolithic tool schemas and gives the LLM an
- * incremental append surface rather than one giant JSON object.
+ * The remaining three tools (`extract_slot`, `flag_missing_info`,
+ * `ask_clarification`) stay as incremental "scratchpad" tools, injected
+ * via `SessionPrompt.setExtraTools(childSessionID, ...)` for the life of
+ * a single agent invocation.
+ *
+ * Small tool schemas mirror the architect pattern — gives the LLM an
+ * incremental append surface rather than a single monolithic object that
+ * amplifies streaming-buffering issues on some providers.
  */
 import { tool } from "ai"
 import z from "zod"
@@ -21,7 +25,7 @@ import type {
   IntentSlot,
 } from "./types"
 
-const INTENT_CLASSES = [
+export const INTENT_CLASSES = [
   "question",
   "bug_fix",
   "feature",
@@ -31,7 +35,7 @@ const INTENT_CLASSES = [
   "unclear",
 ] as const satisfies readonly IntentClass[]
 
-const COMPLEXITY_BANDS = [
+export const COMPLEXITY_BANDS = [
   "trivial",
   "small",
   "medium",
@@ -42,6 +46,36 @@ const COMPLEXITY_BANDS = [
 const CLARIFICATION_PRIORITIES = ["blocker", "nice"] as const
 
 // ---------------------------------------------------------------------------
+// Terminal JSON-schema: payload the StructuredOutput tool must deliver.
+// The incremental fields (slots / missing / clarifications) stay in the
+// collector below and are merged in by `collectorToResult` so the final
+// `IntentAnalysisResult` matches the pre-migration shape.
+// ---------------------------------------------------------------------------
+
+export const IntentFinalSchema = z.object({
+  intent_class: z
+    .enum(INTENT_CLASSES)
+    .describe(
+      "Primary intent class — pick 'unclear' only when no class fits better than random guessing.",
+    ),
+  complexity: z
+    .enum(COMPLEXITY_BANDS)
+    .describe(
+      "Rough work size: trivial (minutes), small (one file / one goal), medium (few files, coordinated), large (multi-subsystem), unknown (not enough info to judge).",
+    ),
+  confidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe("Overall confidence in this analysis, 0-1."),
+  summary: z
+    .string()
+    .min(1)
+    .describe("One-line statement of what the user wants."),
+})
+export type IntentFinal = z.infer<typeof IntentFinalSchema>
+
+// ---------------------------------------------------------------------------
 // Collector
 // ---------------------------------------------------------------------------
 
@@ -49,11 +83,6 @@ export interface IntentCollector {
   slots: IntentSlot[]
   missing: string[]
   clarifications: IntentClarification[]
-  intent_class?: IntentClass
-  complexity?: IntentComplexity
-  confidence?: number
-  summary: string
-  finalized: boolean
 }
 
 function emptyCollector(): IntentCollector {
@@ -61,8 +90,6 @@ function emptyCollector(): IntentCollector {
     slots: [],
     missing: [],
     clarifications: [],
-    summary: "",
-    finalized: false,
   }
 }
 
@@ -100,7 +127,8 @@ export function createIntentOutputTools() {
       }),
       execute: async ({ key, value, confidence }) => {
         collector.slots.push({ key, value, confidence })
-        return `OK: slot "${key}" recorded (${collector.slots.length} total)`
+        const output = `OK: slot "${key}" recorded (${collector.slots.length} total)`
+        return { output, title: `slot:${key}`, metadata: { count: collector.slots.length } }
       },
     }),
 
@@ -120,7 +148,8 @@ export function createIntentOutputTools() {
       }),
       execute: async ({ key }) => {
         if (!collector.missing.includes(key)) collector.missing.push(key)
-        return `OK: missing "${key}" flagged (${collector.missing.length} total)`
+        const output = `OK: missing "${key}" flagged (${collector.missing.length} total)`
+        return { output, title: `missing:${key}`, metadata: { count: collector.missing.length } }
       },
     }),
 
@@ -147,47 +176,12 @@ export function createIntentOutputTools() {
       }),
       execute: async ({ question, why_needed, priority }) => {
         collector.clarifications.push({ question, why_needed, priority })
-        return `OK: clarification recorded (${collector.clarifications.length} total)`
-      },
-    }),
-
-    finalize_intent: tool({
-      description:
-        "Finalize the intent analysis. Call exactly once at the end after " +
-        "all extract_slot / flag_missing_info / ask_clarification calls. " +
-        "Sets the intent class, complexity band, overall confidence, and " +
-        "a one-line summary of what the user wants.",
-      inputSchema: z.object({
-        intent_class: z
-          .enum(INTENT_CLASSES)
-          .describe(
-            "Primary intent class — pick 'unclear' only when no class fits " +
-              "better than random guessing.",
-          ),
-        complexity: z
-          .enum(COMPLEXITY_BANDS)
-          .describe(
-            "Rough work size: trivial (minutes), small (one file / one goal), " +
-              "medium (few files, coordinated), large (multi-subsystem), " +
-              "unknown (not enough info to judge).",
-          ),
-        confidence: z
-          .number()
-          .min(0)
-          .max(1)
-          .describe("Overall confidence in this analysis, 0-1."),
-        summary: z
-          .string()
-          .min(1)
-          .describe("One-line statement of what the user wants."),
-      }),
-      execute: async ({ intent_class, complexity, confidence, summary }) => {
-        collector.intent_class = intent_class
-        collector.complexity = complexity
-        collector.confidence = confidence
-        collector.summary = summary
-        collector.finalized = true
-        return `OK: intent finalized (class=${intent_class}, complexity=${complexity}, slots=${collector.slots.length}, clarifications=${collector.clarifications.length})`
+        const output = `OK: clarification recorded (${collector.clarifications.length} total)`
+        return {
+          output,
+          title: `clarify:${priority}`,
+          metadata: { count: collector.clarifications.length, priority },
+        }
       },
     }),
   }
@@ -205,17 +199,25 @@ export function createIntentOutputTools() {
 }
 
 // ---------------------------------------------------------------------------
-// Collector → Result
+// Collector + StructuredOutput → Result
 // ---------------------------------------------------------------------------
 
-export function collectorToResult(c: IntentCollector): IntentAnalysisResult {
+/**
+ * Merge incremental collector state with the terminal StructuredOutput
+ * payload. Returns a fully-populated IntentAnalysisResult. Passing
+ * `final=undefined` keeps `intent_class="unclear"` / `complexity="unknown"`
+ * and `confidence=0` so callers can still render something when the LLM
+ * skipped the StructuredOutput call — the same defensive defaults the
+ * pre-migration `collectorToResult` used.
+ */
+export function collectorToResult(c: IntentCollector, final?: IntentFinal): IntentAnalysisResult {
   return {
-    intent_class: c.intent_class ?? "unclear",
-    complexity: c.complexity ?? "unknown",
+    intent_class: final?.intent_class ?? "unclear",
+    complexity: final?.complexity ?? "unknown",
     extracted_slots: c.slots,
     missing_info: c.missing,
     clarifications: c.clarifications,
-    confidence: c.confidence ?? 0,
-    summary: c.summary,
+    confidence: final?.confidence ?? 0,
+    summary: final?.summary ?? "",
   }
 }
