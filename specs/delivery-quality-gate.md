@@ -194,7 +194,16 @@ Publisher 里 `workspaceExportAdapter` 仅把 `delivery.patch` 写进 `Global.Pa
 
 ---
 
-### P1-A · 禁 SPA 静态脚手架退路（`src/executor/opencode.ts` + `evaluator/`）
+### P1-A · 禁 SPA 静态脚手架退路（`src/delivery/checks/runtime-evidence.ts` + skill prompts） ✅ DONE (Stream E, commit 032fcebe9, 2026-04-24)
+
+> **实现要点**：
+> - 实际落位 `src/delivery/checks/runtime-evidence.ts`——不是 spec 原写的 `src/evaluator/`，因为 `src/evaluator/` 2026-04-20 已删，逻辑归并到 `src/delivery/checks/`（rule 9 recall + rule 24 现有抽象）
+> - `computeRuntimeEvidence` 输出 4 类 violation：`no_build_artifact` / `render_failed` / `empty_root_shell`（`<div id="root|app|__next">` 仅 ≤1 子元素）/ `dom_too_thin`（text<120 或 nodes<60）
+> - `renderPage` 扩展返回 `dom: {textLength, nodeCount, isEmptyRootShell, hasBodyChildren}`——与 screenshot 同一轮 puppeteer 采集，runtime-evidence 与 P0-B 硬门共享这一次 render（rule 22）
+> - `verdict.ts` 加 `synthesizeRuntimeRejection`——runtime 未过直接合成 rejected（category="runtime" + 每 goalId 逐条归因），不召唤 LLM
+> - `service.ts` verify 流重排为 `runtime-evidence → LLM verdict → P0-B 硬门`；视觉硬门复用 `runtimeReport.evidence.renderedPngPath`，删掉 Stream C 版的独立 `resolveRenderedPath`
+> - Skill 侧：`webpage-clone.md` 加 P1-A hard rule（SPA 抓不下来 → STOP escalate，禁改用 visual contract 糊 scaffold）；`delivery-verify-web.md` 说明 service-level pre-gate 存在，LLM 不能糊弄
+> - **并行陷阱遵守**：未动 `engine/git.ts`（Stream C' 领地）、`orchestrator/tools.ts`（A/C'/D 轮流领地）、`delivery/agent.ts`（C' / A）、`delivery/tools.ts`（Stream A）
 
 **目标**：goal 不得只产 "文本脚手架" 就算完成。
 
@@ -287,9 +296,12 @@ Phase 1（5 条 stream 并行，无共享代码路径）
 │     ├── .1 每轮 repair 强制 git commit            → engine/git.ts:commitDeliveryRound + orchestrator/tools.ts:deliver
 │     ├── .2 aborted 恢复回收 detached goal-run commits → engine/git.ts:reclaimDetachedGoalCommits
 │     └── .3 publisher 从 commit 算 changedFiles     → engine/publisher.ts:workspaceExportAdapter (git diff baseRef..HEAD)
-└── Stream E · P1-A · 禁静态脚手架退路
-      └── src/executor/opencode.ts（prompt）
-          src/evaluator/runtime-evidence.ts（新，共用 puppeteer helper）
+└── Stream E · P1-A · 禁静态脚手架退路  ✅ DONE (commit 032fcebe9)
+      └── src/delivery/checks/runtime-evidence.ts（新；src/evaluator/ 已删，归并到 delivery/checks/）
+          src/delivery/checks/visual.ts（renderPage 扩 dom metrics）
+          src/delivery/service.ts（runtime → LLM → P0-B 硬门，单次 render）
+          src/delivery/verdict.ts（synthesizeRuntimeRejection）
+          src/skill/builtin/{webpage-clone,delivery-verify-web}.md（prompt 禁 fallback）
 
 Phase 2（依赖 Phase 1）
 ├── Stream C' · P0-C.4 · LKG score-driven rollback  ✅ DONE (2026-04-24)
@@ -359,7 +371,7 @@ stub 交付物（Stream A–G 可直接 import，未实现部分以 `throw NotIm
 | P0-B ✅ | 数值门前置 | 极高 | 中 | 无 |
 | P0-C | LKG 回滚 + 每轮 commit | 高 | 中 | P0-B（需要 score） |
 | P0-A ✅ | Reference 真实性 | 高 | 小 | 无 |
-| P1-A | 禁静态脚手架退路 | 高 | 小 | P0-A（共用 runtime evidence 能力） |
+| P1-A ✅ | 禁静态脚手架退路 | 高 | 小 | P0-A（共用 runtime evidence 能力） |
 | P1-B | 内容指纹 | 中 | 中 | P0-A（共用 capture-manifest） |
 | P2   | Round 可观测 | 中 | 小 | P0-B、P0-C（数据源） |
 
