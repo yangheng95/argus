@@ -56,7 +56,16 @@ tools.ts:416 原话："When you need to view the image contents, pass the return
 
 ---
 
-### P0-A · Reference 真实性闸（`src/design-analyst/capture-gate.ts` 新增）
+### P0-A · Reference 真实性闸（`src/design-analyst/capture-gate.ts` 新增） ✅ DONE (Stream B, commit 7f53a3de6, 2026-04-24)
+
+> **实现要点**：
+> - `capture-gate.ts` 实装 `captureReferenceManifest`：puppeteer networkidle2 → fonts.ready → content-paint waitForFunction（canvas 有像素 OR main bbox > 200×200）；任一环节失败抛 `CaptureGateError(stage)`
+> - Manifest 字段全部填实：screenshot/dom sha256、HAR 大小（累加 content-length）、非白像素占比 / 4bit-bucket 唯一色 / top-16 调色板 / layout 命名 bbox（chart/sidebar/toolbar/header/footer/main）/ innerText 归一的 reference_strings
+> - 产物落盘 `outDir/{manifest.json, screenshot.png, dom.html}`，供下游 replay / P1-B 消费
+> - 像素统计抽到 `src/util/pixel-stats.ts`，P0-A 与 P0-B 单源共享（rule 22）；同时 `visual-metric.ts` 重构为复用，无行为变化
+> - 真实性闸整合进两个入口——`url_screenshot` 工具 + `orchestrator/tools.ts` 的 live-URL 自动采集循环；gate violation 直接 throw（`CaptureGateError.stage === "gate"` 冒泡至 design_analysis 失败），浏览器/网络错误仍 warn+continue（区别：真实性 vs 资源可用性）
+> - 删除废弃 `src/design-analyst/url-screenshot.ts`（已无 caller，rule 10）
+> - **并行陷阱**：未动 `delivery/tools.ts`（Stream A）、未动 `orchestrator/tools.ts:deliver()` 的 render 区块（Stream A）
 
 **目标**：让 reference.png 不可能是伪造的。
 
@@ -233,8 +242,12 @@ Phase 1（5 条 stream 并行，无共享代码路径）
 ├── Stream A · P0-0 · Delivery LLM 多模态
 │     └── src/delivery/tools.ts（tool result 改 multimodal）
 │         src/orchestrator/tools.ts（首 prompt 强制 rendered_output）
-├── Stream B · P0-A · Capture 真实性闸
+├── Stream B · P0-A · Capture 真实性闸  ✅ DONE (commit 7f53a3de6)
 │     └── src/design-analyst/capture-gate.ts（新）
+│         src/util/pixel-stats.ts（新，与 P0-B 共享）
+│         src/design-analyst/url-screenshot-tool.ts（接入 gate）
+│         src/orchestrator/tools.ts（live-URL 自动采集接入 gate）
+│         src/design-analyst/url-screenshot.ts（删除）
 │         产出契约：CaptureManifest
 ├── Stream C · P0-B · 数值门  ✅ DONE (commit 0b4c60582)
 │     └── src/delivery/visual-metric.ts（新）
@@ -315,7 +328,7 @@ stub 交付物（Stream A–G 可直接 import，未实现部分以 `throw NotIm
 | **P0-0** | **Delivery LLM 真正看到渲染图** | **极高（无此项后续全空）** | 中 | 无 |
 | P0-B ✅ | 数值门前置 | 极高 | 中 | 无 |
 | P0-C | LKG 回滚 + 每轮 commit | 高 | 中 | P0-B（需要 score） |
-| P0-A | Reference 真实性 | 高 | 小 | 无 |
+| P0-A ✅ | Reference 真实性 | 高 | 小 | 无 |
 | P1-A | 禁静态脚手架退路 | 高 | 小 | P0-A（共用 runtime evidence 能力） |
 | P1-B | 内容指纹 | 中 | 中 | P0-A（共用 capture-manifest） |
 | P2   | Round 可观测 | 中 | 小 | P0-B、P0-C（数据源） |
