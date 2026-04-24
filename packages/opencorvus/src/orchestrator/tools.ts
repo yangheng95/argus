@@ -192,20 +192,19 @@ export function createOrchestratorTools(input: {
     input.workflow = direct
     input.workflowState = nextState
 
-    try {
-      await updateTask(task, { workflow_state: nextState }, "Workflow switched: direct build path selected")
-      EngineProtocol.emit(EngineEvent.WorkflowSelected, {
-        taskID,
-        workflowID: direct.id,
-        workflowName: direct.name,
-        summary: `Workflow "${direct.name}" selected`,
-      })
-    } catch (error) {
-      log.warn("build tool: failed to switch workflow to direct", {
-        taskID,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
+    // Phase-6-f-3-bis-b: workflow selection is no longer persisted on
+    // engine_task. The next wake recomputes the same eligibility test
+    // from DB state and will arrive at the direct workflow again
+    // deterministically. We still emit the event so the overlay UI
+    // reflects the current choice live. `task` param is retained only
+    // for logging context.
+    void task
+    EngineProtocol.emit(EngineEvent.WorkflowSelected, {
+      taskID,
+      workflowID: direct.id,
+      workflowName: direct.name,
+      summary: `Workflow "${direct.name}" selected`,
+    })
   }
 
   // ── Workflow step tracking (passive observation) ──
@@ -220,12 +219,16 @@ export function createOrchestratorTools(input: {
     // Only task-scope steps track state here. Goal-scope step status is
     // projected from engine_goal_run on read (see workflow.ts::projectGoalSteps);
     // there is no longer a shadow table to write into.
+    // Phase-6-f-3-bis-b: task-scope mutation stays in the in-memory
+    // WorkflowState so renderWorkflowPrompt's [CURRENT]/[RUNNING] labels
+    // stay accurate within this orchestrator wake. No DB write — the
+    // board projects step status from side-effects (spec / goals / runs /
+    // delivery presence) and gets live `running` updates via
+    // WorkflowStepUpdated events.
     if (step.scope === "task") {
       ws.taskSteps[step.id] = { status: "running", startedAt: now }
       ws.currentStepID = step.id
       try {
-        const task = requireTask(taskID)
-        await updateTask(task, { workflow_state: ws }, `Workflow step started: ${step.label}`)
         EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
           taskID, stepID: step.id, goalID, status: "running",
           summary: `Step "${step.label}" started`,
@@ -275,8 +278,6 @@ export function createOrchestratorTools(input: {
     ws.currentStepID = nextStep?.id ?? null
 
     try {
-      const task = requireTask(taskID)
-      await updateTask(task, { workflow_state: ws }, `Workflow step ${status}: ${step.label}`)
       EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
         taskID, stepID: step.id, goalID, status,
         summary: `Step "${step.label}" ${status}`,

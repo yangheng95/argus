@@ -15,7 +15,14 @@
  */
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
-import { listGoals, listGoalRunsForTask } from "./store"
+import {
+  findActiveSpecForTask,
+  findDeliveriesForTask,
+  findRuns,
+  findTask,
+  listGoals,
+  listGoalRunsForTask,
+} from "./store"
 
 // ═══════════════════════════════════════════════════════════════════
 // 类型定义
@@ -96,15 +103,16 @@ export interface GoalWorkflowState {
   stepPhases?: Record<string, Record<string, GoalStepStatus>>
 }
 
-/** 任务级工作流追踪状态，存储在 engine_task.workflow_state 列 */
+/** 任务级工作流追踪状态（rule 23: in-memory only — 不再持久化到 engine_task.workflow_state；
+ *  跨唤醒的步骤状态从 artifact/row 现算via `projectTaskSteps` / `projectGoalSteps`）。 */
 export interface WorkflowState {
   /** 当前使用的 workflow ID */
   workflowID: string
   /** 当前预期的下一步骤 ID（用于 system prompt 标注 [CURRENT]） */
   currentStepID: string | null
-  /** task-scope 步骤状态 */
+  /** task-scope 步骤状态（仅在 orchestrator loop 当前进程内有效） */
   taskSteps: Record<string, GoalStepStatus>
-  /** per-goal 步骤状态 */
+  /** per-goal 步骤状态（同上） */
   goalSteps: Record<string, GoalWorkflowState>
 }
 
@@ -292,6 +300,55 @@ export function createWorkflowState(workflow: MiniWorkflow): WorkflowState {
 /** 根据 tool 名查找 workflow 中对应的 step */
 export function findStepByTool(workflow: MiniWorkflow, toolName: string): MiniWorkflowStep | undefined {
   return workflow.steps.find(s => s.tool === toolName)
+}
+
+/**
+ * Project task-scope step status from persistent side-effects — no FSM cell.
+ *
+ * Maps each task-scope step's `tool` to whichever DB artifact that tool
+ * produces. Presence of the artifact = the step has already been exercised
+ * and is reported as `completed`; absence = `pending`. The orchestrator
+ * emits `EngineEvent.WorkflowStepUpdated` for transient `running` state,
+ * which the overlay consumes live. On reload the board returns `pending`
+ * for a step that is currently in-flight — that's a one-frame UI blink,
+ * not a correctness regression: the next event rehydrates `running`.
+ */
+export function projectTaskSteps(
+  taskID: string,
+  workflow: MiniWorkflow,
+): Record<string, GoalStepStatus> {
+  const task = findTask(taskID)
+  if (!task) return {}
+  const out: Record<string, GoalStepStatus> = {}
+  for (const step of workflow.steps) {
+    if (step.scope !== "task") continue
+    out[step.id] = { status: taskStepStatusByTool(taskID, task, step.tool) }
+  }
+  return out
+}
+
+function taskStepStatusByTool(
+  taskID: string,
+  task: { design_specs?: unknown | null },
+  tool: string,
+): GoalStepStatus["status"] {
+  switch (tool) {
+    case "design_analysis": {
+      const specs = task.design_specs
+      return Array.isArray(specs) && specs.length > 0 ? "completed" : "pending"
+    }
+    case "requirements":
+      return findActiveSpecForTask(taskID) ? "completed" : "pending"
+    case "architect":
+      return listGoals(taskID).length > 0 ? "completed" : "pending"
+    case "build":
+      // direct workflow: any run (artifact kind="run") means a build occurred
+      return findRuns(taskID).length > 0 ? "completed" : "pending"
+    case "deliver":
+      return findDeliveriesForTask(taskID).length > 0 ? "completed" : "pending"
+    default:
+      return "pending"
+  }
 }
 
 /**

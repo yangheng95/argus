@@ -112,32 +112,31 @@ export namespace Orchestrator {
         return
       }
 
-      // 0. Initialize workflow state on first wake (no persisted workflow_state yet).
-      //    Subsequent wakes reload the persisted state. Per the unified-teardown
-      //    plan, "first wake" is detected from task state, not from a trigger
-      //    label: any task that has not yet committed a workflow_state row is
-      //    treated as new.
-      let workflow: MiniWorkflow | undefined
-      let workflowState: WorkflowState | undefined
-      if (!task.workflow_state) {
-        const workflowID = await WorkflowRegistry.defaultID()
-        workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
-        if (workflow) {
-          workflowState = createWorkflowState(workflow)
-          await updateTask(task, { workflow_state: workflowState }, `Workflow selected: ${workflow.name}`)
-          EngineProtocol.emit(EngineEvent.WorkflowSelected, {
-            taskID,
-            workflowID: workflow.id,
-            workflowName: workflow.name,
-            summary: `Workflow "${workflow.name}" selected`,
-          })
-        }
-      } else {
-        const existingState = task.workflow_state
-        workflow = await WorkflowRegistry.resolve(existingState.workflowID) ?? WorkflowRegistry.resolveSync(existingState.workflowID)
-        workflowState = existingState
+      // Phase-6-f-3-bis-b: workflow_state is no longer persisted. Every
+      // wake re-resolves the default workflow (pipeline). Tools.ts's
+      // switchToDirectWorkflowIfEligible mutates `input.workflow` /
+      // `input.workflowState` in-memory when the task turns out to be a
+      // direct-build case; that mutation does not escape the current
+      // orchestrator loop, which is fine — the eligibility check is
+      // deterministic from DB state and will reach the same verdict on
+      // the next wake if the task continues in the same shape.
+      //
+      // "First wake" detection now reads task.time_started (stamped by
+      // the serial queue when it picks the task up). Per rule 23 the
+      // LLM reads describe output for actual phase identification, not
+      // a cached step-FSM cell.
+      const workflowID = await WorkflowRegistry.defaultID()
+      const workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
+      const workflowState: WorkflowState | undefined = workflow ? createWorkflowState(workflow) : undefined
+      const isFirstWake = !task.time_started
+      if (isFirstWake && workflow) {
+        EngineProtocol.emit(EngineEvent.WorkflowSelected, {
+          taskID,
+          workflowID: workflow.id,
+          workflowName: workflow.name,
+          summary: `Workflow "${workflow.name}" selected`,
+        })
       }
-      const isFirstWake = !task.workflow_state
 
       // 1. Resolve model — respects agent.task.model in user config; otherwise
       //    inherits the user's most recent in-session model pick from the

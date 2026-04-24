@@ -218,12 +218,6 @@ export const EngineTaskTable = sqliteTable(
      *  carried several other fields that turned out to be dead). Read by the
      *  dispatch tool when creating runs. */
     executor: text().notNull().$type<EngineExecutor>().default("opencode"),
-    /** Task-level workflow tracking (which workflow / current step / per-step
-     *  status / per-goal step status). Promoted from task.metadata._workflow.
-     *  See `src/engine/workflow.ts` WorkflowState for the shape. Initialized
-     *  at task creation, updated by the orchestrator workflow-tracking tool,
-     *  read by overlay board rendering. */
-    workflow_state: text({ mode: "json" }).$type<import("@/engine/workflow").WorkflowState>(),
     /** Architect-produced challenge seeds for the Prosecutor. Promoted from
      *  task.metadata._architect_challenge_seeds. Written once by the
      *  architect tool in orchestrator/tools.ts, read on each delivery
