@@ -111,6 +111,7 @@ export type EngineArtifactKind =
   | "verification-evidence"
   | "delivery"
   | "goal_run_attempt"
+  | "run"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
@@ -470,32 +471,13 @@ export const EnginePlanNodeTable = sqliteTable(
   ],
 )
 
-export const EngineRunTable = sqliteTable(
-  "engine_run",
-  {
-    id: text().primaryKey(),
-    task_id: text()
-      .notNull()
-      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    plan_version_id: text().references(() => EnginePlanVersionTable.id, { onDelete: "set null" }),
-    session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    executor: text().notNull().$type<EngineExecutor>().default("opencode"),
-    status: text().notNull().$type<EngineRunStatus>().default("queued"),
-    phase: text().notNull().$type<EngineRunPhase>().default("execute"),
-    blocking_reason: text(),
-    error: text(),
-    retry_count: integer().notNull().default(0),
-    executor_ref: text({ mode: "json" }).$type<EngineExecutorRef>(),
-    metadata: text({ mode: "json" }).$type<EngineMetadata>(),
-    time_started: integer(),
-    time_completed: integer(),
-    ...Timestamps,
-  },
-  (table) => [
-    index("engine_run_task_idx").on(table.task_id),
-    index("engine_run_status_idx").on(table.status),
-  ],
-)
+// Phase-6-e: `engine_run` was removed in favour of `engine_artifact` rows
+// with kind="run". See engine/writer.ts (createRun) + engine/state.ts
+// (updateRun) for the writer and engine/store.ts (RunRow +
+// artifactRowToRunRow + latestPerRun) for the read-model. Append-only —
+// status transitions (queued → accepted → running → ...) are new rows
+// per logical run_id; findRun and the listLiveRunsForProject / findRuns
+// helpers take the newest via time_created desc (+ id tiebreak).
 
 // Phase-6-d: `engine_goal_run` was removed in favour of `engine_artifact`
 // rows with kind="goal_run_attempt". See engine/persist.ts (createGoalRun /
@@ -513,7 +495,8 @@ export const EngineInteractionRequestTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => EngineRunTable.id, { onDelete: "cascade" }),
+    /** Phase-6-e: plain text pointer to the logical run id (was FK). */
+    run_id: text(),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
     external_id: text().notNull(),
     request_type: text().notNull().$type<EngineInteractionType>(),
@@ -547,9 +530,11 @@ export const EngineArtifactTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    run_id: text()
-      .notNull()
-      .references(() => EngineRunTable.id, { onDelete: "cascade" }),
+    /** Phase-6-e: plain text pointer to the logical run id (was FK to
+     *  engine_run which is now deleted). notNull preserved — every artifact
+     *  belongs to a logical run, including the "run" artifacts themselves
+     *  (self-referencing: id === run_id for the first row per run). */
+    run_id: text().notNull(),
     /** Phase-6-d: plain text pointer to the logical goal_run id (was FK to
      *  engine_goal_run which is now deleted). See persist.ts / store.ts for
      *  the artifact-backed goal_run semantics. */
@@ -601,9 +586,8 @@ export const EngineExecutorSessionTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    run_id: text()
-      .notNull()
-      .references(() => EngineRunTable.id, { onDelete: "cascade" }),
+    /** Phase-6-e: plain text pointer to logical run id (was FK). */
+    run_id: text().notNull(),
     /** Phase-6-d: plain text pointer to logical goal_run id (was FK). */
     goal_run_id: text(),
     provider: text().notNull().$type<EngineExecutor>(),

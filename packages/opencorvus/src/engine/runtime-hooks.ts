@@ -1,4 +1,4 @@
-import type { EngineRunTable, EngineTaskTable } from "./engine.sql"
+import type { EngineTaskTable } from "./engine.sql"
 import type { RunRow, TaskRow } from "./store"
 
 export type RuntimeHooks = {
@@ -9,7 +9,7 @@ export type RuntimeHooks = {
   ) => Promise<TaskRow>
   updateRun: (
     row: RunRow,
-    values: Partial<typeof EngineRunTable.$inferInsert>,
+    values: Partial<RunRow>,
     summary: string,
   ) => Promise<RunRow>
 }

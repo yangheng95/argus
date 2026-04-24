@@ -2,8 +2,8 @@ import { Database, and, eq } from "@/storage/db"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
-import { EngineProgressSnapshotTable, EngineRunTable, EngineTaskTable } from "./engine.sql"
-import { requireRun, requireTask, type RunRow, type TaskRow } from "./store"
+import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
+import { findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { Identifier } from "@/id/id"
 import { assertTransition, type TaskStatus } from "./state-machine"
 
@@ -123,7 +123,7 @@ export async function updateTask(
 
 export async function updateRun(
   row: RunRow,
-  values: Partial<typeof EngineRunTable.$inferInsert>,
+  values: Partial<RunRow>,
   summary: string,
 ) {
   const nextStatus = values.status ?? row.status
@@ -148,40 +148,47 @@ export async function updateRun(
   }
   const now = Date.now()
   const statusChanged = nextStatus !== row.status
-  const normalizedValues = {
-    ...values,
-    ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
-    ...(!row.time_started && ["accepted", "running", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
-      ? { time_started: now }
-      : {}),
-    ...((nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") && values.time_completed === undefined
-      ? { time_completed: now }
-      : {}),
+  // Phase-6-e: run rows are append-only `engine_artifact` kind="run" rows.
+  // Bump time_created via Math.max(existing.time_updated + 1, now) so same-ms
+  // appends retain strict order (mirror of 6-d-1 goal_run pattern).
+  const effectiveNow = Math.max(row.time_updated + 1, now)
+  const mergedPayload = {
+    plan_version_id: values.plan_version_id === undefined ? row.plan_version_id : values.plan_version_id,
+    session_id: values.session_id === undefined ? row.session_id : values.session_id,
+    executor: values.executor ?? row.executor,
+    status: nextStatus,
+    phase: nextPhase,
+    blocking_reason: nextStatus !== "blocked" && values.blocking_reason === undefined ? null : nextBlocking,
+    error: nextError,
+    retry_count: values.retry_count ?? row.retry_count,
+    executor_ref: nextRef,
+    metadata: values.metadata === undefined ? row.metadata : values.metadata,
+    time_started:
+      !row.time_started && ["accepted", "running", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
+        ? now
+        : nextStarted,
+    time_completed:
+      (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted") && values.time_completed === undefined
+        ? now
+        : nextCompleted,
   }
-  let updated: RunRow | undefined
   Database.transaction((db) => {
-    const whereClause = statusChanged
-      ? and(
-          eq(EngineRunTable.id, row.id),
-          eq(EngineRunTable.status, row.status),
-        )
-      : eq(EngineRunTable.id, row.id)
-    updated = db
-      .update(EngineRunTable)
-      .set({
-        ...normalizedValues,
-        time_updated: now,
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("run"),
+        task_id: row.task_id,
+        run_id: row.id,
+        kind: "run",
+        label: `run-${nextStatus}`,
+        payload: mergedPayload,
+        time_created: effectiveNow,
+        time_updated: effectiveNow,
       })
-      .where(whereClause)
-      .returning()
-      .get()
-    if (!updated) {
-      throw new StaleRowError("run", row.id, row.status, nextStatus)
-    }
+      .run()
     db.update(EngineTaskTable)
       .set({
         active_run_id: row.id,
-        time_updated: now,
+        time_updated: effectiveNow,
       })
       .where(eq(EngineTaskTable.id, row.task_id))
       .run()
@@ -193,11 +200,6 @@ export async function updateRun(
       ),
     )
   })
-  // Terminal transition: release in-process PerRunState (merge locks,
-  // agent-notification set). This is the single authoritative point for
-  // run-lifecycle cleanup — every writer path (runtime.syncRun,
-  // runtime.failRun, writer.abortRuns, orchestrator tools, recovery)
-  // funnels through updateRun, so no path can leak in-memory state.
   if (
     statusChanged &&
     (nextStatus === "completed" || nextStatus === "failed" || nextStatus === "aborted")
@@ -205,7 +207,7 @@ export async function updateRun(
     const { PerRunState } = await import("./per-run-state")
     PerRunState.finalize(row.id)
   }
-  return updated ?? requireRun(row.id)
+  return findRun(row.id) ?? requireRun(row.id)
 }
 
 export function hooks() {

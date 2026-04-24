@@ -7,7 +7,6 @@ import {
   EngineTaskTable,
   EnginePlanVersionTable,
   EngineGoalTable,
-  EngineRunTable,
 } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { goalSlug } from "../../src/engine/persist"
@@ -87,15 +86,28 @@ function seed() {
       time_updated: now,
     }).run(),
   )
+  // Phase-6-e: run rows live in engine_artifact (kind="run").
   Database.use((db) =>
-    db.insert(EngineRunTable).values({
+    db.insert(EngineArtifactTable).values({
       id: runID,
       task_id: taskID,
-      plan_version_id: planID,
-      executor: "opencode",
-      status: "running",
-      phase: "execute",
-      retry_count: 0,
+      run_id: runID,
+      kind: "run",
+      label: "run-running",
+      payload: {
+        plan_version_id: planID,
+        session_id: null,
+        executor: "opencode",
+        status: "running",
+        phase: "execute",
+        blocking_reason: null,
+        error: null,
+        retry_count: 0,
+        executor_ref: null,
+        metadata: null,
+        time_started: now,
+        time_completed: null,
+      },
       time_created: now,
       time_updated: now,
     }).run(),

@@ -7,9 +7,11 @@ import {
   findEvaluationsByTask,
   findDeliveryByGoalRun,
   findLatestEvaluationForGoalRun,
+  findRun,
   listGoalRunsByGoal,
   type DeliveryRow,
   type EvaluationRow,
+  type RunRow,
 } from "@/engine/store"
 import {
   findSpecSnapshot,
@@ -23,7 +25,6 @@ import {
   EnginePlanVersionTable,
   EngineProgressSnapshotTable,
   EngineRequirementTable,
-  EngineRunTable,
   EngineTaskTable,
   EvaluationCheck,
   TaskBoardGoalStepPayload,
@@ -62,9 +63,7 @@ export function boardTag(input: { taskID: string }) {
 }
 
 function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
-  const run = task.active_run_id
-    ? Database.use((db) => db.select().from(EngineRunTable).where(eq(EngineRunTable.id, task.active_run_id!)).get())
-    : undefined
+  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
   const plan = task.active_plan_version_id
     ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
@@ -345,9 +344,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
 }
 
 function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
-  const run = task.active_run_id
-    ? Database.use((db) => db.select().from(EngineRunTable).where(eq(EngineRunTable.id, task.active_run_id!)).get())
-    : undefined
+  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
   const plan = task.active_plan_version_id
     ? Database.use((db) => db.select().from(EnginePlanVersionTable).where(eq(EnginePlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
@@ -580,7 +577,7 @@ function viewBoardEvaluation(
 
 function boardFailure(input: {
   task: typeof EngineTaskTable.$inferSelect
-  run: (typeof EngineRunTable.$inferSelect) | undefined
+  run: RunRow | undefined
   interactions: Array<typeof EngineInteractionRequestTable.$inferSelect>
   evaluation: EvaluationRow | undefined
 }) {
@@ -632,7 +629,7 @@ function boardFailure(input: {
 
 function boardOverview(input: {
   task: typeof EngineTaskTable.$inferSelect
-  run: (typeof EngineRunTable.$inferSelect) | undefined
+  run: RunRow | undefined
   pendingInteractions: Array<typeof EngineInteractionRequestTable.$inferSelect>
   candidateDelivery: DeliveryRow | undefined
   acceptedDelivery: DeliveryRow | undefined

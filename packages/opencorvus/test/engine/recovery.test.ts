@@ -7,7 +7,6 @@ import {
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
-  EngineRunTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import {
@@ -84,13 +83,27 @@ function seedActiveExecution() {
       time_created: now,
       time_updated: now,
     }).run()
-    db.insert(EngineRunTable).values({
+    // Phase-6-e: run rows live in engine_artifact (kind="run").
+    db.insert(EngineArtifactTable).values({
       id: runID,
       task_id: activeTaskID,
-      executor: "opencode",
-      status: "running",
-      phase: "execute",
-      retry_count: 0,
+      run_id: runID,
+      kind: "run",
+      label: "run-running",
+      payload: {
+        plan_version_id: null,
+        session_id: null,
+        executor: "opencode",
+        status: "running",
+        phase: "execute",
+        blocking_reason: null,
+        error: null,
+        retry_count: 0,
+        executor_ref: null,
+        metadata: null,
+        time_started: now,
+        time_completed: null,
+      },
       time_created: now,
       time_updated: now,
     }).run()
@@ -204,14 +217,26 @@ function seedQueuedTask() {
       time_created: now,
       time_updated: now,
     }).run()
-    db.insert(EngineRunTable).values({
+    db.insert(EngineArtifactTable).values({
       id: queuedRunID,
       task_id: queuedTaskID,
-      plan_version_id: queuedPlanID,
-      executor: "opencode",
-      status: "queued",
-      phase: "execute",
-      retry_count: 0,
+      run_id: queuedRunID,
+      kind: "run",
+      label: "run-queued",
+      payload: {
+        plan_version_id: queuedPlanID,
+        session_id: null,
+        executor: "opencode",
+        status: "queued",
+        phase: "execute",
+        blocking_reason: null,
+        error: null,
+        retry_count: 0,
+        executor_ref: null,
+        metadata: null,
+        time_started: null,
+        time_completed: null,
+      },
       time_created: now,
       time_updated: now,
     }).run()

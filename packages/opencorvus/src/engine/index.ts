@@ -17,7 +17,6 @@ export * from "./recovery"
 export {
   EngineTaskTable,
   EngineGoalTable,
-  EngineRunTable,
   EnginePlanVersionTable,
   EngineExecutorSessionTable,
   EnginePlanNodeTable,

@@ -25,7 +25,6 @@ import {
   EngineExecutorSessionTable,
   EngineGoalTable,
   EngineRequirementTable,
-  EngineRunTable,
   EngineTaskTable,
   type EngineDeliveryStatus,
   type EngineArtifactKind,

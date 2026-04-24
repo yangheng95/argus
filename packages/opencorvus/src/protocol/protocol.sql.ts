@@ -1,6 +1,6 @@
 import { integer, index, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { Identifier } from "@/id/id"
-import { EngineInteractionRequestTable, EngineRunTable, EngineTaskTable } from "@/engine"
+import { EngineInteractionRequestTable, EngineTaskTable } from "@/engine"
 import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
 import type { ProtocolAggregate, ProtocolInboxStatus, ProtocolKind } from "./schema"
@@ -16,7 +16,8 @@ export const ProtocolEventTable = sqliteTable(
     aggregate_type: text().notNull().$type<ProtocolAggregate>(),
     aggregate_id: text().notNull(),
     task_id: text().references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    run_id: text().references(() => EngineRunTable.id, { onDelete: "set null" }),
+    /** Phase-6-e: plain text pointer to logical run id (was FK). */
+    run_id: text(),
     /** Phase-6-d: plain text pointer to the logical goal_run id (was FK). */
     goal_run_id: text(),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),

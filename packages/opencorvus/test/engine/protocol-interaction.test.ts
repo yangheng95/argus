@@ -5,8 +5,8 @@ import { type ExecutorAdapter } from "../../src/executor/contract"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
 import {
+  EngineArtifactTable,
   EngineInteractionRequestTable,
-  EngineRunTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { EngineService } from "@/task-api"
@@ -55,19 +55,30 @@ describe("protocol interaction resolution", () => {
             time_updated: now,
           }).run(),
         )
+        // Phase-6-e: run rows live in engine_artifact (kind="run").
         Database.use((db) =>
-          db.insert(EngineRunTable).values({
+          db.insert(EngineArtifactTable).values({
             id: runID,
             task_id: taskID,
-            session_id: session.id,
-            executor: "codex",
-            status: "blocked",
-            phase: "execute",
-            blocking_reason: "permission",
-            retry_count: 0,
-            executor_ref: {
-              session_id: "thr_1:turn_1",
-              queue_task_id: "queue_1",
+            run_id: runID,
+            kind: "run",
+            label: "run-blocked",
+            payload: {
+              plan_version_id: null,
+              session_id: session.id,
+              executor: "codex",
+              status: "blocked",
+              phase: "execute",
+              blocking_reason: "permission",
+              error: null,
+              retry_count: 0,
+              executor_ref: {
+                session_id: "thr_1:turn_1",
+                queue_task_id: "queue_1",
+              },
+              metadata: null,
+              time_started: null,
+              time_completed: null,
             },
             time_created: now,
             time_updated: now,
