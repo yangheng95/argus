@@ -113,6 +113,70 @@ export namespace SessionLoop {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Ephemeral per-session step-finish hook (phase 3-a-4 of specs/new-arch/16-unified-teardown.md)
+  //
+  // Agents that dispatch work via a tool and then want to stop the LLM
+  // generation once the tool has acknowledged the dispatch (the orchestrator
+  // pattern: `dispatch_goal` fires, the signal aborts the active turn) need
+  // a hook that runs after every LLM turn inside the session loop. AI SDK's
+  // `onStepFinish` gives this at the stream level; SessionLoop does not
+  // expose it natively, so callers register a process-local callback the
+  // loop fires after each `processTurn` returns.
+  //
+  // Scope rules mirror setExtraTools: in-memory only, one entry per
+  // sessionID, replaced wholesale on repeat calls, cleared on sentinel/
+  // callback completion, and NOT persisted across process restart.
+  // ---------------------------------------------------------------------------
+  export interface StepHookEvent {
+    /** 1-indexed turn number within this session's current prompt cycle. */
+    step: number
+    /** Outcome of the turn processTurn just completed. */
+    turn: "stop" | "continue"
+  }
+  export type StepHook = (event: StepHookEvent) => void | Promise<void>
+
+  const ephemeralStepHooks = new Map<string, StepHook>()
+
+  /** Register a step-finish hook for a session. Passing `undefined` clears. */
+  export function setStepHook(sessionID: string, hook: StepHook | undefined): void {
+    if (!hook) {
+      ephemeralStepHooks.delete(sessionID)
+      return
+    }
+    ephemeralStepHooks.set(sessionID, hook)
+  }
+
+  /** Internal: fire the registered step hook, swallowing errors. */
+  async function fireStepHook(sessionID: string, event: StepHookEvent): Promise<void> {
+    const hook = ephemeralStepHooks.get(sessionID)
+    if (!hook) return
+    try {
+      await hook(event)
+    } catch (err) {
+      log.warn("step-hook threw; loop continues", {
+        sessionID,
+        step: event.step,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  /** Convenience wrapper: set the hook, run `fn`, always clear afterwards
+   *  regardless of whether `fn` resolved or threw. */
+  export async function withStepHook<T>(
+    sessionID: string,
+    hook: StepHook,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    setStepHook(sessionID, hook)
+    try {
+      return await fn()
+    } finally {
+      setStepHook(sessionID, undefined)
+    }
+  }
+
   function collectLoopState(msgs: Message.WithParts[]) {
     let lastUser: Message.User | undefined
     let lastAssistant: Message.Assistant | undefined
@@ -758,6 +822,11 @@ export namespace SessionLoop {
             model,
             abort,
           })
+          // Fire the registered step hook (phase 3-a-4) — agents that
+          // dispatch via a tool and want to abort the active generation
+          // once the tool landed use this hook to fire their deferred-stop
+          // signal.
+          await fireStepHook(sessionID, { step, turn })
           if (turn === "stop") break
           continue
         }
