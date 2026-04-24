@@ -3,10 +3,10 @@ import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
+  EngineArtifactTable,
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
-  EngineRunTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
 import { listQueuedGoalRunsForRun, requireRun, requireTask } from "../../src/engine"
@@ -57,7 +57,6 @@ describe("orchestrator deferred stop", () => {
         request: "Verify dispatch stop timing",
         status: "active",
         priority: "normal",
-        active_run_id: runID,
         time_created: now,
         time_updated: now,
       }).run()
@@ -71,14 +70,27 @@ describe("orchestrator deferred stop", () => {
         time_created: now,
         time_updated: now,
       }).run()
-      db.insert(EngineRunTable).values({
+      // Phase-6-e: run rows live in engine_artifact (kind="run").
+      db.insert(EngineArtifactTable).values({
         id: runID,
         task_id: taskID,
-        plan_version_id: planID,
-        executor: "opencode",
-        status: "running",
-        phase: "execute",
-        retry_count: 0,
+        run_id: runID,
+        kind: "run",
+        label: "run-running",
+        payload: {
+          plan_version_id: planID,
+          session_id: null,
+          executor: "opencode",
+          status: "running",
+          phase: "execute",
+          blocking_reason: null,
+          error: null,
+          retry_count: 0,
+          executor_ref: null,
+          metadata: null,
+          time_started: now,
+          time_completed: null,
+        },
         time_created: now,
         time_updated: now,
       }).run()
@@ -204,7 +216,8 @@ describe("orchestrator deferred stop", () => {
         const result = await tools.exec_goal.execute({ goalID }, {} as any)
 
         const task = requireTask(taskID)
-        const runID = task.active_run_id!
+        const { findActiveRunForTask } = await import("../../src/engine/store")
+        const runID = findActiveRunForTask(task.id)!.id
         expect(result).toContain(`Goal "Exec goal" (${goalID}) queued for execution via run ${runID}.`)
         expect(runID).toBeTruthy()
         expect(requireRun(runID).status).toBe("running")
@@ -241,7 +254,6 @@ describe("orchestrator deferred stop", () => {
         request: "Verify submit stop timing",
         status: "queued",
         priority: "normal",
-        active_run_id: runID,
         time_created: now,
         time_updated: now,
       }).run()
