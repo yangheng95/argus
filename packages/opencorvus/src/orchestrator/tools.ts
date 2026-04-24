@@ -788,15 +788,36 @@ export function createOrchestratorTools(input: {
         // Any non-Figma URL is rendered via headless Chromium so design-tool
         // share links (Sketch Cloud, Adobe XD, Framer, InVision, Zeplin, …)
         // and plain live pages contribute pixel references, not just markup.
+        //
+        // P0-A: 每张 reference PNG 都必须通过 captureReferenceManifest + gate。
+        // 伪造 / 空白 / 阈值不达标的图直接抛 CaptureGateError，向上冒泡让
+        // design_analysis 失败——禁止"网页访问不到就退回 visual contract 文本"
+        // （spec rule 1）。浏览器/网络异常（非 gate violation）仍 warn+continue
+        // 因为那是外部资源问题不是 reference 真实性问题。
         for (const liveUrl of liveUrls) {
           try {
-            const { fetchUrlScreenshot } = await import("@/design-analyst/url-screenshot")
-            const shot = await fetchUrlScreenshot({ url: liveUrl })
-            const hostname = (() => { try { return new URL(shot.finalUrl).hostname } catch { return "url" } })()
+            const { captureReferenceManifest, enforceCaptureGate, summarizeCaptureViolations, CaptureGateError } =
+              await import("@/design-analyst/capture-gate")
+            const osMod = await import("node:os")
+            const outDir = pathMod.join(
+              osMod.tmpdir(),
+              "opencorvus-capture",
+              `${taskID}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            )
+            const capture = await captureReferenceManifest({ url: liveUrl, outDir })
+            const gate = enforceCaptureGate(capture.manifest)
+            if (!gate.ok) {
+              // 真实性闸拒收 ⇒ task 级失败；调用方通过 CaptureGateError 区分于普通抓图错误。
+              throw new CaptureGateError(
+                `reference authenticity gate rejected ${liveUrl}: ${summarizeCaptureViolations(gate.violations)}`,
+                "gate",
+              )
+            }
+            const hostname = (() => { try { return new URL(capture.manifest.url).hostname } catch { return "url" } })()
             const slug = hostname.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60) || "url"
             const ref = await AttachmentStore.write(
               Instance.project.id,
-              shot.png,
+              capture.screenshotPng,
               "image/png",
               `url-${slug}-${Date.now()}.png`,
             )
@@ -805,14 +826,25 @@ export function createOrchestratorTools(input: {
               intent: "visual_reference",
               source: "url-screenshot",
             })
-            log.info("design_analysis: url screenshot materialized", {
-              taskID, url: liveUrl, finalUrl: shot.finalUrl, sha: ref.sha, size: ref.size,
+            log.info("design_analysis: url screenshot materialized (gate passed)", {
+              taskID,
+              url: liveUrl,
+              sha: ref.sha,
+              size: ref.size,
+              non_white: capture.manifest.non_white_pixel_ratio,
+              unique_colors: capture.manifest.unique_color_count,
             })
             materializedCount++
           } catch (shotErr) {
-            log.warn("design_analysis: url screenshot failed", {
+            const { CaptureGateError } = await import("@/design-analyst/capture-gate")
+            if (shotErr instanceof CaptureGateError && shotErr.stage === "gate") {
+              // 真实性闸拒收：向上抛，让 design_analysis 工具调用整体 fail。
+              throw shotErr
+            }
+            log.warn("design_analysis: url screenshot failed (non-gate)", {
               taskID,
               url: liveUrl,
+              stage: shotErr instanceof CaptureGateError ? shotErr.stage : "unknown",
               error: shotErr instanceof Error ? shotErr.message : String(shotErr),
             })
           }
