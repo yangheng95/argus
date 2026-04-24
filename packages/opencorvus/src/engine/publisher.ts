@@ -12,13 +12,13 @@ const log = Log.create({ service: "engine-delivery" })
 // Delivery Adapter 接口 — 可插拔的交付步骤
 // ---------------------------------------------------------------------------
 
-export type DeliveryArtifact = {
+type DeliveryArtifact = {
   kind: "patch" | "report" | "link" | "git_ref" | "pr"
   label: string
   payload: Record<string, unknown>
 }
 
-export type DeliveryAdapterResult = {
+type DeliveryAdapterResult = {
   id: string
   status: "delivered" | "skipped"
   summary: string
@@ -26,13 +26,13 @@ export type DeliveryAdapterResult = {
   artifacts: DeliveryArtifact[]
 }
 
-export type DeliveryContext = {
+type DeliveryContext = {
   task: TaskRow
   run: RunRow
   delivery: DeliveryRow
 }
 
-export type DeliveryAdapter = {
+type DeliveryAdapter = {
   id: string
   /** 执行交付步骤，返回产出的 artifacts 和状态 */
   execute(ctx: DeliveryContext): Promise<DeliveryAdapterResult>
@@ -54,7 +54,7 @@ type DeliveryPublish = {
 
 const registry: DeliveryAdapter[] = []
 
-export namespace DeliveryPipeline {
+namespace DeliveryPipeline {
   export function register(adapter: DeliveryAdapter) {
     const idx = registry.findIndex((a) => a.id === adapter.id)
     if (idx >= 0) {
