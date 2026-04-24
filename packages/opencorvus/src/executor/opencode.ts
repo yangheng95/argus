@@ -13,6 +13,8 @@ import { Database, eq, and, inArray } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { sessionGoalID } from "@/server/routes/task-event"
+import { createEventQueue } from "@/util/event-queue"
+import { EngineConfig } from "@/engine/config"
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -132,57 +134,34 @@ export namespace OpencodeExecutor {
 
   export async function* events(input: { goalID?: string; sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
     if (!input.goalID && !input.sessionID) return
-    const queue: Array<z.infer<typeof EventResult>> = []
-    let done = false
-    let wake: (() => void) | undefined
-    const push = (event: z.infer<typeof EventResult>) => {
-      queue.push(event)
-      wake?.()
-    }
+    const cfg = await EngineConfig.get()
+    const queue = createEventQueue<z.infer<typeof EventResult>>({
+      idleMs: cfg.activity.executor_events_idle_ms,
+      signal: input.signal,
+      label: `opencode-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
+    })
 
-    // Subscribe to GlobalBus instead of Instance-scoped Bus.
-    // Goal executors run in worktree Instances (separate directories),
-    // so their SessionPrompt publishes events to the WORKTREE Instance's Bus.
-    // The pipeline consumer runs in the MAIN Instance.
-    // Bus.subscribeAll() only sees the current Instance's events — deaf to worktrees.
-    // GlobalBus receives ALL events from ALL Instances (Bus.publish line 88).
+    // Subscribe to GlobalBus (cross-Instance): goal executors run in
+    // worktree Instances while the pipeline consumer sits in the MAIN
+    // Instance. Bus.subscribeAll() is Instance-scoped and would miss
+    // the worktree events — GlobalBus is the only common surface.
     const handler = (msg: { payload: any }) => {
       const event = msg.payload
       if (!event || typeof event.type !== "string") return
       const next = mapEvent(event, input)
       if (!next) return
-      push(next)
+      queue.push(next)
       if (next.type === "task-queue.completed" && input.queueTaskID) {
         const payload = next.payload as { queueTaskID?: string } | undefined
-        if (payload?.queueTaskID === input.queueTaskID) {
-          done = true
-          wake?.()
-        }
+        if (payload?.queueTaskID === input.queueTaskID) queue.complete()
       }
     }
     GlobalBus.on("event", handler)
-
-    const abort = () => {
-      done = true
-      GlobalBus.off("event", handler)
-      wake?.()
-    }
-    input.signal?.addEventListener("abort", abort)
     try {
-      while (!done) {
-        if (queue.length === 0) {
-          await new Promise<void>((resolve) => {
-            wake = resolve
-          })
-          wake = undefined
-          if (done && queue.length === 0) break
-        }
-        const next = queue.shift()
-        if (next) yield next
-      }
+      yield* queue.iterable
     } finally {
-      input.signal?.removeEventListener("abort", abort)
       GlobalBus.off("event", handler)
+      queue.complete()
     }
   }
 }
