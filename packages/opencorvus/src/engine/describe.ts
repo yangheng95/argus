@@ -23,6 +23,7 @@
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { readIterationHistory as readHistory } from "@/metrics/store"
 import { deriveGoalStatus } from "./goal-status"
+import { isRunOrphan } from "./recovery"
 import { taskRewindCursor } from "./rewind"
 
 /** Derived goal status enum — returned by goalStatusByID / statusOf.
@@ -128,6 +129,14 @@ export interface TaskDesc {
   plan_summary?: string
   active_run_id?: string
   active_run_status?: string
+  /** True when `active_run_id` refers to a run that currently has no live
+   *  executor (no live `engine_goal_run` attached) — i.e. this run has
+   *  lost its OS-level execution context, typically because the owner
+   *  process was restarted. Derived by `engine/recovery.ts#isRunOrphan`
+   *  from the existing live-run / live-goal-run tables. Phase 4+ retires
+   *  the abort brake that today translates this fact into status writes;
+   *  this boolean becomes the sole signal the orchestrator LLM reads. */
+  run_orphan?: boolean
   clarifications?: string
   operator_notes?: string
   goals: GoalDesc[]
@@ -313,9 +322,15 @@ export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   }
 
   let activeRunStatus: string | undefined
+  let runOrphan: boolean | undefined
   if (task.active_run_id) {
     const run = findRun(task.active_run_id)
     activeRunStatus = run?.status
+    // Fact-only orphan probe. Does not write the run's status — the abort
+    // brake in engine/recovery.ts#cleanupOrphanExecutionArtifacts still
+    // handles the physical teardown during process startup. This exposure
+    // is what phase 4+ will use to replace the status-based gates.
+    runOrphan = isRunOrphan(task.project_id, task.active_run_id)
   }
 
   const totalRuns = findRuns(task.id).length
@@ -339,6 +354,7 @@ export async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     plan_summary: planSummary,
     active_run_id: task.active_run_id ?? undefined,
     active_run_status: activeRunStatus,
+    run_orphan: runOrphan,
     clarifications: clarificationTranscriptSection(task.id) || undefined,
     operator_notes: operatorNotesSection(task.id) || undefined,
     goals,
@@ -412,7 +428,15 @@ export function renderTaskDescription(desc: TaskDesc): string {
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)
   if (desc.active_run_id) {
-    lines.push(`Active run: ${desc.active_run_id}${desc.active_run_status ? ` (${desc.active_run_status})` : ""}`)
+    const orphanTag = desc.run_orphan ? " ORPHAN" : ""
+    lines.push(`Active run: ${desc.active_run_id}${desc.active_run_status ? ` (${desc.active_run_status})` : ""}${orphanTag}`)
+    if (desc.run_orphan) {
+      lines.push(
+        `Note: this run has no live executor — the owner process was restarted. ` +
+          `The next decision should treat it as abandoned (retry, restart_from_stage, ` +
+          `or drop) rather than assuming it is still progressing.`,
+      )
+    }
   }
   if (desc.error) lines.push(`Error: ${desc.error}`)
   lines.push(

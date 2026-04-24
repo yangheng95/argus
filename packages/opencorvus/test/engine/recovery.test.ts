@@ -10,7 +10,12 @@ import {
   EngineRunTable,
   EngineTaskTable,
 } from "../../src/engine/engine.sql"
-import { recoverProjectExecution } from "../../src/engine/recovery"
+import {
+  cleanupOrphanExecutionArtifacts,
+  isRunOrphan,
+  observeOrphanRuns,
+  recoverProjectExecution,
+} from "../../src/engine/recovery"
 import { findExecutorSession, findGoal, findGoalRun, findRun, findTask } from "../../src/engine/store"
 import { resetDatabase } from "../fixture/db"
 
@@ -243,6 +248,50 @@ describe("engine recovery", () => {
     expect(findGoal(goalID)?.workspace_branch).toBe("opencorvus/recovery-test")
     expect(findRun(runID)?.status).toBe("aborted")
     expect(findTask(activeTaskID)?.status).toBe("active")
+  })
+
+  test("observeOrphanRuns returns live runs without live goal_runs and does NOT mutate them", async () => {
+    seedProject()
+    seedActiveExecution()
+
+    const orphansBefore = observeOrphanRuns(projectID)
+    // The run is live (status=running) and HAS a live goal_run, so it's NOT
+    // orphan while the goal_run row is live.
+    expect(orphansBefore.map((r) => r.id)).not.toContain(runID)
+
+    // Simulate the goal_run crossing to terminal (process restart
+    // scenario). The run then has no live goal_run attached.
+    Database.use((db) =>
+      db
+        .update(EngineGoalRunTable)
+        .set({ status: "failed" })
+        .where(eq(EngineGoalRunTable.id, goalRunID))
+        .run(),
+    )
+
+    const orphansAfter = observeOrphanRuns(projectID)
+    expect(orphansAfter.map((r) => r.id)).toContain(runID)
+    // Fact-only: the run itself is still "running" — observe is a read, not a write.
+    expect(findRun(runID)?.status).toBe("running")
+    expect(isRunOrphan(projectID, runID)).toBe(true)
+  })
+
+  test("cleanupOrphanExecutionArtifacts with enableAbortBrake=false leaves DB untouched", async () => {
+    seedProject()
+    seedActiveExecution()
+
+    const result = await cleanupOrphanExecutionArtifacts({
+      projectID,
+      enableAbortBrake: false,
+    })
+
+    // Fact-only: abort brake disabled means DB state does not change.
+    expect(result.abortedSessions).toBe(0)
+    expect(result.abortedGoalRuns).toBe(0)
+    expect(result.abortedRuns).toBe(0)
+    expect(findRun(runID)?.status).toBe("running")
+    expect(findGoalRun(goalRunID)?.status).toBe("running")
+    expect(findExecutorSession(executorSessionID)?.status).toBe("active")
   })
 
   test("starts the queued backlog only when the project has no active task", async () => {

@@ -1,5 +1,46 @@
+/**
+ * Engine execution recovery.
+ *
+ * Phase-1 shape (see `specs/new-arch/16-unified-teardown.md` §1.5, §7-1):
+ * this module splits the pre-existing `recoverProjectExecution` path into
+ * three separable responsibilities so that phase 4+ can tear the physical
+ * "abort brake" down without touching the orphan-observation pipeline:
+ *
+ *   1. `observeOrphanRuns(projectID)` — PURE FACT. Returns the list of
+ *      live `engine_run` rows that have no live `engine_goal_run` attached.
+ *      No writes. No aborts. Used by the describe projection to surface
+ *      `run_orphan` on `TaskDesc`.
+ *
+ *   2. `cleanupOrphanExecutionArtifacts(projectID)` — PHYSICAL BRAKE.
+ *      Aborts orphan runs + live executor sessions + live goal runs and
+ *      drives OS-level cleanup via the `Ownership` registry (worktree
+ *      markers + child-process markers whose owner PID is dead).
+ *
+ *      The abort calls remain ON for phase 1 because `active_run_id` and
+ *      the queue/runtime/tool gates downstream still treat live `engine_run`
+ *      rows as control-plane truth (see engine/queue.ts, engine/runtime.ts,
+ *      orchestrator/tools.ts). Flipping them off before phase 4 would park
+ *      every task on a stale `active_run_id`. Phase 4 removes those gates,
+ *      and at that point this function can drop the abort half and become
+ *      pure ownership sweeping.
+ *
+ *   3. `recoverProjectExecution(...)` — legacy composite entry point. Runs
+ *      observe → cleanup → resume-task-loops in order. Callers that only
+ *      want facts should call `observeOrphanRuns` directly; callers that
+ *      only want physical cleanup should call `cleanupOrphanExecutionArtifacts`.
+ *
+ * THE TASK LOOP IS NOT AUTOMATICALLY RESTARTED by observe/cleanup. Only
+ * `recoverProjectExecution` resumes active task loops, matching the prior
+ * behaviour. Per the user-message-driven model, tasks stay at
+ * status="active" in DB; whether a loop is currently in flight is not
+ * tracked — every user message unconditionally calls runTaskLoop, and the
+ * per-taskID serial chain in orchestrator/loop.ts ensures concurrent
+ * calls are linearised rather than dropped.
+ */
+
 import { Log } from "@/util/log"
-import { advanceQueue, listActiveForCwd, listOrphanedActiveInProject, listQueuedCwdsInProject, resumeActiveTaskLoop, taskCwd } from "./queue"
+import { Instance } from "@/project/instance"
+import { advanceQueue, listActiveForCwd, listOrphanedActiveInProject, listQueuedCwdsInProject, resumeActiveTaskLoop } from "./queue"
 import {
   abortLiveExecutionForProject,
   abortRuns,
@@ -8,47 +49,161 @@ import {
   listLiveGoalRunsForProject,
   listLiveRunsForProject,
   searchProjectTasks,
+  type RunRow,
 } from "./store"
+import { Ownership } from "./ownership"
+import { Worktree } from "@/worktree"
 
 const log = Log.create({ service: "engine-recovery" })
 
 const RECOVERY_REASON = "Process restart: executor session lost during recovery"
 
 /**
- * On process restart: clean up physical resources that leaked (executor
- * sessions, live goal_runs, orphan runs). THE LOOP IS NOT AUTOMATICALLY
- * RESTARTED — the user-message-driven model says the next run requires
- * a user message. Tasks stay at status="active" in DB; whether a loop is
- * currently in flight is not tracked — every user message unconditionally
- * calls runTaskLoop, and the per-taskID serial chain in orchestrator/loop.ts
- * ensures concurrent calls are linearised rather than dropped.
+ * Pure observation: list live engine_run rows that have no live
+ * engine_goal_run attached. Shape-compatible with the old
+ * `recoverOrphanRuns` filter — but returns the rows instead of mutating
+ * them, so callers (e.g. describe.ts) can project "is this run an orphan"
+ * without triggering the abort brake.
+ *
+ * SEMANTICS:
+ *   - `status === "queued"` is NOT orphan (waiting to start is normal).
+ *   - Everything else that has no live goal_run IS orphan (lost the
+ *     executor link across a process restart).
+ *
+ * Complexity: two indexed list queries (live-runs + live-goal-runs) on
+ * the project. Acceptable to call on describe paths.
+ */
+export function observeOrphanRuns(projectID: string): RunRow[] {
+  const liveGoalRunIDs = new Set(
+    listLiveGoalRunsForProject(projectID).map((goalRun) => goalRun.coordinator_run_id),
+  )
+  return listLiveRunsForProject(projectID).filter((run) => {
+    if (run.status === "queued") return false
+    if (liveGoalRunIDs.has(run.id)) return false
+    return true
+  })
+}
+
+/**
+ * Is the given run currently orphan for the given project?
+ *
+ * Convenience wrapper around `observeOrphanRuns` for describe.ts, where
+ * each task only needs a boolean for its `active_run_id`. Callers that
+ * already have the full orphan list should reuse it instead of calling
+ * this per-run.
+ */
+export function isRunOrphan(projectID: string, runID: string): boolean {
+  if (!runID) return false
+  return observeOrphanRuns(projectID).some((r) => r.id === runID)
+}
+
+/**
+ * Physical cleanup of orphan execution artifacts:
+ *
+ *   (a) ABORT BRAKE (phase-1 temp): terminates live executor sessions,
+ *       live goal_runs, and orphan runs via the writer primitives. This
+ *       is the only thing that prevents tasks from parking on a stale
+ *       `active_run_id` on the current `engine/queue.ts` control plane.
+ *       Slated for removal in phase 4 (see §7-4).
+ *
+ *   (b) OWNERSHIP SWEEP: consumes the on-disk ownership registry
+ *       (`Ownership.Worktree` + `Ownership.Process`) and drops stale
+ *       markers plus, for dead-owner worktree markers, removes the
+ *       physical directory via `Worktree.remove`. No DB writes here.
+ *
+ * Returns a fact bundle suitable for logging and for the composite
+ * recoverProjectExecution entry point.
+ */
+export async function cleanupOrphanExecutionArtifacts(input: {
+  projectID: string
+  /** Drop the abort brake (phase-4+). Defaults to `true` because phase-1
+   *  control-plane gates still require it. */
+  enableAbortBrake?: boolean
+  /** Override the disk root for ownership markers. Defaults to the
+   *  `Instance.worktree` primary directory. */
+  primaryWorktreeDir?: string
+}) {
+  const enableAbortBrake = input.enableAbortBrake !== false
+
+  let abortedSessions = 0
+  let abortedGoalRuns = 0
+  let abortedRuns = 0
+
+  if (enableAbortBrake) {
+    const liveAbort = await abortLiveExecutionForProject({
+      projectID: input.projectID,
+      reason: RECOVERY_REASON,
+      cleanupGoalWorkspaces: false,
+    })
+    abortedSessions = liveAbort.executorSessions
+    abortedGoalRuns = liveAbort.goalRuns
+    const orphans = observeOrphanRuns(input.projectID)
+    abortedRuns = await abortRuns(orphans, "Process restart: run lost live executor state during recovery")
+  }
+
+  const primaryWorktreeDir = input.primaryWorktreeDir ?? safeInstanceWorktree()
+  let ownership: Ownership.CleanupResult | undefined
+  if (primaryWorktreeDir) {
+    ownership = await Ownership.cleanup({
+      primaryWorktreeDir,
+      removeWorktreeDir: async (directory) => {
+        await Worktree.remove({ directory }).catch((err) => {
+          log.warn("ownership sweep: Worktree.remove failed, leaving on disk", {
+            directory,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+      },
+    })
+  }
+
+  return {
+    abortedSessions,
+    abortedGoalRuns,
+    abortedRuns,
+    ownership,
+  }
+}
+
+function safeInstanceWorktree(): string | undefined {
+  try {
+    return Instance.worktree
+  } catch {
+    // Called outside an Instance.provide scope (e.g. some test harnesses).
+    // Skip ownership sweep rather than throwing — markers just linger until
+    // a real Instance-scoped recovery call picks them up.
+    return undefined
+  }
+}
+
+/**
+ * Composite entry point preserved for callers (cli/cmd/serve.ts,
+ * project/instance wiring). Runs observe → cleanup → resume. Callers
+ * that only need observation should import `observeOrphanRuns` directly.
  */
 export async function recoverProjectExecution(input: {
   projectID: string
   isTaskLoopActive?: (taskID: string) => boolean
   startTaskLoop?: (taskID: string) => Promise<void> | void
 }) {
-  const { executorSessions: abortedSessions, goalRuns: abortedGoalRuns } =
-    await abortLiveExecutionForProject({
-      projectID: input.projectID,
-      reason: RECOVERY_REASON,
-      cleanupGoalWorkspaces: false,
-    })
-  const abortedRuns = await recoverOrphanRuns(input.projectID)
+  const cleanup = await cleanupOrphanExecutionArtifacts({ projectID: input.projectID })
   const resumedTaskIDs = await resumeRecoveredTaskLoops(input)
 
   log.info("project recovery complete", {
     projectID: input.projectID,
-    abortedSessions,
-    abortedGoalRuns,
-    abortedRuns,
+    abortedSessions: cleanup.abortedSessions,
+    abortedGoalRuns: cleanup.abortedGoalRuns,
+    abortedRuns: cleanup.abortedRuns,
+    ownershipWorktreeOrphans: cleanup.ownership?.worktreeOrphans.length ?? 0,
+    ownershipProcessOrphans: cleanup.ownership?.processOrphans.length ?? 0,
     resumedTaskIDs,
   })
 
   return {
-    abortedSessions,
-    abortedGoalRuns,
-    abortedRuns,
+    abortedSessions: cleanup.abortedSessions,
+    abortedGoalRuns: cleanup.abortedGoalRuns,
+    abortedRuns: cleanup.abortedRuns,
+    ownership: cleanup.ownership,
     resumedTaskID: resumedTaskIDs[0],
     resumedTaskIDs,
   }
@@ -109,26 +264,3 @@ async function resumeRecoveredTaskLoopsWithHooks(input: {
   await input.startTaskLoop(queuedTask.id)
   return [queuedTask.id]
 }
-
-/**
- * Orphan-run detection: a run is "orphaned" if it's live but has no live
- * goal_run and no live executor_session attached. These are left dangling
- * after the worker process dies mid-dispatch; transitively aborting them
- * matches what startup recovery did before the writer refactor.
- *
- * We reuse the shared abortRuns primitive so the termination path is
- * identical to restart_from_stage's run-abort path (CAS + event emission
- * via updateRun).
- */
-async function recoverOrphanRuns(projectID: string) {
-  const liveGoalRunIDs = new Set(
-    listLiveGoalRunsForProject(projectID).map((goalRun) => goalRun.coordinator_run_id),
-  )
-  const orphans = listLiveRunsForProject(projectID).filter((run) => {
-    if (run.status === "queued") return false
-    if (liveGoalRunIDs.has(run.id)) return false
-    return true
-  })
-  return abortRuns(orphans, "Process restart: run lost live executor state during recovery")
-}
-
