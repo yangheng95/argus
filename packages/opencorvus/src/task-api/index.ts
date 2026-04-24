@@ -382,22 +382,13 @@ export namespace EngineService {
       scope: "instance",
       run: () => EngineRuntime.monitorRuns(hooks()),
     })
-    // Startup recovery is centralized in engine/recovery.ts. It reconciles
-    // executor_session -> goal_run -> run -> task ordering before any task
-    // loop resumes, so restart recovery cannot requeue a task while stale
-    // live rows still block readiness.
-    async function recoverProjectExecution() {
-      const projectID = Instance.project.id
-      const { recoverProjectExecution } = await import("@/engine/recovery")
-      // Recovery aborts stale executor state first, then resumes orphaned
-      // active loops / queued backlog through the queue coordinator.
-      await recoverProjectExecution({ projectID })
-    }
-    setTimeout(() => {
-      recoverProjectExecution().catch((err) => {
-        log.error("project recovery failed", { error: err instanceof Error ? err.message : String(err) })
-      })
-    }, 500)
+    // Phase-7: no aggressive startup recovery. The post-phase-5 build model
+    // is synchronous within a single orchestrator wake — nothing survives
+    // across process restart that needs a dedicated cleanup phase. Orphan
+    // runs surface via describe.ts `run_orphan` on the next wake and the
+    // orchestrator LLM decides whether to retry / restart_from_stage /
+    // drop. OS-level cleanup (worktrees, processes) is owned by the
+    // ownership registry, not by a recovery function.
   }
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {

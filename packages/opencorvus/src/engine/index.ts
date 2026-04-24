@@ -13,7 +13,8 @@ export * from "./config"
 export * from "./protocol"
 export * from "./workflow"
 export * from "./catalog"
-export * from "./recovery"
+export * from "./orphan"
+export * from "./task-status"
 export {
   EngineTaskTable,
   EngineGoalTable,
