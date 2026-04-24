@@ -1,79 +1,116 @@
-import { Database, and, eq } from "@/storage/db"
+import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
+import { deriveTaskStatus } from "./task-status"
 import { Identifier } from "@/id/id"
+
+/**
+ * Caller-facing task-update shape. `status` is a logical verb (queued /
+ * active / completed / failed / cancelled) that the writer maps to
+ * concrete fact fields; there is no `status` column anymore (6-f-2).
+ *
+ * Mapping:
+ *   active    → time_started defaults to now if unset
+ *   completed → time_completed defaults to now; clears error
+ *   failed    → time_completed defaults to now; error required
+ *   cancelled → time_completed defaults to now; stamps metadata.cancelled=true
+ *   queued    → clears time_started / time_completed
+ */
+export type TaskUpdateValues = Omit<Partial<typeof EngineTaskTable.$inferInsert>, "status"> & {
+  status?: "queued" | "active" | "completed" | "failed" | "cancelled"
+}
 
 export async function updateTask(
   row: TaskRow,
-  values: Partial<typeof EngineTaskTable.$inferInsert>,
+  values: TaskUpdateValues,
   summary: string,
 ) {
-  const nextStatus = values.status ?? row.status
-  // Phase-6-f: rule 23 — no state-machine transition gate. The LLM
-  // orchestrator drives task.status; illegal transition enforcement was a
-  // legacy FSM gate that fought the autonomous-agent design. Callers are
-  // responsible for setting coherent values; bad writes surface as runtime
-  // misbehaviour, not DB errors.
-  const nextError = values.error === undefined ? row.error : values.error
-  const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
-  const nextCompleted = values.time_completed === undefined ? row.time_completed : values.time_completed
-  // No-op guard: bail only when the caller supplied *only* the 4 guarded fields
-  // AND none of them changed. If the caller passed any other field (metadata,
-  // title, …) we MUST write — otherwise metadata-only updates get silently dropped.
-  const guardedKeys = new Set(["status", "error", "time_started", "time_completed"])
-  const hasOtherWrite = Object.keys(values).some((key) => !guardedKeys.has(key))
+  const { status: intent, ...rest } = values
+  const now = Date.now()
+
+  // Resolve fact fields from the logical verb. Explicit fields in `rest`
+  // win — callers can always override timestamps if they carry their own
+  // "now" from the transaction entry point.
+  const resolved: Partial<typeof EngineTaskTable.$inferInsert> = { ...rest }
+  const metaBase: Record<string, unknown> =
+    (typeof rest.metadata === "object" && rest.metadata !== null && !Array.isArray(rest.metadata))
+      ? { ...(rest.metadata as Record<string, unknown>) }
+      : {}
+  let metaMutated = rest.metadata !== undefined
+  switch (intent) {
+    case "active":
+      if (resolved.time_started === undefined && row.time_started == null) {
+        resolved.time_started = now
+      }
+      break
+    case "completed":
+      if (resolved.time_completed === undefined) resolved.time_completed = now
+      if (resolved.error === undefined) resolved.error = null
+      break
+    case "failed":
+      if (resolved.time_completed === undefined) resolved.time_completed = now
+      // error must be supplied by caller for failures
+      break
+    case "cancelled":
+      if (resolved.time_completed === undefined) resolved.time_completed = now
+      metaBase.cancelled = true
+      metaMutated = true
+      break
+    case "queued":
+      resolved.time_started = null
+      resolved.time_completed = null
+      break
+    case undefined:
+      // metadata-only or explicit field-only update
+      break
+  }
+  if (metaMutated) {
+    // Merge over row.metadata when caller didn't already supply full metadata.
+    if (rest.metadata === undefined) {
+      const existing = (row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata))
+        ? (row.metadata as Record<string, unknown>)
+        : {}
+      resolved.metadata = { ...existing, ...metaBase }
+    } else {
+      resolved.metadata = metaBase
+    }
+  }
+
+  // No-op guard: if nothing actually changes, bail. We check the fact
+  // fields + the caller-supplied key set; metadata / title / etc. always
+  // force a write.
+  const nextError = resolved.error === undefined ? row.error : resolved.error
+  const nextStarted = resolved.time_started === undefined ? row.time_started : resolved.time_started
+  const nextCompleted = resolved.time_completed === undefined ? row.time_completed : resolved.time_completed
+  const guardedKeys = new Set(["error", "time_started", "time_completed"])
+  const hasOtherWrite = Object.keys(resolved).some((key) => !guardedKeys.has(key))
   if (
     !hasOtherWrite &&
-    nextStatus === row.status &&
     nextError === row.error &&
     nextStarted === row.time_started &&
     nextCompleted === row.time_completed
   ) {
     return row
   }
-  const now = Date.now()
-  const statusChanged = nextStatus !== row.status
+
   let updated: TaskRow | undefined
   Database.transaction((db) => {
-    // Compare-and-swap on status: when this call is *transitioning* the row,
-    // the UPDATE only succeeds if the row's current status still matches the
-    // caller's snapshot. This is the DB-level guard that prevents two
-    // concurrent callers from racing on the same transition (e.g., loop start
-    // and user cancel both reading "queued" and both writing).
-    //
-    // For metadata-only updates (no status change) we skip the status guard
-    // so harmless writes to live rows don't spuriously fail.
-    const whereClause = statusChanged
-      ? and(
-          eq(EngineTaskTable.id, row.id),
-          eq(EngineTaskTable.status, row.status),
-        )
-      : eq(EngineTaskTable.id, row.id)
     updated = db
       .update(EngineTaskTable)
       .set({
-        ...values,
+        ...resolved,
         time_updated: now,
       })
-      .where(whereClause)
+      .where(eq(EngineTaskTable.id, row.id))
       .returning()
       .get()
     if (!updated) {
-      // For transitions: the row's status changed under us → stale row,
-      // caller must decide (refetch+retry or bail). Throw so every write in
-      // this tx rolls back together.
-      // For metadata-only updates: the row was deleted — also a caller bug.
-      // Compare-and-swap failed: the row's status changed between this
-      // caller's read and the write. Throw so the whole transaction rolls
-      // back; callers must refetch and retry (or bail). Silent swallow
-      // re-introduces the race conditions the CAS was added to prevent.
-      throw new Error(
-        `task ${row.id} is stale: expected status '${row.status}', attempted write to '${nextStatus}'`,
-      )
+      throw new Error(`task ${row.id} not found during updateTask`)
     }
+    const nextStatus = deriveTaskStatus(updated)
     db.insert(EngineProgressSnapshotTable)
       .values({
         id: Identifier.ascending("progress"),

@@ -1,7 +1,8 @@
 import { Instance } from "@/project/instance"
-import { Database, desc, eq, and, like } from "@/storage/db"
+import { Database, desc, eq, and, isNotNull, isNull, like, sql } from "@/storage/db"
 import { EngineArtifactTable, EngineTaskTable, EngineGoalTable } from "@/engine"
 import { goalStatusByID } from "@/engine/describe"
+import { deriveTaskStatus, isTaskActive, isTaskCompleted, isTaskFailed } from "@/engine/task-status"
 import { Tool } from "./tool"
 import z from "zod"
 
@@ -39,9 +40,9 @@ export const AnalyticsTool = Tool.define("analytics", {
         db.select().from(EngineTaskTable).where(eq(EngineTaskTable.project_id, projectID)).all(),
       )
       const total = tasks.length
-      const completed = tasks.filter((t) => t.status === "completed").length
-      const failed = tasks.filter((t) => t.status === "failed").length
-      const running = tasks.filter((t) => t.status === "active").length
+      const completed = tasks.filter(isTaskCompleted).length
+      const failed = tasks.filter(isTaskFailed).length
+      const running = tasks.filter(isTaskActive).length
       const blocked = 0
 
       // 计算完成时间中位数
@@ -93,7 +94,33 @@ export const AnalyticsTool = Tool.define("analytics", {
     if (args.action === "search") {
       const limit = args.limit
       const conditions = [eq(EngineTaskTable.project_id, projectID)]
-      if (args.status) conditions.push(eq(EngineTaskTable.status, args.status))
+      if (args.status) {
+        // Phase-6-f-2: status column gone; translate to fact conditions.
+        const cancelledMark = sql`json_extract(${EngineTaskTable.metadata}, '$.cancelled') = 1`
+        switch (args.status) {
+          case "queued":
+            conditions.push(isNull(EngineTaskTable.time_started))
+            conditions.push(isNull(EngineTaskTable.time_completed))
+            break
+          case "active":
+            conditions.push(isNotNull(EngineTaskTable.time_started))
+            conditions.push(isNull(EngineTaskTable.time_completed))
+            break
+          case "completed":
+            conditions.push(isNotNull(EngineTaskTable.time_completed))
+            conditions.push(isNull(EngineTaskTable.error))
+            conditions.push(sql`(${cancelledMark}) IS NOT TRUE`)
+            break
+          case "failed":
+            conditions.push(isNotNull(EngineTaskTable.time_completed))
+            conditions.push(isNotNull(EngineTaskTable.error))
+            conditions.push(sql`(${cancelledMark}) IS NOT TRUE`)
+            break
+          case "cancelled":
+            conditions.push(cancelledMark)
+            break
+        }
+      }
       if (args.query) conditions.push(like(EngineTaskTable.title, `%${args.query}%`))
 
       const tasks = Database.use((db) =>
@@ -109,7 +136,7 @@ export const AnalyticsTool = Tool.define("analytics", {
       const results = tasks.map((t) => ({
         id: t.id,
         title: t.title,
-        status: t.status,
+        status: deriveTaskStatus(t),
         priority: t.priority,
         created: new Date(t.time_created).toISOString(),
         updated: new Date(t.time_updated).toISOString(),

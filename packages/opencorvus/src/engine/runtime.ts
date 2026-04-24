@@ -227,8 +227,9 @@ export namespace EngineRuntime {
       if (run.status !== "running") {
         await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
       }
-      if (task.status !== "active") {
-        // Phase-6-f-4: task.blocking_reason cache removed (run-scoped only).
+      // Phase-6-f-2/4: task.status / blocking_reason caches removed.
+      // Promote to active via time_started stamp if not yet started.
+      if (task.time_started == null) {
         await hooks.updateTask(task, { status: "active" }, "Run executing")
       }
       return
@@ -257,8 +258,11 @@ export namespace EngineRuntime {
   }
 
   export async function createOperatorRun(task: TaskRow, run: RunRow, note: string) {
-    if (task.status === "completed" || task.status === "cancelled") {
-      throw new Error(`Cannot create operator run: task ${task.id} is in terminal state "${task.status}"`)
+    // Phase-6-f-2: operator notes are allowed on failed tasks (they revive
+    // the task via a new run) but not on completed / cancelled tasks.
+    const { isTaskCompleted, isTaskCancelled, deriveTaskStatus } = await import("./task-status")
+    if (isTaskCompleted(task) || isTaskCancelled(task)) {
+      throw new Error(`Cannot create operator run: task ${task.id} is in terminal state "${deriveTaskStatus(task)}"`)
     }
     const { createRun } = await import("./writer")
     const { updateTask } = await import("./state")
@@ -328,18 +332,7 @@ function stopEventBridge(runID: string) {
   }
 }
 
-type RuntimeHooks = {
-  updateTask: (
-    row: TaskRow,
-    values: Partial<typeof EngineTaskTable.$inferInsert>,
-    summary: string,
-  ) => Promise<TaskRow>
-  updateRun: (
-    row: RunRow,
-    values: Partial<RunRow>,
-    summary: string,
-  ) => Promise<RunRow>
-}
+type RuntimeHooks = import("./runtime-hooks").RuntimeHooks
 
 
 function upsertExecutorInteraction(

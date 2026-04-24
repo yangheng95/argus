@@ -1,6 +1,7 @@
 import z from "zod"
 import { createDecisionLog } from "@/decision-log"
 import { goalStatusByID } from "@/engine/describe"
+import { deriveTaskStatus, isTaskActive, isTaskQueued } from "@/engine/task-status"
 import {
   findActivePlanForTask,
   findActiveRunForTask,
@@ -213,7 +214,7 @@ function buildBoard(task: typeof EngineTaskTable.$inferSelect) {
         kind: task.kind,
         title: task.title,
         request: task.request,
-        status: task.status,
+        status: deriveTaskStatus(task),
         priority: task.priority,
         // Phase-6-f-4: blocking lives on run (or none when no active run).
         blockingReason: run?.blocking_reason ?? undefined,
@@ -643,18 +644,19 @@ function boardOverview(input: {
       }
     | undefined
 }) {
-  const active = ["queued", "active"].includes(input.task.status)
+  const derivedStatus = deriveTaskStatus(input.task)
+  const active = derivedStatus === "queued" || derivedStatus === "active"
   const canResume = Boolean(input.run) && !active && input.pendingInteractions.length === 0
   const headline =
     input.pendingInteractions.length > 0
       ? "Waiting on human input"
-      : input.task.status === "completed"
+      : derivedStatus === "completed"
         ? "Accepted delivery is ready"
-        : input.task.status === "failed"
+        : derivedStatus === "failed"
           ? "Current attempt failed acceptance"
-          : input.task.status === "cancelled"
+          : derivedStatus === "cancelled"
             ? "Task was cancelled"
-            : input.task.status === "active"
+            : derivedStatus === "active"
               ? input.run?.blocking_reason
                 ? "Task is blocked"
                 : "Task is actively progressing"
@@ -662,7 +664,7 @@ function boardOverview(input: {
   const summary =
     input.pendingInteractions.length > 0
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
-      : input.task.status === "completed" && input.acceptedDelivery
+      : derivedStatus === "completed" && input.acceptedDelivery
         ? clipBoard(input.acceptedDelivery.summary)
         : input.currentFailure?.summary ??
           (input.candidateDelivery
@@ -677,19 +679,19 @@ function boardOverview(input: {
           title: "Resolve the pending interaction",
           detail: "Reply to the permission or question request to unblock the task.",
         }
-      : input.task.status === "failed"
+      : derivedStatus === "failed"
         ? {
             kind: "replan" as const,
             title: "Replan from the latest failure",
             detail: "Review the failed acceptance result, tighten the scope if needed, then replan or retry.",
           }
-        : input.task.status === "cancelled"
+        : derivedStatus === "cancelled"
           ? {
               kind: "retry" as const,
               title: "Retry if the task should continue",
               detail: "The task is cancelled. Retry will queue a new run from the latest context.",
             }
-            : input.task.status === "completed"
+            : derivedStatus === "completed"
               ? {
                   kind: "review_delivery" as const,
                   title: "Review the accepted delivery",
@@ -715,7 +717,7 @@ function boardOverview(input: {
     controls: {
       canRetry: canResume,
       canReplan: canResume && Boolean(findActivePlanForTask(input.task.id) ?? input.run?.plan_version_id),
-      canCancel: Boolean(input.run) && ["queued", "active"].includes(input.task.status),
+      canCancel: Boolean(input.run) && (isTaskQueued(input.task) || isTaskActive(input.task)),
     },
   }
 }

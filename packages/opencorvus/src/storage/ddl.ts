@@ -366,7 +366,6 @@ CREATE TABLE IF NOT EXISTS engine_task (
   architect_challenge_seeds text,
   criteria_results       text NOT NULL DEFAULT '[]',
   kind                   text NOT NULL DEFAULT 'workflow',
-  status                 text NOT NULL DEFAULT 'queued',
   priority               text NOT NULL DEFAULT 'normal',
   -- Phase-6-f-4: blocking_reason cache column removed. Blocking is a
   -- run-scoped signal (run.blocking_reason + pending interactions).
@@ -387,7 +386,7 @@ CREATE TABLE IF NOT EXISTS engine_task (
   FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS engine_task_project_idx ON engine_task (project_id);
-CREATE INDEX IF NOT EXISTS engine_task_status_idx  ON engine_task (status);
+CREATE INDEX IF NOT EXISTS engine_task_time_completed_idx ON engine_task (time_completed);
 CREATE INDEX IF NOT EXISTS engine_task_kind_idx    ON engine_task (kind);
 CREATE UNIQUE INDEX IF NOT EXISTS engine_task_project_request_idx
   ON engine_task (project_id, request_id);

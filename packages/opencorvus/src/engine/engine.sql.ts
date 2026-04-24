@@ -234,7 +234,9 @@ export const EngineTaskTable = sqliteTable(
      *  used for one-shot edits / Q&A / quick fixes. Both kinds share the same
      *  task table and queue so cancel/list/audit are uniform. */
     kind: text().notNull().$type<"workflow" | "build">().default("workflow"),
-    status: text().notNull().$type<EngineTaskStatus>().default("queued"),
+    /** Phase-6-f-2: `status` cache column removed. Derive via
+     *  `engine/task-status.ts::deriveTaskStatus` from
+     *  (time_started, time_completed, error, metadata.cancelled). */
     priority: text().notNull().$type<EngineTaskPriority>().default("normal"),
     /** Phase-6-f-4: `blocking_reason` cache column removed. Blocking is a
      *  run-scoped signal (run.blocking_reason + pending interactions). */
@@ -264,7 +266,7 @@ export const EngineTaskTable = sqliteTable(
   },
   (table) => [
     index("engine_task_project_idx").on(table.project_id),
-    index("engine_task_status_idx").on(table.status),
+    index("engine_task_time_completed_idx").on(table.time_completed),
     index("engine_task_kind_idx").on(table.kind),
     uniqueIndex("engine_task_project_request_idx").on(table.project_id, table.request_id),
   ],

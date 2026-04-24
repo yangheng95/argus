@@ -1,10 +1,10 @@
-import type { EngineTaskTable } from "./engine.sql"
+import type { TaskUpdateValues } from "./state"
 import type { RunRow, TaskRow } from "./store"
 
 export type RuntimeHooks = {
   updateTask: (
     row: TaskRow,
-    values: Partial<typeof EngineTaskTable.$inferInsert>,
+    values: TaskUpdateValues,
     summary: string,
   ) => Promise<TaskRow>
   updateRun: (

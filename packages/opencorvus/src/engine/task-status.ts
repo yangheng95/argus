@@ -1,0 +1,59 @@
+/**
+ * Derive task status from persistent facts — no FSM cache column.
+ *
+ * Rule-23 compliance: the "status" field is a **projection** of
+ * `(time_started, time_completed, error, metadata.cancelled)`. Call-sites that
+ * need a status string for display / logging / LLM prompts use
+ * `deriveTaskStatus(task)`; decision logic should prefer the specific
+ * boolean predicate (`isTaskTerminal` / `isTaskActive` / etc.) to avoid
+ * string branching.
+ *
+ * Replaces the old `engine_task.status` column deleted in 6-f-2.
+ *
+ * Cancelled vs failed: both have `time_completed != null && error != null`.
+ * The disambiguator is `metadata.cancelled === true`, stamped by
+ * `task-api/index.ts::cancelTask`. Any other terminal-with-error path is
+ * a failure.
+ */
+
+export type DerivedTaskStatus = "queued" | "active" | "completed" | "failed" | "cancelled"
+
+type TaskStatusFields = {
+  time_started?: number | null
+  time_completed?: number | null
+  error?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export function isTaskCancelled(task: TaskStatusFields): boolean {
+  const meta = task.metadata
+  if (!meta || typeof meta !== "object") return false
+  return (meta as Record<string, unknown>).cancelled === true
+}
+
+export function isTaskTerminal(task: TaskStatusFields): boolean {
+  return task.time_completed != null
+}
+
+export function isTaskCompleted(task: TaskStatusFields): boolean {
+  return isTaskTerminal(task) && !task.error && !isTaskCancelled(task)
+}
+
+export function isTaskFailed(task: TaskStatusFields): boolean {
+  return isTaskTerminal(task) && !!task.error && !isTaskCancelled(task)
+}
+
+export function isTaskActive(task: TaskStatusFields): boolean {
+  return task.time_started != null && task.time_completed == null
+}
+
+export function isTaskQueued(task: TaskStatusFields): boolean {
+  return task.time_started == null && task.time_completed == null
+}
+
+export function deriveTaskStatus(task: TaskStatusFields): DerivedTaskStatus {
+  if (isTaskCancelled(task)) return "cancelled"
+  if (task.time_completed != null) return task.error ? "failed" : "completed"
+  if (task.time_started != null) return "active"
+  return "queued"
+}
