@@ -17,7 +17,7 @@ describe("engine queue", () => {
     await resetDatabase()
   })
 
-  test("dispatchTaskLoop claims queued work with its preserved trigger", async () => {
+  test("dispatchTaskLoop preserves the caller's event through the queue claim", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -41,13 +41,13 @@ describe("engine queue", () => {
           }).run(),
         )
 
-        await dispatchTaskLoop({ taskID, trigger: { kind: "created" } })
+        await dispatchTaskLoop({ taskID, event: { note: "caller-supplied note" } })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
         expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
           taskID,
-          trigger: { kind: "created" },
+          event: { note: "caller-supplied note" },
         })
         expect(findTask(taskID)?.status).toBe("active")
       },
@@ -114,7 +114,7 @@ describe("engine queue", () => {
           }).run()
         })
 
-        await dispatchTaskLoop({ taskID: activeID, trigger: { kind: "created" } })
+        await dispatchTaskLoop({ taskID: activeID })
         await new Promise((resolve) => setTimeout(resolve, 0))
 
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
@@ -142,7 +142,7 @@ describe("engine queue", () => {
     })
   })
 
-  test("advanceQueue derives retry for queued retry work after process-local trigger state is gone", async () => {
+  test("advanceQueue forwards queued work without synthesising a trigger", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -159,7 +159,7 @@ describe("engine queue", () => {
             project_id: Instance.project.id,
             source: "test",
             title: "queued retry task",
-            request: "derive retry trigger from durable state",
+            request: "advanceQueue must forward without deriving a trigger from active_run_id",
             status: "queued",
             active_run_id: runID,
             priority: "normal",
@@ -180,11 +180,13 @@ describe("engine queue", () => {
         await advanceQueue(taskCwd(taskID))
         await new Promise((resolve) => setTimeout(resolve, 0))
 
+        // Phase 2: the queue must NOT invent an OrchestratorEvent from
+        // active_run_id. The orchestrator reads the describe snapshot on
+        // wake and decides for itself — the event is purely caller-supplied.
         expect(runTaskLoop).toHaveBeenCalledTimes(1)
-        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({
-          taskID,
-          trigger: { kind: "retry" },
-        })
+        const firstCall = runTaskLoop.mock.calls[0]?.[0] as { taskID: string; event?: unknown }
+        expect(firstCall.taskID).toBe(taskID)
+        expect(firstCall.event).toBeUndefined()
       },
     })
   })

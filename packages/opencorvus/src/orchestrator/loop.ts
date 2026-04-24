@@ -1,30 +1,37 @@
 /**
  * Task Control Loop — the single entry point for task lifecycle.
  *
- * Replaces fire-and-forget Orchestrator triggers with a structured loop:
- *   Decision Point (Orchestrator) → GoalPool (execution) → collect results → repeat
+ * Post-unified-teardown §2 model: there is no typed trigger enum. The loop
+ * wakes the Orchestrator with an optional `OrchestratorEvent.note` hint,
+ * synthesises wake events from state reads (active goal runs, verdict
+ * artifacts) between Orchestrator turns, and exits when the task reaches
+ * a terminal status. No typed trigger enum appears here anymore — what
+ * used to be batch-complete / delivery-rejected / operator-message triggers
+ * carrying structured payload are today just free-form event notes authored
+ * via `OrchestratorEventNote.*` helpers, all derived from data the describe
+ * layer surfaces on its own.
  *
- * What this eliminates:
- *   - recoverOrphanedTasks (loop IS the lifecycle)
- *   - notifyGoalResult fire-and-forget (pool drain collects results)
- *   - fire-and-forget agent-notification races (PerRunState claim+finalize
- *     runs on the single updateRun terminal transition, not scattered maps)
- *   - duplicate wake-suppression gates (the loop owns all waiting between pool drains)
- *   - infinite wake-up loops (no re-triggering — the loop decides)
+ * What this still owns:
+ *   - Serial per-taskID execution (one loop per task at a time).
+ *   - GoalPool drive (until phase 5 folds build into a parallel tool).
+ *   - Delivery-rejection detection via artifact watermark.
+ *   - Iteration ceiling + inactivity-driven goal wait.
  *
- * All timeouts are inactivity-based, never hard/absolute.
+ * What this does NOT own:
+ *   - Deciding what the orchestrator does on wake (the LLM reads describe).
+ *   - Constructing typed triggers (they no longer exist).
+ *   - Managing active_run_id as control-plane truth (phase 4 dismantles).
  */
 
 import { Log } from "@/util/log"
 import { GoalPool, type PoolHooks } from "@/engine/goal-pool"
 import type { RuntimeHooks } from "@/engine/runtime-hooks"
-import { Orchestrator, type OrchestratorTrigger } from "@/orchestrator/agent"
-import { effectiveMaxExecutorGroups, findTask, findRun, findPlan, listGoalsByPlan, listPlanNodesByPlan } from "@/engine"
+import { Orchestrator, OrchestratorEventNote, type OrchestratorEvent } from "@/orchestrator/agent"
+import { effectiveMaxExecutorGroups, findTask, findRun, findPlan } from "@/engine"
 import type { TaskRow, RunRow, PlanRow } from "@/engine"
 import { mergeGoalDelivery } from "@/engine/runtime"
 import { describeTaskFromRow } from "@/engine/describe"
 import type { GoalDesc } from "@/engine/describe"
-import { Database, eq } from "@/storage/db"
 import { isRunReadyForGoalDispatch } from "./scheduler"
 
 const log = Log.create({ service: "orchestrator-loop" })
@@ -100,20 +107,18 @@ export function interruptTaskLoop(taskID: string, reason = "task loop interrupte
   // signal-aware await (observed in benchmarks: LLM streams that acknowledge
   // abort by setting a flag but never reject the outer Promise), a subsequent
   // runTaskLoop() would chain `prev.then()` onto that zombie Promise and wait
-  // forever for the operator_message / delivery_rejected trigger to fire.
+  // forever for the next wake to fire.
   // Dropping the Map entry here means the NEXT runTaskLoop() starts from
   // Promise.resolve() instead — the old loop's cleanup still runs when its
-  // Promise eventually resolves, it just no longer gates later triggers.
+  // Promise eventually resolves, it just no longer gates later wakes.
   // processTask's own `abort(taskID)` preamble serialises any brief overlap
   // between the old tail and the new head.
   taskLoopChain.delete(taskID)
 }
 
-export type TaskLoopTrigger = OrchestratorTrigger
-
 export async function runTaskLoop(input: {
   taskID: string
-  trigger: TaskLoopTrigger
+  event?: OrchestratorEvent
   signal?: AbortSignal
   hooks: RuntimeHooks
 }) {
@@ -150,12 +155,12 @@ export async function runTaskLoop(input: {
  */
 async function runTaskLoopInner(input: {
   taskID: string
-  trigger: TaskLoopTrigger
+  event?: OrchestratorEvent
   signal?: AbortSignal
   hooks: RuntimeHooks
 }) {
   const { taskID, signal, hooks } = input
-  let trigger = input.trigger
+  let event = input.event
 
   // Immediately mark the task as active so the cwd-scoped queue can observe
   // that this task now owns execution for its workspace before the first
@@ -168,7 +173,7 @@ async function runTaskLoopInner(input: {
     }
   }
 
-  log.info("task loop started", { taskID, trigger: trigger.kind })
+  log.info("task loop started", { taskID, note: event?.note })
 
   // ── Main loop: Decision → Pool → Decision ──
   let decisionTurn = 0
@@ -187,40 +192,40 @@ async function runTaskLoopInner(input: {
    *  artifacts newer than this. Initialized to loop start so we don't react
    *  to pre-existing verdicts from previous loop runs of the same task
    *  (e.g. crash recovery), and bumped past every consumed artifact so a
-   *  single rejection only fires the trigger once. */
+   *  single rejection only fires the wake once. */
   let lastReworkSeenAt = Date.now()
 
   while (!signal?.aborted) {
     const task = findTask(taskID)
     if (!task) { log.error("task not found, exiting loop", { taskID }); break }
-    if (
-      (task.status === "completed" || task.status === "failed" || task.status === "cancelled") &&
-      trigger.kind !== "operator_message" &&
-      trigger.kind !== "retry"
-    ) {
+
+    // Terminal-state exit. Operator messages / retry requests arrive as a
+    // caller-supplied event.note and must be allowed to wake a terminal
+    // task so the orchestrator can revive it; bare state-read wakes must
+    // not, or the loop burns turns on nothing.
+    const terminal = task.status === "completed" || task.status === "failed" || task.status === "cancelled"
+    if (terminal && !event) {
       log.info("task in terminal state, exiting loop", { taskID, status: task.status })
       break
     }
 
-    // Waiting on already-running goal executions is not a new Orchestrator
-    // decision. If we re-entered only because the wait loop ticked again,
-    // keep sleeping here instead of burning another decision turn.
-    if (trigger.kind === "batch_complete" && task.status === "active") {
-      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-      if (run) {
-        const { listActiveGoalRunsForRun } = await import("@/engine/store")
-        const activeGoalRuns = listActiveGoalRunsForRun(run.id)
-        if (activeGoalRuns.length > 0) {
-          log.info("active goal runs still executing before decision, waiting", {
-            taskID,
-            runID: run.id,
-            activeGoalRuns: activeGoalRuns.length,
-            goalRunIDs: activeGoalRuns.map((goalRun) => goalRun.id),
-          })
-          await sleep(5_000, signal)
-          if (signal?.aborted) break
-          continue
-        }
+    // State-only wait: if any goal_run is still live, do not burn an
+    // orchestrator decision turn — wait for the pool to finish. The
+    // describe layer's is_running flag is derived from the goal_run chain
+    // tip so this check is authoritative without reading goal.status.
+    if (task.status === "active" && task.active_run_id) {
+      const { listActiveGoalRunsForRun } = await import("@/engine/store")
+      const activeGoalRuns = listActiveGoalRunsForRun(task.active_run_id)
+      if (activeGoalRuns.length > 0) {
+        log.info("active goal runs still executing before decision, waiting", {
+          taskID,
+          runID: task.active_run_id,
+          activeGoalRuns: activeGoalRuns.length,
+          goalRunIDs: activeGoalRuns.map((goalRun) => goalRun.id),
+        })
+        await sleep(5_000, signal)
+        if (signal?.aborted) break
+        continue
       }
     }
 
@@ -241,21 +246,22 @@ async function runTaskLoopInner(input: {
     }
 
     // ── Phase 1: Decision Point ──
-    // Call Orchestrator with current state. It decides what to do:
+    // Call Orchestrator with current event note. It decides what to do:
     //   - dispatch goals → calls dispatch_goal/submit_execution tool → self-aborts
     //   - complete/fail task → calls fail_task/deliver tool → exits
     //   - no action → finishReason=stop with no dispatch
-    log.info("decision point", { taskID, iteration: decisionTurn, trigger: trigger.kind })
+    log.info("decision point", { taskID, iteration: decisionTurn, note: event?.note })
 
-    let agentDispatched = false
     try {
-      await Orchestrator.processTask(taskID, trigger as any)
-      // Orchestrator finished. Check if it dispatched goals.
+      await Orchestrator.processTask(taskID, event)
     } catch (err) {
       if (signal?.aborted) break
       log.error("orchestrator error at decision point", { taskID, error: String(err) })
       // Don't break — re-check task status and maybe retry
     }
+    // Consume the event: subsequent iterations synthesise their own wake
+    // notes from state reads below. The caller's initial event is one-shot.
+    event = undefined
 
     // Re-read task state after agent decision
     const taskAfter = findTask(taskID)
@@ -264,7 +270,6 @@ async function runTaskLoopInner(input: {
       log.info("task entered terminal state after decision", {
         taskID,
         status: taskAfter.status,
-        trigger: trigger.kind,
       })
       break
     }
@@ -274,37 +279,35 @@ async function runTaskLoopInner(input: {
     // (label="delivery-agent-verdict", payload.verdict="rejected") and calls
     // startNewAttempt on the goals the delivery agent attributed the rejection
     // to (verdict.affected_goal_ids). This block watermarks the artifact
-    // stream so the orchestrator agent gets a `delivery_rejected` trigger
-    // with structured feedback on its next decision point. The orchestrator
-    // reads affected_goal_ids + rejection_details to decide strategy
+    // stream so the orchestrator agent gets a rejection wake with structured
+    // feedback on its next decision point. The orchestrator reads
+    // affected_goal_ids + rejection_details to decide strategy
     // (modify_goal vs re-run architect vs let-it-redispatch).
     //
     // Keyed on the verdict artifact — NOT on goal_run.superseded_reason
     // string matching. Per rule 23 we do not branch on enum label values;
-    // the artifact is the first-class delivery output.
+    // the artifact is the first-class delivery output. The event.note is
+    // synthesised here; the orchestrator's buildSystemParts renders the
+    // same payload separately from the persistent artifact so omitting
+    // the note still produces correct behaviour.
     if (taskAfter.status === "active") {
       const { findRecentDeliveryRejection } = await import("@/engine/store")
       const verdictArt = findRecentDeliveryRejection(taskID, lastReworkSeenAt)
       if (verdictArt) {
         lastReworkSeenAt = (verdictArt.time_created ?? Date.now()) + 1
         const verdict = (verdictArt.payload ?? {}) as Record<string, unknown>
-        const feedback: Record<string, unknown> = {
-          verdict_summary: verdict.summary,
-          issues_found: Array.isArray(verdict.issues_found) ? verdict.issues_found : [],
-          affected_goal_ids: Array.isArray(verdict.affected_goal_ids) ? verdict.affected_goal_ids : [],
-          rejection_details: Array.isArray(verdict.rejection_details) ? verdict.rejection_details : [],
-          startup_verification: verdict.startup_verification,
-          frontend_check: verdict.frontend_check,
-          verdict_artifact_id: verdictArt.id,
-        }
-        log.info("delivery rejection detected — re-triggering orchestrator", {
+        log.info("delivery rejection detected — re-waking orchestrator", {
           taskID,
           verdictArtifactID: verdictArt.id,
         })
-        trigger = {
-          kind: "delivery_rejected",
-          runID: taskAfter.active_run_id ?? "",
-          feedback,
+        event = {
+          note: OrchestratorEventNote.deliveryRejected({
+            verdictSummary: typeof verdict.summary === "string" ? verdict.summary : undefined,
+            issues: Array.isArray(verdict.issues_found) ? (verdict.issues_found as string[]) : [],
+            rejectionDetails: Array.isArray(verdict.rejection_details)
+              ? (verdict.rejection_details as Array<{ category?: string; file?: string; error?: string; suggestion?: string }>)
+              : [],
+          }),
         }
         continue
       }
@@ -328,7 +331,8 @@ async function runTaskLoopInner(input: {
         })
         await sleep(5_000, signal)
         if (signal?.aborted) break
-        trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
+        // No event note needed — the next iteration's state read drives
+        // orchestrator directly; it will see the updated goal_run tips.
         continue
       }
     }
@@ -336,16 +340,14 @@ async function runTaskLoopInner(input: {
       // No run or no plan — Orchestrator didn't dispatch anything.
       // Could be: still in spec/requirements/architect phase.
       // The Orchestrator's tool calls (spec, requirements, etc.) are handled within processTask.
-      // Loop back to decision point.
-      log.info("no active run with plan, re-triggering", { taskID })
-      trigger = { kind: "batch_complete", runID: run?.id ?? "", summary: { passed: 0, failed: 0, total: 0 } }
+      // Loop back to decision point without a synthesised event.
+      log.info("no active run with plan, re-waking", { taskID })
       continue
     }
 
     const plan = findPlan(run.plan_version_id)
     if (!plan) {
       log.warn("plan not found", { taskID, planID: run.plan_version_id })
-      trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
       continue
     }
 
@@ -355,7 +357,6 @@ async function runTaskLoopInner(input: {
         runID: run.id,
         status: run.status,
       })
-      trigger = { kind: "batch_complete", runID: run.id, summary: { passed: 0, failed: 0, total: 0 } }
       continue
     }
 
@@ -369,14 +370,18 @@ async function runTaskLoopInner(input: {
     const hasPending = goals.some((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted)
 
     if (!hasActive && !hasPending) {
-      // All goals are in terminal state. Feed results back to Orchestrator.
+      // All goals are in terminal state. Feed results back to Orchestrator
+      // as a free-form batch-summary note.
       const passed = goals.filter((g) => g.is_terminal_ok).length
       const failed = goals.filter((g) => g.is_terminal_fail).length
       log.info("all goals in terminal state", { taskID, passed, failed })
-      trigger = {
-        kind: "batch_complete",
-        runID: run.id,
-        summary: { passed, failed, total: goals.length },
+      event = {
+        note: OrchestratorEventNote.batchComplete({
+          runID: run.id,
+          passed,
+          failed,
+          total: goals.length,
+        }),
       }
       continue
     }
@@ -461,7 +466,7 @@ async function runTaskLoopInner(input: {
       if (hasPending) {
         const passed = goals.filter((g) => g.is_terminal_ok).length
         const failed = goals.filter((g) => g.is_terminal_fail).length
-        log.warn("pending goals present but none dispatched — feeding to Orchestrator", {
+        log.warn("pending goals present but none dispatched — re-waking Orchestrator", {
           taskID, passed, failed,
           pending: goals.filter((g) => g.never_dispatched || g.needs_redispatch || g.is_aborted).length,
         })
@@ -474,10 +479,13 @@ async function runTaskLoopInner(input: {
         // masked real failures as "stuck" rather than routing them to
         // the LLM for classification.
 
-        trigger = {
-          kind: "batch_complete",
-          runID: run.id,
-          summary: { passed, failed, total: goals.length },
+        event = {
+          note: OrchestratorEventNote.batchComplete({
+            runID: run.id,
+            passed,
+            failed,
+            total: goals.length,
+          }),
         }
         continue
       }
@@ -502,14 +510,13 @@ async function runTaskLoopInner(input: {
       pending: pendingGoals.length,
     })
 
-    trigger = {
-      kind: "batch_complete",
-      runID: run.id,
-      summary: {
+    event = {
+      note: OrchestratorEventNote.batchComplete({
+        runID: run.id,
         passed: passedGoals.length,
         failed: failedGoals.length,
         total: goalsAfter.length,
-      },
+      }),
     }
   }
 
