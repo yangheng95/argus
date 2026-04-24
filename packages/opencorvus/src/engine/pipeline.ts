@@ -47,16 +47,6 @@ export async function awaitPipelineSettled(taskID: string): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
-/** Register an AbortController for a task stage (used by task-tools). */
-export function registerTaskAbort(taskID: string, ctrl: AbortController): void {
-  taskAborts.set(taskID, ctrl)
-}
-
-/** Unregister a task's AbortController (used by task-tools cleanup). */
-export function unregisterTaskAbort(taskID: string): void {
-  taskAborts.delete(taskID)
-}
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------

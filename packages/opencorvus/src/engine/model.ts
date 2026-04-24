@@ -7,12 +7,6 @@ import { Reply as PermissionReply } from "@/permission/types"
 import { Answer as QuestionAnswer } from "@/question/types"
 import { FileDiff as SnapshotFileDiff } from "@/snapshot/types"
 
-/** Task statuses that indicate a terminal or notable state change worth mirroring to channels. */
-export const TASK_TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const
-
-/** Run statuses that indicate a terminal or notable state change worth mirroring to channels. */
-export const RUN_TERMINAL_STATUSES = ["blocked", "failed", "completed", "aborted"] as const
-
 export const Budget = z.object({
   maxRuns: z.number().int().positive().optional(),
   maxFixRuns: z.number().int().positive().optional(),
