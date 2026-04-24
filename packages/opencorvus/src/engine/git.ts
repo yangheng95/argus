@@ -3,9 +3,12 @@ import { Instance } from "@/project/instance"
 import { Vcs } from "@/project/vcs"
 import { Database, eq } from "@/storage/db"
 import { git } from "@/util/git"
+import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
 import { requireTask, type DeliveryRow, type PlanRow, type TaskRow } from "./store"
+
+const log = Log.create({ service: "engine-git" })
 
 const AUTHOR = {
   name: "OpenCorvus",
@@ -398,11 +401,152 @@ async function reclaimDetachedGoalCommits(input: {
   return { reclaimed, unreclaimable }
 }
 
+/**
+ * P0-C.4 LKG state lives in `task.metadata.git.delivery_lkg`.
+ * One slot per task — the task-level delivery picky loop is the only
+ * writer; per-goal worktrees do not own LKG (only the merged worktree
+ * has a meaningful visual score).
+ */
+export interface DeliveryLKG {
+  best_score: number
+  best_commit_sha: string
+  best_round: number
+  /** Wall-clock for forensic audit (regress-from-when in replay). */
+  recorded_at: number
+}
+
+function readDeliveryLKG(task: TaskRow): DeliveryLKG | undefined {
+  const value = dict(dict(task.metadata).git).delivery_lkg
+  if (!value || typeof value !== "object" || Array.isArray(value)) return
+  const v = value as Record<string, unknown>
+  if (
+    typeof v.best_score !== "number" ||
+    typeof v.best_commit_sha !== "string" ||
+    typeof v.best_round !== "number" ||
+    typeof v.recorded_at !== "number"
+  ) return
+  return {
+    best_score: v.best_score,
+    best_commit_sha: v.best_commit_sha,
+    best_round: v.best_round,
+    recorded_at: v.recorded_at,
+  }
+}
+
+function writeDeliveryLKG(task: TaskRow, lkg: DeliveryLKG): TaskRow {
+  return save(task, { delivery_lkg: lkg })
+}
+
+/**
+ * P0-C.4 — Last-Known-Good roll-back.
+ *
+ * Compare the round's score against the LKG; if it regresses past the
+ * tolerance band, `git reset --hard <best_commit_sha>` so the next
+ * iteration starts from the last good state. Improvements (or first
+ * round) update the LKG. Equality within `epsilon` keeps the existing
+ * LKG (avoid LKG churn from numerical jitter in pHash / SSIM).
+ *
+ * Returns a structured result so the caller can attach it to the
+ * decision log and the engine_iteration snapshot for replay (Stream G).
+ *
+ * Failure modes are surfaced loudly (no fallback, rule 1):
+ *  - missing best_commit_sha after regression ⇒ skip reset, log ERROR
+ *  - git reset fails ⇒ propagate so the orchestrator can fail the task
+ */
+export type LKGOutcome =
+  | { kind: "first_round"; score: number; updated: DeliveryLKG }
+  | { kind: "improved"; score: number; previous: DeliveryLKG; updated: DeliveryLKG }
+  | { kind: "held"; score: number; previous: DeliveryLKG }
+  | { kind: "regressed"; score: number; previous: DeliveryLKG; rolledBackTo: string }
+
+async function evaluateAndApplyLKG(input: {
+  task: TaskRow
+  iteration: number
+  score: number
+  roundCommitSha: string | undefined
+  /** Symmetric tolerance — score difference within ±epsilon is treated as
+   *  "held" (no LKG update, no rollback). 0.01 ≈ 1% of the [0,1] score. */
+  epsilon?: number
+}): Promise<{ outcome: LKGOutcome; task: TaskRow }> {
+  const epsilon = input.epsilon ?? 0.01
+  const previous = readDeliveryLKG(input.task)
+
+  if (!previous) {
+    if (!input.roundCommitSha) {
+      // No prior LKG and no commit to anchor this round — nothing to record.
+      // Caller already logs the missing commit; treat as "held" of an empty
+      // LKG so callers do not have to special-case `first_round && noSha`.
+      return {
+        task: input.task,
+        outcome: {
+          kind: "held",
+          score: input.score,
+          previous: { best_score: input.score, best_commit_sha: "", best_round: input.iteration, recorded_at: Date.now() },
+        },
+      }
+    }
+    const updated: DeliveryLKG = {
+      best_score: input.score,
+      best_commit_sha: input.roundCommitSha,
+      best_round: input.iteration,
+      recorded_at: Date.now(),
+    }
+    return { task: writeDeliveryLKG(input.task, updated), outcome: { kind: "first_round", score: input.score, updated } }
+  }
+
+  const delta = input.score - previous.best_score
+  if (delta > epsilon) {
+    if (!input.roundCommitSha) {
+      // Improvement detected but no commit anchor — keep the previous LKG so
+      // we never advance to a sha-less best (rollback target would be empty).
+      return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
+    }
+    const updated: DeliveryLKG = {
+      best_score: input.score,
+      best_commit_sha: input.roundCommitSha,
+      best_round: input.iteration,
+      recorded_at: Date.now(),
+    }
+    return { task: writeDeliveryLKG(input.task, updated), outcome: { kind: "improved", score: input.score, previous, updated } }
+  }
+  if (delta >= -epsilon) {
+    return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
+  }
+
+  // Regression past tolerance — reset to the LKG commit so the next
+  // iteration does not compound the bad direction. We never reset onto an
+  // empty sha; if the LKG was recorded without one (defensive), surface
+  // loudly instead of silently passing.
+  if (!previous.best_commit_sha) {
+    log.warn("evaluateAndApplyLKG: regression detected but LKG has no commit sha — cannot roll back", {
+      taskID: input.task.id, iteration: input.iteration, delta,
+    })
+    return { task: input.task, outcome: { kind: "held", score: input.score, previous } }
+  }
+  const cwd = Instance.directory
+  const reset = await git(["reset", "--hard", previous.best_commit_sha], { cwd, env: env() })
+  if (reset.exitCode !== 0) {
+    const err = reset.stderr.toString().trim() || reset.stdout.toString().trim() || "git reset failed"
+    throw new Error(`evaluateAndApplyLKG: git reset --hard ${previous.best_commit_sha} failed: ${err}`)
+  }
+  log.info("evaluateAndApplyLKG: rolled back to LKG", {
+    taskID: input.task.id, iteration: input.iteration,
+    score: input.score, best_score: previous.best_score, sha: previous.best_commit_sha,
+  })
+  return {
+    task: input.task,
+    outcome: { kind: "regressed", score: input.score, previous, rolledBackTo: previous.best_commit_sha },
+  }
+}
+
 export namespace EngineGit {
   export const commitDeliveryRound = (input: Parameters<typeof commitDeliveryRound>[0]) =>
     commitDeliveryRound(input)
   export const reclaimDetachedGoalCommits = (input: Parameters<typeof reclaimDetachedGoalCommits>[0]) =>
     reclaimDetachedGoalCommits(input)
+  export const evaluateAndApplyLKG = (input: Parameters<typeof evaluateAndApplyLKG>[0]) =>
+    evaluateAndApplyLKG(input)
+  export const readLKG = (task: TaskRow) => readDeliveryLKG(task)
 
   export async function prepare(task: TaskRow, plan?: PlanRow) {
     if (baseline(task)) return { task }
