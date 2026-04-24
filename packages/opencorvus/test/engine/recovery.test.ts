@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
+  EngineArtifactTable,
   EngineExecutorSessionTable,
-  EngineGoalRunTable,
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
@@ -94,14 +94,32 @@ function seedActiveExecution() {
       time_created: now,
       time_updated: now,
     }).run()
-    db.insert(EngineGoalRunTable).values({
+    // Phase-6-d: goal_run rows live in engine_artifact (kind="goal_run_attempt").
+    db.insert(EngineArtifactTable).values({
       id: goalRunID,
       task_id: activeTaskID,
-      goal_id: goalID,
-      coordinator_run_id: runID,
-      executor: "opencode",
-      status: "running",
-      retry_count: 0,
+      run_id: runID,
+      goal_run_id: goalRunID,
+      kind: "goal_run_attempt",
+      label: "attempt-running",
+      payload: {
+        goal_id: goalID,
+        plan_node_id: null,
+        session_id: null,
+        status: "running",
+        retry_count: 0,
+        blocking_reason: null,
+        error: null,
+        workspace_dir: null,
+        base_ref: null,
+        merge_ref: null,
+        supersede_of: null,
+        superseded_reason: null,
+        superseded_at: null,
+        metadata: null,
+        time_started: now,
+        time_completed: null,
+      },
       time_created: now,
       time_updated: now,
     }).run()
@@ -278,12 +296,40 @@ describe("engine recovery", () => {
     expect(orphansBefore.map((r) => r.id)).not.toContain(runID)
 
     // Simulate the goal_run crossing to terminal (process restart
-    // scenario). The run then has no live goal_run attached.
+    // scenario). Phase-6-d: append a new engine_artifact with status="failed"
+    // so the latest row for this logical goal_run is terminal.
+    const terminalNow = Date.now() + 10
     Database.use((db) =>
       db
-        .update(EngineGoalRunTable)
-        .set({ status: "failed" })
-        .where(eq(EngineGoalRunTable.id, goalRunID))
+        .insert(EngineArtifactTable)
+        .values({
+          id: `${goalRunID}_failed`,
+          task_id: activeTaskID,
+          run_id: runID,
+          goal_run_id: goalRunID,
+          kind: "goal_run_attempt",
+          label: "attempt-failed",
+          payload: {
+            goal_id: goalID,
+            plan_node_id: null,
+            session_id: null,
+            status: "failed",
+            retry_count: 0,
+            blocking_reason: null,
+            error: null,
+            workspace_dir: null,
+            base_ref: null,
+            merge_ref: null,
+            supersede_of: null,
+            superseded_reason: null,
+            superseded_at: null,
+            metadata: null,
+            time_started: null,
+            time_completed: terminalNow,
+          },
+          time_created: terminalNow,
+          time_updated: terminalNow,
+        })
         .run(),
     )
 

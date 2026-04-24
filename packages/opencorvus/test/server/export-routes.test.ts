@@ -2,7 +2,6 @@ import { afterEach, expect, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import {
   EngineArtifactTable,
-  EngineGoalRunTable,
   EngineGoalTable,
   EnginePlanNodeTable,
   EnginePlanVersionTable,
@@ -143,19 +142,35 @@ test.skip("GET /export/task/:taskID includes goal-snapshot evaluations and QA gr
             },
           ])
           .run()
-        db.insert(EngineGoalRunTable)
+        // Phase-6-d: goal_run rows live in engine_artifact (kind="goal_run_attempt").
+        db.insert(EngineArtifactTable)
           .values({
             id: goalRunID,
             task_id: taskID,
-            goal_id: goalID,
-            plan_node_id: nodeID,
-            coordinator_run_id: runID,
-            executor: "opencode",
-            status: "completed",
-            retry_count: 0,
+            run_id: runID,
+            goal_run_id: goalRunID,
+            kind: "goal_run_attempt",
+            label: "attempt-completed",
+            payload: {
+              goal_id: goalID,
+              plan_node_id: nodeID,
+              session_id: null,
+              status: "completed",
+              retry_count: 0,
+              blocking_reason: null,
+              error: null,
+              workspace_dir: null,
+              base_ref: null,
+              merge_ref: null,
+              supersede_of: null,
+              superseded_reason: null,
+              superseded_at: null,
+              metadata: null,
+              time_started: null,
+              time_completed: now,
+            },
             time_created: now,
             time_updated: now,
-            time_completed: now,
           })
           .run()
         // Phase-6-c: deliveries live in engine_artifact (kind='delivery').

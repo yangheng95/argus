@@ -1,5 +1,5 @@
 import { integer, real, sqliteTable, text, index, primaryKey } from "drizzle-orm/sqlite-core"
-import { EngineTaskTable, EngineGoalTable, EngineGoalRunTable } from "@/engine/engine.sql"
+import { EngineTaskTable, EngineGoalTable } from "@/engine/engine.sql"
 import { Timestamps } from "@/storage/schema.sql"
 import type {
   ArbiterVerdict,
@@ -67,7 +67,9 @@ export const EngineMetricResultTable = sqliteTable(
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
     iteration: integer().notNull(),
-    goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
+    /** Phase-6-d: plain text pointer to the logical goal_run id (was FK to
+     *  engine_goal_run). */
+    goal_run_id: text(),
     raw_value: real().notNull(),
     normalized_value: real().notNull(),
     met_target: integer({ mode: "boolean" }).notNull(),

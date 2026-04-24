@@ -3,11 +3,11 @@ import { Database } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { ProjectTable } from "../../src/project/project.sql"
 import {
+  EngineArtifactTable,
   EngineTaskTable,
   EnginePlanVersionTable,
   EngineGoalTable,
   EngineRunTable,
-  EngineGoalRunTable,
 } from "../../src/engine/engine.sql"
 import { createDecisionLog } from "../../src/decision-log"
 import { goalSlug } from "../../src/engine/persist"
@@ -100,15 +100,33 @@ function seed() {
       time_updated: now,
     }).run(),
   )
+  // Phase-6-d: goal_run rows live in engine_artifact (kind="goal_run_attempt").
   Database.use((db) =>
-    db.insert(EngineGoalRunTable).values({
+    db.insert(EngineArtifactTable).values({
       id: goalRunID,
       task_id: taskID,
-      goal_id: goalID,
-      coordinator_run_id: runID,
-      executor: "opencode",
-      status: "failed",
-      retry_count: 0,
+      run_id: runID,
+      goal_run_id: goalRunID,
+      kind: "goal_run_attempt",
+      label: "attempt-failed",
+      payload: {
+        goal_id: goalID,
+        plan_node_id: null,
+        session_id: null,
+        status: "failed",
+        retry_count: 0,
+        blocking_reason: null,
+        error: null,
+        workspace_dir: null,
+        base_ref: null,
+        merge_ref: null,
+        supersede_of: null,
+        superseded_reason: null,
+        superseded_at: null,
+        metadata: null,
+        time_started: null,
+        time_completed: now,
+      },
       time_created: now,
       time_updated: now,
     }).run(),

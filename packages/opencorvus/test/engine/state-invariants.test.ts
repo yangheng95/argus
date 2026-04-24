@@ -9,8 +9,8 @@ import {
 } from "../../src/storage/db"
 import {
   EngineArtifactTable,
-  EngineGoalRunTable,
 } from "../../src/engine/engine.sql"
+import { listGoalRunsByGoal, listGoalRunsForTask } from "../../src/engine/store"
 
 /**
  * Cross-table state invariants. These are the properties the Phase 1-6
@@ -62,25 +62,24 @@ describe("engine state invariants", () => {
   })
 
   test("each goal has at most one live tip in its supersede chain", () => {
+    // Phase-6-d: goal_run rows are engine_artifact kind='goal_run_attempt';
+    // `listGoalRunsByGoal` collapses the append-only stream to the latest per
+    // logical goal_run. The invariant is unchanged.
     const liveStatuses = ["queued", "accepted", "planning", "running", "evaluating", "blocked"] as const
-    const rows = Database.use((db) =>
+    const distinctGoalIDs = Database.use((db) =>
       db
-        .select()
-        .from(EngineGoalRunTable)
-        .all(),
+        .selectDistinct({ goalID: sql<string>`json_extract(${EngineArtifactTable.payload}, '$.goal_id')` })
+        .from(EngineArtifactTable)
+        .where(eq(EngineArtifactTable.kind, "goal_run_attempt"))
+        .all()
+        .map((r) => r.goalID)
+        .filter((x): x is string => !!x),
     )
-    const byGoal = new Map<string, typeof rows>()
-    for (const r of rows) {
-      const list = byGoal.get(r.goal_id) ?? []
-      list.push(r)
-      byGoal.set(r.goal_id, list)
-    }
     const violations: Array<{ goalID: string; liveTips: string[] }> = []
-    for (const [goalID, goalRuns] of byGoal) {
+    for (const goalID of distinctGoalIDs) {
+      const goalRuns = listGoalRunsByGoal(goalID)
       const supersededIDs = new Set(
-        goalRuns
-          .map((r) => (r as { supersede_of?: string | null }).supersede_of)
-          .filter((x): x is string => !!x),
+        goalRuns.map((r) => r.supersede_of).filter((x): x is string => !!x),
       )
       const tips = goalRuns.filter((r) => !supersededIDs.has(r.id))
       const liveTips = tips.filter((r) => liveStatuses.includes(r.status as (typeof liveStatuses)[number]))
@@ -92,26 +91,69 @@ describe("engine state invariants", () => {
   })
 
   test("supersede_of references exist (no dangling links)", () => {
-    const rows = Database.use((db) =>
+    // Phase-6-d: walk distinct logical goal_run_ids; each goal_run's
+    // supersede_of must point at another logical goal_run that exists.
+    const logicalIDs = Database.use((db) =>
       db
-        .select({ id: EngineGoalRunTable.id, supersede_of: EngineGoalRunTable.supersede_of })
-        .from(EngineGoalRunTable)
-        .all(),
+        .selectDistinct({ id: EngineArtifactTable.goal_run_id })
+        .from(EngineArtifactTable)
+        .where(eq(EngineArtifactTable.kind, "goal_run_attempt"))
+        .all()
+        .map((r) => r.id)
+        .filter((x): x is string => !!x),
     )
-    const allIDs = new Set(rows.map((r) => r.id))
-    const dangling = rows
-      .filter((r) => r.supersede_of && !allIDs.has(r.supersede_of))
-      .map((r) => ({ runID: r.id, missingParent: r.supersede_of }))
+    const allIDs = new Set(logicalIDs)
+    const dangling: Array<{ runID: string; missingParent: string }> = []
+    for (const id of logicalIDs) {
+      const row = Database.use((db) =>
+        db
+          .select()
+          .from(EngineArtifactTable)
+          .where(
+            and(
+              eq(EngineArtifactTable.goal_run_id, id),
+              eq(EngineArtifactTable.kind, "goal_run_attempt"),
+            ),
+          )
+          .orderBy(sql`${EngineArtifactTable.time_created} DESC`)
+          .get(),
+      )
+      const payload = (row?.payload ?? {}) as { supersede_of?: string | null }
+      if (payload.supersede_of && !allIDs.has(payload.supersede_of)) {
+        dangling.push({ runID: id, missingParent: payload.supersede_of })
+      }
+    }
     expect(dangling).toEqual([])
   })
 
   test("supersede chain has no cycles", () => {
-    const rows = Database.use((db) =>
+    const logicalIDs = Database.use((db) =>
       db
-        .select({ id: EngineGoalRunTable.id, supersede_of: EngineGoalRunTable.supersede_of })
-        .from(EngineGoalRunTable)
-        .all(),
+        .selectDistinct({ id: EngineArtifactTable.goal_run_id })
+        .from(EngineArtifactTable)
+        .where(eq(EngineArtifactTable.kind, "goal_run_attempt"))
+        .all()
+        .map((r) => r.id)
+        .filter((x): x is string => !!x),
     )
+    const rows: Array<{ id: string; supersede_of: string | null }> = []
+    for (const id of logicalIDs) {
+      const row = Database.use((db) =>
+        db
+          .select()
+          .from(EngineArtifactTable)
+          .where(
+            and(
+              eq(EngineArtifactTable.goal_run_id, id),
+              eq(EngineArtifactTable.kind, "goal_run_attempt"),
+            ),
+          )
+          .orderBy(sql`${EngineArtifactTable.time_created} DESC`)
+          .get(),
+      )
+      const payload = (row?.payload ?? {}) as { supersede_of?: string | null }
+      rows.push({ id, supersede_of: payload.supersede_of ?? null })
+    }
     const parent = new Map<string, string>()
     for (const r of rows) {
       if (r.supersede_of) parent.set(r.id, r.supersede_of)

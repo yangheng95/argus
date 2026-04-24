@@ -7,6 +7,7 @@ import {
   findEvaluationsByTask,
   findDeliveryByGoalRun,
   findLatestEvaluationForGoalRun,
+  listGoalRunsByGoal,
   type DeliveryRow,
   type EvaluationRow,
 } from "@/engine/store"
@@ -16,7 +17,6 @@ import {
   EngineArtifactTable,
   EngineChannelBindingTable,
   EngineExecutorSessionTable,
-  EngineGoalRunTable,
   EngineGoalTable,
   EngineInteractionRequestTable,
   EnginePlanNodeTable,
@@ -33,7 +33,7 @@ import type { WorkflowState } from "@/engine"
 import { projectGoalSteps, type MiniWorkflowStep } from "@/engine/workflow"
 import { Instance } from "@/project/instance"
 import { ProtocolEventTable } from "@/protocol/protocol.sql"
-import { Database, desc, eq, sql } from "@/storage/db"
+import { Database, and, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 import { plannerReportFromMetadata } from "@/planner/output-tools"
@@ -368,11 +368,16 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
   const goalRuns = Database.use((db) =>
     db
       .select({
-        count: sql<number>`count(*)`,
-        updated: sql<number>`coalesce(max(${EngineGoalRunTable.time_updated}), 0)`,
+        count: sql<number>`count(distinct ${EngineArtifactTable.goal_run_id})`,
+        updated: sql<number>`coalesce(max(${EngineArtifactTable.time_updated}), 0)`,
       })
-      .from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.task_id, task.id))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, task.id),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
+        ),
+      )
       .get(),
   )
   const executorSessions = Database.use((db) =>
@@ -876,12 +881,7 @@ export function currentGoalRunFromRows<T extends { id: string; supersede_of?: st
 }
 
 function currentGoalRun(goalID: string) {
-  const rows = Database.use((db) =>
-    db.select().from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.goal_id, goalID))
-      .orderBy(desc(EngineGoalRunTable.time_created))
-      .all(),
-  )
+  const rows = listGoalRunsByGoal(goalID)
   return currentGoalRunFromRows(rows)
 }
 

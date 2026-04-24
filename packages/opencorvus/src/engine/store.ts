@@ -10,7 +10,6 @@ import {
   EngineArtifactTable,
   EngineExecutorSessionTable,
   EngineGoalTable,
-  EngineGoalRunTable,
   EngineGoalSnapshotTable,
   EngineInteractionRequestTable,
   EngineMilestoneTable,
@@ -30,6 +29,8 @@ import {
   type EngineEvaluationScope,
   type EngineEvaluationStatus,
   type EngineEvaluationVerdict,
+  type EngineGoalRunStatus,
+  type EngineMetadata,
 } from "./engine.sql"
 import { ACTIVE_GOAL_RUN_STATUSES, DISPATCHABLE_RUN_STATUSES, LIVE_EXECUTOR_SESSION_STATUSES, LIVE_GOAL_RUN_STATUSES, LIVE_RUN_STATUSES } from "./catalog"
 
@@ -78,7 +79,35 @@ export type ProgressRow = typeof EngineProgressSnapshotTable.$inferSelect
 export type ExecutorSessionRow = typeof EngineExecutorSessionTable.$inferSelect
 export type RequirementRow = typeof EngineRequirementTable.$inferSelect
 export type GoalSnapshotRow = typeof EngineGoalSnapshotTable.$inferSelect
-export type GoalRunRow = typeof EngineGoalRunTable.$inferSelect
+/** Phase-6-d artifact-backed goal_run shape. Was `typeof EngineGoalRunTable.$inferSelect`
+ *  until `engine_goal_run` was deleted in favour of `engine_artifact` rows with
+ *  kind="goal_run_attempt". Field names stay snake_case so old consumers do
+ *  not churn. Reconstructed via `artifactRowToGoalRunRow()` below. Append-only:
+ *  each status transition writes a new artifact row with the same logical
+ *  `goal_run_id`; the latest row per logical id is authoritative. */
+export type GoalRunRow = {
+  id: string
+  task_id: string
+  goal_id: string
+  plan_node_id: string | null
+  coordinator_run_id: string
+  session_id: string | null
+  status: EngineGoalRunStatus
+  retry_count: number
+  blocking_reason: string | null
+  error: string | null
+  workspace_dir: string | null
+  base_ref: string | null
+  merge_ref: string | null
+  supersede_of: string | null
+  superseded_reason: string | null
+  superseded_at: number | null
+  metadata: EngineMetadata | null
+  time_started: number | null
+  time_completed: number | null
+  time_created: number
+  time_updated: number
+}
 export type PlanNodeRow = typeof EnginePlanNodeTable.$inferSelect
 export type SpecSnapshotRow = typeof EngineSpecSnapshotTable.$inferSelect
 export type SpecItemRow = typeof EngineSpecItemTable.$inferSelect
@@ -376,26 +405,38 @@ export function findLatestEvaluationForGoalRun(goalRunID: string): EvaluationRow
   return row ? artifactRowToEvaluationRow(row) : undefined
 }
 
-export function listGoalRunsForTask(taskID: string) {
-  return Database.use((db) =>
+export function listGoalRunsForTask(taskID: string): GoalRunRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.task_id, taskID))
-      .orderBy(desc(EngineGoalRunTable.time_created))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.task_id, taskID),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
+  return latestPerGoalRun(rows).map(artifactRowToGoalRunRow)
 }
 
-export function listGoalRunsByGoal(goalID: string) {
-  return Database.use((db) =>
+export function listGoalRunsByGoal(goalID: string): GoalRunRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.goal_id, goalID))
-      .orderBy(desc(EngineGoalRunTable.time_created))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
+          sql`json_extract(${EngineArtifactTable.payload}, '$.goal_id') = ${goalID}`,
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
+  return latestPerGoalRun(rows).map(artifactRowToGoalRunRow)
 }
 
 /**
@@ -404,15 +445,12 @@ export function listGoalRunsByGoal(goalID: string) {
  * retry should pass this row's id as the `supersedeOf` to createGoalRun.
  * Returns undefined when no goal_run exists for the goal yet.
  */
-export function findLatestTipGoalRun(goalID: string) {
+export function findLatestTipGoalRun(goalID: string): GoalRunRow | undefined {
   const rows = listGoalRunsByGoal(goalID)
   if (rows.length === 0) return undefined
   const supersededIDs = new Set(
-    rows
-      .map((r) => (r as { supersede_of?: string | null }).supersede_of)
-      .filter((x): x is string => !!x),
+    rows.map((r) => r.supersede_of).filter((x): x is string => !!x),
   )
-  // Rows are ordered by time_created desc, so the first tip is the newest.
   return rows.find((r) => !supersededIDs.has(r.id))
 }
 
@@ -463,14 +501,24 @@ export function findGoal(goalID: string) {
   )
 }
 
-export function findGoalRun(goalRunID: string) {
-  return Database.use((db) =>
+export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
+  // Tie-break by id (ascending identifier) so ties on time_created resolve
+  // to the latest writer deterministically. Two appends in the same ms
+  // otherwise give undefined ordering.
+  const row = Database.use((db) =>
     db
       .select()
-      .from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.id, goalRunID))
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.goal_run_id, goalRunID),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created), desc(EngineArtifactTable.id))
       .get(),
   )
+  return row ? artifactRowToGoalRunRow(row) : undefined
 }
 
 /**
@@ -530,46 +578,60 @@ export function listGoalRunsForDispatch(taskID: string) {
   return listGoalRunsForTask(taskID)
 }
 
-export function listActiveGoalRunsForRun(coordinatorRunID: string) {
-  return Database.use((db) =>
+export function listActiveGoalRunsForRun(coordinatorRunID: string): GoalRunRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineGoalRunTable)
+      .from(EngineArtifactTable)
       .where(
         and(
-          eq(EngineGoalRunTable.coordinator_run_id, coordinatorRunID),
-          inArray(EngineGoalRunTable.status, ACTIVE_GOAL_RUN_STATUSES),
+          eq(EngineArtifactTable.run_id, coordinatorRunID),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
         ),
       )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
+  return latestPerGoalRun(rows)
+    .map(artifactRowToGoalRunRow)
+    .filter((r) => (ACTIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status))
 }
 
-export function listQueuedGoalRunsForRun(coordinatorRunID: string) {
-  return Database.use((db) =>
+export function listQueuedGoalRunsForRun(coordinatorRunID: string): GoalRunRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineGoalRunTable)
+      .from(EngineArtifactTable)
       .where(
         and(
-          eq(EngineGoalRunTable.coordinator_run_id, coordinatorRunID),
-          eq(EngineGoalRunTable.status, "queued"),
+          eq(EngineArtifactTable.run_id, coordinatorRunID),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
         ),
       )
-      .orderBy(EngineGoalRunTable.time_created)
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
+  return latestPerGoalRun(rows)
+    .map(artifactRowToGoalRunRow)
+    .filter((r) => r.status === "queued")
+    .reverse()
 }
 
-export function listGoalRunsForRun(coordinatorRunID: string) {
-  return Database.use((db) =>
+export function listGoalRunsForRun(coordinatorRunID: string): GoalRunRow[] {
+  const rows = Database.use((db) =>
     db
       .select()
-      .from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.coordinator_run_id, coordinatorRunID))
-      .orderBy(EngineGoalRunTable.time_created)
+      .from(EngineArtifactTable)
+      .where(
+        and(
+          eq(EngineArtifactTable.run_id, coordinatorRunID),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
+        ),
+      )
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all(),
   )
+  return latestPerGoalRun(rows).map(artifactRowToGoalRunRow).reverse()
 }
 
 /** @deprecated Use listGoalRunsForTask or listGoalRunsForDispatch. */
@@ -695,22 +757,25 @@ export function listLiveRunsForProject(projectID: string) {
   )
 }
 
-export function listLiveGoalRunsForProject(projectID: string) {
-  return Database.use((db) =>
+export function listLiveGoalRunsForProject(projectID: string): GoalRunRow[] {
+  const rows = Database.use((db) =>
     db
-      .select({ goalRun: EngineGoalRunTable })
-      .from(EngineGoalRunTable)
-      .innerJoin(EngineTaskTable, eq(EngineGoalRunTable.task_id, EngineTaskTable.id))
+      .select({ artifact: EngineArtifactTable })
+      .from(EngineArtifactTable)
+      .innerJoin(EngineTaskTable, eq(EngineArtifactTable.task_id, EngineTaskTable.id))
       .where(
         and(
           eq(EngineTaskTable.project_id, projectID),
-          inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
+          eq(EngineArtifactTable.kind, "goal_run_attempt"),
         ),
       )
-      .orderBy(desc(EngineGoalRunTable.time_created))
+      .orderBy(desc(EngineArtifactTable.time_created))
       .all()
-      .map((row) => row.goalRun),
+      .map((row) => row.artifact),
   )
+  return latestPerGoalRun(rows)
+    .map(artifactRowToGoalRunRow)
+    .filter((r) => (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status))
 }
 
 export function listGoalWorkspacesForProject(projectID: string) {
@@ -1289,6 +1354,70 @@ function arrayOfChecks(input: unknown): EngineEvaluationCheck[] {
     const parsed = EvaluationCheck.safeParse(item)
     return parsed.success ? [parsed.data] : []
   })
+}
+
+/** Phase-6-d helper: collapse the append-only goal_run artifact stream into
+ *  one row per logical goal_run_id (the newest, since input arrives
+ *  `time_created desc`). Preserves input order so "latest overall" = [0]. */
+function latestPerGoalRun(
+  rows: Array<typeof EngineArtifactTable.$inferSelect>,
+): Array<typeof EngineArtifactTable.$inferSelect> {
+  const seen = new Set<string>()
+  const result: Array<typeof EngineArtifactTable.$inferSelect> = []
+  for (const row of rows) {
+    const key = row.goal_run_id ?? row.id
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(row)
+  }
+  return result
+}
+
+/** Reconstruct a `GoalRunRow` from an `engine_artifact` row whose
+ *  `kind === "goal_run_attempt"`. The payload carries all goal_run-specific
+ *  state; only id/task_id/run_id/goal_run_id/timestamps come from columns. */
+function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): GoalRunRow {
+  const payload = (row.payload ?? {}) as {
+    goal_id?: string
+    plan_node_id?: string | null
+    session_id?: string | null
+    status?: EngineGoalRunStatus
+    retry_count?: number
+    blocking_reason?: string | null
+    error?: string | null
+    workspace_dir?: string | null
+    base_ref?: string | null
+    merge_ref?: string | null
+    supersede_of?: string | null
+    superseded_reason?: string | null
+    superseded_at?: number | null
+    metadata?: EngineMetadata | null
+    time_started?: number | null
+    time_completed?: number | null
+  }
+  return {
+    id: row.goal_run_id ?? row.id,
+    task_id: row.task_id,
+    goal_id: payload.goal_id ?? "",
+    plan_node_id: payload.plan_node_id ?? null,
+    coordinator_run_id: row.run_id,
+    session_id: payload.session_id ?? null,
+    status: payload.status ?? "queued",
+    retry_count: payload.retry_count ?? 0,
+    blocking_reason: payload.blocking_reason ?? null,
+    error: payload.error ?? null,
+    workspace_dir: payload.workspace_dir ?? null,
+    base_ref: payload.base_ref ?? null,
+    merge_ref: payload.merge_ref ?? null,
+    supersede_of: payload.supersede_of ?? null,
+    superseded_reason: payload.superseded_reason ?? null,
+    superseded_at: payload.superseded_at ?? null,
+    metadata: payload.metadata ?? null,
+    time_started: payload.time_started ?? null,
+    time_completed: payload.time_completed ?? null,
+    time_created: row.time_created,
+    time_updated: row.time_updated,
+  }
 }
 
 /** Reconstruct an `EvaluationRow` (historical `engine_evaluation` shape) from an

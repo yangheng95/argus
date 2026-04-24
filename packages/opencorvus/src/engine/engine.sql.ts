@@ -497,63 +497,14 @@ export const EngineRunTable = sqliteTable(
   ],
 )
 
-export const EngineGoalRunTable = sqliteTable(
-  "engine_goal_run",
-  {
-    id: text().primaryKey(),
-    task_id: text()
-      .notNull()
-      .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
-    goal_id: text()
-      .notNull()
-      .references(() => EngineGoalTable.id, { onDelete: "cascade" }),
-    plan_node_id: text(),
-    coordinator_run_id: text()
-      .notNull()
-      .references(() => EngineRunTable.id, { onDelete: "cascade" }),
-    session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    status: text().notNull().$type<EngineGoalRunStatus>().default("queued"),
-    retry_count: integer().notNull().default(0),
-    blocking_reason: text(),
-    error: text(),
-    workspace_dir: text(),
-    base_ref: text(),
-    merge_ref: text(),
-    /** When a retry creates a fresh goal_run for a goal whose prior run is
-     *  already in a terminal state (completed/failed/aborted), the new row
-     *  points at the old row via supersede_of. Readiness, dispatch gate,
-     *  and "satisfies goal" queries walk this chain and treat only the
-     *  tail (no successor) as authoritative — retries re-dispatch without
-     *  mutating history and without resurrecting terminal states. */
-    supersede_of: text(),
-    /** Why this row's tip was superseded (i.e. why a new attempt was opened).
-     *  Set on the OLD row by `Goal.startNewAttempt` / `supersedeGoalRun`
-     *  when the prior run is in a terminal state but the goal must re-dispatch.
-     *  `deriveGoalStatus` projects terminal tips with this column non-null
-     *  back to `pending` so the dispatch loop picks them up. NULL on rows
-     *  that were never superseded. */
-    superseded_reason: text(),
-    superseded_at: integer(),
-    metadata: text({ mode: "json" }).$type<EngineMetadata>(),
-    time_started: integer(),
-    time_completed: integer(),
-    /** Wall-clock timestamp of the most recent observed executor chunk /
-     *  event for this run. Independent of time_updated (which can be bumped
-     *  by metadata writes with no actual progress). The orphan scanner in
-     *  engine/goal-run-watchdog.ts compares this against
-     *  EngineConfig.activity.goal_run_idle_ms to detect silent hangs. */
-    last_progress_at: integer(),
-    ...Timestamps,
-  },
-  (table) => [
-    index("engine_goal_run_task_idx").on(table.task_id),
-    index("engine_goal_run_goal_idx").on(table.goal_id),
-    index("engine_goal_run_coordinator_idx").on(table.coordinator_run_id),
-    index("engine_goal_run_status_idx").on(table.status),
-    index("engine_goal_run_supersede_of_idx").on(table.supersede_of),
-    index("engine_goal_run_last_progress_idx").on(table.last_progress_at),
-  ],
-)
+// Phase-6-d: `engine_goal_run` was removed in favour of `engine_artifact`
+// rows with kind="goal_run_attempt". See engine/persist.ts (createGoalRun /
+// supersedeGoalRun / updateGoalRun → appendGoalRunArtifact) for the writer
+// and engine/store.ts (GoalRunRow + artifactRowToGoalRunRow +
+// latestPerGoalRun) for the read-model. Append-only — status transitions
+// (queued → accepted → running → completed/failed/aborted, plus
+// supersede marks) are new rows per logical goal_run_id; `findGoalRun` and
+// the 7 listGoalRunsFor* helpers take the newest via `time_created desc`.
 
 export const EngineInteractionRequestTable = sqliteTable(
   "engine_interaction_request",
@@ -599,7 +550,10 @@ export const EngineArtifactTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => EngineRunTable.id, { onDelete: "cascade" }),
-    goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
+    /** Phase-6-d: plain text pointer to the logical goal_run id (was FK to
+     *  engine_goal_run which is now deleted). See persist.ts / store.ts for
+     *  the artifact-backed goal_run semantics. */
+    goal_run_id: text(),
     /** Phase-6-c: delivery_id used to FK onto engine_delivery(id). With that
      *  table deleted, the column is a plain text pointer to the id of the
      *  latest delivery-kind artifact row for the logical delivery. Still set
@@ -650,7 +604,8 @@ export const EngineExecutorSessionTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => EngineRunTable.id, { onDelete: "cascade" }),
-    goal_run_id: text().references(() => EngineGoalRunTable.id, { onDelete: "set null" }),
+    /** Phase-6-d: plain text pointer to logical goal_run id (was FK). */
+    goal_run_id: text(),
     provider: text().notNull().$type<EngineExecutor>(),
     protocol: text().notNull(),
     protocol_version: text().notNull(),

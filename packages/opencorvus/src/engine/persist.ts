@@ -24,7 +24,6 @@ import {
   EngineArtifactTable,
   EngineExecutorSessionTable,
   EngineGoalTable,
-  EngineGoalRunTable,
   EngineRequirementTable,
   EngineRunTable,
   EngineTaskTable,
@@ -34,10 +33,9 @@ import {
 import { persistEvidence } from "@/verification/persist"
 import { LIVE_GOAL_RUN_STATUSES } from "./catalog"
 import { EngineProtocol } from "./protocol"
-import { findGoal, findGoalRun, findLatestTipGoalRun, findPlan, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
+import { findGoal, findGoalRun, findLatestTipGoalRun, findPlan, listGoalRunsByGoal, listGoals, listGoalsForPlan, type GoalRow, type RunRow, type TaskRow } from "./store"
 import { syncGoalStatus } from "./goal-status"
 import { createDecisionLog } from "@/decision-log"
-import { StaleRowError } from "./state"
 
 const log = Log.create({ service: "engine-transition" })
 
@@ -320,83 +318,73 @@ export function createGoalRun(input: {
   supersedeOf?: string
   now?: number
 }) {
-  // Live-run dedup: only collapse against a running goal_run that is itself
-  // a tip of the supersede chain. A live row that was already superseded is
-  // a leaked in-flight retry and must not block the new dispatch.
-  const liveCandidates = Database.use((db) =>
-    db
-      .select()
-      .from(EngineGoalRunTable)
-      .where(and(
-        eq(EngineGoalRunTable.coordinator_run_id, input.coordinatorRunID),
-        eq(EngineGoalRunTable.goal_id, input.goalID),
-        input.planNodeID
-          ? eq(EngineGoalRunTable.plan_node_id, input.planNodeID)
-          : isNull(EngineGoalRunTable.plan_node_id),
-        inArray(EngineGoalRunTable.status, LIVE_GOAL_RUN_STATUSES),
-      ))
-      .orderBy(desc(EngineGoalRunTable.time_created))
-      .all(),
+  // Phase-6-d: goal_run is an append-only `engine_artifact` row stream with
+  // kind="goal_run_attempt". First insert uses the same id for both the
+  // artifact row id and the logical goal_run_id so downstream pointers
+  // (evidence.goal_run_id, metric.goal_run_id, protocol_event.goal_run_id)
+  // resolve. Updates append new rows sharing the same logical goal_run_id.
+  //
+  // Live-run dedup: re-use an existing LIVE tip for the same (coordinator,
+  // goal, plan_node) triple. A row that was already superseded is a leaked
+  // in-flight retry and must not block the new dispatch.
+  const liveTips = listGoalRunsByGoal(input.goalID).filter((r) =>
+    r.coordinator_run_id === input.coordinatorRunID &&
+    (input.planNodeID ? r.plan_node_id === input.planNodeID : r.plan_node_id === null) &&
+    (LIVE_GOAL_RUN_STATUSES as readonly string[]).includes(r.status),
   )
-  if (liveCandidates.length > 0) {
+  if (liveTips.length > 0) {
     const supersededIDs = new Set(
-      Database.use((db) =>
-        db
-          .select({ parent: EngineGoalRunTable.supersede_of })
-          .from(EngineGoalRunTable)
-          .where(and(
-            eq(EngineGoalRunTable.goal_id, input.goalID),
-            // any row whose supersede_of is set counts
-          ))
-          .all()
-          .map((r) => r.parent)
-          .filter((p): p is string => !!p),
-      ),
+      listGoalRunsByGoal(input.goalID)
+        .map((r) => r.supersede_of)
+        .filter((x): x is string => !!x),
     )
-    const tip = liveCandidates.find((r) => !supersededIDs.has(r.id))
+    const tip = liveTips.find((r) => !supersededIDs.has(r.id))
     if (tip) return tip
   }
   const id = Identifier.ascending("goal_run")
   const now = input.now ?? Date.now()
+  const payload = {
+    goal_id: input.goalID,
+    plan_node_id: input.planNodeID ?? null,
+    session_id: input.sessionID ?? null,
+    status: "queued" as const,
+    retry_count: input.retryCount ?? 0,
+    blocking_reason: input.blockingReason ?? null,
+    error: input.error ?? null,
+    workspace_dir: input.workspaceDir ?? null,
+    base_ref: input.baseRef ?? null,
+    merge_ref: input.mergeRef ?? null,
+    supersede_of: input.supersedeOf ?? null,
+    superseded_reason: null,
+    superseded_at: null,
+    metadata:
+      input.metadata || input.sessionID
+        ? {
+            ...(input.metadata ?? {}),
+            ...(input.sessionID ? { local_session_id: input.sessionID } : {}),
+          }
+        : null,
+    time_started: null,
+    time_completed: null,
+  }
   Database.use((db) =>
     db
-      .insert(EngineGoalRunTable)
+      .insert(EngineArtifactTable)
       .values({
         id,
         task_id: input.taskID,
-        goal_id: input.goalID,
-        plan_node_id: input.planNodeID,
-        coordinator_run_id: input.coordinatorRunID,
-        session_id: input.sessionID,
-        status: "queued",
-        retry_count: input.retryCount ?? 0,
-        blocking_reason: input.blockingReason ?? null,
-        error: input.error ?? null,
-        workspace_dir: input.workspaceDir,
-        base_ref: input.baseRef,
-        merge_ref: input.mergeRef,
-        supersede_of: input.supersedeOf,
-        metadata:
-          input.metadata || input.sessionID
-            ? {
-                ...(input.metadata ?? {}),
-                ...(input.sessionID ? { local_session_id: input.sessionID } : {}),
-              }
-            : undefined,
+        run_id: input.coordinatorRunID,
+        goal_run_id: id,
+        kind: "goal_run_attempt",
+        label: "attempt-queued",
+        payload,
         time_created: now,
         time_updated: now,
       })
       .run(),
   )
-  const row = Database.use((db) =>
-    db
-      .select()
-      .from(EngineGoalRunTable)
-      .where(eq(EngineGoalRunTable.id, id))
-      .get(),
-  )
+  const row = findGoalRun(id)
   if (!row) throw new Error(`createGoalRun: inserted goal run ${id} not found after insert`)
-  // engine_goal.status is derived — refresh it now that a new tip exists.
   syncGoalStatus(input.goalID, "createGoalRun")
   return row
 }
@@ -535,19 +523,72 @@ function supersedeGoalRun(input: {
   if (!existing) {
     throw new Error(`supersedeGoalRun: goal_run ${input.oldGoalRunID} not found`)
   }
-  Database.use((db) =>
-    db
-      .update(EngineGoalRunTable)
-      .set({
-        superseded_reason: input.reason,
-        superseded_at: now,
-        time_updated: now,
-      })
-      .where(eq(EngineGoalRunTable.id, input.oldGoalRunID))
-      .run(),
-  )
+  appendGoalRunArtifact({
+    goalRunID: input.oldGoalRunID,
+    existing,
+    patch: {
+      superseded_reason: input.reason,
+      superseded_at: now,
+    },
+    label: `attempt-${existing.status}`,
+    now,
+  })
   syncGoalStatus(existing.goal_id, `supersedeGoalRun:${input.reason}`)
   return existing
+}
+
+/** Phase-6-d shared writer: append a new `goal_run_attempt` artifact row
+ *  carrying the merged state. The logical goal_run_id stays stable; queries
+ *  collapse the stream to the newest row per id via `latestPerGoalRun`. */
+function appendGoalRunArtifact(input: {
+  goalRunID: string
+  existing: import("./store").GoalRunRow
+  patch: Partial<import("./store").GoalRunRow>
+  label: string
+  now: number
+}) {
+  const merged = { ...input.existing, ...input.patch }
+  const payload = {
+    goal_id: merged.goal_id,
+    plan_node_id: merged.plan_node_id,
+    session_id: merged.session_id,
+    status: merged.status,
+    retry_count: merged.retry_count,
+    blocking_reason: merged.blocking_reason,
+    error: merged.error,
+    workspace_dir: merged.workspace_dir,
+    base_ref: merged.base_ref,
+    merge_ref: merged.merge_ref,
+    supersede_of: merged.supersede_of,
+    superseded_reason: merged.superseded_reason,
+    superseded_at: merged.superseded_at,
+    metadata: merged.metadata,
+    time_started: merged.time_started,
+    time_completed: merged.time_completed,
+  }
+  // Guarantee strict wall-clock monotonicity across appends to the same
+  // logical goal_run. Without this, two appends that land in the same
+  // millisecond (e.g. double-supersede in tight sequence) would have
+  // identical time_created and no deterministic ordering; latest-wins
+  // selection then flips under load. Bumping to max(existing + 1, now)
+  // keeps each append strictly newer regardless of wall-clock resolution.
+  const effectiveNow = Math.max(input.existing.time_updated + 1, input.now)
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("goal_run"),
+        task_id: merged.task_id,
+        run_id: merged.coordinator_run_id,
+        goal_run_id: input.goalRunID,
+        kind: "goal_run_attempt",
+        label: input.label,
+        payload,
+        time_created: effectiveNow,
+        time_updated: effectiveNow,
+      })
+      .run(),
+  )
 }
 
 /**
@@ -645,7 +686,7 @@ export function startNewAttempt(input: {
 
 export function updateGoalRun(
   goalRunID: string,
-  values: Partial<typeof EngineGoalRunTable.$inferInsert>,
+  values: Partial<import("./store").GoalRunRow>,
 ) {
   const row = findGoalRun(goalRunID)
   if (!row) return undefined
@@ -655,7 +696,7 @@ export function updateGoalRun(
   // informational, not blocking.
   const now = Date.now()
   const statusChanged = nextStatus !== row.status
-  const normalizedValues = {
+  const patch: Partial<import("./store").GoalRunRow> = {
     ...values,
     ...(nextStatus !== "blocked" && values.blocking_reason === undefined ? { blocking_reason: null } : {}),
     ...(!row.time_started && ["accepted", "planning", "running", "evaluating", "blocked", "completed"].includes(nextStatus) && values.time_started === undefined
@@ -665,26 +706,14 @@ export function updateGoalRun(
       ? { time_completed: now }
       : {}),
   }
-  let updated: typeof EngineGoalRunTable.$inferSelect | undefined
-  Database.transaction((db) => {
-    const whereClause = statusChanged
-      ? and(
-          eq(EngineGoalRunTable.id, goalRunID),
-          eq(EngineGoalRunTable.status, row.status),
-        )
-      : eq(EngineGoalRunTable.id, goalRunID)
-    updated = db
-      .update(EngineGoalRunTable)
-      .set({
-        ...normalizedValues,
-        time_updated: now,
-      })
-      .where(whereClause)
-      .returning()
-      .get()
-    if (!updated) {
-      throw new StaleRowError("goal_run", goalRunID, row.status, nextStatus)
-    }
+  Database.transaction(() => {
+    appendGoalRunArtifact({
+      goalRunID,
+      existing: row,
+      patch,
+      label: `attempt-${nextStatus}`,
+      now,
+    })
   })
   if (statusChanged) {
     syncGoalStatus(row.goal_id, `updateGoalRun ${row.status}→${nextStatus}`)
@@ -705,7 +734,7 @@ export function updateGoalRun(
       ),
     )
   }
-  return updated ?? findGoalRun(goalRunID)
+  return findGoalRun(goalRunID)
 }
 
 type EvaluationStatus = "passed" | "failed" | "pending"
