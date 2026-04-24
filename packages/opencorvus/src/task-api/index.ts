@@ -60,6 +60,7 @@ import {
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import { dispatchTaskLoop } from "@/engine/queue"
+import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
 import { AutoPermission } from "@/engine/auto-permission"
@@ -147,10 +148,9 @@ async function continueTaskMessage(
   // message behind a sleeping wait path.
   void dispatchTaskLoop({
     taskID,
-    trigger: {
-      kind: "operator_message",
-      message: text,
-      attachmentSummary,
+    event: {
+      note: OrchestratorEventNote.operatorMessage({ text, attachmentSummary }),
+      operatorMessage: { text, attachmentSummary },
     },
     interrupt: true,
   })
@@ -506,7 +506,7 @@ export namespace EngineService {
       source: input.source ?? "api",
       userID: slackUser(metadata),
     })
-    void dispatchTaskLoop({ taskID, trigger: { kind: "created" } })
+    void dispatchTaskLoop({ taskID })
     return taskID
   }
 
@@ -1087,7 +1087,7 @@ export namespace EngineService {
     }
     // Reset to queued and hand scheduling back to the single queue/coordinator entry.
     await updateTask(task, { status: "queued", error: null, blocking_reason: null }, "Retry requested by operator")
-    void dispatchTaskLoop({ taskID, trigger: { kind: "retry" } })
+    void dispatchTaskLoop({ taskID, event: { note: OrchestratorEventNote.retry(task) } })
     return viewTask(requireTask(taskID))
   }
 
@@ -1122,7 +1122,7 @@ export namespace EngineService {
       return { resumed: false, status: run.status }
     }
     const nextRunID = await EngineRuntime.createOperatorRun(task, run, note)
-    void dispatchTaskLoop({ taskID: task.id, trigger: { kind: "retry" } })
+    void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: "active" as const }
   }
 

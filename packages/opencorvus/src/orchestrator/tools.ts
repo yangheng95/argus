@@ -2883,8 +2883,9 @@ export function createOrchestratorTools(input: {
           // engine_iteration + the verdict artifact persisted above are the
           // canonical source of truth for the rejection details — the
           // orchestrator reads them via query_metric_trajectory and the
-          // loop reads the verdict artifact directly to populate the
-          // delivery_rejected trigger.feedback. No task.metadata signal.
+          // task loop watermarks the verdict artifact to synthesize a
+          // rejection wake note for the next orchestrator decision.
+          // No task.metadata signal.
           const { startNewAttempt } = await import("@/engine/persist")
           // Attribution is the delivery agent's job. `verdict.affected_goal_ids`
           // is a contract-required non-empty array on rejection (enforced in

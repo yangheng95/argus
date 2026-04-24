@@ -235,24 +235,22 @@ Claude Code 的答案：重启 = 新会话。opencorvus 采用相同语义：
   - 若 `abortRuns` 尚未删光，文档与代码必须明确其仅剩“active_run_id gate 未拆完时的临时物理刹车”职责
   - orchestrator prompt 里引用的每个工具名都能在 tool registry 中解析到
 
-### 阶段 2（Orchestrator trigger 枚举 + loop 重入模型拆除）
+### 阶段 2（Orchestrator trigger 枚举 + loop 重入模型拆除）— ✅ 2026-04-24
 
-- 删 `OrchestratorTrigger` 的 `batch_complete / delivery_rejected / operator_message / retry` 分支
-- Orchestrator 重写成单一长跑 SessionLoop：外部想触发 = 往 orchestrator session append 一条 message（无论是 user、tool_result 还是系统消息）
-- "batch_complete" 本来就是 build tool 的返回值，orchestrator 继续读即可
-- "delivery_rejected" 本来就是 deliver tool 的返回值
-- "operator_message" 本来就是 session 里新的 user message
-- `runTaskLoop` 从“合成 trigger + 等 batch drain”的事件机改成“按需唤醒 + 单次 SessionLoop 线性化包装器”
-- `engine/queue.ts` 不再根据 `active_run_id` 派生 `created / retry / batch_complete`
-- 这一步完成后，**只有 orchestrator** 能被外部 append / 唤醒；其余 agent 不得保留独立 loop owner、独立 trigger 入口或 task-api 直达入口
-- **长跑 session 生命周期明确定义**（避免再生一个伪状态机）：
-  - 进程启动不主动唤醒 orchestrator session；**有新 append message 时按需唤醒**一次 SessionLoop 迭代
-  - 单次迭代跑到「无未决 tool_call 且 LLM 未请求继续」即返回，释放 LLM provider 连接
-  - idle 时不持有任何 provider / 内存句柄；所有"恢复"语义全靠"读 session 重进入"
-  - 进程中途 kill = 未决 tool_call 的 `tool_result` 不写入 → 下次唤醒时 LLM 从 session 尾部自决
-- **交付**：
-  - `rg "OrchestratorTrigger|batch_complete|delivery_rejected" packages/opencorvus/src/orchestrator` = 0
-  - queue / loop 层不再合成“下一轮 trigger 该是什么”这种伪事件
+- [x] 删 `OrchestratorTrigger` 的 `batch_complete / delivery_rejected / operator_message / retry` 分支；替换为 `OrchestratorEvent = { note?, operatorMessage? }`
+- [x] `Orchestrator.processTask(taskID, event?)` 不再接受 trigger；首次唤醒（`!task.workflow_state`）用 `task.request`，后续唤醒使用 `event.note` 或通用“re-read context and decide”提示
+- [x] `describeTrigger` 函数整体删除，改为导出 `OrchestratorEventNote.{batchComplete, deliveryRejected, operatorMessage, retry}` 纯字符串合成器（供 loop / task-api 同源调用）
+- [x] `buildSystemParts` 不再读 trigger：最近一次 delivery 反馈直接读 `findLatestDeliveryVerdictArtifact`；当前 run 的 delivery / evaluation 直接读 `task.active_run_id`
+- [x] `runTaskLoop` 重写：`trigger: TaskLoopTrigger` → `event?: OrchestratorEvent`；内部不再用 `trigger.kind === "batch_complete"` 作为等待判据，改为 state-only（`listActiveGoalRunsForRun`）；delivery-rejected 水印 / pool drain / pending redispatch 均只合成 `event = { note }` 注入下轮唤醒
+- [x] `engine/queue.ts` 删除 `deriveQueuedTrigger` / `deriveResumeTrigger`；`dispatchTaskLoop({ taskID, event? })` 仅透传调用者提供的 event
+- [x] task-api 的 `createTask / retryTask / recordOperatorNote / ... message` 改用 `event: { note: OrchestratorEventNote.X(...) }` 或 `event: undefined`
+- [x] 长跑 session 生命周期约束写入 `loop.ts` 顶部注释：唤醒→single decision→释放；idle 不持 provider；崩溃就是 session 尾部；orchestrator 外没有任何入口可以外部唤醒
+- [x] **交付校验**：`rg "OrchestratorTrigger|batch_complete|delivery_rejected" packages/opencorvus/src/orchestrator` = 0；`rg "TaskLoopTrigger" packages/opencorvus/src` = 0；queue.test.ts 断言“advanceQueue 不再合成 event”
+- [x] 全量 engine 测试（85 pass / 0 fail）确认无退化
+
+**阶段 2 遗留项（不阻塞交付，phase 5 自然退化）**：
+- orchestrator 子 session 仍按每次唤醒 `Session.createNext`（并非真正的“长跑 session 追加”）；待 phase 5 build-as-tool 后可转换为持久 session
+- `ORCHESTRATOR_INSTRUCTIONS` 中仍有少量 “batch” / “rejection” 描述性语言（不再是 trigger 枚举名），作为行为说明保留
 
 ### 阶段 3（AgentRuntime 合并到 SessionLoop）
 

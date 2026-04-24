@@ -18,40 +18,16 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
-import type { TaskLoopTrigger } from "@/orchestrator/loop"
+import type { OrchestratorEvent } from "@/orchestrator/agent"
 
 const log = Log.create({ service: "engine.queue" })
 
 // Process-local dedup — prevents two loops running for the same taskID
 // in the same process. The real queue lock is in the DB (claimNextForCwd).
 const loopInFlight = new Set<string>()
-const queuedTaskTriggers = new Map<string, TaskLoopTrigger>()
+const queuedTaskEvents = new Map<string, OrchestratorEvent>()
 
-function zeroSummary() {
-  return { passed: 0, failed: 0, total: 0 }
-}
-
-function deriveQueuedTrigger(task: TaskRow): TaskLoopTrigger {
-  if (task.active_run_id) {
-    return { kind: "retry" }
-  }
-
-  return { kind: "created" }
-}
-
-function deriveResumeTrigger(task: TaskRow): TaskLoopTrigger {
-  if (!task.active_run_id) {
-    return { kind: "created" }
-  }
-
-  return {
-    kind: "batch_complete",
-    runID: task.active_run_id ?? "",
-    summary: zeroSummary(),
-  }
-}
-
-async function launchTaskLoop(taskID: string, trigger: TaskLoopTrigger, interrupt = false): Promise<void> {
+async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefined, interrupt = false): Promise<void> {
   const [{ runTaskLoop, interruptTaskLoop }, { hooks }] = await Promise.all([
     import("@/orchestrator/loop"),
     import("@/engine/state"),
@@ -65,7 +41,7 @@ async function launchTaskLoop(taskID: string, trigger: TaskLoopTrigger, interrup
   // attached by the caller fired before the loop had done anything, so the
   // queue-advance hook never fired on real task termination and sibling
   // queued tasks in the same cwd stayed stuck forever.
-  return runTaskLoop({ taskID, trigger, hooks: hooks() })
+  return runTaskLoop({ taskID, event, hooks: hooks() })
     .catch((err) => {
       log.error("task loop failed", { taskID, error: err instanceof Error ? err.message : String(err) })
     })
@@ -252,36 +228,36 @@ export async function advanceQueue(cwd: string): Promise<void> {
   if (!cwd) return
   const claimed = claimNextForCwd(cwd)
   if (!claimed) return
-  const trigger = queuedTaskTriggers.get(claimed.id) ?? deriveQueuedTrigger(claimed)
-  queuedTaskTriggers.delete(claimed.id)
-  await startLoopForTask(claimed, trigger, cwd)
+  const event = queuedTaskEvents.get(claimed.id)
+  queuedTaskEvents.delete(claimed.id)
+  await startLoopForTask(claimed, event, cwd)
 }
 
 export async function dispatchTaskLoop(input: {
   taskID: string
-  trigger: TaskLoopTrigger
+  event?: OrchestratorEvent
   interrupt?: boolean
 }): Promise<void> {
   const task = findTask(input.taskID)
   if (!task) return
   const cwd = taskCwd(task.id)
   if (!cwd) {
-    log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, trigger: input.trigger.kind })
+    log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
     return
   }
 
   if (task.status === "queued") {
-    queuedTaskTriggers.set(task.id, input.trigger)
+    if (input.event) queuedTaskEvents.set(task.id, input.event)
     await advanceQueue(cwd)
     return
   }
 
-  // Task is already active — inject a new trigger into the existing loop
-  // chain (loop.ts serialises multi-trigger entries per taskID). The new
+  // Task is already active — inject a new wake event into the existing loop
+  // chain (loop.ts serialises multi-entry calls per taskID). The new
   // invocation might be the one that drives the task to terminal, so its
   // completion must also advance the cwd queue. Fire-and-forget: callers
   // don't want to block on task completion.
-  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.trigger, input.interrupt === true))
+  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, input.event, input.interrupt === true))
 }
 
 /**
@@ -301,7 +277,10 @@ export async function resumeActiveTaskLoop(taskID: string): Promise<void> {
     log.warn("resumeActiveTaskLoop: task has no cwd", { taskID })
     return
   }
-  await startLoopForTask(task, deriveResumeTrigger(task), cwd)
+  // No synthesised event here — the loop re-enters and reads the describe
+  // snapshot to decide what to do. Phase 2's goal is to stop synthesising
+  // "created" / "batch_complete" labels from state columns.
+  await startLoopForTask(task, undefined, cwd)
 }
 
 /**
@@ -314,14 +293,14 @@ export async function resumeActiveTaskLoop(taskID: string): Promise<void> {
  */
 async function startLoopForTask(
   task: TaskRow,
-  trigger: TaskLoopTrigger,
+  event: OrchestratorEvent | undefined,
   cwd: string,
 ): Promise<void> {
   if (loopInFlight.has(task.id)) {
     log.info("loop already in flight, skipping", { taskID: task.id })
     return
   }
-  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, trigger))
+  attachLoopCompletion(task.id, cwd, launchTaskLoop(task.id, event))
 }
 
 /** Check if a task loop is currently running in this process. */

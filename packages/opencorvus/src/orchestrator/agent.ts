@@ -1,17 +1,16 @@
 /**
  * Orchestrator — master agent in the Agent Team architecture.
  *
- * Calls LLM through ProviderLLM.stream() — the unified provider adaptation layer.
+ * Per spec/new-arch/16-unified-teardown.md §3, the orchestrator has no typed
+ * trigger enum — it is woken by *events* (task creation, goal batch finish,
+ * delivery verdict, operator message) carried as a free-form note. On every
+ * wake it reads its full state from the describe layer + the artifact stream
+ * and decides what to do next. Callers may pass an optional `event.note`
+ * string to hint WHY they just woke the orchestrator; that note is rendered
+ * into the user message of this invocation's child session, but every
+ * decision derives from the describe snapshot, not from the note's content.
  *
- * Triggered by:
- * - Task creation (kind: "created") — new task, agent plans and submits execution
- * - Batch complete (kind: "batch_complete") — goal batch finished (any mix of pass/fail),
- *   agent reads fresh context and decides next action
- * - Operator message (kind: "operator_message") — user sent a new message and the
- *   scheduler must decide whether to inject guidance, cancel, retry, or change strategy
- * - User retry request (kind: "retry")
- *
- * The Orchestrator controls the entire pipeline via tools:
+ * The orchestrator controls the entire pipeline via tools:
  * requirements → goals → plan → execute → eval → delivery verify → publish
  * All other agents (requirements, architect, plan, eval, delivery) are subordinate workers.
  */
@@ -48,15 +47,28 @@ const log = Log.create({ service: "orchestrator" })
 const MAX_STEPS = 20
 
 // ---------------------------------------------------------------------------
-// Trigger types
+// Wake event — free-form hint about WHY the orchestrator is being woken.
+// Replaces the old typed trigger enum per specs/new-arch/16-unified-teardown.md
+// §3. Callers that previously sent trigger.kind="X" now synthesize the relevant
+// context string into `note`. Operator text + attachment summary are the only
+// structured fields because the tools layer still consumes them via
+// `createOrchestratorTools({ operatorMessage })`.
 // ---------------------------------------------------------------------------
 
-export type OrchestratorTrigger =
-  | { kind: "created" }
-  | { kind: "batch_complete"; runID: string; summary: { passed: number; failed: number; total: number }; depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }> }
-  | { kind: "delivery_rejected"; runID: string; feedback: Record<string, unknown> }
-  | { kind: "operator_message"; message: string; attachmentSummary?: string }
-  | { kind: "retry" }
+export interface OrchestratorEvent {
+  /** Free-form "reason for wake" string rendered as the user message of
+   *  this wake's child session. If absent, the task's original request is
+   *  used when the orchestrator has no prior invocation for this task;
+   *  otherwise a generic "re-read context and decide" prompt is used. */
+  note?: string
+  /** Present only when the wake is caused by an operator-typed message.
+   *  Passed to `createOrchestratorTools` so the `inject_operator_message`
+   *  tool can surface the text/attachments into the running executor. */
+  operatorMessage?: {
+    text: string
+    attachmentSummary?: string
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Concurrency guard
@@ -85,7 +97,7 @@ export namespace Orchestrator {
     return running.has(taskID)
   }
 
-  export async function processTask(taskID: string, trigger: OrchestratorTrigger): Promise<void> {
+  export async function processTask(taskID: string, event?: OrchestratorEvent): Promise<void> {
     abort(taskID)
     const ctrl = new AbortController()
     running.set(taskID, ctrl)
@@ -99,12 +111,15 @@ export namespace Orchestrator {
         return
       }
 
-      // 0. Initialize workflow state on new task creation
+      // 0. Initialize workflow state on first wake (no persisted workflow_state yet).
+      //    Subsequent wakes reload the persisted state. Per the unified-teardown
+      //    plan, "first wake" is detected from task state, not from a trigger
+      //    label: any task that has not yet committed a workflow_state row is
+      //    treated as new.
       let workflow: MiniWorkflow | undefined
       let workflowState: WorkflowState | undefined
-      if (trigger.kind === "created") {
-        const requestedID = task.workflow_state?.workflowID
-        const workflowID = requestedID ?? await WorkflowRegistry.defaultID()
+      if (!task.workflow_state) {
+        const workflowID = await WorkflowRegistry.defaultID()
         workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
         if (workflow) {
           workflowState = createWorkflowState(workflow)
@@ -117,13 +132,11 @@ export namespace Orchestrator {
           })
         }
       } else {
-        // Load existing workflow state for re-triggers
-        const existingState = task.workflow_state ?? undefined
-        if (existingState) {
-          workflow = await WorkflowRegistry.resolve(existingState.workflowID) ?? WorkflowRegistry.resolveSync(existingState.workflowID)
-          workflowState = existingState
-        }
+        const existingState = task.workflow_state
+        workflow = await WorkflowRegistry.resolve(existingState.workflowID) ?? WorkflowRegistry.resolveSync(existingState.workflowID)
+        workflowState = existingState
       }
+      const isFirstWake = !task.workflow_state
 
       // 1. Resolve model — respects agent.task.model in user config; otherwise
       //    inherits the user's most recent in-session model pick from the
@@ -159,13 +172,7 @@ export namespace Orchestrator {
         signal: ctrl.signal,
         workflow,
         workflowState,
-        operatorMessage:
-          trigger.kind === "operator_message"
-            ? {
-                text: trigger.message,
-                attachmentSummary: trigger.attachmentSummary,
-              }
-            : undefined,
+        operatorMessage: event?.operatorMessage,
       })
       stopSignal = dispatchSignal
       const guard = toolGuard(tools)
@@ -176,25 +183,27 @@ export namespace Orchestrator {
           if (stopReason) {
             log.info("orchestrator deferred stop finalized", {
               taskID,
-              trigger: trigger.kind,
               reason: stopReason,
             })
           }
         }
       }
 
-      // 4. Build prompt — use the user's original request as the user message
-      // for "created" triggers (it IS the user's intent). For re-triggers
-      // (batch_complete, retry) use a short event description.
-      const system = await buildSystemParts(task, trigger, workflow, workflowState)
-      const userText = trigger.kind === "created"
+      // 4. Build prompt. First wake uses the task's original request as the
+      //    user message (the user's actual intent). Subsequent wakes use the
+      //    event.note if provided, otherwise a generic re-read instruction.
+      //    No trigger-kind switch — every decision branch downstream reads
+      //    the describe snapshot, not this string.
+      const system = await buildSystemParts(task, event, workflow, workflowState)
+      const userText = isFirstWake
         ? task.request
-        : describeTrigger(task, trigger)
-      // Build multimodal content when task has file attachments (only for initial trigger).
-      // AttachmentStore.partition routes image/audio/video/pdf to inline file
-      // parts and text/* / json to a URL-only reference list; see helper
-      // comments for the silent-rejection rationale.
-      const attachments = trigger.kind === "created" && Array.isArray(task.attachments)
+        : (event?.note ?? "Task state has advanced. Re-read the context snapshot and decide the next action.")
+      // Build multimodal content when task has file attachments (only for the
+      // first wake, because that is when the user's original attachments are
+      // introduced). AttachmentStore.partition routes image/audio/video/pdf
+      // to inline file parts and text/* / json to a URL-only reference list;
+      // see helper comments for the silent-rejection rationale.
+      const attachments = isFirstWake && Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
       const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
@@ -220,7 +229,8 @@ export namespace Orchestrator {
 
       log.info("orchestrator starting", {
         taskID,
-        trigger: trigger.kind,
+        firstWake: isFirstWake,
+        note: event?.note,
         sessionID: agentSession.id,
         model: `${model.providerID}/${model.id}`,
         toolCount: Object.keys(tools).length,
@@ -253,7 +263,7 @@ export namespace Orchestrator {
       const toolCallCount = runResult.toolCallCount
       log.info("orchestrator finished", {
         taskID,
-        trigger: trigger.kind,
+        note: event?.note,
         steps: resultSteps.length,
         toolCalls: toolCallCount,
         finishReason: resultFinishReason,
@@ -313,11 +323,11 @@ export namespace Orchestrator {
       // stopSignal abort is a normal termination (submit_execution/dispatch/dispatch_goal
       // dispatched work). NOT an error — the agent will be re-triggered on completion.
       if (stopSignal?.aborted) {
-        log.info("orchestrator stopped after dispatch", { taskID, trigger: trigger.kind })
+        log.info("orchestrator stopped after dispatch", { taskID, note: event?.note })
         return
       }
       const msg = error instanceof Error ? error.message : String(error)
-      log.error("orchestrator failed", { taskID, trigger: trigger.kind, error: msg })
+      log.error("orchestrator failed", { taskID, note: event?.note, error: msg })
       // Surface the error on the task so UI/orphan-recovery can see it.
       // Don't change task status — let orphan recovery decide the next step.
       try {
@@ -333,113 +343,106 @@ export namespace Orchestrator {
 }
 
 // ---------------------------------------------------------------------------
-// Trigger description
+// Standard event notes — free-form hints passed through OrchestratorEvent.note.
+// Exported so every caller synthesizes the same wording; changing a note's text
+// is a one-point edit. None of these strings gate control flow — the describe
+// snapshot is the source of truth the orchestrator reads for every decision.
 // ---------------------------------------------------------------------------
 
-function describeTrigger(task: TaskRow, trigger: OrchestratorTrigger): string {
-  switch (trigger.kind) {
-    case "created":
-      return "New task created. Process it."
-
-    case "batch_complete": {
-      const lines = [
-        `Goal batch complete on run ${trigger.runID}.`,
-        `Summary: ${trigger.summary.passed} passed, ${trigger.summary.failed} failed, ${trigger.summary.total} total.`,
-      ]
-
-      if (trigger.depBlocked && trigger.depBlocked.length > 0) {
-        lines.push(
-          "",
-          "⚠ BLOCKED GOALS — the following pending goals CANNOT execute because their dependencies failed:",
-        )
-        for (const b of trigger.depBlocked) {
-          const deps = b.blockedBy.map(d => `${d.title} [${d.status}]`).join(", ")
-          lines.push(`  • "${b.goalTitle}" blocked by: ${deps}`)
-        }
-        lines.push(
-          "",
-          "ACTION REQUIRED: You MUST resolve the blocking goals before these can proceed.",
-          "Call query_failed_goals, then either retry_goal (with root cause analysis) or fail_task.",
-          "Dispatching or waiting will NOT help — these goals will never become ready until the blockers are resolved.",
-        )
-      } else {
-        lines.push(
-          "",
-          "Read context (read_context) to see goal statuses and eval evidence.",
-          "Decide next action based on current state — no predetermined action.",
-        )
-      }
-
-      return lines.join("\n")
-    }
-
-    case "delivery_rejected": {
-      const fb = trigger.feedback
-      const issues = Array.isArray(fb.issues_found) ? fb.issues_found as string[] : []
-      const details = Array.isArray(fb.rejection_details) ? fb.rejection_details as Array<{ category?: string; file?: string; error?: string; suggestion?: string }> : []
-
-      const lines = [
-        `## DELIVERY REJECTED — passed goals auto-reset to pending`,
-        "",
-        "The delivery agent (adversarial evaluator) rejected the integrated deliverable.",
-        "Every passed goal in this task has been opened under a fresh attempt",
-        "(superseded_reason=delivery_rework). The dispatch loop will re-execute",
-        "them under the SAME contract unless you intervene.",
-        "",
-        `**Summary**: ${fb.verdict_summary ?? "No summary"}`,
-        "",
-        `**Issues found** (${issues.length}):`,
-        ...issues.map((issue: string) => `  - ${issue}`),
-      ]
-
-      if (details.length > 0) {
-        lines.push("", "**Structured rejection details**:")
-        for (const d of details) {
-          const filePart = d.file ? ` [${d.file}]` : ""
-          const sugPart = d.suggestion ? ` → Suggested: ${d.suggestion}` : ""
-          lines.push(`  - [${d.category ?? "unknown"}]${filePart}: ${d.error ?? "no description"}${sugPart}`)
-        }
-      }
-
-      lines.push(
-        "",
-        "## STRATEGY DECISION",
-        "",
-        "Goals will redispatch automatically. Your job is to decide whether the",
-        "EXISTING contracts are sufficient, or if structural changes are needed:",
-        "",
-        "- **Contract is fine, just a transient/integration issue** → do nothing; the loop redispatches under the same contract.",
-        "- **Contract gap / missing criteria** → modify_goal (acceptance_specs, owned_paths) on affected goals before they redispatch.",
-        "- **Missing functionality or structural gap** → re-run **architect** so it refines the goal set (add/modify/split/remove) based on the rejection feedback.",
-        "- **Goal decomposition suspect (same goal-set rejected twice)** → re-run **architect** to regenerate goals from the existing requirements.",
-        "- **Requirements themselves wrong** → restart_from_stage('requirements') redoes the full chain.",
-        "",
-        "Focus on the SPECIFIC issues. Do NOT rework everything blindly.",
-      )
-
-      return lines.join("\n")
-    }
-
-    case "operator_message": {
-      const lines = [
-        "Operator message received.",
-        "",
-        "Latest user message:",
-        trigger.message,
-      ]
-      if (trigger.attachmentSummary) {
-        lines.push("", trigger.attachmentSummary)
+export const OrchestratorEventNote = {
+  batchComplete(input: {
+    runID: string
+    passed: number
+    failed: number
+    total: number
+    depBlocked?: Array<{ goalTitle: string; blockedBy: Array<{ title: string; status: string }> }>
+  }): string {
+    const lines: string[] = [
+      `Goal batch complete on run ${input.runID}.`,
+      `Summary: ${input.passed} passed, ${input.failed} failed, ${input.total} total.`,
+    ]
+    if (input.depBlocked && input.depBlocked.length > 0) {
+      lines.push("", "⚠ BLOCKED GOALS — the following pending goals CANNOT execute because their dependencies failed:")
+      for (const b of input.depBlocked) {
+        const deps = b.blockedBy.map((d) => `${d.title} [${d.status}]`).join(", ")
+        lines.push(`  • "${b.goalTitle}" blocked by: ${deps}`)
       }
       lines.push(
         "",
-        "Decide whether to inject this guidance into the running executor, retry the task, cancel the task, restart from a stage, or ask a clarification question.",
+        "ACTION REQUIRED: resolve the blocking goals before these can proceed. Call query_failed_goals, then retry_goal with root cause or fail_task.",
       )
-      return lines.join("\n")
+    } else {
+      lines.push(
+        "",
+        "Read context (read_context) to see goal statuses and eval evidence.",
+        "Decide next action based on current state — no predetermined action.",
+      )
     }
+    return lines.join("\n")
+  },
 
-    case "retry":
-      return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
-  }
+  deliveryRejected(input: {
+    verdictSummary?: string
+    issues?: string[]
+    rejectionDetails?: Array<{ category?: string; file?: string; error?: string; suggestion?: string }>
+  }): string {
+    const issues = input.issues ?? []
+    const details = input.rejectionDetails ?? []
+    const lines: string[] = [
+      "## DELIVERY REJECTED — passed goals auto-reset to pending",
+      "",
+      "The delivery agent (adversarial evaluator) rejected the integrated deliverable.",
+      "Every passed goal in this task has been opened under a fresh attempt (superseded_reason=delivery_rework).",
+      "The dispatch loop will re-execute them under the SAME contract unless you intervene.",
+      "",
+      `**Summary**: ${input.verdictSummary ?? "No summary"}`,
+      "",
+      `**Issues found** (${issues.length}):`,
+      ...issues.map((issue) => `  - ${issue}`),
+    ]
+    if (details.length > 0) {
+      lines.push("", "**Structured rejection details**:")
+      for (const d of details) {
+        const filePart = d.file ? ` [${d.file}]` : ""
+        const sugPart = d.suggestion ? ` → Suggested: ${d.suggestion}` : ""
+        lines.push(`  - [${d.category ?? "unknown"}]${filePart}: ${d.error ?? "no description"}${sugPart}`)
+      }
+    }
+    lines.push(
+      "",
+      "## STRATEGY DECISION",
+      "",
+      "- **Contract is fine** → do nothing; the loop redispatches under the same contract.",
+      "- **Contract gap** → modify_goal (acceptance_specs, owned_paths) on affected goals.",
+      "- **Structural gap** → re-run architect to refine the goal set.",
+      "- **Same goal-set rejected twice** → re-run architect to regenerate goals.",
+      "- **Requirements themselves wrong** → restart_from_stage('requirements').",
+      "",
+      "Focus on the SPECIFIC issues. Do NOT rework everything blindly.",
+    )
+    return lines.join("\n")
+  },
+
+  operatorMessage(input: { text: string; attachmentSummary?: string }): string {
+    const lines: string[] = [
+      "Operator message received.",
+      "",
+      "Latest user message:",
+      input.text,
+    ]
+    if (input.attachmentSummary) {
+      lines.push("", input.attachmentSummary)
+    }
+    lines.push(
+      "",
+      "Decide whether to inject this guidance into the running executor, retry the task, cancel the task, restart from a stage, or ask a clarification question.",
+    )
+    return lines.join("\n")
+  },
+
+  retry(task: TaskRow): string {
+    return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -527,7 +530,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "   - requirements (always)",
   "   - architect (always)",
   "   - create_run → submit_execution",
-  "   - STOP and wait for batch_complete re-trigger",
+  "   - STOP and wait — the task loop will wake you again when the goal batch finishes.",
   "4. **Mandatory clarification gate**: Before calling ANY tool (design_analysis, requirements, build),",
   "   evaluate the request against this checklist. If TWO OR MORE items are missing or ambiguous, you MUST",
   "   call `question` first with targeted options to resolve them:",
@@ -540,9 +543,9 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "   A visual reference (image/URL) supplies visual appearance but does NOT satisfy scope, data model,",
   "   interactions, or tech stack. Do NOT skip clarification just because an image is attached.",
   "",
-  "## After batch completes (re-triggered with batch_complete)",
+  "## After a goal batch completes (next wake)",
   "",
-  "- If ANY dispatchable goal is still `running` or `pending` → do NOTHING. Wait for the next batch_complete.",
+  "- If ANY dispatchable goal is still `running` or `pending` → do NOTHING. The task loop will wake you when the batch actually finishes.",
   "- `verification` goals do not dispatch to an executor worktree; they stay pending until **deliver** runs merged-worktree verification.",
   "- Once ALL dispatchable goals are terminal (passed/failed):",
   "  - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).",
@@ -552,7 +555,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "  - **fail_task** ONLY when the executor produced empty / garbled / fundamentally unusable output. Logic bugs, test failures, missing imports = fix and retry, never fail_task.",
   "- **NEVER dispatch_goal on a passed goal** — passed is terminal. Use modify_goal to change contract.",
   "",
-  "## After delivery rejection (re-triggered with delivery_rejected)",
+  "## After a delivery rejection (next wake)",
   "",
   "On rejection, every passed goal in the task has ALREADY been opened under",
   "a fresh attempt cycle (superseded_reason=delivery_rework) by the deliver",
@@ -561,7 +564,7 @@ const ORCHESTRATOR_INSTRUCTIONS = [
   "",
   "Direct workflow:",
   "  - Call `build` again with the rejection feedback as part of the request. Then call `deliver` again.",
-  "  - The rejection details are pre-loaded in your trigger context (do not re-fetch).",
+  "  - The rejection details are already pre-loaded in the Current State snapshot (do not re-fetch).",
   "",
   "Pipeline workflow — escalation ladder (try the cheapest first; climb only when the previous rung did not converge).",
   "  Rationale: by deliver-time the per-goal worktrees have already been merged into main — the deliverable is AGGREGATED CODE. Default rework operates on that aggregated state, not on per-goal shards. Fall back to per-goal retry only when a failure is clearly confined to one goal's internals.",
@@ -632,9 +635,12 @@ const ORCHESTRATOR_INSTRUCTIONS = [
 /**
  * Build the orchestrator system prompt as a two-part array:
  *   [0] = static instructions (stable, benefits from 1h cache TTL)
- *   [1] = dynamic context (changes per trigger — task state, goals, budget, etc.)
+ *   [1] = dynamic context — task state, goals, budget, latest delivery
+ *         feedback, latest run result. All derived from DB state; no trigger
+ *         enum branching. The optional `event.note` is the USER MESSAGE,
+ *         not a prompt segment — do not thread it through here.
  */
-async function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, workflow?: MiniWorkflow, workflowState?: WorkflowState): Promise<string[]> {
+async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undefined, workflow?: MiniWorkflow, workflowState?: WorkflowState): Promise<string[]> {
   const ctx: string[] = []
 
   // ── Follow-up task context ──
@@ -677,11 +683,15 @@ async function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, wor
         `  - iter ${it.iteration}: arbiter=${it.arbiter_verdict}, S_k=${it.aggregate_score.toFixed(3)} (Δ=${it.delta_vs_prev.toFixed(3)}), blocking_unmet=${it.blocking_unmet_count}, open_ce=${it.open_counterexamples}, novelty=${it.novelty_score}`,
       )
     }
-    // Latest delivery feedback comes from trigger.feedback (loop reads it
-    // from the verdict artifact when it sees a recent delivery_rework
-    // supersede). Empty unless this very turn was triggered by a rejection.
-    const latest = trigger.kind === "delivery_rejected"
-      ? (trigger.feedback as Record<string, unknown> | undefined)
+    // Latest delivery feedback comes from the most recent
+    // delivery-agent-verdict artifact on the task. Shown only when the
+    // most recent verdict was a rejection — per spec there is no trigger
+    // enum steering this block, it is derived from persistent artifacts.
+    const { findLatestDeliveryVerdictArtifact } = await import("@/engine/store")
+    const latestVerdictArt = findLatestDeliveryVerdictArtifact(task.id)
+    const latestVerdictPayload = (latestVerdictArt?.payload ?? {}) as Record<string, unknown>
+    const latest = latestVerdictPayload.verdict === "rejected"
+      ? latestVerdictPayload
       : undefined
     if (latest) {
       ctx.push("")
@@ -731,51 +741,44 @@ async function buildSystemParts(task: TaskRow, trigger: OrchestratorTrigger, wor
     ctx.push(renderWorkflowPrompt(workflow, workflowState))
   }
 
-  // Run context (delivery + eval results for reasoning).
-  //
-  // This block was the largest single source of system-prompt growth in
-  // the orchestrator prior to the SubAgentProtocol introduction: a batch
-  // complete trigger could embed kilobytes of LLM-generated delivery
-  // prose, hundreds of changed-file paths, and ten checks each carrying
-  // multi-paragraph evidence. The yielded summary is now framed as a
-  // sub-agent-protocol message — same shape, same per-message ceiling
-  // as a tool return — with explicit pointers back to the persistent
-  // delivery / evaluation rows for full content.
-  if (trigger.kind === "batch_complete") {
-    const runID = trigger.runID
-    const delivery = findDeliveryByRun(runID)
-    const evaluation = findEvaluationByRun(runID)
-
-    const fields: Array<[string, string | string[]]> = []
-    if (delivery) {
-      fields.push(["delivery_summary", delivery.summary])
-      const changedFiles = delivery.result?.changed_files
-      if (changedFiles?.length) fields.push(["changed_files", changedFiles])
-    }
-    if (evaluation) {
-      fields.push([`evaluation_${evaluation.verdict}`, evaluation.summary])
-      const checks = evaluation.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
-      if (checks?.length) {
-        const lines = checks.map((c) => `${c.name}=${c.status}${c.evidence ? `: ${c.evidence}` : ""}`)
-        fields.push(["check_results", lines])
+  // Run context — delivery + eval results for the current active run (if
+  // any). Rendered on every wake from persistent DB state so the orchestrator
+  // sees latest results without depending on a trigger enum to deliver them.
+  // The yielded summary is framed as a sub-agent-protocol message with the
+  // same per-message ceiling as a tool return; full content stays in the
+  // delivery / evaluation rows referenced via the pointer.
+  const activeRunID = task.active_run_id ?? undefined
+  if (activeRunID) {
+    const delivery = findDeliveryByRun(activeRunID)
+    const evaluation = findEvaluationByRun(activeRunID)
+    if (delivery || evaluation) {
+      const fields: Array<[string, string | string[]]> = []
+      if (delivery) {
+        fields.push(["delivery_summary", delivery.summary])
+        const changedFiles = delivery.result?.changed_files
+        if (changedFiles?.length) fields.push(["changed_files", changedFiles])
       }
+      if (evaluation) {
+        fields.push([`evaluation_${evaluation.verdict}`, evaluation.summary])
+        const checks = evaluation.checks as Array<{ name: string; status: string; evidence?: string }> | undefined
+        if (checks?.length) {
+          const lines = checks.map((c) => `${c.name}=${c.status}${c.evidence ? `: ${c.evidence}` : ""}`)
+          fields.push(["check_results", lines])
+        }
+      }
+
+      const pointerHints: string[] = []
+      if (delivery) pointerHints.push(`read_context scope=deliveries (delivery row ${delivery.id})`)
+      if (evaluation) pointerHints.push(`read_context scope=evaluations (evaluation row ${evaluation.id})`)
+      const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "read_context"
+
+      ctx.push("")
+      ctx.push(SubAgentProtocol.yieldResult({
+        headline: `## Latest Run Result (run ${activeRunID})`,
+        fields,
+        pointer,
+      }))
     }
-    fields.push([
-      "batch_totals",
-      `${trigger.summary.passed} passed / ${trigger.summary.failed} failed / ${trigger.summary.total} total`,
-    ])
-
-    const pointerHints: string[] = []
-    if (delivery) pointerHints.push(`read_context scope=deliveries (delivery row ${delivery.id})`)
-    if (evaluation) pointerHints.push(`read_context scope=evaluations (evaluation row ${evaluation.id})`)
-    const pointer = pointerHints.length > 0 ? pointerHints.join("; ") : "read_context"
-
-    ctx.push("")
-    ctx.push(SubAgentProtocol.yieldResult({
-      headline: `## Latest Run Result (run ${runID})`,
-      fields,
-      pointer,
-    }))
   }
 
   return [ORCHESTRATOR_INSTRUCTIONS, ctx.join("\n")]
