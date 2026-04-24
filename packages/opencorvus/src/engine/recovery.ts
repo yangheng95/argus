@@ -100,11 +100,15 @@ export function isRunOrphan(projectID: string, runID: string): boolean {
 /**
  * Physical cleanup of orphan execution artifacts:
  *
- *   (a) ABORT BRAKE (phase-1 temp): terminates live executor sessions,
- *       live goal_runs, and orphan runs via the writer primitives. This
- *       is the only thing that prevents tasks from parking on a stale
- *       `active_run_id` on the current `engine/queue.ts` control plane.
- *       Slated for removal in phase 4 (see §7-4).
+ *   (a) ABORT BRAKE (phase-1 temp, default OFF after phase-4):
+ *       Terminates live executor sessions, live goal_runs, and orphan
+ *       runs via the writer primitives. Originally required because the
+ *       `engine/queue.ts` control plane gated on stale `active_run_id`;
+ *       phase 2 removed those derivations and phase 4 confirms no
+ *       control-plane reader still blocks on orphan live rows, so the
+ *       default is now `false`. Callers that need the pre-phase-4
+ *       behaviour (e.g. regression fixtures that depend on the legacy
+ *       abort semantics) can opt back in with `enableAbortBrake: true`.
  *
  *   (b) OWNERSHIP SWEEP: consumes the on-disk ownership registry
  *       (`Ownership.Worktree` + `Ownership.Process`) and drops stale
@@ -116,14 +120,16 @@ export function isRunOrphan(projectID: string, runID: string): boolean {
  */
 export async function cleanupOrphanExecutionArtifacts(input: {
   projectID: string
-  /** Drop the abort brake (phase-4+). Defaults to `true` because phase-1
-   *  control-plane gates still require it. */
+  /** Opt into the legacy abort brake. Defaults to `false` post-phase-4
+   *  — leaving orphan `engine_run` / `engine_goal_run` rows in place is
+   *  safe because the control plane now reads `run_orphan` from the
+   *  describe projection (phase 1) rather than gating on live status. */
   enableAbortBrake?: boolean
   /** Override the disk root for ownership markers. Defaults to the
    *  `Instance.worktree` primary directory. */
   primaryWorktreeDir?: string
 }) {
-  const enableAbortBrake = input.enableAbortBrake !== false
+  const enableAbortBrake = input.enableAbortBrake === true
 
   let abortedSessions = 0
   let abortedGoalRuns = 0

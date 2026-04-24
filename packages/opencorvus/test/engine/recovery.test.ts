@@ -221,7 +221,7 @@ afterEach(async () => {
 })
 
 describe("engine recovery", () => {
-  test("aborts stale executor state before resuming the active task loop", async () => {
+  test("phase-4 default: recovery is observe-only; orphan runs are left intact, active task resumes anyway", async () => {
     seedProject()
     seedActiveExecution()
     const resumed: string[] = []
@@ -234,20 +234,38 @@ describe("engine recovery", () => {
       },
     })
 
-    expect(result).toMatchObject({
-      abortedSessions: 1,
-      abortedGoalRuns: 1,
-      abortedRuns: 1,
-      resumedTaskID: activeTaskID,
-    })
+    // No abort brake — orphan live rows survive; the orchestrator sees
+    // them via `run_orphan` in the describe projection on its next wake.
+    expect(result.abortedSessions).toBe(0)
+    expect(result.abortedGoalRuns).toBe(0)
+    expect(result.abortedRuns).toBe(0)
+    expect(result.resumedTaskID).toBe(activeTaskID)
     expect(resumed).toEqual([activeTaskID])
-    expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
-    expect(findGoalRun(goalRunID)?.status).toBe("aborted")
-    expect(findGoalRun(goalRunID)?.error).toContain("Process restart")
+
+    // Live rows persisted untouched.
+    expect(findExecutorSession(executorSessionID)?.status).toBe("active")
+    expect(findGoalRun(goalRunID)?.status).toBe("running")
+    expect(findRun(runID)?.status).toBe("running")
     expect(findGoal(goalID)?.workspace_dir).toBe(workspaceDir)
     expect(findGoal(goalID)?.workspace_branch).toBe("opencorvus/recovery-test")
-    expect(findRun(runID)?.status).toBe("aborted")
     expect(findTask(activeTaskID)?.status).toBe("active")
+  })
+
+  test("legacy opt-in: cleanupOrphanExecutionArtifacts({enableAbortBrake:true}) still aborts, for regression fixtures", async () => {
+    seedProject()
+    seedActiveExecution()
+
+    const result = await cleanupOrphanExecutionArtifacts({
+      projectID,
+      enableAbortBrake: true,
+    })
+
+    expect(result.abortedSessions).toBe(1)
+    expect(result.abortedGoalRuns).toBe(1)
+    expect(result.abortedRuns).toBe(1)
+    expect(findExecutorSession(executorSessionID)?.status).toBe("aborted")
+    expect(findGoalRun(goalRunID)?.status).toBe("aborted")
+    expect(findRun(runID)?.status).toBe("aborted")
   })
 
   test("observeOrphanRuns returns live runs without live goal_runs and does NOT mutate them", async () => {
