@@ -288,7 +288,7 @@ await SessionPrompt.prompt({
 
 **迁移动作**（方案 1 落地路径）：
 
-- **阶段 3-a-1**：给 `SessionPrompt.prompt` / `SessionLoop.loop` / `SessionLoop.resolveTools` 加 `extraTools` 通道 + 单测。此步**单独成 PR**，不得同时迁移 agent。
+- **阶段 3-a-1**（✅ 2026-04-24，commit `20b49373e`）：`SessionLoop.setExtraTools / getExtraTools / withExtraTools` 落地；`resolveTools` 末尾合并 extras（shadow 允许）；`SessionPrompt` 透明再导出同一 function reference；8 条单测覆盖 round-trip / 空清除 / session 隔离 / wholesale replace / withExtraTools ok+throw / 再导出身份一致
 - **阶段 3-a-2**：补 `createStructuredOutputTool` 的 schema 约束 + 失败自纠 + 单测（若现有覆盖不够）。
 - 固化规则：**所有新定义的 stage agent 都必须复用 session agent 基建**，不得再引入独立 runtime、独立 stream hook 栈、独立 tool resolve 路径或独立 session 持久化逻辑。
 - **阶段 3-b**：普通 stage agent 迁移：`intent-analysis → design-analyst → requirements → planner → deliver → orchestrator`。每个 agent 独立 PR：
