@@ -88,7 +88,7 @@ Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
           "# Text diff result",
           "",
           "⚠️  The rendered `index.html` produced no visible text nodes after a 3s wait.",
-          "This usually means the HTML relies on client-side JavaScript to render content (React, Vue, etc.) — the webpage-clone skill forbids JS frameworks. Rewrite `index.html` as fully static HTML and try again.",
+          "This usually means the HTML relies on client-side JavaScript to render content (React, Vue, etc.) — the webpage-generate skill forbids JS frameworks. Rewrite `index.html` as fully static HTML and try again.",
         ].join("\n"),
         metadata: {
           referenceChars: referenceText.length,

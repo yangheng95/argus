@@ -20,7 +20,7 @@ export const WebpageRenderTool = Tool.define("webpage_render", {
 
 Serves the output directory over a loopback server, loads \`index.html\`, waits for fonts + images + a 3s settle, then captures a PNG at the chosen viewport. Returns the screenshot path + render time.
 
-Use as step 5 of the webpage-clone workflow (after your agent wrote index.html). Follow it with \`webpage_evaluate\` to score against reference.png. Requires a local browser — no external network is strictly needed.`,
+Use as step 5 of the webpage-generate workflow (after your agent wrote index.html). Follow it with \`webpage_evaluate\` to score against reference.png. Requires a local browser — no external network is strictly needed.`,
   parameters: z.object({
     inputDir: z
       .string()

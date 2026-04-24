@@ -508,7 +508,7 @@ export function buildGoalPrompt(input: {
   dependencies?: GoalRow[]
   cwd?: string
   /** Pre-resolved build-stage skill prompt (from `resolveStageSkills("build", taskSignals)`).
-   *  Lets the caller inject skill teaching — e.g. webpage-clone's webpage_extract →
+   *  Lets the caller inject skill teaching — e.g. webpage-generate's webpage_extract →
    *  webpage_compile → webpage_analyze workflow — into the executor prompt so the
    *  executor knows which tools exist and when to use them. */
   skillPrompt?: string
@@ -552,7 +552,7 @@ export function buildGoalPrompt(input: {
     input.cwd
       ? `Your working directory is: ${input.cwd}\nAll file paths MUST be relative to this directory or use this absolute prefix. Never write files outside this directory.`
       : undefined,
-    // Stage skills — caller resolves `stage: build` skills (webpage-clone,
+    // Stage skills — caller resolves `stage: build` skills (webpage-generate,
     // etc.) with the task's signals (attachment images, URL in request) and
     // passes the resulting prompt here. This is how the mirror tool workflow
     // (webpage_extract → webpage_compile → webpage_analyze → render → evaluate)

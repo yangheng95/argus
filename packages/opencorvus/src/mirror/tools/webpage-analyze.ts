@@ -39,7 +39,7 @@ Returns a summary: section list, pattern list, token counts. The agent should \`
 
 This tool is artifact-dependent: do NOT call it until \`webpage_extract\` has completed and written \`extracted-page.json\`. Never batch it in the same assistant turn as \`webpage_extract\`.
 
-Use as step 3 of the webpage-clone workflow. Pure function, no network.`,
+Use as step 3 of the webpage-generate workflow. Pure function, no network.`,
   parameters: z.object({
     outputDir: z
       .string()

@@ -532,7 +532,7 @@ export class GoalPool {
         : []
 
       // Resolve `stage: build` skills with the task's signals so skills like
-      // webpage-clone auto-attach their teaching prompt when the task has a
+      // webpage-generate auto-attach their teaching prompt when the task has a
       // reference image / URL. Without this, per-goal executors never see
       // webpage_extract / webpage_compile / webpage_analyze / webpage_render /
       // webpage_evaluate instructions and fall back to hand-writing HTML.
