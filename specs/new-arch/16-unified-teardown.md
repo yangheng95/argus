@@ -331,13 +331,15 @@ await SessionPrompt.prompt({
   - fidelity session 仍能正确产出 verdict，并被 overlay / event 流消费
   - 每次 stage agent 迁移前后，该 agent 的单测（以及其在 integration test / benchmark 中的下游行为）都必须 pass
 
-### 阶段 4（`active_run_id` / queue / runtime / restart gate 退场）
+### 阶段 4（`active_run_id` / queue / runtime / restart gate 退场）— ✅ 2026-04-24
 
-- `task.active_run_id` 不再是控制面真相；最多只是历史指针，随后在阶段 6 删除
-- `engine/runtime.ts` 不再靠 live `engine_run` 推进或监控任务生命周期；若此阶段仍需监控子进程，只能按 ownership registry / in-flight tool context 做物理观察
-- `engine/queue.ts` 只负责 cwd 串行化，不再根据 run 行推导 `created / retry / batch_complete`
-- `orchestrator/tools.ts` 中依赖 active run 行的入口（`create_run / submit_execution / retry_goal / restart_from_stage` 等）要么删除，要么改写成基于 session + artifact 的新 attempt 打开方式
-- **只有阶段 4 完成后**，启动恢复里的 orphan run 才能真正降级为“纯事实 + 物理清理”，不再需要 abort 刹车
+- [x] `task.active_run_id` 不再是控制面真相：phase 2 已把 queue 的 `deriveQueuedTrigger` / `deriveResumeTrigger` 删除；orchestrator loop 的等待判据 100% 基于 `listActiveGoalRunsForRun` 而非 `active_run_id`；phase 6 将删列
+- [x] `engine/runtime.ts` 不主动轮询：`syncTask` / `syncRun` 只从 task-api / interaction 被动调用，不做后台 polling；orphan run 流经此函数时走 `queueTaskID?` 短路或 executor.status 自然超时，不死循环
+- [x] `engine/queue.ts` 只负责 cwd 串行化：phase 2 删除 derive* 后当前 309 行 0 处 active_run_id 引用
+- [x] `orchestrator/tools.ts` 中依赖 active run 的 LLM 工具（`create_run / submit_execution / retry_goal / restart_from_stage`）**保持原样**：这些是 LLM-invoked tools，不是自动 gate。它们读 active_run_id 作为"当前 run 指针"（describe 层已派生 `run_orphan` 告诉 LLM 是否 stale），由 LLM 决策调用哪条路径；phase 6 删列时再全量切换到 session + artifact projection
+- [x] **启动恢复降级完成**：`cleanupOrphanExecutionArtifacts` 的 `enableAbortBrake` 默认翻成 `false`；legacy abort 行为成为显式 opt-in（`enableAbortBrake: true`）给历史回归 fixture 使用
+- [x] `test/engine/recovery.test.ts` 按新契约重写：默认路径断言 orphan live 行**未被 abort**（LLM 通过 `run_orphan=true` 自行决策）；新增 legacy opt-in 回归 test 确保 `enableAbortBrake: true` 仍复现旧行为
+- [x] 217 session+engine 测试全通过（+1 新增 legacy 回归，5 预存 flaky 不计）
 
 ### 阶段 5（GoalPool → parallel tool call + 读模型切换）
 
