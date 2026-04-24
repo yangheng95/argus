@@ -10,7 +10,7 @@
  * register_decision) and by the RequirementsResult type shape.
  *
  * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): runs via
- * SessionPrompt.prompt + extraTools instead of AgentRuntime.run + a private
+ * SessionPrompt.prompt + extraTools instead of SessionPrompt.prompt + a private
  * finalize_requirements tool. Terminal `summary` arrives through SessionLoop's
  * StructuredOutput tool (RequirementsFinalSchema); incremental
  * register_requirement / register_decision tools stay as agent-scoped extras.

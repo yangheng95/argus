@@ -14,7 +14,7 @@
  *   • tech stack context (from Decision Log)
  *
  * Phase 3-b-4 migration (specs/new-arch/16-unified-teardown.md §7-3): runs via
- * SessionPrompt.prompt + extraTools instead of AgentRuntime.run + a private
+ * SessionPrompt.prompt + extraTools instead of SessionPrompt.prompt + a private
  * submit_plan tool. The plan arrives through SessionLoop's StructuredOutput
  * (PlannerReportSchema). No incremental tools survive — the planner's output
  * is a single terminal payload.

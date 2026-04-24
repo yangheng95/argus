@@ -512,8 +512,6 @@ export class GoalPool {
         } catch (planErr) {
           // Plan failure terminates the build step.
           throw planErr
-        } finally {
-          await planHooks.flush()
         }
       }
 

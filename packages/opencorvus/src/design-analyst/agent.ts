@@ -18,7 +18,7 @@
  *   arrive via SessionLoop's StructuredOutput (DesignFinalSchema).
  *
  * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): runs via
- * SessionPrompt.prompt + extraTools instead of AgentRuntime.run + a private
+ * SessionPrompt.prompt + extraTools instead of SessionPrompt.prompt + a private
  * finalize_design_requirements tool. The multimodal attachments are threaded
  * through SessionPrompt.prompt's parts array; live URL capture and
  * read-attachment stay as agent-scoped extras.

@@ -109,7 +109,7 @@ export namespace DeliveryAgent {
 
     // Retry loop covers missing-submit_verdict failures — the agent ran but did
     // not call submit_verdict before the step budget ended. Same shape as the
-    // pre-migration loop; wraps SessionPrompt.prompt instead of AgentRuntime.run.
+    // pre-migration loop; wraps SessionPrompt.prompt instead of SessionPrompt.prompt.
     // Each attempt opens its own child session so the collector state on retry
     // is not entangled with a prior attempt's message history.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {

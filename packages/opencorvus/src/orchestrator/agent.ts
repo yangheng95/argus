@@ -267,7 +267,7 @@ export namespace Orchestrator {
       // Subscribe to session-level errors so critical stream failures still
       // flip the task to failed. SessionLoop publishes Session.Event.Error on
       // provider / processor faults; collecting them here reproduces the
-      // AgentRuntime.failures snapshot at a coarser granularity.
+      // the pre-migration runtime.failures snapshot at a coarser granularity.
       const streamErrors: Array<{ reason: string; errorName?: string }> = []
       const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
         const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
@@ -315,7 +315,7 @@ export namespace Orchestrator {
       // Critical stream failures (mid-stream protocol violations, provider
       // onError) mean the agent's view of the run is incoherent and we must
       // fail the task. The Session.Event.Error subscription above is the
-      // post-migration replacement for AgentRuntime's failures snapshot —
+      // post-migration replacement for the pre-migration runtime's failures snapshot —
       // SessionLoop publishes its own errors through that bus event.
       if (streamErrors.length > 0) {
         const first = streamErrors[0]
@@ -336,7 +336,7 @@ export namespace Orchestrator {
 
     } catch (error) {
       // SessionLoop persists its own assistant parts; no explicit flush
-      // equivalent for the post-phase-3 AgentRuntime hooks path.
+      // equivalent for the post-phase-3 the pre-migration runtime hooks path.
       if (ctrl.signal.aborted) {
         log.info("orchestrator was aborted", { taskID })
         return

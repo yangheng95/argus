@@ -19,7 +19,6 @@ import { sessionGoalID } from "@/server/routes/task-event"
 import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
-import { sessionStreamHooks } from "@/agent/runtime"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
 import { withStageRetry } from "@/util/retry"
 import { Event as EngineEvent } from "@/engine/model"
@@ -467,7 +466,7 @@ export function createOrchestratorTools(input: {
         // build prompts from that single source of truth.
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
-        // RequirementsService runs inside AgentRuntime. Do not layer a second
+        // RequirementsService runs inside the pre-migration runtime. Do not layer a second
         // caller-side inactivity timer here.
         // Hoisted so the catch below can reference requirementsSession.id
         // when emitting the error-path terminal event.
@@ -478,9 +477,9 @@ export function createOrchestratorTools(input: {
           directory: Instance.directory,
         })
         try {
-          const hooks = sessionStreamHooks({ sessionID: requirementsSession.id, taskID, stage: "requirements" })
-
-
+          // Post-phase-3-b the requirements agent runs via SessionPrompt and
+          // owns its own session persistence — no caller-side stream hook
+          // forwarding.
           const { RequirementsService } = await import("@/requirements")
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
@@ -495,24 +494,10 @@ export function createOrchestratorTools(input: {
               parentSessionID: requirementsSession.id,
               signal: input.signal,
               decisionLog,
-              stream: {
-                onChunk: async (arg: any) => {
-                  const chunk = (arg as any)?.chunk
-                  // Re-emit text-delta as reasoning-delta so it renders in a collapsible
-                  // thinking block, visually separated from tool calls.
-                  if (chunk?.type === "text-delta") {
-                    if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-                  } else {
-                    if (hooks.onChunk) await hooks.onChunk(arg)
-                  }
-                },
-                onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
-              },
               onStatus: () => {},
             }),
             { signal: input.signal },
           )
-          await hooks.flush()
 
 
           // Persist spec snapshot v1 (requirements + decisions only; the
@@ -632,7 +617,7 @@ export function createOrchestratorTools(input: {
           )
           throw err
         } finally {
-          // No caller-level guard: AgentRuntime enforces progress/absolute timeouts.
+          // No caller-level guard: the pre-migration runtime enforces progress/absolute timeouts.
         }
       },
     }),
@@ -931,10 +916,8 @@ export function createOrchestratorTools(input: {
           title: `Design Analysis: ${task.title}`,
           directory: Instance.directory,
         })
-        const hooks = sessionStreamHooks({ sessionID: designSession.id, taskID, stage: "design-analyst" })
-
-        // DesignAnalystAgent runs inside AgentRuntime which owns its own
-        // alive/progress/absolute timers. No caller inactivity guard.
+        // Post-phase-3-b the design-analyst runs via SessionPrompt and owns
+        // its own session persistence — no caller-side stream hook forwarding.
         try {
           const { DesignAnalystAgent } = await import("@/design-analyst")
 
@@ -950,21 +933,8 @@ export function createOrchestratorTools(input: {
             taskID,
             parentSessionID: designSession.id,
             signal: input.signal,
-            stream: {
-              onChunk: async (arg: any) => {
-                const chunk = (arg as any)?.chunk
-                if (chunk?.type === "text-delta") {
-                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-                } else {
-                  if (hooks.onChunk) await hooks.onChunk(arg)
-                }
-              },
-              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
-            },
             onStatus: () => {},
           })
-
-          await hooks.flush()
 
           // Persist the visual contract on task.design_specs (dedicated JSON
           // column, not metadata). Delivery reads it directly as advisory
@@ -1058,7 +1028,6 @@ export function createOrchestratorTools(input: {
             pointer: "task.design_specs (JSON column on engine_task)",
           })
         } catch (err) {
-          await hooks.flush()
           await trackStepComplete("design_analysis", undefined, true)
           const msg = err instanceof Error ? err.message : String(err)
           log.error("design_analysis: failed", { taskID, error: msg })
@@ -1110,8 +1079,6 @@ export function createOrchestratorTools(input: {
           title: `Architect: ${task.title}`,
           directory: Instance.directory,
         })
-        const hooks = sessionStreamHooks({ sessionID: architectSession.id, taskID, stage: "architect" })
-
         try {
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
@@ -1166,21 +1133,9 @@ export function createOrchestratorTools(input: {
             requirementDecisions,
             designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
             signal: input.signal,
-            stream: {
-              onChunk: async (arg: any) => {
-                const chunk = (arg as any)?.chunk
-                if (chunk?.type === "text-delta") {
-                  if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-                } else {
-                  if (hooks.onChunk) await hooks.onChunk(arg)
-                }
-              },
-              onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
-            },
+            parentSessionID: architectSession.id,
             onStatus: () => {},
           })
-
-          await hooks.flush()
 
           // Persist Architect output in a single transaction: new spec_snapshot
           // supersedes the previous, goals upsert, metrics baseline install,
@@ -1334,7 +1289,6 @@ export function createOrchestratorTools(input: {
 
           return summary
         } catch (err) {
-          await hooks.flush().catch(() => {})
           EngineProtocol.emit(
             EngineEvent.ArchitectCompleted,
             {
@@ -2439,9 +2393,6 @@ export function createOrchestratorTools(input: {
           title: `Delivery verification: ${task.title}`,
           directory: Instance.directory,
         })
-        const hooks = sessionStreamHooks({ sessionID: deliverySession.id, taskID, stage: "delivery" })
-
-
         try {
           const { DeliveryService } = await import("@/delivery/service")
           const { DeliveryVerdict } = await import("@/delivery/agent")
@@ -2480,19 +2431,8 @@ export function createOrchestratorTools(input: {
               delivery: deliveryInfo,
               attachments: deliveryAttachments,
               signal: input.signal,
-              stream: {
-                onChunk: async (arg: any) => {
-                  const chunk = (arg as any)?.chunk
-                  if (chunk?.type === "text-delta") {
-                    if (hooks.onChunk) await hooks.onChunk({ chunk: { ...chunk, type: "reasoning-delta" } })
-                  } else {
-                    if (hooks.onChunk) await hooks.onChunk(arg)
-                  }
-                },
-                onError: async (arg: any) => { if (hooks.onError) await hooks.onError(arg) },
-              },
+              parentSessionID: deliverySession.id,
             })
-          await hooks.flush()
 
           // Persist verdict as artifact
           const { EngineArtifactTable } = await import("@/engine/engine.sql")
@@ -3196,8 +3136,9 @@ export function createOrchestratorTools(input: {
         const decisionLog = createDecisionLog(taskID)
         const decisionSection = decisionLog.toPromptSection({ limit: 30 }) ?? ""
 
-        // Run refine analysis via LLM
-        const { ProviderLLM } = await import("@/provider/llm")
+        // Run refine analysis via SessionPrompt. No tools, plain text
+        // generation driven by system + user prompts; the child session
+        // persists transcript for the overlay.
         const model = await resolveAgentModel("orchestrator", { taskID })
 
         const refineSession = await Session.createNext({
@@ -3206,7 +3147,6 @@ export function createOrchestratorTools(input: {
           title: `Refine: ${task.title}`,
           directory: Instance.directory,
         })
-        const hooks = sessionStreamHooks({ sessionID: refineSession.id, taskID, stage: "assistant" })
 
         const systemPrompt = [
           "You are a project analyst reviewing a completed software project.",
@@ -3244,17 +3184,17 @@ export function createOrchestratorTools(input: {
           decisionSection,
         ].join("\n")
 
-        const stream = await ProviderLLM.stream({
-          model,
+        const finalMessage = await SessionPrompt.prompt({
+          sessionID: refineSession.id,
+          model: { providerID: model.providerID, modelID: model.api.id },
+          agent: "assistant",
           system: systemPrompt,
-          messages: [{ role: "user" as const, content: userPrompt }],
-          cacheKey: `task-${taskID}-refine`,
-          ...(hooks.onChunk ? { onChunk: hooks.onChunk as any } : {}),
-          ...(hooks.onError ? { onError: hooks.onError } : {}),
+          parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
         })
-
-        const resultText = await stream.text
-        await hooks.flush()
+        const resultText = (finalMessage?.parts ?? [])
+          .filter((p) => p.type === "text" && typeof (p as any).text === "string")
+          .map((p) => (p as any).text as string)
+          .join("\n\n")
 
         await trackStepComplete("refine")
 
