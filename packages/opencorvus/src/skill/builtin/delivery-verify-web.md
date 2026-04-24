@@ -77,3 +77,21 @@ For each required tool, one entry with:
 
 Do NOT call `submit_verdict(accepted)` on curl output alone. The verdict
 enforcement will reject it.
+
+### P1-A runtime-evidence pre-gate
+
+Before your session even opens, `DeliveryService` runs an independent
+`computeRuntimeEvidence` against the merged worktree (puppeteer +
+`findRenderedIndex`). If the build artifact is missing, the root mount
+point is an empty `<div id="root"></div>` shell, or the rendered DOM has
+< ~120 chars of text or < ~60 nodes, the service synthesizes a
+`rejected` verdict with `category="runtime"` and **never invokes this
+agent**. Therefore:
+
+- If you ARE running, runtime-evidence already saw a non-empty DOM. A
+  zero-violation runtime report is a precondition, not a certification
+  of correctness — keep performing layers 1-6 above.
+- If a prior round got synth-rejected with `runtime:*` violations, your
+  job this round is to MAKE the app actually render (fix build / main
+  mount / data fetch), not to write prose explaining why an empty page
+  is acceptable.

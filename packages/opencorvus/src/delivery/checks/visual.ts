@@ -431,7 +431,20 @@ export async function renderPage(opts: {
   viewport?: { width: number; height: number }
   referenceForViewport?: string
   browserExecutable?: string
-}): Promise<{ renderedPath: string; viewport: { width: number; height: number }; size: { width: number; height: number } }> {
+}): Promise<{
+  renderedPath: string
+  viewport: { width: number; height: number }
+  size: { width: number; height: number }
+  /** DOM 实证指标：P1-A runtime-evidence 用来甄别「仅文本脚手架」类交付，
+   *  与 screenshot 同一轮 render 采集，避免下游再开一次 puppeteer（rule 22）。 */
+  dom: {
+    textLength: number
+    nodeCount: number
+    hasBodyChildren: boolean
+    /** React 根「<div id=\"root\"></div>」空壳（未 hydrate / hydrate 了空 App）。 */
+    isEmptyRootShell: boolean
+  }
+}> {
   let viewport = opts.viewport
   if (!viewport) {
     if (!opts.referenceForViewport) {
@@ -496,6 +509,12 @@ export async function renderPage(opts: {
     args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
   })
   const renderedPath = path.join(opts.outDir, "rendered.png")
+  let dom: {
+    textLength: number
+    nodeCount: number
+    hasBodyChildren: boolean
+    isEmptyRootShell: boolean
+  }
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 })
@@ -505,12 +524,41 @@ export async function renderPage(opts: {
       type: "png",
       clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
     })
+    dom = await page.evaluate(() => {
+      const body = document.body
+      const text = body ? (body.innerText ?? "").trim() : ""
+      const nodeCount = document.querySelectorAll("*").length
+      const hasBodyChildren = !!body && body.children.length > 0
+      // 检测 Vite/CRA 空壳：`<div id="root">` 是 body 的唯一非脚本子元素且其内部
+      // 元素 <= 1。React SPA 渲染失败 / 未 hydrate / hydrate 了空 App 都会命中。
+      const isEmptyRootShell = (() => {
+        if (!body) return true
+        const elementChildren = Array.from(body.children).filter(
+          (c) => c.tagName !== "SCRIPT" && c.tagName !== "STYLE" && c.tagName !== "NOSCRIPT",
+        )
+        if (elementChildren.length !== 1) return false
+        const sole = elementChildren[0] as HTMLElement
+        if (sole.id !== "root" && sole.id !== "app" && sole.id !== "__next") return false
+        return sole.querySelectorAll("*").length <= 1
+      })()
+      return {
+        textLength: text.length,
+        nodeCount,
+        hasBodyChildren,
+        isEmptyRootShell,
+      }
+    })
   } finally {
     await browser.close()
     if (staticServer) await staticServer.close()
   }
   const rendered = await decodePNG(renderedPath)
-  return { renderedPath, viewport, size: { width: rendered.width, height: rendered.height } }
+  return {
+    renderedPath,
+    viewport,
+    size: { width: rendered.width, height: rendered.height },
+    dom,
+  }
 }
 
 /** SSIM visual diff — retained for the external benchmark CLI and operator
