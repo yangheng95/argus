@@ -1016,12 +1016,53 @@ export namespace SessionLoop {
     // shadow a built-in name if they deliberately want to (e.g. a stage
     // agent that replaces `read` with a sandboxed variant). Shadowing is
     // bounded to the session's lifetime — see setExtraTools doc comment.
+    //
+    // Extras must return `{ output: string, title?: string, metadata?: object }`
+    // — SessionLoop's Message.ToolPart persistence layer validates that shape
+    // when the tool call finalises. Plain-string returns are auto-wrapped here
+    // so stage-agent callers can keep the simple `return "OK: ..."` idiom
+    // without silently landing a ZodError at tool-completion time.
     const extras = getExtraTools(input.session.id)
     for (const [name, extraTool] of Object.entries(extras)) {
-      tools[name] = extraTool
+      tools[name] = wrapExtraTool(extraTool)
     }
 
     return tools
+  }
+
+  /**
+   * Normalise an extra tool's `execute` return so it conforms to the
+   * `{ output: string, title: string, metadata: object }` shape
+   * SessionLoop's tool-part persistence requires.
+   *
+   *   - Plain string  →  `{ output: string, title: "", metadata: {} }`
+   *   - Object result →  coerce missing fields to their minimal valid form
+   *
+   * Idempotent: already-conforming results round-trip unchanged.
+   */
+  function wrapExtraTool(raw: AITool): AITool {
+    const original = raw as AITool & { execute?: (...args: any[]) => any }
+    if (!original.execute) return raw
+    const execute = original.execute
+    return {
+      ...(raw as any),
+      async execute(args: unknown, options: unknown) {
+        const result = await execute(args, options)
+        if (typeof result === "string") {
+          return { output: result, title: "", metadata: {} }
+        }
+        if (result && typeof result === "object") {
+          const r = result as Record<string, unknown>
+          return {
+            ...r,
+            output: typeof r.output === "string" ? r.output : JSON.stringify(r.output ?? r),
+            title: typeof r.title === "string" ? r.title : "",
+            metadata: r.metadata && typeof r.metadata === "object" ? r.metadata : {},
+          }
+        }
+        return { output: String(result ?? ""), title: "", metadata: {} }
+      },
+    } as AITool
   }
 
   export function createStructuredOutputTool(input: {
