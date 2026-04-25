@@ -1092,8 +1092,13 @@ export namespace SessionLoop {
     // so stage-agent callers can keep the simple `return "OK: ..."` idiom
     // without silently landing a ZodError at tool-completion time.
     const extras = getExtraTools(input.session.id)
+    const sessionIDForExtras = input.session.id
+    const messageIDForExtras = input.processor.message.id
     for (const [name, extraTool] of Object.entries(extras)) {
-      tools[name] = wrapExtraTool(extraTool)
+      tools[name] = wrapExtraTool(extraTool, {
+        sessionID: sessionIDForExtras,
+        messageID: messageIDForExtras,
+      })
     }
 
     return tools
@@ -1109,10 +1114,33 @@ export namespace SessionLoop {
    *
    * Idempotent: already-conforming results round-trip unchanged.
    */
-  function wrapExtraTool(raw: AITool): AITool {
+  function wrapExtraTool(
+    raw: AITool,
+    ctx: { sessionID: string; messageID: string },
+  ): AITool {
     const original = raw as AITool & { execute?: (...args: any[]) => any }
     if (!original.execute) return raw
     const execute = original.execute
+    // Mirror the attachment stamping the registry-tools wrapper applies
+    // (loop.ts:967-987). Extras (e.g. delivery's screenshot,
+    // verify_page_integrity) build attachments via buildMultimodalToolResult
+    // which returns `{ type, mime, url, filename }` — missing the
+    // PartBase fields (id/sessionID/messageID) that ToolStateCompleted's
+    // FilePart schema requires. Without stamping here those attachments
+    // land in part.state.attachments unstamped and the next session
+    // processor tick rejects the message state with ZodError on
+    // `state.attachments[0].{id,sessionID,messageID}`.
+    const stampAttachments = (input: unknown): unknown => {
+      if (!input || !Array.isArray(input)) return input
+      return input.map((attachment: any) => ({
+        ...attachment,
+        id: typeof attachment?.id === "string" && attachment.id.length > 0
+          ? attachment.id
+          : Identifier.ascending("part"),
+        sessionID: ctx.sessionID,
+        messageID: ctx.messageID,
+      }))
+    }
     return {
       ...(raw as any),
       async execute(args: unknown, options: unknown) {
@@ -1127,6 +1155,9 @@ export namespace SessionLoop {
             output: typeof r.output === "string" ? r.output : JSON.stringify(r.output ?? r),
             title: typeof r.title === "string" ? r.title : "",
             metadata: r.metadata && typeof r.metadata === "object" ? r.metadata : {},
+            ...(r.attachments !== undefined
+              ? { attachments: stampAttachments(r.attachments) }
+              : {}),
           }
         }
         return { output: String(result ?? ""), title: "", metadata: {} }
