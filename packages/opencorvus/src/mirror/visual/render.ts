@@ -198,6 +198,12 @@ export const RenderInputSchema = z.object({
   viewport: z.object({ width: z.number(), height: z.number() }),
   timeout: z.number().optional(),
   fullPage: z.boolean().optional(),
+  /**
+   * If provided, navigate puppeteer to this URL instead of booting the
+   * built-in static loopback server. Use this when the project needs a
+   * live backend (Express/Fastify/etc.) that the agent has already started.
+   */
+  url: z.string().url().optional(),
 })
 export type RenderInput = z.infer<typeof RenderInputSchema>
 
@@ -228,15 +234,34 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
   const startTime = Date.now()
   const timeout = parsed.timeout ?? 30_000
   const fullPage = parsed.fullPage ?? false
-  const { outputDir, viewport } = parsed
+  const { outputDir, viewport, url: liveUrl } = parsed
 
-  const indexPath = resolve(outputDir, "index.html")
-  if (!existsSync(indexPath)) {
-    throw new RenderError({ outputDir, reason: `index.html not found in ${outputDir}` })
+  // Two modes:
+  //   1. liveUrl provided  → agent already booted a server; skip the static loopback.
+  //   2. liveUrl absent    → static-file mode; require index.html and serve outputDir.
+  let server: Server | undefined
+  let targetUrl: string
+  if (liveUrl) {
+    ctx?.emit?.({ phase: "start-server", detail: `external: ${liveUrl}` })
+    targetUrl = liveUrl
+  } else {
+    const indexPath = resolve(outputDir, "index.html")
+    if (!existsSync(indexPath)) {
+      throw new RenderError({
+        outputDir,
+        reason:
+          `index.html not found in ${outputDir}. ` +
+          `If your project needs a backend (Express/Fastify/etc.) to serve its pages, ` +
+          `start the server yourself (e.g. \`bun run dev\` or \`npm start\`) on a known port ` +
+          `and call webpage_render again with \`url=http://127.0.0.1:<port>/<route>\`. ` +
+          `Otherwise produce a self-contained \`index.html\` in the worktree root.`,
+      })
+    }
+    ctx?.emit?.({ phase: "start-server" })
+    const started = await createStaticServer(outputDir)
+    server = started.server
+    targetUrl = `http://127.0.0.1:${started.port}/`
   }
-
-  ctx?.emit?.({ phase: "start-server" })
-  const { server, port } = await createStaticServer(outputDir)
 
   let browser: Browser | undefined
   try {
@@ -293,12 +318,16 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
 
     ctx?.emit?.({ phase: "load-page" })
     try {
-      await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle0", timeout })
+      await page.goto(targetUrl, { waitUntil: "networkidle0", timeout })
     } catch (err) {
+      const baseReason = err instanceof Error ? err.message : String(err)
+      const hint = liveUrl
+        ? ` Verify the server at ${liveUrl} is running and serving the requested route.`
+        : ` If your project requires a live backend, start it (e.g. \`bun run dev\`) and call webpage_render with \`url=http://127.0.0.1:<port>/<route>\` instead of relying on the static-file fallback.`
       throw new RenderError(
         {
           outputDir,
-          reason: err instanceof Error ? err.message : String(err),
+          reason: baseReason + hint,
           phase: "navigate",
         },
         { cause: err },
@@ -354,6 +383,29 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
     // Filter out non-fatal warnings (DevTools, CDN noise).
     const filteredErrors = consoleErrors.filter((e) => !/DevTools|cdn\.tailwindcss\.com/i.test(e))
 
+    // Detect 404s / fetch failures that indicate the page expected a live
+    // backend but no `url` was supplied. The screenshot will show broken /
+    // empty data sections — surface this hard so the agent stops iterating
+    // on a degraded render.
+    const backendErrorPattern =
+      /\b(404|500|503)\b|Failed to fetch|NetworkError|net::ERR_|fetch failed|TypeError: Failed to fetch|Unexpected token .* "Not found"/i
+    const backendErrors = filteredErrors.filter((e) => backendErrorPattern.test(e))
+    if (backendErrors.length > 0 && !liveUrl) {
+      throw new RenderError({
+        outputDir,
+        reason:
+          `Rendered page logged ${backendErrors.length} backend / network failure(s) — ` +
+          `the screenshot would not faithfully represent the target. ` +
+          `First console errors: ${backendErrors.slice(0, 3).join(" | ")}. ` +
+          `If your project depends on a backend server, start it yourself ` +
+          `(e.g. \`bun run dev\` / \`npm start\`) on a known port and re-call webpage_render ` +
+          `with \`url=http://127.0.0.1:<port>/<route>\`. ` +
+          `Otherwise inline the data directly into a self-contained \`index.html\` so the ` +
+          `static-file fallback can render it without network calls.`,
+        phase: "screenshot",
+      })
+    }
+
     return {
       screenshotDataUrl,
       screenshotBuffer,
@@ -369,6 +421,6 @@ export async function renderFiles(input: RenderInput, ctx?: RenderFilesCtx): Pro
         log.warn("browser close failed", { error: err instanceof Error ? err.message : String(err) })
       }
     }
-    server.close()
+    server?.close()
   }
 }
