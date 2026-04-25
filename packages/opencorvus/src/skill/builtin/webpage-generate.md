@@ -14,6 +14,7 @@ required_tools:
   - webpage_render
   - webpage_evaluate
   - webpage_text_diff
+  - webpage_vision_judge
 ---
 
 # Webpage Generate Skill
@@ -157,9 +158,22 @@ Call `webpage_render` (no args needed — defaults render `<worktree>/index.html
 
 ## Step 7 — Evaluate
 
-Call `webpage_evaluate` with `reference=reference.png` and `rendered=rendered.png` (both resolved inside `mirror/`). Writes `mirror/diff.png` (red = pixels that differ) and `mirror/eval-result.json` (recorded for the build-stage acceptance gate). Returns an overall score in 0–100.
+Two complementary checks. Run BOTH after every render — they catch different failure modes and disagreement between them is itself a signal.
 
-The score formula: `round(ssim × 50 + (100 − pixelDiff%) × 0.5)`. Target ≥ 95.
+### 7a. Visual judge (PRIMARY acceptance gate)
+
+Call `webpage_vision_judge` (no args needed — defaults read `mirror/reference.png` + `mirror/rendered.png`). It does a single-shot vision-LLM call with no system prompt and no tool list — just the two images and a request to enumerate visible differences. Output goes to `mirror/vision-judge.json` and includes:
+
+- `accepted: true|false` — the acceptance signal you trust
+- `differences[]` — ranked list with `severity` (critical/major/minor), `region`, `observed`, `expected`, and a concrete `fix_hint` per item
+
+Why this is primary: SSIM numbers and text-diffs are proxies that have historically let the agent skip looking at pixels (score plateau at ~94 with logo SVG and icons visibly wrong). Vision-judge forces an actual visual comparison every round.
+
+### 7b. SSIM + diff heatmap (secondary, structural)
+
+Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Writes `mirror/diff.png` (red = pixels that differ) and `mirror/eval-result.json`. Returns a 0–100 score (`round(ssim × 50 + (100 − pixelDiff%) × 0.5)`).
+
+Treat the score as a **trend indicator** for layout/colour drift, not as the acceptance gate. The diff heatmap is useful when vision-judge flags a region but you can't immediately see where the largest pixel-level error sits.
 
 ## Step 8 — Iterate on specific gaps
 
@@ -167,17 +181,19 @@ If the score is below target you MUST iterate. Most remaining gaps come from dyn
 
 For each round (up to **8**, count explicitly):
 
-1. **Diagnose**:
-   - `webpage_text_diff` — list of reference strings absent from your render. Single most effective signal.
-   - Inspect `mirror/diff.png` — the largest red regions point you at the next correction.
+1. **Diagnose** in this order:
+   - `webpage_vision_judge` — the structured `differences[]` list IS your work queue. Each entry already has a `fix_hint`. Address `severity: "critical"` items first, then `major`, then `minor`.
+   - `webpage_text_diff` — list of reference strings absent from your render. Reliable signal for missing copy / hot-search rows / nav labels.
+   - Inspect `mirror/diff.png` — only when you need to localise the pixel error that vision-judge flagged but you can't see at a glance.
 2. **Edit** `index.html` with the `edit` tool (targeted patches; do NOT rewrite the whole file once it's at a workable state):
+   - Apply the `fix_hint` for each diff vision-judge listed (severity-ordered).
    - Insert any strings reported by `webpage_text_diff`, in the right section per `page-ir.xml`'s `Section Text` catalogue. Keep wording verbatim.
    - Add or refine CSS rules for color drift / spacing / typography. Reference tokens via `var(--…)` only — do not invent hex values.
    - Replace placeholder image src values when `mirror/images/` is missing the asset (use the original remote URL from `extracted-page.json` as a fallback).
    - Preserve every element + CSS rule that is already rendering correctly. Deleting correct markup costs points you won't recover.
 3. Re-run `webpage_render`.
-4. Re-run `webpage_evaluate`.
-5. If `score ≥ target`, proceed to acceptance. If `score < target` and you've completed fewer than 8 rounds, go back to step 1. If you've completed 8 rounds and the score still lags, STOP. Report the final score, the biggest remaining diff regions, and any obvious blockers (e.g. dynamic content that cannot be statically cloned).
+4. Re-run `webpage_vision_judge` AND `webpage_evaluate`.
+5. If `webpage_vision_judge` returns `accepted=true` (and SSIM has not regressed), proceed to acceptance. If still `accepted=false` and you've completed fewer than 8 rounds, go back to step 1. If you've completed 8 rounds and the verdict still rejects, STOP. Report the final verdict, the biggest remaining critical/major diffs, and any obvious blockers (e.g. dynamic content that cannot be statically cloned).
 
 ## Cross-goal artifact sharing — DO NOT delete `mirror/`
 
@@ -188,8 +204,9 @@ The mirror toolchain output MUST stay in the worktree. Subsequent goals + delive
 You MUST NOT mark the goal `passed` or call `goal_report` / `StructuredOutput` until you have:
 
 1. Run `webpage_render` and produced `mirror/rendered.png` for the CURRENT `index.html` (re-run after every edit pass — a stale rendered.png from before your last edit does NOT count).
-2. Read `mirror/rendered.png` (the actual image, not just its bytes count) and visually compared it against `mirror/reference.png`. Confirm in your structured output that you inspected both images.
-3. Run `webpage_evaluate` against the freshly-rendered `mirror/rendered.png` and recorded the score in `mirror/eval-result.json`.
+2. Run `webpage_vision_judge` against the freshly-rendered `mirror/rendered.png` and confirmed the verdict file `mirror/vision-judge.json` reports `accepted: true`. This is the SINGLE primary acceptance signal — SSIM scores alone are NOT enough.
+3. Read `mirror/rendered.png` (the actual image, not just its bytes count) and visually compared it against `mirror/reference.png`. Confirm in your structured output that you inspected both images.
+4. Run `webpage_evaluate` against the freshly-rendered `mirror/rendered.png` and recorded the score in `mirror/eval-result.json` (secondary trend signal).
 
 The render screenshot is the SINGLE source of truth for "does this look like the reference". DOM diffs, text-presence checks, file-existence asserts, and DOCTYPE greps are sanity checks — they are NEVER a substitute for looking at the rendered image. A goal that compiled, committed, and passes every textual check but renders to a blank page or a broken layout is a FAILED goal regardless of what the structural checks say. Catch that before delivery does.
 
