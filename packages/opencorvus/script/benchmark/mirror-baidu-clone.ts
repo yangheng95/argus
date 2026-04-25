@@ -94,7 +94,6 @@ interface IterationReport {
   promptChars: number
   feedbackChars: number
   screenshotPath?: string
-  diffPath?: string
   /** Tokens from the reference that are missing in the rendered output. */
   missingTokens?: string[]
   /** Score of the best iteration so far — when we regressed, we restored from `best-index.html`. */
@@ -272,6 +271,7 @@ async function main() {
 
       let lastFeedback: string | undefined
       let bestScore = -1
+      let consecutiveNoImprovement = 0
       const bestIndexPath = path.join(OUTPUT_DIR, "best-index.html")
 
       for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
@@ -396,12 +396,6 @@ async function main() {
         record.mismatchedPixels = evalReport.mismatchedPixels
         record.totalPixels = evalReport.totalPixels
 
-        // Save the diff PNG for inspection.
-        const diffBase64 = evalReport.diffImageDataUrl.replace(/^data:image\/png;base64,/, "")
-        const diffPath = path.join(OUTPUT_DIR, `diff-${iter}.png`)
-        await fs.writeFile(diffPath, Buffer.from(diffBase64, "base64"))
-        record.diffPath = diffPath
-
         // ── text-diff feedback (re-extract the rendered index.html) ─────
         // Uses puppeteer-core again. Cheap (~5s) and gives the agent
         // concrete missing phrases to plug rather than generic guidance.
@@ -442,13 +436,17 @@ async function main() {
 
         record.durationMs = Date.now() - iterStart
 
-        // Best-state preservation: snapshot index.html whenever we hit a new high.
+        // Best-state preservation + stagnation tracking: snapshot index.html
+        // whenever we hit a new high; otherwise tick the no-improvement counter.
         if (record.score > bestScore) {
           bestScore = record.score
+          consecutiveNoImprovement = 0
           const liveIndex = path.join(OUTPUT_DIR, "index.html")
           if (existsSync(liveIndex)) {
             await fs.copyFile(liveIndex, bestIndexPath)
           }
+        } else {
+          consecutiveNoImprovement += 1
         }
 
         report.iterations.push(record)
@@ -469,14 +467,22 @@ async function main() {
 
         report.finalScore = Math.max(report.finalScore, record.score)
 
-        // Build diff-guided feedback for the next iteration.
+        if (consecutiveNoImprovement >= 3) {
+          console.log(
+            `\n[baidu-clone] ⏹  stagnation: ${consecutiveNoImprovement} consecutive iterations without a new high score (best=${bestScore}/100). Stopping iteration; handing off best snapshot.`,
+          )
+          report.finalScore = bestScore
+          break
+        }
+
+        // Build feedback for the next iteration.
         lastFeedback = buildCloneFeedback({
           iter,
           evalReport,
-          diffPath,
           referencePath,
           targetScore: TARGET_SCORE,
           bestScore,
+          consecutiveNoImprovement,
           missingTokens,
         })
       }
