@@ -1924,7 +1924,7 @@ export class Session2 extends HeyApiClient {
         | "planner"
         | "goal"
         | "architect"
-        | "fidelity"
+        | "integrity"
         | "delivery"
         | "executor"
         | "build"

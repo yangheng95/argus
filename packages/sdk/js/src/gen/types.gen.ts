@@ -311,7 +311,7 @@ export type EventRequirementsCompleted = {
     goalCount?: number
     decisionCount?: number
     traceabilityCount?: number
-    fidelityScore?: number
+    integrityScore?: number
     summary: string
   }
 }
@@ -345,16 +345,16 @@ export type EventDesignAnalysisCompleted = {
   }
 }
 
-export type EventFidelityReviewStarted = {
-  type: "fidelity.review.started"
+export type EventIntegrityReviewStarted = {
+  type: "integrity.review.started"
   properties: {
     taskID: string
     sessionID: string
   }
 }
 
-export type EventFidelityReviewProgress = {
-  type: "fidelity.review.progress"
+export type EventIntegrityReviewProgress = {
+  type: "integrity.review.progress"
   properties: {
     taskID: string
     sessionID: string
@@ -363,8 +363,8 @@ export type EventFidelityReviewProgress = {
   }
 }
 
-export type EventFidelityReviewChunk = {
-  type: "fidelity.review.chunk"
+export type EventIntegrityReviewChunk = {
+  type: "integrity.review.chunk"
   properties: {
     taskID: string
     sessionID: string
@@ -374,14 +374,22 @@ export type EventFidelityReviewChunk = {
   }
 }
 
-export type EventFidelityReviewCompleted = {
-  type: "fidelity.review.completed"
+export type EventIntegrityReviewCompleted = {
+  type: "integrity.review.completed"
   properties: {
     taskID: string
     sessionID: string
-    verdict: "faithful" | "needs_correction"
+    verdict: "pass" | "concerns" | "needs_correction"
+    summary: string
+    dimensions: Array<{
+      id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality"
+      verdict: "pass" | "concerns" | "needs_correction"
+      issueCount: number
+      correctionCount: number
+      missingGoalCount: number
+    }>
     issues: Array<{
-      type: "uncovered" | "partial" | "distorted" | "merged_incorrectly"
+      type: string
       description: string
     }>
     corrections: Array<{
@@ -1344,7 +1352,7 @@ export type Session = {
     | "planner"
     | "goal"
     | "architect"
-    | "fidelity"
+    | "integrity"
     | "delivery"
     | "executor"
     | "build"
@@ -1515,10 +1523,10 @@ export type Event =
   | EventRequirementsCompleted
   | EventArchitectCompleted
   | EventDesignAnalysisCompleted
-  | EventFidelityReviewStarted
-  | EventFidelityReviewProgress
-  | EventFidelityReviewChunk
-  | EventFidelityReviewCompleted
+  | EventIntegrityReviewStarted
+  | EventIntegrityReviewProgress
+  | EventIntegrityReviewChunk
+  | EventIntegrityReviewCompleted
   | EventBuildCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
@@ -2841,7 +2849,7 @@ export type GlobalSession = {
     | "planner"
     | "goal"
     | "architect"
-    | "fidelity"
+    | "integrity"
     | "delivery"
     | "executor"
     | "build"
@@ -4524,7 +4532,7 @@ export type SessionCreateData = {
       | "planner"
       | "goal"
       | "architect"
-      | "fidelity"
+      | "integrity"
       | "delivery"
       | "executor"
       | "build"
@@ -9424,6 +9432,8 @@ export type SessionTraceResponses = {
         [key: string]: unknown
       }
     }>
+    traceDir: string
+    enabled: boolean
   }
 }
 
@@ -9466,6 +9476,8 @@ export type TaskTraceResponses = {
         [key: string]: unknown
       }
     }>
+    traceDir: string
+    enabled: boolean
   }
 }
 
