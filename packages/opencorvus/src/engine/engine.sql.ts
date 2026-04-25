@@ -111,7 +111,7 @@ export type EngineArtifactKind =
   | "verification-evidence"
   | "delivery"
   | "goal_run_attempt"
-  | "fidelity_attempt"
+  | "integrity_attempt"
   | "prosecutor_attempt"
   | "run"
   | "orchestrator-stream-error"
@@ -356,7 +356,7 @@ export const EngineGoalTable = sqliteTable(
     imports: text({ mode: "json" }).$type<string[]>().notNull().default([]),
     /** Goal category (e.g. bootstrap, feature, verification). */
     kind: text().notNull().default("feature"),
-    /** Requirement IDs from user input that this goal covers (fidelity tracing). */
+    /** Requirement IDs from user input that this goal covers (integrity tracing). */
     requirement_ids: text({ mode: "json" }).$type<string[]>().notNull().default([]),
 
     // --- Orchestrator-managed fields ---

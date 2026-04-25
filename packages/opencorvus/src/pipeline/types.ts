@@ -36,7 +36,7 @@ export interface GoalContractFields {
   priority: "blocking" | "advisory"
   /** Goal category. */
   kind: string
-  /** Requirement IDs from user input that this goal covers (for fidelity tracing). */
+  /** Requirement IDs from user input that this goal covers (for integrity tracing). */
   requirement_ids: string[]
   /**
    * Interfaces this goal EXPORTS for dependent goals.

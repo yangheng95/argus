@@ -47,7 +47,7 @@ export type CardKind =
   | "phase"     // phase row inside a step (plan / build / evaluate inside pipeline.build)
   | "tool"      // promoted tool call (nested card for task/subagent)
   | "message"   // user / system synthetic bubble
-  | "fidelity"; // requirements fidelity review verdict
+  | "integrity"; // architecture integrity review verdict
 
 export type CardStatus =
   | "pending"
@@ -163,12 +163,20 @@ export interface CardNode {
   toolPart?: any;
   contextTokens?: number;
   contextTokensEstimated?: boolean;
-  /** Structured fidelity review payload — only populated for kind="fidelity"
-   *  nodes. Mirrors `FidelityReviewCompleted` event shape (see
-   *  opencorvus/engine/model.ts). Rendered natively by <FidelityCard>; the
-   *  raw JSON that the fidelity LLM produces never reaches the UI. */
-  fidelity?: {
-    verdict: "faithful" | "needs_correction";
+  /** Structured integrity review payload — only populated for kind="integrity"
+   *  nodes. Mirrors `IntegrityReviewCompleted` event shape (see
+   *  opencorvus/engine/model.ts). Rendered natively by <IntegrityCard>; the
+   *  raw JSON that the integrity LLM produces never reaches the UI. */
+  integrity?: {
+    verdict: "pass" | "concerns" | "needs_correction";
+    summary: string;
+    dimensions: Array<{
+      id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
+      verdict: "pass" | "concerns" | "needs_correction";
+      issueCount: number;
+      correctionCount: number;
+      missingGoalCount: number;
+    }>;
     issues: Array<{ type: string; description: string }>;
     corrections: Array<{
       action: "modify" | "split" | "remove";

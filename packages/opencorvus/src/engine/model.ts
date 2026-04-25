@@ -486,7 +486,7 @@ const ProgressSnapshot = z.object({
 
 /**
  * Live session activity for a task — surfaces pre-plan agent work (requirements /
- * architect / fidelity-review / design-analyst) that would otherwise be invisible
+ * architect / integrity-review / design-analyst) that would otherwise be invisible
  * because `goals` and `run` are empty until the architect finishes decomposing.
  * Derived from protocol_event + session.kind; no FSM column involved.
  */
@@ -1002,7 +1002,7 @@ export const Event = {
       goalCount: z.number().optional(),
       decisionCount: z.number().optional(),
       traceabilityCount: z.number().optional(),
-      fidelityScore: z.number().optional(),
+      integrityScore: z.number().optional(),
       summary: z.string(),
     }),
   ),
@@ -1033,22 +1033,22 @@ export const Event = {
       summary: z.string(),
     }),
   ),
-  /** Fidelity review lifecycle markers. The review makes a non-streaming LLM
+  /** Integrity review lifecycle markers. The review makes a non-streaming LLM
    *  call that can take 60–180s; without these events the SSE stream falls
    *  silent long enough to trip the benchmark alive-stall detector (cap
    *  120s) and mask real progress. `Started` fires once before the first
    *  LLM attempt; `Progress` fires on an interval while we wait for the
    *  verdict so the stream keeps ticking. Neither is rendered by the
    *  overlay — they exist purely to expose liveness. */
-  FidelityReviewStarted: BusEvent.define(
-    "fidelity.review.started",
+  IntegrityReviewStarted: BusEvent.define(
+    "integrity.review.started",
     z.object({
       taskID: Identifier.schema("task"),
       sessionID: z.string(),
     }),
   ),
-  FidelityReviewProgress: BusEvent.define(
-    "fidelity.review.progress",
+  IntegrityReviewProgress: BusEvent.define(
+    "integrity.review.progress",
     z.object({
       taskID: Identifier.schema("task"),
       sessionID: z.string(),
@@ -1056,16 +1056,16 @@ export const Event = {
       elapsedMs: z.number(),
     }),
   ),
-  /** Fidelity review streaming chunk. Forwarded from the LLM stream while
+  /** Integrity review streaming chunk. Forwarded from the LLM stream while
    *  the tool-use loop is in flight. ONLY `reasoning-delta` is forwarded —
-   *  the `submit_fidelity_verdict` tool-input JSON is protocol payload and
+   *  the `submit_integrity_verdict` tool-input JSON is protocol payload and
    *  must never surface as visible text (that would defeat the point of
    *  the tool-call architecture; verdict is delivered structurally via
-   *  FidelityReviewCompleted). Non-reasoning models emit no reasoning
+   *  IntegrityReviewCompleted). Non-reasoning models emit no reasoning
    *  chunks; their sub-15s tool call needs no streaming. Throttled to
    *  ~2 events/s to keep protocol_event row counts sane. */
-  FidelityReviewChunk: BusEvent.define(
-    "fidelity.review.chunk",
+  IntegrityReviewChunk: BusEvent.define(
+    "integrity.review.chunk",
     z.object({
       taskID: Identifier.schema("task"),
       sessionID: z.string(),
@@ -1074,25 +1074,36 @@ export const Event = {
       attempt: z.number(),
     }),
   ),
-  /** Fidelity review verdict with the full structured result. Emitted once
-   *  per reviewFidelity() call after the LLM submits its tool-call verdict.
-   *  Carries the same shape as FidelityResult so the overlay can render a
-   *  native verdict card (badge + issues + corrections). */
-  FidelityReviewCompleted: BusEvent.define(
-    "fidelity.review.completed",
+  /** Integrity review verdict with the full structured result. Emitted once
+   *  per reviewIntegrity() call after the LLM submits its tool-call verdict.
+   *  Carries the per-dimension breakdown (goal_fidelity / technical_feasibility
+   *  / hallucination / solution_quality) plus the cross-dimension union of
+   *  issues / corrections / missing goals so the overlay can render a native
+   *  verdict card. The runtime aggregates `verdict` from per-dimension worst-
+   *  case; the LLM does NOT supply a top-level verdict. */
+  IntegrityReviewCompleted: BusEvent.define(
+    "integrity.review.completed",
     z.object({
       taskID: Identifier.schema("task"),
-      /** Requirements agent session that owns this fidelity review. The
+      /** Requirements agent session that owns this integrity review. The
        *  overlay uses this to attach the verdict card under the requirements
        *  session card — without it the card would escape to the top level,
        *  which the overlay explicitly forbids (see tree-writer card hierarchy
-       *  rules). Required: every real fidelity pass runs inside an agent
+       *  rules). Required: every real integrity pass runs inside an agent
        *  session; emitting without sessionID is a backend bug that must be
-       *  caught at the source (see fidelity.ts emitFidelityEvent assertion). */
+       *  caught at the source (see integrity/agent.ts emitIntegrityEvent assertion). */
       sessionID: z.string(),
-      verdict: z.enum(["faithful", "needs_correction"]),
+      verdict: z.enum(["pass", "concerns", "needs_correction"]),
+      summary: z.string(),
+      dimensions: z.array(z.object({
+        id: z.enum(["goal_fidelity", "technical_feasibility", "hallucination", "solution_quality"]),
+        verdict: z.enum(["pass", "concerns", "needs_correction"]),
+        issueCount: z.number(),
+        correctionCount: z.number(),
+        missingGoalCount: z.number(),
+      })),
       issues: z.array(z.object({
-        type: z.enum(["uncovered", "partial", "distorted", "merged_incorrectly"]),
+        type: z.string(),
         description: z.string(),
       })),
       corrections: z.array(z.object({

@@ -2,7 +2,7 @@
  * runAgentSession — the single entry point every OpenCorvus WORKER agent runs through.
  *
  * Position in the architecture: agents have one shape. Each agent module
- * (architect / requirements / build / delivery / fidelity / prosecutor /
+ * (architect / requirements / build / delivery / integrity / prosecutor /
  * intent-analysis / design-analyst / orchestrator-children…) contributes only
  * what is genuinely agent-specific:
  *
@@ -42,7 +42,7 @@
  *   2. `withStepHook` wrapping `withExtraTools` so a deferred-stop finalizer
  *      runs after every assistant step. Worker agents have no equivalent
  *      step-level coordination need — their session terminates on the
- *      collector's contract being met (build/delivery) or stepCountIs (fidelity
+ *      collector's contract being met (build/delivery) or stepCountIs (integrity
  *      / prosecutor). Adding step-hook plumbing to the runner would saddle
  *      every worker with the orchestrator's dispatch-model overhead.
  *
@@ -102,7 +102,7 @@ export interface AgentToolKit<C> {
 
 /**
  * EngineConfig stage keys whose `.skills` field drives skill injection.
- * Agents not in this set (orchestrator, fidelity, prosecutor) get no
+ * Agents not in this set (orchestrator, integrity, prosecutor) get no
  * automatic skill injection — they are special-cased by intent. Skill
  * injection is opt-in: pass `skillsStage` to enable it. The runner
  * appends matched skills to the SYSTEM prompt — auto-load semantics, never
@@ -445,7 +445,7 @@ export async function runAgentSession<C>(
 // blocker preventing other stage agents from gaining bounded retry without
 // duplicating delivery's loop verbatim.
 //
-// Single-shot agents (architect, requirements, fidelity, prosecutor,
+// Single-shot agents (architect, requirements, integrity, prosecutor,
 // design-analyst, intent-analysis, build) keep calling `runAgentSession`
 // directly — no retry is needed for any of them at this time, and forcing
 // them through this wrapper would just add a useless `maxRetries: 1`

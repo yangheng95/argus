@@ -55,7 +55,7 @@ export namespace SessionLoop {
   // Ephemeral per-session tools (phase 3-a-1 of specs/new-arch/16-unified-teardown.md)
   //
   // Some stage agents (intent-analysis, requirements, architect, delivery,
-  // fidelity reviewer, ...) need to expose agent-scoped tool objects
+  // integrity reviewer, ...) need to expose agent-scoped tool objects
   // (`extract_slot`, `register_requirement`, `submit_verdict`, ...) for a
   // single prompt invocation. These tools do not belong in the global Agent
   // registry because their meaning is bounded to one agent's lifetime, and

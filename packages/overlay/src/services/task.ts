@@ -240,7 +240,7 @@ export async function selectTask(
   stopSSE();
   clearBoard();
   clearMessages();
-  // Drop cardTreeStore + the writer's internal session/message/fidelity
+  // Drop cardTreeStore + the writer's internal session/message/integrity
   // indices so the conversation panel doesn't carry stale cards into the
   // next task. resetWriter() was documented for task-switch use but had no
   // production call site — the old pipeline's derivation from messageStore

@@ -325,7 +325,7 @@ export namespace Agent {
             "requirements",
             "design_analysis",
             "architect",
-            "fidelity",
+            "integrity",
             "deliver",
             "prosecute",
             "publish_delivery",
@@ -438,9 +438,9 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
-      fidelity: {
-        name: "fidelity",
-        description: "Fidelity review stage. Verifies that the produced goal set covers the original user request; system prompt is built per-call in fidelity/agent.ts.",
+      integrity: {
+        name: "integrity",
+        description: "Integrity review stage. Multi-dimension review of architect output: goal_fidelity / technical_feasibility / hallucination / solution_quality. System prompt is built per-call in integrity/agent.ts from the dimension registry.",
         steps: 1000,
         options: {},
         mode: "primary",

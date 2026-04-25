@@ -895,7 +895,7 @@ export function listGoalWorkspacesForProject(projectID: string) {
  * Sessions that produced a protocol event for this task within the last
  * `windowMs` milliseconds. This is the describe-layer view of "what agents
  * are currently working" — it covers pre-plan sessions (requirements /
- * architect / fidelity / design-analyst) which `goals` and `run` miss
+ * architect / integrity / design-analyst) which `goals` and `run` miss
  * entirely because they're gated on `active_plan_version_id`.
  *
  * Source: protocol_event is the append-only truth for agent activity; we do
@@ -904,7 +904,7 @@ export function listGoalWorkspacesForProject(projectID: string) {
  *
  * Sessions that have already emitted a phase-terminal event
  * (`*.completed` per the EngineEvent naming contract — requirements.completed,
- * architect.completed, design_analysis.completed, fidelity.completed,
+ * architect.completed, design_analysis.completed, integrity.completed,
  * build.completed, delivery.completed, intent_analysis.completed) are
  * excluded so the overlay's spinner stops the moment the inner runner
  * concludes — without waiting for the orchestrator's next LLM step. The

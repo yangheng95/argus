@@ -1470,22 +1470,26 @@ export function recordBuildAttempt(input: {
 }
 
 /**
- * Record a fidelity-review attempt as an append-only artifact so the
- * orchestrator's read_context can surface "fidelity already ran with verdict X
+ * Record an integrity-review attempt as an append-only artifact so the
+ * orchestrator's read_context can surface "integrity already ran with verdict X
  * for spec snapshot Y". Without this the LLM has no way to distinguish
- * "fidelity was never called" from "fidelity ran and returned faithful (no
- * goal change)" — same death-loop shape rule 23 / commit 7acb5f17f addressed
+ * "integrity was never called" from "integrity ran and returned pass (no goal
+ * change)" — same death-loop shape rule 23 / commit 7acb5f17f addressed
  * for build.
  */
-export function recordFidelityAttempt(input: {
+export function recordIntegrityAttempt(input: {
   taskID: string
-  /** The fidelity child session id — surfaces in overlay nesting. */
+  /** The integrity child session id — surfaces in overlay nesting. */
   sessionID: string
   /** Spec snapshot the goal set was reviewed against. The orchestrator may
-   *  legitimately re-run fidelity after architect lands a NEW snapshot, so
+   *  legitimately re-run integrity after architect lands a NEW snapshot, so
    *  read_context must scope the latest-attempt lookup by snapshot id. */
   specSnapshotID: string
-  verdict: "faithful" | "needs_correction"
+  verdict: "pass" | "concerns" | "needs_correction"
+  /** Per-dimension verdicts so read_context can surface "goal_fidelity passed
+   *  but solution_quality flagged 3 weak_acceptance specs" — losing this
+   *  granularity behind a single aggregate would defeat the redesign. */
+  perDimension: Array<{ id: string; verdict: "pass" | "concerns" | "needs_correction" }>
   issuesCount: number
   correctionsCount: number
   missingCount: number
@@ -1498,6 +1502,7 @@ export function recordFidelityAttempt(input: {
     spec_snapshot_id: input.specSnapshotID,
     session_id: input.sessionID,
     verdict: input.verdict,
+    per_dimension: input.perDimension,
     issues_count: input.issuesCount,
     corrections_count: input.correctionsCount,
     missing_count: input.missingCount,
@@ -1512,7 +1517,7 @@ export function recordFidelityAttempt(input: {
         task_id: input.taskID,
         run_id: null,
         goal_run_id: null,
-        kind: "fidelity_attempt",
+        kind: "integrity_attempt",
         label: `verdict-${input.verdict}`,
         payload,
         time_created: now,

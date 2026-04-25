@@ -205,7 +205,7 @@ const PIPELINE: MiniWorkflow = {
       id: "architect",
       tool: "architect",
       label: "Architect",
-      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约 / fidelity。每个 task 都要跑；delivery 拒绝后也可 re-run 精修 goal 集合。",
+      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约。每个 task 都要跑；delivery 拒绝后也可 re-run 精修 goal 集合。后续 integrity 审查多维度（goal fidelity / 技术可行性 / hallucination / 方案质量）。",
       scope: "task",
       skippable: false,
       after: ["requirements"],

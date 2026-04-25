@@ -16,8 +16,8 @@
  * Constraints:
  * ✗ Cannot execute code / commands
  * ✗ Cannot write or modify user files
- * ✗ Cannot call other agents (fidelity runs as a sibling via the
- *   orchestrator `fidelity` tool — see fidelity/agent.ts)
+ * ✗ Cannot call other agents (integrity runs as a sibling via the
+ *   orchestrator `integrity` tool — see integrity/agent.ts)
  * ✗ Cannot modify engine_requirement rows (those are owned by Requirements)
  *
  * Implementation: thin shell over `runAgentSession`. Agent-specific code
@@ -157,8 +157,9 @@ export namespace ArchitectAgent {
       )
     }
 
-    // Architect produces the goal set as facts. Fidelity is a SEPARATE
-    // orchestrator-level step — architect does not call it. Rule 22.
+    // Architect produces the goal set as facts. Integrity (multi-dimension
+    // review) is a SEPARATE orchestrator-level step — architect does not
+    // call it. Rule 22.
     const goals: GoalContractFields[] = collector.goals.map((g) => ({
       id: g.id,
       title: g.title,
@@ -243,7 +244,7 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
       specs: input.designSpecs,
       instructions: [
         "The following advisory visual constraints came from design_analysis.",
-        "Use them when decomposing frontend goals, owned paths, interaction work, and fidelity coverage.",
+        "Use them when decomposing frontend goals, owned paths, interaction work, and integrity coverage.",
       ],
     }))
   }

@@ -1069,7 +1069,7 @@ export function createOrchestratorTools(input: {
         "Decompose the task into goals. The Architect reads the REQ-N list + " +
         "foundational decisions produced by requirements, explores the codebase, " +
         "and registers the final goal set (including metric specs, challenge " +
-        "seeds, traceability, cross-goal contracts, and fidelity verdict). " +
+        "seeds, traceability, cross-goal contracts, and integrity verdict). " +
         "Call after `requirements`. Call again (as a re-run) when delivery " +
         "rejects the current goal set and the problem is structural rather " +
         "than a point fix; Architect will refine the existing goals instead " +
@@ -1150,10 +1150,10 @@ export function createOrchestratorTools(input: {
           })
 
           // Single-pass persist. Architect's goal set is the authoritative
-          // result of this tool call. Fidelity is a SEPARATE orchestrator
-          // tool (`fidelity`) that re-upserts the corrected set against the
-          // same spec snapshot. No dual-write, no readiness gate keyed on a
-          // second LLM call (rule 22 / 23).
+          // result of this tool call. Integrity (multi-dimension review) is a
+          // SEPARATE orchestrator tool (`integrity`) that re-upserts the
+          // corrected set against the same spec snapshot. No dual-write, no
+          // readiness gate keyed on a second LLM call (rule 22 / 23).
           const newSpecSnapshotID = Identifier.ascending("spec")
           const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
           const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
@@ -1271,7 +1271,7 @@ export function createOrchestratorTools(input: {
               `${result.globalMetricSpecs.length} global metrics, ${result.challengeSeeds.length} challenge seeds, ` +
               `${result.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: call \`fidelity\` to verify goal coverage against the user request, then proceed to per-goal \`build\`.`,
+              ` NEXT: call \`integrity\` to verify goal_fidelity / technical_feasibility / hallucination / solution_quality, then proceed to per-goal \`build\`.`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
@@ -1314,47 +1314,50 @@ export function createOrchestratorTools(input: {
     }),
 
     // -----------------------------------------------------------------------
-    // Fidelity — orchestrator-driven goal-coverage review.
+    // Integrity — orchestrator-driven multi-dimension review of architect output.
     //
     // Lifted out of architect/agent.ts (audit 2026-04-25): per the agent
     // boundary rule (agents do not call agents; only the orchestrator
-    // routes messages between agents), the fidelity reviewer must be a
+    // routes messages between agents), the integrity reviewer must be a
     // sibling of architect at the orchestrator level, not a nested call
     // inside architect's run(). This tool reads the persisted goal set,
-    // invokes the fidelity reviewer, and on `needs_correction` re-upserts
+    // invokes the integrity reviewer, and on `needs_correction` re-upserts
     // the corrected goal set against the same active spec snapshot.
     // -----------------------------------------------------------------------
 
-    fidelity: tool({
+    integrity: tool({
       description:
-        "Review the persisted goal set against the ORIGINAL user request for " +
-        "coverage and fidelity. Call AFTER `architect` lands a goal set, BEFORE " +
-        "dispatching `build`. The reviewer either confirms the set as faithful " +
-        "or returns corrections (modify / remove / add); on needs_correction " +
-        "the orchestrator re-upserts the corrected set against the same spec " +
-        "snapshot. Re-run when delivery feedback hints the goal set drifted " +
-        "from user intent (vs. a structural rewrite, which is `architect`).",
+        "Multi-dimension review of architect output: goal_fidelity (coverage of " +
+        "the original user request), technical_feasibility (imports / exports / " +
+        "owned_paths / dep graph viability), hallucination (ungrounded REQs / " +
+        "specs / contracts), solution_quality (granularity, acceptance-spec " +
+        "strength, ownership, ordering). Call AFTER `architect` lands a goal " +
+        "set, BEFORE dispatching `build`. The reviewer returns a per-dimension " +
+        "verdict (pass / concerns / needs_correction); on aggregate " +
+        "needs_correction the orchestrator re-upserts the corrected goal set " +
+        "against the same spec snapshot. Re-run when delivery feedback hints " +
+        "the goal set drifted (vs. a structural rewrite, which is `architect`).",
       inputSchema: z.object({
-        reason: z.string().optional().describe("Why you decided to run fidelity review"),
+        reason: z.string().optional().describe("Why you decided to run integrity review"),
       }),
       execute: async () => {
         const task = requireTask(taskID)
         const activeSpec = findActiveSpecForTask(task.id)
         if (!activeSpec) {
           return SubAgentProtocol.yieldResult({
-            headline: "fidelity: no active spec snapshot — call `architect` first.",
+            headline: "integrity: no active spec snapshot — call `architect` first.",
             pointer: `task ${taskID}`,
           })
         }
         const dbGoals = listGoals(taskID).filter((g) => g.spec_snapshot_id === activeSpec.id)
         if (dbGoals.length === 0) {
           return SubAgentProtocol.yieldResult({
-            headline: "fidelity: no goals on the active spec snapshot — call `architect` first.",
+            headline: "integrity: no goals on the active spec snapshot — call `architect` first.",
             pointer: `spec ${activeSpec.id}`,
           })
         }
 
-        // Single session per sub-agent (rule 22). reviewFidelity creates the
+        // Single session per sub-agent (rule 22). reviewIntegrity creates the
         // runner session internally and returns its id on `verdict.sessionID`.
 
         const { findRequirements } = await import("@/engine/store")
@@ -1392,8 +1395,8 @@ export function createOrchestratorTools(input: {
           requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
         }))
 
-        const { reviewFidelity, applyFidelityCorrections } = await import("@/fidelity")
-        const verdict = await reviewFidelity({
+        const { reviewIntegrity, applyIntegrityCorrections } = await import("@/integrity")
+        const verdict = await reviewIntegrity({
           userRequest: task.request,
           taskTitle: task.title,
           goals: goalsForReview,
@@ -1406,39 +1409,52 @@ export function createOrchestratorTools(input: {
           parentSessionID: input.agentSessionID,
         })
 
-        if (verdict.verdict === "faithful") {
+        const perDimensionLabels = verdict.dimensions.map((d) => `${d.id}=${d.verdict}`).join(", ")
+        const { recordIntegrityAttempt } = await import("@/engine/persist")
+        const perDimensionRollup = verdict.dimensions.map((d) => ({ id: d.id, verdict: d.verdict }))
+
+        if (verdict.verdict !== "needs_correction") {
           try {
-            const { recordFidelityAttempt } = await import("@/engine/persist")
-            recordFidelityAttempt({
+            recordIntegrityAttempt({
               taskID,
               sessionID: verdict.sessionID,
               specSnapshotID: activeSpec.id,
-              verdict: "faithful",
+              verdict: verdict.verdict,
+              perDimension: perDimensionRollup,
               issuesCount: verdict.issues.length,
               correctionsCount: 0,
               missingCount: 0,
+              reason: verdict.summary,
             })
           } catch (err) {
-            log.error("fidelity: recordFidelityAttempt failed", {
+            log.error("integrity: recordIntegrityAttempt failed", {
               taskID,
               error: err instanceof Error ? err.message : String(err),
             })
           }
+          const headline =
+            verdict.verdict === "pass"
+              ? `Integrity verdict: pass — ${perDimensionLabels}. NEXT: dispatch \`build({ goalID })\` per goal.`
+              : `Integrity verdict: concerns — ${perDimensionLabels}. ${verdict.summary} ` +
+                `Goal set is executable; surface the concerns above to the operator if relevant. ` +
+                `NEXT: dispatch \`build({ goalID })\` per goal, OR re-run \`architect\` / upstream agents if a hallucination dimension flagged ungrounded REQs.`
           return SubAgentProtocol.yieldResult({
-            headline: `Fidelity verdict: faithful — goal set covers user intent. NEXT: dispatch \`build({ goalID })\` per goal.`,
+            headline,
             fields: [
               ["goal_count", String(goalsForReview.length)],
               ["spec_snapshot_id", activeSpec.id],
+              ["per_dimension", verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`)],
+              ["summary", verdict.summary],
             ],
-            pointer: `fidelity session ${verdict.sessionID}`,
+            pointer: `integrity session ${verdict.sessionID}`,
           })
         }
 
-        const corrected = applyFidelityCorrections(goalsForReview, verdict)
+        const corrected = applyIntegrityCorrections(goalsForReview, verdict)
         const beforeIDs = new Set(goalsForReview.map((g) => g.id))
         const afterIDs = new Set(corrected.map((g) => g.id))
-        const removedByFidelity = [...beforeIDs].filter((id) => !afterIDs.has(id))
-        const addedByFidelity = [...afterIDs].filter((id) => !beforeIDs.has(id))
+        const removedByIntegrity = [...beforeIDs].filter((id) => !afterIDs.has(id))
+        const addedByIntegrity = [...afterIDs].filter((id) => !beforeIDs.has(id))
 
         const { upsertGoalsFromArchitect } = await import("@/engine/persist")
         const { persistArchitectMetrics } = await import("@/metrics/store")
@@ -1464,7 +1480,7 @@ export function createOrchestratorTools(input: {
               priority: g.priority,
               source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
             })),
-            removedLLMIDs: removedByFidelity,
+            removedLLMIDs: removedByIntegrity,
             now: Date.now(),
           })
           persisted = out.persisted
@@ -1472,7 +1488,7 @@ export function createOrchestratorTools(input: {
           deletedIDs = out.deletedIDs
 
           // Re-baseline goal metric specs against the corrected goal id map
-          // so newly-added fidelity goals are picked up by the metric layer
+          // so newly-added integrity goals are picked up by the metric layer
           // and removed goals stop accumulating metric_results. The global
           // specs are unchanged (they are not goal-scoped).
           persistArchitectMetrics({
@@ -1485,12 +1501,12 @@ export function createOrchestratorTools(input: {
           Database.effect(() =>
             EngineProtocol.emit(
               EngineEvent.TaskUpdated,
-              { taskID, status: deriveTaskStatus(task), summary: `Fidelity corrected goal set: -${deletedIDs.length} +${addedByFidelity.length}` },
-              { source: "orchestrator.fidelity" },
+              { taskID, status: deriveTaskStatus(task), summary: `Integrity corrected goal set: -${deletedIDs.length} +${addedByIntegrity.length}` },
+              { source: "orchestrator.integrity" },
             ),
           )
         }) } catch (dbErr) {
-          log.error("fidelity: failed to persist corrections", {
+          log.error("integrity: failed to persist corrections", {
             taskID,
             error: dbErr instanceof Error ? dbErr.message : String(dbErr),
           })
@@ -1500,18 +1516,19 @@ export function createOrchestratorTools(input: {
         for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
 
         try {
-          const { recordFidelityAttempt } = await import("@/engine/persist")
-          recordFidelityAttempt({
+          recordIntegrityAttempt({
             taskID,
             sessionID: verdict.sessionID,
             specSnapshotID: activeSpec.id,
             verdict: "needs_correction",
+            perDimension: perDimensionRollup,
             issuesCount: verdict.issues.length,
             correctionsCount: verdict.corrections.length,
             missingCount: verdict.missingGoals.length,
+            reason: verdict.summary,
           })
         } catch (err) {
-          log.error("fidelity: recordFidelityAttempt failed", {
+          log.error("integrity: recordIntegrityAttempt failed", {
             taskID,
             error: err instanceof Error ? err.message : String(err),
           })
@@ -1519,17 +1536,19 @@ export function createOrchestratorTools(input: {
 
         return SubAgentProtocol.yieldResult({
           headline:
-            `Fidelity verdict: needs_correction. ` +
+            `Integrity verdict: needs_correction (${perDimensionLabels}). ` +
+            `${verdict.summary} ` +
             `Goal set re-upserted against spec ${activeSpec.id}: ` +
             `${verdict.corrections.length} corrections, ${verdict.missingGoals.length} new goals, ${deletedIDs.length} removed. ` +
             `NEXT: dispatch \`build({ goalID })\` on the corrected set.`,
           fields: [
             ["issues", verdict.issues.map((i) => `[${i.type}] ${i.description}`)],
-            ["added_goals", addedByFidelity],
-            ["removed_goals", removedByFidelity],
+            ["added_goals", addedByIntegrity],
+            ["removed_goals", removedByIntegrity],
             ["spec_snapshot_id", activeSpec.id],
+            ["per_dimension", verdict.dimensions.map((d) => `${d.id}=${d.verdict}(${d.issues.length}issues)`)],
           ],
-          pointer: `fidelity session ${verdict.sessionID}`,
+          pointer: `integrity session ${verdict.sessionID}`,
         })
       },
     }),
@@ -1737,7 +1756,7 @@ export function createOrchestratorTools(input: {
         const nices = r.clarifications.filter((c) => c.priority === "nice")
 
         // Persist intent reading into the Decision Log so downstream agents
-        // (requirements / architect / fidelity / build) see the upstream
+        // (requirements / architect / integrity / build) see the upstream
         // scope_boundary / complexity / slots / clarifications via the
         // TaskContext.snapshot block. Without this the agent runs but its
         // output never reaches any downstream prompt — pure token waste.
@@ -1951,7 +1970,7 @@ export function createOrchestratorTools(input: {
     }),
 
     read_context: tool({
-      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, fidelity/prosecutor attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
+      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, integrity/prosecutor attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
       inputSchema: z.object({
         scope: z.enum(["goals", "evaluations", "decisions", "deliveries", "all"]).default("all").describe("What to read"),
       }),
@@ -2049,37 +2068,43 @@ export function createOrchestratorTools(input: {
         }
 
         if (scope === "all") {
-          // Fidelity / prosecutor attempts: surface the FACT that these stages
+          // Integrity / prosecutor attempts: surface the FACT that these stages
           // ran for the current spec snapshot / delivery. Without this the
-          // orchestrator-LLM cannot tell "fidelity returned faithful (no goal
-          // change)" from "fidelity never called" — same death-loop shape that
+          // orchestrator-LLM cannot tell "integrity returned pass (no goal
+          // change)" from "integrity never called" — same death-loop shape that
           // commit 7acb5f17f addressed for build via recordBuildAttempt.
           const { EngineArtifactTable } = await import("@/engine/engine.sql")
           const { desc } = await import("@/storage/db")
           const activeSpec = findActiveSpecForTask(taskID)
           if (activeSpec) {
-            const fidelityRow = Database.use((db) =>
+            const integrityRow = Database.use((db) =>
               db
                 .select()
                 .from(EngineArtifactTable)
                 .where(
                   and(
                     eq(EngineArtifactTable.task_id, taskID),
-                    eq(EngineArtifactTable.kind, "fidelity_attempt"),
+                    eq(EngineArtifactTable.kind, "integrity_attempt"),
                   ),
                 )
                 .orderBy(desc(EngineArtifactTable.time_created))
                 .limit(1)
                 .get(),
             )
-            if (fidelityRow) {
-              const p = (fidelityRow.payload ?? {}) as Record<string, unknown>
+            if (integrityRow) {
+              const p = (integrityRow.payload ?? {}) as Record<string, unknown>
               const matchesSnapshot = p.spec_snapshot_id === activeSpec.id
+              const perDim = Array.isArray(p.per_dimension)
+                ? (p.per_dimension as Array<{ id: string; verdict: string }>)
+                  .map((d) => `${d.id}=${d.verdict}`)
+                  .join(", ")
+                : ""
               sections.push(
-                `\n## Fidelity (latest)`,
+                `\n## Integrity (latest)`,
                 `- verdict: ${String(p.verdict ?? "unknown")}` +
+                  (perDim ? ` — per-dimension: ${perDim}` : "") +
                   ` — issues=${Number(p.issues_count ?? 0)} corrections=${Number(p.corrections_count ?? 0)} missing=${Number(p.missing_count ?? 0)}` +
-                  (matchesSnapshot ? " (current spec snapshot)" : " (STALE — newer spec snapshot exists; re-run fidelity)"),
+                  (matchesSnapshot ? " (current spec snapshot)" : " (STALE — newer spec snapshot exists; re-run integrity)"),
               )
             }
           }
@@ -3726,7 +3751,7 @@ export function createOrchestratorTools(input: {
           // mark the spinning build session card as terminal. Without it the
           // card stays in "running" state forever even though BuildAgent.run
           // already resolved. Mirrors RequirementsCompleted / ArchitectCompleted
-          // / FidelityReviewCompleted shape.
+          // / IntegrityReviewCompleted shape.
           EngineProtocol.emit(
             EngineEvent.BuildCompleted,
             {

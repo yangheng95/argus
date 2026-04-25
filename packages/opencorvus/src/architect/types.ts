@@ -128,10 +128,11 @@ export interface ArchitectRetryContext {
 // ---------------------------------------------------------------------------
 
 export interface ArchitectResult {
-  /** Final goal set produced by the architect agent. Fidelity is a separate
-   *  orchestrator-level step (orchestrator/tools.ts:fidelity) — the goal set
-   *  here is unconditioned by fidelity verdict and may be re-upserted by the
-   *  orchestrator after fidelity corrections land. */
+  /** Final goal set produced by the architect agent. Integrity (multi-dimension
+   *  review) is a separate orchestrator-level step (orchestrator/tools.ts:
+   *  integrity) — the goal set here is unconditioned by the integrity verdict
+   *  and may be re-upserted by the orchestrator after integrity corrections
+   *  land. */
   goals: GoalContractFields[]
   /** Goal IDs the Architect chose to drop during a re-run. */
   removedGoalIDs: string[]
