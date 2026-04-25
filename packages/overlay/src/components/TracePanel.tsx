@@ -12,7 +12,7 @@
 //                                    persistent right-panel trace stream
 //                                    when no `onClose` is provided.
 
-import { For, Show, createMemo, createResource, createSignal } from "solid-js";
+import { For, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent } from "../services/trace";
 
 type TracePanelProps =
@@ -147,7 +147,7 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
 }
 
 export function TracePanel(props: TracePanelProps) {
-  const cacheKey = createMemo(() => props.sessionID ?? `task:${props.taskID}`);
+  const cacheKey = createMemo(() => props.sessionID ?? `task:${props.taskID ?? ""}`);
   const [refreshTick, setRefreshTick] = createSignal(0);
 
   const [events] = createResource(
@@ -172,14 +172,40 @@ export function TracePanel(props: TracePanelProps) {
     setRefreshTick((v) => v + 1);
   };
 
+  // Auto-refresh: when a task / session is bound, poll every 4s so the panel
+  // picks up new events without the operator having to hit ↻. Cleanup ensures
+  // the timer dies when the panel unmounts (task switch / panel close). The
+  // service-layer cache is keyed by sessionID/taskID, so consecutive polls
+  // hit the in-memory cache cheaply when the trace file has not changed
+  // size — only the cache invalidation in `refresh` forces a re-read.
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const hasTarget = createMemo(() =>
+    Boolean(("sessionID" in props && props.sessionID) || ("taskID" in props && props.taskID)),
+  );
+  const startPolling = () => {
+    if (timer) clearInterval(timer);
+    if (!hasTarget()) return;
+    timer = setInterval(refresh, 4_000);
+  };
+  startPolling();
+  onCleanup(() => {
+    if (timer) clearInterval(timer);
+  });
+
+  const titleText = createMemo(() => {
+    if ("sessionID" in props && props.sessionID) {
+      return `Session trace · ${String(props.sessionID).slice(-12)}`;
+    }
+    if ("taskID" in props && props.taskID) {
+      return `Task trace · ${String(props.taskID).slice(-12)}`;
+    }
+    return "Task trace · (no task selected)";
+  });
+
   return (
     <div class="trace-panel">
       <div class="trace-panel-head">
-        <span class="trace-panel-title">
-          {"sessionID" in props && props.sessionID
-            ? `Session trace · ${String(props.sessionID).slice(-12)}`
-            : `Task trace · ${String((props as any).taskID ?? "").slice(-12)}`}
-        </span>
+        <span class="trace-panel-title">{titleText()}</span>
         <span class="trace-panel-actions">
           <button type="button" class="trace-panel-refresh" onClick={refresh} title="Refresh">
             ↻
@@ -191,16 +217,21 @@ export function TracePanel(props: TracePanelProps) {
           </Show>
         </span>
       </div>
-      <Show when={events.loading}>
-        <div class="trace-panel-empty">Loading…</div>
-      </Show>
-      <Show when={!events.loading && (events()?.length ?? 0) === 0}>
+      <Show when={!hasTarget()}>
         <div class="trace-panel-empty">
-          No trace events yet. Trace files write to <code>&lt;project&gt;/.opencorvus/trace/</code>;
-          this view picks them up after the next agent run.
+          Select a task on the left to stream its agent trace here.
         </div>
       </Show>
-      <Show when={(events()?.length ?? 0) > 0}>
+      <Show when={hasTarget() && events.loading}>
+        <div class="trace-panel-empty">Loading…</div>
+      </Show>
+      <Show when={hasTarget() && !events.loading && (events()?.length ?? 0) === 0}>
+        <div class="trace-panel-empty">
+          No trace events yet. Trace files write to <code>&lt;project&gt;/.opencorvus/trace/</code>;
+          this view auto-refreshes every 4s and picks them up after the next agent run.
+        </div>
+      </Show>
+      <Show when={hasTarget() && (events()?.length ?? 0) > 0}>
         <div class="trace-panel-body">
           <For each={events()}>
             {(event) => <TraceEventRow event={event} />}
