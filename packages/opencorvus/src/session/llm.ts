@@ -19,6 +19,7 @@ import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
+import { AgentTrace } from "@/trace"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -167,6 +168,25 @@ export namespace LLM {
       ),
       ...input.messages,
     ]
+
+    if (AgentTrace.isEnabled()) {
+      AgentTrace.recordLLMRequest({
+        sessionID: input.sessionID,
+        agentName: input.agent.name,
+        agentMode: input.agent.mode,
+        model: { providerID: input.model.providerID, modelID: input.model.id },
+        small: input.small,
+        toolChoice: input.toolChoice,
+        system,
+        messages: requestMessages,
+        tools: Object.entries(tools).map(([name, t]) => ({
+          name,
+          description: typeof (t as { description?: unknown }).description === "string"
+            ? ((t as { description: string }).description)
+            : undefined,
+        })),
+      })
+    }
 
     const result = streamText({
       onError(event) {

@@ -81,6 +81,7 @@ import { Log } from "@/util/log"
 import type { Message } from "@/session/message"
 import type { SessionKind } from "@/session/session.sql"
 import type { ToolSet } from "ai"
+import { AgentTrace } from "@/trace"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -378,6 +379,19 @@ export async function runAgentSession<C>(
     hasStructured: structured !== undefined,
   })
 
+  if (AgentTrace.isEnabled()) {
+    AgentTrace.recordAgentReport({
+      sessionID: session.id,
+      parentSessionID: input.parentSessionID,
+      taskID: input.taskID,
+      agentName,
+      kind: "agent_report",
+      collector,
+      structured,
+      streamErrors,
+    })
+  }
+
   return {
     session,
     finalMessage,
@@ -491,12 +505,40 @@ export async function runAgentSessionWithRetry<C>(
 
     const decision = input.isComplete(out.collector, out.streamErrors)
     if (decision.ok) {
+      if (AgentTrace.isEnabled()) {
+        AgentTrace.recordAgentReport({
+          sessionID: out.session.id,
+          parentSessionID: input.parentSessionID,
+          taskID: input.taskID,
+          agentName: agentLabel,
+          kind: "agent_report_retry_final",
+          collector: out.collector,
+          structured: out.structured,
+          streamErrors: out.streamErrors,
+          attempts: attempt,
+        })
+      }
       return { ...out, attempts: attempt }
     }
     lastError = new Error(decision.reason ?? "isComplete returned ok=false")
     log.warn(`${agentLabel}: attempt incomplete, will retry`, {
       attempt,
       reason: lastError.message,
+    })
+  }
+
+  if (AgentTrace.isEnabled()) {
+    AgentTrace.recordAgentReport({
+      sessionID: lastOutput?.session.id ?? "no-session",
+      parentSessionID: input.parentSessionID,
+      taskID: input.taskID,
+      agentName: agentLabel,
+      kind: "agent_report_retry_final",
+      collector: lastOutput?.collector,
+      structured: lastOutput?.structured,
+      streamErrors: lastOutput?.streamErrors,
+      attempts: input.maxRetries,
+      error: lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`,
     })
   }
 
