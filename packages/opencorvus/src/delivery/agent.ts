@@ -10,16 +10,12 @@
  * 4. Re-verify after fixes to confirm the application works
  * 5. Make a final acceptance decision before publishing
  */
-import { resolveAgentModel } from "@/agent/model"
 import { createDeliveryTools } from "./tools"
 import { createDeliveryOutputTools } from "./output-tools"
 import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
+import { runAgentSession } from "@/agent/runner"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
-import { Provider } from "@/provider/provider"
-import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import { Bus } from "@/bus"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import { toolGuard } from "@/util/tool-guard"
@@ -69,112 +65,86 @@ type VerifyInput = {
 
 export namespace DeliveryAgent {
   export async function verify(input: VerifyInput): Promise<DeliveryVerdictType> {
-    // Per-agent model override: if config sets agent.delivery.model, honor it;
-    // otherwise inherit the user's most recent in-session model pick from the
-    // task session; otherwise fall through to Provider.defaultModel().
-    let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
-    if (input.model) {
-      model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
-    } else {
-      model = await resolveAgentModel("delivery", { sessionID: input.task.sessionID }).catch(() => undefined)
-    }
-    if (!model) throw new Error("no LLM model available for delivery agent")
-
     const deliveryCfg = (await EngineConfig.get()).delivery
-
-    const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
-    const systemResolved = await deliveryAgentSystem(input)
-    const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
-    const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
-    const enableMap: Record<string, boolean> = Object.fromEntries(
-      Object.keys(guard.tools).map((name) => [name, true]),
-    )
     const context = prefetchDeliveryContext(input)
     const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
-    const parts = await buildPromptParts(textPrompt, input.attachments)
-    const systemPrompt = systemResolved.prompt
+    const taskSignals: TaskSignals = {
+      has_attachment_image: (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/")),
+      request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
+      request_text: input.task.request,
+    }
+
+    // Delivery's output tool kit needs `requiredTools` at registration time —
+    // the submit_verdict tool rejects accepted verdicts when the declared
+    // required tools were not called. Skill resolution happens here in the
+    // agent body (not inside the runner) so the tool kit can bind against
+    // the returned list; the composed system prompt is then handed to the
+    // runner as `rawSystemPrompt` so the runner does not re-resolve the
+    // same skill set (rule 22).
+    const systemResolved = await deliveryAgentSystem(input)
 
     log.info("delivery agent starting", {
       title: input.task.title,
       goals: input.goals.length,
       changedFiles: input.delivery.changedFiles.length,
-      model: model.id,
       config: deliveryCfg,
     })
 
     const externalSignal = input.signal
-
     const MAX_RETRIES = deliveryCfg.max_retries
     let verdict: DeliveryVerdictType | undefined
     let lastError: Error | undefined
 
-    // Retry loop covers missing-submit_verdict failures — the agent ran but did
-    // not call submit_verdict before the step budget ended. Same shape as the
-    // pre-migration loop; wraps SessionPrompt.prompt instead of SessionPrompt.prompt.
-    // Each attempt opens its own child session so the collector state on retry
-    // is not entangled with a prior attempt's message history.
+    // Retry loop covers missing-submit_verdict failures — the agent ran but
+    // did not call submit_verdict before the step budget ended. Each attempt
+    // opens its own child session (via runAgentSession) so collector state
+    // on retry is not entangled with the prior attempt's history.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (externalSignal?.aborted) break
       if (attempt > 0) {
-        if (externalSignal?.aborted) break
         log.info("delivery agent retrying", { attempt, reason: lastError?.message })
-        outputToolKit.reset()
       }
 
-      const agentSession = await Session.createNext({
-        kind: "delivery",
-        parentID: input.task.sessionID,
-        title: `Delivery: ${input.task.title}`,
-        directory: Instance.directory,
-      })
-      const abortPrompt = () => {
-        try {
-          SessionPrompt.cancel(agentSession.id)
-        } catch {
-          /* session may already be stopped */
-        }
-      }
-      externalSignal?.addEventListener("abort", abortPrompt, { once: true })
+      const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
+      const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
+      const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
 
-      const streamErrors: Array<{ reason: string; name?: string }> = []
-      const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
-        const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
-        if (props.sessionID !== agentSession.id) return
-        streamErrors.push({ reason: props.error?.message ?? "unknown error", name: props.error?.name })
-      })
-
+      let streamErrorsOut: Array<{ reason: string; name?: string }> = []
       try {
-        await SessionPrompt.withExtraTools(agentSession.id, guard.tools as any, async () => {
-          await SessionPrompt.prompt({
-            sessionID: agentSession.id,
-            model: { providerID: model!.providerID, modelID: model!.api.id },
-            agent: "delivery",
-            system: systemPrompt,
-            tools: enableMap,
-            parts,
-          })
+        const out = await runAgentSession({
+          kind: "delivery",
+          core: systemResolved.prompt,
+          rawSystemPrompt: true,
+          sessionTitle: `Delivery: ${input.task.title}`,
+          sessionDirectory: Instance.directory,
+          parentSessionID: input.task.sessionID,
+          taskID: input.task.id,
+          model: input.model,
+          signal: externalSignal,
+          toolKit: {
+            tools: guard.tools as any,
+            getCollector: () => outputToolKit.getCollector(),
+          },
+          buildUserPrompt: () => textPrompt,
+          buildUserParts: () => buildPromptParts(textPrompt, input.attachments),
+        })
+        streamErrorsOut = out.streamErrors
+        log.info("delivery agent finished", {
+          attempt,
+          sessionID: out.session.id,
+          streamErrors: streamErrorsOut.length,
         })
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         const isAborted = externalSignal?.aborted || (err instanceof Error && err.name === "AbortError")
         log.warn("delivery agent run failed", { attempt, error: lastError.message, aborted: isAborted })
         if (isAborted && externalSignal?.aborted) break
-        errorUnsub()
-        externalSignal?.removeEventListener("abort", abortPrompt)
         continue
-      } finally {
-        errorUnsub()
-        externalSignal?.removeEventListener("abort", abortPrompt)
       }
 
-      log.info("delivery agent finished", {
-        attempt,
-        sessionID: agentSession.id,
-        streamErrors: streamErrors.length,
-      })
-
-      if (streamErrors.length > 0) {
+      if (streamErrorsOut.length > 0) {
         lastError = new Error(
-          `delivery: session stream error: ${streamErrors[0].name ?? "error"}: ${streamErrors[0].reason}`,
+          `delivery: session stream error: ${streamErrorsOut[0].name ?? "error"}: ${streamErrorsOut[0].reason}`,
         )
         log.warn("delivery: stream error, will retry", { attempt, error: lastError.message })
         continue

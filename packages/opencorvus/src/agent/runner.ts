@@ -31,7 +31,7 @@ import { resolveAgentModel } from "@/agent/model"
 import { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
 import { EngineConfig } from "@/engine"
-import { loadStageSkills } from "@/engine/skill-inject"
+import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
@@ -146,6 +146,19 @@ export interface RunAgentSessionInput<C> {
   /** Pass-through skill stage. When omitted, no skill injection runs.
    *  See `SkillStage` JSDoc. */
   skillsStage?: SkillStage
+  /** Optional task signals forwarded to `resolveStageSkills`. Drives the
+   *  auto-detect side of skill matching (attachments mime, request URL
+   *  presence, request text). Ignored when `skillsStage` is omitted. */
+  skillTaskSignals?: TaskSignals
+  /** When true, treat `core` as the already-composed system prompt and
+   *  skip the runner's config-append + skill-injection pass. The caller
+   *  owns `resolveStageSkills` (and, when it cares, the returned
+   *  `requiredTools` list). Used by delivery because its output tool
+   *  kit needs `requiredTools` at registration time — the caller calls
+   *  `resolveStageSkills` once to bind the output tools, then hands the
+   *  resulting composed prompt through here so the runner does not
+   *  re-resolve the same skill set. */
+  rawSystemPrompt?: boolean
   /** Legacy passthrough; not wired after the SessionPrompt migration. */
   stream?: TextHooks
 }
@@ -164,6 +177,11 @@ export interface RunAgentSessionOutput<C> {
   streamErrors: Array<{ reason: string; name?: string }>
   /** Resolved model the run used. */
   model: { providerID: string; modelID: string; id: string }
+  /** Union of `required_tools` declared by every matched skill, when
+   *  `skillsStage` was set. Empty array otherwise. Consumed by agents
+   *  (currently delivery) that wire skill-declared tool requirements
+   *  into their output-tool validation. */
+  requiredTools: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +224,14 @@ export async function runAgentSession<C>(
   }
 
   // ── 2. Compose the system prompt ─────────────────────────────────────
-  const systemPrompt = await composeSystemPrompt(agentName, input.core, input.skillsStage)
+  const { prompt: systemPrompt, requiredTools } = input.rawSystemPrompt
+    ? { prompt: input.core, requiredTools: [] as string[] }
+    : await composeSystemPrompt(
+        agentName,
+        input.core,
+        input.skillsStage,
+        input.skillTaskSignals,
+      )
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
   const userText = await input.buildUserPrompt()
@@ -320,6 +345,7 @@ export async function runAgentSession<C>(
     structured,
     streamErrors,
     model: { providerID: model.providerID, modelID: model.api.id, id: model.id },
+    requiredTools,
   }
 }
 
@@ -340,7 +366,8 @@ async function composeSystemPrompt(
   agentName: string,
   core: string,
   skillsStage: SkillStage | undefined,
-): Promise<string> {
+  taskSignals: TaskSignals | undefined,
+): Promise<{ prompt: string; requiredTools: string[] }> {
   const config = await Config.get()
   const userAppend = (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt
   const withAppend =
@@ -348,13 +375,13 @@ async function composeSystemPrompt(
       ? `${core}\n\n${userAppend}`
       : core
 
-  if (!skillsStage) return withAppend
+  if (!skillsStage) return { prompt: withAppend, requiredTools: [] }
 
   const orchCfg = await EngineConfig.get()
   const stageCfg = (orchCfg as unknown as Record<SkillStage, { skills: string[] }>)[skillsStage]
-  if (!stageCfg) return withAppend
-  const skills = await loadStageSkills(stageCfg.skills, skillsStage)
-  return withAppend + skills
+  if (!stageCfg) return { prompt: withAppend, requiredTools: [] }
+  const resolved = await resolveStageSkills(stageCfg.skills, skillsStage, taskSignals)
+  return { prompt: withAppend + resolved.prompt, requiredTools: resolved.requiredTools }
 }
 
 // ---------------------------------------------------------------------------
