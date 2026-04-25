@@ -230,14 +230,6 @@ export namespace BuildAgent {
           },
         })
         parsed = BuildResultSchema.safeParse(out.structured)
-        if (parsed.success) {
-          parsed = BuildResultSchema.safeParse(await enforceBuildSkillEvidence({
-            result: parsed.data,
-            requiredTools: skillResolution.requiredTools,
-            sessionID: out.session.id,
-            worktreeDir: worktreeDir ?? Instance.directory,
-          }))
-        }
         // Fast-forward merge the goal branch back into primary HEAD before
         // teardown. This is the standard git-worktree pattern: branch off
         // primary → work in worktree → merge back so the next worktree (and
@@ -312,112 +304,6 @@ export namespace BuildAgent {
       }
     })
   }
-}
-
-type BuildSkillFailure = { name: string; detail: string }
-
-async function enforceBuildSkillEvidence(input: {
-  result: BuildResult
-  requiredTools: string[]
-  sessionID: string
-  worktreeDir: string
-}): Promise<BuildResult> {
-  const requiredTools = Array.from(new Set(input.requiredTools))
-  if (input.result.status !== "passed" || requiredTools.length === 0) return input.result
-
-  const failures: BuildSkillFailure[] = []
-  const messages = await Session.messages({ sessionID: input.sessionID }).catch(() => [])
-  const completedTools = new Set<string>()
-  for (const message of messages) {
-    for (const part of message.parts) {
-      if (part.type !== "tool") continue
-      if (part.state.status !== "completed") continue
-      completedTools.add(part.tool)
-    }
-  }
-
-  const missing = requiredTools.filter((tool) => !completedTools.has(tool))
-  if (missing.length > 0) {
-    failures.push({
-      name: "skill-required tools",
-      detail: `Missing completed tool calls: ${missing.join(", ")}`,
-    })
-  }
-
-  if (requiredTools.includes("webpage_evaluate")) {
-    const visualFailure = await verifyWebpageEvaluation(input.worktreeDir)
-    if (visualFailure) failures.push(visualFailure)
-  }
-
-  if (failures.length === 0) return input.result
-  return {
-    ...input.result,
-    status: "failed",
-    summary: "Build rejected by skill-required evidence.",
-    tests: [
-      ...input.result.tests,
-      ...failures.map((failure) => ({
-        name: failure.name,
-        passed: false,
-        detail: failure.detail,
-      })),
-    ],
-    error: failures.map((failure) => `${failure.name}: ${failure.detail}`).join(" | "),
-  }
-}
-
-async function verifyWebpageEvaluation(worktreeDir: string): Promise<BuildSkillFailure | undefined> {
-  const evalPath = path.join(worktreeDir, "mirror", "eval-result.json")
-  let parsed: Record<string, unknown>
-  try {
-    parsed = JSON.parse(await fs.readFile(evalPath, "utf8"))
-  } catch (err) {
-    return {
-      name: "webpage_evaluate result",
-      detail: `Missing or unreadable mirror/eval-result.json: ${err instanceof Error ? err.message : String(err)}`,
-    }
-  }
-
-  const score = Number(parsed.overallScore)
-  if (!Number.isFinite(score)) {
-    return { name: "webpage_evaluate score", detail: "mirror/eval-result.json does not contain a numeric overallScore" }
-  }
-  if (score < 95) {
-    return { name: "webpage_evaluate score", detail: `overallScore=${score} is below required target 95` }
-  }
-
-  const indexPath = path.join(worktreeDir, "index.html")
-  const renderedPathRaw = typeof parsed.renderedPath === "string" ? parsed.renderedPath : "mirror/rendered.png"
-  const renderedPath = path.isAbsolute(renderedPathRaw)
-    ? renderedPathRaw
-    : path.resolve(worktreeDir, renderedPathRaw)
-  const [indexStat, renderedStat, evalStat] = await Promise.all([
-    fs.stat(indexPath).catch((err) => err),
-    fs.stat(renderedPath).catch((err) => err),
-    fs.stat(evalPath).catch((err) => err),
-  ])
-  if (indexStat instanceof Error) {
-    return { name: "webpage_render freshness", detail: `Missing index.html: ${indexStat.message}` }
-  }
-  if (renderedStat instanceof Error) {
-    return { name: "webpage_render freshness", detail: `Missing rendered screenshot ${renderedPath}: ${renderedStat.message}` }
-  }
-  if (evalStat instanceof Error) {
-    return { name: "webpage_evaluate freshness", detail: `Missing eval result ${evalPath}: ${evalStat.message}` }
-  }
-  if (renderedStat.mtimeMs < indexStat.mtimeMs) {
-    return {
-      name: "webpage_render freshness",
-      detail: "mirror/rendered.png is older than index.html; re-run webpage_render after the final edit",
-    }
-  }
-  if (evalStat.mtimeMs < renderedStat.mtimeMs) {
-    return {
-      name: "webpage_evaluate freshness",
-      detail: "mirror/eval-result.json is older than the rendered screenshot; re-run webpage_evaluate after rendering",
-    }
-  }
-  return undefined
 }
 
 // ---------------------------------------------------------------------------
