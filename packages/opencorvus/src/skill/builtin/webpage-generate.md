@@ -40,6 +40,21 @@ priority: 60
 
 You are producing a **static HTML skeleton** that visually mirrors a reference webpage. You have five deterministic tools — use them in order. Never open a browser yourself via `bash`; use the provided tools.
 
+## Reuse on re-entry
+
+This skill is idempotent on `mirror/`. Before doing anything else, list the worktree root and check whether `mirror/` already exists from a prior invocation (or a sibling goal that ran the extract pipeline). When the directory is populated, REUSE — do not re-extract, do not invent values:
+
+- `mirror/extracted-page.json` — DOM tree + ~33 computed CSS properties per element
+- `mirror/page-ir.xml` — compact XML IR with text catalog and section structure
+- `mirror/scaffold.json` — section list + pattern catalog + design-token system
+- `mirror/design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (copy values verbatim into your inline CSS / Tailwind arbitrary classes — never invent hex codes or font sizes)
+- `mirror/App.tsx` — reference composition (read for structure, do not `import` or `<script src=>` it)
+- `mirror/shared-context.md` — compact prompt-ready summary
+- `mirror/images/img-N.{png,jpg,svg}` — downloaded image assets (move/copy into `./images/` at the worktree root and reference with relative paths)
+- `mirror/reference.png` — the pixel target for SSIM scoring
+
+Skip steps 1-3 (`webpage_extract` / `webpage_compile` / `webpage_analyze`) when the corresponding artifact exists AND the URL has not changed. Jump directly to step 4 (write `index.html`) or step 5+ (render / evaluate / iterate). The whole point of `mirror/` being git-tracked is so subsequent goals and retries build on the same authoritative source instead of redoing pixel extraction or hand-rolling colour values.
+
 ## Critical Dependency Rule
 
 The general "parallelize independent tool calls" guidance does **not** apply to this workflow.
