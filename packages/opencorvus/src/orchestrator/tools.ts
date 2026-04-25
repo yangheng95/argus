@@ -1145,7 +1145,6 @@ export function createOrchestratorTools(input: {
             taskRequest: task.request,
             taskTitle: task.title,
             taskID,
-            sessionID: architectSession.id,
             decisionLog,
             requirements,
             requirementDecisions,

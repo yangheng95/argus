@@ -12,30 +12,28 @@
  * ✓ Registers challenge seeds for the Prosecutor
  * ✓ Records REQ-N → goal traceability
  * ✓ Resolves cross-goal interfaces into binding Decision Log contracts
- * ✓ Runs fidelity review against the original user request
  *
  * Constraints:
  * ✗ Cannot execute code / commands
  * ✗ Cannot write or modify user files
- * ✗ Cannot call other agents
+ * ✗ Cannot call other agents (fidelity runs as a sibling via the
+ *   orchestrator `fidelity` tool — see fidelity/agent.ts)
  * ✗ Cannot modify engine_requirement rows (those are owned by Requirements)
+ *
+ * Implementation: thin shell over `runAgentSession`. Agent-specific code
+ * is the user-prompt constructor and the architect output tool kit; the
+ * runner owns model resolution, session creation, system-prompt
+ * composition (core + config.agent.architect.prompt append + skills),
+ * stream-error capture, and abort signal propagation.
  */
-import type { TextHooks } from "@/llm/api"
+import { runAgentSession } from "@/agent/runner"
 import { createPlannerTools } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
-import { toolGuard } from "@/util/tool-guard"
-import { resolveAgentModel } from "@/agent/model"
-import { Config } from "@/config/config"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { Instance } from "@/project/instance"
-import { Provider } from "@/provider/provider"
-import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import { Bus } from "@/bus"
-import { Identifier } from "@/id/id"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
@@ -63,12 +61,10 @@ const VALID_CATEGORIES = new Set<ArchitectDecisionKey>([
 // ---------------------------------------------------------------------------
 
 export namespace ArchitectAgent {
-  export async function coordinate(input: {
-    /**
-     * Existing goals to seed the collector with. Empty list on the first
-     * pass (Architect decomposes from scratch); non-empty on a re-run
-     * (Architect refines against delivery feedback).
-     */
+  export interface CoordinateInput {
+    /** Existing goals to seed the collector with. Empty list on the first
+     *  pass (Architect decomposes from scratch); non-empty on a re-run
+     *  (Architect refines against delivery feedback). */
     goals: GoalContractFields[]
     taskRequest: string
     taskTitle: string
@@ -82,216 +78,139 @@ export namespace ArchitectAgent {
     designSpecs?: VisualSpec[]
     /** Delivery feedback that triggered this re-run. Absent on first pass. */
     retryContext?: ArchitectRetryContext
-    /** SessionID for fidelity event correlation. */
-    sessionID?: string
     /** Parent session — a child "architect" session is created under it. */
     parentSessionID?: string
-    /** Explicit model override (provider/model). Skips `resolveAgentModel`. */
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
-    /** Legacy passthrough; not wired after the SessionPrompt migration. */
-    stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
-  }): Promise<ArchitectResult> {
-    return run(input)
   }
-}
 
-// ---------------------------------------------------------------------------
-// Internal
-// ---------------------------------------------------------------------------
+  export async function coordinate(input: CoordinateInput): Promise<ArchitectResult> {
+    const seedGoals: RegisteredGoal[] = input.goals.map((g) => ({
+      id: g.id,
+      title: g.title,
+      objective: g.objective,
+      acceptance_specs: g.acceptance_specs,
+      owned_paths: g.owned_paths,
+      depends_on: g.depends_on,
+      exports: g.exports,
+      imports: g.imports,
+      priority: g.priority,
+      kind: (g.kind as RegisteredGoal["kind"]) ?? "feature",
+      requirement_ids: g.requirement_ids,
+    }))
+    const outputToolKit = createArchitectOutputTools({ existingGoals: seedGoals })
+    const plannerTools = await filterAgentTools(createPlannerTools(), "architect")
 
-async function run(input: {
-  goals: GoalContractFields[]
-  taskRequest: string
-  taskTitle: string
-  taskID?: string
-  decisionLog: DecisionLog
-  requirements?: ParsedRequirement[]
-  requirementDecisions?: RequirementsDecision[]
-  designSpecs?: VisualSpec[]
-  retryContext?: ArchitectRetryContext
-  sessionID?: string
-  parentSessionID?: string
-  model?: { providerID: string; modelID: string }
-  signal?: AbortSignal
-  stream?: TextHooks
-  onStatus?: (summary: string) => void | Promise<void>
-}): Promise<ArchitectResult> {
-  if (input.signal?.aborted) throw new Error("architect agent aborted")
-
-  let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
-  if (input.model) {
-    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
-  } else {
-    model = await resolveAgentModel("architect", { taskID: input.taskID }).catch(() => undefined)
-  }
-  if (!model) throw new Error("no LLM model available for architect agent")
-
-  if (input.signal?.aborted) throw new Error("architect agent aborted after model resolution")
-
-  const seedGoals: RegisteredGoal[] = input.goals.map((g) => ({
-    id: g.id,
-    title: g.title,
-    objective: g.objective,
-    acceptance_specs: g.acceptance_specs,
-    owned_paths: g.owned_paths,
-    depends_on: g.depends_on,
-    exports: g.exports,
-    imports: g.imports,
-    priority: g.priority,
-    kind: (g.kind as RegisteredGoal["kind"]) ?? "feature",
-    requirement_ids: g.requirement_ids,
-  }))
-  const outputToolKit = createArchitectOutputTools({ existingGoals: seedGoals })
-  const plannerTools = await filterAgentTools(createPlannerTools(), "architect")
-  const guard = toolGuard({ ...plannerTools, ...outputToolKit.tools })
-  const enableMap: Record<string, boolean> = Object.fromEntries(
-    Object.keys(guard.tools).map((name) => [name, true]),
-  )
-
-  await input.onStatus?.("Architect agent: coordinating cross-goal contracts")
-
-  const systemPrompt = await architectSystem()
-  const userPrompt = buildUserPrompt(input)
-
-  log.info("architect agent starting", {
-    seedGoals: input.goals.length,
-    requirements: input.requirements?.length ?? 0,
-    decisions: input.requirementDecisions?.length ?? 0,
-    retry: Boolean(input.retryContext),
-    model: model.id,
-  })
-
-  const agentSession = await Session.createNext({
-    kind: "architect",
-    parentID: input.parentSessionID,
-    title: `Architect: ${input.taskTitle}`,
-    directory: Instance.directory,
-  })
-
-  const abortPrompt = () => {
-    try {
-      SessionPrompt.cancel(agentSession.id)
-    } catch {
-      /* session may already be stopped */
-    }
-  }
-  input.signal?.addEventListener("abort", abortPrompt, { once: true })
-
-  const streamErrors: Array<{ reason: string; name?: string }> = []
-  const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
-    const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
-    if (props.sessionID !== agentSession.id) return
-    streamErrors.push({ reason: props.error?.message ?? "unknown error", name: props.error?.name })
-  })
-
-  try {
-    await SessionPrompt.withExtraTools(agentSession.id, guard.tools as any, async () => {
-      await SessionPrompt.prompt({
-        sessionID: agentSession.id,
-        model: { providerID: model!.providerID, modelID: model!.api.id },
-        agent: "architect",
-        system: systemPrompt,
-        tools: enableMap,
-        parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
-      })
+    log.info("architect agent starting", {
+      seedGoals: input.goals.length,
+      requirements: input.requirements?.length ?? 0,
+      decisions: input.requirementDecisions?.length ?? 0,
+      retry: Boolean(input.retryContext),
     })
-  } finally {
-    errorUnsub()
-    input.signal?.removeEventListener("abort", abortPrompt)
-  }
 
-  log.info("architect agent finished", {
-    sessionID: agentSession.id,
-    streamErrors: streamErrors.length,
-  })
-
-  const collector = outputToolKit.getCollector()
-
-  if (!collector.finalized) {
-    log.warn("architect agent: submit_architect not called", {
+    const out = await runAgentSession({
+      kind: "architect",
+      core: ARCHITECT_CORE,
+      sessionTitle: `Architect: ${input.taskTitle}`,
+      parentSessionID: input.parentSessionID,
       taskID: input.taskID,
-      goalCount: collector.goals.length,
-      streamErrors: streamErrors.length,
+      model: input.model,
+      signal: input.signal,
+      onStatus: input.onStatus ?? (() => {}),
+      toolKit: {
+        tools: { ...plannerTools, ...outputToolKit.tools },
+        getCollector: () => outputToolKit.getCollector(),
+      },
+      buildUserPrompt: () => buildUserPrompt(input),
+      skillsStage: "architect",
     })
-    throw new Error(
-      "Architect agent did not call submit_architect. " +
-      "The model must register goals, metrics, seeds, traceability, and " +
-      "contracts via tools, then call submit_architect to validate. " +
-      "Check the prompt and model behaviour.",
-    )
-  }
 
-  if (collector.goals.length === 0) {
-    throw new Error(
-      "Architect finalized with zero goals — a task must have at least one goal.",
-    )
-  }
-
-  // Architect produces the goal set as facts. Fidelity is a SEPARATE agent
-  // driven by the orchestrator (orchestrator/tools.ts:fidelity) — architect
-  // does not call it. This keeps each agent boundary clean: orchestrator
-  // collects architect's yield, then drives fidelity, then re-upserts the
-  // corrected goal set. See architect comment line 20 (cannot call other
-  // agents) and CLAUDE.md rule 22 (no double-source).
-  const goals: GoalContractFields[] = collector.goals.map((g) => ({
-    id: g.id,
-    title: g.title,
-    objective: g.objective,
-    acceptance_specs: g.acceptance_specs,
-    owned_paths: g.owned_paths,
-    depends_on: g.depends_on,
-    exports: g.exports,
-    imports: g.imports,
-    priority: g.priority,
-    kind: g.kind,
-    requirement_ids: g.requirement_ids,
-  }))
-
-  // Decision Log seed — one entry per contract, tagged with goal scope.
-  const contracts: ArchitectContract[] = collector.contracts.map((c) => ({
-    category: c.category,
-    title: c.title,
-    spec: c.spec,
-    goalIDs: c.goalIDs,
-  }))
-  for (const contract of contracts) {
-    if (!VALID_CATEGORIES.has(contract.category)) continue
-    // goalID dispatch:
-    //   • Single-goal contract → tag with that goal so per-goal sub-agents
-    //     reading `phasePromptSectionForGoal` see it.
-    //   • Multi-goal contract → tag as task-scoped (omit goalID). Per-goal
-    //     reads include `goal_id IS NULL` rows, so all goals see it.
-    const tagAsGoalID = contract.goalIDs.length === 1 ? contract.goalIDs[0] : undefined
-    input.decisionLog.append({
-      goalID: tagAsGoalID,
-      phase: "architect",
-      key: contract.category,
-      value: `## ${contract.title}\n${contract.spec}`,
-      reason: `Architect consensus for goals: ${contract.goalIDs.join(", ") || "(task-wide)"}`,
+    log.info("architect agent finished", {
+      sessionID: out.session.id,
+      streamErrors: out.streamErrors.length,
     })
-  }
 
-  log.info("architect agent output", {
-    goals: goals.length,
-    removed: collector.removed_goal_ids.length,
-    goalMetrics: collector.goal_metric_specs.length,
-    globalMetrics: collector.global_metric_specs.length,
-    challengeSeeds: collector.challenge_seeds.length,
-    traceability: collector.traceability.length,
-    contracts: contracts.length,
-  })
+    const collector = outputToolKit.getCollector()
 
-  return {
-    goals,
-    removedGoalIDs: collector.removed_goal_ids,
-    goalMetricSpecs: collector.goal_metric_specs,
-    globalMetricSpecs: collector.global_metric_specs,
-    challengeSeeds: collector.challenge_seeds,
-    traceability: collector.traceability,
-    contracts,
-    summary: collector.summary || "Architect decomposition",
+    if (!collector.finalized) {
+      log.warn("architect agent: submit_architect not called", {
+        taskID: input.taskID,
+        goalCount: collector.goals.length,
+        streamErrors: out.streamErrors.length,
+      })
+      throw new Error(
+        "Architect agent did not call submit_architect. " +
+        "The model must register goals, metrics, seeds, traceability, and " +
+        "contracts via tools, then call submit_architect to validate. " +
+        "Check the prompt and model behaviour.",
+      )
+    }
+
+    if (collector.goals.length === 0) {
+      throw new Error(
+        "Architect finalized with zero goals — a task must have at least one goal.",
+      )
+    }
+
+    // Architect produces the goal set as facts. Fidelity is a SEPARATE
+    // orchestrator-level step — architect does not call it. Rule 22.
+    const goals: GoalContractFields[] = collector.goals.map((g) => ({
+      id: g.id,
+      title: g.title,
+      objective: g.objective,
+      acceptance_specs: g.acceptance_specs,
+      owned_paths: g.owned_paths,
+      depends_on: g.depends_on,
+      exports: g.exports,
+      imports: g.imports,
+      priority: g.priority,
+      kind: g.kind,
+      requirement_ids: g.requirement_ids,
+    }))
+
+    // Decision Log seed — one entry per contract, tagged with goal scope.
+    const contracts: ArchitectContract[] = collector.contracts.map((c) => ({
+      category: c.category,
+      title: c.title,
+      spec: c.spec,
+      goalIDs: c.goalIDs,
+    }))
+    for (const contract of contracts) {
+      if (!VALID_CATEGORIES.has(contract.category)) continue
+      // Single-goal contracts tag the owning goal so the per-goal prompt
+      // section renders it; multi-goal contracts tag as task-scoped
+      // (goalID=undefined) so every goal's prompt reads it.
+      const tagAsGoalID = contract.goalIDs.length === 1 ? contract.goalIDs[0] : undefined
+      input.decisionLog.append({
+        goalID: tagAsGoalID,
+        phase: "architect",
+        key: contract.category,
+        value: `## ${contract.title}\n${contract.spec}`,
+        reason: `Architect consensus for goals: ${contract.goalIDs.join(", ") || "(task-wide)"}`,
+      })
+    }
+
+    log.info("architect agent output", {
+      goals: goals.length,
+      removed: collector.removed_goal_ids.length,
+      goalMetrics: collector.goal_metric_specs.length,
+      globalMetrics: collector.global_metric_specs.length,
+      challengeSeeds: collector.challenge_seeds.length,
+      traceability: collector.traceability.length,
+      contracts: contracts.length,
+    })
+
+    return {
+      goals,
+      removedGoalIDs: collector.removed_goal_ids,
+      goalMetricSpecs: collector.goal_metric_specs,
+      globalMetricSpecs: collector.global_metric_specs,
+      challengeSeeds: collector.challenge_seeds,
+      traceability: collector.traceability,
+      contracts,
+      summary: collector.summary || "Architect decomposition",
+    }
   }
 }
 
@@ -299,16 +218,7 @@ async function run(input: {
 // Prompt construction
 // ---------------------------------------------------------------------------
 
-function buildUserPrompt(input: {
-  goals: GoalContractFields[]
-  taskRequest: string
-  taskTitle: string
-  decisionLog: DecisionLog
-  requirements?: ParsedRequirement[]
-  requirementDecisions?: RequirementsDecision[]
-  designSpecs?: VisualSpec[]
-  retryContext?: ArchitectRetryContext
-}): string {
+function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
   const sections: string[] = []
 
   sections.push(`# Task\n\nTitle: ${input.taskTitle}\n\nRequest:\n${input.taskRequest}`)
@@ -374,8 +284,6 @@ function buildUserPrompt(input: {
     )
   }
 
-  // Seed goals — empty on first pass, populated on re-run so the Architect
-  // can choose to modify/remove instead of re-registering from scratch.
   if (input.goals.length > 0) {
     const ARCHITECT_SPECS_CAP = 600
     const goalsText = input.goals.map((g) => {
@@ -416,10 +324,4 @@ function buildUserPrompt(input: {
   )
 
   return sections.join("\n\n")
-}
-
-async function architectSystem(): Promise<string> {
-  const config = await Config.get()
-  const agentPrompt = (config.agent as Record<string, any> | undefined)?.architect?.prompt
-  return typeof agentPrompt === "string" ? agentPrompt : ARCHITECT_CORE
 }
