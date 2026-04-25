@@ -1,5 +1,6 @@
-import { Database, sql } from "@/storage/db"
+import { Database, sql, eq } from "@/storage/db"
 import { Log } from "@/util/log"
+import { MemoryFileTable } from "./memory.sql"
 import type { Memory } from "./index"
 
 export namespace MemorySearch {
@@ -13,6 +14,27 @@ export namespace MemorySearch {
     fact: 1.1,
     note: 0.95,
     episode: 0.8,
+  }
+
+  /**
+   * Cold-start guard: when a project has zero memory entries, every
+   * `memory.search` call from every stage agent at task start ends up
+   * doing the full FTS pipeline only to return [], 4-6 times per agent,
+   * dozens of times per task. The benchmark caught the 14-48s loops on
+   * the first task in a fresh temp home. Short-circuit returns early
+   * when the project has no memory_file rows at all — once anything is
+   * written (compaction, reflection, user note) searches resume normally.
+   */
+  function projectHasMemory(projectId: string): boolean {
+    const row = Database.use((db) =>
+      db
+        .select({ id: MemoryFileTable.id })
+        .from(MemoryFileTable)
+        .where(eq(MemoryFileTable.project_id, projectId))
+        .limit(1)
+        .get(),
+    )
+    return row !== undefined
   }
 
   export function search(input: {
@@ -37,6 +59,12 @@ export namespace MemorySearch {
     }
     if (scope === "session" && !input.sessionID) {
       log.info("session-scoped memory search skipped without sessionID", { query })
+      return []
+    }
+    if (!projectHasMemory(input.projectId)) {
+      log.info("memory empty for project — skipping FTS pipeline", {
+        projectId: input.projectId,
+      })
       return []
     }
 
