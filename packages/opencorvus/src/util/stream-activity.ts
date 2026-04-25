@@ -29,6 +29,20 @@ export interface StreamActivityGate {
   readonly signal: AbortSignal
   /** Call on every chunk / event. Resets the inactivity timer. */
   observe(): void
+  /**
+   * Suspend the inactivity timer until `resume()` is called. Use when the
+   * stream is legitimately paused waiting on a long synchronous tool call —
+   * the LLM provider holds the connection open but emits no chunks during
+   * tool execution, so the chunk-driven probe would false-positive trip.
+   * Per rule 23 we don't infer "tool running" from internal state; the
+   * caller explicitly pauses around the tool-call → tool-result boundary.
+   *
+   * Calls nest: each `pause()` requires a matching `resume()`. Excess
+   * `resume()` calls are a no-op so callers don't need pair-tracking.
+   */
+  pause(): void
+  /** Counterpart to pause(); reschedules the idle timer. */
+  resume(): void
   /** Millisecond timestamp of the most recent observe() (or construction). */
   lastActivityAt(): number
   /** True once the gate's own controller has aborted due to inactivity. */
@@ -63,6 +77,10 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
   let last = Date.now()
   let disposed = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  /** Pause depth — `pause()` increments, `resume()` decrements. The timer is
+   *  scheduled only when depth === 0. Allows nested pause regions (e.g. one
+   *  tool dispatched inside another). */
+  let pauseDepth = 0
 
   const trip = () => {
     if (disposed) return
@@ -72,9 +90,17 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
     )
   }
 
+  const clear = () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
   const schedule = () => {
     if (disposed) return
-    if (timer !== null) clearTimeout(timer)
+    clear()
+    if (pauseDepth > 0) return
     timer = setTimeout(trip, options.idleMs)
     // Timer is intentionally ref'd: unref would let Bun idle out while an
     // async iterator is parked on `await new Promise`, defeating the gate.
@@ -89,6 +115,20 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
       last = Date.now()
       schedule()
     },
+    pause() {
+      if (disposed) return
+      pauseDepth++
+      clear()
+    },
+    resume() {
+      if (disposed) return
+      if (pauseDepth === 0) return
+      pauseDepth--
+      if (pauseDepth === 0) {
+        last = Date.now()
+        schedule()
+      }
+    },
     lastActivityAt() {
       return last
     },
@@ -98,10 +138,7 @@ export function withStreamActivity(options: StreamActivityOptions): StreamActivi
     dispose() {
       if (disposed) return
       disposed = true
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
+      clear()
     },
   }
 }
