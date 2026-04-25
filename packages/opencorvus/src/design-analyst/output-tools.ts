@@ -51,7 +51,12 @@ export const DesignFinalSchema = z.object({
     .array(z.string().min(1))
     .min(1)
     .describe(
-      "Recommended stack: framework, CSS approach, component library.",
+      "Recommended FRONTEND stack only: UI framework, CSS approach, component library, font family. " +
+      "Examples: ['React 18', 'Tailwind CSS', 'shadcn/ui', 'Inter font']; " +
+      "['Vanilla HTML/CSS/JS', 'CSS variables for design tokens', 'Microsoft YaHei + Arial']. " +
+      "Out-of-lane — DO NOT include backend frameworks (Node.js, Express, FastAPI, Spring, Rails, etc.), " +
+      "API protocols (REST API, GraphQL, gRPC, etc.), databases, runtimes, or any server-side concern. " +
+      "Architect (downstream) owns backend / runtime / data-layer decisions. Stay strictly frontend.",
     ),
 })
 export type DesignFinal = z.infer<typeof DesignFinalSchema>

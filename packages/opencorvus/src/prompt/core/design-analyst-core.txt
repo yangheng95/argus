@@ -50,7 +50,11 @@ One interaction pattern. `trigger` (hover / click / focus / scroll / drag / resi
 One responsive rule. `breakpoint`, `change`, `affected_layout_ids` (must reference registered layout specs).
 
 ### StructuredOutput (terminal)
-Call ONCE at the end. Provide `design_system` (e.g. "Material 3", "custom dark with teal accents") and `tech_stack` (e.g. ["React", "Tailwind CSS", "shadcn/ui"]). This closes the analysis — no further tool calls are taken after it.
+Call ONCE at the end. Provide `design_system` (e.g. "Material 3", "custom dark with teal accents") and `tech_stack` — **FRONTEND ONLY**.
+
+`tech_stack` examples: `["React 18", "Tailwind CSS", "shadcn/ui"]`, `["Vanilla HTML/CSS/JS", "CSS variables for design tokens", "Microsoft YaHei + Arial"]`. Allowed categories: UI framework, CSS approach, component library, font family. **Forbidden** (out-of-lane): backend frameworks (Node.js, Express, FastAPI, Spring, Rails…), API protocols (REST API, GraphQL, gRPC…), databases, runtimes, server-side anything. Architect (downstream) owns those decisions — your job is to inform the visual implementation, not the system architecture.
+
+This closes the analysis — no further tool calls are taken after it.
 
 ## Id Conventions
 
