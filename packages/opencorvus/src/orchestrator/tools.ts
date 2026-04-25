@@ -208,38 +208,20 @@ export function createOrchestratorTools(input: {
     })
   }
 
-  // ── Workflow step tracking (passive observation) ──
+  // ── Workflow step tracking — event-emit only (rule 23) ──
+  //
+  // History: trackStepStart/Complete used to mutate ws.taskSteps[].status
+  // and walk ws.currentStepID forward — a coded FSM. Step status is now
+  // projected from artifacts (workflow.ts::projectTaskSteps reads decision
+  // log / spec snapshot / goals / runs / deliveries), so the cells were
+  // pure duplication. Both functions are now thin event emitters: overlay
+  // still gets live `running` / `completed` / `failed` transitions via
+  // WorkflowStepUpdated, but no parallel state is maintained server-side.
 
   async function trackStepStart(toolName: string, goalID?: string): Promise<void> {
-    if (!input.workflow || !input.workflowState) return
+    if (!input.workflow) return
     const step = findStepByTool(input.workflow, toolName)
     if (!step) return
-    const now = Date.now()
-    const ws = input.workflowState
-
-    // Only task-scope steps track state here. Goal-scope step status is
-    // projected from engine_goal_run on read (see workflow.ts::projectGoalSteps);
-    // there is no longer a shadow table to write into.
-    // Phase-6-f-3-bis-b: task-scope mutation stays in the in-memory
-    // WorkflowState so renderWorkflowPrompt's [CURRENT]/[RUNNING] labels
-    // stay accurate within this orchestrator wake. No DB write — the
-    // board projects step status from side-effects (spec / goals / runs /
-    // delivery presence) and gets live `running` updates via
-    // WorkflowStepUpdated events.
-    if (step.scope === "task") {
-      ws.taskSteps[step.id] = { status: "running", startedAt: now }
-      ws.currentStepID = step.id
-      try {
-        EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
-          taskID, stepID: step.id, goalID, status: "running",
-          summary: `Step "${step.label}" started`,
-        })
-      } catch { /* best effort */ }
-      return
-    }
-    // goal-scope: nothing to persist — goal_run creation/update downstream
-    // drives the derived state. Emit an event so the overlay still sees the
-    // tool-level transition without needing to poll the board.
     try {
       EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
         taskID, stepID: step.id, goalID, status: "running",
@@ -249,35 +231,10 @@ export function createOrchestratorTools(input: {
   }
 
   async function trackStepComplete(toolName: string, goalID?: string, failed = false): Promise<void> {
-    if (!input.workflow || !input.workflowState) return
+    if (!input.workflow) return
     const step = findStepByTool(input.workflow, toolName)
     if (!step) return
-    const now = Date.now()
-    const ws = input.workflowState
     const status = failed ? "failed" as const : "completed" as const
-
-    if (step.scope !== "task") {
-      // Goal-scope step completion is derived from engine_goal_run transitions.
-      // Emit-only here.
-      try {
-        EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
-          taskID, stepID: step.id, goalID, status,
-          summary: `Step "${step.label}" ${status}`,
-        })
-      } catch { /* best effort */ }
-      return
-    }
-
-    const existing = ws.taskSteps[step.id]
-    ws.taskSteps[step.id] = { ...existing, status, completedAt: now }
-
-    // Advance currentStepID to next pending task-scope step
-    const nextStep = input.workflow.steps.find(s => {
-      if (s.scope === "task") return ws.taskSteps[s.id]?.status === "pending"
-      return false
-    })
-    ws.currentStepID = nextStep?.id ?? null
-
     try {
       EngineProtocol.emit(EngineEvent.WorkflowStepUpdated, {
         taskID, stepID: step.id, goalID, status,

@@ -104,16 +104,18 @@ export interface GoalWorkflowState {
   stepPhases?: Record<string, Record<string, GoalStepStatus>>
 }
 
-/** 任务级工作流追踪状态（rule 23: in-memory only — 不再持久化到 engine_task.workflow_state；
- *  跨唤醒的步骤状态从 artifact/row 现算via `projectTaskSteps` / `projectGoalSteps`）。 */
+/** 任务级工作流追踪状态（rule 23: 不持有 FSM cell — 步骤状态全部从
+ *  artifact/row 现算 via `projectTaskSteps` / `projectGoalSteps`）。
+ *
+ *  历史上这里还有 `currentStepID` 和 `taskSteps[]` 两个字段，被 trackStep*
+ *  在每次 tool 执行时翻字段值并把指针往前挪 —— 经典 FSM。后来步骤投影
+ *  方式补齐了（projectTaskSteps 从 decision_log / spec / goals / runs /
+ *  delivery 现算），那两个字段就是纯重复来源。删掉。 */
 export interface WorkflowState {
   /** 当前使用的 workflow ID */
   workflowID: string
-  /** 当前预期的下一步骤 ID（用于 system prompt 标注 [CURRENT]） */
-  currentStepID: string | null
-  /** task-scope 步骤状态（仅在 orchestrator loop 当前进程内有效） */
-  taskSteps: Record<string, GoalStepStatus>
-  /** per-goal 步骤状态（同上） */
+  /** per-goal 派生步骤状态。在 prompt 渲染时通常会被 `projectGoalSteps` 覆盖
+   *  （从 goal_run 现算），保留字段是为了向后兼容传入未带 taskID 的渲染调用。 */
   goalSteps: Record<string, GoalWorkflowState>
 }
 
@@ -295,19 +297,11 @@ export namespace WorkflowRegistry {
 // Workflow State 工厂
 // ═══════════════════════════════════════════════════════════════════
 
-/** 根据 workflow 定义创建初始 WorkflowState */
+/** 根据 workflow 定义创建初始 WorkflowState — 任务级步骤状态不再保存在
+ *  cell 里，所有现算（rule 23）。 */
 export function createWorkflowState(workflow: MiniWorkflow): WorkflowState {
-  const taskSteps: Record<string, GoalStepStatus> = {}
-  for (const step of workflow.steps) {
-    if (step.scope === "task") {
-      taskSteps[step.id] = { status: "pending" }
-    }
-  }
-  const firstStep = workflow.steps[0]
   return {
     workflowID: workflow.id,
-    currentStepID: firstStep?.id ?? null,
-    taskSteps,
     goalSteps: {},
   }
 }
@@ -547,22 +541,23 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
   lines.push(`## Stage progress (advisory — agents are dispatched on-demand, not in fixed order)`)
   lines.push("")
 
+  // Project step state from artifacts (rule 23 — no FSM cells). Without a
+  // taskID we have nothing to project from, so every step shows PENDING:
+  // legitimate pre-task state, not data loss.
   const derivedGoalSteps = taskID ? projectGoalSteps(taskID, workflow) : state.goalSteps
+  const derivedTaskSteps = taskID ? projectTaskSteps(taskID, workflow) : {}
 
   for (let i = 0; i < workflow.steps.length; i++) {
     const step = workflow.steps[i]
     const num = i + 1
     const skip = step.skippable ? " (可跳过)" : ""
 
-    // 确定状态标签
     let statusTag = "[PENDING]"
     if (step.scope === "task") {
-      const ts = state.taskSteps[step.id]
-      if (ts) {
-        statusTag = statusLabel(ts.status)
-      }
+      const ts = derivedTaskSteps[step.id]
+      if (ts) statusTag = statusLabel(ts.status)
     } else {
-      // goal-scope: 如果任意 goal 在跑就算 running，全部 done 算 done
+      // goal-scope: 任一 goal 在跑视为 running；全部 done 算 done
       const goalEntries = Object.values(derivedGoalSteps)
       if (goalEntries.length > 0) {
         const statuses = goalEntries.map(g => g.steps[step.id]?.status ?? "pending")
@@ -571,10 +566,6 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
         else if (statuses.some(s => s === "failed")) statusTag = "[FAILED]"
         else if (statuses.some(s => s === "completed")) statusTag = "[PARTIAL]"
       }
-    }
-
-    if (step.id === state.currentStepID && statusTag === "[PENDING]") {
-      statusTag = "[CURRENT]"
     }
 
     lines.push(`${num}. [${step.scope}] ${step.tool} — ${step.hint}${skip} ${statusTag}`)
