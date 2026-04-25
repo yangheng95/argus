@@ -1352,6 +1352,88 @@ export function deleteGoal(goalID: string) {
 }
 
 /**
+ * Record a build agent attempt as a `goal_run_attempt` artifact so the
+ * derived goal status reflects the build outcome.
+ *
+ * Why this helper exists separately from `createGoalRun` / `updateGoalRun`:
+ * post-phase-5 the orchestrator's `build` tool dispatches `BuildAgent.run`
+ * directly without a coordinator Run row. The legacy createGoalRun path
+ * required `coordinatorRunID` and assumed a GoalPool dispatcher would
+ * later mark the run terminal. The new flow has neither, so we collapse
+ * the two-write protocol (queued → completed) into a single terminal
+ * artifact: `kind="goal_run_attempt"` carries the build outcome directly,
+ * `syncGoalStatus` re-derives `engine_goal.status` from the chain tip
+ * (per `goal-status.ts`), and the orchestrator's next describe sees the
+ * goal as `passed` / `failed` instead of stale `pending`.
+ *
+ * Without this, build agents return passed but no one writes the
+ * outcome — every subsequent orchestrator wake reads `goals: pending`
+ * and re-dispatches build, infinite loop until MAX_TASK_ITERATIONS.
+ *
+ * Per rule 23 the LLM still owns the *decision* on what to do with the
+ * outcome (call deliver, retry, fail_task). This helper only persists
+ * the *fact* that build ran and what it returned.
+ */
+export function recordBuildAttempt(input: {
+  taskID: string
+  goalID: string
+  /** The BuildAgent's child session — surfaces in overlay nesting. */
+  sessionID: string
+  /** "completed" when build returned passed; "failed" when build returned
+   *  failed or threw an infrastructure error. Maps to goal status passed/
+   *  failed via `mapRunStatus` in goal-status.ts. */
+  status: "completed" | "failed"
+  commitRef?: string
+  workspaceDir?: string
+  /** Concrete failure reason when status="failed". Surfaces in describe so
+   *  the orchestrator's next decision turn can read it via read_context. */
+  error?: string
+  now?: number
+}): string {
+  const id = Identifier.ascending("goal_run")
+  const now = input.now ?? Date.now()
+  const payload = {
+    goal_id: input.goalID,
+    plan_node_id: null,
+    session_id: input.sessionID,
+    status: input.status,
+    retry_count: 0,
+    blocking_reason: null,
+    error: input.error ?? null,
+    workspace_dir: input.workspaceDir ?? null,
+    base_ref: null,
+    merge_ref: null,
+    supersede_of: null,
+    superseded_reason: null,
+    superseded_at: null,
+    metadata: input.commitRef ? { commit_ref: input.commitRef } : null,
+    time_started: now,
+    time_completed: now,
+  }
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        // No coordinator Run in the post-phase-5 build flow. run_id is
+        // nullable; null + the goal_run_id self-reference suffices for
+        // the chain-tip walk in goal-status.ts.
+        run_id: null,
+        goal_run_id: id,
+        kind: "goal_run_attempt",
+        label: `attempt-${input.status}`,
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  syncGoalStatus(input.goalID, `recordBuildAttempt:${input.status}`)
+  return id
+}
+
+/**
  * Record an orchestrator stream-error fact as an append-only artifact.
  *
  * Used when the orchestrator's own LLM stream aborts mid-decision (provider
