@@ -259,7 +259,8 @@ If exploration reveals a genuine orthogonal subsystem that can ship without re-o
 ## Technical rules (apply to every implementation goal)
 
 - **Static HTML only.** NO JavaScript frameworks, NO React/Vue/Babel/JSX, NO client-side rendering. Every visible text node must appear as raw HTML so a non-executing reader sees the content.
-- **One external dependency allowed**: Tailwind CDN (https://cdn.tailwindcss.com). Tailwind utility classes plus an inline \`<style>\` block. Nothing else — no other CDNs, no local bundling, no build step.
+- **Vanilla CSS only.** All styles live in ONE \`<style>\` block at the top of \`<head>\`. Inject every design token from \`mirror/design-tokens.ts\` (COLORS / FONTS / SPACING / RADII) as a CSS custom property under \`:root { --color-primary: …; }\` and reference them via \`var(--…)\`. Use real CSS class selectors with cascading rules — do NOT inline styles on every element. NO Tailwind, NO external CSS framework, NO CDN, NO JS framework, NO build step.
+- **CSS hygiene.** Include \`*, *::before, *::after { box-sizing: border-box }\`, \`body { margin: 0 }\`, set \`font-family\` on \`body\`, write media queries when the reference uses them.
 - **Do not fetch https://www.baidu.com/ at runtime.** The clone must be fully static.
 - **Exact text.** Preserve the Chinese strings visible on the reference: top nav "新闻 hao123 地图 贴吧 视频 图片 网盘 更多", submit button "百度一下", footer strings, etc.
 - **Exact palette.** Baidu blue #4E6EF2 for the search button and link hovers; white background; 1 px #C8C8C8 search-box border.
