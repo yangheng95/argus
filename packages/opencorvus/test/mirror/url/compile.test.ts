@@ -315,26 +315,14 @@ describe("compilePageToXmlString — GOLDEN PARITY byte-level", () => {
           },
         ),
     },
-    {
-      name: "list with 4 repeating items (triggers Repeat group)",
-      build: () => {
-        const items = Array.from({ length: 5 }, (_, i) =>
-          el({
-            tag: "li",
-            text: `Item ${i + 1}`,
-            bounds: { x: 0, y: i * 40, w: 200, h: 40 },
-          }),
-        )
-        return page([
-          el({
-            tag: "ul",
-            role: "list",
-            bounds: { x: 0, y: 0, w: 200, h: 200 },
-            children: items,
-          }),
-        ])
-      },
-    },
+    // The "list with 4 repeating items" parity case was removed when we
+    // disabled `<Repeat>` folding by default (URL_COMPILE_REPEAT_THRESHOLD
+    // → Infinity in url/compile.ts). The LLM hand-write path needs the full
+    // DOM tree to reproduce per-item structure (e.g. each Baidu hot-search
+    // row's text + tag); folding loses per-instance attributes the codegen
+    // agent then cannot recover. Mirror's reference still folds at 3, so
+    // byte-parity for this case is intentionally broken — non-repeat parity
+    // is still covered by the other golden cases.
   ]
 
   for (const c of cases) {

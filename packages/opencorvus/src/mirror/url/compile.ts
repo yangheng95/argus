@@ -19,9 +19,12 @@ import { estimateTokens } from "../shared/token-estimator"
 import type { ExtractedElement, ExtractedPage, ExtractedStyles } from "../ir/extracted-page"
 import { XmlIRSchema, type XmlIR } from "../ir/xml-ir"
 
-// Mirror `infra/config.ts` constants — pinned values (not `Infinity`).
+// Mirror `infra/config.ts` constants. Repeat folding (`<Repeat count=N>`)
+// disabled by default — the LLM hand-write path needs the full DOM tree to
+// reproduce per-item structure (e.g. each Baidu hot-search row's text + tag).
+// Folding loses per-instance attributes the codegen agent then cannot recover.
 const URL_COMPILE_MAX_SIBLINGS = 30
-const URL_COMPILE_REPEAT_THRESHOLD = 3
+const URL_COMPILE_REPEAT_THRESHOLD = Infinity
 const URL_COMPILE_MAX_REPEAT_DATA_ITEMS = 20
 
 // ─── ir-utils (inlined from mirror/infra/compile/ir-utils.ts) ────────────
