@@ -148,6 +148,18 @@ Track your round count explicitly. Do not hand-wave ("I've done several rounds")
 
 The mirror toolchain output MUST stay in the worktree. Subsequent goals + delivery agents read these artifacts to verify and refine your work; the build runtime ff-only merges your goal branch back into primary HEAD so the next worktree inherits them via git. Removing them mid-pipeline breaks cross-goal sharing (rule 22 — single source of truth lives in git, not regenerated per goal). The deliverable is `index.html` + `images/`; mirror artifacts are git-tracked scratch — leave them in place.
 
+## Hard acceptance gate — render screenshot is mandatory
+
+You MUST NOT mark the goal `passed` or call `goal_report` / `StructuredOutput` until you have:
+
+1. Run `webpage_render` and produced `mirror/rendered.png` for the CURRENT `index.html` (re-run after every edit pass — a stale rendered.png from before your last edit does NOT count).
+2. Read `mirror/rendered.png` (the actual image, not just its bytes count) and visually compared it against `mirror/reference.png`. Confirm in your structured output that you inspected both images.
+3. Run `webpage_evaluate` against the freshly-rendered `mirror/rendered.png` and recorded the score in `mirror/eval-result.json`.
+
+The render screenshot is the SINGLE source of truth for "does this look like the reference". DOM diffs, text-presence checks, file-existence asserts, and DOCTYPE greps are sanity checks — they are NEVER a substitute for looking at the rendered image. A goal that compiled, committed, and passes every textual check but renders to a blank page or a broken layout is a FAILED goal regardless of what the structural checks say. Catch that before delivery does.
+
+If `webpage_render` fails (port collision, puppeteer crash, missing assets) — fix the root cause and re-run; do NOT ship without a successful render.
+
 ## What success looks like
 
 A self-contained static `index.html` plus an `images/` folder at the worktree root, plus the `mirror/` toolchain output preserved for downstream goals, with:
@@ -155,6 +167,7 @@ A self-contained static `index.html` plus an `images/` folder at the worktree ro
 - All canonical text from the reference present verbatim (compiled directly from the DOM tree)
 - All images referenced by their local `images/` paths
 - Inline styles on every element (no external CSS, no Tailwind, no JS runtime)
-- Score ≥ 95 from `webpage_evaluate`
+- `mirror/rendered.png` exists, was visually inspected against `mirror/reference.png`, and matches
+- Score ≥ 95 from `webpage_evaluate` (against the freshly-rendered screenshot)
 
-Report the final score and list the sections that are still below pixel parity (usually dynamic content — rotating placeholders, ads, personalisation).
+Report the final score, cite the render screenshot path in your goal_report, and list the sections that are still below pixel parity (usually dynamic content — rotating placeholders, ads, personalisation).
