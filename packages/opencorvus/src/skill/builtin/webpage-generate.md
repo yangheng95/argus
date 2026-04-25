@@ -1,6 +1,6 @@
 ---
 name: webpage-generate
-description: Generate a high-fidelity HTML clone of a reference webpage with visual similarity ≥ 95. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, and assets deterministically; you then HAND-WRITE the page using vanilla CSS (design tokens injected as `:root` custom properties, real cascading selectors), iterating against `webpage_render` + `webpage_evaluate` + `webpage_vision_judge` until the score meets target. Default to a single-file static `index.html`; if the page genuinely needs a backend (search APIs, hot-search feeds, etc.), build it and pass `url=http://127.0.0.1:<port>/<route>` to `webpage_render` so the screenshot reflects a working page. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts — never invent hex codes, copy, or section structure.
+description: Generate a high-fidelity clone of a reference webpage with visual similarity ≥ 95. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, and assets deterministically; you implement the page in whatever tech stack the brief or surrounding goals call for (static HTML+CSS, React+Tailwind, Vue, plain Hono SSR — the skill is tech-stack-neutral); then iterate against `webpage_render` + `webpage_evaluate` + `webpage_vision_judge` until the score meets target. Pass `url=http://127.0.0.1:<port>/<route>` to `webpage_render` when your project needs a live server. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts — never invent hex codes, copy, or section structure.
 stage: build
 auto_detect:
   task_signals:
@@ -19,35 +19,34 @@ required_tools:
 
 # Webpage Generate Skill
 
-You produce a **high-fidelity HTML clone** of a reference webpage. The mirror toolchain extracts structure, tokens, and text deterministically; **you hand-write** the markup using vanilla CSS, then iterate against visual + textual diffs until the score meets target.
+You produce a **high-fidelity visual clone** of a reference webpage. The mirror toolchain extracts structure, tokens, and text deterministically; you implement the page; you iterate against the visual judge until the score meets target.
 
-## Default shape — single-file static `index.html`
+## Tech-stack policy — adaptive
 
-Most reference pages can be cloned as a single self-contained file. Default to that shape unless the page genuinely needs a backend.
+This skill is tech-stack-neutral. Pick the shape that best fits the brief, the surrounding goals, and the project files already on disk:
 
-The deliverable must satisfy ALL of:
+- **Static single-file** (`index.html` + inline `<style>`, no build step): simplest path, works for most landing-page-shaped clones. Choose this when nothing in the brief or repo demands otherwise — fewer moving parts means faster convergence.
+- **Framework + bundler** (React+Vite, Vue, Solid, Svelte, plain HTML+vite, etc.): choose when the brief or an upstream goal already mandates a framework, or when component reuse is a genuine asset for this clone.
+- **CSS approach**: vanilla CSS, Tailwind, CSS modules, styled-components — whatever the chosen stack is idiomatic with. The fidelity gate doesn't care; the rendered pixels do.
+- **Backend (Express / Hono / Fastify / etc.)**: include only if the page genuinely depends on dynamic data (search APIs, hot-search feeds, autocomplete) AND inlining canonical sample data into the page is not acceptable for the brief.
 
-- One `index.html` at the worktree root.
-- ONE `<style>` block at the top of `<head>`. Use real CSS class selectors and cascading rules — do **NOT** put `style="…"` on every element.
-- Inject every COLORS / FONTS / SPACING / RADII value from `mirror/design-tokens.ts` as a CSS custom property under `:root { --color-primary: …; }` and reference them via `var(--…)`. No hard-coded hex values inside selectors.
-- Standard reset: `*, *::before, *::after { box-sizing: border-box }`, `body { margin: 0 }`, set `font-family` on `body`.
-- **NO Tailwind. NO external CSS framework. NO CDN. NO build step.** Only standard HTML5 + CSS3.
-- All visible text from the reference appears as raw HTML — non-executing readers see the content.
-- Images via the local `images/` paths from the mirror toolchain (or original URLs as fallback when the extractor could not download).
+What is NOT optional regardless of stack:
 
-## When the page needs a backend
+- The deliverable MUST be loadable by `webpage_render` — either as a static file (`index.html` at the worktree root or `inputDir`) or via a live server you start yourself.
+- Design tokens (colours, fonts, spacing, radii) come from `mirror/design-tokens.ts` — do not invent hex codes, font sizes, or spacing values. Apply them through whatever convention your stack uses (CSS custom properties under `:root`, Tailwind theme extension, design-tokens-as-TS-export, etc.).
+- Visible text comes verbatim from `mirror/page-ir.xml` `<Text>` nodes / `Section Text` catalog — do not paraphrase.
+- Images from `mirror/images/` (or fallback to the original URLs from `mirror/extracted-page.json` when the extractor could not download).
 
-If the reference truly depends on a backend (e.g. search results, hot-search lists, autocomplete) and inlining the canonical sample data into `index.html` is not acceptable, build the backend too:
+## Rendering the result for evaluation
 
-1. Place the server entry under `src/server/` (Express / Hono / Fastify — your call).
-2. Make it listen on a port supplied via the `PORT` env variable (default 3000) and serve the page route at `/`.
-3. Start it yourself before screenshotting (e.g. `PORT=4123 bun run src/server/index.ts &`) and remember the port.
-4. Call `webpage_render` with `url=http://127.0.0.1:<port>/<route>` instead of relying on the static-file fallback. Puppeteer will hit your live server.
-5. After screenshotting, kill your server.
+Two `webpage_render` modes — pick whichever fits your project shape:
 
-`webpage_render` will hard-fail in static mode if the rendered page logs 404/fetch/network errors — that's the signal you owe a live server. Don't iterate on a degraded screenshot.
+1. **Static mode** (default): your project produces a self-contained `index.html` at the worktree root. `webpage_render` serves the directory over a built-in loopback server and screenshots `index.html`.
+2. **Live-server mode**: your project needs a backend or a dev server (Vite, Webpack, Next, etc.). Start it yourself on a known port (e.g. `PORT=4123 bun run dev &`) and call `webpage_render` with `url=http://127.0.0.1:4123/<route>`. Puppeteer navigates directly to the live URL. Kill the server after the goal closes.
 
-The agent does **not** call any "magic compile" tool that emits the HTML — there is no such tool by design (rule 22 — single source of truth for the generation strategy lives in `src/mirror/url/prompt.ts`). You write it.
+`webpage_render` hard-fails in static mode when the rendered page logs 404 / fetch / network errors — that signals your page expected a live backend. Switch to live-server mode or inline the data; do not iterate on a degraded screenshot.
+
+The skill exposes no "magic compile" tool that emits the page — you implement it (rule 22, single source of truth for generation strategy is your code, not a hidden compiler).
 
 ## Reuse on re-entry
 
@@ -60,8 +59,8 @@ This skill is idempotent on `mirror/` and `index.html`. On re-entry:
 - `mirror/shared-context.md` — compact prompt-ready summary
 - `mirror/images/img-N.{png,jpg,svg}` — downloaded image assets
 - `mirror/reference.png` — the pixel target for SSIM scoring
-- `index.html` — your hand-written deliverable
-- `images/` — assets the deliverable references (promoted from `mirror/images/`)
+- The deliverable itself (e.g. `index.html` for a static clone, `src/` + a dev-server entry for a framework-shaped clone)
+- `images/` — assets the deliverable references (promoted from `mirror/images/`) when your stack serves them from a public directory
 
 When the artefacts exist for the right URL, REUSE — skip extract, skip compile, skip analyze, jump to step 4. The whole point of `mirror/` being git-tracked + ff-only merged across goal worktrees is that subsequent goals build on the same authoritative source instead of re-extracting.
 
@@ -124,9 +123,16 @@ Call `webpage_analyze` (no args needed). Writes:
 
 Quote the exact strings, copy the exact hex codes (via `var(--…)`), follow the section ordering from `page-ir.xml`. Do not paraphrase headings, nav labels, or button text.
 
-## Step 5 — Hand-write `index.html`
+## Step 5 — Implement the page
 
-Skeleton (adapt to the reference):
+Adapt to the chosen tech stack. Whatever shape you pick, the deliverable must:
+
+- Match section structure verbatim from `page-ir.xml` — section ordering, nesting, and approximate bounds.
+- Use exact text from the `Section Text` catalog — no paraphrasing.
+- Wire colours / fonts / spacing through `mirror/design-tokens.ts` via your stack's idiomatic mechanism (CSS custom properties under `:root`, Tailwind theme extension, design-token export, etc.). Don't invent values.
+- Reference image assets via `mirror/images/<name>` (or original URLs from `mirror/extracted-page.json` as fallback).
+
+If you're picking the static path, a minimal skeleton looks like this — every other approach (React component tree, Vue SFC, etc.) has its own equivalent:
 
 ```html
 <!doctype html>
@@ -137,34 +143,22 @@ Skeleton (adapt to the reference):
   <title><!-- exact title from page-ir.xml --></title>
   <style>
     :root {
-      --color-primary: #4E6EF2;
-      --color-bg: #ffffff;
-      --color-text: #222;
-      --color-border: #C8C8C8;
-      --font-sans: "PingFang SC", system-ui, sans-serif;
-      --space-1: 4px; --space-2: 8px; --space-3: 16px; --space-4: 24px;
-      --radius-1: 4px; --radius-2: 8px;
-      /* one custom property per token from design-tokens.ts */
+      /* one custom property per token from mirror/design-tokens.ts */
     }
     *, *::before, *::after { box-sizing: border-box }
     body { margin: 0; font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg); }
-    .header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); }
-    .search-box { border: 1px solid var(--color-border); border-radius: var(--radius-1); }
-    .search-submit { background: var(--color-primary); color: #fff; }
-    /* … real cascading rules … */
+    /* real cascading rules referencing var(--…) */
   </style>
 </head>
 <body>
-  <header class="header">
-    <!-- exact text from Section Text catalog in page-ir.xml -->
-  </header>
+  <header><!-- exact text from Section Text catalog in page-ir.xml --></header>
   <main>…</main>
   <footer>…</footer>
 </body>
 </html>
 ```
 
-Match section structure verbatim from `page-ir.xml`. Match bounds approximately via flex/grid + sizing tokens — pixel-exact placement is not required, structural similarity is.
+Bounds: match approximately via flex/grid + sizing tokens — pixel-exact placement is not required, structural similarity is.
 
 ## Step 6 — Render
 
@@ -232,12 +226,12 @@ If `webpage_render` fails (port collision, puppeteer crash, missing assets) — 
 
 ## What success looks like
 
-A self-contained `index.html` + `images/` folder at the worktree root, plus the `mirror/` toolchain output preserved for downstream goals, with:
+A working clone — whatever shape your stack produced — that passes `webpage_render`, plus the `mirror/` toolchain output preserved for downstream goals, with:
 
 - All canonical text from the reference present verbatim (read from `page-ir.xml`)
-- All images referenced by their local `images/` paths
-- One `<style>` block, vanilla CSS, design tokens injected via `:root` custom properties (no inline styles, no Tailwind, no JS runtime)
+- All images referenced by their local `mirror/images/` paths (or original URLs as fallback)
+- Design tokens applied through whichever idiomatic mechanism the chosen stack uses (`:root` custom properties, Tailwind theme extension, design-token export, etc.) — never invented hex codes or font sizes
 - `mirror/rendered.png` exists, was visually inspected against `mirror/reference.png`, and matches
-- Score ≥ 95 from `webpage_evaluate` (against the freshly-rendered screenshot)
+- `webpage_vision_judge.accepted = true` AND `webpage_evaluate` score ≥ 95 (against the freshly-rendered screenshot)
 
-Report the final score, cite the render screenshot path in your goal_report, and list the sections that are still below pixel parity (usually dynamic content — rotating placeholders, ads, personalisation).
+Report the final score and `vision_judge` verdict, cite the render screenshot path in your goal_report, and list the sections that are still below pixel parity (usually dynamic content — rotating placeholders, ads, personalisation).
