@@ -93,6 +93,16 @@ export namespace ArchitectAgent {
     /** Legacy passthrough; not wired after the SessionPrompt migration. */
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
+    /**
+     * Fired AFTER the architect agent emits its decomposition (goals, metrics,
+     * contracts) and BEFORE `reviewFidelity` is awaited. Lets the caller
+     * persist raw goals immediately so they are visible in the read model
+     * even when the fidelity LLM hangs (alibaba-coding-plan-cn 5+ min idle
+     * is the observed worst case). If the callback throws, coordinate logs
+     * and continues — fidelity must not be blocked by a persist failure.
+     * Per rule 23 goals are facts; fidelity is a separate quality artifact.
+     */
+    onDecomposed?: (decomposition: import("./types").ArchitectDecomposition) => void | Promise<void>
   }): Promise<ArchitectResult> {
     return run(input)
   }
@@ -118,6 +128,7 @@ async function run(input: {
   signal?: AbortSignal
   stream?: TextHooks
   onStatus?: (summary: string) => void | Promise<void>
+  onDecomposed?: (decomposition: import("./types").ArchitectDecomposition) => void | Promise<void>
 }): Promise<ArchitectResult> {
   if (input.signal?.aborted) throw new Error("architect agent aborted")
 
@@ -247,6 +258,39 @@ async function run(input: {
     kind: g.kind,
     requirement_ids: g.requirement_ids,
   }))
+
+  // Pre-fidelity persist hook (rule 23): emit the raw decomposition so the
+  // caller can write goals to the read model BEFORE the fidelity LLM
+  // potentially hangs. If fidelity returns corrections later, the caller
+  // re-upserts; otherwise the persisted set already matches the final set.
+  if (input.onDecomposed) {
+    try {
+      await input.onDecomposed({
+        goals: goalsForFidelity,
+        removedGoalIDs: collector.removed_goal_ids,
+        goalMetricSpecs: collector.goal_metric_specs,
+        globalMetricSpecs: collector.global_metric_specs,
+        challengeSeeds: collector.challenge_seeds,
+        traceability: collector.traceability,
+        contracts: collector.contracts.map((c) => ({
+          category: c.category,
+          title: c.title,
+          spec: c.spec,
+          goalIDs: c.goalIDs,
+        })),
+        summary: collector.summary || "Architect decomposition",
+      })
+    } catch (err) {
+      // Per the contract, persist failure must not wedge fidelity. Log and
+      // proceed; fidelity will still run and the final result will reflect
+      // any corrections.
+      log.error("architect onDecomposed callback threw — proceeding with fidelity", {
+        taskID: input.taskID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
   const fidelity = await reviewFidelity({
     userRequest: input.taskRequest,
     taskTitle: input.taskTitle,

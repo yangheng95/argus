@@ -145,6 +145,31 @@ export interface ArchitectResult {
   summary: string
 }
 
+/**
+ * Architect-agent output before the fidelity gate. Emitted to the
+ * `onDecomposed` callback of `ArchitectAgent.coordinate` so callers can
+ * persist goals as facts immediately, without blocking on fidelity.
+ *
+ * Per rule 23 (no FSM): goals are facts produced by the architect agent;
+ * fidelity is a separate quality artifact. Coupling them so goals only
+ * land in the DB after fidelity returns turns fidelity into a hardcoded
+ * gate that wedges the whole task when the LLM provider hangs (observed
+ * with alibaba-coding-plan-cn 5+ min thinking idles). The orchestrator
+ * loop should be free to re-wake on a stream-error artifact and read
+ * the persisted goals; if the fidelity verdict eventually arrives, a
+ * second persist call applies any in-place corrections.
+ */
+export interface ArchitectDecomposition {
+  goals: GoalContractFields[]
+  removedGoalIDs: string[]
+  goalMetricSpecs: ArchitectGoalMetricSpec[]
+  globalMetricSpecs: ArchitectGlobalMetricSpec[]
+  challengeSeeds: ArchitectChallengeSeed[]
+  traceability: TraceabilityEntry[]
+  contracts: ArchitectContract[]
+  summary: string
+}
+
 // ---------------------------------------------------------------------------
 // Re-export primitives the Architect receives from Requirements as input.
 // ---------------------------------------------------------------------------
