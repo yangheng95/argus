@@ -53,7 +53,7 @@ const EXECUTOR_TOOLS = {
       readOnly: true,
     },
   },
-  grep: {
+  search_code: {
     name: "search_code",
     annotations: {
       readOnly: true,

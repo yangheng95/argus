@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
-import { GrepTool } from "../../src/tool/grep"
+import { SearchCodeTool } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
@@ -17,13 +17,13 @@ const ctx = {
 
 const projectRoot = path.join(__dirname, "../..")
 
-describe("tool.grep", () => {
+describe("tool.search_code", () => {
   test("basic search", async () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const grep = await GrepTool.init()
-        const result = await grep.execute(
+        const searchCode = await SearchCodeTool.init()
+        const result = await searchCode.execute(
           {
             pattern: "export",
             path: path.join(projectRoot, "src/tool"),
@@ -46,8 +46,8 @@ describe("tool.grep", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const grep = await GrepTool.init()
-        const result = await grep.execute(
+        const searchCode = await SearchCodeTool.init()
+        const result = await searchCode.execute(
           {
             pattern: "xyznonexistentpatternxyz123",
             path: tmp.path,
@@ -71,8 +71,8 @@ describe("tool.grep", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const grep = await GrepTool.init()
-        const result = await grep.execute(
+        const searchCode = await SearchCodeTool.init()
+        const result = await searchCode.execute(
           {
             pattern: "line",
             path: tmp.path,

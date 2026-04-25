@@ -37,7 +37,7 @@ import type { WriteTool } from "@/tool/write"
 import { BashTool } from "@/tool/bash"
 import type { GlobTool } from "@/tool/glob"
 import { TodoWriteTool } from "@/tool/todo"
-import type { GrepTool } from "@/tool/grep"
+import type { SearchCodeTool } from "@/tool/grep"
 import type { ListTool } from "@/tool/ls"
 import type { EditTool } from "@/tool/edit"
 import type { ApplyPatchTool } from "@/tool/apply_patch"
@@ -1495,8 +1495,8 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "read"}>
           <Read {...toolprops} />
         </Match>
-        <Match when={props.part.tool === "grep"}>
-          <Grep {...toolprops} />
+        <Match when={props.part.tool === "search_code"}>
+          <SearchCode {...toolprops} />
         </Match>
         <Match when={props.part.tool === "list"}>
           <List {...toolprops} />
@@ -1504,8 +1504,8 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "webfetch"}>
           <WebFetch {...toolprops} />
         </Match>
-        <Match when={props.part.tool === "codesearch"}>
-          <CodeSearch {...toolprops} />
+        <Match when={props.part.tool === "external_code_search"}>
+          <ExternalCodeSearch {...toolprops} />
         </Match>
         <Match when={props.part.tool === "websearch"}>
           <WebSearch {...toolprops} />
@@ -1842,10 +1842,10 @@ function Read(props: ToolProps<typeof ReadTool>) {
   )
 }
 
-function Grep(props: ToolProps<typeof GrepTool>) {
+function SearchCode(props: ToolProps<typeof SearchCodeTool>) {
   return (
     <InlineTool icon="✱" pending="Searching content..." complete={props.input.pattern} part={props.part}>
-      Grep "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
+      Search Code "{props.input.pattern}" <Show when={props.input.path}>in {normalizePath(props.input.path)} </Show>
       <Show when={props.metadata.matches}>
         ({props.metadata.matches} {props.metadata.matches === 1 ? "match" : "matches"})
       </Show>
@@ -1875,12 +1875,12 @@ function WebFetch(props: ToolProps<typeof WebFetchTool>) {
   )
 }
 
-function CodeSearch(props: ToolProps<any>) {
+function ExternalCodeSearch(props: ToolProps<any>) {
   const input = props.input as any
   const metadata = props.metadata as any
   return (
     <InlineTool icon="◇" pending="Searching code..." complete={input.query} part={props.part}>
-      Exa Code Search "{input.query}" <Show when={metadata.results}>({metadata.results} results)</Show>
+      External Code Search "{input.query}" <Show when={metadata.results}>({metadata.results} results)</Show>
     </InlineTool>
   )
 }

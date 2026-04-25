@@ -33,7 +33,7 @@ interface McpCodeResponse {
   }
 }
 
-export const CodeSearchTool = Tool.define("codesearch", {
+export const ExternalCodeSearchTool = Tool.define("external_code_search", {
   description: DESCRIPTION,
   parameters: z.object({
     query: z
@@ -52,7 +52,7 @@ export const CodeSearchTool = Tool.define("codesearch", {
   }),
   async execute(params, ctx) {
     await ctx.ask({
-      permission: "codesearch",
+      permission: "external_code_search",
       patterns: [params.query],
       always: ["*"],
       metadata: {
@@ -106,7 +106,7 @@ export const CodeSearchTool = Tool.define("codesearch", {
           if (data.result && data.result.content && data.result.content.length > 0) {
             return {
               output: data.result.content[0].text,
-              title: `Code search: ${params.query}`,
+              title: `External code search: ${params.query}`,
               metadata: {},
             }
           }
@@ -116,7 +116,7 @@ export const CodeSearchTool = Tool.define("codesearch", {
       return {
         output:
           "No code snippets or documentation found. Please try a different query, be more specific about the library or programming concept, or check the spelling of framework names.",
-        title: `Code search: ${params.query}`,
+        title: `External code search: ${params.query}`,
         metadata: {},
       }
     } catch (error) {

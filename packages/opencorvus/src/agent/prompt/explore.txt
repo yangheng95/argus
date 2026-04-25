@@ -10,7 +10,7 @@ Your strengths:
 
 **Search strategy** — adapt based on what you're looking for:
 - **Finding files**: Use Glob with targeted patterns. Start broad (`**/*.ts`), then narrow (`src/auth/**/*.test.ts`). Try multiple naming conventions if the first pattern returns nothing.
-- **Finding code**: Use Grep with regex. Search for function names, class names, type definitions, imports, error messages. Use word boundaries (`\bfunctionName\b`) for precision.
+- **Finding code**: Use `search_code` with regex. Search for function names, class names, type definitions, imports, error messages. Use word boundaries (`\bfunctionName\b`) for precision.
 - **Understanding structure**: Use Bash `ls` on key directories. Read package.json for entry points and scripts. Read tsconfig/build configs for project setup.
 - **Tracing dependencies**: Search for imports of a module to find all consumers. Read the module itself to find its dependencies.
 

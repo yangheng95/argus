@@ -212,6 +212,7 @@ import type {
   SessionSummarizeResponses,
   SessionTodoErrors,
   SessionTodoResponses,
+  SessionTraceResponses,
   SessionUnrevertErrors,
   SessionUnrevertResponses,
   SessionUpdateErrors,
@@ -261,6 +262,8 @@ import type {
   TaskRewindResponses,
   TaskRunsErrors,
   TaskRunsResponses,
+  TaskTraceErrors,
+  TaskTraceResponses,
   TaskTranscriptErrors,
   TaskTranscriptResponses,
   TaskUpdateBudgetErrors,
@@ -1915,6 +1918,7 @@ export class Session2 extends HeyApiClient {
         | "root"
         | "orchestrator"
         | "assistant"
+        | "intent-analysis"
         | "requirements"
         | "design-analyst"
         | "planner"
@@ -2747,6 +2751,34 @@ export class Session2 extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<SessionUnrevertResponses, SessionUnrevertErrors, ThrowOnError>({
       url: "/session/{sessionID}/unrevert",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get session AgentTrace events
+   */
+  public trace<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionTraceResponses, unknown, ThrowOnError>({
+      url: "/session/{sessionID}/trace",
       ...options,
       ...params,
     })
@@ -5072,6 +5104,34 @@ export class Task extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<TaskFollowupResponses, TaskFollowupErrors, ThrowOnError>({
       url: "/task/{taskID}/followup",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get task AgentTrace events (all sessions)
+   */
+  public trace<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskTraceResponses, TaskTraceErrors, ThrowOnError>({
+      url: "/task/{taskID}/trace",
       ...options,
       ...params,
     })

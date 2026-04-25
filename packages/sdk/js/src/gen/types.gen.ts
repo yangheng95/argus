@@ -400,6 +400,19 @@ export type EventFidelityReviewCompleted = {
   }
 }
 
+export type EventBuildCompleted = {
+  type: "build.completed"
+  properties: {
+    taskID: string
+    sessionID: string
+    goalID?: string
+    status: "passed" | "failed" | "error"
+    error?: string
+    commitRef?: string
+    summary: string
+  }
+}
+
 export type Project = {
   id: string
   worktree: string
@@ -1215,21 +1228,6 @@ export type EventVcsBranchUpdated = {
   }
 }
 
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
 export type EventTaskReport = {
   type: "task.report"
   properties: {
@@ -1340,6 +1338,7 @@ export type Session = {
     | "root"
     | "orchestrator"
     | "assistant"
+    | "intent-analysis"
     | "requirements"
     | "design-analyst"
     | "planner"
@@ -1453,6 +1452,21 @@ export type EventPtyDeleted = {
   }
 }
 
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
 export type EventWorkspaceReady = {
   type: "workspace.ready"
   properties: {
@@ -1505,6 +1519,7 @@ export type Event =
   | EventFidelityReviewProgress
   | EventFidelityReviewChunk
   | EventFidelityReviewCompleted
+  | EventBuildCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
   | EventServerConnected
@@ -1538,8 +1553,6 @@ export type Event =
   | EventTaskPlanUpdated
   | EventTaskQueueCompleted
   | EventVcsBranchUpdated
-  | EventWorktreeReady
-  | EventWorktreeFailed
   | EventTaskReport
   | EventGoalReport
   | EventCommandExecuted
@@ -1552,6 +1565,8 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
+  | EventWorktreeReady
+  | EventWorktreeFailed
   | EventWorkspaceReady
   | EventWorkspaceFailed
 
@@ -1962,7 +1977,7 @@ export type PermissionConfig =
       read?: PermissionRuleConfig
       edit?: PermissionRuleConfig
       glob?: PermissionRuleConfig
-      grep?: PermissionRuleConfig
+      search_code?: PermissionRuleConfig
       list?: PermissionRuleConfig
       bash?: PermissionRuleConfig
       task?: PermissionRuleConfig
@@ -1972,7 +1987,7 @@ export type PermissionConfig =
       question?: PermissionActionConfig
       webfetch?: PermissionActionConfig
       websearch?: PermissionActionConfig
-      codesearch?: PermissionActionConfig
+      external_code_search?: PermissionActionConfig
       lsp?: PermissionRuleConfig
       doom_loop?: PermissionActionConfig
       skill?: PermissionRuleConfig
@@ -2422,16 +2437,12 @@ export type Config = {
        */
       max_retries?: number
       /**
-       * Maximum merge-resolver retry attempts per conflicted file before aborting
-       */
-      merge_conflict_max_retries?: number
-      /**
        * Additional skill paths for delivery agent
        */
       skills?: Array<string>
     }
     /**
-     * P0-B delivery visual numeric hard-gate thresholds. Change values then rebaseline via script/delivery/replay.ts.
+     * P0-B delivery visual numeric hard-gate thresholds.
      */
     delivery_visual?: {
       /**
@@ -2491,7 +2502,7 @@ export type Config = {
       skills?: Array<string>
     }
     /**
-     * Chunk-driven inactivity gates. Single source of truth for every streaming layer (session LLM, executor events, goal_run scanner, task queue).
+     * Chunk-driven inactivity gates. Single source of truth for streaming layers (session LLM, executor events, task queue).
      */
     activity?: {
       /**
@@ -2502,10 +2513,6 @@ export type Config = {
        * Max idle window for the executor event queue, ms
        */
       executor_events_idle_ms?: number
-      /**
-       * Max idle window scanned against engine_goal_run.last_progress_at, ms
-       */
-      goal_run_idle_ms?: number
       /**
        * Total wall-clock cap for a single queued task run, ms
        */
@@ -2828,6 +2835,7 @@ export type GlobalSession = {
     | "root"
     | "orchestrator"
     | "assistant"
+    | "intent-analysis"
     | "requirements"
     | "design-analyst"
     | "planner"
@@ -4510,6 +4518,7 @@ export type SessionCreateData = {
       | "root"
       | "orchestrator"
       | "assistant"
+      | "intent-analysis"
       | "requirements"
       | "design-analyst"
       | "planner"
@@ -9386,6 +9395,81 @@ export type GoalRunDeliveryResponses = {
 }
 
 export type GoalRunDeliveryResponse = GoalRunDeliveryResponses[keyof GoalRunDeliveryResponses]
+
+export type SessionTraceData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/trace"
+}
+
+export type SessionTraceResponses = {
+  /**
+   * Session AgentTrace events
+   */
+  200: {
+    events: Array<{
+      ts: number
+      kind: string
+      sessionID?: string
+      parentSessionID?: string
+      taskID?: string
+      agentName?: string
+      agentMode?: string
+      payload?: {
+        [key: string]: unknown
+      }
+    }>
+  }
+}
+
+export type SessionTraceResponse = SessionTraceResponses[keyof SessionTraceResponses]
+
+export type TaskTraceData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/trace"
+}
+
+export type TaskTraceErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskTraceError = TaskTraceErrors[keyof TaskTraceErrors]
+
+export type TaskTraceResponses = {
+  /**
+   * Aggregated task AgentTrace events
+   */
+  200: {
+    events: Array<{
+      ts: number
+      kind: string
+      sessionID?: string
+      parentSessionID?: string
+      taskID?: string
+      agentName?: string
+      agentMode?: string
+      payload?: {
+        [key: string]: unknown
+      }
+    }>
+  }
+}
+
+export type TaskTraceResponse = TaskTraceResponses[keyof TaskTraceResponses]
 
 export type RunArtifactsData = {
   body?: never
