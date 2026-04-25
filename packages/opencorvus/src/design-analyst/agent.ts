@@ -17,29 +17,16 @@
  * ✓ Emits specs via register_*_spec tools; terminal design_system / tech_stack
  *   arrive via SessionLoop's StructuredOutput (DesignFinalSchema).
  *
- * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): runs via
- * SessionPrompt.prompt + extraTools instead of SessionPrompt.prompt + a private
- * finalize_design_requirements tool. The multimodal attachments are threaded
- * through SessionPrompt.prompt's parts array; live URL capture and
- * read-attachment stay as agent-scoped extras.
+ * Implementation: thin shell over `runAgentSession`. The runner owns
+ * model / session / prompt-composition / abort / stream-error handling.
  */
 import z from "zod"
-import type { TextHooks } from "@/llm/api"
+import { runAgentSession } from "@/agent/runner"
 import { createPlannerTools } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
-import { resolveAgentModel } from "@/agent/model"
-import { EngineConfig } from "@/engine"
-import { loadStageSkills } from "@/engine/skill-inject"
-import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
-import { Provider } from "@/provider/provider"
-import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import type { Message } from "@/session/message"
-import { Identifier } from "@/id/id"
-import { pathToFileURL } from "bun"
 import type { VisualSpec } from "./types"
 import { createDesignOutputTools, DesignFinalSchema, type DesignFinal } from "./output-tools"
 import { createReadAttachmentTool } from "./read-attachment-tool"
@@ -60,35 +47,93 @@ export namespace DesignAnalystAgent {
     title: string
     request: string
     /**
-     * The complete visual input available at dispatch time. Callers may have
-     * already resolved URLs into PNG attachments here (intent="visual_reference").
-     * The agent may additionally capture a live http(s) webpage via its
-     * dedicated `url_screenshot` tool when the brief contains an uncaptured
-     * visual URL, but it never uses webfetch.
+     * The complete visual input available at dispatch time. Callers may
+     * have already resolved URLs into PNG attachments here
+     * (intent="visual_reference"). The agent may additionally capture a
+     * live http(s) webpage via its dedicated `url_screenshot` tool when
+     * the brief contains an uncaptured visual URL, but it never uses
+     * webfetch.
      */
     attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string; intent?: string; source?: string }>
     taskID?: string
     /** Parent session — a child "design-analyst" session is created under it. */
     parentSessionID?: string
-    /** Explicit model override (provider/model). Skips `resolveAgentModel`. */
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
-    /** Legacy passthrough; no longer wired. Kept on the signature so callers
-     *  do not have to churn. Smoke tests must drive streams through the
-     *  session's own bus subscriptions. */
-    stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
   }
 
   export async function analyze(input: AnalyzeInput): Promise<Result> {
-    return run(input)
+    const plannerTools = await filterAgentTools(createPlannerTools(), "design-analyst")
+    const screenshotToolKit = createUrlScreenshotTool()
+    const outputToolKit = createDesignOutputTools()
+    const projectID = (() => {
+      try {
+        return Instance.project.id
+      } catch {
+        return ""
+      }
+    })()
+    const readAttachmentToolKit = createReadAttachmentTool(projectID)
+
+    log.info("design analyst starting", {
+      title: input.title,
+      hasAttachments: !!input.attachments?.length,
+      attachmentCount: input.attachments?.length ?? 0,
+    })
+
+    const out = await runAgentSession({
+      kind: "design-analyst",
+      core: DESIGN_ANALYST_CORE,
+      sessionTitle: `Design: ${input.title}`,
+      parentSessionID: input.parentSessionID,
+      taskID: input.taskID,
+      model: input.model,
+      signal: input.signal,
+      onStatus: input.onStatus,
+      toolKit: {
+        tools: {
+          ...plannerTools,
+          ...screenshotToolKit,
+          ...readAttachmentToolKit,
+          ...outputToolKit.tools,
+        },
+        getCollector: () => outputToolKit.getSpecs(),
+      },
+      buildUserPrompt: () => buildUserPrompt(input),
+      buildUserParts: () => buildPromptParts(buildUserPrompt(input), input.attachments),
+      format: {
+        schema: z.toJSONSchema(DesignFinalSchema) as Record<string, unknown>,
+        retryCount: 2,
+      },
+      skillsStage: "design_analyst",
+    })
+
+    const structured = out.structured as DesignFinal | undefined
+    const specs = out.collector as VisualSpec[]
+
+    log.info("design analyst finished", {
+      specs: specs.length,
+      structuredMissing: !structured,
+    })
+
+    if (!structured) {
+      throw new Error(
+        "Design analyst agent did not finalize — StructuredOutput missing. " +
+        "Check the model's tool-calling behavior or the design-analyst prompt.",
+      )
+    }
+
+    return {
+      specs,
+      designSystem: structured.design_system,
+      techStack: structured.tech_stack,
+    }
   }
 
   /**
    * Render a VisualSpec[] into a prompt section suitable for delivery's
-   * user-prompt "Design Contract (advisory)" block. Grouped by category,
-   * bullet-listed with id + severity + title + requirement + applies_to.
-   * Caller decides where to splice this into its prompt.
+   * user-prompt "Design Contract (advisory)" block.
    */
   export function renderForDelivery(specs: readonly VisualSpec[], designSystem?: string): string {
     if (specs.length === 0) return ""
@@ -122,113 +167,11 @@ export namespace DesignAnalystAgent {
   }
 }
 
-async function run(input: DesignAnalystAgent.AnalyzeInput): Promise<DesignAnalystAgent.Result> {
-  if (input.signal?.aborted) throw new Error("design analyst aborted before start")
+// ---------------------------------------------------------------------------
+// Prompt construction
+// ---------------------------------------------------------------------------
 
-  let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
-  if (input.model) {
-    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
-  } else {
-    model = await resolveAgentModel("design-analyst", { taskID: input.taskID }).catch(() => undefined)
-  }
-  if (!model) throw new Error("no LLM model available for design-analyst agent")
-
-  if (input.signal?.aborted) throw new Error("design analyst aborted after model resolution")
-
-  const plannerTools = await filterAgentTools(createPlannerTools(), "design-analyst")
-  const screenshotToolKit = createUrlScreenshotTool()
-  const outputToolKit = createDesignOutputTools()
-  const projectID = (() => {
-    try {
-      return Instance.project.id
-    } catch {
-      return ""
-    }
-  })()
-  const extraTools = {
-    ...plannerTools,
-    ...screenshotToolKit,
-    ...createReadAttachmentTool(projectID),
-    ...outputToolKit.tools,
-  }
-  const enableMap: Record<string, boolean> = Object.fromEntries(
-    Object.keys(extraTools).map((name) => [name, true]),
-  )
-
-  if (input.signal?.aborted) throw new Error("design analyst aborted before LLM call")
-
-  await input.onStatus?.("Design analyst: extracting visual contract")
-
-  const systemPrompt = await designAnalystSystem()
-  const userPrompt = buildUserPrompt(input)
-
-  log.info("design analyst starting", {
-    title: input.title,
-    model: model.id,
-    hasAttachments: !!input.attachments?.length,
-    attachmentCount: input.attachments?.length ?? 0,
-  })
-
-  const childSession = await Session.createNext({
-    kind: "design-analyst",
-    parentID: input.parentSessionID,
-    title: `Design: ${input.title}`,
-    directory: Instance.directory,
-  })
-
-  const parts = await buildPromptParts(childSession.id, userPrompt, input.attachments)
-
-  let finalMessage: Message.WithParts | undefined
-  await SessionPrompt.withExtraTools(childSession.id, extraTools, async () => {
-    finalMessage = (await SessionPrompt.prompt({
-      sessionID: childSession.id,
-      model: { providerID: model!.providerID, modelID: model!.api.id },
-      agent: "design-analyst",
-      system: systemPrompt,
-      tools: enableMap,
-      format: {
-        type: "json_schema",
-        schema: z.toJSONSchema(DesignFinalSchema) as Record<string, unknown>,
-        retryCount: 2,
-      },
-      parts,
-    })) as Message.WithParts
-  })
-
-  if (input.signal?.aborted) throw new Error("design analyst aborted during prompt")
-  if (!finalMessage) throw new Error("design analyst: SessionPrompt.prompt returned no message")
-
-  const structured = (finalMessage.info as Message.Assistant).structured as DesignFinal | undefined
-
-  log.info("design analyst finished", {
-    specs: outputToolKit.getSpecs().length,
-    structuredMissing: !structured,
-  })
-
-  if (!structured) {
-    throw new Error(
-      "Design analyst agent did not finalize — StructuredOutput missing. " +
-      "Check the model's tool-calling behavior or the design-analyst prompt.",
-    )
-  }
-
-  return {
-    specs: outputToolKit.getSpecs(),
-    designSystem: structured.design_system,
-    techStack: structured.tech_stack,
-  }
-}
-
-/**
- * Build SessionPrompt-compatible message parts for the user turn.
- *
- * Text prompt comes first, then each multimodal attachment (images/PDFs)
- * lands as a FilePart. Text-like attachments are enumerated in the prompt
- * body itself as reference text so the LLM knows they exist (but actually
- * reads them via the read_attachment extra tool, not inline).
- */
 async function buildPromptParts(
-  sessionID: string,
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
@@ -238,19 +181,10 @@ async function buildPromptParts(
 
   const parts: Array<
     | { type: "text"; text: string }
-    | {
-        type: "file"
-        url: string
-        mime: string
-        filename?: string
-      }
+    | { type: "file"; url: string; mime: string; filename?: string }
   > = [{ type: "text", text: enrichedText }]
 
   for (const fp of fileParts) {
-    // AttachmentStore returns ai-sdk FilePart with `data` URL; our
-    // PromptInput FilePart uses { url, mime }. The helper below rewrites
-    // the payload so Session.saveMessage can persist the part without
-    // trying to re-resolve a local file path.
     if ("image" in fp && fp.image) {
       const data = typeof fp.image === "string" ? fp.image : undefined
       if (data) parts.push({ type: "file", url: data, mime: "image/*" })
@@ -273,7 +207,7 @@ async function buildPromptParts(
     }
   }
 
-  return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
+  return parts
 }
 
 function buildUserPrompt(input: {
@@ -282,6 +216,10 @@ function buildUserPrompt(input: {
   attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
 }): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+  // URL presence is a *structural* detection (syntactic protocol scheme),
+  // not a keyword policy: the agent decides whether to propose a
+  // `url_screenshot` capture based on whether a web URL is even
+  // available in the brief. Not a rule-11 violation.
   const hasLiveHttpUrl = /https?:\/\/\S+/i.test(input.request)
 
   const visualAttachments = (input.attachments ?? []).filter(
@@ -339,22 +277,3 @@ function buildUserPrompt(input: {
 
   return sections.join("\n\n")
 }
-
-async function designAnalystSystem(): Promise<string> {
-  // Single-source skill injection. `config.agent["design-analyst"].prompt`
-  // appends to the canonical CORE; it cannot replace it. The skill loader
-  // is the only injection path; no bypass field exists.
-  const config = await Config.get()
-  const userAppend = (config.agent as Record<string, any> | undefined)?.["design-analyst"]?.prompt
-  const core = typeof userAppend === "string" && userAppend.trim().length > 0
-    ? DESIGN_ANALYST_CORE + "\n\n" + userAppend
-    : DESIGN_ANALYST_CORE
-  const orchCfg = await EngineConfig.get()
-  const skills = await loadStageSkills(orchCfg.design_analyst.skills, "design-analyst")
-  return core + skills
-}
-
-// pathToFileURL is imported for future use by callers that may want to
-// convert local paths to attachments — it is a part of the AttachmentStore
-// contract surface and keeping the import silences tree-shaking warnings.
-void pathToFileURL
