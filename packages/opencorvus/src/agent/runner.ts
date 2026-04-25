@@ -333,37 +333,55 @@ export async function runAgentSession<C>(
 
   let finalMessage: Message.WithParts | undefined
   try {
-    await SessionPrompt.withExtraTools(session.id, input.toolKit.tools, async () => {
-      const promptArgs: Parameters<typeof SessionPrompt.prompt>[0] = {
-        sessionID: session.id,
-        model: { providerID: model!.providerID, modelID: model!.api.id },
-        agent: agentName,
-        system: systemPrompt,
-        tools: enableMap,
-        parts: parts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
-      }
-      if (input.format) {
-        promptArgs.format = {
-          type: "json_schema",
-          schema: input.format.schema,
-          retryCount: input.format.retryCount ?? 2,
+    try {
+      await SessionPrompt.withExtraTools(session.id, input.toolKit.tools, async () => {
+        const promptArgs: Parameters<typeof SessionPrompt.prompt>[0] = {
+          sessionID: session.id,
+          model: { providerID: model!.providerID, modelID: model!.api.id },
+          agent: agentName,
+          system: systemPrompt,
+          tools: enableMap,
+          parts: parts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
         }
+        if (input.format) {
+          promptArgs.format = {
+            type: "json_schema",
+            schema: input.format.schema,
+            retryCount: input.format.retryCount ?? 2,
+          }
+        }
+        finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
+      })
+    } finally {
+      errorUnsub()
+      input.signal?.removeEventListener("abort", abortPrompt)
+      if (lifecycleDisposable && typeof lifecycleDisposable === "object" && "dispose" in lifecycleDisposable) {
+        try { lifecycleDisposable.dispose() } catch { /* best-effort disposer */ }
       }
-      finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
-    })
-  } finally {
-    errorUnsub()
-    input.signal?.removeEventListener("abort", abortPrompt)
-    if (lifecycleDisposable && typeof lifecycleDisposable === "object" && "dispose" in lifecycleDisposable) {
-      try { lifecycleDisposable.dispose() } catch { /* best-effort disposer */ }
     }
-  }
 
-  if (input.signal?.aborted) {
-    throw new AgentRunError(kind, "aborted during prompt")
-  }
-  if (!finalMessage) {
-    throw new AgentRunError(kind, "SessionPrompt.prompt returned no message")
+    if (input.signal?.aborted) {
+      throw new AgentRunError(kind, "aborted during prompt")
+    }
+    if (!finalMessage) {
+      throw new AgentRunError(kind, "SessionPrompt.prompt returned no message")
+    }
+  } catch (err) {
+    if (AgentTrace.isEnabled()) {
+      AgentTrace.recordAgentReport({
+        sessionID: session.id,
+        parentSessionID: input.parentSessionID,
+        taskID: input.taskID,
+        agentName,
+        kind: "agent_report_failure",
+        collector: (() => {
+          try { return input.toolKit.getCollector() } catch { return undefined }
+        })(),
+        streamErrors,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+    throw err
   }
 
   // ── 7. Return collector + structured output ──────────────────────────

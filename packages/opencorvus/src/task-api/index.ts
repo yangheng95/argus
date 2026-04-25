@@ -1220,26 +1220,50 @@ export namespace EngineService {
       .filter((part) => part.length > 0)
       .join("\n")
 
+    const followupMessages = [
+      {
+        role: "system" as const,
+        content:
+          "你是协作中的助手。基于任务刚刚结束时的状态，推断用户最可能想让 AI 做的下一步，给出一条第一人称口吻的简短中文指令，直接作为用户发给 AI 的消息。要求：不超过 30 字；不使用引号；不解释；当任务明显已无后续时返回空字符串。以 JSON 对象返回，字段名 suggestion。",
+      },
+      { role: "user" as const, content: context },
+    ]
     const stream = streamObject({
       model: language,
       temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-      messages: [
-        {
-          role: "system",
-          content:
-            "你是协作中的助手。基于任务刚刚结束时的状态，推断用户最可能想让 AI 做的下一步，给出一条第一人称口吻的简短中文指令，直接作为用户发给 AI 的消息。要求：不超过 30 字；不使用引号；不解释；当任务明显已无后续时返回空字符串。以 JSON 对象返回，字段名 suggestion。",
-        },
-        { role: "user", content: context },
-      ],
+      messages: followupMessages,
       schema: z.object({ suggestion: z.string() }),
     })
 
-    for await (const part of stream.fullStream) {
-      if (part.type === "error") throw part.error
+    try {
+      for await (const part of stream.fullStream) {
+        if (part.type === "error") throw part.error
+      }
+      const final = await stream.object
+      const suggestion = (final?.suggestion ?? "").trim()
+      const { AgentTrace } = await import("@/trace")
+      if (AgentTrace.isEnabled()) {
+        AgentTrace.recordHelperLLMCall({
+          agentName: "task-followup",
+          model: { providerID: model.providerID, modelID: model.id },
+          messages: followupMessages,
+          schema: { suggestion: "string" },
+          output: final,
+        })
+      }
+      return { suggestion }
+    } catch (err) {
+      const { AgentTrace } = await import("@/trace")
+      if (AgentTrace.isEnabled()) {
+        AgentTrace.recordHelperLLMCall({
+          agentName: "task-followup",
+          model: { providerID: model.providerID, modelID: model.id },
+          messages: followupMessages,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      throw err
     }
-    const final = await stream.object
-    const suggestion = (final?.suggestion ?? "").trim()
-    return { suggestion }
   }
 
   export async function abortRun(runID: string) {

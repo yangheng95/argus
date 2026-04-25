@@ -1,14 +1,31 @@
 /**
  * AgentTrace — append-only JSONL capture of every agent's LLM input + report.
  *
- * Activated by env `OPENCORVUS_AGENT_TRACE=1`. When unset, every entry point is
- * a noop (rule 26 — zero overhead). Per rule 22, this is the SINGLE trace
- * abstraction every hook site uses; per rule 25, the output directory is
- * derived from `Instance.directory` rather than hardcoded.
+ * AUTO-ENABLED by default — set `OPENCORVUS_AGENT_TRACE=0` to opt out.
+ * Rationale: this is a debug-first project; the user explicitly asked for
+ * trace to be on by default so deep-debug sessions don't require remembering
+ * to set an env var. The hook sites still pay only one boolean check on the
+ * disabled path, so the cost is negligible.
  *
- * Output: `<project>/.opencorvus/trace/<sessionID>.jsonl`. One file per child
- * session for easy correlation; the parent session id + task id sit in each
- * line's payload so consumers can stitch a task-wide view via grep.
+ * Per rule 22, this is the SINGLE trace abstraction every hook site uses;
+ * per rule 25, the output directory is derived from `Instance.directory`
+ * rather than hardcoded.
+ *
+ * Output layout under `<project>/.opencorvus/trace/`:
+ *   - `<sessionID>.jsonl` — per-session detail (every event for that session)
+ *   - `_task-<taskID>.jsonl` — per-task chronological rollup. Each event that
+ *     carries taskID is appended to BOTH its session file AND the task file,
+ *     so a single task's orchestrator wake + every sub-agent dispatch sit in
+ *     one file in time order. Underscore prefix sorts task files to the top
+ *     of `ls` for quick navigation.
+ *   - `_index.jsonl` — append-only manifest. One line per (sessionID,
+ *     agentName, kind="session_open") tuple, written the first time the
+ *     trace sees a session. Lets you `cat _index.jsonl | jq` to map
+ *     sessionID → agentName → taskID without scanning every per-session
+ *     file. Index lines also fire for helper LLM calls (no sessionID), so
+ *     Agent.generate and generateFollowup show up.
+ *   - `helper-<agentName>-<ts>.jsonl` — for direct streamObject calls that
+ *     have no session context (Agent.generate / generateFollowup).
  *
  * Event shape:
  *   { ts, kind, sessionID, parentSessionID?, taskID?, agentName, payload }
@@ -42,7 +59,11 @@ import { Instance } from "@/project/instance"
 const log = Log.create({ service: "agent-trace" })
 
 export namespace AgentTrace {
-  const ENABLED = process.env.OPENCORVUS_AGENT_TRACE === "1"
+  // Auto-enabled. Opt out via `OPENCORVUS_AGENT_TRACE=0` (also accepts "false"
+  // / "no" / "off" for ergonomics). The empty string and unset both keep
+  // tracing on by design.
+  const DISABLED_VALUES = new Set(["0", "false", "no", "off"])
+  const ENABLED = !DISABLED_VALUES.has((process.env.OPENCORVUS_AGENT_TRACE ?? "").toLowerCase())
   const REDACT_ATTACHMENTS = process.env.OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS === "1"
 
   export function isEnabled(): boolean {
@@ -65,6 +86,49 @@ export namespace AgentTrace {
     return path.join(traceDir(), `${sessionID}.jsonl`)
   }
 
+  function taskFile(taskID: string): string {
+    return path.join(traceDir(), `_task-${taskID}.jsonl`)
+  }
+
+  function indexFile(): string {
+    return path.join(traceDir(), "_index.jsonl")
+  }
+
+  /** Sessions whose first event we have already indexed in `_index.jsonl`.
+   *  Used to dedupe the index — first-seen sessions write a session_open line,
+   *  subsequent events for the same session don't. Helper-call sessionIDs
+   *  (`helper-<agentName>-<ts>`) are unique-per-call, so they index once. */
+  const seenSessions = new Set<string>()
+
+  function maybeWriteIndex(event: {
+    sessionID: string
+    parentSessionID?: string
+    taskID?: string
+    agentName: string
+    kind: string
+  }) {
+    if (seenSessions.has(event.sessionID)) return
+    seenSessions.add(event.sessionID)
+    try {
+      ensureDir()
+      const line = safeStringify({
+        ts: Date.now(),
+        kind: "session_open",
+        sessionID: event.sessionID,
+        parentSessionID: event.parentSessionID,
+        taskID: event.taskID,
+        agentName: event.agentName,
+        firstEvent: event.kind,
+      }) + "\n"
+      fs.appendFileSync(indexFile(), line, { encoding: "utf-8" })
+    } catch (err) {
+      log.warn("trace index append failed", {
+        sessionID: event.sessionID,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
   function safeStringify(value: unknown): string {
     const seen = new WeakSet()
     return JSON.stringify(value, (_key, val) => {
@@ -79,12 +143,34 @@ export namespace AgentTrace {
     })
   }
 
-  function append(sessionID: string, event: Record<string, unknown>) {
+  function append(
+    sessionID: string,
+    event: Record<string, unknown> & {
+      taskID?: string
+      parentSessionID?: string
+      agentName: string
+      kind: string
+    },
+  ) {
     if (!ENABLED) return
     try {
       ensureDir()
+      maybeWriteIndex({
+        sessionID,
+        parentSessionID: event.parentSessionID,
+        taskID: event.taskID,
+        agentName: event.agentName,
+        kind: event.kind,
+      })
       const line = safeStringify(event) + "\n"
       fs.appendFileSync(sessionFile(sessionID), line, { encoding: "utf-8" })
+      // Per-task chronological rollup so a single task's full timeline (every
+      // wake + every sub-agent dispatch) is grep-able in one file. The same
+      // line is duplicated; consumers can dedupe on (sessionID, ts) or just
+      // scan the rollup directly.
+      if (typeof event.taskID === "string" && event.taskID.length > 0) {
+        fs.appendFileSync(taskFile(event.taskID), line, { encoding: "utf-8" })
+      }
     } catch (err) {
       log.warn("trace append failed", {
         sessionID,
@@ -142,6 +228,37 @@ export namespace AgentTrace {
     })
   }
 
+  /** Capture a direct streamObject / generateText call that bypasses the
+   *  session pipeline (Agent.generate, generateFollowup). Synthesises a
+   *  helper sessionID from agentName + timestamp so the event lands in its
+   *  own file under the same trace dir. Both the input and the structured
+   *  output go in one event since these helpers are single-shot. */
+  export function recordHelperLLMCall(input: {
+    agentName: string
+    model: { providerID: string; modelID: string }
+    messages: unknown[]
+    schema?: unknown
+    output?: unknown
+    error?: string
+  }): string {
+    if (!ENABLED) return ""
+    const helperSessionID = `helper-${input.agentName}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    append(helperSessionID, {
+      ts: Date.now(),
+      kind: "helper_llm_call",
+      sessionID: helperSessionID,
+      agentName: input.agentName,
+      payload: {
+        model: input.model,
+        messages: redactMessages(input.messages),
+        schema: input.schema,
+        output: input.output,
+        error: input.error,
+      },
+    })
+    return helperSessionID
+  }
+
   /** Capture an agent's terminal report. Used by runAgentSession,
    *  runAgentSessionWithRetry, and Orchestrator.processTask. */
   export function recordAgentReport(input: {
@@ -149,7 +266,7 @@ export namespace AgentTrace {
     parentSessionID?: string
     taskID?: string
     agentName: string
-    kind: "agent_report" | "agent_report_retry_final" | "orchestrator_wake"
+    kind: "agent_report" | "agent_report_retry_final" | "agent_report_failure" | "orchestrator_wake" | "orchestrator_wake_failure"
     collector?: unknown
     structured?: unknown
     streamErrors?: Array<{ reason: string; name?: string }>
