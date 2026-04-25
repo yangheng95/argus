@@ -11,7 +11,20 @@ import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
 import { StepPayloadBody } from "./StepPayloadBody";
 import { FidelityBody } from "./FidelityCard";
+import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
+
+/** Extract the opencorvus sessionID encoded in agent-card ids. The writer
+ *  builds them as `<stage>:session:<sid>` (services/tree-writer.ts::sessionCardID),
+ *  so any card whose id matches that pattern can surface its session-scoped
+ *  AgentTrace events. Returns undefined when the card isn't a session card
+ *  (synthetic message bubbles, tool promotions, etc). */
+function sessionIDFromCardID(id: string): string | undefined {
+  const idx = id.indexOf(":session:");
+  if (idx < 0) return undefined;
+  const sid = id.slice(idx + ":session:".length);
+  return sid || undefined;
+}
 
 /**
  * Unified recursive card primitive.
@@ -50,6 +63,21 @@ export function Card(props: { node: CardNode; depth: number }) {
 
   const toggle = () => {
     toggleCard(props.node.id, props.node.status, defaultExpanded());
+  };
+
+  // Per-card AgentTrace toggle. Only meaningful for session cards (kind="agent")
+  // whose id encodes a sessionID. Local signal — no need to persist across
+  // reloads; the trace endpoint is cheap and idempotent.
+  const traceSessionID = createMemo(() =>
+    props.node.kind === "agent" ? sessionIDFromCardID(props.node.id) : undefined,
+  );
+  const [traceOpen, setTraceOpen] = createSignal(false);
+  const onTraceToggle = () => {
+    if (!traceSessionID()) return;
+    // Auto-expand the card when opening the trace panel — collapsed cards
+    // hide their body, which is where the panel renders.
+    if (!expanded()) toggleCard(props.node.id, props.node.status, defaultExpanded());
+    setTraceOpen((v) => !v);
   };
 
   /**
@@ -154,9 +182,18 @@ export function Card(props: { node: CardNode; depth: number }) {
         collapsible={collapsible()}
         onToggle={toggle}
         onRewind={onRewind}
+        traceSessionID={traceSessionID()}
+        traceOpen={traceOpen()}
+        onTrace={traceSessionID() ? onTraceToggle : undefined}
       />
       <Show when={expanded()}>
         <div class="card__body">
+          <Show when={traceOpen() && traceSessionID()}>
+            <TracePanel
+              sessionID={traceSessionID()!}
+              onClose={() => setTraceOpen(false)}
+            />
+          </Show>
           <Show when={props.node.kind === "step" && props.node.goalDescription}>
             <section class="card__goal-desc" aria-label={t("goal.field.objective")}>
               <div class="card__goal-desc-label">{t("goal.field.objective")}</div>

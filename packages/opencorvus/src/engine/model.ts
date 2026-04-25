@@ -880,6 +880,25 @@ export const TaskConversationHydration = z.object({
   view: TaskConversationView,
 })
 
+/** AgentTrace event surfaced to the overlay debug panel. Shape mirrors what
+ *  the trace JSONL writer persists; payload is open-ended (`record<string, any>`)
+ *  because llm_request / agent_report / helper_llm_call carry different
+ *  fields and the UI renders them with kind-aware components. */
+export const TraceEvent = z.object({
+  ts: z.number(),
+  kind: z.string(),
+  sessionID: z.string().optional(),
+  parentSessionID: z.string().optional(),
+  taskID: z.string().optional(),
+  agentName: z.string().optional(),
+  agentMode: z.string().optional(),
+  payload: z.record(z.string(), z.any()).optional(),
+})
+
+export const TraceEventList = z.object({
+  events: TraceEvent.array(),
+})
+
 export const ArtifactAudit = z.object({
   source_files_added: z.number(),
   config_files_added: z.number(),

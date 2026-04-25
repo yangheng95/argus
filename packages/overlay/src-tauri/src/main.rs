@@ -644,6 +644,14 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
         .env("OPENCORVUS_VERSION", env!("CARGO_PKG_VERSION"))
         .env("OPENCORVUS_CHANNEL", "latest")
         .env("OPENCORVUS_CLIENT", "app")
+        // Overlay-launched opencorvus must always write trace files under the
+        // active project's `<Instance.directory>/.opencorvus/trace/`. Inheriting
+        // a stray `OPENCORVUS_AGENT_TRACE_DIR` from the launching shell (or
+        // a prior benchmark run that exported it globally) would silently
+        // route trace into a stale temp path instead of the project directory,
+        // and the overlay's debug surfaces would never see it. Strip it before
+        // spawn so the env override only applies where it's set on purpose.
+        .env_remove("OPENCORVUS_AGENT_TRACE_DIR")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());

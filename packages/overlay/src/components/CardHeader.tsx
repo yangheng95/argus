@@ -78,6 +78,15 @@ export function CardHeader(props: {
    *  card's `time` (ms — becomes cursorTime on the backend) and id
    *  (anchorEventID for audit). Parent routes it to POST /task/:id/rewind. */
   onRewind?: (cursorTime: number, anchorID: string) => void | Promise<void>;
+  /** Set on cards that map 1:1 to an opencorvus session (kind="agent"
+   *  cards whose id follows `<stage>:session:<sid>`). When present the
+   *  header renders a 🔍 button that calls `onTrace` to toggle the
+   *  AgentTrace panel for that session inside the card body. */
+  traceSessionID?: string;
+  /** Whether the trace panel is currently open in the parent. */
+  traceOpen?: boolean;
+  /** Toggle the trace panel for this card. */
+  onTrace?: () => void;
 }) {
   const badge = () => statusBadge(props.node);
   const glyph = () => leadingGlyph(props.node);
@@ -231,6 +240,32 @@ export function CardHeader(props: {
                 <path d="M3.5 8.5l3 3 6-6.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </Show>
+          </button>
+        </Show>
+        <Show when={!!props.traceSessionID && !!props.onTrace}>
+          <button
+            type="button"
+            class="card__trace"
+            classList={{ "card__trace--open": !!props.traceOpen }}
+            title="Inspect AgentTrace for this session"
+            aria-label="Inspect AgentTrace for this session"
+            aria-pressed={!!props.traceOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onTrace?.();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                props.onTrace?.();
+              }
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="7" cy="7" r="4" stroke="currentColor" stroke-width="1.5" fill="none" />
+              <path d="M10 10l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
           </button>
         </Show>
         <Show when={canRewind()}>
