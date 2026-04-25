@@ -63,4 +63,43 @@ describe("resolveStageSkills", () => {
       },
     })
   })
+
+  test("aggregates required_tools across auto-detected build skills for webpage tasks", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await resolveStageSkills([], "build", {
+          request_contains_url: true,
+          request_text: "复刻 https://www.baidu.com/",
+        })
+        expect(result.requiredTools).toContain("webpage_compile_html")
+        expect(result.requiredTools).toContain("webpage_render")
+        expect(result.requiredTools).toContain("webpage_evaluate")
+        expect(result.prompt).toContain("Skill-system invariants")
+        expect(result.prompt).toContain("Skill: webpage-generate")
+      },
+    })
+  })
+
+  test("does not auto-detect webpage-generate from frontend files alone", async () => {
+    await using tmp = await tmpdir()
+    const fs = await import("node:fs/promises")
+    const path = await import("node:path")
+    await fs.writeFile(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({ name: "frontend", dependencies: { react: "^18.0.0", vite: "^5.0.0" } }),
+    )
+    await fs.writeFile(path.join(tmp.path, "index.html"), "<div id=\"root\"></div>")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await resolveStageSkills([], "build", {
+          request_text: "Implement the account settings page",
+        })
+        expect(result.skills.map((skill) => skill.name)).not.toContain("webpage-generate")
+        expect(result.requiredTools).toEqual([])
+      },
+    })
+  })
 })

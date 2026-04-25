@@ -55,11 +55,11 @@ export namespace Skill {
     }).optional(),
     /** Priority for ordering when multiple skills match (higher = first). */
     priority: z.number().optional().default(0),
-    /** Tools the delivery agent MUST call (and the call MUST pass) before it
-     *  can submit_verdict(accepted). Enforced in output-tools.submit_verdict
-     *  against the verdict's tool_call_evidence[]. Each entry is a tool name
-     *  as declared on the delivery tool set (e.g. "verify_page_integrity",
-     *  "screenshot", "run_command"). Empty or omitted = no enforcement. */
+    /** Tools the stage agent MUST call before it can report success. Delivery
+     *  enforces this through output-tools.submit_verdict and
+     *  tool_call_evidence[]. Build enforces it from the session's completed
+     *  tool parts and any machine-readable artifacts the skill requires. Empty
+     *  or omitted = no enforcement. */
     required_tools: z.array(z.string()).optional().default([]),
   })
   export type Info = z.infer<typeof Info>

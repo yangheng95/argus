@@ -32,6 +32,15 @@ const log = Log.create({ service: "skill-inject" })
  * CORE constants that could drift.
  */
 const STAGE_INVARIANTS: Record<string, string> = {
+  build: `## Skill-system invariants (enforced by BuildAgent)
+
+Injected skills can declare \`required_tools\` in their frontmatter. When a
+build-stage skill declares required tools, \`status='passed'\` is rejected by
+BuildAgent unless every required tool completed in the build session. For
+\`webpage_evaluate\`, BuildAgent also reads \`mirror/eval-result.json\` from the
+current worktree and rejects stale or sub-target visual evidence. A webpage
+clone is not passed until the freshly rendered current \`index.html\` scores at
+least 95 against the reference.`,
   delivery: `## Skill-system invariants (enforced by submit_verdict)
 
 The delivery verdict schema carries a \`tool_call_evidence[]\` array. Injected

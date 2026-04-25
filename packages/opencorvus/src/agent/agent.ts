@@ -104,7 +104,6 @@ export namespace Agent {
       // any of them via user config.
       webpage_extract: "allow",
       webpage_compile: "allow",
-      webpage_compile_html: "allow",
       webpage_analyze: "allow",
       webpage_render: "allow",
       webpage_evaluate: "allow",
@@ -302,7 +301,7 @@ export namespace Agent {
         steps: 1000,
         // Whitelist: orchestrator is a SCHEDULER, not an executor. The benchmark
         // caught it bypassing the build agent entirely (calling webpage_extract
-        // / webpage_compile_html / webpage_render / webpage_evaluate / bash /
+        // / webpage_render / webpage_evaluate / bash /
         // edit / read directly across 20 steps) because the default toolset
         // exposed every executor surface. Rule 22 — one role per tool list.
         // Allowed:

@@ -59,6 +59,22 @@ Use as step 6 of the webpage-generate workflow. Feed the diff image path back to
     const diffBase64 = report.diffImageDataUrl.replace(/^data:image\/png;base64,/, "")
     await fs.writeFile(diffPath, Buffer.from(diffBase64, "base64"))
 
+    const evalResultPath = path.join(outputDir, "eval-result.json")
+    const evalResult = {
+      generatedAt: new Date().toISOString(),
+      referencePath,
+      renderedPath,
+      diffPath,
+      overallScore: report.overallScore,
+      ssimScore: report.ssimScore,
+      pixelDiffPercent: report.pixelDiffPercent,
+      dimensionsMatch: report.dimensionsMatch,
+      mismatchedPixels: report.mismatchedPixels,
+      totalPixels: report.totalPixels,
+      comparisonDimensions: report.comparisonDimensions,
+    }
+    await fs.writeFile(evalResultPath, JSON.stringify(evalResult, null, 2), "utf8")
+
     return {
       title: `Score ${report.overallScore}/100 (ssim=${report.ssimScore.toFixed(3)} pixelDiff=${report.pixelDiffPercent.toFixed(2)}%)`,
       output: [
@@ -67,6 +83,7 @@ Use as step 6 of the webpage-generate workflow. Feed the diff image path back to
         `- Reference: \`${referencePath}\``,
         `- Rendered:  \`${renderedPath}\``,
         `- Diff:      \`${diffPath}\``,
+        `- Result:    \`${evalResultPath}\``,
         "",
         `## Score: **${report.overallScore}/100**`,
         `- SSIM structural: ${report.ssimScore.toFixed(4)}`,
@@ -85,6 +102,7 @@ Use as step 6 of the webpage-generate workflow. Feed the diff image path back to
         mismatchedPixels: report.mismatchedPixels,
         totalPixels: report.totalPixels,
         diffPath,
+        evalResultPath,
       },
     }
   },

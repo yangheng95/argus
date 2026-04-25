@@ -38,7 +38,6 @@ import { GoalReportTool } from "./goal-report"
 import {
   WebpageExtractTool,
   WebpageCompileTool,
-  WebpageCompileHtmlTool,
   WebpageAnalyzeTool,
   WebpageRenderTool,
   WebpageEvaluateTool,
@@ -147,7 +146,6 @@ export namespace ToolRegistry {
       AnalyticsTool,
       WebpageExtractTool,
       WebpageCompileTool,
-      WebpageCompileHtmlTool,
       WebpageAnalyzeTool,
       WebpageRenderTool,
       WebpageEvaluateTool,
