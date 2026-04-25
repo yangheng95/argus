@@ -1728,6 +1728,56 @@ export function createOrchestratorTools(input: {
         const r = out.result
         const blockers = r.clarifications.filter((c) => c.priority === "blocker")
         const nices = r.clarifications.filter((c) => c.priority === "nice")
+
+        // Persist intent reading into the Decision Log so downstream agents
+        // (requirements / architect / fidelity / build) see the upstream
+        // scope_boundary / complexity / slots / clarifications via the
+        // TaskContext.snapshot block. Without this the agent runs but its
+        // output never reaches any downstream prompt — pure token waste.
+        // Same pattern as design_analysis (rule 22, single source).
+        const { createDecisionLog } = await import("@/decision-log")
+        const decisionLog = createDecisionLog(taskID)
+        decisionLog.append({
+          phase: "intent_analysis",
+          key: "intent_summary",
+          value: `${r.intent_class} / ${r.complexity} / confidence=${r.confidence.toFixed(2)}. ${r.summary}`,
+          reason: "Intent-analysis terminal classification for downstream stage agents.",
+        })
+        if (r.extracted_slots.length > 0) {
+          decisionLog.append({
+            phase: "intent_analysis",
+            key: "intent_slots",
+            value: r.extracted_slots
+              .map((s) => `${s.key}=${s.value} (conf=${s.confidence.toFixed(2)})`)
+              .join("; "),
+            reason: "Slots extracted from the user request — downstream REQ-N + goal decomposition should reflect these explicitly.",
+          })
+        }
+        if (r.missing_info.length > 0) {
+          decisionLog.append({
+            phase: "intent_analysis",
+            key: "intent_missing_info",
+            value: r.missing_info.join(", "),
+            reason: "Information judged missing from the request — downstream agents must infer from repo / decisions or flag explicitly.",
+          })
+        }
+        if (blockers.length > 0) {
+          decisionLog.append({
+            phase: "intent_analysis",
+            key: "intent_blocker_clarifications",
+            value: blockers.map((c) => c.question).join(" | "),
+            reason: "Blocker clarifications — orchestrator already surfaced or auto-resolved; downstream should not re-ask.",
+          })
+        }
+        if (nices.length > 0) {
+          decisionLog.append({
+            phase: "intent_analysis",
+            key: "intent_nice_clarifications",
+            value: nices.map((c) => c.question).join(" | "),
+            reason: "Nice-to-have clarifications — downstream picks the most reasonable answer if a decision hinges on one.",
+          })
+        }
+
         return SubAgentProtocol.yieldResult({
           headline:
             `Intent: ${r.intent_class} / complexity=${r.complexity} / confidence=${r.confidence.toFixed(2)}. ` +
@@ -1741,7 +1791,7 @@ export function createOrchestratorTools(input: {
             ["blocker_questions", blockers.map((c) => c.question)],
             ["nice_questions", nices.map((c) => c.question)],
           ],
-          pointer: `intent session ${out.sessionID}`,
+          pointer: `intent session ${out.sessionID}; decision log keys: intent_summary${r.extracted_slots.length>0?" + intent_slots":""}${r.missing_info.length>0?" + intent_missing_info":""}${blockers.length>0?" + intent_blocker_clarifications":""}${nices.length>0?" + intent_nice_clarifications":""}`,
         })
       },
     }),
