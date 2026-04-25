@@ -122,13 +122,11 @@ describe("orchestrator protocol", () => {
           sequence: 1,
         })
 
-        const stored = Database.use((db) =>
-          db.select({ status: EngineTaskTable.status })
-            .from(EngineTaskTable)
-            .where(eq(EngineTaskTable.id, taskID))
-            .get(),
-        )
-        expect(stored?.status).toBe("failed")
+        // Phase-6-f-2: task.status column deleted; derive status from
+        // time_completed + error per engine/task-status.ts.
+        const stored = findTask(taskID)
+        const { deriveTaskStatus } = await import("../../src/engine/task-status")
+        expect(stored ? deriveTaskStatus(stored) : undefined).toBe("failed")
       },
     })
   })

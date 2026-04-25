@@ -597,7 +597,12 @@ CREATE INDEX IF NOT EXISTS engine_interaction_status_idx   ON engine_interaction
 CREATE TABLE IF NOT EXISTS engine_artifact (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,
-  run_id       text NOT NULL,
+  -- Phase-7+: nullable. Most artifacts still scope to a run (self-referencing
+  -- for kind='run': id === run_id), but task-level facts emitted before any
+  -- run exists (kind='orchestrator-stream-error' when runCount=0) have no run.
+  -- Per rule 23 the schema does not enforce a state-machine invariant the
+  -- orchestrator owns.
+  run_id       text,
   goal_run_id  text,
   delivery_id  text,
   kind         text NOT NULL,

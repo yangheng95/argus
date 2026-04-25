@@ -965,7 +965,9 @@ export function updateEvaluationFromDeliveryVerdict(input: {
   const checks = input.checks ?? existingChecks
   persistEvidence({
     taskID: existing.task_id,
-    runID: existing.run_id,
+    // delivery-kind artifacts always have run_id set by writeDeliveryRow.
+    // run_id is nullable on the table only for kind="orchestrator-stream-error".
+    runID: existing.run_id!,
     deliveryID: input.deliveryID,
     scope: "delivery",
     status,
@@ -1346,5 +1348,46 @@ export function updateGoal(input: {
 export function deleteGoal(goalID: string) {
   return Database.use((db) =>
     db.delete(EngineGoalTable).where(eq(EngineGoalTable.id, goalID)).run(),
+  )
+}
+
+/**
+ * Record an orchestrator stream-error fact as an append-only artifact.
+ *
+ * Used when the orchestrator's own LLM stream aborts mid-decision (provider
+ * onError, stream-idle watchdog, mid-stream protocol violation). Per rule 23
+ * we do NOT transition the task to terminal `failed` on a transient stream
+ * error — that's a state-machine reaction the orchestrator should make
+ * itself on the next decision turn after reading the artifact via describe.
+ *
+ * The orchestrator-loop watches for this artifact via
+ * `findRecentOrchestratorStreamError` and synthesises a re-wake event with
+ * the structured retry note, mirroring the delivery-rejection auto-rewake
+ * pattern. `MAX_TASK_ITERATIONS` (default 50) is the runaway guard.
+ */
+export function recordOrchestratorStreamError(input: {
+  taskID: string
+  reason: string
+  errorName?: string
+  sessionID?: string
+  now: number
+}) {
+  return Database.use((db) =>
+    db.insert(EngineArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.taskID,
+        run_id: null,
+        kind: "orchestrator-stream-error",
+        label: "orchestrator-stream-error",
+        payload: {
+          reason: input.reason,
+          errorName: input.errorName,
+          sessionID: input.sessionID,
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run(),
   )
 }

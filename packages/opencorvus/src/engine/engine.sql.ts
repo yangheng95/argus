@@ -112,6 +112,7 @@ export type EngineArtifactKind =
   | "delivery"
   | "goal_run_attempt"
   | "run"
+  | "orchestrator-stream-error"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type EngineEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type EngineEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
@@ -514,10 +515,13 @@ export const EngineArtifactTable = sqliteTable(
       .notNull()
       .references(() => EngineTaskTable.id, { onDelete: "cascade" }),
     /** Phase-6-e: plain text pointer to the logical run id (was FK to
-     *  engine_run which is now deleted). notNull preserved — every artifact
-     *  belongs to a logical run, including the "run" artifacts themselves
-     *  (self-referencing: id === run_id for the first row per run). */
-    run_id: text().notNull(),
+     *  engine_run which is now deleted). Nullable post-phase-7: most artifacts
+     *  still scope to a run (self-referencing for "run" kind: id === run_id),
+     *  but task-level facts emitted before any run exists (e.g.
+     *  kind="orchestrator-stream-error" raised mid-decision when runCount=0)
+     *  legitimately have no run. Per rule 23 schema does not enforce a
+     *  state-machine invariant the orchestrator owns. */
+    run_id: text(),
     /** Phase-6-d: plain text pointer to the logical goal_run id (was FK to
      *  engine_goal_run which is now deleted). See persist.ts / store.ts for
      *  the artifact-backed goal_run semantics. */

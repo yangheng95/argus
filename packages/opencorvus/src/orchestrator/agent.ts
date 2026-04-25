@@ -311,27 +311,31 @@ export namespace Orchestrator {
         streamErrors: streamErrors.length,
       })
 
-      // Critical stream failures (mid-stream protocol violations, provider
-      // onError) mean the agent's view of the run is incoherent and we must
-      // fail the task. The Session.Event.Error subscription above is the
-      // post-migration replacement for the pre-migration runtime's failures snapshot —
-      // SessionLoop publishes its own errors through that bus event.
+      // Stream failures (mid-stream protocol violations, provider onError,
+      // session-llm idle abort) are recorded as an append-only artifact.
+      // The orchestrator loop watches for this artifact and re-wakes the
+      // orchestrator with a structured retry note, identical to the
+      // delivery-rejection auto-rewake pattern. Per rule 23 we do NOT
+      // transition the task to `failed` here — the next decision turn lets
+      // the LLM read the abort fact via describe and decide itself
+      // (retry the same approach, restart from a stage, fail_task, or
+      // ask the operator). MAX_TASK_ITERATIONS is the runaway guard.
       if (streamErrors.length > 0) {
         const first = streamErrors[0]
         const reason = `${first?.errorName ?? "stream-error"}: ${first?.reason ?? "unknown"}`
-        log.warn("orchestrator surfaced stream failures", {
+        log.warn("orchestrator stream failure surfaced as artifact", {
           taskID,
-          criticalCount: streamErrors.length,
+          streamErrors: streamErrors.length,
           firstFailureName: first?.errorName,
         })
-        const current = requireTask(taskID)
-        const { isTaskTerminal } = await import("@/engine/task-status")
-        if (!isTaskTerminal(current)) {
-          await updateTask(current, {
-            status: "failed",
-            error: `Orchestrator stream failure: ${reason}`,
-          }, `Orchestrator stream failure: ${reason}`)
-        }
+        const { recordOrchestratorStreamError } = await import("@/engine/persist")
+        recordOrchestratorStreamError({
+          taskID,
+          reason,
+          errorName: first?.errorName,
+          sessionID: agentSession.id,
+          now: Date.now(),
+        })
       }
 
     } catch (error) {
@@ -464,6 +468,34 @@ export const OrchestratorEventNote = {
 
   retry(task: TaskRow): string {
     return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
+  },
+
+  /**
+   * Re-wake note synthesised after an orchestrator stream-error artifact is
+   * detected. The previous decision turn aborted (idle / provider onError);
+   * the next turn should re-read the session + describe snapshot and decide
+   * autonomously whether to retry the same approach, restart from a stage,
+   * or fail_task. We deliberately do NOT prescribe a retry — that would
+   * be a state-machine reaction in prose form. Per rule 23 the LLM owns
+   * the recovery decision.
+   */
+  streamErrorRetry(input: { reason: string; sessionID?: string }): string {
+    const lines: string[] = [
+      "## Previous decision turn aborted (LLM stream error)",
+      "",
+      `Reason: ${input.reason}`,
+    ]
+    if (input.sessionID) lines.push(`Aborted session: ${input.sessionID}`)
+    lines.push(
+      "",
+      "Re-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).",
+      "",
+      "Decide autonomously what to do next:",
+      "- If the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.",
+      "- If the same failure repeats across decisions → call `question` for operator input or `fail_task` with a clear reason; do not loop indefinitely.",
+      "- If a partial tool side-effect needs reconciling, address it before the next forward step.",
+    )
+    return lines.join("\n")
   },
 }
 
