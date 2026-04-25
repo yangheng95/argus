@@ -350,6 +350,129 @@ export async function runAgentSession<C>(
 }
 
 // ---------------------------------------------------------------------------
+// Retry helper — wraps `runAgentSession` for agents whose successful run is
+// gated by a stateful collector (e.g. delivery's `submit_verdict`) and that
+// need a fresh child session + fresh tool kit per attempt so collector state
+// does not bleed across retries.
+//
+// Per rule 22 / rule 24: any agent that needs retry MUST go through this
+// helper. The retry logic does not live inside individual agent modules —
+// previously delivery owned its own copy of this loop, which was the only
+// blocker preventing other stage agents from gaining bounded retry without
+// duplicating delivery's loop verbatim.
+//
+// Single-shot agents (architect, requirements, fidelity, prosecutor,
+// design-analyst, intent-analysis, build) keep calling `runAgentSession`
+// directly — no retry is needed for any of them at this time, and forcing
+// them through this wrapper would just add a useless `maxRetries: 1`
+// boilerplate (rule 26 — no over-engineering).
+// ---------------------------------------------------------------------------
+
+export interface RetryDecision {
+  /** True when the attempt produced a usable collector. False forces another
+   *  attempt (up to maxRetries). */
+  ok: boolean
+  /** Human-readable reason captured into lastError when ok=false. Surfaces
+   *  in the AgentRunError thrown after attempts are exhausted. */
+  reason?: string
+}
+
+export interface RunAgentSessionWithRetryInput<C>
+  extends Omit<RunAgentSessionInput<C>, "toolKit"> {
+  /** Maximum attempts. attempt 1 is the first call; attempt 2..N are retries.
+   *  Must be >= 1; pass 1 to disable retry while still using this entry
+   *  point uniformly. */
+  maxRetries: number
+  /** Fresh tool kit per attempt. Called once before each `runAgentSession`
+   *  dispatch so collector state and any tool-internal mutable state does
+   *  not bleed across retries. */
+  toolKitFactory: () => AgentToolKit<C>
+  /** Decide whether the just-finished attempt's collector + streamErrors
+   *  constitute success. `ok=true` ends the loop and returns; `ok=false`
+   *  triggers a retry with `reason` captured into lastError. */
+  isComplete: (
+    collector: C,
+    streamErrors: Array<{ reason: string; name?: string }>,
+  ) => RetryDecision
+}
+
+export interface RunAgentSessionWithRetryOutput<C> extends RunAgentSessionOutput<C> {
+  /** 1-indexed count of attempts actually taken (always <= maxRetries). */
+  attempts: number
+}
+
+export async function runAgentSessionWithRetry<C>(
+  input: RunAgentSessionWithRetryInput<C>,
+): Promise<RunAgentSessionWithRetryOutput<C>> {
+  if (input.maxRetries < 1) {
+    throw new AgentRunError(
+      input.kind,
+      `runAgentSessionWithRetry: maxRetries must be >= 1, got ${input.maxRetries}`,
+    )
+  }
+  const agentLabel = input.agentName ?? input.kind
+  let lastError: Error | undefined
+  let lastOutput: RunAgentSessionOutput<C> | undefined
+
+  for (let attempt = 1; attempt <= input.maxRetries; attempt++) {
+    if (input.signal?.aborted) {
+      throw new AgentRunError(input.kind, "aborted before retry attempt")
+    }
+    if (attempt > 1) {
+      log.info(`${agentLabel} agent retrying`, {
+        attempt,
+        reason: lastError?.message,
+      })
+    }
+    const kit = input.toolKitFactory()
+    let out: RunAgentSessionOutput<C> | undefined
+    try {
+      out = await runAgentSession({ ...input, toolKit: kit })
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      const aborted =
+        input.signal?.aborted || (err instanceof Error && err.name === "AbortError")
+      if (aborted) throw lastError
+      log.warn(`${agentLabel} agent run failed`, { attempt, error: lastError.message })
+      continue
+    }
+    lastOutput = out
+
+    if (out.streamErrors.length > 0) {
+      lastError = new Error(
+        `${agentLabel}: session stream error: ${out.streamErrors[0].name ?? "error"}: ${out.streamErrors[0].reason}`,
+      )
+      log.warn(`${agentLabel}: stream error, will retry`, {
+        attempt,
+        error: lastError.message,
+      })
+      continue
+    }
+
+    const decision = input.isComplete(out.collector, out.streamErrors)
+    if (decision.ok) {
+      return { ...out, attempts: attempt }
+    }
+    lastError = new Error(decision.reason ?? "isComplete returned ok=false")
+    log.warn(`${agentLabel}: attempt incomplete, will retry`, {
+      attempt,
+      reason: lastError.message,
+    })
+  }
+
+  if (!lastOutput) {
+    throw new AgentRunError(
+      input.kind,
+      lastError?.message ?? "agent failed before producing output",
+    )
+  }
+  throw new AgentRunError(
+    input.kind,
+    lastError?.message ?? `agent did not complete after ${input.maxRetries} attempts`,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // System-prompt composition — single source of truth.
 //
 // Order:
