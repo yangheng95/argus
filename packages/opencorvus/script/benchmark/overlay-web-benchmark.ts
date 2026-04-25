@@ -451,18 +451,16 @@ if (resumeTaskID) {
 // Re-inject local provider configs after scaffoldProject (which overwrites config-override)
 await prepareLocalProviders()
 
-// AgentTrace dir override: temp.dir is rm -rf'd at end-of-run unless --keep,
-// so the default `<Instance.directory>/.opencorvus/trace/` would be wiped
-// alongside the workspace. Pin trace output to a sibling of the report file
-// in process.cwd() so traces survive regardless of --keep. Override with
-// OPENCORVUS_AGENT_TRACE_DIR if the caller wants a different location.
+// AgentTrace dir: keep the canonical default `<Instance.directory>/.opencorvus/trace/`
+// so every agent (orchestrator + every per-goal sub-agent in any worktree under
+// `.opencorvus-worktrees/`) writes into the same well-known place the user can
+// inspect. The post-run temp.dir cleanup is patched below to preserve this dir
+// (move it out before rm -rf), so traces survive regardless of --keep. Caller
+// can still pin a different absolute location via OPENCORVUS_AGENT_TRACE_DIR.
 if (!process.env.OPENCORVUS_AGENT_TRACE_DIR) {
-  const traceStamp = Date.now()
-  process.env.OPENCORVUS_AGENT_TRACE_DIR = path.join(
-    process.cwd(),
-    `overlay-web-benchmark-trace-${traceStamp}`,
-  )
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = path.join(temp.dir, ".opencorvus", "trace")
 }
+await fs.mkdir(process.env.OPENCORVUS_AGENT_TRACE_DIR, { recursive: true }).catch(() => undefined)
 process.stderr.write(`[trace] OPENCORVUS_AGENT_TRACE_DIR=${process.env.OPENCORVUS_AGENT_TRACE_DIR}\n`)
 
 await Instance.provide({
@@ -1082,7 +1080,19 @@ try {
       } catch { /* best effort — pkill not available on all platforms */ }
     })
   }
-  if (!keep && temp.dir) await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
+  if (!keep && temp.dir) {
+    // Rescue the trace dir before wiping the workspace. Default trace dir is
+    // `<temp.dir>/.opencorvus/trace`, which would otherwise die with the
+    // workspace and make every benchmark run lose its agent traces.
+    const traceDir = process.env.OPENCORVUS_AGENT_TRACE_DIR
+    if (traceDir && traceDir.startsWith(temp.dir)) {
+      const stamp = Date.now()
+      const survivor = path.join(process.cwd(), `overlay-web-benchmark-trace-${stamp}`)
+      await cleanup("trace.preserve", () => fs.rename(traceDir, survivor).catch(() => undefined))
+      logLine(`[overlay-benchmark] trace preserved at ${survivor}`)
+    }
+    await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
+  }
   if (!keep && temp.home) await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined))
   process.exit(process.exitCode ?? 0)
 }
