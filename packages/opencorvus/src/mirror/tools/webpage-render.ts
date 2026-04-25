@@ -52,7 +52,10 @@ Use as step 5 of the webpage-generate workflow (after your agent wrote index.htm
     const inputDir = params.inputDir
       ? path.resolve(Instance.directory, params.inputDir)
       : Instance.directory
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+    const outputDir = await resolveMirrorOutputDir({
+      override: params.outputDir,
+      sessionID: ctx.sessionID,
+    })
 
     await ctx.ask({
       permission: "webpage_render",
