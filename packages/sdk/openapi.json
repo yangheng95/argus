@@ -3302,7 +3302,7 @@
                       "planner",
                       "goal",
                       "architect",
-                      "fidelity",
+                      "integrity",
                       "delivery",
                       "executor",
                       "build",
@@ -18574,10 +18574,18 @@
                           "kind"
                         ]
                       }
+                    },
+                    "traceDir": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "events"
+                    "events",
+                    "traceDir",
+                    "enabled"
                   ]
                 }
               }
@@ -18661,10 +18669,18 @@
                           "kind"
                         ]
                       }
+                    },
+                    "traceDir": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "events"
+                    "events",
+                    "traceDir",
+                    "enabled"
                   ]
                 }
               }
@@ -23601,7 +23617,7 @@
               "traceabilityCount": {
                 "type": "number"
               },
-              "fidelityScore": {
+              "integrityScore": {
                 "type": "number"
               },
               "summary": {
@@ -23733,12 +23749,12 @@
           "properties"
         ]
       },
-      "Event.fidelity.review.started": {
+      "Event.integrity.review.started": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "fidelity.review.started"
+            "const": "integrity.review.started"
           },
           "properties": {
             "type": "object",
@@ -23762,12 +23778,12 @@
           "properties"
         ]
       },
-      "Event.fidelity.review.progress": {
+      "Event.integrity.review.progress": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "fidelity.review.progress"
+            "const": "integrity.review.progress"
           },
           "properties": {
             "type": "object",
@@ -23799,12 +23815,12 @@
           "properties"
         ]
       },
-      "Event.fidelity.review.chunk": {
+      "Event.integrity.review.chunk": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "fidelity.review.chunk"
+            "const": "integrity.review.chunk"
           },
           "properties": {
             "type": "object",
@@ -23841,12 +23857,12 @@
           "properties"
         ]
       },
-      "Event.fidelity.review.completed": {
+      "Event.integrity.review.completed": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "const": "fidelity.review.completed"
+            "const": "integrity.review.completed"
           },
           "properties": {
             "type": "object",
@@ -23861,9 +23877,54 @@
               "verdict": {
                 "type": "string",
                 "enum": [
-                  "faithful",
+                  "pass",
+                  "concerns",
                   "needs_correction"
                 ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "dimensions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "enum": [
+                        "goal_fidelity",
+                        "technical_feasibility",
+                        "hallucination",
+                        "solution_quality"
+                      ]
+                    },
+                    "verdict": {
+                      "type": "string",
+                      "enum": [
+                        "pass",
+                        "concerns",
+                        "needs_correction"
+                      ]
+                    },
+                    "issueCount": {
+                      "type": "number"
+                    },
+                    "correctionCount": {
+                      "type": "number"
+                    },
+                    "missingGoalCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "verdict",
+                    "issueCount",
+                    "correctionCount",
+                    "missingGoalCount"
+                  ]
+                }
               },
               "issues": {
                 "type": "array",
@@ -23871,13 +23932,7 @@
                   "type": "object",
                   "properties": {
                     "type": {
-                      "type": "string",
-                      "enum": [
-                        "uncovered",
-                        "partial",
-                        "distorted",
-                        "merged_incorrectly"
-                      ]
+                      "type": "string"
                     },
                     "description": {
                       "type": "string"
@@ -23951,6 +24006,8 @@
               "taskID",
               "sessionID",
               "verdict",
+              "summary",
+              "dimensions",
               "issues",
               "corrections",
               "missingGoals",
@@ -27024,7 +27081,7 @@
               "planner",
               "goal",
               "architect",
-              "fidelity",
+              "integrity",
               "delivery",
               "executor",
               "build",
@@ -27595,16 +27652,16 @@
             "$ref": "#/components/schemas/Event.design_analysis.completed"
           },
           {
-            "$ref": "#/components/schemas/Event.fidelity.review.started"
+            "$ref": "#/components/schemas/Event.integrity.review.started"
           },
           {
-            "$ref": "#/components/schemas/Event.fidelity.review.progress"
+            "$ref": "#/components/schemas/Event.integrity.review.progress"
           },
           {
-            "$ref": "#/components/schemas/Event.fidelity.review.chunk"
+            "$ref": "#/components/schemas/Event.integrity.review.chunk"
           },
           {
-            "$ref": "#/components/schemas/Event.fidelity.review.completed"
+            "$ref": "#/components/schemas/Event.integrity.review.completed"
           },
           {
             "$ref": "#/components/schemas/Event.build.completed"
@@ -30276,7 +30333,7 @@
               "planner",
               "goal",
               "architect",
-              "fidelity",
+              "integrity",
               "delivery",
               "executor",
               "build",

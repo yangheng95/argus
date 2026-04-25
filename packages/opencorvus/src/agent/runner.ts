@@ -152,6 +152,16 @@ export interface RunAgentSessionInput<C> {
   sessionDirectory?: string
   /** Parent session id (orchestrator wake child / pipeline parent). */
   parentSessionID?: string
+  /** Goal this session belongs to (per-goal build / planner / evaluator).
+   *  Stamped onto the SessionTable row so `sessionGoalID()` returns it
+   *  without inferring from parent chains. The protocol bridge
+   *  (server/routes/task-message-protocol-bridge.ts:enrichProperties) reads
+   *  this column to stamp goalID on every emitted message / part event,
+   *  which is what the overlay tree-writer needs to route the session
+   *  card under its goal phase instead of leaking it as a top-level card.
+   *  Per-task agents (orchestrator, requirements, architect, integrity,
+   *  delivery, …) leave this undefined. */
+  goalID?: string
   /** Task id for cache stickiness + per-agent model resolution. */
   taskID?: string
   /** Explicit model override; bypasses `resolveAgentModel`. */
@@ -304,6 +314,7 @@ export async function runAgentSession<C>(
   const session = await Session.createNext({
     kind,
     parentID: input.parentSessionID,
+    goalID: input.goalID,
     title: input.sessionTitle,
     directory: input.sessionDirectory ?? Instance.directory,
   })

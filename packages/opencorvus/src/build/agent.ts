@@ -197,6 +197,12 @@ export namespace BuildAgent {
           sessionTitle: buildSessionTitle(input.target),
           sessionDirectory: worktreeDir!,
           parentSessionID: input.parentSessionID,
+          // Goal-scoped builds need goalID on the session row so the
+          // protocol bridge stamps it onto every part event; without it
+          // the overlay's tree-writer cannot route the session card to
+          // the goal's build phase and the parts orphan as a top-level
+          // "构建" card. Direct-shape builds pass kind="task" → undefined.
+          goalID: input.target.kind === "goal" ? input.target.id : undefined,
           taskID: input.task.id,
           model: input.model,
           signal: input.signal,
