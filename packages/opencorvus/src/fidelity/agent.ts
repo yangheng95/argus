@@ -15,15 +15,12 @@ import z from "zod"
 import FIDELITY_CORE from "@/prompt/core/fidelity-core.txt"
 import { Log } from "@/util/log"
 import { resolveAgentModel } from "@/agent/model"
+import { runAgentSession } from "@/agent/runner"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import type { GoalContractFields } from "@/pipeline/types"
 import { AcceptanceSpecSchema, renderSpecsAsText } from "@/acceptance/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
-import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import { Bus } from "@/bus"
-import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
@@ -152,212 +149,191 @@ export async function reviewFidelity(input: {
    *  agent card for each invocation. */
   parentSessionID?: string
 }): Promise<FidelityResult> {
-  const { goals, signal } = input
+  const { goals } = input
 
   if (input.taskID && !input.parentSessionID) {
     throw new Error(
       `reviewFidelity requires parentSessionID for task-backed runs (taskID=${input.taskID}). ` +
-        `Architect must create a fidelity child session instead of routing review through a synthetic card.`,
+        `The orchestrator's fidelity tool must attach a parent session before dispatch.`,
     )
   }
 
-  const fidelitySession = input.parentSessionID
-    ? await Session.createNext({
-        kind: "fidelity",
-        parentID: input.parentSessionID,
-        title: `Fidelity Review: ${input.taskTitle}`,
-        directory: Instance.directory,
-      })
-    : undefined
-  const fidelitySessionID = fidelitySession?.id
-  // Liveness: the tool-call LLM pass may run 60-180s. The Started event +
-  // Progress tick below feed the fidelity session card and the benchmark
-  // alive-stall detector. They carry no LLM output.
-  emitFidelityLifecycle("started", input.taskID, fidelitySessionID, 0, 0)
-  const startedAt = Date.now()
-  const progressTicker =
-    input.taskID && fidelitySessionID
-      ? setInterval(() => {
-          // attempt=0 because the tool-call flow has no user-visible retry
-          // counter — the AI SDK absorbs Zod validation retries within a
-          // single call. The overlay subtitle suppresses the "attempt N" prefix
-          // when attempt is 0 (tree-writer.materializeRunningFidelity).
-          emitFidelityLifecycle(
-            "progress",
-            input.taskID,
-            fidelitySessionID,
-            0,
-            Date.now() - startedAt,
-          )
-        }, 20_000)
-      : null
-
-  try {
-    if (goals.length === 0) {
-      const result: FidelityResult = {
-        verdict: "needs_correction",
-        issues: [{ type: "uncovered", description: "No goals produced" }],
-        corrections: [],
-        missingGoals: [],
-      }
-      emitFidelityEvent(input.taskID, fidelitySessionID, result, 0)
-      return result
+  // Empty-goal-set and missing-model paths are soft exits that synthesize a
+  // verdict without invoking the LLM. Both need a sessionID for the overlay
+  // to render a card — create a transient session up front. If no parent
+  // session is supplied (CLI dry-run with no taskID) the event emitter
+  // silently skips.
+  if (goals.length === 0) {
+    const result: FidelityResult = {
+      verdict: "needs_correction",
+      issues: [{ type: "uncovered", description: "No goals produced" }],
+      corrections: [],
+      missingGoals: [],
     }
-
-    const model = await resolveAgentModel("fidelity", { taskID: input.taskID }).catch(() => undefined)
-    if (!model) {
-      log.warn("no LLM available for fidelity review, skipping")
-      const result: FidelityResult = { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
-      emitFidelityEvent(input.taskID, fidelitySessionID, result, 0)
-      return result
-    }
-
-    if (signal?.aborted) throw new Error("fidelity review aborted")
-
-    const goalIDs = new Set(goals.map((g) => g.id))
-    const collector: { result: FidelityResult | undefined } = { result: undefined }
-
-    const submitTool = tool({
-      description:
-        "Submit the fidelity verdict for the goal set. Call EXACTLY ONCE after evaluating " +
-        "the goals against the original user request. All fields are schema-validated; on " +
-        "validation error you will receive a message describing the failure and must call again.",
-      inputSchema: SubmitFidelityInput,
-      execute: async ({ verdict, issues, corrections, missing_goals }) => {
-        // Drop corrections that point at unknown goal IDs — the reviewer
-        // sometimes invents IDs. We don't auto-repair (no fallback); we drop
-        // and surface the count so the model can resubmit with the right IDs
-        // if the verdict changes shape.
-        const droppedCorrections: string[] = []
-        const keptCorrections: GoalCorrection[] = []
-        for (const c of corrections) {
-          if (!goalIDs.has(c.goal_id)) {
-            droppedCorrections.push(c.goal_id)
-            continue
-          }
-          keptCorrections.push({
-            action: c.action,
-            goalID: c.goal_id,
-            reason: c.reason,
-            updates: c.updates,
-          })
-        }
-
-        let normalized: FidelityResult = {
-          verdict,
-          issues: issues.map((i) => ({
-            type: i.type,
-            description: i.description,
-            goalIDs: i.goal_ids,
-          })),
-          corrections: keptCorrections,
-          missingGoals: missing_goals.map((m) => ({
-            title: m.title,
-            objective: m.objective,
-            acceptance_specs: m.acceptance_specs,
-            owned_paths: m.owned_paths,
-            kind: m.kind,
-            priority: m.priority,
-            reason: m.reason,
-          })),
-        }
-
-        // Verdict reconciliation: if the model says "faithful" but lists
-        // corrections/missing goals, treat as needs_correction. Inverse too.
-        // The model occasionally gets the verdict label wrong while the
-        // body is consistent.
-        if (
-          normalized.verdict === "faithful" &&
-          (normalized.corrections.length > 0 || normalized.missingGoals.length > 0)
-        ) {
-          normalized = { ...normalized, verdict: "needs_correction" }
-        }
-        if (
-          normalized.verdict === "needs_correction" &&
-          normalized.issues.length === 0 &&
-          normalized.corrections.length === 0 &&
-          normalized.missingGoals.length === 0
-        ) {
-          normalized = { ...normalized, verdict: "faithful" }
-        }
-
-        collector.result = normalized
-
-        const droppedNote = droppedCorrections.length > 0
-          ? ` (dropped ${droppedCorrections.length} correction(s) referencing unknown goal IDs: ${droppedCorrections.join(", ")})`
-          : ""
-        return `OK: verdict "${normalized.verdict}" recorded — ${normalized.issues.length} issues, ${normalized.corrections.length} corrections, ${normalized.missingGoals.length} missing goals${droppedNote}`
-      },
-    })
-
-    const systemPrompt = buildFidelitySystem()
-    const userPrompt = buildFidelityPrompt(input)
-
-    // Fidelity requires a session to persist the review card. If
-    // fidelitySessionID is missing (CLI dry-runs without taskID) we still
-    // need a session to drive SessionPrompt — create a transient one.
-    const runSession = fidelitySession
-      ?? (await Session.createNext({
-        kind: "fidelity",
-        title: `Fidelity Review: ${input.taskTitle}`,
-        directory: Instance.directory,
-      }))
-
-    const abortPrompt = () => {
-      try {
-        SessionPrompt.cancel(runSession.id)
-      } catch {
-        /* session may already be stopped */
-      }
-    }
-    signal?.addEventListener("abort", abortPrompt, { once: true })
-
-    const streamErrors: Array<{ reason: string; name?: string }> = []
-    const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
-      const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
-      if (props.sessionID !== runSession.id) return
-      streamErrors.push({ reason: props.error?.message ?? "unknown error", name: props.error?.name })
-    })
-
-    try {
-      await SessionPrompt.withExtraTools(runSession.id, { submit_fidelity_verdict: submitTool }, async () => {
-        await SessionPrompt.prompt({
-          sessionID: runSession.id,
-          model: { providerID: model.providerID, modelID: model.api.id },
-          agent: "fidelity",
-          system: systemPrompt,
-          tools: { submit_fidelity_verdict: true },
-          parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
-        })
-      })
-    } finally {
-      errorUnsub()
-      signal?.removeEventListener("abort", abortPrompt)
-    }
-
-    if (!collector.result) {
-      throw new Error(
-        `fidelity reviewer did not call submit_fidelity_verdict ` +
-          `(sessionID=${runSession.id}, streamErrors=${streamErrors.length})`,
-      )
-    }
-
-    log.info("fidelity review completed", {
-      verdict: collector.result.verdict,
-      issues: collector.result.issues.length,
-      corrections: collector.result.corrections.length,
-      missingGoals: collector.result.missingGoals.length,
-      streamErrors: streamErrors.length,
-    })
-
-    // attempts=1 because phase-3-b-7 migration absorbs Zod retries inside
-    // AI SDK's tool-input-validation path (the overlay suppresses "attempt N"
-    // when attempt is 1, matching the pre-migration behavior).
-    emitFidelityEvent(input.taskID, fidelitySessionID, collector.result, 1)
-    return collector.result
-  } finally {
-    if (progressTicker) clearInterval(progressTicker)
+    await emitSoftFidelity(input, result)
+    return result
   }
+  const model = await resolveAgentModel("fidelity", { taskID: input.taskID }).catch(() => undefined)
+  if (!model) {
+    log.warn("no LLM available for fidelity review, skipping")
+    const result: FidelityResult = { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
+    await emitSoftFidelity(input, result)
+    return result
+  }
+
+  const goalIDs = new Set(goals.map((g) => g.id))
+  const collector: { result: FidelityResult | undefined } = { result: undefined }
+
+  const submitTool = tool({
+    description:
+      "Submit the fidelity verdict for the goal set. Call EXACTLY ONCE after evaluating " +
+      "the goals against the original user request. All fields are schema-validated; on " +
+      "validation error you will receive a message describing the failure and must call again.",
+    inputSchema: SubmitFidelityInput,
+    execute: async ({ verdict, issues, corrections, missing_goals }) => {
+      // Drop corrections that point at unknown goal IDs — the reviewer
+      // sometimes invents IDs. We don't auto-repair (no fallback); we drop
+      // and surface the count so the model can resubmit with the right IDs
+      // if the verdict changes shape.
+      const droppedCorrections: string[] = []
+      const keptCorrections: GoalCorrection[] = []
+      for (const c of corrections) {
+        if (!goalIDs.has(c.goal_id)) {
+          droppedCorrections.push(c.goal_id)
+          continue
+        }
+        keptCorrections.push({
+          action: c.action,
+          goalID: c.goal_id,
+          reason: c.reason,
+          updates: c.updates,
+        })
+      }
+
+      let normalized: FidelityResult = {
+        verdict,
+        issues: issues.map((i) => ({
+          type: i.type,
+          description: i.description,
+          goalIDs: i.goal_ids,
+        })),
+        corrections: keptCorrections,
+        missingGoals: missing_goals.map((m) => ({
+          title: m.title,
+          objective: m.objective,
+          acceptance_specs: m.acceptance_specs,
+          owned_paths: m.owned_paths,
+          kind: m.kind,
+          priority: m.priority,
+          reason: m.reason,
+        })),
+      }
+
+      // Verdict reconciliation: if the model says "faithful" but lists
+      // corrections/missing goals, treat as needs_correction. Inverse too.
+      // The model occasionally gets the verdict label wrong while the
+      // body is consistent.
+      if (
+        normalized.verdict === "faithful" &&
+        (normalized.corrections.length > 0 || normalized.missingGoals.length > 0)
+      ) {
+        normalized = { ...normalized, verdict: "needs_correction" }
+      }
+      if (
+        normalized.verdict === "needs_correction" &&
+        normalized.issues.length === 0 &&
+        normalized.corrections.length === 0 &&
+        normalized.missingGoals.length === 0
+      ) {
+        normalized = { ...normalized, verdict: "faithful" }
+      }
+
+      collector.result = normalized
+
+      const droppedNote = droppedCorrections.length > 0
+        ? ` (dropped ${droppedCorrections.length} correction(s) referencing unknown goal IDs: ${droppedCorrections.join(", ")})`
+        : ""
+      return `OK: verdict "${normalized.verdict}" recorded — ${normalized.issues.length} issues, ${normalized.corrections.length} corrections, ${normalized.missingGoals.length} missing goals${droppedNote}`
+    },
+  })
+
+  // onSessionCreated runs right after runner creates the child session.
+  // Fires the "Started" event + a 20s progress ticker, both scoped to the
+  // fresh session.id. The returned disposer clears the ticker when the
+  // runner finishes (success or failure).
+  const startedAt = Date.now()
+  const out = await runAgentSession({
+    kind: "fidelity",
+    core: FIDELITY_CORE,
+    sessionTitle: `Fidelity Review: ${input.taskTitle}`,
+    parentSessionID: input.parentSessionID,
+    taskID: input.taskID,
+    model: { providerID: model.providerID, modelID: model.api.id },
+    signal: input.signal,
+    toolKit: {
+      tools: { submit_fidelity_verdict: submitTool },
+      getCollector: () => collector,
+    },
+    buildUserPrompt: () => buildFidelityPrompt(input),
+    onSessionCreated: (session) => {
+      emitFidelityLifecycle("started", input.taskID, session.id, 0, 0)
+      const ticker = input.taskID
+        ? setInterval(() => {
+            emitFidelityLifecycle(
+              "progress",
+              input.taskID,
+              session.id,
+              0,
+              Date.now() - startedAt,
+            )
+          }, 20_000)
+        : null
+      return { dispose: () => { if (ticker) clearInterval(ticker) } }
+    },
+  })
+
+  if (!collector.result) {
+    throw new Error(
+      `fidelity reviewer did not call submit_fidelity_verdict ` +
+        `(sessionID=${out.session.id}, streamErrors=${out.streamErrors.length})`,
+    )
+  }
+
+  log.info("fidelity review completed", {
+    verdict: collector.result.verdict,
+    issues: collector.result.issues.length,
+    corrections: collector.result.corrections.length,
+    missingGoals: collector.result.missingGoals.length,
+    streamErrors: out.streamErrors.length,
+  })
+
+  // attempts=1 because phase-3-b-7 migration absorbs Zod retries inside
+  // AI SDK's tool-input-validation path (the overlay suppresses "attempt N"
+  // when attempt is 1, matching the pre-migration behavior).
+  emitFidelityEvent(input.taskID, out.session.id, collector.result, 1)
+  return collector.result
+}
+
+/**
+ * Soft-fail path for the two early exits (no goals / no model). Materializes
+ * a transient session for overlay attribution so the verdict card can render,
+ * then emits the terminal event. Silent when no parentSessionID is supplied
+ * (CLI dry-runs).
+ */
+async function emitSoftFidelity(
+  input: { taskID?: string; parentSessionID?: string; taskTitle: string },
+  result: FidelityResult,
+): Promise<void> {
+  if (!input.taskID) return
+  if (!input.parentSessionID) return
+  const { Session } = await import("@/session")
+  const session = await Session.createNext({
+    kind: "fidelity",
+    parentID: input.parentSessionID,
+    title: `Fidelity Review: ${input.taskTitle}`,
+    directory: Instance.directory,
+  })
+  emitFidelityEvent(input.taskID, session.id, result, 0)
 }
 
 /** Broadcast the parsed fidelity verdict so the overlay can render a native
