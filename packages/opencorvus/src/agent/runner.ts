@@ -101,11 +101,12 @@ export interface AgentToolKit<C> {
 }
 
 /**
- * The four EngineConfig stage keys whose `.skills` field drives skill
- * injection. Agents whose kind falls outside this set (orchestrator,
- * fidelity, prosecutor, build) get no automatic skill injection — they
- * are special-cases by intent. Skill injection is opt-in: pass
- * `skillsStage` to enable it.
+ * EngineConfig stage keys whose `.skills` field drives skill injection.
+ * Agents not in this set (orchestrator, fidelity, prosecutor) get no
+ * automatic skill injection — they are special-cased by intent. Skill
+ * injection is opt-in: pass `skillsStage` to enable it. The runner
+ * appends matched skills to the SYSTEM prompt — auto-load semantics, never
+ * stuffed into the user message.
  */
 export type SkillStage =
   | "requirements"
@@ -114,6 +115,7 @@ export type SkillStage =
   | "delivery"
   | "design_analyst"
   | "intent_analysis"
+  | "build"
 
 /**
  * Optional structured-output (JSON schema) for agents whose final tool
@@ -610,10 +612,13 @@ async function composeSystemPrompt(
 
   if (!skillsStage) return { prompt: withAppend, requiredTools: [] }
 
+  // Auto-detect always runs when skillsStage is set. Explicit names from
+  // EngineConfig.<stage>.skills layer on top when present; missing config
+  // is fine — auto-detect is the primary path and shouldn't be gated on it.
   const orchCfg = await EngineConfig.get()
-  const stageCfg = (orchCfg as unknown as Record<SkillStage, { skills: string[] }>)[skillsStage]
-  if (!stageCfg) return { prompt: withAppend, requiredTools: [] }
-  const resolved = await resolveStageSkills(stageCfg.skills, skillsStage, taskSignals)
+  const stageCfg = (orchCfg as unknown as Record<SkillStage, { skills?: string[] } | undefined>)[skillsStage]
+  const explicitNames = stageCfg?.skills ?? []
+  const resolved = await resolveStageSkills(explicitNames, skillsStage, taskSignals)
   return { prompt: withAppend + resolved.prompt, requiredTools: resolved.requiredTools }
 }
 
