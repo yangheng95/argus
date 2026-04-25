@@ -82,6 +82,7 @@ import type { Message } from "@/session/message"
 import type { SessionKind } from "@/session/session.sql"
 import type { ToolSet } from "ai"
 import { AgentTrace } from "@/trace"
+import { TaskContext } from "@/task-context"
 
 const log = Log.create({ service: "agent-runner" })
 
@@ -265,7 +266,11 @@ export async function runAgentSession<C>(
   }
 
   // ── 2. Compose the system prompt ─────────────────────────────────────
-  const { prompt: systemPrompt, requiredTools } = input.rawSystemPrompt
+  // Static parts (core + user override + skill block) come from
+  // `composeSystemPrompt`; the live task context block is appended last so
+  // every stage agent sees the same task / goals / decision-log surface
+  // without having to memory.search for it (rule 23 / rule 22).
+  const composed = input.rawSystemPrompt
     ? { prompt: input.core, requiredTools: [] as string[] }
     : await composeSystemPrompt(
         agentName,
@@ -273,6 +278,11 @@ export async function runAgentSession<C>(
         input.skillsStage,
         input.skillTaskSignals,
       )
+  const liveContext = input.taskID ? TaskContext.snapshot(input.taskID) : ""
+  const systemPrompt = liveContext.trim().length > 0
+    ? `${composed.prompt}\n\n${liveContext}`
+    : composed.prompt
+  const requiredTools = composed.requiredTools
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
   const userText = await input.buildUserPrompt()
