@@ -401,6 +401,15 @@ export namespace Orchestrator {
       }
       const msg = error instanceof Error ? error.message : String(error)
       log.error("orchestrator failed", { taskID, note: event?.note, error: msg })
+      if (AgentTrace.isEnabled() && agentSessionID) {
+        AgentTrace.recordAgentReport({
+          sessionID: agentSessionID,
+          taskID,
+          agentName: "orchestrator",
+          kind: "orchestrator_wake_failure",
+          error: msg,
+        })
+      }
       // Surface the error on the task so UI/orphan-recovery can see it.
       // Don't change task status — let orphan recovery decide the next step.
       try {

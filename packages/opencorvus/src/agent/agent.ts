@@ -80,7 +80,7 @@ export namespace Agent {
       doom_loop: "ask",
       list: "allow",
       glob: "allow",
-      grep: "allow",
+      search_code: "allow",
       bash: "allow",
       edit: "allow",
       task: "allow",
@@ -108,7 +108,7 @@ export namespace Agent {
       webpage_render: "allow",
       webpage_evaluate: "allow",
       webpage_text_diff: "allow",
-      codesearch: "allow",
+      external_code_search: "allow",
       lsp: "allow",
       memory: "allow",
       schedule: "allow",
@@ -183,13 +183,13 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             "*": "deny",
-            grep: "allow",
+            search_code: "allow",
             glob: "allow",
             list: "allow",
             bash: "allow",
             webfetch: "allow",
             websearch: "deny",
-            codesearch: "allow",
+            external_code_search: "allow",
             read: "allow",
             memory: "allow",
             external_directory: {
@@ -200,7 +200,7 @@ export namespace Agent {
           user,
         ),
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
-        tools: { include: ["read", "glob", "grep", "bash", "codesearch", "lsp", "webfetch", "memory"] },
+        tools: { include: ["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"] },
         prompt: PROMPT_EXPLORE,
         options: {},
         mode: "subagent",
@@ -538,6 +538,24 @@ export namespace Agent {
     const isOpenAIOAuth =
       defaultModel.providerID === "openai" && (await Auth.get(defaultModel.providerID))?.type === "oauth"
 
+    const helperMessages: ModelMessage[] = [
+      ...system.map(
+        (item): ModelMessage => ({
+          role: "system",
+          content: item,
+        }),
+      ),
+      {
+        role: "user",
+        content: `Create an agent configuration based on this request: \"${input.description}\".\n\nIMPORTANT: The following identifiers already exist and must NOT be used: ${existing.map((i) => i.name).join(", ")}\n  Return ONLY the JSON object, no other text, do not wrap in backticks`,
+      },
+    ]
+    const helperSchema = z.object({
+      identifier: z.string(),
+      whenToUse: z.string(),
+      systemPrompt: z.string(),
+    })
+
     const result = streamObject({
       experimental_telemetry: {
         isEnabled: cfg.experimental?.openTelemetry,
@@ -546,24 +564,9 @@ export namespace Agent {
         },
       },
       temperature: 0.3,
-      messages: [
-        ...system.map(
-          (item): ModelMessage => ({
-            role: "system",
-            content: item,
-          }),
-        ),
-        {
-          role: "user",
-          content: `Create an agent configuration based on this request: \"${input.description}\".\n\nIMPORTANT: The following identifiers already exist and must NOT be used: ${existing.map((i) => i.name).join(", ")}\n  Return ONLY the JSON object, no other text, do not wrap in backticks`,
-        },
-      ],
+      messages: helperMessages,
       model: language,
-      schema: z.object({
-        identifier: z.string(),
-        whenToUse: z.string(),
-        systemPrompt: z.string(),
-      }),
+      schema: helperSchema,
       ...(isOpenAIOAuth
         ? {
             providerOptions: ProviderTransform.providerOptions(model, { store: false }),
@@ -572,10 +575,36 @@ export namespace Agent {
         : {}),
     })
 
-    for await (const part of result.fullStream) {
-      if (part.type === "error") throw part.error
+    let helperError: string | undefined
+    try {
+      for await (const part of result.fullStream) {
+        if (part.type === "error") throw part.error
+      }
+      const finalObj = await result.object
+      const { AgentTrace } = await import("@/trace")
+      if (AgentTrace.isEnabled()) {
+        AgentTrace.recordHelperLLMCall({
+          agentName: "agent-generate",
+          model: { providerID: defaultModel.providerID, modelID: defaultModel.modelID },
+          messages: helperMessages,
+          schema: { identifier: "string", whenToUse: "string", systemPrompt: "string" },
+          output: finalObj,
+        })
+      }
+      return finalObj
+    } catch (err) {
+      helperError = err instanceof Error ? err.message : String(err)
+      const { AgentTrace } = await import("@/trace")
+      if (AgentTrace.isEnabled()) {
+        AgentTrace.recordHelperLLMCall({
+          agentName: "agent-generate",
+          model: { providerID: defaultModel.providerID, modelID: defaultModel.modelID },
+          messages: helperMessages,
+          error: helperError,
+        })
+      }
+      throw err
     }
-    return result.object
   }
 
   /** Resolve the agent generation prompt, respecting config.prompt.agent_generate override. */
