@@ -101,6 +101,11 @@ export interface RunAgentSessionInput<C> {
   core: string
   /** Display title for the child session (overlay shows this). */
   sessionTitle: string
+  /** Override `directory` on the child session. Defaults to
+   *  `Instance.directory`. Used by agents that run inside a worktree
+   *  (currently just the build agent) so the session + its tools root
+   *  at the worktree path, not the primary. */
+  sessionDirectory?: string
   /** Parent session id (orchestrator wake child / pipeline parent). */
   parentSessionID?: string
   /** Task id for cache stickiness + per-agent model resolution. */
@@ -222,7 +227,7 @@ export async function runAgentSession<C>(
     kind,
     parentID: input.parentSessionID,
     title: input.sessionTitle,
-    directory: Instance.directory,
+    directory: input.sessionDirectory ?? Instance.directory,
   })
 
   // ── 5. Stream-error capture + abort propagation ──────────────────────

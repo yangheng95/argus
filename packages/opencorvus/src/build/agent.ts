@@ -25,13 +25,8 @@
 
 import z from "zod"
 import { Log } from "@/util/log"
-import { resolveAgentModel } from "@/agent/model"
-import { Provider } from "@/provider/provider"
+import { runAgentSession } from "@/agent/runner"
 import { Instance } from "@/project/instance"
-import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import type { Message } from "@/session/message"
-import { Identifier } from "@/id/id"
 import { Worktree } from "@/worktree"
 import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
@@ -137,18 +132,13 @@ export namespace BuildAgent {
    * (model unavailable, worktree creation failed, session stream error).
    */
   export async function run(input: RunInput): Promise<RunOutput> {
-    if (input.signal?.aborted) throw new Error("build agent aborted before start")
-
-    let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
-    if (input.model) {
-      model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
-    } else {
-      model = await resolveAgentModel("build", { taskID: input.task.id }).catch(() => undefined)
-    }
-    if (!model) throw new Error("no LLM model available for build agent")
-
     return BuildSemaphore.withSlot(input.task, async () => {
       // ── Worktree acquisition ─────────────────────────────────────────────
+      // Happens OUTSIDE runAgentSession because the worktree is the
+      // session's working directory — the runner needs it resolved before
+      // it calls Session.createNext. When ownsWorktree is false, the
+      // caller (re-attempt / user-preallocated dir) is responsible for
+      // cleanup; we neither create nor clean up the directory.
       const ownsWorktree = !input.workDir
       let worktreeDir = input.workDir
       let worktreeBranch: string | undefined
@@ -157,8 +147,6 @@ export namespace BuildAgent {
         const info = await Worktree.create({ name: `build-${targetLabel}` })
         worktreeDir = info.directory
         worktreeBranch = info.branch
-        // Record ownership marker so restart recovery can reclaim the dir
-        // if this process dies mid-run.
         await Ownership.Worktree.record({
           primaryWorktreeDir: Instance.worktree,
           worktreeDir,
@@ -169,51 +157,59 @@ export namespace BuildAgent {
         })
       }
 
-      // ── Child session ────────────────────────────────────────────────────
-      const agentSession = await Session.createNext({
-        kind: "build",
-        parentID: input.parentSessionID,
-        title: buildSessionTitle(input.target),
-        directory: worktreeDir!,
-      })
-
-      // External signal → session cancel.
-      const abortPrompt = () => {
-        try {
-          SessionPrompt.cancel(agentSession.id)
-        } catch {
-          /* session may already be stopped */
-        }
+      // Stage-skill injection for build: the resolved skill block is
+      // appended to the USER prompt (not the system prompt) — unusual
+      // among agents, but a deliberate legacy of the pre-phase-5
+      // buildGoalPrompt path. Kept as-is; the runner's `skillsStage`
+      // parameter would put it on the system side, which build's
+      // existing tests assume it does not.
+      const taskSignals: import("@/engine/skill-inject").TaskSignals = {
+        has_attachment_image: Array.isArray(input.task.attachments)
+          && input.task.attachments.some((a: any) => typeof a?.mime === "string" && a.mime.startsWith("image/")),
+        request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
+        request_text: input.task.request ?? "",
       }
-      input.signal?.addEventListener("abort", abortPrompt, { once: true })
-
-      log.info("build agent starting", {
-        taskID: input.task.id,
-        sessionID: agentSession.id,
-        target: input.target.kind,
-        worktreeDir,
-        model: model.id,
+      const { loadStageSkills } = await import("@/engine/skill-inject")
+      const skillPrompt = await loadStageSkills([], "build", taskSignals).catch((err) => {
+        log.warn("build agent: stage-skill injection failed — proceeding without skills", {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        return ""
       })
 
-      const userPrompt = buildUserPrompt(input.target, input.context)
-      let finalMessage: Message.WithParts | undefined
+      const buildPromptText = () =>
+        [buildUserPrompt(input.target, input.context), skillPrompt]
+          .filter((s) => typeof s === "string" && s.trim().length > 0)
+          .join("\n\n")
+
+      let out
       try {
-        finalMessage = (await SessionPrompt.prompt({
-          sessionID: agentSession.id,
-          model: { providerID: model.providerID, modelID: model.api.id },
-          agent: "build",
-          system: BUILD_CORE,
+        out = await runAgentSession({
+          kind: "build",
+          core: BUILD_CORE,
+          sessionTitle: buildSessionTitle(input.target),
+          sessionDirectory: worktreeDir!,
+          parentSessionID: input.parentSessionID,
+          taskID: input.task.id,
+          model: input.model,
+          signal: input.signal,
+          // Build's ambient toolset is surfaced through the agent system
+          // (bash / read / write / edit / …); runner registers no extra
+          // agent-scoped tools on top. Empty tool kit + runner-supplied
+          // enableMap means the build agent sees its default tools via
+          // SessionPrompt.prompt's normal resolution path.
+          toolKit: {
+            tools: {},
+            getCollector: () => undefined as unknown,
+          },
+          buildUserPrompt: buildPromptText,
           format: {
-            type: "json_schema",
             schema: z.toJSONSchema(BuildResultSchema) as Record<string, unknown>,
             retryCount: 2,
           },
-          parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
-        })) as Message.WithParts
+        })
       } finally {
-        input.signal?.removeEventListener("abort", abortPrompt)
         if (ownsWorktree && worktreeDir) {
-          // Fire-and-forget cleanup — errors are logged inside cleanupGoalWorkspace.
           await cleanupGoalWorkspace(worktreeDir).catch((err) => {
             log.warn("build agent: cleanupGoalWorkspace failed", {
               worktreeDir,
@@ -223,11 +219,7 @@ export namespace BuildAgent {
         }
       }
 
-      if (input.signal?.aborted) throw new Error("build agent aborted during prompt")
-      if (!finalMessage) throw new Error("build agent: SessionPrompt.prompt returned no message")
-
-      const structured = (finalMessage.info as Message.Assistant).structured
-      const parsed = BuildResultSchema.safeParse(structured)
+      const parsed = BuildResultSchema.safeParse(out.structured)
       if (!parsed.success) {
         throw new Error(
           `build agent: StructuredOutput payload did not match BuildResultSchema: ${parsed.error.message}`,
@@ -236,7 +228,7 @@ export namespace BuildAgent {
 
       log.info("build agent finished", {
         taskID: input.task.id,
-        sessionID: agentSession.id,
+        sessionID: out.session.id,
         status: parsed.data.status,
         commit_ref: parsed.data.commit_ref,
         testCount: parsed.data.tests.length,
@@ -245,7 +237,7 @@ export namespace BuildAgent {
 
       return {
         result: parsed.data,
-        sessionID: agentSession.id,
+        sessionID: out.session.id,
         worktreeDir: ownsWorktree ? worktreeDir : undefined,
       }
     })
