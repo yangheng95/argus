@@ -13,7 +13,7 @@
 import { createDeliveryTools } from "./tools"
 import { createDeliveryOutputTools } from "./output-tools"
 import DELIVERY_CORE from "@/prompt/core/delivery-core.txt"
-import { runAgentSession } from "@/agent/runner"
+import { runAgentSessionWithRetry } from "@/agent/runner"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Identifier } from "@/id/id"
@@ -90,86 +90,53 @@ export namespace DeliveryAgent {
       config: deliveryCfg,
     })
 
-    const externalSignal = input.signal
-    const MAX_RETRIES = deliveryCfg.max_retries
-    let verdict: DeliveryVerdictType | undefined
-    let lastError: Error | undefined
+    // Retry across attempts is owned by `runAgentSessionWithRetry` (rule 22 /
+    // rule 24): each attempt mints a fresh tool kit + child session so the
+    // submit_verdict collector and stateful rework tools cannot bleed across
+    // retries. The helper handles abort propagation, stream-error retry, and
+    // exhausted-attempts surfacing — delivery only declares: how many
+    // retries, how to mint a kit, and what counts as "complete".
+    const out = await runAgentSessionWithRetry({
+      kind: "delivery",
+      core: systemResolved.prompt,
+      rawSystemPrompt: true,
+      sessionTitle: `Delivery: ${input.task.title}`,
+      sessionDirectory: Instance.directory,
+      parentSessionID: input.task.sessionID,
+      taskID: input.task.id,
+      model: input.model,
+      signal: input.signal,
+      maxRetries: deliveryCfg.max_retries,
+      toolKitFactory: () => {
+        const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
+        const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
+        const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
+        return {
+          tools: guard.tools as any,
+          getCollector: () => outputToolKit.getCollector(),
+        }
+      },
+      isComplete: (collector) => {
+        if (collector.finalized && collector.verdict) return { ok: true }
+        return {
+          ok: false,
+          reason: "delivery agent did not call submit_verdict before the step budget ran out",
+        }
+      },
+      buildUserPrompt: () => textPrompt,
+      buildUserParts: () => buildPromptParts(textPrompt, input.attachments),
+    })
 
-    // Retry loop covers missing-submit_verdict failures — the agent ran but
-    // did not call submit_verdict before the step budget ended. Each attempt
-    // opens its own child session (via runAgentSession) so collector state
-    // on retry is not entangled with the prior attempt's history.
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      if (externalSignal?.aborted) break
-      if (attempt > 0) {
-        log.info("delivery agent retrying", { attempt, reason: lastError?.message })
-      }
-
-      const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
-      const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
-      const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
-
-      let streamErrorsOut: Array<{ reason: string; name?: string }> = []
-      try {
-        const out = await runAgentSession({
-          kind: "delivery",
-          core: systemResolved.prompt,
-          rawSystemPrompt: true,
-          sessionTitle: `Delivery: ${input.task.title}`,
-          sessionDirectory: Instance.directory,
-          parentSessionID: input.task.sessionID,
-          taskID: input.task.id,
-          model: input.model,
-          signal: externalSignal,
-          toolKit: {
-            tools: guard.tools as any,
-            getCollector: () => outputToolKit.getCollector(),
-          },
-          buildUserPrompt: () => textPrompt,
-          buildUserParts: () => buildPromptParts(textPrompt, input.attachments),
-        })
-        streamErrorsOut = out.streamErrors
-        log.info("delivery agent finished", {
-          attempt,
-          sessionID: out.session.id,
-          streamErrors: streamErrorsOut.length,
-        })
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
-        const isAborted = externalSignal?.aborted || (err instanceof Error && err.name === "AbortError")
-        log.warn("delivery agent run failed", { attempt, error: lastError.message, aborted: isAborted })
-        if (isAborted && externalSignal?.aborted) break
-        continue
-      }
-
-      if (streamErrorsOut.length > 0) {
-        lastError = new Error(
-          `delivery: session stream error: ${streamErrorsOut[0].name ?? "error"}: ${streamErrorsOut[0].reason}`,
-        )
-        log.warn("delivery: stream error, will retry", { attempt, error: lastError.message })
-        continue
-      }
-
-      const collector = outputToolKit.getCollector()
-      if (collector.finalized && collector.verdict) {
-        verdict = collector.verdict
-        break
-      }
-
-      lastError = new Error(
-        "delivery agent did not call submit_verdict before the step budget ran out",
-      )
-      log.warn("delivery: submit_verdict not called, will retry", { attempt })
-    }
-
+    const verdict = out.collector.verdict
     if (!verdict) {
-      throw new Error(lastError?.message ?? "Delivery agent failed after retries")
+      throw new Error("delivery: runAgentSessionWithRetry returned without a verdict")
     }
 
     log.info("delivery agent output", {
       verdict: verdict.verdict,
       issuesFound: verdict.issues_found.length,
       startupSuccess: verdict.startup_verification.success,
+      attempts: out.attempts,
     })
 
     return verdict
