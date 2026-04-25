@@ -307,7 +307,10 @@ export namespace Agent {
         prompt: REQUIREMENTS_CORE,
         // Shared tools — structured-output tools from createRequirementsOutputTools()
         // bypass this filter (they are the agent's contract with the orchestrator).
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        // todoread/todowrite expose the per-session private scratchpad so the
+        // LLM can plan + check off steps; rule 23 says we don't infer plans
+        // from internal state, the agent maintains its own.
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
         options: {},
         mode: "primary",
         native: true,
@@ -317,7 +320,7 @@ export namespace Agent {
         name: "architect",
         description: "Architect agent. Resolves cross-goal interfaces, file layout, and shared types into binding Decision Log entries.",
         prompt: ARCHITECT_CORE,
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
         // Mirrors EngineConfig.architect.max_steps (default 60). SessionLoop
         // reads this directly; keep in sync with EngineConfig by convention.
         steps: 60,
@@ -330,7 +333,7 @@ export namespace Agent {
         name: "planner",
         description: "Planner agent. Produces per-goal implementation plans from GoalContracts + Architect decisions.",
         prompt: PLANNER_CORE,
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
         options: {},
         mode: "primary",
         native: true,
@@ -343,7 +346,7 @@ export namespace Agent {
         // design-analyst uses dedicated url_screenshot + read_attachment/output
         // tools in its factory; shared planner tools listed here are the only
         // ones filtered by include/exclude.
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot"] },
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", "todoread", "todowrite"] },
         options: {},
         mode: "primary",
         native: true,
@@ -353,7 +356,7 @@ export namespace Agent {
         name: "intent-analysis",
         description: "Intent-analysis agent. Front-of-pipeline intent disambiguation — turns a short user request into a structured IntentAnalysisResult (class, complexity, slots, missing info, clarifications).",
         prompt: INTENT_ANALYSIS_CORE,
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get"] },
+        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
         options: {},
         mode: "primary",
         native: true,
