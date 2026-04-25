@@ -1824,9 +1824,26 @@ function rebuildTopLevelOrder(): void {
     for (const childID of node.childIDs || []) claimedChildIDs.add(childID);
   }
 
+  // goal-scope stages are NEVER top-level when the task has goals registered.
+  // The standard hide path (resolveSessionContainerCardID) already covers this
+  // when the session info carries goalID; this set is the belt-and-braces
+  // backstop for the case where the protocol bridge failed to enrich a part
+  // event with goalID and the session was created top-level. The top "构建"
+  // duplicate card the operator sees in pipeline-mode tasks is exactly this
+  // failure mode — every stage="build"/"planner" session belongs under its
+  // goal phase by design (workflow.ts: build is goal-scope in PIPELINE), so
+  // we filter them out unconditionally here whenever the task has any goal.
+  const taskHasGoals = Array.isArray((boardStore.board as any)?.goalWorkflows)
+    && (boardStore.board as any).goalWorkflows.length > 0;
+  const goalScopeStages = new Set(["build", "planner"]);
+
   const hiddenSessionCardIDs = new Set<string>();
   for (const info of sessions.values()) {
     if (info.stage === "executor" || resolveSessionContainerCardID(info)) {
+      if (info.cardID) hiddenSessionCardIDs.add(info.cardID);
+      continue;
+    }
+    if (taskHasGoals && goalScopeStages.has(String(info.stage || ""))) {
       if (info.cardID) hiddenSessionCardIDs.add(info.cardID);
     }
   }
