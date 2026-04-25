@@ -146,24 +146,19 @@ const DEFAULTS: EngineConfigType = {
   // haiku and starved sonnet — observed: requirements stopped at 60 steps
   // for a 30-requirement PRD with only 2 register_goal emitted.
   requirements: {
-    max_steps: 200,        // was 100 — sonnet needs headroom for PRD scan + register passes
+    max_steps: 1000,
     skills: [],
   },
   architect: {
-    max_steps: 60,         // was 20 — ~10 goals × 2-3 contract registrations
+    max_steps: 1000,
     skills: [],
   },
   planner: {
-    max_steps: 80,         // was 30
+    max_steps: 1000,
     skills: [],
   },
   delivery: {
-    // Vision-driven fig2code delivery loops compare rendered output against
-    // the reference image and edit CSS/layout before producing verdict. Per
-    // 2026-04-20 per-goal evaluator removal, delivery also owns per-goal
-    // verification (runs build / test / lint / rubric specs itself via
-    // run_command and parallel per-goal subagents).
-    max_steps: 160,        // was 80
+    max_steps: 1000,
     max_retries: 2,
     skills: [],
   },
@@ -183,14 +178,11 @@ const DEFAULTS: EngineConfigType = {
     },
   },
   design_analyst: {
-    max_steps: 80,         // was 50
+    max_steps: 1000,
     skills: [],
   },
   intent_analysis: {
-    // Short-lived front-of-pipeline agent: few slots + optional grounding
-    // lookups. Budgets are intentionally tight — if it needs deeper
-    // exploration, that is the job of downstream agents, not this one.
-    max_steps: 20,
+    max_steps: 1000,
     skills: [],
   },
   activity: {

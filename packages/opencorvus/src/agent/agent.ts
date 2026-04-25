@@ -268,7 +268,7 @@ export namespace Agent {
         // EngineConfig-linked dynamic read here would couple the Agent
         // registry to runtime state (CLAUDE.md rule 26), so we keep both
         // in sync by convention.
-        steps: 160,
+        steps: 1000,
         // `task` is INTENTIONALLY not excluded: delivery dispatches per-goal
         // review subagents (Phase 2.5 in DELIVERY_AGENT_SYSTEM) to deepen its
         // otherwise thin per-goal verification. Adversarial review across 3+
@@ -293,15 +293,13 @@ export namespace Agent {
         // Prompt is constructed dynamically per-wake in src/orchestrator/agent.ts
         // (buildSystemParts). No static core prompt — the orchestrator's
         // context depends on live task/goal/run state.
-        // steps=80 sized for the full pipeline workflow in one session:
-        // intent_analysis → design_analysis → requirements → architect →
-        // fidelity → N builds → deliver → prosecute → publish_delivery, plus
-        // skill loads, todowrite/read, and observation tool calls between
-        // each. Observed 2026-04-25 with the previous steps=20 cap: a 3-goal
-        // pipeline ran exactly 20 llm_requests and stopped without ever
-        // reaching deliver — the deliver-pending auto-rewake fired but the
-        // task had already burned a full session on dispatch.
-        steps: 80,
+        // Step cap raised to 1000 (effectively unlimited). Per user 2026-04-25
+        // the per-agent step budget should not constrain normal flow — the
+        // auto-rewake gate, MAX_TASK_ITERATIONS, and stream-idle watchdog
+        // already bound a wedged LLM. A tight per-session cap was the
+        // dominant failure mode (3-goal pipeline burned the original 20-step
+        // cap on dispatch alone, never reaching deliver).
+        steps: 1000,
         // Whitelist: orchestrator is a SCHEDULER, not an executor. The benchmark
         // caught it bypassing the build agent entirely (calling webpage_extract
         // / webpage_compile_html / webpage_render / webpage_evaluate / bash /
@@ -383,9 +381,7 @@ export namespace Agent {
         description: "Architect agent. Resolves cross-goal interfaces, file layout, and shared types into binding Decision Log entries.",
         prompt: ARCHITECT_CORE,
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
-        // Mirrors EngineConfig.architect.max_steps (default 60). SessionLoop
-        // reads this directly; keep in sync with EngineConfig by convention.
-        steps: 60,
+        steps: 1000,
         options: {},
         mode: "primary",
         native: true,
@@ -445,10 +441,7 @@ export namespace Agent {
       fidelity: {
         name: "fidelity",
         description: "Fidelity review stage. Verifies that the produced goal set covers the original user request; system prompt is built per-call in fidelity/agent.ts.",
-        // Fidelity is a single-tool-call review: one shot + up to two
-        // schema-retry self-corrections is enough. Matches the
-        // pre-migration stepCountIs(3) budget.
-        steps: 3,
+        steps: 1000,
         options: {},
         mode: "primary",
         native: true,
@@ -457,8 +450,7 @@ export namespace Agent {
       prosecutor: {
         name: "prosecutor",
         description: "Prosecutor stage. Adversarial half of the delivery Dynamic Adversarial Metrics loop; files counterexamples against the defender (delivery) verdict.",
-        // Matches the pre-migration PROSECUTOR_MAX_STEPS = 8.
-        steps: 8,
+        steps: 1000,
         options: {},
         mode: "primary",
         native: true,
