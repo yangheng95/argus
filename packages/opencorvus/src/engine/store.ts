@@ -858,6 +858,15 @@ export function listGoalWorkspacesForProject(projectID: string) {
  * Source: protocol_event is the append-only truth for agent activity; we do
  * not gate on `status` columns (rule 23: no state machine). Join with
  * SessionTable only to surface `kind` / `goal_id` for UI labelling.
+ *
+ * Sessions that have already emitted a phase-terminal event
+ * (`*.completed` per the EngineEvent naming contract — requirements.completed,
+ * architect.completed, design_analysis.completed, fidelity.completed,
+ * build.completed, delivery.completed, intent_analysis.completed) are
+ * excluded so the overlay's spinner stops the moment the inner runner
+ * concludes — without waiting for the orchestrator's next LLM step. The
+ * exclusion looks at the same protocol_event table; no parallel state
+ * column is introduced (rule 22 single source).
  */
 export function listActiveSessionsForTask(taskID: string, windowMs = 60_000) {
   const threshold = Date.now() - windowMs
@@ -876,6 +885,11 @@ export function listActiveSessionsForTask(taskID: string, windowMs = 60_000) {
           eq(ProtocolEventTable.task_id, taskID),
           isNotNull(ProtocolEventTable.session_id),
           gt(ProtocolEventTable.emitted_at, threshold),
+          sql`NOT EXISTS (
+            SELECT 1 FROM protocol_event AS pe_done
+            WHERE pe_done.session_id = ${ProtocolEventTable.session_id}
+              AND pe_done.type LIKE '%.completed'
+          )`,
         ),
       )
       .groupBy(ProtocolEventTable.session_id)
