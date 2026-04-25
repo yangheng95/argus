@@ -2,7 +2,7 @@ import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
-import { GrepTool } from "./grep"
+import { SearchCodeTool } from "./grep"
 import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
@@ -20,7 +20,7 @@ import { type ToolContext as PluginToolContext, type ToolDefinition } from "@ope
 import z from "zod"
 import { Plugin } from "../plugin"
 import { WebSearchTool } from "./websearch"
-import { CodeSearchTool } from "./codesearch"
+import { ExternalCodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
@@ -38,6 +38,7 @@ import { GoalReportTool } from "./goal-report"
 import {
   WebpageExtractTool,
   WebpageCompileTool,
+  WebpageCompileHtmlTool,
   WebpageAnalyzeTool,
   WebpageRenderTool,
   WebpageEvaluateTool,
@@ -125,7 +126,7 @@ export namespace ToolRegistry {
       BashTool,
       ReadTool,
       GlobTool,
-      GrepTool,
+      SearchCodeTool,
       EditTool,
       WriteTool,
       TaskTool,
@@ -133,7 +134,7 @@ export namespace ToolRegistry {
       TodoWriteTool,
       TodoReadTool,
       WebSearchTool,
-      CodeSearchTool,
+      ExternalCodeSearchTool,
       SkillTool,
       ApplyPatchTool,
       MemoryTool,
@@ -146,6 +147,7 @@ export namespace ToolRegistry {
       AnalyticsTool,
       WebpageExtractTool,
       WebpageCompileTool,
+      WebpageCompileHtmlTool,
       WebpageAnalyzeTool,
       WebpageRenderTool,
       WebpageEvaluateTool,

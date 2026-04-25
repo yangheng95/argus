@@ -104,6 +104,7 @@ export namespace Agent {
       // any of them via user config.
       webpage_extract: "allow",
       webpage_compile: "allow",
+      webpage_compile_html: "allow",
       webpage_analyze: "allow",
       webpage_render: "allow",
       webpage_evaluate: "allow",

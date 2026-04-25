@@ -1,13 +1,8 @@
 ---
 name: webpage-generate
-description: Generate a webpage as a static single-file HTML skeleton with visual similarity ≥ 95%. Uses headless-browser extraction, deterministic structure/token analysis, and an SSIM+pixel-match feedback loop. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (Apple HIG, macOS/iOS app, a specific site URL, a Figma/screenshot) and expects a visual match. If you need to generate code from an explicit or inferred URL, build directly on the webpage skeleton produced by mirror — the visual fidelity is materially higher than freehand authoring. 如果需要根据显式或推理出的 URL 生成代码，请直接基于 mirror 生成的网页骨架，视觉复原度更佳。
+description: Generate a webpage as a static single-file HTML clone with visual similarity ≥ 95%. Pipeline is deterministic — extract DOM via headless Chrome, compile to inline-styled `index.html`, then render + evaluate against the reference and edit on specific gaps. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (Apple HIG, macOS/iOS app, a specific site URL, a Figma/screenshot) and expects a visual match. Always compile from `mirror/extracted-page.json` — do NOT hand-write the clone from a screenshot. 始终从 mirror 抽取产物编译，不要根据截图手写 HTML。
 stage: build
 auto_detect:
-  # OR-semantics across these blocks: any match activates the skill. For
-  # benchmark / greenfield clones the worktree starts empty, so files/deps
-  # miss; the task_signals block covers that case — a reference screenshot
-  # attachment OR an http(s) URL in the request text is an unambiguous
-  # "clone this page" intent.
   files:
     - index.html
     - public/index.html
@@ -38,31 +33,30 @@ priority: 60
 
 # Webpage Generate Skill
 
-You are producing a **static HTML skeleton** that visually mirrors a reference webpage. You have five deterministic tools — use them in order. Never open a browser yourself via `bash`; use the provided tools.
+You produce a **static HTML clone** that visually mirrors a reference webpage. The pipeline is deterministic: the mirror toolchain extracts the authoritative DOM tree + computed styles + image assets, then `webpage_compile_html` replays them as inline-styled `index.html`. **You do NOT hand-write the clone.** Your job is to (a) trigger the pipeline in order, (b) render and evaluate, (c) edit `index.html` only when `webpage_evaluate` / `webpage_text_diff` surfaces a specific gap.
 
 ## Reuse on re-entry
 
-This skill is idempotent on `mirror/`. Before doing anything else, list the worktree root and check whether `mirror/` already exists from a prior invocation (or a sibling goal that ran the extract pipeline). When the directory is populated, REUSE — do not re-extract, do not invent values:
+This skill is idempotent on `mirror/` and `index.html`. Before doing anything, list the worktree root and check what already exists from a prior invocation or sibling goal:
 
 - `mirror/extracted-page.json` — DOM tree + ~33 computed CSS properties per element
-- `mirror/page-ir.xml` — compact XML IR with text catalog and section structure
+- `mirror/page-ir.xml` — compact XML IR (text catalogue, section structure)
 - `mirror/scaffold.json` — section list + pattern catalog + design-token system
-- `mirror/design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (copy values verbatim into your inline CSS / Tailwind arbitrary classes — never invent hex codes or font sizes)
-- `mirror/App.tsx` — reference composition (read for structure, do not `import` or `<script src=>` it)
+- `mirror/design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants
 - `mirror/shared-context.md` — compact prompt-ready summary
-- `mirror/images/img-N.{png,jpg,svg}` — downloaded image assets (move/copy into `./images/` at the worktree root and reference with relative paths)
+- `mirror/images/img-N.{png,jpg,svg}` — downloaded image assets
 - `mirror/reference.png` — the pixel target for SSIM scoring
+- `index.html` — the compiled deliverable
+- `images/` — assets the deliverable references (promoted from `mirror/images/`)
 
-Skip steps 1-3 (`webpage_extract` / `webpage_compile` / `webpage_analyze`) when the corresponding artifact exists AND the URL has not changed. Jump directly to step 4 (write `index.html`) or step 5+ (render / evaluate / iterate). The whole point of `mirror/` being git-tracked is so subsequent goals and retries build on the same authoritative source instead of redoing pixel extraction or hand-rolling colour values.
+When `mirror/extracted-page.json` exists for the right URL, REUSE — skip extract, jump straight to `webpage_compile_html`. The whole point of `mirror/` being git-tracked + ff-only merged across goal worktrees is so subsequent goals build on the same authoritative source instead of re-extracting.
 
-## Critical Dependency Rule
+## Critical rules
 
-The general "parallelize independent tool calls" guidance does **not** apply to this workflow.
-
-- Steps 1-3 are **strictly serial** because each one writes artifacts consumed by the next step.
-- Never call `webpage_compile` or `webpage_analyze` in the same response as `webpage_extract`.
-- Wait for `webpage_extract` to finish and confirm `extracted-page.json` exists before calling either downstream tool.
-- Never start render/evaluate until after you have actually written `index.html`.
+- Steps 1–2 are **strictly serial**. `webpage_compile_html` reads what `webpage_extract` writes; never call them in the same response.
+- Do NOT hand-write `index.html` from a screenshot. Always go through `webpage_compile_html`.
+- Do NOT call `webpage_compile` or `webpage_analyze` unless `webpage_evaluate` surfaces a gap that needs the IR or scaffold to diagnose — they're optional diagnostic tools, not part of the happy path.
+- Do NOT delete `mirror/` artifacts — see "Cross-goal artifact sharing" below.
 
 ## Activation
 
@@ -79,119 +73,88 @@ Do NOT use it for content rewriting, SEO analysis, or behavioural scraping.
 
 If the user provided a URL that starts with `http://` or `https://`, skip to step 1.
 
-If the user said "clone X" or "复刻 X" but gave only a name/brand/product (e.g. "clone Baidu", "复刻 bilibili"), resolve the canonical URL:
+If the user said "clone X" but gave only a name/brand (e.g. "clone Baidu", "复刻 bilibili"), resolve the canonical URL:
 
-1. Call the `websearch` tool with a tight query like `X official homepage` or `X 官网`.
-2. Pick the top hit whose host looks canonical (e.g. `baidu.com`, not `baidu.fandom.com`).
-3. Confirm with the user in one sentence: "I'll clone `<url>` — is that right?" unless the mapping is unambiguous.
+1. Call `websearch` with a tight query like `X official homepage` or `X 官网`.
+2. Pick the top hit whose host looks canonical (`baidu.com`, not `baidu.fandom.com`).
+3. Confirm with the user in one sentence unless the mapping is unambiguous.
 
-Never invent a URL. If `websearch` returns nothing useful, stop and ask the user for the URL.
-
-## Artifact layout
-
-All mirror-tool artifacts live under **`mirror/`** — a single top-level folder at the worktree root, separate from the clone's deliverable (`index.html` + its final `images/` if you promote them). It is git-visible so the delivery commit captures the artifacts (do NOT place them under `.opencorvus/` — that tree is orchestrator scratch and is gitignored, so `git add -A` would drop them).
-
-Refer to artifacts as `mirror/<file>` unless a tool specifically accepts a different `inputDir` / `referenceDir` override. Do not scatter these into the worktree root.
+Never invent a URL. If `websearch` returns nothing useful, stop and ask the user.
 
 ## Step 1 — Extract the reference
 
-Call `webpage_extract` with the URL. Defaults (1440×900 viewport, `body` scope) are right for most desktop pages. Artifacts land under `mirror/`:
+Call `webpage_extract` with the URL. Defaults (1440×900 viewport, `body` scope, `keep_images: true`) are right for most desktop pages. Artifacts land under `mirror/`:
 
 - `mirror/reference.png` — the pixel target for scoring later
-- `mirror/extracted-page.json` — DOM tree with ~33 computed CSS properties per element
+- `mirror/extracted-page.json` — DOM tree with computed CSS per element (the authoritative source `webpage_compile_html` consumes)
 - `mirror/images/img-N.{png,jpg,svg}` — downloaded image assets
-- (the tool prints a summary to context — the full JSON stays on disk)
 
-Network access to the URL is required. The tool will ask for permission.
+Network access required. The tool will ask for permission.
 
 ### P1-A hard rule: no text-only fallback
 
-If `webpage_extract` cannot resolve the reference (SPA behind a login wall,
-pixel-free canvas, JS-only shell), **STOP and escalate to the user** —
-report the specific failure mode and ask for a different URL or a
-pre-extracted PNG. You MUST NOT:
+If `webpage_extract` cannot resolve the reference (SPA behind a login wall, pixel-free canvas, JS-only shell), **STOP and escalate to the user** — report the specific failure mode and ask for a different URL or a pre-extracted PNG. You MUST NOT:
 
-- Continue by reading `mirror/scaffold.json` + `mirror/App.tsx` and writing
-  an invented `index.html` from the visual-contract text alone.
+- Continue by reading `mirror/scaffold.json` + writing an invented `index.html` from the visual-contract text alone.
 - Fabricate screenshots, DOM snapshots, or `webpage_evaluate` scores.
-- Call `submit_verdict(accepted)` on a deliverable whose build artifact
-  cannot be rendered — the delivery runtime-evidence gate (P1-A) re-runs
-  puppeteer against `dist/`/`build/` independently and will reject any
-  empty-root-shell (`<div id="root"></div>` only) or thin-DOM output with
-  `category="runtime"` regardless of your verdict text.
+- Call any submit / accept verdict on a deliverable whose build artifact cannot be rendered — the delivery runtime-evidence gate (P1-A) re-runs puppeteer and rejects empty-root-shell or thin-DOM output regardless of your verdict text.
 
-This is the ainvest-style failure the gate exists to stop. "Static scaffold
-because dynamic capture failed" is a hard-no.
+"Static scaffold because dynamic capture failed" is a hard-no.
 
-## Step 2 — Compile the XML IR
+## Step 2 — Compile `index.html`
 
-Call `webpage_compile` **only after step 1 completed successfully**. It reads `mirror/extracted-page.json` and emits `mirror/page-ir.xml` — a compact (<20KB) XML representation of the DOM with layout/style attributes inlined and repeated siblings collapsed. You will `read` this file in step 4.
+Call `webpage_compile_html` (no args needed — defaults read `mirror/extracted-page.json` and write `index.html` + `images/` at the worktree root). The tool:
 
-## Step 3 — Analyze the structure
+1. Replays the extracted DOM tree as nested HTML with inline styles (no JS, no Tailwind, no external CSS).
+2. Copies `mirror/images/` to `images/` at the worktree root and remaps every `<img src>` to the local path.
+3. Returns the byte size + element count.
 
-Call `webpage_analyze` **only after step 1 completed successfully**. It reads `mirror/extracted-page.json` and writes under the same folder:
+**This is the entire write step.** No `write index.html`, no `edit index.html` from scratch. The compiled HTML is the high-fidelity baseline; iteration in step 5 only makes targeted patches.
 
-- `mirror/scaffold.json` — section list + pattern catalog + design-token system
-- `mirror/design-tokens.ts` — `COLORS` / `FONTS` / `SPACING` / `RADII` constants (copy values; do NOT invent hex codes)
-- `mirror/App.tsx` — reference composition (you can inspect but don't copy it directly)
-- `mirror/shared-context.md` — compact prompt-ready summary of tokens + patterns
+## Step 3 — Render
 
-## Step 4 — Write the static HTML
+Call `webpage_render` (no args needed — defaults render `<worktree>/index.html` and write `mirror/rendered.png`). Returns render time + any console errors.
 
-Write **one file**: `index.html` at the root of the worktree.
+## Step 4 — Evaluate
 
-Hard rules:
-
-1. **Static HTML only**. No JavaScript frameworks (React, Vue, etc.), no Babel, no JSX. Every visible text node MUST be present as raw HTML text — a viewer with JS disabled should still see the page's content.
-2. **CSS**: inline `<style>` + Tailwind via CDN (`<script src="https://cdn.tailwindcss.com"></script>`). No other runtime dependencies.
-3. **Text**: copy phrases verbatim from `mirror/page-ir.xml` `<Text>` tags and the `Section Text` catalog. Do not paraphrase headings, nav labels, or button text.
-4. **Images**: before writing `<img>` tags, copy / move `mirror/images/` out to `./images/` at the worktree root so the final clone is portable and doesn't reference a hidden folder. Use relative paths `images/img-N.ext` from `index.html`. Fall back to original URLs only if local paths are absent.
-5. **Colors**: copy the hex values from `mirror/design-tokens.ts` `COLORS` directly into your inline CSS / Tailwind arbitrary-value classes. Do NOT `import` or `<script src>` that file — the final HTML must be self-contained so step 8 can delete `mirror/`. Never invent tones.
-6. **Structure**: match the section order and rough bounds reported in `mirror/scaffold.json`.
-
-Before writing, `read` `mirror/page-ir.xml` and `mirror/shared-context.md` at minimum.
-
-## Step 5 — Render
-
-Call `webpage_render` (no args needed — `inputDir` defaults to the current worktree where `index.html` lives, `outputDir` defaults to `mirror/`). It writes `mirror/rendered.png` and reports render time + any console errors.
-
-## Step 6 — Evaluate
-
-Call `webpage_evaluate` with `reference=reference.png` and `rendered=rendered.png` (both resolved inside `mirror/` — evaluate's `outputDir` defaults there). It writes `mirror/diff.png` (red = pixels that differ) and returns an overall score in 0-100.
+Call `webpage_evaluate` with `reference=reference.png` and `rendered=rendered.png` (both resolved inside `mirror/`). Writes `mirror/diff.png` (red = pixels that differ) and returns an overall score in 0–100.
 
 The score formula: `round(ssim × 50 + (100 − pixelDiff%) × 0.5)`. Target ≥ 95.
 
-## Step 7 — Iterate until score reaches target
+## Step 5 — Iterate on specific gaps
 
-If `webpage_evaluate` returns a score below the target (default 95), you MUST iterate. Do **not** move to step 8 prematurely — "close enough" is not acceptable.
+If the score is below target you MUST iterate. The compiled HTML preserves the authoritative DOM, so most gaps come from dynamic content (rotating placeholders, ads, personalisation), font fallbacks, or images the extractor could not download.
 
 For each round:
-1. **Diagnose**: call `webpage_text_diff`. It returns a concrete list of strings that exist in the reference but not in your current `index.html`. This is the single most effective signal for closing the SSIM gap — text mismatches cost more per-pixel than colour drift.
-2. **Edit** `index.html` (use the `edit` tool — do NOT rewrite the whole file with `write`):
-   - Add every missing string from `webpage_text_diff` output, placed in the correct section per `page-ir.xml`'s `Section Text` catalogue. Keep wording verbatim.
-   - Attack the largest red regions in `diff.png` next.
-   - Use only the hex values copied from `design-tokens.ts`.
-   - Preserve every element that's already rendering correctly — deleting correct markup costs points you won't recover.
+
+1. **Diagnose**:
+   - `webpage_text_diff` — list of reference strings absent from your render. Single most effective signal.
+   - Inspect `mirror/diff.png` — the largest red regions point you at the next correction.
+   - Optional: call `webpage_compile` to read `mirror/page-ir.xml` for section structure context, or `webpage_analyze` for `mirror/scaffold.json` token / pattern catalogue. Skip these if `text_diff` + `diff.png` is enough.
+2. **Edit** `index.html` (use the `edit` tool — never rewrite the whole file with `write` and never re-run `webpage_compile_html` mid-iteration; the compiler always reproduces the original DOM and would clobber your fixes):
+   - Insert any strings reported by `webpage_text_diff`, placed in the right section per `page-ir.xml`'s `Section Text` catalogue. Keep wording verbatim.
+   - Replace placeholder image src values when `mirror/images/` is missing the asset (use the original remote URL from `extracted-page.json` as a fallback).
+   - Adjust styles only where `diff.png` flags a clear regression — colour drift fixes use the values copied from `mirror/design-tokens.ts`; never invent hex codes.
+   - Preserve every element that's already rendering correctly. Deleting correct markup costs points you won't recover.
 3. Re-run `webpage_render`.
 4. Re-run `webpage_evaluate`.
 5. If `score ≥ target`, you are done — proceed to "What success looks like" below.
 6. If `score < target` and you've completed fewer than **8 rounds**, go back to #1.
 7. If you've completed 8 rounds and the score still lags, STOP. Report the final score, the biggest remaining diff regions, and any obvious blockers (e.g. dynamic content that cannot be statically cloned).
 
-Track your round count explicitly in your reasoning. Do not hand-wave ("I've done several rounds"); count them.
+Track your round count explicitly. Do not hand-wave ("I've done several rounds"); count them.
 
-## DO NOT delete `mirror/` artifacts
+## Cross-goal artifact sharing — DO NOT delete `mirror/`
 
-The mirror toolchain output (`extracted-page.json`, `page-ir.xml`, `scaffold.json`, `design-tokens.ts`, `App.tsx`, `shared-context.md`, `images/`, `reference.png`) MUST stay in the worktree. Subsequent goals + delivery agents read these artifacts to verify and refine your work; the build runtime ff-only merges your goal branch back into primary HEAD so the next worktree inherits them via git. Removing them mid-pipeline breaks cross-goal sharing (rule 22 — single source of truth lives in git, not regenerated per goal). The deliverable is `index.html` + `images/`; mirror artifacts are scratch but they are git-tracked scratch — leave them in place.
+The mirror toolchain output MUST stay in the worktree. Subsequent goals + delivery agents read these artifacts to verify and refine your work; the build runtime ff-only merges your goal branch back into primary HEAD so the next worktree inherits them via git. Removing them mid-pipeline breaks cross-goal sharing (rule 22 — single source of truth lives in git, not regenerated per goal). The deliverable is `index.html` + `images/`; mirror artifacts are git-tracked scratch — leave them in place.
 
 ## What success looks like
 
-A single-file static `index.html` plus an `images/` folder, nothing else, that visually reproduces the reference at the target viewport with:
+A self-contained static `index.html` plus an `images/` folder at the worktree root, plus the `mirror/` toolchain output preserved for downstream goals, with:
 
-- All canonical text from the reference present verbatim
+- All canonical text from the reference present verbatim (compiled directly from the DOM tree)
 - All images referenced by their local `images/` paths
-- Colour values inlined (no external `design-tokens.ts` dependency)
-- No JS runtime dependency
-- Score ≥ 95 from `webpage_evaluate` before cleanup
+- Inline styles on every element (no external CSS, no Tailwind, no JS runtime)
+- Score ≥ 95 from `webpage_evaluate`
 
-Report the final score and list the sections that are still below pixel parity (they are usually dynamic content — e.g. rotating placeholders, ads, personalisation).
+Report the final score and list the sections that are still below pixel parity (usually dynamic content — rotating placeholders, ads, personalisation).
