@@ -409,7 +409,9 @@ function artifactRowToDeliveryRow(row: typeof EngineArtifactTable.$inferSelect):
   return {
     id: row.delivery_id ?? row.id,
     task_id: row.task_id,
-    run_id: row.run_id,
+    // delivery-kind artifacts always have run_id set by writeDeliveryRow;
+    // nullable column only used for kind="orchestrator-stream-error".
+    run_id: row.run_id!,
     goal_run_id: row.goal_run_id ?? null,
     status: payload.status ?? "candidate",
     summary: payload.summary ?? "",
@@ -580,6 +582,31 @@ export function findRecentDeliveryRejection(taskID: string, sinceMs: number) {
   const payload = (art.payload ?? {}) as Record<string, unknown>
   if (payload.verdict !== "rejected") return undefined
   return art
+}
+
+/**
+ * Most recent orchestrator stream-error artifact for `taskID` whose
+ * `time_created >= sinceMs`. Used by the orchestrator loop to detect
+ * "the orchestrator's own LLM stream aborted (idle / provider onError)"
+ * and re-wake itself so the LLM gets a fresh decision turn instead of
+ * silently giving up on transient network hangs (e.g. alibaba-coding-plan-cn
+ * stream idle > 180s). Per rule 23 stream abort is a fact recorded as an
+ * artifact, not a state-machine transition; the LLM decides whether to
+ * retry or fail_task on next wake.
+ *
+ * Returns undefined when no matching artifact exists in the window.
+ */
+export function findRecentOrchestratorStreamError(taskID: string, sinceMs: number) {
+  return Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, taskID),
+        eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
+        gte(EngineArtifactTable.time_created, sinceMs),
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
 }
 
 /**
@@ -1443,7 +1470,10 @@ function latestPerRun(
   const seen = new Set<string>()
   const result: Array<typeof EngineArtifactTable.$inferSelect> = []
   for (const row of rows) {
-    const key = row.run_id
+    // run-kind artifacts: first row self-references (id === run_id), follow-ups
+    // explicitly set run_id. row.run_id is null only for stream-error kind,
+    // never input here (callers filter by kind="run").
+    const key = row.run_id ?? row.id
     if (seen.has(key)) continue
     seen.add(key)
     result.push(row)
@@ -1468,7 +1498,10 @@ function artifactRowToRunRow(row: typeof EngineArtifactTable.$inferSelect): RunR
     time_completed?: number | null
   }
   return {
-    id: row.run_id,
+    // run-kind artifact: id === run_id (self-reference) on first row; both
+    // are filled for follow-ups. Fallback to row.id covers the self-ref case
+    // where run_id may not yet be persisted (defensive).
+    id: row.run_id ?? row.id,
     task_id: row.task_id,
     plan_version_id: payload.plan_version_id ?? null,
     session_id: payload.session_id ?? null,
@@ -1531,7 +1564,8 @@ function artifactRowToGoalRunRow(row: typeof EngineArtifactTable.$inferSelect): 
     task_id: row.task_id,
     goal_id: payload.goal_id ?? "",
     plan_node_id: payload.plan_node_id ?? null,
-    coordinator_run_id: row.run_id,
+    // goal_run_attempt artifacts always carry the coordinating run_id.
+    coordinator_run_id: row.run_id!,
     session_id: payload.session_id ?? null,
     status: payload.status ?? "queued",
     retry_count: payload.retry_count ?? 0,
@@ -1568,7 +1602,8 @@ function artifactRowToEvaluationRow(row: typeof EngineArtifactTable.$inferSelect
   return {
     id: row.id,
     task_id: row.task_id,
-    run_id: row.run_id,
+    // verification-evidence artifacts always carry run_id (writer enforces it).
+    run_id: row.run_id!,
     goal_run_id: row.goal_run_id ?? null,
     delivery_id: row.delivery_id ?? null,
     scope: payload.scope ?? "delivery",

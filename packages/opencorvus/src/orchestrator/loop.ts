@@ -267,6 +267,37 @@ async function runTaskLoopInner(input: {
       }
     }
 
+    // ── Orchestrator stream-error detection (auto-rewake) ──
+    // When the orchestrator's own LLM stream aborts mid-decision (provider
+    // onError, session-llm idle watchdog), agent.ts records an
+    // `orchestrator-stream-error` artifact instead of marking the task
+    // terminal. We auto-rewake with the structured retry note so the next
+    // decision turn lets the LLM read the abort fact + session log and
+    // decide for itself. Same watermark + at-most-once semantics as the
+    // delivery-rejection branch above. Per rule 23 the recovery decision
+    // belongs to the LLM, not to this loop. `MAX_TASK_ITERATIONS` is the
+    // runaway guard; each transient hang costs one decision turn.
+    if (isTaskActive(taskAfter)) {
+      const { findRecentOrchestratorStreamError } = await import("@/engine/store")
+      const errArt = findRecentOrchestratorStreamError(taskID, lastReworkSeenAt)
+      if (errArt) {
+        lastReworkSeenAt = (errArt.time_created ?? Date.now()) + 1
+        const payload = (errArt.payload ?? {}) as Record<string, unknown>
+        log.info("orchestrator stream error detected — re-waking orchestrator", {
+          taskID,
+          artifactID: errArt.id,
+          iteration: decisionTurn,
+        })
+        event = {
+          note: OrchestratorEventNote.streamErrorRetry({
+            reason: typeof payload.reason === "string" ? payload.reason : "stream error",
+            sessionID: typeof payload.sessionID === "string" ? payload.sessionID : undefined,
+          }),
+        }
+        continue
+      }
+    }
+
     // No auto-rewake signal detected. The orchestrator either stopped mid
     // task (pending operator input, awaiting external trigger) or finished
     // without marking terminal. Exit and let the next external wake
