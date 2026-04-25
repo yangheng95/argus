@@ -84,10 +84,19 @@ export interface StructuredFormat {
 }
 
 export interface RunAgentSessionInput<C> {
-  /** session.kind — must match agent.<kind> in Config and the system prompt.
-   *  Constrained to the SessionKind union; the runner does not allow
-   *  free-form strings (rule 25). */
+  /** session.kind — determines how the overlay renders the child session
+   *  and how session_id downstream readers route. Constrained to the
+   *  SessionKind union; the runner does not accept free-form strings
+   *  (rule 25). */
   kind: SessionKind
+  /** Agent name for model resolution / system-prompt composition /
+   *  SessionPrompt.agent dispatch. Defaults to `kind`. Supply a separate
+   *  value when session.kind and agent name diverge — currently only
+   *  prosecutor (session.kind="evaluator", agentName="prosecutor") to
+   *  keep overlay renderers keyed on the historical kind while the
+   *  runner looks up `config.agent.prosecutor.*` and
+   *  `resolveAgentModel("prosecutor", ...)`. */
+  agentName?: string
   /** Loaded core prompt text from `prompt/core/<kind>-core.txt`. */
   core: string
   /** Display title for the child session (overlay shows this). */
@@ -102,6 +111,13 @@ export interface RunAgentSessionInput<C> {
   signal?: AbortSignal
   /** Optional liveness hook. */
   onStatus?: (summary: string) => void | Promise<void>
+  /** Fires AFTER the child session is created and BEFORE the prompt call
+   *  begins. Return value is a disposer that runs after the prompt
+   *  completes (success or failure). Use for stage-specific lifecycle
+   *  instrumentation: "Started" event emission, heartbeat tickers,
+   *  stream-chunk forwarders. The runner owns the session; the hook is
+   *  strictly observer-scope, not control-scope. */
+  onSessionCreated?: (session: Awaited<ReturnType<typeof Session.createNext>>) => Promise<{ dispose: () => void }> | { dispose: () => void } | void
   /** Stage-specific extra tool surface + collector. */
   toolKit: AgentToolKit<C>
   /** Stage-specific user-message text. */
@@ -165,6 +181,7 @@ export async function runAgentSession<C>(
   input: RunAgentSessionInput<C>,
 ): Promise<RunAgentSessionOutput<C>> {
   const { kind } = input
+  const agentName = input.agentName ?? kind
 
   if (input.signal?.aborted) {
     throw new AgentRunError(kind, "aborted before model resolution")
@@ -175,7 +192,7 @@ export async function runAgentSession<C>(
   if (input.model) {
     model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
   } else {
-    model = await resolveAgentModel(kind, { taskID: input.taskID }).catch(() => undefined)
+    model = await resolveAgentModel(agentName, { taskID: input.taskID }).catch(() => undefined)
   }
   if (!model) throw new AgentRunError(kind, "no LLM model available")
 
@@ -184,7 +201,7 @@ export async function runAgentSession<C>(
   }
 
   // ── 2. Compose the system prompt ─────────────────────────────────────
-  const systemPrompt = await composeSystemPrompt(kind, input.core, input.skillsStage)
+  const systemPrompt = await composeSystemPrompt(agentName, input.core, input.skillsStage)
 
   // ── 3. Build user prompt parts ───────────────────────────────────────
   const userText = await input.buildUserPrompt()
@@ -230,7 +247,8 @@ export async function runAgentSession<C>(
     Object.keys(input.toolKit.tools).map((name) => [name, true]),
   )
 
-  log.info(`${kind} agent starting`, {
+  log.info(`${agentName} agent starting`, {
+    kind,
     sessionID: session.id,
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
@@ -238,13 +256,17 @@ export async function runAgentSession<C>(
     toolNames: Object.keys(input.toolKit.tools),
   })
 
+  const lifecycleDisposable = input.onSessionCreated
+    ? await input.onSessionCreated(session)
+    : undefined
+
   let finalMessage: Message.WithParts | undefined
   try {
     await SessionPrompt.withExtraTools(session.id, input.toolKit.tools, async () => {
       const promptArgs: Parameters<typeof SessionPrompt.prompt>[0] = {
         sessionID: session.id,
         model: { providerID: model!.providerID, modelID: model!.api.id },
-        agent: kind,
+        agent: agentName,
         system: systemPrompt,
         tools: enableMap,
         parts: parts as Parameters<typeof SessionPrompt.prompt>[0]["parts"],
@@ -261,6 +283,9 @@ export async function runAgentSession<C>(
   } finally {
     errorUnsub()
     input.signal?.removeEventListener("abort", abortPrompt)
+    if (lifecycleDisposable && typeof lifecycleDisposable === "object" && "dispose" in lifecycleDisposable) {
+      try { lifecycleDisposable.dispose() } catch { /* best-effort disposer */ }
+    }
   }
 
   if (input.signal?.aborted) {
@@ -276,7 +301,8 @@ export async function runAgentSession<C>(
     : undefined
   const collector = input.toolKit.getCollector()
 
-  log.info(`${kind} agent finished`, {
+  log.info(`${agentName} agent finished`, {
+    kind,
     sessionID: session.id,
     streamErrors: streamErrors.length,
     hasStructured: structured !== undefined,
@@ -306,12 +332,12 @@ export async function runAgentSession<C>(
 // ---------------------------------------------------------------------------
 
 async function composeSystemPrompt(
-  kind: SessionKind,
+  agentName: string,
   core: string,
   skillsStage: SkillStage | undefined,
 ): Promise<string> {
   const config = await Config.get()
-  const userAppend = (config.agent as Record<string, any> | undefined)?.[kind]?.prompt
+  const userAppend = (config.agent as Record<string, any> | undefined)?.[agentName]?.prompt
   const withAppend =
     typeof userAppend === "string" && userAppend.trim().length > 0
       ? `${core}\n\n${userAppend}`
