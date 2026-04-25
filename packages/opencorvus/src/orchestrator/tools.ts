@@ -993,9 +993,9 @@ export function createOrchestratorTools(input: {
           if (analysis.techStack.length > 0) {
             decisionLog.append({
               phase: "design_analysis",
-              key: "recommended_stack",
+              key: "recommended_frontend_stack",
               value: analysis.techStack.join(", "),
-              reason: "Design-analyst suggested implementation stack cues for downstream execution.",
+              reason: "Design-analyst's FRONTEND-only stack hints (UI framework / CSS / component library / fonts). Backend / runtime / data-layer choices are out-of-lane and remain architect's call.",
             })
           }
 
