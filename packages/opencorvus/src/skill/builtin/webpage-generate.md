@@ -1,6 +1,6 @@
 ---
 name: webpage-generate
-description: Generate a single-file static HTML clone of a reference webpage with visual similarity ≥ 95. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, and assets deterministically; you then HAND-WRITE `index.html` using vanilla CSS (one `<style>` block, design tokens injected as `:root` custom properties, real cascading selectors), iterating against `webpage_render` + `webpage_evaluate` until the score meets target. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts — never invent hex codes, copy, or section structure.
+description: Generate a high-fidelity HTML clone of a reference webpage with visual similarity ≥ 95. The mirror toolchain (`webpage_extract` → `webpage_compile` → `webpage_analyze`) extracts structure, design tokens, copy, and assets deterministically; you then HAND-WRITE the page using vanilla CSS (design tokens injected as `:root` custom properties, real cascading selectors), iterating against `webpage_render` + `webpage_evaluate` + `webpage_vision_judge` until the score meets target. Default to a single-file static `index.html`; if the page genuinely needs a backend (search APIs, hot-search feeds, etc.), build it and pass `url=http://127.0.0.1:<port>/<route>` to `webpage_render` so the screenshot reflects a working page. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (specific URL, screenshot). Always pull palette / text / structure from the mirror artifacts — never invent hex codes, copy, or section structure.
 stage: build
 auto_detect:
   task_signals:
@@ -19,9 +19,11 @@ required_tools:
 
 # Webpage Generate Skill
 
-You produce a **single-file static HTML clone** of a reference webpage. The mirror toolchain extracts structure, tokens, and text deterministically; **you hand-write** `index.html` using vanilla CSS, then iterate against visual + textual diffs until the score meets target.
+You produce a **high-fidelity HTML clone** of a reference webpage. The mirror toolchain extracts structure, tokens, and text deterministically; **you hand-write** the markup using vanilla CSS, then iterate against visual + textual diffs until the score meets target.
 
-## Output contract — read carefully
+## Default shape — single-file static `index.html`
+
+Most reference pages can be cloned as a single self-contained file. Default to that shape unless the page genuinely needs a backend.
 
 The deliverable must satisfy ALL of:
 
@@ -29,9 +31,21 @@ The deliverable must satisfy ALL of:
 - ONE `<style>` block at the top of `<head>`. Use real CSS class selectors and cascading rules — do **NOT** put `style="…"` on every element.
 - Inject every COLORS / FONTS / SPACING / RADII value from `mirror/design-tokens.ts` as a CSS custom property under `:root { --color-primary: …; }` and reference them via `var(--…)`. No hard-coded hex values inside selectors.
 - Standard reset: `*, *::before, *::after { box-sizing: border-box }`, `body { margin: 0 }`, set `font-family` on `body`.
-- **NO Tailwind. NO external CSS framework. NO CDN. NO JS framework. NO build step. NO `<script>` tag.** Only standard HTML5 + CSS3.
+- **NO Tailwind. NO external CSS framework. NO CDN. NO build step.** Only standard HTML5 + CSS3.
 - All visible text from the reference appears as raw HTML — non-executing readers see the content.
 - Images via the local `images/` paths from the mirror toolchain (or original URLs as fallback when the extractor could not download).
+
+## When the page needs a backend
+
+If the reference truly depends on a backend (e.g. search results, hot-search lists, autocomplete) and inlining the canonical sample data into `index.html` is not acceptable, build the backend too:
+
+1. Place the server entry under `src/server/` (Express / Hono / Fastify — your call).
+2. Make it listen on a port supplied via the `PORT` env variable (default 3000) and serve the page route at `/`.
+3. Start it yourself before screenshotting (e.g. `PORT=4123 bun run src/server/index.ts &`) and remember the port.
+4. Call `webpage_render` with `url=http://127.0.0.1:<port>/<route>` instead of relying on the static-file fallback. Puppeteer will hit your live server.
+5. After screenshotting, kill your server.
+
+`webpage_render` will hard-fail in static mode if the rendered page logs 404/fetch/network errors — that's the signal you owe a live server. Don't iterate on a degraded screenshot.
 
 The agent does **not** call any "magic compile" tool that emits the HTML — there is no such tool by design (rule 22 — single source of truth for the generation strategy lives in `src/mirror/url/prompt.ts`). You write it.
 
