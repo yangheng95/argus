@@ -175,31 +175,17 @@ export namespace BuildAgent {
         baseRef = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim() || undefined
       }
 
-      // Stage-skill injection for build: the resolved skill block is
-      // appended to the USER prompt (not the system prompt) — unusual
-      // among agents, but a deliberate legacy of the pre-phase-5
-      // buildGoalPrompt path. Kept as-is; the runner's `skillsStage`
-      // parameter would put it on the system side, which build's
-      // existing tests assume it does not.
+      // Skill auto-load goes through the runner's system-prompt path
+      // (rule 22: single-source skill injection lives on the system side
+      // for every agent — auto-detected, never stuffed into user prompt).
       const taskSignals: import("@/engine/skill-inject").TaskSignals = {
         has_attachment_image: Array.isArray(input.task.attachments)
           && input.task.attachments.some((a: any) => typeof a?.mime === "string" && a.mime.startsWith("image/")),
         request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
         request_text: input.task.request ?? "",
       }
-      const { resolveStageSkills } = await import("@/engine/skill-inject")
-      const skillResolution = await resolveStageSkills([], "build", taskSignals).catch((err) => {
-        log.warn("build agent: stage-skill injection failed — proceeding without skills", {
-          error: err instanceof Error ? err.message : String(err),
-        })
-        return { prompt: "", skills: [], requiredTools: [] }
-      })
-      const skillPrompt = skillResolution.prompt
 
-      const buildPromptText = () =>
-        [buildUserPrompt(input.target, input.context), skillPrompt]
-          .filter((s) => typeof s === "string" && s.trim().length > 0)
-          .join("\n\n")
+      const buildPromptText = () => buildUserPrompt(input.target, input.context)
 
       let out
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
@@ -224,6 +210,8 @@ export namespace BuildAgent {
             getCollector: () => undefined as unknown,
           },
           buildUserPrompt: buildPromptText,
+          skillsStage: "build",
+          skillTaskSignals: taskSignals,
           format: {
             schema: z.toJSONSchema(BuildResultSchema) as Record<string, unknown>,
             retryCount: 2,
