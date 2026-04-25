@@ -76,6 +76,14 @@ export namespace SessionRetry {
       }
     })
     if (!json || typeof json !== "object") return undefined
+    // Arrays are technically objects but never carry the provider-error
+    // shape we whitelist below. ZodError.message is a JSON-serialised array
+    // of issues — parsing succeeds, the rest of this function then sees no
+    // recognised pattern and used to fall through to "retry by default",
+    // turning every non-APIError schema mismatch into an infinite loop
+    // (run 9 doom loop). Default-deny: only the explicit rate-limit /
+    // overload signatures below are retryable.
+    if (Array.isArray(json)) return undefined
     const code = typeof json.code === "string" ? json.code : ""
 
     if (json.type === "error" && json.error?.type === "too_many_requests") {
@@ -87,8 +95,11 @@ export namespace SessionRetry {
     if (json.type === "error" && typeof json.error?.code === "string" && json.error.code.includes("rate_limit")) {
       return "Rate Limited"
     }
-    // Typed error envelopes (type=error) without a recognized retry signal are not retryable.
-    if (json.type === "error") return undefined
-    return JSON.stringify(json)
+    // Default-deny (rule 1, no fallback): unrecognised JSON envelopes are
+    // NOT retryable. Anything not matched above is a deterministic error
+    // (schema mismatch, application bug, malformed payload) — retrying
+    // hits the same failure with the same data and turns into a doom
+    // loop. Only the explicit retryable patterns above return non-undefined.
+    return undefined
   }
 }
