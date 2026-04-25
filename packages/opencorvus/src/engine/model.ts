@@ -1091,4 +1091,23 @@ export const Event = {
       attempts: z.number(),
     }),
   ),
+  /** Build agent lifecycle terminal event. Emitted by the orchestrator's
+   *  `build` tool wrapper once `BuildAgent.run` resolves (success or error).
+   *  Carries the build session id so the overlay tree-writer can mark the
+   *  spinning build card as completed/failed — without this event the UI
+   *  card has no terminal signal and spins indefinitely after the agent
+   *  has actually finished. Goal-id is set for pipeline builds, absent
+   *  for direct-workflow builds. */
+  BuildCompleted: BusEvent.define(
+    "build.completed",
+    z.object({
+      taskID: Identifier.schema("task"),
+      sessionID: z.string(),
+      goalID: z.string().optional(),
+      status: z.enum(["passed", "failed", "error"]),
+      error: z.string().optional(),
+      commitRef: z.string().optional(),
+      summary: z.string(),
+    }),
+  ),
 }
