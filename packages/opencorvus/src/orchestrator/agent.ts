@@ -72,6 +72,7 @@ import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import { describeTask, renderTaskDescription } from "@/engine/describe"
 import type { TaskRow, WorkflowState, MiniWorkflow } from "@/engine"
+import { AgentTrace } from "@/trace"
 
 const log = Log.create({ service: "orchestrator" })
 // MAX_STEPS lives on agent.orchestrator.steps in src/agent/agent.ts. SessionLoop
@@ -340,6 +341,23 @@ export namespace Orchestrator {
         finishReason: assistantInfo?.finish,
         streamErrors: streamErrors.length,
       })
+
+      if (AgentTrace.isEnabled()) {
+        const finalText = finalMessage?.parts
+          ?.filter((p) => p.type === "text")
+          .map((p) => (p as { text: string }).text)
+          .join("\n\n")
+        AgentTrace.recordAgentReport({
+          sessionID: agentSession.id,
+          parentSessionID: task.session_id ?? undefined,
+          taskID,
+          agentName: "orchestrator",
+          kind: "orchestrator_wake",
+          finishReason: assistantInfo?.finish,
+          finalText,
+          streamErrors: streamErrors.map((e) => ({ reason: e.reason, name: e.errorName })),
+        })
+      }
 
       // Stream failures (mid-stream protocol violations, provider onError,
       // session-llm idle abort) are recorded as an append-only artifact.
