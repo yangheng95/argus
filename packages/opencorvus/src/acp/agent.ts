@@ -1496,7 +1496,8 @@ export namespace ACP {
       case "write":
         return "edit"
 
-      case "grep":
+      case "search_code":
+      case "external_code_search":
       case "glob":
       case "context7_resolve_library_id":
       case "context7_get_library_docs":
@@ -1519,7 +1520,7 @@ export namespace ACP {
       case "write":
         return input["filePath"] ? [{ path: input["filePath"] }] : []
       case "glob":
-      case "grep":
+      case "search_code":
         return input["path"] ? [{ path: input["path"] }] : []
       case "bash":
         return []

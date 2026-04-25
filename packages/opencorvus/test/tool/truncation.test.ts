@@ -8,7 +8,7 @@ import path from "path"
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
 
 // Truncate.output now refuses to silently lose data: an agent without the
-// `task` tool or both `read`+`grep` has no way to re-fetch the saved file,
+// `task` tool or both `read`+`search_code` has no way to re-fetch the saved file,
 // so calling Truncate from such an agent is a CLAUDE.md rule #1 violation
 // and throws. Tests that exercise the truncation logic itself supply an
 // agent that owns task permission to satisfy the recovery-path contract.
@@ -17,11 +17,11 @@ const AGENT_WITH_TASK = {
   permission: [{ permission: "task", pattern: "*", action: "allow" as const }],
 } as any
 
-const AGENT_WITH_READ_GREP = {
-  name: "test-agent-rg",
+const AGENT_WITH_READ_SEARCH_CODE = {
+  name: "test-agent-search",
   permission: [
     { permission: "read", pattern: "*", action: "allow" as const },
-    { permission: "grep", pattern: "*", action: "allow" as const },
+    { permission: "search_code", pattern: "*", action: "allow" as const },
   ],
 } as any
 
@@ -102,7 +102,7 @@ describe("Truncate", () => {
 
       expect(result.truncated).toBe(true)
       expect(result.content).toContain("The tool call succeeded but the output was truncated")
-      expect(result.content).toContain("Grep")
+      expect(result.content).toContain("search_code")
       if (!result.truncated) throw new Error("expected truncated")
       expect(result.outputPath).toBeDefined()
       expect(result.outputPath).toContain("tool_")
@@ -111,7 +111,7 @@ describe("Truncate", () => {
       expect(written).toBe(lines)
     })
 
-    test("throws when truncation needed but agent has no recovery path (no task / no read+grep)", async () => {
+    test("throws when truncation needed but agent has no recovery path (no task / no read+search_code)", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
       // No agent passed → cannot recover the saved copy. Silent truncation
       // here would be a CLAUDE.md rule #1 fallback. Surface the failure.
@@ -128,7 +128,7 @@ describe("Truncate", () => {
         permission: [
           { permission: "task", pattern: "*", action: "deny" as const },
           { permission: "read", pattern: "*", action: "deny" as const },
-          { permission: "grep", pattern: "*", action: "deny" as const },
+          { permission: "search_code", pattern: "*", action: "deny" as const },
         ],
       } as any
       await expect(Truncate.output(lines, { maxLines: 10 }, denyAll)).rejects.toThrow(
@@ -146,19 +146,19 @@ describe("Truncate", () => {
       )
     })
 
-    test("permits truncation when agent has read AND grep but task is denied", async () => {
+    test("permits truncation when agent has read AND search_code but task is denied", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
       const rgOnly = {
         name: "rg",
         permission: [
           { permission: "task", pattern: "*", action: "deny" as const },
           { permission: "read", pattern: "*", action: "allow" as const },
-          { permission: "grep", pattern: "*", action: "allow" as const },
+          { permission: "search_code", pattern: "*", action: "allow" as const },
         ],
       } as any
       const result = await Truncate.output(lines, { maxLines: 10 }, rgOnly)
       expect(result.truncated).toBe(true)
-      expect(result.content).toContain("Grep")
+      expect(result.content).toContain("search_code")
       // No "Task tool" hint when task is denied
       expect(result.content).not.toContain("Task tool")
     })
@@ -169,24 +169,24 @@ describe("Truncate", () => {
       const result = await Truncate.output(lines, { maxLines: 10 }, agent as any)
 
       expect(result.truncated).toBe(true)
-      expect(result.content).toContain("Grep")
+      expect(result.content).toContain("search_code")
       expect(result.content).toContain("Task tool")
     })
 
-    test("omits Task tool hint when agent has read+grep but task is denied", async () => {
+    test("omits Task tool hint when agent has read+search_code but task is denied", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
       const agent = {
         name: "rg-only",
         permission: [
           { permission: "task", pattern: "*", action: "deny" as const },
           { permission: "read", pattern: "*", action: "allow" as const },
-          { permission: "grep", pattern: "*", action: "allow" as const },
+          { permission: "search_code", pattern: "*", action: "allow" as const },
         ],
       }
       const result = await Truncate.output(lines, { maxLines: 10 }, agent as any)
 
       expect(result.truncated).toBe(true)
-      expect(result.content).toContain("Grep")
+      expect(result.content).toContain("search_code")
       expect(result.content).not.toContain("Task tool")
     })
 

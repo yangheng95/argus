@@ -13,13 +13,13 @@ import { Agent } from "../../agent/agent"
 import { PermissionNext } from "../../permission/next"
 import { Tool } from "../../tool/tool"
 import { GlobTool } from "../../tool/glob"
-import { GrepTool } from "../../tool/grep"
+import { SearchCodeTool } from "../../tool/grep"
 import { ListTool } from "../../tool/ls"
 import { ReadTool } from "../../tool/read"
 import { WebFetchTool } from "../../tool/webfetch"
 import { EditTool } from "../../tool/edit"
 import { WriteTool } from "../../tool/write"
-import { CodeSearchTool } from "../../tool/codesearch"
+import { ExternalCodeSearchTool } from "../../tool/codesearch"
 import { WebSearchTool } from "../../tool/websearch"
 import { TaskTool } from "../../tool/task"
 import { SkillTool } from "../../tool/skill"
@@ -88,9 +88,9 @@ function glob(info: ToolProps<typeof GlobTool>) {
   })
 }
 
-function grep(info: ToolProps<typeof GrepTool>) {
+function searchCode(info: ToolProps<typeof SearchCodeTool>) {
   const root = info.input.path ?? ""
-  const title = `Grep "${info.input.pattern}"`
+  const title = `Search Code "${info.input.pattern}"`
   const suffix = root ? `in ${normalizePath(root)}` : ""
   const num = info.metadata.matches
   const description =
@@ -153,10 +153,10 @@ function edit(info: ToolProps<typeof EditTool>) {
   )
 }
 
-function codesearch(info: ToolProps<typeof CodeSearchTool>) {
+function externalCodeSearch(info: ToolProps<typeof ExternalCodeSearchTool>) {
   inline({
     icon: "◇",
-    title: `Exa Code Search "${info.input.query}"`,
+    title: `External Code Search "${info.input.query}"`,
   })
 }
 
@@ -398,13 +398,15 @@ export const RunCommand = cmd({
         try {
           if (part.tool === "bash") return bash(props<typeof BashTool>(part))
           if (part.tool === "glob") return glob(props<typeof GlobTool>(part))
-          if (part.tool === "grep") return grep(props<typeof GrepTool>(part))
+          if (part.tool === "search_code") return searchCode(props<typeof SearchCodeTool>(part))
           if (part.tool === "list") return list(props<typeof ListTool>(part))
           if (part.tool === "read") return read(props<typeof ReadTool>(part))
           if (part.tool === "write") return write(props<typeof WriteTool>(part))
           if (part.tool === "webfetch") return webfetch(props<typeof WebFetchTool>(part))
           if (part.tool === "edit") return edit(props<typeof EditTool>(part))
-          if (part.tool === "codesearch") return codesearch(props<typeof CodeSearchTool>(part))
+          if (part.tool === "external_code_search") {
+            return externalCodeSearch(props<typeof ExternalCodeSearchTool>(part))
+          }
           if (part.tool === "websearch") return websearch(props<typeof WebSearchTool>(part))
           if (part.tool === "task") return task(props<typeof TaskTool>(part))
           if (part.tool === "todowrite") return todo(props<typeof TodoWriteTool>(part))

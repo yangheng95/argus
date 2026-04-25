@@ -48,10 +48,10 @@ export namespace Truncate {
     return rule.action !== "deny"
   }
 
-  function hasRecoveryPath(agent?: Agent.Info): { ok: true; via: "task" | "read+grep" } | { ok: false } {
+  function hasRecoveryPath(agent?: Agent.Info): { ok: true; via: "task" | "read+search_code" } | { ok: false } {
     if (!agent) return { ok: false }
     if (hasTool(agent, "task")) return { ok: true, via: "task" }
-    if (hasTool(agent, "read") && hasTool(agent, "grep")) return { ok: true, via: "read+grep" }
+    if (hasTool(agent, "read") && hasTool(agent, "search_code")) return { ok: true, via: "read+search_code" }
     return { ok: false }
   }
 
@@ -59,7 +59,7 @@ export namespace Truncate {
    * Tool output too large for the prompt is shipped to disk and replaced with
    * a preview + recovery hint. The recovery hint is an active contract: the
    * receiving agent MUST be able to read the saved file (via task delegation
-   * or read+grep). When the agent has neither path we throw rather than
+  * or read+search_code). When the agent has neither path we throw rather than
    * silently truncate — silent truncation here is a CLAUDE.md rule #1
    * violation (information loss with no recovery).
    *
@@ -82,11 +82,11 @@ export namespace Truncate {
     if (!recovery.ok) {
       // No recovery path → truncating would lose information silently.
       // Surface the failure so the caller can react (split the request,
-      // route through an agent that owns read/grep, or fail the task).
+      // route through an agent that owns read/search_code, or fail the task).
       throw new Error(
         `Truncate.output: tool result is ${totalBytes} bytes / ${lines.length} lines ` +
         `(limit ${maxBytes}/${maxLines}) and the calling agent ` +
-        `${agent?.name ?? "(unknown)"} has neither the 'task' nor 'read'+'grep' tools to ` +
+        `${agent?.name ?? "(unknown)"} has neither the 'task' nor 'read'+'search_code' tools to ` +
         `re-read a saved copy. Truncating here would silently lose data — denying the call instead.`,
       )
     }
@@ -127,8 +127,8 @@ export namespace Truncate {
     await Filesystem.write(filepath, text)
 
     const hint = recovery.via === "task"
-      ? `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse the Task tool to have explore agent process this file with Grep and Read (with offset/limit). Do NOT read the full file yourself - delegate to save context.`
-      : `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse Grep to search the full content or Read with offset/limit to view specific sections.`
+      ? `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse the Task tool to have explore agent process this file with search_code and Read (with offset/limit). Do NOT read the full file yourself - delegate to save context.`
+      : `The tool call succeeded but the output was truncated. Full output saved to: ${filepath}\nUse search_code to search the full content or Read with offset/limit to view specific sections.`
     const message =
       direction === "head"
         ? `${preview}\n\n...${removed} ${unit} truncated...\n\n${hint}`

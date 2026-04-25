@@ -249,11 +249,11 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               }
             }
 
-            if (permission === "grep") {
+            if (permission === "search_code") {
               const pattern = typeof data.pattern === "string" ? data.pattern : ""
               return {
                 icon: "✱",
-                title: `Grep "${pattern}"`,
+                title: `Search Code "${pattern}"`,
                 body: (
                   <Show when={pattern}>
                     <box paddingLeft={1}>
@@ -343,11 +343,11 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               }
             }
 
-            if (permission === "codesearch") {
+            if (permission === "external_code_search") {
               const query = typeof data.query === "string" ? data.query : ""
               return {
                 icon: "◇",
-                title: `Exa Code Search "${query}"`,
+                title: `External Code Search "${query}"`,
                 body: (
                   <Show when={query}>
                     <box paddingLeft={1}>
