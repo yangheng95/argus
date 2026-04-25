@@ -7,14 +7,27 @@ import { WebpageAnalyzeTool } from "../../src/mirror/tools/webpage-analyze"
 import webpageGenerateMd from "../../src/skill/builtin/webpage-generate.md" with { type: "text" }
 
 describe("webpage-generate dependency guards", () => {
-  test("skill declares deterministic pipeline and build-required tools", () => {
+  test("skill declares vanilla-CSS handwrite pipeline and build-required tools", () => {
     const parsed = matter(webpageGenerateMd)
-    expect(parsed.data.required_tools).toContain("webpage_compile_html")
+    // Required tools cover extract → compile → analyze (serial), then the
+    // render/evaluate/text-diff loop. The deterministic compile-html tool is
+    // gone (rule 22 — single-source generation strategy lives in
+    // src/mirror/url/prompt.ts) so the skill must NOT name it.
+    expect(parsed.data.required_tools).toContain("webpage_extract")
+    expect(parsed.data.required_tools).toContain("webpage_compile")
+    expect(parsed.data.required_tools).toContain("webpage_analyze")
     expect(parsed.data.required_tools).toContain("webpage_render")
     expect(parsed.data.required_tools).toContain("webpage_evaluate")
-    expect(parsed.content).toContain("Steps 1–2 are **strictly serial**")
-    expect(parsed.content).toContain("Do NOT hand-write `index.html` from a screenshot")
-    expect(parsed.content).toContain("`webpage_compile_html`")
+    expect(parsed.data.required_tools).toContain("webpage_text_diff")
+    expect(parsed.data.required_tools).not.toContain("webpage_compile_html")
+    // Content invariants: vanilla CSS contract, hand-write requirement,
+    // strictly-serial extract/compile/analyze, no Tailwind / CDN / JS runtime.
+    expect(parsed.content).toContain("vanilla CSS")
+    expect(parsed.content).toContain(":root")
+    expect(parsed.content).toContain("Steps 1–3 are **strictly serial**")
+    expect(parsed.content).toMatch(/hand-write|Hand-write|HAND-WRITE/)
+    expect(parsed.content).not.toMatch(/Tailwind CDN|cdn\.tailwindcss\.com/)
+    expect(parsed.content).not.toContain("`webpage_compile_html`")
   })
 
   test("compile and analyze surface an actionable missing-artifact error", async () => {

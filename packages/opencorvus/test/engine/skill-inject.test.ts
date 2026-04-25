@@ -73,9 +73,13 @@ describe("resolveStageSkills", () => {
           request_contains_url: true,
           request_text: "复刻 https://www.baidu.com/",
         })
-        expect(result.requiredTools).toContain("webpage_compile_html")
+        expect(result.requiredTools).toContain("webpage_extract")
+        expect(result.requiredTools).toContain("webpage_compile")
+        expect(result.requiredTools).toContain("webpage_analyze")
         expect(result.requiredTools).toContain("webpage_render")
         expect(result.requiredTools).toContain("webpage_evaluate")
+        expect(result.requiredTools).toContain("webpage_text_diff")
+        expect(result.requiredTools).not.toContain("webpage_compile_html")
         expect(result.prompt).toContain("Skill-system invariants")
         expect(result.prompt).toContain("Skill: webpage-generate")
       },
