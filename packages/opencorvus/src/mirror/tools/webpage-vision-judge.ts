@@ -162,25 +162,63 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       renderedBytes: renderedBytes.length,
     })
 
-    const result = await generateObject({
-      model: language,
-      schema: VerdictSchema,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userPrompt },
-            { type: "text", text: "\n--- REFERENCE (target) ---\n" },
-            { type: "file", mediaType: "image/png", data: referenceBytes },
-            { type: "text", text: "\n--- RENDERED (current attempt) ---\n" },
-            { type: "file", mediaType: "image/png", data: renderedBytes },
-          ],
-        },
-      ],
-    })
-
-    const verdict = result.object
     const judgePath = path.join(outputDir, "vision-judge.json")
+
+    let verdict: z.infer<typeof VerdictSchema>
+    try {
+      const result = await generateObject({
+        model: language,
+        schema: VerdictSchema,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: userPrompt },
+              { type: "text", text: "\n--- REFERENCE (target) ---\n" },
+              { type: "file", mediaType: "image/png", data: referenceBytes },
+              { type: "text", text: "\n--- RENDERED (current attempt) ---\n" },
+              { type: "file", mediaType: "image/png", data: renderedBytes },
+            ],
+          },
+        ],
+      })
+      verdict = result.object
+    } catch (err) {
+      const errMessage = err instanceof Error ? err.message : String(err)
+      const errName = err instanceof Error ? err.name : "UnknownError"
+      const errStack = err instanceof Error ? err.stack : undefined
+      const cause = err instanceof Error && "cause" in err ? (err as { cause?: unknown }).cause : undefined
+      const causeMessage =
+        cause instanceof Error ? cause.message : cause !== undefined ? String(cause) : undefined
+      log.error("vision judge generateObject failed", {
+        providerID: parsed.providerID,
+        modelID: parsed.modelID,
+        errName,
+        errMessage,
+        causeMessage,
+        errStack,
+      })
+      const failurePayload = {
+        generatedAt: new Date().toISOString(),
+        model: `${parsed.providerID}/${parsed.modelID}`,
+        referencePath,
+        renderedPath,
+        accepted: false,
+        overall_impression: `Vision judge failed: ${errName} — ${errMessage}`,
+        differences: [],
+        error: { name: errName, message: errMessage, cause: causeMessage },
+      }
+      await fs.writeFile(judgePath, JSON.stringify(failurePayload, null, 2), "utf8")
+      throw new Error(
+        `webpage_vision_judge: ${errName} — ${errMessage}` +
+          (causeMessage ? ` (cause: ${causeMessage})` : "") +
+          `. Common causes: (1) the model returned narrative text instead of JSON matching the schema; ` +
+          `(2) the model timed out streaming; (3) the model rejected the image payload. ` +
+          `A failure verdict was written to ${judgePath} so downstream gates can proceed.`,
+        { cause: err instanceof Error ? err : undefined },
+      )
+    }
+
     const payload = {
       generatedAt: new Date().toISOString(),
       model: `${parsed.providerID}/${parsed.modelID}`,
