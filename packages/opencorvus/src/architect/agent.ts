@@ -39,7 +39,6 @@ import { Identifier } from "@/id/id"
 import type { GoalContractFields } from "@/pipeline/types"
 import type { DecisionLog } from "@/decision-log"
 import { renderSpecsAsText } from "@/acceptance/types"
-import { reviewFidelity, applyFidelityCorrections } from "./fidelity"
 import type {
   ArchitectContract,
   ArchitectDecisionKey,
@@ -93,16 +92,6 @@ export namespace ArchitectAgent {
     /** Legacy passthrough; not wired after the SessionPrompt migration. */
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
-    /**
-     * Fired AFTER the architect agent emits its decomposition (goals, metrics,
-     * contracts) and BEFORE `reviewFidelity` is awaited. Lets the caller
-     * persist raw goals immediately so they are visible in the read model
-     * even when the fidelity LLM hangs (alibaba-coding-plan-cn 5+ min idle
-     * is the observed worst case). If the callback throws, coordinate logs
-     * and continues — fidelity must not be blocked by a persist failure.
-     * Per rule 23 goals are facts; fidelity is a separate quality artifact.
-     */
-    onDecomposed?: (decomposition: import("./types").ArchitectDecomposition) => void | Promise<void>
   }): Promise<ArchitectResult> {
     return run(input)
   }
@@ -128,7 +117,6 @@ async function run(input: {
   signal?: AbortSignal
   stream?: TextHooks
   onStatus?: (summary: string) => void | Promise<void>
-  onDecomposed?: (decomposition: import("./types").ArchitectDecomposition) => void | Promise<void>
 }): Promise<ArchitectResult> {
   if (input.signal?.aborted) throw new Error("architect agent aborted")
 
@@ -241,11 +229,13 @@ async function run(input: {
     )
   }
 
-  // Fidelity gate — verify the final goal set covers the ORIGINAL user
-  // request. Applies corrections in-place so the returned goals are the
-  // accepted set. sessionID forwards into FidelityReviewCompleted so the
-  // overlay nests the verdict card correctly.
-  const goalsForFidelity: GoalContractFields[] = collector.goals.map((g) => ({
+  // Architect produces the goal set as facts. Fidelity is a SEPARATE agent
+  // driven by the orchestrator (orchestrator/tools.ts:fidelity) — architect
+  // does not call it. This keeps each agent boundary clean: orchestrator
+  // collects architect's yield, then drives fidelity, then re-upserts the
+  // corrected goal set. See architect comment line 20 (cannot call other
+  // agents) and CLAUDE.md rule 22 (no double-source).
+  const goals: GoalContractFields[] = collector.goals.map((g) => ({
     id: g.id,
     title: g.title,
     objective: g.objective,
@@ -258,55 +248,6 @@ async function run(input: {
     kind: g.kind,
     requirement_ids: g.requirement_ids,
   }))
-
-  // Pre-fidelity persist hook (rule 23): emit the raw decomposition so the
-  // caller can write goals to the read model BEFORE the fidelity LLM
-  // potentially hangs. If fidelity returns corrections later, the caller
-  // re-upserts; otherwise the persisted set already matches the final set.
-  if (input.onDecomposed) {
-    try {
-      await input.onDecomposed({
-        goals: goalsForFidelity,
-        removedGoalIDs: collector.removed_goal_ids,
-        goalMetricSpecs: collector.goal_metric_specs,
-        globalMetricSpecs: collector.global_metric_specs,
-        challengeSeeds: collector.challenge_seeds,
-        traceability: collector.traceability,
-        contracts: collector.contracts.map((c) => ({
-          category: c.category,
-          title: c.title,
-          spec: c.spec,
-          goalIDs: c.goalIDs,
-        })),
-        summary: collector.summary || "Architect decomposition",
-      })
-    } catch (err) {
-      // Per the contract, persist failure must not wedge fidelity. Log and
-      // proceed; fidelity will still run and the final result will reflect
-      // any corrections.
-      log.error("architect onDecomposed callback threw — proceeding with fidelity", {
-        taskID: input.taskID,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-
-  const fidelity = await reviewFidelity({
-    userRequest: input.taskRequest,
-    taskTitle: input.taskTitle,
-    goals: goalsForFidelity,
-    requirements: input.requirements,
-    requirementDecisions: input.requirementDecisions,
-    designSpecs: input.designSpecs,
-    decisionLog: input.decisionLog,
-    signal: input.signal,
-    taskID: input.taskID,
-    parentSessionID: input.sessionID,
-  })
-
-  const finalGoals = fidelity.verdict === "needs_correction"
-    ? applyFidelityCorrections(goalsForFidelity, fidelity)
-    : goalsForFidelity
 
   // Decision Log seed — one entry per contract, tagged with goal scope.
   const contracts: ArchitectContract[] = collector.contracts.map((c) => ({
@@ -333,25 +274,23 @@ async function run(input: {
   }
 
   log.info("architect agent output", {
-    goals: finalGoals.length,
+    goals: goals.length,
     removed: collector.removed_goal_ids.length,
     goalMetrics: collector.goal_metric_specs.length,
     globalMetrics: collector.global_metric_specs.length,
     challengeSeeds: collector.challenge_seeds.length,
     traceability: collector.traceability.length,
     contracts: contracts.length,
-    fidelityVerdict: fidelity.verdict,
   })
 
   return {
-    goals: finalGoals,
+    goals,
     removedGoalIDs: collector.removed_goal_ids,
     goalMetricSpecs: collector.goal_metric_specs,
     globalMetricSpecs: collector.global_metric_specs,
     challengeSeeds: collector.challenge_seeds,
     traceability: collector.traceability,
     contracts,
-    fidelity,
     summary: collector.summary || "Architect decomposition",
   }
 }

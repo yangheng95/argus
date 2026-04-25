@@ -1118,145 +1118,9 @@ export function createOrchestratorTools(input: {
           }))
 
           const { ArchitectAgent } = await import("@/architect/agent")
-
-          // Persist state shared between the pre-fidelity and post-fidelity
-          // writes. The pre-fidelity write (rule 23: goals are facts, not
-          // gated by fidelity) lands the raw decomposition so the read model
-          // sees goals immediately even if fidelity hangs on alibaba. If
-          // fidelity returns with `needs_correction`, a second upsert with
-          // the same `newSpecSnapshotID` overwrites the goal payload in
-          // place; otherwise the early write is already the final state.
           const { upsertGoalsFromArchitect } = await import("@/engine/persist")
           const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
           const { persistArchitectMetrics } = await import("@/metrics/store")
-          const newSpecSnapshotID = Identifier.ascending("spec")
-          const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
-
-          const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
-          const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
-
-          let persisted: Array<{ id: string; title: string; llmID: string }> = []
-          let llmToDBID = new Map<string, string>()
-          let deletedIDs: string[] = []
-          let earlyWriteCommitted = false
-
-          /**
-           * Persist a decomposition snapshot. Idempotent on `newSpecSnapshotID`
-           * — first call inserts the spec snapshot row; subsequent calls
-           * update the same row's content + re-upsert goals against it.
-           */
-          const persistDecomposition = (
-            decomp: import("@/architect/types").ArchitectDecomposition,
-            opts: { phase: "pre-fidelity" | "post-fidelity"; fidelity?: import("@/architect/fidelity").FidelityResult | null },
-          ) => {
-            const now = Date.now()
-            const goalLines = decomp.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
-            const traceLines = decomp.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
-            const contractLines = decomp.contracts.map((c) => `- **${c.category}** — ${c.title} (goals: ${c.goalIDs.join(", ") || "task-wide"})`)
-            const specContent = [
-              `# ${task.title}`,
-              "",
-              decomp.summary,
-              "",
-              "## Requirements",
-              ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
-              "",
-              "## Decisions",
-              ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
-              "",
-              "## Goals",
-              ...(goalLines.length > 0 ? goalLines : ["_(none)_"]),
-              "",
-              "## Traceability",
-              ...(traceLines.length > 0 ? traceLines : ["_(none)_"]),
-              "",
-              "## Architect Contracts",
-              ...(contractLines.length > 0 ? contractLines : ["_(none)_"]),
-            ].join("\n")
-
-            Database.transaction((db) => {
-              if (!earlyWriteCommitted) {
-                db.insert(EngineSpecSnapshotTable).values({
-                  id: newSpecSnapshotID,
-                  task_id: taskID,
-                  version: 2,
-                  status: "ready",
-                  summary: decomp.summary,
-                  content: specContent,
-                  scope: requirements.map((r) => r.description).join("; "),
-                  time_created: now,
-                  time_updated: now,
-                }).run()
-
-                if (priorSpecSnapshotID) {
-                  db.update(EngineSpecSnapshotTable)
-                    .set({ status: "superseded", time_updated: now })
-                    .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
-                    .run()
-                }
-              } else {
-                db.update(EngineSpecSnapshotTable)
-                  .set({ summary: decomp.summary, content: specContent, time_updated: now })
-                  .where(eq(EngineSpecSnapshotTable.id, newSpecSnapshotID))
-                  .run()
-              }
-
-              const out = upsertGoalsFromArchitect(db, {
-                taskID,
-                specSnapshotID: newSpecSnapshotID,
-                architectGoals: decomp.goals.map((g) => ({
-                  llmID: g.id,
-                  title: g.title,
-                  objective: g.objective,
-                  acceptance_specs: g.acceptance_specs,
-                  owned_paths: g.owned_paths,
-                  depends_on: g.depends_on,
-                  exports: g.exports,
-                  imports: g.imports,
-                  kind: g.kind,
-                  requirement_ids: g.requirement_ids,
-                  priority: g.priority,
-                  source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
-                })),
-                removedLLMIDs: decomp.removedGoalIDs,
-                now,
-              })
-              persisted = out.persisted
-              llmToDBID = out.llmToDBID
-              deletedIDs = out.deletedIDs
-
-              persistArchitectMetrics({
-                task_id: taskID,
-                goal_id_map: llmToDBID,
-                goal_metric_specs: decomp.goalMetricSpecs,
-                global_metric_specs: decomp.globalMetricSpecs,
-              })
-
-              db.update(EngineTaskTable)
-                .set({
-                  architect_challenge_seeds: decomp.challengeSeeds as unknown as Record<string, unknown>[],
-                  time_updated: now,
-                })
-                .where(eq(EngineTaskTable.id, taskID))
-                .run()
-
-              const summarySuffix = opts.fidelity ? ` (fidelity=${opts.fidelity.verdict})` : " (pre-fidelity)"
-              Database.effect(() =>
-                EngineProtocol.emit(
-                  EngineEvent.TaskUpdated,
-                  { taskID, status: deriveTaskStatus(task), summary: `Goals decomposed by Architect${summarySuffix}` },
-                  { source: "orchestrator.architect" },
-                ),
-              )
-            })
-            earlyWriteCommitted = true
-            log.info("architect: decomposition persisted", {
-              taskID,
-              phase: opts.phase,
-              goalCount: persisted.length,
-              fidelityVerdict: opts.fidelity?.verdict,
-            })
-          }
 
           const result = await ArchitectAgent.coordinate({
             goals: existingGoals.map((g) => ({
@@ -1285,53 +1149,118 @@ export function createOrchestratorTools(input: {
             signal: input.signal,
             parentSessionID: architectSession.id,
             onStatus: () => {},
-            // Pre-fidelity persist (rule 23): write goals immediately so the
-            // read model + future orchestrator wakes can see them even if
-            // the fidelity LLM hangs (alibaba 5+ min stream-idle observed).
-            // Errors here must not wedge coordinate(); coordinate logs and
-            // continues with fidelity, and the post-fidelity persist below
-            // is the second chance.
-            onDecomposed: async (decomp) => {
-              try {
-                persistDecomposition(decomp, { phase: "pre-fidelity", fidelity: null })
-              } catch (dbErr) {
-                log.error("architect: pre-fidelity persist failed (will retry post-fidelity)", {
-                  taskID,
-                  error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-                })
-              }
-            },
           })
 
-          // Post-fidelity persist (idempotent re-upsert): if fidelity returned
-          // corrections that changed the goal set, we overwrite the goal
-          // payload in place against the same spec snapshot. If fidelity was
-          // a no-op (verdict ∈ {accept, skipped} and goals unchanged), the
-          // re-upsert is harmless.
-          try {
-            persistDecomposition(
-              {
-                goals: result.goals,
-                removedGoalIDs: result.removedGoalIDs,
-                goalMetricSpecs: result.goalMetricSpecs,
-                globalMetricSpecs: result.globalMetricSpecs,
-                challengeSeeds: result.challengeSeeds,
-                traceability: result.traceability,
-                contracts: result.contracts,
-                summary: result.summary,
-              },
-              { phase: "post-fidelity", fidelity: result.fidelity },
+          // Single-pass persist. Architect's goal set is the authoritative
+          // result of this tool call. Fidelity is a SEPARATE orchestrator
+          // tool (`fidelity`) that re-upserts the corrected set against the
+          // same spec snapshot. No dual-write, no readiness gate keyed on a
+          // second LLM call (rule 22 / 23).
+          const newSpecSnapshotID = Identifier.ascending("spec")
+          const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
+          const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
+          const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
+          const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
+          const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
+          const contractLines = result.contracts.map((c) => `- **${c.category}** — ${c.title} (goals: ${c.goalIDs.join(", ") || "task-wide"})`)
+          const specContent = [
+            `# ${task.title}`,
+            "",
+            result.summary,
+            "",
+            "## Requirements",
+            ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
+            "",
+            "## Decisions",
+            ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
+            "",
+            "## Goals",
+            ...(goalLines.length > 0 ? goalLines : ["_(none)_"]),
+            "",
+            "## Traceability",
+            ...(traceLines.length > 0 ? traceLines : ["_(none)_"]),
+            "",
+            "## Architect Contracts",
+            ...(contractLines.length > 0 ? contractLines : ["_(none)_"]),
+          ].join("\n")
+
+          let persisted: Array<{ id: string; title: string; llmID: string }> = []
+          let llmToDBID = new Map<string, string>()
+          let deletedIDs: string[] = []
+          try { Database.transaction((db) => {
+            const now = Date.now()
+            db.insert(EngineSpecSnapshotTable).values({
+              id: newSpecSnapshotID,
+              task_id: taskID,
+              version: 2,
+              status: "ready",
+              summary: result.summary,
+              content: specContent,
+              scope: requirements.map((r) => r.description).join("; "),
+              time_created: now,
+              time_updated: now,
+            }).run()
+
+            if (priorSpecSnapshotID) {
+              db.update(EngineSpecSnapshotTable)
+                .set({ status: "superseded", time_updated: now })
+                .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
+                .run()
+            }
+
+            const out = upsertGoalsFromArchitect(db, {
+              taskID,
+              specSnapshotID: newSpecSnapshotID,
+              architectGoals: result.goals.map((g) => ({
+                llmID: g.id,
+                title: g.title,
+                objective: g.objective,
+                acceptance_specs: g.acceptance_specs,
+                owned_paths: g.owned_paths,
+                depends_on: g.depends_on,
+                exports: g.exports,
+                imports: g.imports,
+                kind: g.kind,
+                requirement_ids: g.requirement_ids,
+                priority: g.priority,
+                source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
+              })),
+              removedLLMIDs: result.removedGoalIDs,
+              now,
+            })
+            persisted = out.persisted
+            llmToDBID = out.llmToDBID
+            deletedIDs = out.deletedIDs
+
+            persistArchitectMetrics({
+              task_id: taskID,
+              goal_id_map: llmToDBID,
+              goal_metric_specs: result.goalMetricSpecs,
+              global_metric_specs: result.globalMetricSpecs,
+            })
+
+            db.update(EngineTaskTable)
+              .set({
+                architect_challenge_seeds: result.challengeSeeds as unknown as Record<string, unknown>[],
+                time_updated: now,
+              })
+              .where(eq(EngineTaskTable.id, taskID))
+              .run()
+
+            Database.effect(() =>
+              EngineProtocol.emit(
+                EngineEvent.TaskUpdated,
+                { taskID, status: deriveTaskStatus(task), summary: "Goals decomposed by Architect" },
+                { source: "orchestrator.architect" },
+              ),
             )
-          } catch (dbErr) {
-            log.error("architect: post-fidelity persist failed", {
+          }) } catch (dbErr) {
+            log.error("architect: failed to persist goals to DB", {
               taskID,
               error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-              earlyWriteCommitted,
+              stack: dbErr instanceof Error ? dbErr.stack : undefined,
             })
-            // If the early write succeeded, the goals are still in DB; the
-            // orchestrator can dispatch using the pre-fidelity goal set.
-            // Only throw when there is nothing persisted at all.
-            if (!earlyWriteCommitted) throw dbErr
+            throw dbErr
           }
 
           for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
@@ -1342,14 +1271,14 @@ export function createOrchestratorTools(input: {
             headline:
               `Architect decomposition complete: ${persisted.length} goals, ${result.goalMetricSpecs.length} goal metrics, ` +
               `${result.globalMetricSpecs.length} global metrics, ${result.challengeSeeds.length} challenge seeds, ` +
-              `${result.contracts.length} contracts. Fidelity: ${result.fidelity.verdict}.` +
+              `${result.contracts.length} contracts.` +
               (deletedIDs.length > 0 ? ` Removed ${deletedIDs.length} prior goal(s).` : "") +
-              ` NEXT: call create_run + submit_execution to start goal execution.`,
+              ` NEXT: call \`fidelity\` to verify goal coverage against the user request, then proceed to per-goal \`build\`.`,
             summary: result.summary,
             fields: [
               ["goals", persisted.map((g) => `${g.id} ${g.title}`)],
               ["contract_categories", [...new Set(result.contracts.map((c) => c.category))]],
-              ["fidelity", result.fidelity.verdict],
+              ["spec_snapshot_id", newSpecSnapshotID],
             ],
             pointer: `read_context scope=decisions (spec ${newSpecSnapshotID})`,
           })
@@ -1383,6 +1312,389 @@ export function createOrchestratorTools(input: {
           )
           throw err
         }
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Fidelity — orchestrator-driven goal-coverage review.
+    //
+    // Lifted out of architect/agent.ts (audit 2026-04-25): per the agent
+    // boundary rule (agents do not call agents; only the orchestrator
+    // routes messages between agents), the fidelity reviewer must be a
+    // sibling of architect at the orchestrator level, not a nested call
+    // inside architect's run(). This tool reads the persisted goal set,
+    // invokes the fidelity reviewer, and on `needs_correction` re-upserts
+    // the corrected goal set against the same active spec snapshot.
+    // -----------------------------------------------------------------------
+
+    fidelity: tool({
+      description:
+        "Review the persisted goal set against the ORIGINAL user request for " +
+        "coverage and fidelity. Call AFTER `architect` lands a goal set, BEFORE " +
+        "dispatching `build`. The reviewer either confirms the set as faithful " +
+        "or returns corrections (modify / remove / add); on needs_correction " +
+        "the orchestrator re-upserts the corrected set against the same spec " +
+        "snapshot. Re-run when delivery feedback hints the goal set drifted " +
+        "from user intent (vs. a structural rewrite, which is `architect`).",
+      inputSchema: z.object({
+        reason: z.string().optional().describe("Why you decided to run fidelity review"),
+      }),
+      execute: async () => {
+        const task = requireTask(taskID)
+        const activeSpec = findActiveSpecForTask(task.id)
+        if (!activeSpec) {
+          return SubAgentProtocol.yieldResult({
+            headline: "fidelity: no active spec snapshot — call `architect` first.",
+            pointer: `task ${taskID}`,
+          })
+        }
+        const dbGoals = listGoals(taskID).filter((g) => g.spec_snapshot_id === activeSpec.id)
+        if (dbGoals.length === 0) {
+          return SubAgentProtocol.yieldResult({
+            headline: "fidelity: no goals on the active spec snapshot — call `architect` first.",
+            pointer: `spec ${activeSpec.id}`,
+          })
+        }
+
+        const fidelitySession = await Session.createNext({
+          kind: "fidelity",
+          parentID: input.agentSessionID,
+          title: `Fidelity Review: ${task.title}`,
+          directory: Instance.directory,
+        })
+
+        const { findRequirements } = await import("@/engine/store")
+        const reqRows = findRequirements(activeSpec.id)
+        const requirements = reqRows.map((r) => {
+          const meta = (r.metadata ?? {}) as Record<string, unknown>
+          const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
+          return {
+            id: sourceID,
+            type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
+            description: r.description,
+          }
+        })
+        const { createDecisionLog } = await import("@/decision-log")
+        const decisionLog = createDecisionLog(taskID)
+        const requirementDecisions = decisionLog.readByPhase("requirements").map((d) => ({
+          key: d.key,
+          value: d.value,
+          reason: d.reason,
+        }))
+
+        const goalsForReview = dbGoals.map((g) => ({
+          id: g.id,
+          title: g.title,
+          objective: g.objective,
+          acceptance_specs: (typeof g.acceptance_specs === "string"
+            ? JSON.parse(g.acceptance_specs)
+            : g.acceptance_specs ?? []) as AcceptanceSpec[],
+          owned_paths: typeof g.owned_paths === "string" ? JSON.parse(g.owned_paths) : g.owned_paths ?? [],
+          depends_on: typeof g.depends_on === "string" ? JSON.parse(g.depends_on) : g.depends_on ?? [],
+          exports: typeof g.exports === "string" ? JSON.parse(g.exports) : g.exports ?? [],
+          imports: typeof g.imports === "string" ? JSON.parse(g.imports) : g.imports ?? [],
+          priority: g.priority as "blocking" | "advisory",
+          kind: g.kind,
+          requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
+        }))
+
+        const { reviewFidelity, applyFidelityCorrections } = await import("@/architect/fidelity")
+        const verdict = await reviewFidelity({
+          userRequest: task.request,
+          taskTitle: task.title,
+          goals: goalsForReview,
+          requirements,
+          requirementDecisions,
+          designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+          decisionLog,
+          signal: input.signal,
+          taskID,
+          parentSessionID: fidelitySession.id,
+        })
+
+        if (verdict.verdict === "faithful") {
+          return SubAgentProtocol.yieldResult({
+            headline: `Fidelity verdict: faithful — goal set covers user intent. NEXT: dispatch \`build({ goalID })\` per goal.`,
+            fields: [
+              ["goal_count", String(goalsForReview.length)],
+              ["spec_snapshot_id", activeSpec.id],
+            ],
+            pointer: `fidelity session ${fidelitySession.id}`,
+          })
+        }
+
+        const corrected = applyFidelityCorrections(goalsForReview, verdict)
+        const beforeIDs = new Set(goalsForReview.map((g) => g.id))
+        const afterIDs = new Set(corrected.map((g) => g.id))
+        const removedByFidelity = [...beforeIDs].filter((id) => !afterIDs.has(id))
+        const addedByFidelity = [...afterIDs].filter((id) => !beforeIDs.has(id))
+
+        const { upsertGoalsFromArchitect } = await import("@/engine/persist")
+        const { persistArchitectMetrics } = await import("@/metrics/store")
+
+        let persisted: Array<{ id: string; title: string; llmID: string }> = []
+        let llmToDBID = new Map<string, string>()
+        let deletedIDs: string[] = []
+        try { Database.transaction((db) => {
+          const out = upsertGoalsFromArchitect(db, {
+            taskID,
+            specSnapshotID: activeSpec.id,
+            architectGoals: corrected.map((g) => ({
+              llmID: g.id,
+              title: g.title,
+              objective: g.objective,
+              acceptance_specs: g.acceptance_specs,
+              owned_paths: g.owned_paths,
+              depends_on: g.depends_on,
+              exports: g.exports,
+              imports: g.imports,
+              kind: g.kind,
+              requirement_ids: g.requirement_ids,
+              priority: g.priority,
+              source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
+            })),
+            removedLLMIDs: removedByFidelity,
+            now: Date.now(),
+          })
+          persisted = out.persisted
+          llmToDBID = out.llmToDBID
+          deletedIDs = out.deletedIDs
+
+          // Re-baseline goal metric specs against the corrected goal id map
+          // so newly-added fidelity goals are picked up by the metric layer
+          // and removed goals stop accumulating metric_results. The global
+          // specs are unchanged (they are not goal-scoped).
+          persistArchitectMetrics({
+            task_id: taskID,
+            goal_id_map: llmToDBID,
+            goal_metric_specs: [],
+            global_metric_specs: [],
+          })
+
+          Database.effect(() =>
+            EngineProtocol.emit(
+              EngineEvent.TaskUpdated,
+              { taskID, status: deriveTaskStatus(task), summary: `Fidelity corrected goal set: -${deletedIDs.length} +${addedByFidelity.length}` },
+              { source: "orchestrator.fidelity" },
+            ),
+          )
+        }) } catch (dbErr) {
+          log.error("fidelity: failed to persist corrections", {
+            taskID,
+            error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          })
+          throw dbErr
+        }
+
+        for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
+
+        return SubAgentProtocol.yieldResult({
+          headline:
+            `Fidelity verdict: needs_correction. ` +
+            `Goal set re-upserted against spec ${activeSpec.id}: ` +
+            `${verdict.corrections.length} corrections, ${verdict.missingGoals.length} new goals, ${deletedIDs.length} removed. ` +
+            `NEXT: dispatch \`build({ goalID })\` on the corrected set.`,
+          fields: [
+            ["issues", verdict.issues.map((i) => `[${i.type}] ${i.description}`)],
+            ["added_goals", addedByFidelity],
+            ["removed_goals", removedByFidelity],
+            ["spec_snapshot_id", activeSpec.id],
+          ],
+          pointer: `fidelity session ${fidelitySession.id}`,
+        })
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Prosecute — orchestrator-driven adversarial probe.
+    //
+    // Lifted out of the deliver tool (audit 2026-04-25): the prosecutor
+    // (kind: "evaluator") was previously called inside `deliver` between
+    // metric execution and snapshot writing. Per the agent boundary rule
+    // it must be the orchestrator that decides when to run the adversarial
+    // pass and consumes its yield. The orchestrator now drives the order
+    // explicitly: deliver → prosecute → publish_delivery / next iteration.
+    // -----------------------------------------------------------------------
+
+    prosecute: tool({
+      description:
+        "Run the adversarial Prosecutor against the most recent delivery " +
+        "iteration: file concrete counterexamples for failure modes the " +
+        "delivery agent missed, or propose at most one diagnostic challenge " +
+        "metric per iteration (capped at 3 per task). Call AFTER every " +
+        "`deliver` invocation and BEFORE `publish_delivery` so the iteration " +
+        "snapshot reflects the adversarial pass. Side-effects land in DB " +
+        "(engine_counterexample, engine_metric_spec) and feed the next " +
+        "deliver iteration's trajectory query.",
+      inputSchema: z.object({
+        reason: z.string().optional().describe("Why you decided to run the prosecutor now"),
+      }),
+      execute: async () => {
+        const task = requireTask(taskID)
+        const run = findActiveRunForTask(taskID)
+        if (!run) {
+          return SubAgentProtocol.yieldResult({
+            headline: "prosecute: no active run — `deliver` must run first.",
+            pointer: `task ${taskID}`,
+          })
+        }
+        const delivery = findDeliveryByRun(run.id)
+        if (!delivery) {
+          return SubAgentProtocol.yieldResult({
+            headline: "prosecute: no delivery row on the active run — call `deliver` first.",
+            pointer: `run ${run.id}`,
+          })
+        }
+        const { EngineArtifactTable } = await import("@/engine/engine.sql")
+        const { desc } = await import("@/storage/db")
+        const verdictArtifact = Database.use((db) =>
+          db
+            .select()
+            .from(EngineArtifactTable)
+            .where(
+              and(
+                eq(EngineArtifactTable.delivery_id, delivery.id),
+                eq(EngineArtifactTable.kind, "verdict"),
+              ),
+            )
+            .orderBy(desc(EngineArtifactTable.time_created))
+            .limit(1)
+            .get(),
+        )
+        if (!verdictArtifact) {
+          return SubAgentProtocol.yieldResult({
+            headline: "prosecute: no delivery verdict artifact — call `deliver` first.",
+            pointer: `delivery ${delivery.id}`,
+          })
+        }
+        const verdict = verdictArtifact.payload as unknown as import("@/delivery/agent").DeliveryVerdictType
+
+        const { readIterationHistory } = await import("@/metrics/store")
+        const priorIterations = readIterationHistory(taskID)
+        // The deliver tool advances the iteration counter when it writes the
+        // snapshot. Prosecute targets the most recently written snapshot —
+        // i.e. the LAST entry in the trajectory.
+        const iteration = Math.max(0, priorIterations.length - 1)
+
+        const rawSeeds = Array.isArray(task.architect_challenge_seeds)
+          ? (task.architect_challenge_seeds as Array<Record<string, unknown>>)
+          : []
+        const architectSeeds = rawSeeds
+          .filter(
+            (s) =>
+              typeof s.id === "string" &&
+              (s.scope === "goal" || s.scope === "global") &&
+              typeof s.target_ref === "string" &&
+              typeof s.claim === "string" &&
+              typeof s.rationale === "string" &&
+              (s.priority_hint === "high" ||
+                s.priority_hint === "medium" ||
+                s.priority_hint === "low"),
+          )
+          .map((s) => ({
+            id: s.id as string,
+            scope: s.scope as "goal" | "global",
+            target_ref: s.target_ref as string,
+            claim: s.claim as string,
+            rationale: s.rationale as string,
+            priority_hint: s.priority_hint as "high" | "medium" | "low",
+          }))
+
+        const { runProsecutor } = await import("@/delivery/prosecutor")
+        const pRes = await runProsecutor({
+          task: {
+            id: task.id,
+            title: task.title,
+            request: task.request,
+            sessionID: input.agentSessionID,
+          },
+          iteration,
+          defenderVerdict: verdict,
+          architectSeeds,
+          signal: input.signal,
+        })
+
+        log.info("prosecute: done", {
+          taskID,
+          iteration,
+          filed: pRes.counterexamples_filed,
+          proposed: pRes.challenges_proposed,
+          resolved: pRes.counterexamples_resolved,
+        })
+
+        return SubAgentProtocol.yieldResult({
+          headline:
+            `Prosecutor iter ${iteration}: filed ${pRes.counterexamples_filed} counterexample(s), ` +
+            `proposed ${pRes.challenges_proposed} challenge(s), resolved ${pRes.counterexamples_resolved}. ` +
+            `NEXT: ${verdict.verdict === "accepted" ? "call `publish_delivery`" : "address feedback then call `build`/`deliver` again"}.`,
+          summary: pRes.rationale,
+          fields: [
+            ["iteration", String(iteration)],
+            ["delivery_verdict", verdict.verdict],
+          ],
+          pointer: `delivery ${delivery.id}`,
+        })
+      },
+    }),
+
+    // -----------------------------------------------------------------------
+    // Analyze intent — front-of-pipeline disambiguation.
+    //
+    // Lifted out of an unused free-floating IntentAnalysisAgent.analyze
+    // module (audit 2026-04-25). The agent runs at the very front of the
+    // pipeline (before requirements / architect) to reconstruct the user's
+    // real intent from a typically-terse request, the surrounding work
+    // record (decision log + prior delivery feedback when re-entering a
+    // task), and a read-only tour of the repository.
+    // -----------------------------------------------------------------------
+
+    analyze_intent: tool({
+      description:
+        "Reconstruct the user's real intent from a (typically terse) request. " +
+        "The agent reads the request, the existing work record on this task " +
+        "(decision log, prior delivery rejections, refine notes when present), " +
+        "and uses read-only codebase tools (read/find/search/list) to ground " +
+        "complexity and scope estimates in the repo's actual shape. Output is " +
+        "a structured IntentAnalysisResult: intent class, complexity band, " +
+        "extracted slots, missing-info keys, blocker / nice clarifications, " +
+        "overall confidence, and a one-sentence summary. " +
+        "Call BEFORE `requirements` on a fresh pipeline task. On a re-entry " +
+        "(refine / restart_from_stage / operator_message that changes scope), " +
+        "call again so downstream agents see the updated reading. Use the " +
+        "blocker clarifications, if any, as the input to a `question` call " +
+        "before spending budget on requirements / architect.",
+      inputSchema: z.object({
+        reason: z.string().optional().describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
+      }),
+      execute: async () => {
+        const task = requireTask(taskID)
+        const { IntentAnalysisAgent } = await import("@/intent-analysis/agent")
+        const out = await IntentAnalysisAgent.analyze({
+          request: task.request,
+          title: task.title,
+          taskID,
+          parentSessionID: input.agentSessionID,
+          signal: input.signal,
+          onStatus: () => {},
+        })
+        const r = out.result
+        const blockers = r.clarifications.filter((c) => c.priority === "blocker")
+        const nices = r.clarifications.filter((c) => c.priority === "nice")
+        return SubAgentProtocol.yieldResult({
+          headline:
+            `Intent: ${r.intent_class} / complexity=${r.complexity} / confidence=${r.confidence.toFixed(2)}. ` +
+            (blockers.length > 0
+              ? `${blockers.length} blocker clarification(s) — call \`question\` BEFORE \`requirements\`.`
+              : `NEXT: call \`requirements\` (or \`design_analysis\` first if visual references exist).`),
+          summary: r.summary,
+          fields: [
+            ["slots", r.extracted_slots.map((s) => `${s.key}=${s.value}`)],
+            ["missing_info", r.missing_info],
+            ["blocker_questions", blockers.map((c) => c.question)],
+            ["nice_questions", nices.map((c) => c.question)],
+          ],
+          pointer: `intent session ${out.sessionID}`,
+        })
       },
     }),
 
@@ -2303,62 +2615,15 @@ export function createOrchestratorTools(input: {
             },
           })
 
-          // Prosecutor — adversarial probe AFTER metrics, BEFORE snapshot.
-          // Its tool calls (mark_counterexample, propose_challenge_metric)
-          // write directly to DB, so the snapshot we build next sees the new
-          // counterexamples and challenges.
-          try {
-            const { runProsecutor } = await import("@/delivery/prosecutor")
-            const rawSeeds = Array.isArray(task.architect_challenge_seeds)
-              ? task.architect_challenge_seeds
-              : []
-            const architectSeeds = rawSeeds
-              .filter(
-                (s) =>
-                  typeof s.id === "string" &&
-                  (s.scope === "goal" || s.scope === "global") &&
-                  typeof s.target_ref === "string" &&
-                  typeof s.claim === "string" &&
-                  typeof s.rationale === "string" &&
-                  (s.priority_hint === "high" ||
-                    s.priority_hint === "medium" ||
-                    s.priority_hint === "low"),
-              )
-              .map((s) => ({
-                id: s.id as string,
-                scope: s.scope as "goal" | "global",
-                target_ref: s.target_ref as string,
-                claim: s.claim as string,
-                rationale: s.rationale as string,
-                priority_hint: s.priority_hint as "high" | "medium" | "low",
-              }))
-            const pRes = await runProsecutor({
-              task: {
-                id: task.id,
-                title: task.title,
-                request: task.request,
-                sessionID: task.session_id ?? undefined,
-              },
-              iteration,
-              defenderVerdict: verdict,
-              architectSeeds,
-              signal: input.signal,
-            })
-            log.info("deliver: prosecutor done", {
-              taskID,
-              iteration,
-              filed: pRes.counterexamples_filed,
-              proposed: pRes.challenges_proposed,
-              resolved: pRes.counterexamples_resolved,
-            })
-          } catch (err) {
-            log.warn("deliver: prosecutor failed — continuing without adversarial pass", {
-              taskID,
-              iteration,
-              err: err instanceof Error ? err.message : String(err),
-            })
-          }
-
+          // Prosecutor is no longer invoked here (audit 2026-04-25). The
+          // adversarial pass is a sibling agent call driven by the
+          // orchestrator via the `prosecute` tool, which the orchestrator
+          // calls AFTER `deliver` returns. Counterexamples filed in the
+          // prosecute step land before the next deliver iteration's
+          // trajectory query reads them, which is the only ordering
+          // requirement; the iteration snapshot below is recomputed by the
+          // next `deliver` run without needing the prosecutor's output to
+          // be present in this snapshot.
           const specs = readSpecsForTask(taskID)
           const currentResults = readResultsForIteration(taskID, iteration)
           const previousResults =
