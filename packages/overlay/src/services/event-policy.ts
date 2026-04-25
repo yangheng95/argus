@@ -19,10 +19,10 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   "milestone.activated",
   "milestone.passed",
   "milestone.failed",
-  // Fidelity `started` / `progress` / `completed` are NOT noop —
-  // started/progress promote a running fidelity card, and completed upserts
-  // it with the structured verdict. Handled by tree-writer's `handleFidelity*`
-  // family; the same card id (`fidelity:<taskID>`) is upserted across all
+  // Integrity `started` / `progress` / `completed` are NOT noop —
+  // started/progress promote a running integrity card, and completed upserts
+  // it with the structured verdict. Handled by tree-writer's `handleIntegrity*`
+  // family; the same card id (`integrity:<taskID>`) is upserted across all
   // three events.
 ])
 

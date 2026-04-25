@@ -90,23 +90,31 @@ const knownGoalIDs = new Set<string>();
  *  created under attempt N never leaks its parts onto the attempt N+1
  *  card after rebuild. */
 const goalCurrentRunID = new Map<string, string>();
-/** Legacy fidelity child-card ownership map. New fidelity runs render on the
+/** Legacy integrity child-card ownership map. New integrity runs render on the
  *  session card itself, so this map stays empty for fresh data but remains
- *  wired for older protocol slices that still materialize kind="fidelity"
+ *  wired for older protocol slices that still materialize kind="integrity"
  *  child cards. */
-const fidelityCardOwners = new Map<string, string>();
+const integrityCardOwners = new Map<string, string>();
 
-/** Fidelity events that arrived before their owning session's first
+/** Integrity events that arrived before their owning session's first
  *  message.updated. Keyed by sessionID so ensureSessionCard can drain a
  *  single pending payload per session. Holding the raw payload here (NOT in
  *  cardTreeStore.cards) preserves the invariant "every entry in
  *  cardTreeStore.cards is reachable via order or some parent's childIDs" —
- *  a fidelity event that never finds its session stays in this map until
+ *  an integrity event that never finds its session stays in this map until
  *  resetWriter() clears it, never materializing into an unreachable ghost. */
-interface PendingFidelityPayload {
+interface PendingIntegrityPayload {
   taskID: string;
   emittedAt: number;
-  verdict: "faithful" | "needs_correction";
+  verdict: "pass" | "concerns" | "needs_correction";
+  summary: string;
+  dimensions: Array<{
+    id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
+    verdict: "pass" | "concerns" | "needs_correction";
+    issueCount: number;
+    correctionCount: number;
+    missingGoalCount: number;
+  }>;
   issues: Array<{ type: string; description: string }>;
   corrections: Array<{
     action: "modify" | "split" | "remove";
@@ -118,14 +126,14 @@ interface PendingFidelityPayload {
   missingGoals: Array<{ title: string; objective: string; reason?: string }>;
   attempts: number;
 }
-const pendingFidelity = new Map<string, PendingFidelityPayload>();
+const pendingIntegrity = new Map<string, PendingIntegrityPayload>();
 
 /** Subagent terminal status buffered until the owning session materializes.
  *  Phase-completion events (requirements.completed, architect.completed,
  *  design_analysis.completed) arrive AFTER the subagent runs, but on a
  *  reconnect replay they may reach the writer before the session's first
  *  `message.updated` in the normalized stream order. Same pattern as
- *  `pendingFidelity` — held out-of-band, drained by `ensureSessionCard`. */
+ *  `pendingIntegrity` — held out-of-band, drained by `ensureSessionCard`. */
 const pendingSubagentTerminal = new Map<string, "completed" | "error">();
 
 // ── Entry point ──
@@ -135,9 +143,9 @@ export function resetWriter(): void {
   sessions.clear();
   messages.clear();
   knownGoalIDs.clear();
-  fidelityCardOwners.clear();
-  pendingFidelity.clear();
-  runningFidelity.clear();
+  integrityCardOwners.clear();
+  pendingIntegrity.clear();
+  runningIntegrity.clear();
   pendingSubagentTerminal.clear();
   // Drop every key explicitly — plain assignment on a store merges instead of
   // replacing (see setMessages's messagesBySession fix in store/messages.ts).
@@ -250,24 +258,24 @@ export function applyEvent(event: any): void {
     return handleInteraction(event);
   }
 
-  // ── Fidelity review lifecycle ──
+  // ── Integrity review lifecycle ──
   // started/progress put a running placeholder card under the requirements
-  // session (kind="fidelity", status="running"), so the operator sees the
+  // session (kind="integrity", status="running"), so the operator sees the
   // non-streaming LLM review in flight during its 60–180s window. completed
   // upserts the same cardID with the parsed verdict / issues / corrections.
-  // Identity is `fidelity:<taskID>` (stable per task) so all three events
+  // Identity is `integrity:<taskID>` (stable per task) so all three events
   // land on the same card.
-  if (type === "fidelity.review.started") {
-    return handleFidelityStarted(event);
+  if (type === "integrity.review.started") {
+    return handleIntegrityStarted(event);
   }
-  if (type === "fidelity.review.progress") {
-    return handleFidelityProgress(event);
+  if (type === "integrity.review.progress") {
+    return handleIntegrityProgress(event);
   }
-  if (type === "fidelity.review.chunk") {
-    return handleFidelityChunk(event);
+  if (type === "integrity.review.chunk") {
+    return handleIntegrityChunk(event);
   }
-  if (type === "fidelity.review.completed") {
-    return handleFidelityCompleted(event);
+  if (type === "integrity.review.completed") {
+    return handleIntegrityCompleted(event);
   }
 
   // ── Subagent phase completion ──
@@ -574,7 +582,7 @@ function handleSubagentPhaseCompleted(event: any): void {
   const info = sessions.get(sessionID);
   if (!info || !cardTreeStore.cards[info.cardID]) {
     // Session card not yet materialized — hold until ensureSessionCard runs.
-    // Mirrors the pendingFidelity pattern; drained in ensureSessionCard.
+    // Mirrors the pendingIntegrity pattern; drained in ensureSessionCard.
     pendingSubagentTerminal.set(sessionID, status);
     return;
   }
@@ -587,7 +595,7 @@ function writeSessionTerminalStatus(cardID: string, status: "completed" | "error
 
 /** Drain any terminal status buffered for this session. Called from
  *  ensureSessionCard after the session is committed, parallel to
- *  drainPendingFidelity. */
+ *  drainPendingIntegrity. */
 function drainPendingSubagentTerminal(sessionID: string): void {
   const status = pendingSubagentTerminal.get(sessionID);
   if (!status) return;
@@ -603,112 +611,112 @@ function handleInteraction(event: any): void {
   rebuildBoardDerivedCards();
 }
 
-// ── Fidelity review ──
+// ── Integrity review ──
 
-function fidelityCardID(sessionID: string): string {
-  return sessionCardID("fidelity", sessionID);
+function integrityCardID(sessionID: string): string {
+  return sessionCardID("integrity", sessionID);
 }
 
 /** Buffered running-phase payload so `rebuildCardHierarchy` can re-attach a
  *  running card if its owning requirements session card disappears + reappears
- *  (task reselect / replay). Keyed by taskID. Separate from `pendingFidelity`
+ *  (task reselect / replay). Keyed by taskID. Separate from `pendingIntegrity`
  *  because that map is for COMPLETED payloads that predate their session. */
-interface RunningFidelityPayload {
+interface RunningIntegrityPayload {
   sessionID: string
   startedAt: number
   attempt: number
   elapsedMs: number
 }
-const runningFidelity = new Map<string, RunningFidelityPayload>()
+const runningIntegrity = new Map<string, RunningIntegrityPayload>()
 
-function handleFidelityStarted(event: any): void {
+function handleIntegrityStarted(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
   const sessionID = String(props.sessionID || "");
-  if (!taskID) throw new Error("fidelity.review.started missing taskID");
+  if (!taskID) throw new Error("integrity.review.started missing taskID");
   if (!sessionID) {
     throw new Error(
-      `fidelity.review.started missing sessionID (taskID=${taskID})`,
+      `integrity.review.started missing sessionID (taskID=${taskID})`,
     );
   }
   const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
-  const payload: RunningFidelityPayload = {
+  const payload: RunningIntegrityPayload = {
     sessionID,
     startedAt: emittedAt > 0 ? emittedAt : Date.now(),
     attempt: 0,
     elapsedMs: 0,
   };
-  runningFidelity.set(sessionID, payload);
-  materializeRunningFidelity(payload);
+  runningIntegrity.set(sessionID, payload);
+  materializeRunningIntegrity(payload);
 }
 
-function handleFidelityProgress(event: any): void {
+function handleIntegrityProgress(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
   const sessionID = String(props.sessionID || "");
-  if (!taskID) throw new Error("fidelity.review.progress missing taskID");
+  if (!taskID) throw new Error("integrity.review.progress missing taskID");
   if (!sessionID) {
     throw new Error(
-      `fidelity.review.progress missing sessionID (taskID=${taskID})`,
+      `integrity.review.progress missing sessionID (taskID=${taskID})`,
     );
   }
   const attempt = Number(props.attempt || 0);
   const elapsedMs = Number(props.elapsedMs || props.elapsed_ms || 0);
-  const existing = runningFidelity.get(sessionID);
-  const payload: RunningFidelityPayload = {
+  const existing = runningIntegrity.get(sessionID);
+  const payload: RunningIntegrityPayload = {
     sessionID,
     startedAt: existing?.startedAt ?? (Date.now() - elapsedMs),
     attempt,
     elapsedMs,
   };
-  runningFidelity.set(sessionID, payload);
-  materializeRunningFidelity(payload);
+  runningIntegrity.set(sessionID, payload);
+  materializeRunningIntegrity(payload);
 }
 
-/** Append a reasoning delta onto the running fidelity card. The backend
- *  (`requirements/fidelity.ts` createFidelityChunkForwarder) emits
- *  FidelityReviewChunk at ~2 Hz with accumulated 500ms batches. One stable
+/** Append a reasoning delta onto the running integrity card. The backend
+ *  (`integrity/agent.ts` createIntegrityChunkForwarder) emits
+ *  IntegrityReviewChunk at ~2 Hz with accumulated 500ms batches. One stable
  *  part per attempt — a Zod-retry boundary opens a fresh reasoning part,
  *  same-attempt chunks append to the existing part.
  *
  *  Only `kind: "reasoning"` is valid. tool-input deltas are intentionally
  *  NOT forwarded by the backend (they're protocol payload — the verdict
- *  lands structured via FidelityReviewCompleted).
+ *  lands structured via IntegrityReviewCompleted).
  *
  *  Silently skips when the card has already upgraded to the completed
- *  verdict state (card.fidelity populated) — late chunks after Completed
+ *  verdict state (card.integrity populated) — late chunks after Completed
  *  lands would otherwise pollute the verdict render. */
-function handleFidelityChunk(event: any): void {
+function handleIntegrityChunk(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
   const sessionID = String(props.sessionID || "");
-  if (!taskID) throw new Error("fidelity.review.chunk missing taskID");
+  if (!taskID) throw new Error("integrity.review.chunk missing taskID");
   if (!sessionID) {
     throw new Error(
-      `fidelity.review.chunk missing sessionID (taskID=${taskID})`,
+      `integrity.review.chunk missing sessionID (taskID=${taskID})`,
     );
   }
   const kind = String(props.kind || "");
   const delta = String(props.delta || "");
   const attempt = Number(props.attempt || 1);
   if (kind !== "reasoning") {
-    throw new Error(`fidelity.review.chunk unexpected kind: ${kind}`);
+    throw new Error(`integrity.review.chunk unexpected kind: ${kind}`);
   }
   if (!delta) return;
 
-  const cardID = fidelityCardID(sessionID);
+  const cardID = integrityCardID(sessionID);
   const existing = cardTreeStore.cards[cardID];
   // Completed event already upserted the verdict — ignore trailing chunks.
-  if (existing?.fidelity) return;
+  if (existing?.integrity) return;
   // Started must fire before Chunk. If the card is missing, this is a
   // backend ordering bug (chunk before started) — loud-fail per rule 1.
   if (!existing) {
     throw new Error(
-      `fidelity.review.chunk arrived before started (taskID=${taskID}, sessionID=${sessionID})`,
+      `integrity.review.chunk arrived before started (taskID=${taskID}, sessionID=${sessionID})`,
     );
   }
 
-  const partID = `fidelity:${sessionID}:reasoning:${attempt}`;
+  const partID = `integrity:${sessionID}:reasoning:${attempt}`;
 
   setCardTreeStore(
     "cards",
@@ -725,11 +733,11 @@ function handleFidelityChunk(event: any): void {
   );
 }
 
-/** Upsert the running-phase fidelity session card. Fidelity is now a normal
+/** Upsert the running-phase integrity session card. Integrity is now a normal
  *  agent session, so lifecycle events target the session card directly. */
-function materializeRunningFidelity(p: RunningFidelityPayload): void {
+function materializeRunningIntegrity(p: RunningIntegrityPayload): void {
   const session = ensureSessionCard(p.sessionID, {
-    stage: "fidelity",
+    stage: "integrity",
     parentSessionID: "",
     goalID: "",
     time: p.startedAt,
@@ -738,8 +746,8 @@ function materializeRunningFidelity(p: RunningFidelityPayload): void {
   const existing = cardTreeStore.cards[cardID];
   // If the completed event has already landed, don't downgrade the verdict
   // card back to "running". `attempts` on a completed card is > 0 and the
-  // `fidelity` payload is populated — that's how we tell.
-  if (existing && existing.fidelity) return;
+  // `integrity` payload is populated — that's how we tell.
+  if (existing && existing.integrity) return;
   const elapsedSec = Math.max(0, Math.round(p.elapsedMs / 1000));
   const subtitle = p.attempt > 0
     ? `attempt ${p.attempt} · ${formatElapsed(elapsedSec)}`
@@ -753,13 +761,13 @@ function materializeRunningFidelity(p: RunningFidelityPayload): void {
       ...existing,
       status: "running",
       subtitle,
-      stage: "fidelity",
-      accent: stageAccent("fidelity"),
-      title: roleTitleKey("fidelity"),
+      stage: "integrity",
+      accent: stageAccent("integrity"),
+      title: roleTitleKey("integrity"),
     });
     return;
   }
-  throw new Error(`fidelity session card missing after ensureSessionCard (sessionID=${p.sessionID})`);
+  throw new Error(`integrity session card missing after ensureSessionCard (sessionID=${p.sessionID})`);
 }
 
 function formatElapsed(sec: number): string {
@@ -769,36 +777,61 @@ function formatElapsed(sec: number): string {
   return s === 0 ? `${m}m elapsed` : `${m}m ${s}s elapsed`;
 }
 
-function handleFidelityCompleted(event: any): void {
+function handleIntegrityCompleted(event: any): void {
   const props = propsOf(event);
   const taskID = String(props.taskID || "");
   const sessionID = String(props.sessionID || "");
-  if (!taskID) throw new Error("fidelity.review.completed missing taskID");
+  if (!taskID) throw new Error("integrity.review.completed missing taskID");
   if (!sessionID) {
     // sessionID became required (engine/model.ts) — loud-fail rather than
     // allowing the card to escape or silently drop. The matching assertion
-    // in opencorvus/requirements/fidelity.ts emitFidelityEvent keeps the
+    // in opencorvus/integrity/agent.ts emitIntegrityEvent keeps the
     // backend honest.
     throw new Error(
-      `fidelity.review.completed missing sessionID (taskID=${taskID})`,
+      `integrity.review.completed missing sessionID (taskID=${taskID})`,
     );
   }
 
   const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
   if (!(emittedAt > 0)) {
-    throw new Error(`fidelity.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
+    throw new Error(`integrity.review.completed missing emittedAt (taskID=${taskID}); server emitter is the single source of truth`);
   }
   const issues = Array.isArray(props.issues) ? props.issues : [];
   const corrections = Array.isArray(props.corrections) ? props.corrections : [];
   const missingGoals = Array.isArray(props.missingGoals) ? props.missingGoals : [];
+  const dimensionsRaw = Array.isArray(props.dimensions) ? props.dimensions : [];
   const attempts = Number(props.attempts || 0);
-  const verdict: "faithful" | "needs_correction" =
-    props.verdict === "faithful" ? "faithful" : "needs_correction";
+  const summary = typeof props.summary === "string" ? props.summary : "";
+  const verdict: "pass" | "concerns" | "needs_correction" =
+    props.verdict === "pass" ? "pass"
+      : props.verdict === "concerns" ? "concerns"
+      : "needs_correction";
 
-  const payload: PendingFidelityPayload = {
+  const dimensionIDs = ["goal_fidelity", "technical_feasibility", "hallucination", "solution_quality"] as const;
+  type DimensionID = typeof dimensionIDs[number];
+  const isDimensionID = (s: string): s is DimensionID =>
+    (dimensionIDs as readonly string[]).includes(s);
+
+  const payload: PendingIntegrityPayload = {
     taskID,
     emittedAt,
     verdict,
+    summary,
+    dimensions: dimensionsRaw
+      .filter((d: any) => isDimensionID(String(d?.id || "")))
+      .map((d: any) => {
+        const dverdict: "pass" | "concerns" | "needs_correction" =
+          d?.verdict === "pass" ? "pass"
+            : d?.verdict === "concerns" ? "concerns"
+            : "needs_correction";
+        return {
+          id: String(d.id) as DimensionID,
+          verdict: dverdict,
+          issueCount: Number(d?.issueCount || 0),
+          correctionCount: Number(d?.correctionCount || 0),
+          missingGoalCount: Number(d?.missingGoalCount || 0),
+        };
+      }),
     issues: issues.map((i: any) => ({
       type: String(i?.type || "uncovered"),
       description: String(i?.description || ""),
@@ -819,36 +852,43 @@ function handleFidelityCompleted(event: any): void {
   };
 
   const session = ensureSessionCard(sessionID, {
-    stage: "fidelity",
+    stage: "integrity",
     parentSessionID: "",
     goalID: "",
     time: emittedAt,
   });
 
-  materializeFidelity(session, payload);
+  materializeIntegrity(session, payload);
   // Running-card lifecycle: the completed upsert now owns this cardID; drop
-  // the runningFidelity entry so a late `progress` event for the same task
+  // the runningIntegrity entry so a late `progress` event for the same task
   // doesn't rewrite the verdict back to a running placeholder.
-  runningFidelity.delete(sessionID);
+  runningIntegrity.delete(sessionID);
 }
 
-/** Atomically write the fidelity verdict onto the session card itself. */
-function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): void {
+/** Atomically write the integrity verdict onto the session card itself. */
+function materializeIntegrity(session: SessionInfo, p: PendingIntegrityPayload): void {
   const cardID = session.cardID;
-  const status: CardStatus = p.verdict === "faithful" ? "completed" : "error";
+  // pass = green/completed, concerns = warning (rendered as completed but the
+  // verdict pill carries the warning colour), needs_correction = error.
+  const status: CardStatus =
+    p.verdict === "pass" ? "completed"
+      : p.verdict === "concerns" ? "completed"
+      : "error";
   const existing = cardTreeStore.cards[cardID];
   if (!existing) {
-    throw new Error(`fidelity session card missing on completion (sessionID=${session.sessionID})`);
+    throw new Error(`integrity session card missing on completion (sessionID=${session.sessionID})`);
   }
   setCardTreeStore("cards", cardID, {
     ...existing,
-    stage: "fidelity",
-    accent: stageAccent("fidelity"),
+    stage: "integrity",
+    accent: stageAccent("integrity"),
     status,
-    title: roleTitleKey("fidelity"),
+    title: roleTitleKey("integrity"),
     subtitle: undefined,
-    fidelity: {
+    integrity: {
       verdict: p.verdict,
+      summary: p.summary,
+      dimensions: p.dimensions,
       issues: p.issues,
       corrections: p.corrections,
       missingGoals: p.missingGoals,
@@ -857,16 +897,16 @@ function materializeFidelity(session: SessionInfo, p: PendingFidelityPayload): v
   });
 }
 
-/** Drain any fidelity payload waiting for this session and materialize it.
+/** Drain any integrity payload waiting for this session and materialize it.
  *  Called from ensureSessionCard immediately after the session is committed
- *  so a fidelity event that arrived first is flushed in the same batch. */
-function drainPendingFidelity(sessionID: string): void {
-  const payload = pendingFidelity.get(sessionID);
+ *  so an integrity event that arrived first is flushed in the same batch. */
+function drainPendingIntegrity(sessionID: string): void {
+  const payload = pendingIntegrity.get(sessionID);
   if (!payload) return;
   const session = sessions.get(sessionID);
   if (!session || !cardTreeStore.cards[session.cardID]) return;
-  pendingFidelity.delete(sessionID);
-  materializeFidelity(session, payload);
+  pendingIntegrity.delete(sessionID);
+  materializeIntegrity(session, payload);
 }
 
 // ── Session & part bookkeeping ──
@@ -1072,11 +1112,11 @@ function ensureSessionCard(
       existing.goalID = opts.goalID;
     }
     if (!deferHierarchy) rebuildCardHierarchy();
-    // A fidelity event may have arrived before this session's first
+    // An integrity event may have arrived before this session's first
     // message.updated (reconnect replay, SSE interleaving). Drain any held
     // payload now that the session card exists under its real stage id.
     if (!deferHierarchy) {
-      drainPendingFidelity(sessionID);
+      drainPendingIntegrity(sessionID);
       drainPendingSubagentTerminal(sessionID);
     }
     return existing;
@@ -1110,7 +1150,7 @@ function ensureSessionCard(
 
   if (!deferHierarchy) {
     rebuildCardHierarchy();
-    drainPendingFidelity(sessionID);
+    drainPendingIntegrity(sessionID);
     drainPendingSubagentTerminal(sessionID);
   }
   return info;
@@ -1203,7 +1243,7 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
   for (const sessionView of orderedSessions) {
     const sessionID = String(sessionView?.sessionID || "");
     if (!sessionID) continue;
-    drainPendingFidelity(sessionID);
+    drainPendingIntegrity(sessionID);
     drainPendingSubagentTerminal(sessionID);
   }
 }
@@ -1685,11 +1725,11 @@ function rebuildCardHierarchy(): void {
     nextChildIDs.set(childID, nextChildIDs.get(childID) || []);
   }
 
-  // Fidelity verdict cards attach under their owning requirements session.
+  // Integrity verdict cards attach under their owning requirements session.
   // If the session hasn't arrived yet (unordered replay, or CLI dry-run with
   // no session), the card stays pending — it will NOT fall through to the
   // top level (card escape is forbidden).
-  for (const [cardID, ownerSessionID] of fidelityCardOwners.entries()) {
+  for (const [cardID, ownerSessionID] of integrityCardOwners.entries()) {
     if (!cardTreeStore.cards[cardID]) continue;
     const owner = sessions.get(ownerSessionID);
     if (!owner || !cardTreeStore.cards[owner.cardID]) continue;
@@ -1741,7 +1781,7 @@ function normalizeStepStatus(raw: any): CardStatus {
 //     message's time, user-request from `task.time.created - 2` (the -2ms
 //     is what pins it ahead of any message that shares the exact task
 //     timestamp; no special-case needed here).
-//   • Phase and fidelity cards are always claimed as childIDs of their
+//   • Phase and integrity cards are always claimed as childIDs of their
 //     parent (step / requirements session) before this runs, so they drop
 //     out via the `claimedChildIDs` filter instead of needing kind logic.
 //   • `stage === "executor"` sessions are the goal's executor container
@@ -1768,11 +1808,11 @@ function rebuildTopLevelOrder(): void {
     if (hiddenSessionCardIDs.has(cardID)) continue;
     const card = cardTreeStore.cards[cardID];
     if (!card) continue;
-    // Phase / fidelity / tool cards must never appear at top level. They
+    // Phase / integrity / tool cards must never appear at top level. They
     // belong under their container; reaching here unclaimed means the
     // hierarchy is mid-rebuild, so we drop them rather than let them
     // "escape" (身份规则 §card-escape).
-    if (card.kind === "phase" || card.kind === "fidelity" || card.kind === "tool") continue;
+    if (card.kind === "phase" || card.kind === "integrity" || card.kind === "tool") continue;
     order.push(cardID);
   }
 

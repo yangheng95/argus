@@ -10,7 +10,7 @@ import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
 import { StaticTextPart } from "./TextPart";
 import { StepPayloadBody } from "./StepPayloadBody";
-import { FidelityBody } from "./FidelityCard";
+import { IntegrityBody } from "./IntegrityCard";
 import { TracePanel } from "./TracePanel";
 import { t } from "../utils/i18n";
 
@@ -216,11 +216,12 @@ export function Card(props: { node: CardNode; depth: number }) {
             />
           </Show>
 
-          {/* Fidelity verdict: renders the parsed FidelityResult (verdict
-              badge + issues list + corrections diff) on the fidelity agent
-              card while still preserving the underlying reasoning/tool parts. */}
-          <Show when={props.node.fidelity}>
-            <FidelityBody fidelity={props.node.fidelity!} />
+          {/* Integrity verdict: renders the parsed IntegrityResult (verdict
+              badge + summary + per-dimension pills + issues list +
+              corrections diff) on the integrity agent card while still
+              preserving the underlying reasoning/tool parts. */}
+          <Show when={props.node.integrity}>
+            <IntegrityBody integrity={props.node.integrity!} />
           </Show>
 
           {/* Generic parts */}

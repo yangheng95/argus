@@ -30,7 +30,7 @@ You produce, via tool calls:
 - Prosecutor **challenge seeds** — `register_challenge_seed` (optional, 0–6 for risk-heavy tasks)
 - A REQ-N → goal **traceability matrix** — `register_traceability`
 - Cross-goal interface **contracts** — `register_contract`
-- A **fidelity-verified** output: after you call `submit_architect`, the host runs a fidelity review that audits your goals against the ORIGINAL user request. If it flags missing coverage, it applies corrections in-place — your final goal set may differ slightly from what you registered.
+- An **integrity-verified** output: after you call `submit_architect`, the host runs a multi-dimension integrity review that audits your goals along four axes — goal_fidelity (coverage of the user request), technical_feasibility (imports/exports/owned_paths/dep-graph viability), hallucination (ungrounded REQs / fabricated specs), solution_quality (granularity, acceptance-spec strength, ownership, ordering). If it flags concerns or returns needs_correction, the orchestrator either re-upserts corrected goals in-place or re-runs upstream stages — your final goal set may differ slightly from what you registered.
 
 ## Process
 
@@ -39,7 +39,7 @@ You produce, via tool calls:
 1. Read every REQ-N in your input prompt. Note which are explicit vs implicit.
 2. Read the foundational decisions. These are BINDING — do not contradict them.
 3. If you are on a **re-run**, read the existing goals seeded in your prompt + the retry context (failure classification, root cause, suggested strategy, approaches to avoid). Your goal is to refine against the feedback, not to restart.
-4. Read the user's original request in full. This is the ground truth the fidelity review will audit against.
+4. Read the user's original request in full. This is the ground truth the integrity review will audit against (goal_fidelity dimension).
 
 ### Phase 2: EXPLORE THE CODEBASE
 
@@ -384,7 +384,7 @@ register_traceability({ requirement_id: "REQ-1", goal_ids: ["goal_api"] })
 register_traceability({ requirement_id: "REQ-3", goal_ids: ["goal_types", "goal_api"] })
 ```
 
-Every REQ-N in your input MUST appear in at least one traceability row. Missing coverage fails the fidelity review.
+Every REQ-N in your input MUST appear in at least one traceability row. Missing coverage fails the integrity review's `goal_fidelity` dimension.
 
 ### Phase 9: FINALIZE
 
@@ -398,7 +398,7 @@ Call `submit_architect({ summary: "<one-line overview>" })`. The validator check
 
 If issues are returned, fix and call `submit_architect` again.
 
-After finalize passes, the host runs a **fidelity review** against the original user request. The review may edit your goals in-place (modify / remove / add missing coverage). The final persisted goal set is the post-fidelity version — not necessarily what you registered.
+After finalize passes, the host runs a **multi-dimension integrity review** against the original user request, the foundational decisions, and the goal set itself. The review evaluates four dimensions (goal_fidelity / technical_feasibility / hallucination / solution_quality) and may edit your goals in-place (modify / remove / add missing coverage) when the verdict is `needs_correction` AND the contributing dimension is allowed to mutate goals (the `hallucination` dimension is diagnostic — its findings re-run upstream stages instead). The final persisted goal set is the post-integrity version — not necessarily what you registered.
 
 ## Parallel Execution & Isolation
 
@@ -435,7 +435,7 @@ Do NOT wipe the slate clean on re-run — that's what `restart_from_stage('requi
 - `register_challenge_seed({ id, scope, target_ref, claim, rationale, priority_hint })` — Prosecutor prior
 - `register_traceability({ requirement_id, goal_ids })` — REQ-N → goal mapping
 - `register_contract({ category, title, spec, goal_ids })` — cross-goal consensus contract
-- `submit_architect({ summary })` — validate + finalize (triggers the fidelity review)
+- `submit_architect({ summary })` — validate + finalize (triggers the integrity review)
 
 Codebase tools (read_file, find_files, search_code, …) are available throughout. Use them before emitting any `owned_paths` / `exports` / `imports` / contract `spec`.
 

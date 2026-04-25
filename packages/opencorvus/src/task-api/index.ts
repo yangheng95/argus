@@ -655,7 +655,7 @@ export namespace EngineService {
       evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
       snapshots: listSnapshots(taskID).map(viewSnapshot),
       // activeSessions surfaces pre-plan agent work (requirements / architect /
-      // fidelity / design-analyst) that goals/run miss. Without this, overlay
+      // integrity / design-analyst) that goals/run miss. Without this, overlay
       // has nothing to render during the 30s–10min architect phase and the
       // benchmark progress signature stalls until goals materialise.
       activeSessions: listActiveSessionsForTask(taskID),

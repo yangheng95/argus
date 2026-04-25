@@ -18,7 +18,7 @@
  *
  * The orchestrator is the HOST of the worker-session pattern that
  * `src/agent/runner.ts` abstracts — not a user of that pattern. Worker
- * agents (build, delivery, fidelity, prosecutor, requirements, architect,
+ * agents (build, delivery, integrity, prosecutor, requirements, architect,
  * design-analyst, intent-analysis) collapse into the runner's shape because
  * they all share: single composed system prompt, terminal collector contract,
  * thrown AgentRunError on stream / abort failure, no step-level coordination.
@@ -480,9 +480,10 @@ export const OrchestratorEventNote = {
       "",
       "- **Contract is fine** → do nothing; the loop redispatches under the same contract.",
       "- **Contract gap** → modify_goal (acceptance_specs, owned_paths) on affected goals.",
-      "- **Structural gap** → re-run architect to refine the goal set, then fidelity to confirm coverage.",
-      "- **Same goal-set rejected twice** → re-run architect to regenerate goals, then fidelity.",
-      "- **Coverage drift (rejection cites requirements that are not in any goal)** → call fidelity directly; it will re-upsert the corrected goal set against the same spec snapshot without a full architect re-run.",
+      "- **Structural gap** → re-run architect to refine the goal set, then integrity to confirm coverage + feasibility.",
+      "- **Same goal-set rejected twice** → re-run architect to regenerate goals, then integrity.",
+      "- **Coverage drift (rejection cites requirements that are not in any goal)** → call integrity directly; it will re-upsert the corrected goal set against the same spec snapshot without a full architect re-run.",
+      "- **Hallucination flagged by integrity (ungrounded REQs / fabricated specs)** → restart_from_stage upstream (requirements / design_analysis) — DO NOT just edit goals; the goal layer cannot fix bad upstream input.",
       "- **Requirements themselves wrong** → restart_from_stage('requirements').",
       "",
       "Focus on the SPECIFIC issues. Do NOT rework everything blindly.",

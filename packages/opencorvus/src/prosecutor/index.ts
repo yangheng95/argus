@@ -5,7 +5,7 @@
  * metrics.
  *
  * Lives at the top level (not under `delivery/`) for the same reason
- * `fidelity/` does — every agent has the same outward shape.
+ * `integrity/` does — every agent has the same outward shape.
  *
  * session.kind for prosecutor is "evaluator" (historical naming retained
  * so the overlay does not need to re-key its existing renderers).

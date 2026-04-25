@@ -16,7 +16,7 @@ import { toolNameKey } from "./tool";
 
 export type { StepPayload } from "../store/card-tree";
 
-export type CardKind = "agent" | "step" | "phase" | "tool" | "message" | "fidelity";
+export type CardKind = "agent" | "step" | "phase" | "tool" | "message" | "integrity";
 export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
 
 /** A synthetic "part" inserted between messages when flattening multiple
@@ -104,12 +104,20 @@ export interface CardNode {
    * value contributed to the aggregate maximum.
    */
   contextTokensEstimated?: boolean
-  /** Structured fidelity review payload — only populated for kind="fidelity"
-   *  nodes (produced by tree-writer on fidelity.review.completed). Mirrors
+  /** Structured integrity review payload — only populated for kind="integrity"
+   *  nodes (produced by tree-writer on integrity.review.completed). Mirrors
    *  the shape defined in `store/card-tree.ts` so a store CardNode is
    *  assignable to this utils CardNode without casting. */
-  fidelity?: {
-    verdict: "faithful" | "needs_correction";
+  integrity?: {
+    verdict: "pass" | "concerns" | "needs_correction";
+    summary: string;
+    dimensions: Array<{
+      id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
+      verdict: "pass" | "concerns" | "needs_correction";
+      issueCount: number;
+      correctionCount: number;
+      missingGoalCount: number;
+    }>;
     issues: Array<{ type: string; description: string }>;
     corrections: Array<{
       action: "modify" | "split" | "remove";
@@ -210,10 +218,10 @@ export function defaultExpandedForNode(node: CardNode): boolean {
   if (node.status === "running") return true;
   if (node.kind === "agent") return true;
   if (node.kind === "message") return true;
-  // Fidelity verdicts: always expand. The entire point of the card is to
+  // Integrity verdicts: always expand. The entire point of the card is to
   // surface the structured verdict; a collapsed badge would be weaker than
   // the previous raw-JSON render it replaces.
-  if (node.kind === "fidelity") return true;
+  if (node.kind === "integrity") return true;
   // Executor step cards carry goal description + phase children — the
   // operator almost always wants those visible when the goal is alive.
   // A completed executor collapses to save space.
