@@ -31,11 +31,11 @@ import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 const log = Log.create({ service: "mirror.tool.webpage_compile_html" })
 
 export const WebpageCompileHtmlTool = Tool.define("webpage_compile_html", {
-  description: `Deterministically compile a static \`index.html\` clone from the mirror toolchain output. **ONE-SHOT — refuses if \`index.html\` already exists.**
+  description: `Deterministically compile a static \`index.html\` clone from the mirror toolchain output.
 
 Reads \`<mirrorDir>/extracted-page.json\` (from \`webpage_extract\`) and replays the DOM tree as inline-styled HTML. Promotes \`<mirrorDir>/images/\` to \`<targetDir>/images/\` so the compiled HTML's relative \`src\` paths resolve when served.
 
-Call this exactly ONCE per worktree, BEFORE any manual editing — the compiled HTML is the high-fidelity baseline. After compile, run \`webpage_render\` + \`webpage_evaluate\`; only edit \`index.html\` via the \`edit\` tool when evaluation surfaces a specific gap. Re-running compile would clobber your edits and is REFUSED — if you genuinely need to start over (e.g. because \`webpage_extract\` was re-run with new params), pass \`force: true\`.
+Use this BEFORE any manual editing — the compiled HTML is the high-fidelity baseline. After compile, run \`webpage_render\` + \`webpage_evaluate\`; only edit \`index.html\` directly when evaluation surfaces a specific gap (missing text, color drift, image swap). Do NOT hand-write the clone from scratch.
 
 No LLM, no JavaScript frameworks, no network — pure transformation of the extracted DOM.`,
   parameters: z.object({
@@ -55,37 +55,12 @@ No LLM, no JavaScript frameworks, no network — pure transformation of the extr
       .string()
       .describe("Override the document `<title>`. Defaults to the title captured by `webpage_extract`.")
       .optional(),
-    force: z
-      .boolean()
-      .describe(
-        "Bypass the existing-output guard and overwrite `index.html`. Only set this when you've intentionally re-run `webpage_extract` and need to rebuild from scratch — it WILL discard any manual edits.",
-      )
-      .optional(),
   }),
   async execute(params) {
     const mirrorDir = await resolveMirrorOutputDir(params.mirrorDir)
     const targetDir = params.targetDir
       ? path.resolve(Instance.directory, params.targetDir)
       : Instance.directory
-
-    const indexPath = path.join(targetDir, "index.html")
-
-    // One-shot guard. Re-running compile mid-iteration clobbers any manual
-    // edits the agent made after `webpage_evaluate` surfaced specific gaps,
-    // erasing fidelity progress. The skill forbids it; this enforces the
-    // constraint at the tool layer so prompt drift can't override it.
-    if (!params.force) {
-      try {
-        await fs.access(indexPath)
-        throw new Error(
-          `\`${indexPath}\` already exists. \`webpage_compile_html\` is one-shot — re-running it would discard any manual edits. ` +
-            `If you want to refine the page, use the \`edit\` tool to patch specific gaps surfaced by \`webpage_evaluate\` / \`webpage_text_diff\`. ` +
-            `Pass \`force: true\` only when you have intentionally re-run \`webpage_extract\` and need to rebuild from scratch.`,
-        )
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err
-      }
-    }
 
     const extractedPath = path.join(mirrorDir, "extracted-page.json")
     let raw: unknown
@@ -103,6 +78,7 @@ No LLM, no JavaScript frameworks, no network — pure transformation of the extr
     const page = ExtractedPageSchema.parse(raw)
 
     const html = compileExtractedPageToHtml(page, { title: params.title })
+    const indexPath = path.join(targetDir, "index.html")
     await fs.mkdir(targetDir, { recursive: true })
     await fs.writeFile(indexPath, html, "utf8")
 
