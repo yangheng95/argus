@@ -299,13 +299,23 @@ export namespace PermissionNext {
     },
   )
 
+  /**
+   * Hierarchical permission resolution. Rulesets stack (project → session →
+   * agent), `findLast` wins, more specific layers shadow earlier ones. The
+   * default for an unmatched permission is `allow` — built-in tools never
+   * sit behind a confirmation wall, and operators who want to restrict a
+   * tool add an explicit `deny` (or `ask` for human-approval workflows)
+   * rule. Per rule 23 the system does not impose a hidden state machine
+   * (untyped tool → ask → human → wait forever); LLM agents either run
+   * the tool or get a clear `deny` they can react to.
+   */
   export function evaluate(permission: string, pattern: string, ...rulesets: (Ruleset | undefined)[]): Rule {
     const merged = merge(...rulesets)
     log.info("evaluate", { permission, pattern, ruleset: merged })
     const match = merged.findLast(
       (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
     )
-    return match ?? { action: "ask", permission, pattern: "*" }
+    return match ?? { action: "allow", permission, pattern: "*" }
   }
 
   const EDIT_TOOLS = ["edit", "write", "patch", "multiedit"]
