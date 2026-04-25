@@ -555,6 +555,32 @@ export const OrchestratorEventNote = {
     )
     return lines.join("\n")
   },
+
+  /**
+   * Re-wake note synthesised when a build batch has settled (one or more
+   * `goal_run_attempt` artifacts written) but the orchestrator's previous
+   * decision turn ended without dispatching `deliver`. Per the workflow
+   * contract `deliver` is mandatory after every build batch — without it
+   * the task can never reach an accepted terminal state. The previous
+   * turn's LLM either skipped the call (compliance drift) or stopped early
+   * because it dispatched a verification-kind goal as a build (verification
+   * goals belong to deliver, not build). Per rule 23 the LLM still decides
+   * what to call — this note just surfaces the fact and the consequence.
+   */
+  deliverPending(input: { settledGoalCount: number }): string {
+    return [
+      "## Build batch settled — `deliver` not yet called this iteration",
+      "",
+      `${input.settledGoalCount} goal_run_attempt artifact(s) landed since the last delivery verdict, ` +
+        `but no \`delivery-agent-verdict\` followed. The workflow contract makes \`deliver\` mandatory ` +
+        `after every build batch — passed builds are NOT terminal acceptance.`,
+      "",
+      "Read the current describe / read_context state and call `deliver` next. If you believe deliver " +
+        "is not appropriate (e.g. all goals failed and need rework first), make that decision explicitly " +
+        "via the relevant tool (modify_goal / build with feedback / fail_task) — silence is not an option, " +
+        "the loop will keep waking you on this signal.",
+    ].join("\n")
+  },
 }
 
 // ---------------------------------------------------------------------------
