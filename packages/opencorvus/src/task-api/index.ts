@@ -427,27 +427,28 @@ export namespace EngineService {
     // longer reads task.workflow_state — it always defaults to pipeline
     // and projects step status from DB rows.
 
+    // Hierarchical permission model (rule 23): built-in tools default to
+    // `allow` (see PermissionNext.evaluate). Agent-scoped overlays
+    // (orchestrator, delivery, ...) layer on top via setPermission. Operators
+    // restrict via explicit `deny` / `ask` rules under `tool_permissions`
+    // in their config — only those keys appear here. We intentionally do
+    // NOT inject a `*: "ask"` catch-all; that turned the LLM autonomy gate
+    // into an indefinite block whenever the agent reached for a tool the
+    // catch-all lookup happened to land on (todoread, planner, panel, …).
     const cfg = await Config.get()
     const tp = cfg.tool_permissions ?? {}
-    // Helper: resolve per-tool action; defaults to "ask" unless explicitly configured.
-    const toolAction = (key: keyof NonNullable<typeof tp>): "allow" | "ask" | "deny" =>
-      tp[key] ?? "ask"
-    await Session.setPermission({
-      sessionID: session.id,
-      permission: [
-        { permission: "*",                  pattern: "*", action: "ask" },
-        { permission: "skill",              pattern: "*", action: toolAction("skill") },
-        { permission: "external_directory", pattern: "*", action: toolAction("external_directory") },
-        { permission: "webfetch",           pattern: "*", action: toolAction("webfetch") },
-        // metadata.web_search=true is a per-task override from the chat toggle
-        {
-          permission: "websearch", pattern: "*",
-          action: (metadata as any)?.web_search === true ? "allow" : toolAction("websearch"),
-        },
-        { permission: "task",               pattern: "*", action: toolAction("task") },
-        { permission: "schedule",           pattern: "*", action: toolAction("schedule") },
-      ],
-    })
+    const overrides: Array<{ permission: string; pattern: string; action: "allow" | "ask" | "deny" }> = []
+    for (const [key, action] of Object.entries(tp)) {
+      if (!action) continue
+      overrides.push({ permission: key, pattern: "*", action })
+    }
+    // metadata.web_search=true is a per-task override from the chat toggle.
+    if ((metadata as any)?.web_search === true) {
+      overrides.push({ permission: "websearch", pattern: "*", action: "allow" })
+    }
+    if (overrides.length > 0) {
+      await Session.setPermission({ sessionID: session.id, permission: overrides })
+    }
     // Decode any base64 attachments exactly once: persist the bytes under the
     // project's .opencorvus/attachments directory, then carry only references
     // (sha/url/mime/size/filename) through the queue and into every agent.
