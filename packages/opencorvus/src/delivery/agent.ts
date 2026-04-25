@@ -189,36 +189,11 @@ async function buildPromptParts(
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
+  const inlineParts = await AttachmentStore.inlineFileParts(attachments)
   const parts: Array<
     | { type: "text"; text: string }
     | { type: "file"; url: string; mime: string; filename?: string }
-  > = [{ type: "text", text }]
-
-  if (!attachments?.length) return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
-
-  const inlineable = attachments.filter((a) =>
-    AttachmentStore.isMultimodalSupported(typeof a.mime === "string" ? a.mime : ""),
-  )
-  for (const a of inlineable) {
-    const located = AttachmentStore.nameFromUrl(a.url)
-    if (!located) {
-      log.warn("delivery: attachment url did not resolve", { url: a.url, filename: a.filename })
-      continue
-    }
-    try {
-      const bytes = await AttachmentStore.read(located.projectID, located.name)
-      const base64 = Buffer.from(bytes).toString("base64")
-      parts.push({
-        type: "file",
-        url: `data:${a.mime};base64,${base64}`,
-        mime: a.mime,
-        filename: a.filename,
-      })
-    } catch (err) {
-      log.warn("delivery: attachment read failed", { url: a.url, filename: a.filename, err: String(err) })
-    }
-  }
-
+  > = [{ type: "text", text }, ...inlineParts]
   return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 }
 

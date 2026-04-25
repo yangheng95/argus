@@ -224,8 +224,8 @@ export namespace Orchestrator {
       const attachments = isFirstWake && Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
-      const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
-      const attachmentParts = await AttachmentStore.loadFileParts(multimodal)
+      const { referenceOnly } = AttachmentStore.partition(attachments)
+      const inlineFileParts = await AttachmentStore.inlineFileParts(attachments)
       // Orchestrator is the orchestrator; it does NOT own a `read` tool.
       // Attachments are forwarded automatically to the sub-agents it dispatches
       // (requirements / design_analysis / architect via the `requirements` /
@@ -247,24 +247,7 @@ export namespace Orchestrator {
       const parts: Array<
         | { type: "text"; text: string }
         | { type: "file"; url: string; mime: string; filename?: string }
-      > = [{ type: "text", text: enrichedUserText }]
-      for (const fp of attachmentParts) {
-        if ("image" in fp && fp.image) {
-          const data = typeof fp.image === "string" ? fp.image : undefined
-          if (data) parts.push({ type: "file", url: data, mime: "image/*" })
-          continue
-        }
-        if ("file" in fp && fp.file) {
-          const f = fp.file as { data?: string | Uint8Array; mediaType?: string; filename?: string }
-          if (typeof f.data === "string") {
-            parts.push({ type: "file", url: f.data, mime: f.mediaType ?? "application/octet-stream", filename: f.filename })
-          } else if (f.data instanceof Uint8Array) {
-            const base64 = Buffer.from(f.data).toString("base64")
-            const mime = f.mediaType ?? "application/octet-stream"
-            parts.push({ type: "file", url: `data:${mime};base64,${base64}`, mime, filename: f.filename })
-          }
-        }
-      }
+      > = [{ type: "text", text: enrichedUserText }, ...inlineFileParts]
       const partsWithIds = parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 
       log.info("orchestrator starting", {
