@@ -24,14 +24,10 @@ import { tool } from "ai"
 import { createHash } from "node:crypto"
 import z from "zod"
 import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
-import { resolveAgentModel } from "@/agent/model"
+import { runAgentSession } from "@/agent/runner"
 import { toolGuard } from "@/util/tool-guard"
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
-import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import { Instance } from "@/project/instance"
-import { Identifier } from "@/id/id"
 import type { Message } from "@/session/message"
 import {
   addChallengeMetric,
@@ -305,7 +301,6 @@ export interface ProsecutorRunResult {
 export async function runProsecutor(
   input: ProsecutorRunInput,
 ): Promise<ProsecutorRunResult> {
-  const model = await resolveAgentModel("prosecutor", { sessionID: input.task.sessionID })
   const kit = createProsecutorTools({ task_id: input.task.id, iteration: input.iteration })
   const guard = toolGuard(kit.tools)
 
@@ -325,33 +320,31 @@ export async function runProsecutor(
     architectSeeds: input.architectSeeds ?? [],
   })
 
+  // Prosecutor failures are soft: if the run throws (network, model,
+  // anything), we absorb the error into the rationale string and return
+  // a zero-activity result. The defender's verdict already holds; the
+  // prosecutor is an opportunistic adversary, not a required step.
   let rationale = ""
   try {
-    const prosecutorSession = await Session.createNext({
+    const out = await runAgentSession({
       kind: "evaluator",
-      parentID: input.task.sessionID,
-      title: `Prosecutor: ${input.task.title} (iter ${input.iteration})`,
-      directory: Instance.directory,
+      agentName: "prosecutor",
+      core: PROSECUTOR_CORE,
+      sessionTitle: `Prosecutor: ${input.task.title} (iter ${input.iteration})`,
+      parentSessionID: input.task.sessionID,
+      taskID: input.task.id,
+      signal: input.signal,
+      toolKit: {
+        tools: guard.tools as any,
+        getCollector: () => kit.getCollector(),
+      },
+      buildUserPrompt: () => brief,
     })
-    const enableMap: Record<string, boolean> = Object.fromEntries(
-      Object.keys(guard.tools).map((name) => [name, true]),
-    )
-    let finalMessage: Message.WithParts | undefined
-    await SessionPrompt.withExtraTools(prosecutorSession.id, guard.tools as any, async () => {
-      finalMessage = (await SessionPrompt.prompt({
-        sessionID: prosecutorSession.id,
-        model: { providerID: model.providerID, modelID: model.api.id },
-        agent: "prosecutor",
-        system: PROSECUTOR_SYSTEM,
-        tools: enableMap,
-        parts: [{ type: "text", text: brief, id: Identifier.ascending("part") }],
-      })) as Message.WithParts
-    })
-    rationale = extractRationaleFromMessage(finalMessage)
+    rationale = extractRationaleFromMessage(out.finalMessage)
     log.info("prosecutor finished", {
       task: input.task.id,
       iteration: input.iteration,
-      sessionID: prosecutorSession.id,
+      sessionID: out.session.id,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
