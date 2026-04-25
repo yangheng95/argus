@@ -232,14 +232,21 @@ const noBrowser = process.argv.includes("--no-browser")
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
 
-const DEFAULT_TASK_TITLE = "Overlay Web Benchmark — Baidu Homepage Clone"
-const DEFAULT_BAIDU_REFERENCE = path.join(import.meta.dir, "assets", "baidu.png")
+const DEFAULT_TASK_TITLE = "Overlay Web Benchmark — Ainvest Page Clone"
+const DEFAULT_REFERENCE = path.join(import.meta.dir, "assets", "ainvest.png")
 // When the caller runs with no custom request/attachment/reference, the default
-// Baidu-clone task drives the visual-diff gate using the committed fixture.
+// Ainvest-clone task drives the visual-diff gate using the committed fixture
+// at script/benchmark/assets/ainvest.png. Drop the file in there before running
+// the default case; otherwise the benchmark still kicks off but the visual-diff
+// gate has no reference to score against.
+const defaultRefExists = await fs.stat(DEFAULT_REFERENCE).then(() => true).catch(() => false)
+if (!defaultRefExists && rawReferenceImages.length === 0 && !requestFile && !requestAttachment) {
+  console.warn(`[overlay-benchmark] default reference missing: ${DEFAULT_REFERENCE} — pass --reference or --url to provide one, or drop a screenshot at that path.`)
+}
 const referenceImages = rawReferenceImages.length > 0
   ? rawReferenceImages
-  : (!requestFile && !requestAttachment ? [DEFAULT_BAIDU_REFERENCE] : [])
-const DEFAULT_TASK_REQUEST = `请帮我复刻百度的主页，要包含后端实现，是一个完整的系统，网页组件交互等均要实现`
+  : (!requestFile && !requestAttachment && defaultRefExists ? [DEFAULT_REFERENCE] : [])
+const DEFAULT_TASK_REQUEST = `复刻Ainvest的页面，要求包含完整的前端和后端实现，网页组件不缺漏，组件交互完整，例如k线和指标等等`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
