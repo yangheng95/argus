@@ -199,6 +199,14 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-call": {
+                  // Pause the chunk-driven idle gate while the SDK runs the
+                  // tool's `execute`. Long-running tools (build agent ~100-300s,
+                  // delivery, architect) hold the LLM stream open without
+                  // emitting chunks; the gate's 180s default would false-positive
+                  // trip otherwise. Resume on tool-result. Per rule 23 the
+                  // pause is scoped to known stream-pause semantics (tool-call
+                  // boundary), not a generic disable switch.
+                  gate.pause()
                   const match = toolcalls[value.toolCallId]
                   if (match) {
                     const part = await Session.updatePart({
@@ -246,6 +254,11 @@ export namespace SessionProcessor {
                   break
                 }
                 case "tool-result": {
+                  // Pair with `gate.pause()` from tool-call. resume() is a
+                  // no-op if the gate isn't paused (e.g. tool-result without
+                  // matching tool-call after a recovery), so this is safe to
+                  // run unconditionally before the match check.
+                  gate.resume()
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     await Session.updatePart({
@@ -269,6 +282,9 @@ export namespace SessionProcessor {
                 }
 
                 case "tool-error": {
+                  // Pair with `gate.pause()` from tool-call (errors close the
+                  // tool-call window just like results).
+                  gate.resume()
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     await Session.updatePart({
