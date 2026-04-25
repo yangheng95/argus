@@ -158,33 +158,33 @@ Call `webpage_render` (no args needed — defaults render `<worktree>/index.html
 
 ## Step 7 — Evaluate
 
-Two complementary checks. Run BOTH after every render — they catch different failure modes and disagreement between them is itself a signal.
-
-### 7a. Visual judge (PRIMARY acceptance gate)
+### 7a. Visual judge (THE acceptance gate)
 
 Call `webpage_vision_judge` (no args needed — defaults read `mirror/reference.png` + `mirror/rendered.png`). It does a single-shot vision-LLM call with no system prompt and no tool list — just the two images and a request to enumerate visible differences. Output goes to `mirror/vision-judge.json` and includes:
 
 - `accepted: true|false` — the acceptance signal you trust
 - `differences[]` — ranked list with `severity` (critical/major/minor), `region`, `observed`, `expected`, and a concrete `fix_hint` per item
 
-Why this is primary: SSIM numbers and text-diffs are proxies that have historically let the agent skip looking at pixels (score plateau at ~94 with logo SVG and icons visibly wrong). Vision-judge forces an actual visual comparison every round.
+Why this is the gate: SSIM numbers and pixel-diff heatmaps are proxies that let the agent skip looking at pixels (score plateau at ~94 with logo, search-box layout, and floating buttons visibly wrong). Vision-judge forces an actual visual comparison every round.
 
-### 7b. SSIM + diff heatmap (secondary, structural)
+### 7b. SSIM score (progress + regression signal)
 
-Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Writes `mirror/diff.png` (red = pixels that differ) and `mirror/eval-result.json`. Returns a 0–100 score (`round(ssim × 50 + (100 − pixelDiff%) × 0.5)`).
+Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Writes `mirror/eval-result.json`. Returns a 0–100 score (`round(ssim × 50 + (100 − pixelDiff%) × 0.5)`).
 
-Treat the score as a **trend indicator** for layout/colour drift, not as the acceptance gate. The diff heatmap is useful when vision-judge flags a region but you can't immediately see where the largest pixel-level error sits.
+Track the score across iterations: rising = your edits are helping, falling = a refactor regressed something. The score alone cannot decide acceptance — vision-judge does that — but a sudden drop is a real signal worth investigating.
 
 ## Step 8 — Iterate on specific gaps
 
-If the score is below target you MUST iterate. Most remaining gaps come from dynamic content (rotating placeholders, ads, personalisation), font fallbacks, images the extractor could not download, or layout drift.
+**Target:** `webpage_evaluate` overall score **≥ 95** AND `webpage_vision_judge.accepted = true`. Either condition alone is not enough — a 96 score with structurally wrong layout is not done; a vision-judge accept with score 80 means a regression slipped in.
+
+**Stagnation guard (HARD STOP):** if **3 consecutive iterations** fail to raise the score above the previous best (`new_score ≤ best_score_so_far`), STOP iterating and proceed to acceptance with the best snapshot. The remaining gap is either dynamic content that can't be statically cloned, or a structural decision the next pass (delivery / orchestrator) needs to handle. Do not burn rounds 4–8 grinding on the same plateau — record the final verdict and hand off.
 
 For each round (up to **8**, count explicitly):
 
 1. **Diagnose** in this order:
+   - Open `mirror/reference.png` and `mirror/rendered.png` with the `read` tool and look at them yourself first. The score by itself can plateau in the 90s while structural elements are still wrong.
    - `webpage_vision_judge` — the structured `differences[]` list IS your work queue. Each entry already has a `fix_hint`. Address `severity: "critical"` items first, then `major`, then `minor`.
    - `webpage_text_diff` — list of reference strings absent from your render. Reliable signal for missing copy / hot-search rows / nav labels.
-   - Inspect `mirror/diff.png` — only when you need to localise the pixel error that vision-judge flagged but you can't see at a glance.
 2. **Edit** `index.html` with the `edit` tool (targeted patches; do NOT rewrite the whole file once it's at a workable state):
    - Apply the `fix_hint` for each diff vision-judge listed (severity-ordered).
    - Insert any strings reported by `webpage_text_diff`, in the right section per `page-ir.xml`'s `Section Text` catalogue. Keep wording verbatim.
@@ -193,7 +193,11 @@ For each round (up to **8**, count explicitly):
    - Preserve every element + CSS rule that is already rendering correctly. Deleting correct markup costs points you won't recover.
 3. Re-run `webpage_render`.
 4. Re-run `webpage_vision_judge` AND `webpage_evaluate`.
-5. If `webpage_vision_judge` returns `accepted=true` (and SSIM has not regressed), proceed to acceptance. If still `accepted=false` and you've completed fewer than 8 rounds, go back to step 1. If you've completed 8 rounds and the verdict still rejects, STOP. Report the final verdict, the biggest remaining critical/major diffs, and any obvious blockers (e.g. dynamic content that cannot be statically cloned).
+5. **Decide:**
+   - If `score ≥ 95` AND `webpage_vision_judge.accepted = true` → goal done, proceed to acceptance.
+   - If 3 consecutive rounds with no new high score → STOP (stagnation guard above). Report the final score, the biggest remaining critical/major diffs from vision-judge, and any obvious blockers (dynamic content, missing asset). Hand off to delivery.
+   - If you've completed 8 rounds without acceptance → STOP. Same handoff as the stagnation case.
+   - Otherwise go back to step 1.
 
 ## Cross-goal artifact sharing — DO NOT delete `mirror/`
 

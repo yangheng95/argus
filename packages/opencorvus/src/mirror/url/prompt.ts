@@ -104,10 +104,11 @@ sections you rendered and any known gaps.
 export interface BuildCloneFeedbackInput {
   iter: number
   evalReport: EvaluationReport
-  diffPath: string
   referencePath: string
   targetScore: number
   bestScore: number
+  /** How many consecutive iterations have failed to raise the best score. */
+  consecutiveNoImprovement: number
   missingTokens: string[]
 }
 
@@ -129,27 +130,37 @@ export function buildCloneFeedback(input: BuildCloneFeedbackInput): string {
       ? `\n**Regression guard**: a previous iteration scored ${input.bestScore}/100, and we restored \`index.html\` to that best version. Do NOT rewrite the whole file with \`write\` — use \`edit\` to ADD missing elements and CSS rules. Deleting existing correct markup has cost us points before.\n`
       : ""
 
+  const stagnationWarning =
+    input.consecutiveNoImprovement >= 3
+      ? `\n**Stagnation HARD STOP**: ${input.consecutiveNoImprovement} consecutive iterations failed to raise the best score (${input.bestScore}/100). Stop iterating — the remaining gap is not closeable from text edits. Hand off the best snapshot to delivery.\n`
+      : input.consecutiveNoImprovement >= 1
+        ? `\n**Stagnation watch**: ${input.consecutiveNoImprovement}/3 iterations with no new high score. If the next round also fails to improve, stop iterating and hand off.\n`
+        : ""
+
   return `
 Previous iteration scored ${r.overallScore}/100 (target ≥ ${input.targetScore}, gap = ${gapToTarget}).
-Best iteration so far: ${input.bestScore}/100.
+Best iteration so far: ${input.bestScore}/100. Iterations without improvement: ${input.consecutiveNoImprovement}/3.
 
-Metrics:
+Metrics (track them across iterations as a progress / regression signal):
   - SSIM structural similarity: ${r.ssimScore.toFixed(3)}
   - Pixel diff: ${r.pixelDiffPercent.toFixed(2)}% (${r.mismatchedPixels}/${r.totalPixels} px)
   - Dimension match: ${r.dimensionsMatch}
 
-Artefacts (read them with the \`read\` tool):
+Required visual review:
   - Reference screenshot: ${input.referencePath}
   - Your render:          ${renderedPath}
-  - Pixel diff heatmap:   ${input.diffPath}
-${regressionWarning}
+  Open BOTH images and compare them yourself before editing. The score by itself
+  cannot tell you whether structural elements (button placement, search box
+  layout, section ordering) are correct — only the side-by-side comparison can.
+${regressionWarning}${stagnationWarning}
 ${missingLines}
 
 Operating guidance:
   1. Use \`edit\` (NOT \`write\`) to append missing elements / add CSS rules to
      the existing \`index.html\`.
   2. Do NOT remove any element or CSS rule that is already rendering correctly.
-  3. Start with the largest red-zone in the diff image, then move to smaller ones.
+  3. Pick the most visually-impactful gap first (wrong layout / wrong colour /
+     wrong icon). Don't chase pixel-level shimmer.
   4. Colours MUST come from \`design-tokens.ts\` (COLORS constant) — reference
      them via the \`var(--…)\` custom properties you injected at \`:root\`. Do not
      invent hex values.
