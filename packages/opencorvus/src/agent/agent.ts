@@ -108,6 +108,7 @@ export namespace Agent {
       webpage_render: "allow",
       webpage_evaluate: "allow",
       webpage_text_diff: "allow",
+      webpage_vision_judge: "allow",
       external_code_search: "allow",
       lsp: "allow",
       memory: "allow",

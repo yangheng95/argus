@@ -42,6 +42,7 @@ import {
   WebpageRenderTool,
   WebpageEvaluateTool,
   WebpageTextDiffTool,
+  WebpageVisionJudgeTool,
 } from "../mirror/tools"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
@@ -150,6 +151,7 @@ export namespace ToolRegistry {
       WebpageRenderTool,
       WebpageEvaluateTool,
       WebpageTextDiffTool,
+      WebpageVisionJudgeTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,

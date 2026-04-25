@@ -9,6 +9,7 @@
  *   - webpage_render        index.html → PNG screenshot
  *   - webpage_evaluate      (reference, rendered) → score + diff PNG
  *   - webpage_text_diff     reference DOM vs rendered DOM → missing tokens
+ *   - webpage_vision_judge  (reference, rendered) → vision-LLM verdict + ranked diffs
  *
  * A skill (\`src/skill/builtin/webpage-generate.md\`) composes them for the
  * agent; no tool calls another tool internally. The deliverable `index.html`
@@ -22,3 +23,4 @@ export { WebpageAnalyzeTool } from "./webpage-analyze"
 export { WebpageRenderTool } from "./webpage-render"
 export { WebpageEvaluateTool } from "./webpage-evaluate"
 export { WebpageTextDiffTool } from "./webpage-text-diff"
+export { WebpageVisionJudgeTool } from "./webpage-vision-judge"
