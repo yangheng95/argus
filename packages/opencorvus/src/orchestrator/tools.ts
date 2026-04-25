@@ -1598,18 +1598,19 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        const run = findActiveRunForTask(taskID)
-        if (!run) {
-          return SubAgentProtocol.yieldResult({
-            headline: "prosecute: no active run — `deliver` must run first.",
-            pointer: `task ${taskID}`,
-          })
+        // Stateless / unconditional — physical preconditions only (a delivery
+        // row to prosecute against). The "No active run" message was a
+        // state-machine cache gate; same lazy-bootstrap as deliver/publish.
+        let run = findActiveRunForTask(taskID)
+        if (!run && listGoals(taskID).length > 0) {
+          const ensured = await ensureDispatchableRunForSingleGoal()
+          if (!("error" in ensured)) run = ensured.run
         }
-        const delivery = findDeliveryByRun(run.id)
+        const delivery = run ? findDeliveryByRun(run.id) : undefined
         if (!delivery) {
           return SubAgentProtocol.yieldResult({
-            headline: "prosecute: no delivery row on the active run — call `deliver` first.",
-            pointer: `run ${run.id}`,
+            headline: "prosecute: no delivery row to prosecute against — call `deliver` first to produce one.",
+            pointer: run ? `run ${run.id}` : `task ${taskID}`,
           })
         }
         const { EngineArtifactTable } = await import("@/engine/engine.sql")
@@ -2370,23 +2371,30 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        const activeRun = findActiveRunForTask(task.id)
-        if (!activeRun) return "No active run. Execute goals first."
+
+        // Stateless / unconditional deliver (rule 23): every task ends through
+        // this agent regardless of upstream state. No "execute goals first"
+        // gate. If no coordinator run exists yet (e.g. direct request-only
+        // path, or LLM chose to deliver before any build) we lazy-bootstrap
+        // one when there are goals to anchor it; otherwise we proceed with a
+        // null run id and let the delivery agent decide on the available state.
+        let activeRun = findActiveRunForTask(task.id)
+        if (!activeRun && listGoals(taskID).length > 0) {
+          const ensured = await ensureDispatchableRunForSingleGoal()
+          if (!("error" in ensured)) activeRun = ensured.run
+        }
+        const run = activeRun
 
         await trackStepStart("deliver")
-        const run = activeRun
 
         const goals = listGoals(taskID)
 
-        // Rule 23: no state-machine gates. LLM chooses when to deliver; the
-        // DeliveryAgent sees whatever state the task is in (goals running /
-        // pending / failed / passed) and makes its own acceptance call.
-        // Goal statuses are still read below for aggregation, but no branch
-        // here rejects the call based on them.
-
-        // Aggregate per-goal deliveries
-        const { listGoalRunsForRun, findDeliveryByGoalRun } = await import("@/engine/store")
-        const goalRuns = listGoalRunsForRun(run.id)
+        // Aggregate per-goal deliveries — query by task so deliver still works
+        // when no coordinator run exists (e.g. tasks that bypassed the
+        // pipeline). When a run exists every goal_run_attempt also carries
+        // its run_id; the task-scoped query returns the same set.
+        const { listGoalRunsForTask, findDeliveryByGoalRun } = await import("@/engine/store")
+        const goalRuns = listGoalRunsForTask(task.id)
         const allDiffs: Array<{ file: string; diff?: string; [key: string]: unknown }> = []
         const seenFiles = new Set<string>()
         const summaries: string[] = []
@@ -2681,7 +2689,7 @@ export function createOrchestratorTools(input: {
               .values({
                 id: verdictArtifactId,
                 task_id: taskID,
-                run_id: run.id,
+                run_id: run?.id ?? null,
                 delivery_id: deliveryID,
                 kind: "verdict",
                 label: "delivery-agent-verdict",
@@ -2798,7 +2806,7 @@ export function createOrchestratorTools(input: {
             db.insert(EngineArtifactTable).values({
               id: verdictArtifactId,
               task_id: taskID,
-              run_id: run.id,
+              run_id: run?.id ?? null,
               delivery_id: deliveryID,
               kind: "verdict",
               label: "delivery-agent-verdict",
@@ -2999,10 +3007,20 @@ export function createOrchestratorTools(input: {
 
           if (verdict.verdict === "accepted") {
             await trackStepComplete("deliver")
-            log.info("deliver: agent accepted, auto-publishing", { taskID, runID: run.id, deliveryID })
+            log.info("deliver: agent accepted, auto-publishing", { taskID, runID: run?.id ?? null, deliveryID })
             // Auto-publish: delivery agent accepted → immediately complete task.
             // No second LLM turn needed — avoids infinite loop where LLM ends turn
             // without calling publish_delivery.
+            //
+            // Stateless deliver path (run-less tasks): if no coordinator run
+            // exists, there is no Publisher pipeline to drive — the task has
+            // no goals/plan to merge. The verdict is already recorded above;
+            // surface the accept to the LLM so it can fail-task or complete
+            // by other means. This path is rare (most tasks now lazy-create
+            // a run via build), but covered for unconditional deliver intent.
+            if (!run) {
+              return `Delivery verified and ACCEPTED, but no coordinator run exists for this task — nothing for Publisher to merge. Verdict artifact ${verdictArtifactId} recorded; call modify_goal/build to materialise a goal-bearing run if you need to publish a deliverable.`
+            }
             try {
               const delivery = findDeliveryByRun(run.id)
               if (!delivery) return `Delivery verified and ACCEPTED but no delivery record found.`
@@ -3278,13 +3296,21 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        const run = findActiveRunForTask(task.id)
-        if (!run) return "No active run."
 
-        // No blocking-failed gate here — the LLM reads the describe layer and
-        // decides. Delivery existence is still required (we cannot publish
-        // what was never built); that's a physical precondition, not a status
-        // cache check.
+        // Stateless / unconditional — same intent as `deliver`. publish_delivery
+        // has TWO physical preconditions (delivery row exists; verdict artifact
+        // exists) — those stay because "you cannot publish what was never built
+        // / never verified" is a physical fact, not a state-machine cache. The
+        // "No active run" gate WAS state-machine-ish; lazy-bootstrap a run if
+        // one is missing (the deliver call that produced the verdict already
+        // does this, so in practice it always exists at this point).
+        let run = findActiveRunForTask(task.id)
+        if (!run && listGoals(task.id).length > 0) {
+          const ensured = await ensureDispatchableRunForSingleGoal()
+          if (!("error" in ensured)) run = ensured.run
+        }
+        if (!run) return "publish_delivery: no coordinator run for this task — call build (with a goal) or deliver first to materialise one."
+
         const delivery = findDeliveryByRun(run.id)
         if (!delivery) return "No delivery found."
 
