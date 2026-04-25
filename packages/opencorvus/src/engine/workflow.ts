@@ -136,16 +136,16 @@ const DIRECT: MiniWorkflow = {
       id: "analyze_intent",
       tool: "analyze_intent",
       label: "Intent",
-      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。每个 task 都跑（fresh / re-entry / scope change）。如返回 blocker clarifications，必须先调 question 再继续。",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑；明确的 single-edit 可跳过。返回 blocker clarifications 时先调 question。",
       scope: "task",
-      skippable: false,
+      skippable: true,
       after: [],
     },
     {
       id: "build",
       tool: "build",
       label: "Build",
-      hint: "调用 build agent 直接实现请求（read/write/edit/bash）。完成后必须 call deliver — 不再自动 complete 任务。",
+      hint: "调用 build agent 直接实现请求（read/write/edit/bash）。Direct shape (无 goalID) 用于单文件 / bug fix / 整体 rework；Pipeline shape (有 goalID) 在 architect 之后用。完成后必须 call deliver。",
       scope: "task",
       skippable: false,
       after: ["analyze_intent"],
@@ -178,16 +178,16 @@ const PIPELINE: MiniWorkflow = {
       id: "analyze_intent",
       tool: "analyze_intent",
       label: "Intent",
-      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。每个 task 都跑（fresh / re-entry / scope change）。如返回 blocker clarifications，必须先调 question 再继续。",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。按需调用 —— request 模糊或 scope 不清时跑。返回 blocker clarifications 时先调 question。",
       scope: "task",
-      skippable: false,
+      skippable: true,
       after: [],
     },
     {
       id: "design_analysis",
       tool: "design_analysis",
       label: "Design",
-      hint: "分析视觉参考（图片/URL），提取布局、样式、组件清单。仅前端/UI 任务且有视觉参考时触发。",
+      hint: "分析视觉参考（图片/URL），提取布局、样式、组件清单。仅前端/UI 任务且有视觉参考时按需触发。",
       scope: "task",
       skippable: true,
       after: ["analyze_intent"],
@@ -196,18 +196,18 @@ const PIPELINE: MiniWorkflow = {
       id: "requirements",
       tool: "requirements",
       label: "Requirements",
-      hint: "分析输入并分解为带验收标准的 goals。",
+      hint: "分析输入并分解为 REQ-N + 基础决策。多文件 / 需要显式验收标准时按需调用；trivial direct edit 可跳过。",
       scope: "task",
-      skippable: false,
+      skippable: true,
       after: ["design_analysis"],
     },
     {
       id: "architect",
       tool: "architect",
       label: "Architect",
-      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约。每个 task 都要跑；delivery 拒绝后也可 re-run 精修 goal 集合。后续 integrity 审查多维度（goal fidelity / 技术可行性 / hallucination / 方案质量）。",
+      hint: "权威分解者：读 REQ-N + 决策，产出 goals / 度量 / 挑战种子 / 契约。多 goal / 跨模块时按需调用；trivial 单文件改动可跳过。delivery 拒绝后可 re-run 精修 goal 集合。后续 integrity 按需审查多维度（goal fidelity / 技术可行性 / hallucination / 方案质量）。",
       scope: "task",
-      skippable: false,
+      skippable: true,
       after: ["requirements"],
     },
     {
@@ -544,7 +544,7 @@ function mapGoalRunToStepStatus(
  */
 export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowState, taskID?: string): string {
   const lines: string[] = []
-  lines.push(`## Recommended Workflow: ${workflow.name}`)
+  lines.push(`## Stage progress (advisory — agents are dispatched on-demand, not in fixed order)`)
   lines.push("")
 
   const derivedGoalSteps = taskID ? projectGoalSteps(taskID, workflow) : state.goalSteps
@@ -590,11 +590,10 @@ export function renderWorkflowPrompt(workflow: MiniWorkflow, state: WorkflowStat
 
   lines.push("")
   lines.push(
-    "NOTE: 这是推荐路径，不是固定 pipeline。允许的偏离：" +
-    "(a) pipeline 失败时优先 modify_goal/retry_goal 重走 pipeline；" +
-    "(b) 当 goal 级修复明显不够（跨 goal 整合、全局重构）时，回落 direct build 修复后再 deliver；" +
-    "(c) direct build 中途发现需要分解时，调 requirements 切到 pipeline。" +
-    "deliver rejection 必须循环回 build 修复，直到接受或耗尽 max_delivery_iterations。",
+    "NOTE: 上面是按需调用的可见进度，不是必须按序触发的状态机。每个 stage agent 是否调用由你 " +
+    "（编排器）按 request 形态决定 —— 跳过等同于显式选择，理由要在 reasoning 里讲清楚。`deliver` " +
+    "始终是唯一的接受闸；deliver rejection 必须循环回 build 修复，直到接受或耗尽 " +
+    "max_delivery_iterations。",
   )
 
   return lines.join("\n")
