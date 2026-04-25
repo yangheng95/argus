@@ -206,5 +206,12 @@ export function effectiveRole(msg: any, _rootSessionID?: string): string {
     const normalized = normalizeAgentRole(agent);
     if (AGENT_CARD_STAGES.has(normalized)) return normalized;
   }
-  return msg.info?.role || "assistant";
+  // No assistant-fallback (一个萝卜一个坑). If we got here, the message has
+  // no resolvedRole AND no recognised agent AND no role — that's a server
+  // bridge bug; throw so it surfaces immediately.
+  const fallback = msg.info?.role;
+  if (typeof fallback !== "string" || fallback.length === 0) {
+    throw new Error(`effectiveRole: message ${msg.info?.id ?? "<unknown>"} has no resolvedRole/agent/role; bridge must enrich`);
+  }
+  return fallback;
 }

@@ -206,7 +206,14 @@ function projectSyntheticMessages(allMessages: any[]): void {
     const id = String(m?.info?.id || "");
     if (!id) continue;
     const cardID = syntheticCardID(id);
-    const role = String(m?.info?.role || "assistant");
+    // No assistant-fallback (一个萝卜一个坑). Synthetic messages must carry an
+    // explicit role; if a synthesizer forgot to set it, throw loudly so the
+    // upstream emitter is fixed instead of mis-attributing the card.
+    const rawRole = m?.info?.role;
+    if (typeof rawRole !== "string" || rawRole.length === 0) {
+      throw new Error(`synthetic message ${id} missing info.role; emitter must set role explicitly`);
+    }
+    const role = rawRole;
     const time = Number(m?.info?.time?.created || 0);
     if (!(time > 0)) {
       throw new Error(`synthetic message ${id} missing info.time.created; messageStore emitter is the single source of truth`);
@@ -408,8 +415,20 @@ function handleMessageUpdated(event: any): void {
   const sessionID = String(info.sessionID || "");
   if (!id || !sessionID) throw new Error("message.updated info missing id/sessionID");
 
-  const role = String(info.role || "");
-  const resolvedRole = String(info.resolvedRole || info.agent || role || "assistant");
+  // No assistant-fallback (一个萝卜一个坑). Every event must arrive with role
+  // + resolvedRole already populated by the server bridge (overlayMeta). If
+  // either is missing, throw — silently routing role-less events into the
+  // generic assistant card orphans the actual agent's stream.
+  const rawRole = info.role;
+  if (typeof rawRole !== "string" || rawRole.length === 0) {
+    throw new Error(`message.updated info missing role for message ${info.id}; bridge must enrich it`);
+  }
+  const role = rawRole;
+  const rawResolvedRole = info.resolvedRole || info.agent || role;
+  if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
+    throw new Error(`message.updated info missing resolvedRole/agent for message ${info.id}`);
+  }
+  const resolvedRole = String(rawResolvedRole);
   const agent = String(info.agent || "");
   const parentSessionID = String(info.parentSessionID || "");
   const goalID = String(info.goalID || "");
@@ -1203,8 +1222,18 @@ export function hydrateConversationView(view: any, transcript: any[]): void {
         throw new Error(`hydrateConversationView: message ${messageID} missing from transcript`);
       }
       const info = message?.info;
-      const role = String(info?.role || "");
-      const resolvedRole = String(info?.resolvedRole || info?.agent || role || "assistant");
+      // No assistant-fallback (一个萝卜一个坑) — replay path must reflect the
+      // same role attribution the live event stream carries.
+      const rawRole = info?.role;
+      if (typeof rawRole !== "string" || rawRole.length === 0) {
+        throw new Error(`hydrateConversationView: message ${messageID} missing info.role`);
+      }
+      const role = rawRole;
+      const rawResolvedRole = info?.resolvedRole || info?.agent || role;
+      if (typeof rawResolvedRole !== "string" || rawResolvedRole.length === 0) {
+        throw new Error(`hydrateConversationView: message ${messageID} missing resolvedRole/agent`);
+      }
+      const resolvedRole = String(rawResolvedRole);
       const agent = String(info?.agent || "");
       const parentSessionID = String(info?.parentSessionID || session.parentSessionID || "");
       const goalID = String(info?.goalID || session.goalID || "");
