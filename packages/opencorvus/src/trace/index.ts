@@ -71,6 +71,13 @@ export namespace AgentTrace {
   }
 
   function traceDir(): string {
+    // Override path: benchmark runs / CI pipelines that wipe Instance.directory
+    // at the end of the run (overlay-web-benchmark deletes the entire
+    // temp.dir on exit) set this env to a stable location so traces survive.
+    // Default — Instance.directory/.opencorvus/trace — is the right answer
+    // for normal interactive sessions where the project dir is permanent.
+    const override = process.env.OPENCORVUS_AGENT_TRACE_DIR
+    if (override && override.length > 0) return override
     return path.join(Instance.directory, ".opencorvus", "trace")
   }
 
