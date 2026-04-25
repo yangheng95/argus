@@ -37,6 +37,8 @@ import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
+import type { VisualSpec } from "@/design-analyst/types"
+import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
@@ -44,6 +46,51 @@ import BUILD_CORE from "@/prompt/core/build-core.txt"
 const log = Log.create({ service: "build-agent" })
 
 export namespace BuildAgent {
+  /**
+   * Upstream context the build agent needs but cannot recover from `target`
+   * alone. Composed by the caller (orchestrator's `build` tool) from DB
+   * state — REQ-N list, design specs, architect contracts, dependency
+   * goal output, and any prior-attempt retry feedback. Each section is
+   * optional; the agent renders only the ones the caller fills in.
+   *
+   * Why a separate field instead of fattening `BuildTarget`: BuildTarget
+   * is the Zod-validated tool-input schema the orchestrator hands the
+   * LLM. Keeping it minimal avoids forcing the orchestrator to restate
+   * the entire upstream context as JSON tool-call arguments. Context is
+   * server-side composition that the build agent reads directly.
+   */
+  export interface BuildContext {
+    /** REQ-N list produced by Requirements. Drives "what does the user
+     *  actually want" beyond the goal's compressed acceptance_specs. */
+    requirements?: Array<{ id: string; type: "explicit" | "implicit"; description: string }>
+    /** Visual contract from design_analysis (palette, typography, layout,
+     *  components, interactions). Build implementations pulling on UI must
+     *  honour the relevant subset. */
+    designSpecs?: VisualSpec[]
+    /** Cross-goal interface contracts the architect committed to the
+     *  decision log. Each entry is either targeted at this goal explicitly
+     *  or task-wide (goalIDs is empty / omitted). */
+    architectContracts?: Array<{
+      category: string
+      title: string
+      spec: string
+      goalIDs?: string[]
+    }>
+    /** Sibling goals listed in `target.depends_on`. These already merged
+     *  into the worktree base, but the agent benefits from seeing their
+     *  titles + objectives so it knows what is already provided. */
+    dependencies?: Array<{
+      id: string
+      title: string
+      objective: string
+      commit_ref?: string
+    }>
+    /** Pre-rendered "Prior Attempt Failed" section from the decision log's
+     *  retry entries. Empty / undefined on the first attempt. The caller
+     *  composes the markdown so this agent doesn't need DB access. */
+    retryFeedback?: string
+  }
+
   export interface RunInput {
     /** The work target — either a scoped goal (pipeline workflow) or a
      *  free-form request (direct workflow). See build/types.ts. */
@@ -52,6 +99,12 @@ export namespace BuildAgent {
      *  metadata. The build agent does NOT read DB state itself — `task` is
      *  threaded in by the orchestrator's build tool wrapper. */
     task: TaskRow
+    /** Upstream context (requirements, design specs, architect contracts,
+     *  dependency siblings, retry feedback). The orchestrator composes
+     *  this from DB before invoking BuildAgent.run; the agent renders the
+     *  populated sections into the user prompt. Absent fields render to
+     *  nothing (safe for the direct-build path that has no architect). */
+    context?: BuildContext
     /** Parent session the child build session attaches under. Typically
      *  the orchestrator's own child session so overlay nesting stays
      *  intuitive. Optional: when absent the build session is top-level. */
@@ -142,7 +195,7 @@ export namespace BuildAgent {
         model: model.id,
       })
 
-      const userPrompt = buildUserPrompt(input.target)
+      const userPrompt = buildUserPrompt(input.target, input.context)
       let finalMessage: Message.WithParts | undefined
       try {
         finalMessage = (await SessionPrompt.prompt({
@@ -218,9 +271,79 @@ function buildSessionTitle(target: BuildTarget): string {
   return `Build: ${snippet}${target.text.length > 60 ? "…" : ""}`
 }
 
-function buildUserPrompt(target: BuildTarget): string {
+function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
   if (target.kind === "goal") {
     const lines: string[] = []
+
+    // ── Upstream context (rule 23): the goal contract is a compressed view;
+    //    the build agent benefits from the original Requirements list and
+    //    architect cross-goal contracts when implementing the goal. Each
+    //    section is rendered only when the caller supplied it. ───────────
+    const reqs = context?.requirements ?? []
+    if (reqs.length > 0) {
+      lines.push("## Requirements (from Requirements stage)")
+      lines.push("")
+      lines.push(
+        "These are the user-facing requirements driving this task. Your goal's acceptance_specs are derived from a subset; consult the originals when an implementation choice is ambiguous.",
+      )
+      lines.push("")
+      for (const r of reqs) {
+        lines.push(`- **${r.id}** [${r.type}]: ${r.description}`)
+      }
+      lines.push("")
+    }
+
+    const contracts = (context?.architectContracts ?? []).filter((c) => {
+      if (!c.goalIDs || c.goalIDs.length === 0) return true // task-wide
+      return c.goalIDs.includes(target.id)
+    })
+    if (contracts.length > 0) {
+      lines.push("## Architect Contracts (cross-goal consensus, must honour)")
+      lines.push("")
+      lines.push(
+        "The architect committed these interface contracts to the decision log. They are binding: violating them will fail the integration merge.",
+      )
+      lines.push("")
+      for (const c of contracts) {
+        const scope = c.goalIDs && c.goalIDs.length === 1 ? "(this goal)" : "(task-wide)"
+        lines.push(`### ${c.title} — ${c.category} ${scope}`)
+        lines.push(c.spec)
+        lines.push("")
+      }
+    }
+
+    const deps = context?.dependencies ?? []
+    if (deps.length > 0) {
+      lines.push("## Dependencies (already merged into base branch)")
+      lines.push("")
+      lines.push(
+        "These goals completed before yours. Their files are in your worktree; consume the exports they declared, do NOT re-implement them.",
+      )
+      lines.push("")
+      for (const d of deps) {
+        const sha = d.commit_ref ? ` @ ${d.commit_ref}` : ""
+        lines.push(`- **${d.id}** ${d.title}${sha}`)
+        if (d.objective) lines.push(`  - Objective: ${d.objective}`)
+      }
+      lines.push("")
+    }
+
+    if (context?.designSpecs && context.designSpecs.length > 0) {
+      lines.push(renderVisualContractPromptSection({
+        specs: context.designSpecs,
+        instructions: [
+          "The visual contract below came from design_analysis. Implement the subset relevant to this goal's owned files, UI surface, and interactions; ignore specs targeting unrelated regions.",
+        ],
+      }))
+      lines.push("")
+    }
+
+    if (context?.retryFeedback && context.retryFeedback.trim().length > 0) {
+      lines.push(context.retryFeedback)
+      lines.push("")
+    }
+
+    // ── Goal contract ────────────────────────────────────────────────────
     lines.push(`# Goal: ${target.title}`)
     lines.push("")
     lines.push(`**Objective**: ${target.objective}`)
@@ -249,7 +372,7 @@ function buildUserPrompt(target: BuildTarget): string {
     }
     lines.push("")
     lines.push(
-      "Explore → implement within owned_paths → verify via bash → commit → call StructuredOutput exactly once.",
+      "Open with `todowrite` to record the steps you intend to take (small, observable items) and update them as you progress so the overlay reflects state. Then: explore → implement within owned_paths → verify via bash → commit → call StructuredOutput exactly once.",
     )
     return lines.join("\n")
   }
@@ -258,6 +381,6 @@ function buildUserPrompt(target: BuildTarget): string {
     "",
     target.text,
     "",
-    "Explore the repo to understand scope, implement the change, verify via bash (tests / build / run), commit, and call StructuredOutput exactly once with your final report.",
+    "Open with `todowrite` to record your plan (small, observable steps) and update entries as you progress so the overlay reflects state. Then: explore the repo to understand scope, implement the change, verify via bash (tests / build / run), commit, and call StructuredOutput exactly once with your final report.",
   ].join("\n")
 }

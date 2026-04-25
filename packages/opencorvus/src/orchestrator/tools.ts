@@ -3398,13 +3398,15 @@ export function createOrchestratorTools(input: {
         try {
           const { BuildAgent } = await import("@/build/agent")
           let target: import("@/build/types").BuildTarget
+          let context: import("@/build/agent").BuildAgent.BuildContext | undefined
           if (attachedGoalID) {
-            const { findGoal } = await import("@/engine/store")
+            const { findGoal, findRequirements, listGoals } = await import("@/engine/store")
             const goal = findGoal(attachedGoalID)
             if (!goal) {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
               return `build: goal ${attachedGoalID} not found; register via architect first.`
             }
+            const dependsOn = Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : []
             target = {
               kind: "goal",
               id: goal.id,
@@ -3418,7 +3420,77 @@ export function createOrchestratorTools(input: {
               owned_paths: Array.isArray(goal.owned_paths) ? (goal.owned_paths as string[]) : [],
               exports: Array.isArray(goal.exports) ? (goal.exports as string[]) : [],
               imports: Array.isArray(goal.imports) ? (goal.imports as string[]) : [],
-              depends_on: Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : [],
+              depends_on: dependsOn,
+            }
+
+            // ── Compose upstream context for the goal-path build (rule 23):
+            //    requirements + architect contracts + dependency siblings +
+            //    design specs + retry feedback. Each query is independent so
+            //    a missing source (e.g. no active spec) gracefully degrades
+            //    the corresponding section to undefined; the prompt renderer
+            //    only emits the populated ones. ──────────────────────────
+            const activeSpec = findActiveSpecForTask(task.id)
+            const reqRows = activeSpec ? findRequirements(activeSpec.id) : []
+            const requirements = reqRows.map((r) => {
+              const meta = (r.metadata ?? {}) as Record<string, unknown>
+              const sourceID = typeof meta.source_requirement_id === "string" ? meta.source_requirement_id : r.id
+              return {
+                id: sourceID,
+                type: (r.priority === "advisory" ? "implicit" : "explicit") as "explicit" | "implicit",
+                description: r.description,
+              }
+            })
+
+            const { createDecisionLog } = await import("@/decision-log")
+            const decisionLog = createDecisionLog(taskID)
+            const archEntries = decisionLog.readByPhase("architect")
+            const architectContracts = archEntries.map((e) => {
+              const goalIDs = e.goalID ? [e.goalID] : []
+              const titleMatch = e.value.match(/^##\s+(.+?)(?:\n|$)/)
+              const title = titleMatch ? titleMatch[1].trim() : e.key
+              const spec = titleMatch ? e.value.slice(titleMatch[0].length).trimStart() : e.value
+              return { category: e.key, title, spec, goalIDs }
+            })
+
+            const dependencies = dependsOn.length > 0
+              ? listGoals(taskID)
+                  .filter((g) => dependsOn.includes(g.id))
+                  .map((g) => ({
+                    id: g.id,
+                    title: g.title,
+                    objective: g.objective,
+                  }))
+              : []
+
+            const designSpecs = Array.isArray(task.design_specs)
+              ? (task.design_specs as any)
+              : undefined
+
+            // Retry feedback from decision log (per-goal "retry" entries the
+            // orchestrator wrote on prior delivery rejection).
+            const retryEntries = decisionLog.readByPhase("retry").filter((e) => e.goalID === goal.id)
+            const retryFeedback = retryEntries.length > 0
+              ? [
+                  "## Prior Attempt Failed — Read This Before Implementing",
+                  "",
+                  "The previous attempt was rejected. The worktree still has those files; edit in place rather than start from scratch unless the failure forces a structural rewrite.",
+                  "",
+                  "### Coordinator Root-Cause + Delivery Rejection",
+                  ...retryEntries.map((e) => `- ${e.value}${e.reason ? ` — _why: ${e.reason}_` : ""}`),
+                  "",
+                  "### Required For This Retry",
+                  "- Address each rejection above before changing anything else.",
+                  "- Do NOT repeat an approach that was already tried and rejected.",
+                  "- If the root cause sits outside owned_paths, surface it as a SCOPE BLOCKER instead of widening scope.",
+                ].join("\n")
+              : undefined
+
+            context = {
+              requirements: requirements.length > 0 ? requirements : undefined,
+              architectContracts: architectContracts.length > 0 ? architectContracts : undefined,
+              dependencies: dependencies.length > 0 ? dependencies : undefined,
+              designSpecs,
+              retryFeedback,
             }
           } else {
             target = { kind: "request", text: request }
@@ -3427,6 +3499,7 @@ export function createOrchestratorTools(input: {
           const { result, sessionID, worktreeDir } = await BuildAgent.run({
             target,
             task,
+            context,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
           })
