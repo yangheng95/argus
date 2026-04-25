@@ -65,3 +65,6 @@ coverage/
 .cache/
 .turbo/
 Thumbs.db
+
+# orphan/ad-hoc debug dumps
+.scratch/
