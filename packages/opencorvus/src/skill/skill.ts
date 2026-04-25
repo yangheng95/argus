@@ -15,10 +15,6 @@ import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import panelMd from "./builtin/panel.md" with { type: "text" }
-import specResearchMd from "./builtin/spec-research.md" with { type: "text" }
-import prdSpecMd from "./builtin/prd-spec.md" with { type: "text" }
-import deliveryVerifyWebMd from "./builtin/delivery-verify-web.md" with { type: "text" }
-import deliveryVerifyApiMd from "./builtin/delivery-verify-api.md" with { type: "text" }
 import webpageGenerateMd from "./builtin/webpage-generate.md" with { type: "text" }
 
 export namespace Skill {
@@ -92,10 +88,6 @@ export namespace Skill {
 
   const builtins = [
     { skill: panelMd, files: {} },
-    { skill: specResearchMd, files: {} },
-    { skill: prdSpecMd, files: {} },
-    { skill: deliveryVerifyWebMd, files: {} },
-    { skill: deliveryVerifyApiMd, files: {} },
     { skill: webpageGenerateMd, files: {} },
   ] as const
 
