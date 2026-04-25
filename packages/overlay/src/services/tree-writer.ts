@@ -367,8 +367,19 @@ function createSessionCardNode(
  *  The `"pre"` sentinel is used before the first dispatch (no goal_run
  *  exists yet); it collapses into the real run id on the first rebuild
  *  after the board emits a goalRunID. */
-function goalStepCardID(goalID: string, goalRunID: string | undefined, stepID: string): string {
-  return `step:${goalID}:${goalRunID ?? "pre"}:${stepID}`;
+function goalStepCardID(goalID: string, _goalRunID: string | undefined, stepID: string): string {
+  // Attempt-invariant card ID (rule 22 / rule 23). Build agent parts arrive
+  // BEFORE the goal_run artifact lands on the overlay (SSE ordering — the
+  // server now lazy-creates the coordinator run inside `build`, and parts
+  // start streaming the moment the build session opens). With a runID-keyed
+  // ID those early parts wrote to `:pre:`, then `goalCurrentRunID` flipped
+  // to the real runID and `rebuildGoalStepCards` started looking up an
+  // empty `:<runID>:` card under the goal — visible symptom: goal card
+  // shows a "Build" sub-card with green check but empty body. Removing
+  // runID from the card id keeps both observers pointed at the same card
+  // and merges retry attempts into one rolling timeline (per-attempt
+  // separation was a 2026-04-21 addition that broke this invariant).
+  return `step:${goalID}:${stepID}`;
 }
 
 function goalPhaseCardID(goalID: string, goalRunID: string | undefined, stepID: string, phaseID: string): string {
@@ -376,10 +387,10 @@ function goalPhaseCardID(goalID: string, goalRunID: string | undefined, stepID: 
 }
 
 /** A card ID is a top-level executor step iff it matches
- *  `step:<gid>:<runID>:<stepID>` exactly — the phase variants add a
- *  `:phase:<pid>` suffix. Old `goal-group:` ids were removed in the
- *  2026-04-19 flatten, and the pre-attempt `step:<gid>:<stepID>` format
- *  was upgraded to carry the run id on 2026-04-21 (per-attempt isolation). */
+ *  `step:<gid>:<stepID>` exactly — the phase variants add a `:phase:<pid>`
+ *  suffix. Format reverted to attempt-invariant on 2026-04-26 because the
+ *  `:<runID>:` form orphaned all parts written before the run artifact
+ *  materialised on the overlay (the typical case for pipeline build). */
 function isTopLevelStepCardID(id: string): boolean {
   return id.startsWith("step:") && !id.includes(":phase:");
 }
