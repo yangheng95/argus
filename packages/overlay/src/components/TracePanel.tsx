@@ -13,7 +13,7 @@
 //                                    when no `onClose` is provided.
 
 import { For, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
-import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent } from "../services/trace";
+import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent, type TraceFetchResult } from "../services/trace";
 
 type TracePanelProps =
   | { sessionID: string; taskID?: never; onClose?: () => void }
@@ -150,7 +150,7 @@ export function TracePanel(props: TracePanelProps) {
   const cacheKey = createMemo(() => props.sessionID ?? `task:${props.taskID ?? ""}`);
   const [refreshTick, setRefreshTick] = createSignal(0);
 
-  const [events] = createResource(
+  const [data] = createResource<TraceFetchResult, { key: string; tick: number }>(
     () => ({ key: cacheKey(), tick: refreshTick() }),
     async () => {
       if ("sessionID" in props && props.sessionID) {
@@ -159,9 +159,10 @@ export function TracePanel(props: TracePanelProps) {
       if ("taskID" in props && props.taskID) {
         return fetchTaskTrace(props.taskID, { force: refreshTick() > 0 });
       }
-      return [] as TraceEvent[];
+      return { events: [], traceDir: "", enabled: true };
     },
   );
+  const events = createMemo<TraceEvent[]>(() => data()?.events ?? []);
 
   const refresh = () => {
     if ("sessionID" in props && props.sessionID) {
@@ -222,16 +223,34 @@ export function TracePanel(props: TracePanelProps) {
           Select a task on the left to stream its agent trace here.
         </div>
       </Show>
-      <Show when={hasTarget() && events.loading}>
+      <Show when={hasTarget() && data.loading}>
         <div class="trace-panel-empty">Loading…</div>
       </Show>
-      <Show when={hasTarget() && !events.loading && (events()?.length ?? 0) === 0}>
+      <Show when={hasTarget() && !data.loading && events().length === 0}>
         <div class="trace-panel-empty">
-          No trace events yet. Trace files write to <code>&lt;project&gt;/.opencorvus/trace/</code>;
-          this view auto-refreshes every 4s and picks them up after the next agent run.
+          <p>No trace events yet for this target.</p>
+          <Show when={data()?.enabled === false}>
+            <p>
+              <strong>AgentTrace is DISABLED on the server</strong> —
+              <code>OPENCORVUS_AGENT_TRACE=0</code> is set in the server process. Unset it
+              and restart the server to capture traces.
+            </p>
+          </Show>
+          <Show when={data()?.enabled !== false && data()?.traceDir}>
+            <p>
+              Server is reading from: <code>{data()!.traceDir}</code>
+            </p>
+            <p>
+              If your agents wrote traces to a different directory (e.g. a benchmark temp
+              dir set via <code>OPENCORVUS_AGENT_TRACE_DIR</code>), the server here will
+              not see them — point both processes at the same dir, or run agents through
+              the same server instance the overlay is bound to.
+            </p>
+          </Show>
+          <p class="trace-panel-empty-foot">Auto-refreshes every 4s.</p>
         </div>
       </Show>
-      <Show when={hasTarget() && (events()?.length ?? 0) > 0}>
+      <Show when={hasTarget() && events().length > 0}>
         <div class="trace-panel-body">
           <For each={events()}>
             {(event) => <TraceEventRow event={event} />}

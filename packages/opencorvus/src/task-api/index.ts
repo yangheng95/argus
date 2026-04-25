@@ -758,19 +758,43 @@ export namespace EngineService {
    *  line. Returns `events: []` (200, not 404) when the trace file is absent,
    *  because "agent ran but trace was disabled / pre-trace session" is a
    *  legitimate state the UI distinguishes from "session not found". */
-  export async function getSessionTrace(sessionID: string): Promise<{ events: import("@/trace").AgentTrace.TraceEvent[] }> {
+  export async function getSessionTrace(sessionID: string): Promise<{
+    events: import("@/trace").AgentTrace.TraceEvent[]
+    traceDir: string
+    enabled: boolean
+  }> {
     const { AgentTrace } = await import("@/trace")
-    return { events: AgentTrace.readSessionEvents(sessionID) }
+    return {
+      events: AgentTrace.readSessionEvents(sessionID),
+      traceDir: AgentTrace.getTraceDir(),
+      enabled: AgentTrace.isEnabled(),
+    }
   }
 
   /** Aggregate all sessions belonging to a task into one chronological event
    *  stream. Used for the overlay's panel-level "Show all session trace"
    *  affordance. Includes llm_request events that the per-task rollup file
-   *  (`_task-<id>.jsonl`) skips by design. */
-  export async function getTaskTrace(taskID: string): Promise<{ events: import("@/trace").AgentTrace.TraceEvent[] }> {
+   *  (`_task-<id>.jsonl`) skips by design.
+   *
+   *  Also surfaces the resolved trace directory + the enabled flag so the
+   *  overlay's empty state can call out path-mismatch and disabled-tracing
+   *  failure modes by name (the two failure modes that look identical from
+   *  the client's perspective: events:[]). Without this, an operator running
+   *  overlay against project root while the agents wrote traces under a
+   *  benchmark temp dir gets a "no trace yet" message that hides the real
+   *  problem (different Instance.directory). */
+  export async function getTaskTrace(taskID: string): Promise<{
+    events: import("@/trace").AgentTrace.TraceEvent[]
+    traceDir: string
+    enabled: boolean
+  }> {
     requireTask(taskID)
     const { AgentTrace } = await import("@/trace")
-    return { events: AgentTrace.readTaskEvents(taskID) }
+    return {
+      events: AgentTrace.readTaskEvents(taskID),
+      traceDir: AgentTrace.getTraceDir(),
+      enabled: AgentTrace.isEnabled(),
+    }
   }
 
   export async function listArtifacts(runID: string) {
