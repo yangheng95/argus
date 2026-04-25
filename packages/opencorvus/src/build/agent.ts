@@ -46,7 +46,7 @@ const log = Log.create({ service: "build-agent" })
 export namespace BuildAgent {
   export interface RunInput {
     /** The work target — either a scoped goal (pipeline workflow) or a
-     *  free-form request (direct workflow). See build-agent/types.ts. */
+     *  free-form request (direct workflow). See build/types.ts. */
     target: BuildTarget
     /** The owning task row; drives BuildSemaphore limits + worktree
      *  metadata. The build agent does NOT read DB state itself — `task` is

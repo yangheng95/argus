@@ -8,6 +8,8 @@ src/provider/models-snapshot.ts
 node_modules/
 dist/
 build/
+# `src/build/` is the OpenCorvus build *agent* directory, not build output.
+!src/build/
 .output/
 .next/
 .nuxt/

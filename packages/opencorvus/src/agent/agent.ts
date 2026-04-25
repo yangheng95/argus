@@ -361,7 +361,7 @@ export namespace Agent {
       },
       fidelity: {
         name: "fidelity",
-        description: "Fidelity review stage. Verifies that the produced goal set covers the original user request; system prompt is built per-call in architect/fidelity.ts.",
+        description: "Fidelity review stage. Verifies that the produced goal set covers the original user request; system prompt is built per-call in fidelity/agent.ts.",
         // Fidelity is a single-tool-call review: one shot + up to two
         // schema-retry self-corrections is enough. Matches the
         // pre-migration stepCountIs(3) budget.

@@ -49,6 +49,10 @@ overlay.json
 # Auto-added by OpenCorvus
 node_modules/
 build/
+# Source dir conflicting with the generic `build/` ignore — `src/build/` is
+# the OpenCorvus build *agent* (post phase-3 of the isomorphic-agent
+# refactor), not a build-output directory.
+!packages/opencorvus/src/build/
 .output/
 .next/
 .nuxt/

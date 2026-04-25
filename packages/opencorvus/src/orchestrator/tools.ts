@@ -1398,7 +1398,7 @@ export function createOrchestratorTools(input: {
           requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
         }))
 
-        const { reviewFidelity, applyFidelityCorrections } = await import("@/architect/fidelity")
+        const { reviewFidelity, applyFidelityCorrections } = await import("@/fidelity")
         const verdict = await reviewFidelity({
           userRequest: task.request,
           taskTitle: task.title,
@@ -1600,7 +1600,7 @@ export function createOrchestratorTools(input: {
             priority_hint: s.priority_hint as "high" | "medium" | "low",
           }))
 
-        const { runProsecutor } = await import("@/delivery/prosecutor")
+        const { runProsecutor } = await import("@/prosecutor")
         const pRes = await runProsecutor({
           task: {
             id: task.id,
@@ -3392,8 +3392,8 @@ export function createOrchestratorTools(input: {
         // directly. For pure request path, the LLM-supplied `request` is
         // the user message.
         try {
-          const { BuildAgent } = await import("@/build-agent/agent")
-          let target: import("@/build-agent/types").BuildTarget
+          const { BuildAgent } = await import("@/build/agent")
+          let target: import("@/build/types").BuildTarget
           if (attachedGoalID) {
             const { findGoal } = await import("@/engine/store")
             const goal = findGoal(attachedGoalID)
