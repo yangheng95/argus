@@ -239,38 +239,7 @@ const DEFAULT_BAIDU_REFERENCE = path.join(import.meta.dir, "assets", "baidu.png"
 const referenceImages = rawReferenceImages.length > 0
   ? rawReferenceImages
   : (!requestFile && !requestAttachment ? [DEFAULT_BAIDU_REFERENCE] : [])
-const DEFAULT_TASK_REQUEST = `
-Reproduce the Baidu homepage (https://www.baidu.com/) as a pixel-faithful static web clone, delivered as a single \`index.html\` rendered at viewport 1440 × 900. The reference screenshot is attached at references/baidu.png.
-
-## Scope (phase-shaped, not module-shaped)
-
-The deliverable is a single \`index.html\` plus its \`images/\` folder — one primary artifact with one global acceptance surface. Do NOT split hero / nav / footer / search / quick-link regions into separate parallel goals that all keep re-opening the same page shell; that pattern fights this task. Decompose by execution phase instead.
-
-A sensible phase structure (architect may adjust based on exploration):
-
-1. **Reference capture** — extract the live reference into \`mirror/\` using the mirror toolchain (\`webpage_extract\` → \`webpage_compile\` → \`webpage_analyze\`) and commit the artifacts (\`reference.png\`, \`extracted-page.json\`, \`page-ir.xml\`, \`scaffold.json\`, \`design-tokens.ts\`, \`images/\`). Do NOT hand-write colour hex codes, text strings, or section structure when these can be harvested deterministically.
-
-2. **Page shell build-out** — write the consolidated static \`index.html\` in one goal, consuming the mirror artifacts from phase 1 as the authoritative source of structure, text, and tokens. This is the main implementation goal; it should concentrate the markup + styles in one file rather than exposing an internal cross-goal DAG.
-
-3. **Visual fidelity verification** — verification-kind goal. Runs \`webpage_render\` on \`index.html\` at 1440 × 900, then \`webpage_evaluate\` against \`mirror/reference.png\`, and iterates via \`webpage_text_diff\` until SSIM mean ≥ 0.85 and worst-5% window ≥ 0.55.
-
-If exploration reveals a genuine orthogonal subsystem that can ship without re-opening \`index.html\`, architect may split that into its own goal — but the default is phase-serial, single-worktree, single growing artifact.
-
-## Technical rules (apply to every implementation goal)
-
-- **Static HTML only.** NO JavaScript frameworks, NO React/Vue/Babel/JSX, NO client-side rendering. Every visible text node must appear as raw HTML so a non-executing reader sees the content.
-- **Vanilla CSS only.** All styles live in ONE \`<style>\` block at the top of \`<head>\`. Inject every design token from \`mirror/design-tokens.ts\` (COLORS / FONTS / SPACING / RADII) as a CSS custom property under \`:root { --color-primary: …; }\` and reference them via \`var(--…)\`. Use real CSS class selectors with cascading rules — do NOT inline styles on every element. NO Tailwind, NO external CSS framework, NO CDN, NO JS framework, NO build step.
-- **CSS hygiene.** Include \`*, *::before, *::after { box-sizing: border-box }\`, \`body { margin: 0 }\`, set \`font-family\` on \`body\`, write media queries when the reference uses them.
-- **Do not fetch https://www.baidu.com/ at runtime.** The clone must be fully static.
-- **Exact text.** Preserve the Chinese strings visible on the reference: top nav "新闻 hao123 地图 贴吧 视频 图片 网盘 更多", submit button "百度一下", footer strings, etc.
-- **Exact palette.** Baidu blue #4E6EF2 for the search button and link hovers; white background; 1 px #C8C8C8 search-box border.
-- **Viewport.** Target 1440 × 900. The final composed page must look correct at that exact viewport.
-
-## Acceptance (gate)
-
-- Only one deliverable file: \`index.html\` at the project root. The implementation goals may produce intermediate artefacts (component snippets, tokens stylesheet) during their own iteration, but the layout-shell goal is responsible for emitting the single consolidated \`index.html\`.
-- Visual-diff gate: SSIM ≥ 0.85 (mean) and ≥ 0.55 (worst-5% window) against references/baidu.png. Runs automatically at delivery.
-`.trim()
+const DEFAULT_TASK_REQUEST = `请帮我复刻百度的主页，要包含后端实现，是一个完整的系统，网页组件交互等军要实现`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
