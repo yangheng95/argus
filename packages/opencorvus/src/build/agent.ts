@@ -183,6 +183,7 @@ export namespace BuildAgent {
           .join("\n\n")
 
       let out
+      let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       try {
         out = await runAgentSession({
           kind: "build",
@@ -208,6 +209,32 @@ export namespace BuildAgent {
             retryCount: 2,
           },
         })
+        parsed = BuildResultSchema.safeParse(out.structured)
+        // Fast-forward merge the goal branch back into primary HEAD before
+        // teardown. This is the standard git-worktree pattern: branch off
+        // primary → work in worktree → merge back so the next worktree (and
+        // any cross-goal artifact like `mirror/`) inherits the work via git.
+        // Skipped on:
+        //  - caller-owned worktrees (input.workDir set) — caller manages git
+        //  - structured-output failures or non-passed verdicts — there's
+        //    nothing useful to publish to primary
+        // ff-only is intentional (rule 1): a divergence here means another
+        // goal already merged conflicting work, and the conflict must be
+        // surfaced to the orchestrator, not silently three-way merged.
+        if (
+          ownsWorktree &&
+          worktreeBranch &&
+          parsed.success &&
+          parsed.data.status === "passed" &&
+          parsed.data.commit_ref
+        ) {
+          await Worktree.mergeIntoPrimary({ branch: worktreeBranch })
+          log.info("build agent: merged goal branch into primary", {
+            taskID: input.task.id,
+            branch: worktreeBranch,
+            commit_ref: parsed.data.commit_ref,
+          })
+        }
       } finally {
         if (ownsWorktree && worktreeDir) {
           await cleanupGoalWorkspace(worktreeDir).catch((err) => {
@@ -219,10 +246,9 @@ export namespace BuildAgent {
         }
       }
 
-      const parsed = BuildResultSchema.safeParse(out.structured)
-      if (!parsed.success) {
+      if (!parsed || !parsed.success) {
         throw new Error(
-          `build agent: StructuredOutput payload did not match BuildResultSchema: ${parsed.error.message}`,
+          `build agent: StructuredOutput payload did not match BuildResultSchema: ${parsed?.error?.message ?? "(no parsed output)"}`,
         )
       }
 
