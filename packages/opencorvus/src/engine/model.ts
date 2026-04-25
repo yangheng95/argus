@@ -897,6 +897,16 @@ export const TraceEvent = z.object({
 
 export const TraceEventList = z.object({
   events: TraceEvent.array(),
+  /** Resolved trace directory the server reads from. Surfaced so the overlay's
+   *  empty state can show the operator WHICH directory was scanned — the
+   *  "events:[]" failure mode otherwise hides a path mismatch (e.g. overlay
+   *  bound to project root while agents wrote traces in a benchmark temp dir
+   *  via OPENCORVUS_AGENT_TRACE_DIR override). */
+  traceDir: z.string(),
+  /** Whether AgentTrace.isEnabled() returned true. False = no traces are
+   *  being written regardless of dir resolution; OPENCORVUS_AGENT_TRACE=0
+   *  was set on the server process. */
+  enabled: z.boolean(),
 })
 
 export const ArtifactAudit = z.object({

@@ -20,40 +20,67 @@ export interface TraceEvent {
   [key: string]: any;
 }
 
-const sessionCache = new Map<string, TraceEvent[]>();
-const taskCache = new Map<string, TraceEvent[]>();
+export interface TraceFetchResult {
+  events: TraceEvent[];
+  /** Server-resolved trace directory; surfaces in the empty state so the
+   *  operator can see WHICH dir was scanned (path-mismatch is the dominant
+   *  cause of "events:[]" when agents have actually run). */
+  traceDir: string;
+  /** Server's AgentTrace.isEnabled() value. False = OPENCORVUS_AGENT_TRACE=0
+   *  was set on the server process and no traces are being written. */
+  enabled: boolean;
+}
 
-export async function fetchSessionTrace(sessionID: string, opts?: { force?: boolean }): Promise<TraceEvent[]> {
-  if (!sessionID) return [];
+const sessionCache = new Map<string, TraceFetchResult>();
+const taskCache = new Map<string, TraceFetchResult>();
+
+const EMPTY_RESULT: TraceFetchResult = { events: [], traceDir: "", enabled: true };
+
+function normaliseResult(data: unknown): TraceFetchResult {
+  const obj = (data ?? {}) as Record<string, unknown>;
+  const events = Array.isArray(obj.events) ? (obj.events as TraceEvent[]) : [];
+  const traceDir = typeof obj.traceDir === "string" ? obj.traceDir : "";
+  const enabled = typeof obj.enabled === "boolean" ? obj.enabled : true;
+  return { events, traceDir, enabled };
+}
+
+export async function fetchSessionTrace(
+  sessionID: string,
+  opts?: { force?: boolean },
+): Promise<TraceFetchResult> {
+  if (!sessionID) return EMPTY_RESULT;
   if (!opts?.force) {
     const cached = sessionCache.get(sessionID);
     if (cached) return cached;
   }
   try {
     const data = await apiJson(`session/${encodeURIComponent(sessionID)}/trace`);
-    const events = Array.isArray((data as any)?.events) ? ((data as any).events as TraceEvent[]) : [];
-    sessionCache.set(sessionID, events);
-    return events;
+    const result = normaliseResult(data);
+    sessionCache.set(sessionID, result);
+    return result;
   } catch (err) {
     console.warn("trace fetch (session) failed", sessionID, err);
-    return [];
+    return EMPTY_RESULT;
   }
 }
 
-export async function fetchTaskTrace(taskID: string, opts?: { force?: boolean }): Promise<TraceEvent[]> {
-  if (!taskID) return [];
+export async function fetchTaskTrace(
+  taskID: string,
+  opts?: { force?: boolean },
+): Promise<TraceFetchResult> {
+  if (!taskID) return EMPTY_RESULT;
   if (!opts?.force) {
     const cached = taskCache.get(taskID);
     if (cached) return cached;
   }
   try {
     const data = await apiJson(`task/${encodeURIComponent(taskID)}/trace`);
-    const events = Array.isArray((data as any)?.events) ? ((data as any).events as TraceEvent[]) : [];
-    taskCache.set(taskID, events);
-    return events;
+    const result = normaliseResult(data);
+    taskCache.set(taskID, result);
+    return result;
   } catch (err) {
     console.warn("trace fetch (task) failed", taskID, err);
-    return [];
+    return EMPTY_RESULT;
   }
 }
 
