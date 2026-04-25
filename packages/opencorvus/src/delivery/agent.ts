@@ -24,6 +24,8 @@ import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
+import { findActiveSpecForTask, findRequirements } from "@/engine/store"
+import type { RequirementRow } from "@/engine/store"
 import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 import type { GoalInfo, DeliveryInfo } from "@/delivery/checks"
@@ -342,6 +344,17 @@ function buildUserPrompt(
     if (notes) sections.push(notes)
   }
 
+  // Build a REQ-id → row map once so each goal's requirement_ids can be
+  // expanded inline (P1 of req/arch evaluation tightening). Source of truth:
+  // engine_requirement keyed off the active spec snapshot (rule 22).
+  const requirementsByID = new Map<string, RequirementRow>()
+  if (input.task.id) {
+    const snap = findActiveSpecForTask(input.task.id)
+    if (snap) {
+      for (const r of findRequirements(snap.id)) requirementsByID.set(r.id, r)
+    }
+  }
+
   sections.push(
     `# Goals — Acceptance Specs (INFORMATION, not pre-scored)\n\n` +
     `Each goal below carries its \`acceptance_specs\` rendered as text. ` +
@@ -355,10 +368,15 @@ function buildUserPrompt(
     `What matters is that your \`issues_found\` and \`rejection_details\` are ` +
     `concrete and evidence-backed: if you reject, the orchestrator reads your ` +
     `findings to decide what to change next.\n\n` +
+    `Cross-check every linked requirement (see "Linked requirements" under each ` +
+    `goal): the acceptance_specs MUST collectively satisfy the REQ acceptance ` +
+    `criteria. A goal whose acceptance_specs all PASS but whose linked REQ ` +
+    `acceptance is unmet = reject (category="missing_requirement", cite the ` +
+    `REQ id in rejection_details[].requirement_id).\n\n` +
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id and affected_goal_ids when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g)}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
+            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id and affected_goal_ids when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
         )
         .join("\n\n---\n\n"),
   )
@@ -496,9 +514,27 @@ function buildUserPrompt(
   return sections.join("\n\n")
 }
 
-function renderGoalContractDetails(goal: GoalInfo): string {
+function renderGoalContractDetails(
+  goal: GoalInfo,
+  requirementsByID: ReadonlyMap<string, RequirementRow>,
+): string {
   const lines: string[] = []
-  if (goal.requirement_ids.length > 0) lines.push(`- Requirement IDs: ${goal.requirement_ids.join(", ")}`)
+  // Linked requirements — expand id → title + acceptance so delivery can
+  // verify the goal's acceptance_specs actually cover the linked REQ. Falls
+  // through to bare ID listing only when the requirement row is missing
+  // (writer/reader race or stale snapshot — surfaces as a visible gap rather
+  // than a silently-truncated label).
+  if (goal.requirement_ids.length > 0) {
+    lines.push("- Linked requirements:")
+    for (const reqID of goal.requirement_ids) {
+      const r = requirementsByID.get(reqID)
+      if (r) {
+        lines.push(`  - **${r.id}** [${r.priority}] ${r.title} — acceptance: ${r.acceptance}`)
+      } else {
+        lines.push(`  - **${reqID}** (requirement row not found in active spec snapshot)`)
+      }
+    }
+  }
   if (goal.depends_on.length > 0) lines.push(`- Depends on goal IDs: ${goal.depends_on.join(", ")}`)
   if (goal.imports.length > 0) lines.push(`- Imports: ${goal.imports.join(", ")}`)
   if (goal.exports.length > 0) lines.push(`- Exports: ${goal.exports.join(", ")}`)
