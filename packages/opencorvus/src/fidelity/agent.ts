@@ -420,126 +420,6 @@ function emitFidelityLifecycle(
 }
 
 // ---------------------------------------------------------------------------
-// Chunk forwarder — routes AI-SDK stream chunks into FidelityReviewChunk
-// ---------------------------------------------------------------------------
-
-/** Throttled forwarder that takes AI-SDK stream chunks and emits
- *  FidelityReviewChunk events for the overlay's running fidelity card.
- *
- *  ONLY `reasoning-delta` is forwarded. Tool-input-delta is the partial JSON
- *  of the `submit_fidelity_verdict` protocol payload — rendering those
- *  bytes on screen would reveal raw tool arguments, which is exactly what
- *  the tool-call architecture is supposed to hide (structured verdict is
- *  delivered via FidelityReviewCompleted). Non-reasoning models simply
- *  won't stream anything here; their 5-15s tool-call latency is small
- *  enough that no streaming is needed. Reasoning models (qwq, deepseek-r1,
- *  o1, sonnet-thinking) emit minutes of reasoning-delta and that IS the
- *  liveness the operator needs.
- *
- *  Why throttle: provider streams fire tokens at tens of events/s but
- *  protocol_event is persisted per emit. 500ms batching caps row count to
- *  ~360 per 180s review — well under storage overhead budget.
- *
- *  Attempt counter: each re-entry into the reasoning stream after a
- *  validation retry increments attempt so the overlay can open a fresh
- *  reasoning part for each retry (avoids merging reasoning from different
- *  attempts into one block). We detect attempt boundaries via
- *  tool-input-start for the verdict tool — each new start means the model
- *  is kicking off a fresh submission.
- *
- *  Silent when taskID or sessionID is absent (CLI dry-runs). */
-interface FidelityChunkForwarder {
-  handleChunk(arg: { chunk: any }): void
-  flushAll(): Promise<void>
-  dispose(): void
-}
-
-function createFidelityChunkForwarder(opts: {
-  taskID: string | undefined
-  sessionID: string | undefined
-  intervalMs: number
-}): FidelityChunkForwarder {
-  const inactive: FidelityChunkForwarder = {
-    handleChunk: () => {},
-    flushAll: async () => {},
-    dispose: () => {},
-  }
-  if (!opts.taskID || !opts.sessionID) return inactive
-
-  const FIDELITY_TOOL = "submit_fidelity_verdict"
-  let attempt = 0
-
-  let buffer = ""
-  let timer: ReturnType<typeof setTimeout> | null = null
-
-  const emit = async (delta: string) => {
-    if (!delta) return
-    try {
-      await EngineProtocol.emit(
-        EngineEvent.FidelityReviewChunk,
-        {
-          taskID: opts.taskID!,
-          sessionID: opts.sessionID!,
-          kind: "reasoning" as const,
-          delta,
-          attempt: Math.max(attempt, 1),
-        },
-        { source: "architect.fidelity" },
-      )
-    } catch (err) {
-      log.error("fidelity chunk emit failed", {
-        taskID: opts.taskID,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-
-  const flush = async () => {
-    if (timer) {
-      clearTimeout(timer)
-      timer = null
-    }
-    if (!buffer) return
-    const delta = buffer
-    buffer = ""
-    await emit(delta)
-  }
-
-  const armFlush = () => {
-    if (timer) return
-    timer = setTimeout(() => {
-      timer = null
-      void flush()
-    }, opts.intervalMs)
-  }
-
-  return {
-    handleChunk({ chunk }) {
-      const type = chunk?.type
-      if (type === "tool-input-start" && chunk.toolName === FIDELITY_TOOL) {
-        attempt += 1
-        return
-      }
-      if (type === "reasoning-delta") {
-        const text = typeof chunk.text === "string" ? chunk.text : ""
-        if (!text) return
-        buffer += text
-        armFlush()
-        return
-      }
-    },
-    async flushAll() {
-      await flush()
-    },
-    dispose() {
-      if (timer) clearTimeout(timer)
-      timer = null
-      buffer = ""
-    },
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Apply corrections to goal list
 // ---------------------------------------------------------------------------
 
@@ -596,10 +476,6 @@ export function applyFidelityCorrections(
 // ---------------------------------------------------------------------------
 // Prompts
 // ---------------------------------------------------------------------------
-
-function buildFidelitySystem(): string {
-  return FIDELITY_CORE
-}
 
 function buildFidelityPrompt(input: {
   userRequest: string
