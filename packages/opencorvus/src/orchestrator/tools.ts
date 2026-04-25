@@ -1119,6 +1119,145 @@ export function createOrchestratorTools(input: {
 
           const { ArchitectAgent } = await import("@/architect/agent")
 
+          // Persist state shared between the pre-fidelity and post-fidelity
+          // writes. The pre-fidelity write (rule 23: goals are facts, not
+          // gated by fidelity) lands the raw decomposition so the read model
+          // sees goals immediately even if fidelity hangs on alibaba. If
+          // fidelity returns with `needs_correction`, a second upsert with
+          // the same `newSpecSnapshotID` overwrites the goal payload in
+          // place; otherwise the early write is already the final state.
+          const { upsertGoalsFromArchitect } = await import("@/engine/persist")
+          const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
+          const { persistArchitectMetrics } = await import("@/metrics/store")
+          const newSpecSnapshotID = Identifier.ascending("spec")
+          const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
+
+          const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
+          const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
+
+          let persisted: Array<{ id: string; title: string; llmID: string }> = []
+          let llmToDBID = new Map<string, string>()
+          let deletedIDs: string[] = []
+          let earlyWriteCommitted = false
+
+          /**
+           * Persist a decomposition snapshot. Idempotent on `newSpecSnapshotID`
+           * — first call inserts the spec snapshot row; subsequent calls
+           * update the same row's content + re-upsert goals against it.
+           */
+          const persistDecomposition = (
+            decomp: import("@/architect/types").ArchitectDecomposition,
+            opts: { phase: "pre-fidelity" | "post-fidelity"; fidelity?: import("@/architect/fidelity").FidelityResult | null },
+          ) => {
+            const now = Date.now()
+            const goalLines = decomp.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
+            const traceLines = decomp.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
+            const contractLines = decomp.contracts.map((c) => `- **${c.category}** — ${c.title} (goals: ${c.goalIDs.join(", ") || "task-wide"})`)
+            const specContent = [
+              `# ${task.title}`,
+              "",
+              decomp.summary,
+              "",
+              "## Requirements",
+              ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
+              "",
+              "## Decisions",
+              ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
+              "",
+              "## Goals",
+              ...(goalLines.length > 0 ? goalLines : ["_(none)_"]),
+              "",
+              "## Traceability",
+              ...(traceLines.length > 0 ? traceLines : ["_(none)_"]),
+              "",
+              "## Architect Contracts",
+              ...(contractLines.length > 0 ? contractLines : ["_(none)_"]),
+            ].join("\n")
+
+            Database.transaction((db) => {
+              if (!earlyWriteCommitted) {
+                db.insert(EngineSpecSnapshotTable).values({
+                  id: newSpecSnapshotID,
+                  task_id: taskID,
+                  version: 2,
+                  status: "ready",
+                  summary: decomp.summary,
+                  content: specContent,
+                  scope: requirements.map((r) => r.description).join("; "),
+                  time_created: now,
+                  time_updated: now,
+                }).run()
+
+                if (priorSpecSnapshotID) {
+                  db.update(EngineSpecSnapshotTable)
+                    .set({ status: "superseded", time_updated: now })
+                    .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
+                    .run()
+                }
+              } else {
+                db.update(EngineSpecSnapshotTable)
+                  .set({ summary: decomp.summary, content: specContent, time_updated: now })
+                  .where(eq(EngineSpecSnapshotTable.id, newSpecSnapshotID))
+                  .run()
+              }
+
+              const out = upsertGoalsFromArchitect(db, {
+                taskID,
+                specSnapshotID: newSpecSnapshotID,
+                architectGoals: decomp.goals.map((g) => ({
+                  llmID: g.id,
+                  title: g.title,
+                  objective: g.objective,
+                  acceptance_specs: g.acceptance_specs,
+                  owned_paths: g.owned_paths,
+                  depends_on: g.depends_on,
+                  exports: g.exports,
+                  imports: g.imports,
+                  kind: g.kind,
+                  requirement_ids: g.requirement_ids,
+                  priority: g.priority,
+                  source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
+                })),
+                removedLLMIDs: decomp.removedGoalIDs,
+                now,
+              })
+              persisted = out.persisted
+              llmToDBID = out.llmToDBID
+              deletedIDs = out.deletedIDs
+
+              persistArchitectMetrics({
+                task_id: taskID,
+                goal_id_map: llmToDBID,
+                goal_metric_specs: decomp.goalMetricSpecs,
+                global_metric_specs: decomp.globalMetricSpecs,
+              })
+
+              db.update(EngineTaskTable)
+                .set({
+                  architect_challenge_seeds: decomp.challengeSeeds as unknown as Record<string, unknown>[],
+                  time_updated: now,
+                })
+                .where(eq(EngineTaskTable.id, taskID))
+                .run()
+
+              const summarySuffix = opts.fidelity ? ` (fidelity=${opts.fidelity.verdict})` : " (pre-fidelity)"
+              Database.effect(() =>
+                EngineProtocol.emit(
+                  EngineEvent.TaskUpdated,
+                  { taskID, status: deriveTaskStatus(task), summary: `Goals decomposed by Architect${summarySuffix}` },
+                  { source: "orchestrator.architect" },
+                ),
+              )
+            })
+            earlyWriteCommitted = true
+            log.info("architect: decomposition persisted", {
+              taskID,
+              phase: opts.phase,
+              goalCount: persisted.length,
+              fidelityVerdict: opts.fidelity?.verdict,
+            })
+          }
+
           const result = await ArchitectAgent.coordinate({
             goals: existingGoals.map((g) => ({
               id: g.id,
@@ -1146,121 +1285,53 @@ export function createOrchestratorTools(input: {
             signal: input.signal,
             parentSessionID: architectSession.id,
             onStatus: () => {},
+            // Pre-fidelity persist (rule 23): write goals immediately so the
+            // read model + future orchestrator wakes can see them even if
+            // the fidelity LLM hangs (alibaba 5+ min stream-idle observed).
+            // Errors here must not wedge coordinate(); coordinate logs and
+            // continues with fidelity, and the post-fidelity persist below
+            // is the second chance.
+            onDecomposed: async (decomp) => {
+              try {
+                persistDecomposition(decomp, { phase: "pre-fidelity", fidelity: null })
+              } catch (dbErr) {
+                log.error("architect: pre-fidelity persist failed (will retry post-fidelity)", {
+                  taskID,
+                  error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+                })
+              }
+            },
           })
 
-          // Persist Architect output in a single transaction: new spec_snapshot
-          // supersedes the previous, goals upsert, metrics baseline install,
-          // challenge_seeds on task row. If any step throws the whole set
-          // rolls back — no half-applied decomposition survives.
-          const { upsertGoalsFromArchitect } = await import("@/engine/persist")
-          const { EngineSpecSnapshotTable } = await import("@/engine/engine.sql")
-          const { persistArchitectMetrics } = await import("@/metrics/store")
-          const now = Date.now()
-          const newSpecSnapshotID = Identifier.ascending("spec")
-          const priorSpecSnapshotID = findActiveSpecForTask(task.id)?.id
-
-          const reqLines = requirements.map((r) => `- **${r.id}** [${r.type}]: ${r.description}`)
-          const decisionLines = requirementDecisions.map((d) => `- **${d.key}** = ${d.value} — ${d.reason}`)
-          const goalLines = result.goals.map((g) => `- **${g.id}** (${g.kind}, ${g.priority}): ${g.title}`)
-          const traceLines = result.traceability.map((t) => `- ${t.requirementID} → ${t.goalIDs.join(", ")}`)
-          const contractLines = result.contracts.map((c) => `- **${c.category}** — ${c.title} (goals: ${c.goalIDs.join(", ") || "task-wide"})`)
-
-          const specContent = [
-            `# ${task.title}`,
-            "",
-            result.summary,
-            "",
-            "## Requirements",
-            ...(reqLines.length > 0 ? reqLines : ["_(none — Requirements produced an empty REQ-N list)_"]),
-            "",
-            "## Decisions",
-            ...(decisionLines.length > 0 ? decisionLines : ["_(none)_"]),
-            "",
-            "## Goals",
-            ...(goalLines.length > 0 ? goalLines : ["_(none)_"]),
-            "",
-            "## Traceability",
-            ...(traceLines.length > 0 ? traceLines : ["_(none)_"]),
-            "",
-            "## Architect Contracts",
-            ...(contractLines.length > 0 ? contractLines : ["_(none)_"]),
-          ].join("\n")
-
-          let persisted: Array<{ id: string; title: string; llmID: string }> = []
-          let llmToDBID = new Map<string, string>()
-          let deletedIDs: string[] = []
-          try { Database.transaction((db) => {
-            db.insert(EngineSpecSnapshotTable).values({
-              id: newSpecSnapshotID,
-              task_id: taskID,
-              version: 2,
-              status: "ready",
-              summary: result.summary,
-              content: specContent,
-              scope: requirements.map((r) => r.description).join("; "),
-              time_created: now,
-              time_updated: now,
-            }).run()
-
-            if (priorSpecSnapshotID) {
-              db.update(EngineSpecSnapshotTable)
-                .set({ status: "superseded", time_updated: now })
-                .where(eq(EngineSpecSnapshotTable.id, priorSpecSnapshotID))
-                .run()
-            }
-
-            const out = upsertGoalsFromArchitect(db, {
-              taskID,
-              specSnapshotID: newSpecSnapshotID,
-              architectGoals: result.goals.map((g) => ({
-                llmID: g.id,
-                title: g.title,
-                objective: g.objective,
-                acceptance_specs: g.acceptance_specs,
-                owned_paths: g.owned_paths,
-                depends_on: g.depends_on,
-                exports: g.exports,
-                imports: g.imports,
-                kind: g.kind,
-                requirement_ids: g.requirement_ids,
-                priority: g.priority,
-                source: g.requirement_ids.length > 0 ? "spec" as const : "system" as const,
-              })),
-              removedLLMIDs: result.removedGoalIDs,
-              now,
-            })
-            persisted = out.persisted
-            llmToDBID = out.llmToDBID
-            deletedIDs = out.deletedIDs
-
-            persistArchitectMetrics({
-              task_id: taskID,
-              goal_id_map: llmToDBID,
-              goal_metric_specs: result.goalMetricSpecs,
-              global_metric_specs: result.globalMetricSpecs,
-            })
-
-            db.update(EngineTaskTable)
-              .set({
-                architect_challenge_seeds: result.challengeSeeds as unknown as Record<string, unknown>[],
-                time_updated: now,
-              })
-              .where(eq(EngineTaskTable.id, taskID))
-              .run()
-            Database.effect(() =>
-              EngineProtocol.emit(
-                EngineEvent.TaskUpdated,
-                { taskID, status: deriveTaskStatus(task), summary: "Goals decomposed by Architect" },
-                { source: "orchestrator.architect" },
-              ),
+          // Post-fidelity persist (idempotent re-upsert): if fidelity returned
+          // corrections that changed the goal set, we overwrite the goal
+          // payload in place against the same spec snapshot. If fidelity was
+          // a no-op (verdict ∈ {accept, skipped} and goals unchanged), the
+          // re-upsert is harmless.
+          try {
+            persistDecomposition(
+              {
+                goals: result.goals,
+                removedGoalIDs: result.removedGoalIDs,
+                goalMetricSpecs: result.goalMetricSpecs,
+                globalMetricSpecs: result.globalMetricSpecs,
+                challengeSeeds: result.challengeSeeds,
+                traceability: result.traceability,
+                contracts: result.contracts,
+                summary: result.summary,
+              },
+              { phase: "post-fidelity", fidelity: result.fidelity },
             )
-          }) } catch (dbErr) {
-            log.error("architect: failed to persist goals to DB", {
+          } catch (dbErr) {
+            log.error("architect: post-fidelity persist failed", {
               taskID,
               error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-              stack: dbErr instanceof Error ? dbErr.stack : undefined,
+              earlyWriteCommitted,
             })
-            throw dbErr
+            // If the early write succeeded, the goals are still in DB; the
+            // orchestrator can dispatch using the pre-fidelity goal set.
+            // Only throw when there is nothing persisted at all.
+            if (!earlyWriteCommitted) throw dbErr
           }
 
           for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
