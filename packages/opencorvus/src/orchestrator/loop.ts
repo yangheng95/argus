@@ -267,6 +267,31 @@ async function runTaskLoopInner(input: {
       }
     }
 
+    // ── Build-settled-without-deliver detection (auto-rewake) ──
+    // Workflow contract: `deliver` is mandatory after every build batch. The
+    // orchestrator's LLM occasionally ends its turn after build returns
+    // without dispatching deliver (compliance drift, or it mis-classifies a
+    // verification-kind goal as a build target). Without this rewake the
+    // task sits idle until an external trigger arrives — which never comes
+    // for autonomous benchmark runs. We watermark on `goal_run_attempt`
+    // artifacts so a single batch only fires once; if the LLM re-skips
+    // deliver after the rewake, MAX_TASK_ITERATIONS still bounds runaway.
+    if (isTaskActive(taskAfter)) {
+      const { findRecentBuildSettlement, hasDeliveryVerdictSince } = await import("@/engine/store")
+      const settlement = findRecentBuildSettlement(taskID, lastReworkSeenAt)
+      if (settlement && !hasDeliveryVerdictSince(taskID, lastReworkSeenAt)) {
+        lastReworkSeenAt = (settlement.time_created ?? Date.now()) + 1
+        log.info("build batch settled without deliver — re-waking orchestrator", {
+          taskID,
+          settlementArtifactID: settlement.id,
+        })
+        event = {
+          note: OrchestratorEventNote.deliverPending({ settledGoalCount: 1 }),
+        }
+        continue
+      }
+    }
+
     // ── Orchestrator stream-error detection (auto-rewake) ──
     // When the orchestrator's own LLM stream aborts mid-decision (provider
     // onError, session-llm idle watchdog), agent.ts records an

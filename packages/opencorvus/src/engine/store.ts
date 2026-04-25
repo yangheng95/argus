@@ -616,6 +616,49 @@ export function findRecentOrchestratorStreamError(taskID: string, sinceMs: numbe
  * a recent rework attempt is detected so it can hand structured feedback to
  * the orchestrator agent without piggy-backing on task.metadata.
  */
+/**
+ * Most recent `goal_run_attempt` artifact for `taskID` whose `time_created >= sinceMs`.
+ * Used by the orchestrator loop to detect "a build batch just settled" so it can
+ * fire a `deliverPending` re-wake when the orchestrator's previous decision turn
+ * ended without dispatching `deliver`. Watermarking by artifact time prevents
+ * the same batch from re-triggering — once we wake, lastReworkSeenAt advances
+ * past this artifact and only a NEW build attempt can fire it again. Per rule
+ * 23 the LLM decides what to call (deliver / modify_goal / fail_task); this
+ * helper only surfaces the fact "build settled, no delivery yet".
+ */
+export function findRecentBuildSettlement(taskID: string, sinceMs: number) {
+  return Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, taskID),
+        eq(EngineArtifactTable.kind, "goal_run_attempt"),
+        gte(EngineArtifactTable.time_created, sinceMs),
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+}
+
+/**
+ * True when the task has a `delivery-agent-verdict` artifact newer than
+ * `sinceMs` (any verdict — accepted / rejected / continue). Used together
+ * with `findRecentBuildSettlement` to gate the deliverPending wake: only fire
+ * when builds settled but no fresh deliver verdict followed.
+ */
+export function hasDeliveryVerdictSince(taskID: string, sinceMs: number): boolean {
+  const row = Database.use((db) =>
+    db.select({ id: EngineArtifactTable.id }).from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, taskID),
+        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
+        gte(EngineArtifactTable.time_created, sinceMs),
+      ))
+      .limit(1)
+      .get(),
+  )
+  return !!row
+}
+
 export function findLatestDeliveryVerdictArtifact(taskID: string) {
   return Database.use((db) =>
     db.select().from(EngineArtifactTable)
