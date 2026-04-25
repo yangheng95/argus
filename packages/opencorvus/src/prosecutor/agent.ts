@@ -44,7 +44,7 @@ import {
   upsertCounterexample,
 } from "@/metrics/store"
 import type { Counterexample } from "@/metrics/types"
-import type { DeliveryVerdictType } from "./agent"
+import type { DeliveryVerdictType } from "@/delivery/agent"
 
 const log = Log.create({ service: "prosecutor" })
 
