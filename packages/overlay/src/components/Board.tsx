@@ -11,7 +11,7 @@ import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { deliveryGoalProgress } from "../utils/goal-workflow";
-import { WorkflowProgressBar } from "./WorkflowProgressBar";
+import { TracePanel } from "./TracePanel";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
@@ -387,9 +387,16 @@ export function Board(props: BoardProps) {
 
       {/* ── Data-driven unified layout ── */}
       {/* Sections appear based on their data availability, not a mode flag. */}
-      {/* Matches Orchestrator's adaptive pipeline (per specs/new-arch.svg). */}
 
-      <WorkflowProgressBar workflow={workflow()} />
+      {/* Live AgentTrace stream — replaces the old MiniWorkflow pipeline bar.
+          The pipeline bar only echoed the engine workflow steps as
+          [PENDING/RUNNING/DONE], duplicating signal already on goal cards.
+          Trace shows what each agent actually did (llm_request payloads,
+          collector counts, structured-output success) — strictly more
+          information for the operator at no extra noise. */}
+      <Show when={boardStore.selectedTaskID}>
+        <TracePanel taskID={boardStore.selectedTaskID!} />
+      </Show>
 
       {/* TODO(2026-04-20): 需求分析 / 架构检查 / 评估指标 / 交付 / interactions
           五个板块整体下线等重做。当前仅保留 workflow 进度条 + goals + ChangesPanel
