@@ -38,8 +38,11 @@ Use as step 2 of the webpage-generate workflow. Pure function, no network or bro
       .describe("Max compile depth — deeper subtrees get summarised as comments. Default 4.")
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({
+      override: params.outputDir,
+      sessionID: ctx.sessionID,
+    })
     const extractedPath = path.join(outputDir, "extracted-page.json")
 
     let extractedText: string
