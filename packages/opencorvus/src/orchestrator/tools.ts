@@ -465,10 +465,11 @@ export function createOrchestratorTools(input: {
         // build prompts from that single source of truth.
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
-        // RequirementsService runs inside the pre-migration runtime. Do not layer a second
-        // caller-side inactivity timer here.
-        // Hoisted so the catch below can reference requirementsSession.id
-        // when emitting the error-path terminal event.
+        // RequirementsAgent.run owns its own child session + inactivity
+        // detection. No service wrapper anymore (phase-4 of isomorphic-agent
+        // refactor, rule 22). `requirementsSession` below is hoisted only so
+        // the catch block can emit the error-path terminal event with the
+        // parent-session id; the agent creates its own child under it.
         const requirementsSession = await Session.createNext({
           kind: "requirements",
           parentID: input.agentSessionID,
@@ -476,15 +477,12 @@ export function createOrchestratorTools(input: {
           directory: Instance.directory,
         })
         try {
-          // Post-phase-3-b the requirements agent runs via SessionPrompt and
-          // owns its own session persistence — no caller-side stream hook
-          // forwarding.
-          const { RequirementsService } = await import("@/requirements")
+          const { RequirementsAgent } = await import("@/requirements")
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
 
           const result = await withStageRetry("goal", () =>
-            RequirementsService.run({
+            RequirementsAgent.run({
               title: task.title,
               request: task.request,
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
@@ -497,6 +495,12 @@ export function createOrchestratorTools(input: {
             }),
             { signal: input.signal },
           )
+          if (result.requirements.length === 0) {
+            // Same contract the old RequirementsService enforced: an empty
+            // REQ-N list means requirements did not converge. Surface it as
+            // a hard error so the orchestrator can re-run / fail the task.
+            throw new Error("requirements agent produced no REQ-N entries")
+          }
 
 
           // Persist spec snapshot v1 (requirements + decisions only; the
