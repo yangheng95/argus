@@ -51,6 +51,66 @@ export namespace Worktree {
     ),
   }
 
+  export const MergeFailedError = NamedError.create(
+    "WorktreeMergeFailedError",
+    z.object({
+      message: z.string(),
+      branch: z.string(),
+      stderr: z.string().optional(),
+    }),
+  )
+
+  /**
+   * Fast-forward merge a goal branch back into the primary worktree's HEAD.
+   *
+   * The standard git-worktree workflow: branch off primary HEAD → work in
+   * worktree → merge back → next worktree branches off the now-advanced
+   * primary HEAD and inherits everything. The previous code path skipped
+   * step 3 entirely — every goal branch got force-deleted by `Worktree.remove`
+   * the moment build finished, so no goal ever saw what its predecessor had
+   * produced. The "merge agent" goal observed in the overlay-web-benchmark
+   * had to re-extract the same `mirror/` artifacts from scratch because
+   * primary HEAD had no commits from goals 1-3.
+   *
+   * Strict ff-only by design (rule 1: no fallback): if HEAD has diverged
+   * from the goal branch's base — i.e. another goal already merged a
+   * conflicting change — this throws and the caller fails the goal. There
+   * is no automatic three-way / `-X theirs` rescue: that would silently
+   * pick a winner and bury the conflict, exactly the fallback shape the
+   * project's rules forbid.
+   *
+   * Always runs under `withGitLock` so concurrent goal completions do not
+   * race each other on the primary HEAD ref.
+   */
+  export const mergeIntoPrimary = fn(
+    z.object({
+      branch: z
+        .string()
+        .describe("Local branch ref to merge (e.g. `opencorvus/build-foo`). Must already contain the goal's build commits."),
+    }),
+    async (input) => {
+      if (!Project.isGitRepo(Instance.directory)) {
+        throw new NotGitError({ message: "mergeIntoPrimary: not a git project" })
+      }
+      const primaryDir = await primaryWorktreeDir()
+      return withGitLock(async () => {
+        const merged = await $`git merge --ff-only --no-edit ${input.branch}`
+          .quiet()
+          .nothrow()
+          .cwd(primaryDir)
+        if (merged.exitCode !== 0) {
+          const stderr = errorText(merged) || "git merge --ff-only failed"
+          throw new MergeFailedError({
+            message: `mergeIntoPrimary(${input.branch}): ${stderr}`,
+            branch: input.branch,
+            stderr,
+          })
+        }
+        return true
+      })
+    },
+  )
+
   export const Info = z
     .object({
       name: z.string(),
