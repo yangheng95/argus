@@ -56,7 +56,18 @@ export function overlayMeta(
   rootSessionID: string,
   info: { role?: string },
 ): { resolvedRole: OverlayResolvedRole; channel: OverlayChannel } {
-  const role = String(info.role || "assistant")
+  // No "assistant" fallback (rule: 一个萝卜一个坑). Every message MUST carry
+  // an explicit role. Falling back silently routes role-less messages into
+  // the generic assistant card and orphans the actual agent's stream — fix
+  // the emitter, don't paper over it here.
+  if (typeof info.role !== "string" || info.role.length === 0) {
+    throw new Error(
+      `overlayMeta: message on session ${sessionID} has no info.role. ` +
+      `Every message emitter must set role explicitly (user / assistant). ` +
+      `Find the upstream caller that constructed this message and add the role.`,
+    )
+  }
+  const role = info.role
   const isRoot = !!rootSessionID && sessionID === rootSessionID
 
   if (isRoot) {
@@ -133,7 +144,13 @@ function rememberMessageRole(messageID: string, role: string) {
 function cacheMessageInfo(properties: Record<string, unknown>) {
   const info = properties.info as any
   if (!info?.id) return
-  rememberMessageRole(info.id, String(info.role || "assistant"))
+  if (typeof info.role !== "string" || info.role.length === 0) {
+    throw new Error(
+      `cacheMessageInfo: message ${info.id} missing info.role — every emitter ` +
+      `must set role explicitly; no "assistant" fallback (一个萝卜一个坑).`,
+    )
+  }
+  rememberMessageRole(info.id, info.role)
 }
 
 function readPersistedMessageRole(messageID: string): string | undefined {

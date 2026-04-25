@@ -188,7 +188,13 @@ export function syntheticTextMessage(
 export function formatConversationTranscript(messages: any[]): string {
   return (Array.isArray(messages) ? messages : [])
     .map((item) => {
-      const role: string = item?.info?.role || "assistant";
+      // No assistant-fallback (一个萝卜一个坑). Each message must carry an
+      // explicit role; mis-attributing role-less items to "assistant" hides
+      // bugs in the upstream emitter.
+      const role: string = item?.info?.role;
+      if (typeof role !== "string" || role.length === 0) {
+        throw new Error(`transcript: message ${item?.info?.id ?? "<unknown>"} missing info.role`);
+      }
       const header = joinBullet([
         transcriptRole(role),
         transcriptTime(item?.info?.time?.created),
@@ -551,7 +557,12 @@ export function interactionResponseText(interaction: any): string {
  *  `childIDs`. Callers pass this to `formatConversationTranscript`. */
 function flattenCardToMessages(node: CardNode | undefined, out: any[]): void {
   if (!node) return;
-  const role = node.role || node.stage || "assistant";
+  // No assistant-fallback (一个萝卜一个坑). A card without role AND without
+  // stage has no business in the transcript — surface the gap.
+  const role = node.role || node.stage;
+  if (typeof role !== "string" || role.length === 0) {
+    throw new Error(`transcript flatten: card ${node.id ?? "<unknown>"} has no role/stage attribution`);
+  }
   const time = { created: node.time };
   const parts: any[] = [];
   if (node.kind === "step" && node.goalDescription) {

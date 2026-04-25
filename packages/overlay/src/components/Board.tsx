@@ -327,11 +327,17 @@ export function Board(props: BoardProps) {
     let buffer: any[] = [];
     const flush = () => {
       if (buffer.length === 0) return;
+      // No assistant-fallback (一个萝卜一个坑). The grouping boundary marker
+      // must carry a role; if missing, the source emitter is wrong — surface
+      // it instead of silently attributing the parts to the generic assistant.
+      if (!boundary || typeof boundary.role !== "string" || boundary.role.length === 0) {
+        throw new Error(`Board grouping: card ${card.id} parts have no role boundary; emitter must mark role transitions explicitly`);
+      }
       groups.push({
         info: {
           id: `${card.id}:msg:${groups.length}`,
-          role: boundary?.role || "assistant",
-          time: { created: boundary?.time ?? card.time ?? 0 },
+          role: boundary.role,
+          time: { created: boundary.time ?? card.time ?? 0 },
         },
         parts: buffer,
       });
