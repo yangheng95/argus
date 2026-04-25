@@ -372,7 +372,7 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     }
     lines.push("")
     lines.push(
-      "Open with `todowrite` to record the steps you intend to take (small, observable items) and update them as you progress so the overlay reflects state. Then: explore → implement within owned_paths → verify via bash → commit → call StructuredOutput exactly once.",
+      "Explore → implement within owned_paths → verify via bash → commit → call StructuredOutput exactly once.",
     )
     return lines.join("\n")
   }
@@ -381,6 +381,6 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     "",
     target.text,
     "",
-    "Open with `todowrite` to record your plan (small, observable steps) and update entries as you progress so the overlay reflects state. Then: explore the repo to understand scope, implement the change, verify via bash (tests / build / run), commit, and call StructuredOutput exactly once with your final report.",
+    "Explore the repo to understand scope, implement the change, verify via bash (tests / build / run), commit, and call StructuredOutput exactly once with your final report.",
   ].join("\n")
 }
