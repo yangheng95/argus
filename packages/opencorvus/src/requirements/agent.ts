@@ -1,39 +1,31 @@
 /**
- * RequirementsAgent — parses a user task into REQ-N requirements + foundational
- * technical decisions (runtime / frameworks / test strategy). Seeds the
- * Decision Log with the decisions under phase="requirements" so downstream
- * agents build on the same foundation.
+ * RequirementsAgent — parses a user task into REQ-N requirements +
+ * foundational technical decisions (runtime / framework / test strategy).
+ * Seeds the Decision Log with the decisions under phase="requirements"
+ * so downstream agents build on the same foundation.
  *
  * This agent deliberately does NOT produce goals, metric specs, challenge
  * seeds, traceability, or cross-goal contracts — the Architect owns those.
  * The narrow surface is enforced by the tool list (register_requirement +
  * register_decision) and by the RequirementsResult type shape.
  *
- * Phase 3-b migration (specs/new-arch/16-unified-teardown.md §7-3): runs via
- * SessionPrompt.prompt + extraTools instead of SessionPrompt.prompt + a private
- * finalize_requirements tool. Terminal `summary` arrives through SessionLoop's
- * StructuredOutput tool (RequirementsFinalSchema); incremental
- * register_requirement / register_decision tools stay as agent-scoped extras.
+ * Implementation: shell over `runAgentSession`. The runner owns model
+ * resolution, child-session creation, system-prompt composition, abort /
+ * stream-error handling. Agent-specific code is the user prompt builder
+ * (with prefetched repo context + clarification transcript + design
+ * specs + multimodal attachments) and the output tool kit.
  */
 import z from "zod"
-import type { TextHooks } from "@/llm/api"
+import { runAgentSession } from "@/agent/runner"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
-import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
+import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
 import { AttachmentStore } from "@/storage/attachment-store"
-import { resolveAgentModel } from "@/agent/model"
-import { loadStageSkills } from "@/engine/skill-inject"
-import { Config } from "@/config/config"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { Instance } from "@/project/instance"
-import { Provider } from "@/provider/provider"
-import { Session } from "@/session"
-import { SessionPrompt } from "@/session/prompt"
-import type { Message } from "@/session/message"
-import { Identifier } from "@/id/id"
 import type {
   ParsedRequirement,
   RequirementsDecision,
@@ -64,7 +56,7 @@ export interface RequirementsResult {
 }
 
 // ---------------------------------------------------------------------------
-// RequirementsAgent public API
+// Public API
 // ---------------------------------------------------------------------------
 
 export namespace RequirementsAgent {
@@ -76,13 +68,9 @@ export namespace RequirementsAgent {
     /** Advisory visual contract produced by design_analysis. */
     designSpecs?: VisualSpec[]
     taskID?: string
-    /** Parent session — a child "requirements" session is created under it. */
     parentSessionID?: string
-    /** Explicit model override (provider/model). Skips `resolveAgentModel`. */
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
-    /** Legacy passthrough; not wired after the SessionPrompt migration. */
-    stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
     /** Optional Decision Log — seeded with foundational decisions. */
     decisionLog?: DecisionLog
@@ -93,139 +81,91 @@ export namespace RequirementsAgent {
    * Goal decomposition happens downstream in the Architect, not here.
    */
   export async function run(input: RunInput): Promise<RequirementsResult> {
-    return runInternal(input)
-  }
-}
+    const taskWorkDir = extractWorkDir(input.request)
+    const plannerTools = await filterAgentTools(createPlannerTools(taskWorkDir), "requirements")
+    const outputToolKit = createRequirementsOutputTools()
 
-// ---------------------------------------------------------------------------
-// Internal implementation
-// ---------------------------------------------------------------------------
+    const context = prefetchContext(input.title, input.request)
 
-async function runInternal(input: RequirementsAgent.RunInput): Promise<RequirementsResult> {
-  if (input.signal?.aborted) throw new Error("requirements agent aborted before model resolution")
-
-  // Resolve model — per-agent model from Agent.Info (config: agent.requirements.model),
-  // falling back to the user's most recent in-session model pick when no per-agent
-  // override is configured. Test callers can bypass this with input.model.
-  let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
-  if (input.model) {
-    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
-  } else {
-    model = await resolveAgentModel("requirements", { taskID: input.taskID }).catch(() => undefined)
-  }
-  if (!model) throw new Error("no LLM model available for requirements agent")
-
-  if (input.signal?.aborted) throw new Error("requirements agent aborted after model resolution")
-
-  // Extract working directory from request — planner tools use it when present.
-  const cwdMatch =
-    input.request.match(/(?:绝对路径|absolute path)[：:\s]*([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i) ??
-    input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
-  const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
-
-  const plannerTools = await filterAgentTools(createPlannerTools(taskWorkDir), "requirements")
-  const outputToolKit = createRequirementsOutputTools()
-  const extraTools = { ...plannerTools, ...outputToolKit.tools }
-  const enableMap: Record<string, boolean> = Object.fromEntries(
-    Object.keys(extraTools).map((name) => [name, true]),
-  )
-
-  if (input.signal?.aborted) throw new Error("requirements agent aborted before context prefetch")
-
-  const context = prefetchContext(input.title, input.request)
-
-  const systemPrompt = await requirementsSystem()
-  const userPrompt = buildUserPrompt(input, context)
-
-  await input.onStatus?.("Requirements agent starting")
-
-  log.info("requirements agent starting", {
-    title: input.title,
-    model: model.id,
-  })
-
-  const childSession = await Session.createNext({
-    kind: "requirements",
-    parentID: input.parentSessionID,
-    title: `Requirements: ${input.title}`,
-    directory: Instance.directory,
-  })
-
-  const parts = await buildPromptParts(userPrompt, input.attachments)
-
-  let finalMessage: Message.WithParts | undefined
-  await SessionPrompt.withExtraTools(childSession.id, extraTools, async () => {
-    finalMessage = (await SessionPrompt.prompt({
-      sessionID: childSession.id,
-      model: { providerID: model!.providerID, modelID: model!.api.id },
-      agent: "requirements",
-      system: systemPrompt,
-      tools: enableMap,
+    const out = await runAgentSession({
+      kind: "requirements",
+      core: REQUIREMENTS_CORE,
+      sessionTitle: `Requirements: ${input.title}`,
+      parentSessionID: input.parentSessionID,
+      taskID: input.taskID,
+      model: input.model,
+      signal: input.signal,
+      onStatus: input.onStatus,
+      toolKit: {
+        tools: { ...plannerTools, ...outputToolKit.tools },
+        getCollector: () => outputToolKit.getCollector(),
+      },
+      buildUserPrompt: () => buildUserPrompt(input, context),
+      buildUserParts: () => buildPromptParts(buildUserPrompt(input, context), input.attachments),
       format: {
-        type: "json_schema",
         schema: z.toJSONSchema(RequirementsFinalSchema) as Record<string, unknown>,
         retryCount: 2,
       },
-      parts,
-    })) as Message.WithParts
-  })
+      skillsStage: "requirements",
+    })
 
-  if (input.signal?.aborted) throw new Error("requirements agent aborted during prompt")
-  if (!finalMessage) throw new Error("requirements agent: SessionPrompt.prompt returned no message")
+    const structured = out.structured as RequirementsFinal | undefined
+    const collector = out.collector as RequirementsCollector
 
-  const structured = (finalMessage.info as Message.Assistant).structured as RequirementsFinal | undefined
-
-  // Structured tool-call output is the only supported path. If the LLM did
-  // not register any requirements via register_requirement, treat this as a
-  // hard contract failure — there is no text-parsing fallback.
-  const collector = outputToolKit.getCollector()
-  if (collector.requirements.length === 0) {
-    throw new Error(
-      `requirements agent produced no requirements via register_requirement ` +
-      `(structuredMissing=${!structured}). ` +
-      `The orchestrator LLM must decide whether to re-invoke requirements, modify the ` +
-      `task prompt, or fail the task — no coded retry loop.`,
-    )
-  }
-
-  const parsed = collectorToOutput(collector, structured)
-  log.info("requirements agent output", {
-    requirements: parsed.requirements.length,
-    decisions: parsed.decisions.length,
-    structuredMissing: !structured,
-  })
-
-  const result = toResult(parsed)
-
-  // Seed Decision Log with foundational decisions
-  if (input.decisionLog && result.decisions.length > 0) {
-    for (const decision of result.decisions) {
-      input.decisionLog.append({
-        phase: "requirements",
-        key: decision.key,
-        value: decision.value,
-        reason: decision.reason,
-      })
+    // Structured tool-call output is the only supported path. If the LLM
+    // did not register any requirements via register_requirement, treat
+    // this as a hard contract failure — no text-parsing fallback (rule 1).
+    if (collector.requirements.length === 0) {
+      throw new Error(
+        `requirements agent produced no requirements via register_requirement ` +
+          `(structuredMissing=${!structured}). ` +
+          `The orchestrator LLM must decide whether to re-invoke requirements, modify the ` +
+          `task prompt, or fail the task — no coded retry loop.`,
+      )
     }
-  }
 
-  return result
+    const parsed = collectorToOutput(collector, structured)
+    log.info("requirements agent output", {
+      requirements: parsed.requirements.length,
+      decisions: parsed.decisions.length,
+      structuredMissing: !structured,
+    })
+
+    const result: RequirementsResult = {
+      summary: parsed.summary || "Requirements parsed",
+      requirements: parsed.requirements,
+      decisions: parsed.decisions,
+    }
+
+    // Seed Decision Log with foundational decisions
+    if (input.decisionLog && result.decisions.length > 0) {
+      for (const decision of result.decisions) {
+        input.decisionLog.append({
+          phase: "requirements",
+          key: decision.key,
+          value: decision.value,
+          reason: decision.reason,
+        })
+      }
+    }
+
+    return result
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Convert parsed output to RequirementsResult
+// Working-directory extraction — pass-through to planner tools.
 // ---------------------------------------------------------------------------
 
-function toResult(parsed: RequirementsOutput): RequirementsResult {
-  return {
-    summary: parsed.summary || "Requirements parsed",
-    requirements: parsed.requirements,
-    decisions: parsed.decisions,
-  }
+function extractWorkDir(request: string): string | undefined {
+  const m =
+    request.match(/(?:绝对路径|absolute path)[：:\s]*([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i) ??
+    request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
+  return m ? m[1].replace(/[/\\]+$/, "") : undefined
 }
 
 // ---------------------------------------------------------------------------
-// Convert structured collector → RequirementsOutput
+// Structured collector → RequirementsOutput
 // ---------------------------------------------------------------------------
 
 function collectorToOutput(
@@ -287,7 +227,7 @@ async function buildPromptParts(
     }
   }
 
-  return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
+  return parts
 }
 
 function buildUserPrompt(
@@ -328,15 +268,4 @@ function buildUserPrompt(
   )
 
   return sections.join("\n\n")
-}
-
-async function requirementsSystem(): Promise<string> {
-  const config = await Config.get()
-  const userAppend = (config.agent as Record<string, any> | undefined)?.["requirements"]?.prompt
-  const core = typeof userAppend === "string" && userAppend.trim().length > 0
-    ? REQUIREMENTS_CORE + "\n\n" + userAppend
-    : REQUIREMENTS_CORE
-  const orchCfg = await EngineConfig.get()
-  const skills = await loadStageSkills(orchCfg.requirements.skills, "requirements")
-  return core + skills
 }
