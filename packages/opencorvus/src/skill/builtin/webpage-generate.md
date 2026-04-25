@@ -3,32 +3,14 @@ name: webpage-generate
 description: Generate a webpage as a static single-file HTML clone with visual similarity ≥ 95%. Pipeline is deterministic — extract DOM via headless Chrome, compile to inline-styled `index.html`, then render + evaluate against the reference and edit on specific gaps. Activate when the user asks to clone, copy, reproduce, replicate, mirror, 复刻, 克隆, 模仿, or "make a page that looks like" another webpage; or when the brief cites a reference design (Apple HIG, macOS/iOS app, a specific site URL, a Figma/screenshot) and expects a visual match. Always compile from `mirror/extracted-page.json` — do NOT hand-write the clone from a screenshot. 始终从 mirror 抽取产物编译，不要根据截图手写 HTML。
 stage: build
 auto_detect:
-  files:
-    - index.html
-    - public/index.html
-    - src/App.tsx
-    - src/App.vue
-    - src/main.tsx
-    - vite.config.ts
-    - vite.config.js
-    - next.config.js
-    - next.config.ts
-    - package.json
-  deps:
-    - react
-    - react-dom
-    - vue
-    - svelte
-    - next
-    - nuxt
-    - solid-js
-    - astro
-    - vite
-    - tailwindcss
   task_signals:
     has_attachment_image: true
     request_contains_url: true
 priority: 60
+required_tools:
+  - webpage_compile_html
+  - webpage_render
+  - webpage_evaluate
 ---
 
 # Webpage Generate Skill
@@ -63,9 +45,9 @@ When `mirror/extracted-page.json` exists for the right URL, REUSE — skip extra
 Use this skill when the user asks to reproduce a webpage's look — e.g.
 
 - "Clone the Baidu homepage"
-- "复刻 https://example.com/"
+- "复刻 example.com"
 - "Make a landing page that looks like 小红书"
-- "Rebuild the visual shell of <url>"
+- "Rebuild the visual shell of a supplied URL"
 
 Do NOT use it for content rewriting, SEO analysis, or behavioural scraping.
 

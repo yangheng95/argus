@@ -7,11 +7,14 @@ import { WebpageAnalyzeTool } from "../../src/mirror/tools/webpage-analyze"
 import webpageGenerateMd from "../../src/skill/builtin/webpage-generate.md" with { type: "text" }
 
 describe("webpage-generate dependency guards", () => {
-  test("skill explicitly requires serial extract/compile/analyze steps", () => {
+  test("skill declares deterministic pipeline and build-required tools", () => {
     const parsed = matter(webpageGenerateMd)
-    expect(parsed.content).toContain("## Critical Dependency Rule")
-    expect(parsed.content).toContain("Steps 1-3 are **strictly serial**")
-    expect(parsed.content).toContain("Never call `webpage_compile` or `webpage_analyze` in the same response as `webpage_extract`")
+    expect(parsed.data.required_tools).toContain("webpage_compile_html")
+    expect(parsed.data.required_tools).toContain("webpage_render")
+    expect(parsed.data.required_tools).toContain("webpage_evaluate")
+    expect(parsed.content).toContain("Steps 1–2 are **strictly serial**")
+    expect(parsed.content).toContain("Do NOT hand-write `index.html` from a screenshot")
+    expect(parsed.content).toContain("`webpage_compile_html`")
   })
 
   test("compile and analyze surface an actionable missing-artifact error", async () => {
