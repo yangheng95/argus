@@ -148,7 +148,11 @@ export async function reviewFidelity(input: {
    *  child session under this parent so the overlay renders an independent
    *  agent card for each invocation. */
   parentSessionID?: string
-}): Promise<FidelityResult> {
+  /** Fires once the runner session is created so callers (orchestrator
+   *  fidelity tool) can capture the id for recordFidelityAttempt /
+   *  user-facing pointer text without needing a wrapper session. */
+  onSessionCreated?: (sessionID: string) => void
+}): Promise<FidelityResult & { sessionID: string }> {
   const { goals } = input
 
   if (input.taskID && !input.parentSessionID) {
@@ -170,15 +174,17 @@ export async function reviewFidelity(input: {
       corrections: [],
       missingGoals: [],
     }
-    await emitSoftFidelity(input, result)
-    return result
+    const softSessionID = await emitSoftFidelity(input, result)
+    if (softSessionID) input.onSessionCreated?.(softSessionID)
+    return { ...result, sessionID: softSessionID ?? "" }
   }
   const model = await resolveAgentModel("fidelity", { taskID: input.taskID }).catch(() => undefined)
   if (!model) {
     log.warn("no LLM available for fidelity review, skipping")
     const result: FidelityResult = { verdict: "faithful", issues: [], corrections: [], missingGoals: [] }
-    await emitSoftFidelity(input, result)
-    return result
+    const softSessionID = await emitSoftFidelity(input, result)
+    if (softSessionID) input.onSessionCreated?.(softSessionID)
+    return { ...result, sessionID: softSessionID ?? "" }
   }
 
   const goalIDs = new Set(goals.map((g) => g.id))
@@ -276,6 +282,7 @@ export async function reviewFidelity(input: {
     },
     buildUserPrompt: () => buildFidelityPrompt(input),
     onSessionCreated: (session) => {
+      input.onSessionCreated?.(session.id)
       emitFidelityLifecycle("started", input.taskID, session.id, 0, 0)
       const ticker = input.taskID
         ? setInterval(() => {
@@ -311,7 +318,7 @@ export async function reviewFidelity(input: {
   // AI SDK's tool-input-validation path (the overlay suppresses "attempt N"
   // when attempt is 1, matching the pre-migration behavior).
   emitFidelityEvent(input.taskID, out.session.id, collector.result, 1)
-  return collector.result
+  return { ...collector.result, sessionID: out.session.id }
 }
 
 /**
@@ -323,9 +330,9 @@ export async function reviewFidelity(input: {
 async function emitSoftFidelity(
   input: { taskID?: string; parentSessionID?: string; taskTitle: string },
   result: FidelityResult,
-): Promise<void> {
-  if (!input.taskID) return
-  if (!input.parentSessionID) return
+): Promise<string | undefined> {
+  if (!input.taskID) return undefined
+  if (!input.parentSessionID) return undefined
   const { Session } = await import("@/session")
   const session = await Session.createNext({
     kind: "fidelity",
@@ -334,6 +341,7 @@ async function emitSoftFidelity(
     directory: Instance.directory,
   })
   emitFidelityEvent(input.taskID, session.id, result, 0)
+  return session.id
 }
 
 /** Broadcast the parsed fidelity verdict so the overlay can render a native

@@ -465,17 +465,14 @@ export function createOrchestratorTools(input: {
         // build prompts from that single source of truth.
         await trackStepStart("requirements")
         task = await updateTask(task, { status: "active" }, "Requirements analysis started")
-        // RequirementsAgent.run owns its own child session + inactivity
-        // detection. No service wrapper anymore (phase-4 of isomorphic-agent
-        // refactor, rule 22). `requirementsSession` below is hoisted only so
-        // the catch block can emit the error-path terminal event with the
-        // parent-session id; the agent creates its own child under it.
-        const requirementsSession = await Session.createNext({
-          kind: "requirements",
-          parentID: input.agentSessionID,
-          title: `Requirements: ${task.title}`,
-          directory: Instance.directory,
-        })
+        // Single session per sub-agent (rule 22). RequirementsAgent.run
+        // creates the runner session internally; the orchestrator captures
+        // its id via onSessionCreated so SSE completion events attribute
+        // to the same session the overlay already shows. The previous
+        // wrapper session here was a second card with no content, just to
+        // give the catch block an id to emit on — replaced by `runnerSessionID`
+        // captured below.
+        let runnerSessionID: string | undefined
         try {
           const { RequirementsAgent } = await import("@/requirements")
           const { createDecisionLog } = await import("@/decision-log")
@@ -488,10 +485,11 @@ export function createOrchestratorTools(input: {
               attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
               designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
               taskID,
-              parentSessionID: requirementsSession.id,
+              parentSessionID: input.agentSessionID,
               signal: input.signal,
               decisionLog,
               onStatus: () => {},
+              onSessionCreated: (id) => { runnerSessionID = id },
             }),
             { signal: input.signal },
           )
@@ -595,7 +593,7 @@ export function createOrchestratorTools(input: {
             EngineEvent.RequirementsCompleted,
             {
               taskID,
-              sessionID: requirementsSession.id,
+              sessionID: result.sessionID,
               status: "completed",
               requirementCount: result.requirements.length,
               goalCount: 0,
@@ -616,15 +614,17 @@ export function createOrchestratorTools(input: {
             pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
           })
         } catch (err) {
-          // Error-path terminal emission so the overlay's requirements
-          // session card flips out of `running`. Without this the card
-          // spins forever on any failure (LLM error, persistence error,
-          // signal abort). Re-throw preserves existing error propagation.
+          // Error-path terminal emission. We use the runner session id
+          // captured by onSessionCreated when the agent reached at least
+          // session creation; if the failure happened before that (rare —
+          // model resolution, etc.) we attribute the card to the parent
+          // orchestrator session so the overlay still has somewhere to
+          // render the error message instead of orphaning it.
           EngineProtocol.emit(
             EngineEvent.RequirementsCompleted,
             {
               taskID,
-              sessionID: requirementsSession.id,
+              sessionID: runnerSessionID ?? input.agentSessionID,
               status: "error",
               error: err instanceof Error ? err.message : String(err),
               summary: "Requirements failed",
@@ -926,14 +926,10 @@ export function createOrchestratorTools(input: {
           throw new Error(message)
         }
 
-        const designSession = await Session.createNext({
-          kind: "design-analyst",
-          parentID: input.agentSessionID,
-          title: `Design Analysis: ${task.title}`,
-          directory: Instance.directory,
-        })
-        // Post-phase-3-b the design-analyst runs via SessionPrompt and owns
-        // its own session persistence — no caller-side stream hook forwarding.
+        // Single session per sub-agent (rule 22). DesignAnalystAgent.analyze
+        // creates the runner session internally; the orchestrator captures
+        // its id via onSessionCreated for downstream emit attribution.
+        let runnerSessionID: string | undefined
         try {
           const { DesignAnalystAgent } = await import("@/design-analyst")
 
@@ -947,9 +943,10 @@ export function createOrchestratorTools(input: {
             // webpage screenshot with its dedicated `url_screenshot` tool.
             attachments: enrichedHasAttachments ? designVisuals : undefined,
             taskID,
-            parentSessionID: designSession.id,
+            parentSessionID: input.agentSessionID,
             signal: input.signal,
             onStatus: () => {},
+            onSessionCreated: (id) => { runnerSessionID = id },
           })
 
           // Persist the visual contract on task.design_specs (dedicated JSON
@@ -1014,7 +1011,7 @@ export function createOrchestratorTools(input: {
             EngineEvent.DesignAnalysisCompleted,
             {
               taskID,
-              sessionID: designSession.id,
+              sessionID: analysis.sessionID,
               status: "completed",
               layoutSections: countByCategory.layout ?? 0,
               styleTokens: (countByCategory.color ?? 0) + (countByCategory.typography ?? 0) + (countByCategory.spacing ?? 0),
@@ -1051,7 +1048,7 @@ export function createOrchestratorTools(input: {
             EngineEvent.DesignAnalysisCompleted,
             {
               taskID,
-              sessionID: designSession.id,
+              sessionID: runnerSessionID ?? input.agentSessionID,
               status: "error",
               error: msg,
               summary: "Design analysis failed",
@@ -1089,12 +1086,9 @@ export function createOrchestratorTools(input: {
 
         await trackStepStart("architect")
 
-        const architectSession = await Session.createNext({
-          kind: "architect",
-          parentID: input.agentSessionID,
-          title: `Architect: ${task.title}`,
-          directory: Instance.directory,
-        })
+        // Single session per sub-agent (rule 22). ArchitectAgent.coordinate
+        // creates the runner session internally.
+        let runnerSessionID: string | undefined
         try {
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
@@ -1150,8 +1144,9 @@ export function createOrchestratorTools(input: {
             requirementDecisions,
             designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
             signal: input.signal,
-            parentSessionID: architectSession.id,
+            parentSessionID: input.agentSessionID,
             onStatus: () => {},
+            onSessionCreated: (id) => { runnerSessionID = id },
           })
 
           // Single-pass persist. Architect's goal set is the authoritative
@@ -1290,7 +1285,7 @@ export function createOrchestratorTools(input: {
             EngineEvent.ArchitectCompleted,
             {
               taskID,
-              sessionID: architectSession.id,
+              sessionID: result.sessionID,
               status: "completed",
               contractCount: result.contracts.length,
               categories: [...new Set(result.contracts.map((c) => c.category))],
@@ -1306,7 +1301,7 @@ export function createOrchestratorTools(input: {
             EngineEvent.ArchitectCompleted,
             {
               taskID,
-              sessionID: architectSession.id,
+              sessionID: runnerSessionID ?? input.agentSessionID,
               status: "error",
               error: err instanceof Error ? err.message : String(err),
               summary: "Architect failed",
@@ -1359,12 +1354,8 @@ export function createOrchestratorTools(input: {
           })
         }
 
-        const fidelitySession = await Session.createNext({
-          kind: "fidelity",
-          parentID: input.agentSessionID,
-          title: `Fidelity Review: ${task.title}`,
-          directory: Instance.directory,
-        })
+        // Single session per sub-agent (rule 22). reviewFidelity creates the
+        // runner session internally and returns its id on `verdict.sessionID`.
 
         const { findRequirements } = await import("@/engine/store")
         const reqRows = findRequirements(activeSpec.id)
@@ -1412,7 +1403,7 @@ export function createOrchestratorTools(input: {
           decisionLog,
           signal: input.signal,
           taskID,
-          parentSessionID: fidelitySession.id,
+          parentSessionID: input.agentSessionID,
         })
 
         if (verdict.verdict === "faithful") {
@@ -1420,7 +1411,7 @@ export function createOrchestratorTools(input: {
             const { recordFidelityAttempt } = await import("@/engine/persist")
             recordFidelityAttempt({
               taskID,
-              sessionID: fidelitySession.id,
+              sessionID: verdict.sessionID,
               specSnapshotID: activeSpec.id,
               verdict: "faithful",
               issuesCount: verdict.issues.length,
@@ -1439,7 +1430,7 @@ export function createOrchestratorTools(input: {
               ["goal_count", String(goalsForReview.length)],
               ["spec_snapshot_id", activeSpec.id],
             ],
-            pointer: `fidelity session ${fidelitySession.id}`,
+            pointer: `fidelity session ${verdict.sessionID}`,
           })
         }
 
@@ -1512,7 +1503,7 @@ export function createOrchestratorTools(input: {
           const { recordFidelityAttempt } = await import("@/engine/persist")
           recordFidelityAttempt({
             taskID,
-            sessionID: fidelitySession.id,
+            sessionID: verdict.sessionID,
             specSnapshotID: activeSpec.id,
             verdict: "needs_correction",
             issuesCount: verdict.issues.length,
@@ -1538,7 +1529,7 @@ export function createOrchestratorTools(input: {
             ["removed_goals", removedByFidelity],
             ["spec_snapshot_id", activeSpec.id],
           ],
-          pointer: `fidelity session ${fidelitySession.id}`,
+          pointer: `fidelity session ${verdict.sessionID}`,
         })
       },
     }),
@@ -2649,12 +2640,8 @@ export function createOrchestratorTools(input: {
           })
         }
 
-        const deliverySession = await Session.createNext({
-          kind: "delivery",
-          parentID: input.agentSessionID,
-          title: `Delivery verification: ${task.title}`,
-          directory: Instance.directory,
-        })
+        // Single session per sub-agent (rule 22). DeliveryService.verify
+        // creates the runner session internally under the orchestrator parent.
         try {
           const { DeliveryService } = await import("@/delivery/service")
           const { DeliveryVerdict } = await import("@/delivery/agent")
@@ -2693,7 +2680,7 @@ export function createOrchestratorTools(input: {
               delivery: deliveryInfo,
               attachments: deliveryAttachments,
               signal: input.signal,
-              parentSessionID: deliverySession.id,
+              parentSessionID: input.agentSessionID,
             })
 
           // Persist verdict as artifact
