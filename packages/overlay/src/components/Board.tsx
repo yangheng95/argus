@@ -389,14 +389,12 @@ export function Board(props: BoardProps) {
       {/* Sections appear based on their data availability, not a mode flag. */}
 
       {/* Live AgentTrace stream — replaces the old MiniWorkflow pipeline bar.
-          The pipeline bar only echoed the engine workflow steps as
-          [PENDING/RUNNING/DONE], duplicating signal already on goal cards.
-          Trace shows what each agent actually did (llm_request payloads,
-          collector counts, structured-output success) — strictly more
-          information for the operator at no extra noise. */}
-      <Show when={boardStore.selectedTaskID}>
-        <TracePanel taskID={boardStore.selectedTaskID!} />
-      </Show>
+          Always rendered so the operator can see WHERE the trace surface is
+          even before a task is selected; the empty state inside TracePanel
+          carries the "no events yet" message. Conditional rendering hid
+          the panel entirely when selectedTaskID was nullish, which read as
+          "the trace feature is missing" instead of "no events yet". */}
+      <TracePanel taskID={boardStore.selectedTaskID ?? ""} />
 
       {/* TODO(2026-04-20): 需求分析 / 架构检查 / 评估指标 / 交付 / interactions
           五个板块整体下线等重做。当前仅保留 workflow 进度条 + goals + ChangesPanel
