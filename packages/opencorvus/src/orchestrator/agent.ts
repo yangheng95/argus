@@ -13,6 +13,35 @@
  * The orchestrator controls the entire pipeline via tools:
  * requirements → goals → plan → execute → eval → delivery verify → publish
  * All other agents (requirements, architect, plan, eval, delivery) are subordinate workers.
+ *
+ * ── Why this file does NOT use `runAgentSession` ───────────────────────────
+ *
+ * The orchestrator is the HOST of the worker-session pattern that
+ * `src/agent/runner.ts` abstracts — not a user of that pattern. Worker
+ * agents (build, delivery, fidelity, prosecutor, requirements, architect,
+ * design-analyst, intent-analysis) collapse into the runner's shape because
+ * they all share: single composed system prompt, terminal collector contract,
+ * thrown AgentRunError on stream / abort failure, no step-level coordination.
+ *
+ * The orchestrator deliberately diverges on every one of those axes:
+ *   - Two-part system prompt (static + per-wake describe / iteration / verdict)
+ *   - `withStepHook` wrapping `withExtraTools` so deferred-stop finalises after
+ *     every assistant step (dispatch tools opt to abort the orchestrator's
+ *     turn once their child sessions are launched).
+ *   - Stream errors are persisted as `engine_artifact kind="orchestrator-
+ *     stream-error"` and consumed by the next wake's LLM via describe; the
+ *     orchestrator does NOT throw on them, because rule 23 says recovery is
+ *     a decision the LLM owns on the next wake, not a state-machine reaction
+ *     in this turn.
+ *   - Concurrency state (`running.set(taskID, ctrl)`) and SerialQueue-driven
+ *     wake scheduling sit OUTSIDE any single processTask invocation; the
+ *     runner has no analog because workers do not own their own dispatch.
+ *
+ * See the matching NON-GOAL section in `src/agent/runner.ts` for the full
+ * rationale. Anyone tempted to "consolidate orchestrator onto the runner"
+ * is looking at the abstraction upside-down — the orchestrator IS the host
+ * the runner is a building block of.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 import ORCHESTRATOR_CORE from "@/prompt/core/orchestrator-core.txt"
 import { Provider } from "@/provider/provider"
