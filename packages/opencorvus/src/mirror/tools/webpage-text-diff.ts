@@ -53,11 +53,8 @@ Reads extracted-page.json (from webpage_extract) and the clone's index.html.`,
       .describe("Max number of missing tokens to return. Default 30.")
       .optional(),
   }),
-  async execute(params, ctx) {
-    const referenceDir = await resolveMirrorOutputDir({
-      override: params.referenceDir,
-      sessionID: ctx.sessionID,
-    })
+  async execute(params) {
+    const referenceDir = await resolveMirrorOutputDir(params.referenceDir)
     const inputDir = params.inputDir
       ? path.resolve(Instance.directory, params.inputDir)
       : Instance.directory
