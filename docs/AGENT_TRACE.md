@@ -18,7 +18,20 @@ export OPENCORVUS_AGENT_TRACE=0      # 或 false / no / off
 
 # 多模态附件（图片 / PDF base64）很大时，去掉 data: URL 主体
 export OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS=1
+
+# 显式指定 trace 输出目录（例如 benchmark / CI 不想写到 Instance.directory）
+export OPENCORVUS_AGENT_TRACE_DIR=/path/to/trace-out
 ```
+
+### Benchmark / CI 注意
+
+`overlay-web-benchmark.ts` 默认会在结束时 `rm -rf temp.dir`（含 `<temp.dir>/.opencorvus/trace/`）。为防止 trace 被一并清掉，benchmark 启动时**自动**设置：
+
+```
+OPENCORVUS_AGENT_TRACE_DIR=<process.cwd()>/overlay-web-benchmark-trace-<ts>/
+```
+
+trace 落在 cwd（与 reportFile 同目录），不受 cleanup 影响。如果你显式传了 `OPENCORVUS_AGENT_TRACE_DIR`，benchmark 不会覆盖你的设置。
 
 ## 2. 输出文件布局
 

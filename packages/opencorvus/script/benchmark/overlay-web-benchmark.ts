@@ -481,6 +481,20 @@ if (resumeTaskID) {
 // Re-inject local provider configs after scaffoldProject (which overwrites config-override)
 await prepareLocalProviders()
 
+// AgentTrace dir override: temp.dir is rm -rf'd at end-of-run unless --keep,
+// so the default `<Instance.directory>/.opencorvus/trace/` would be wiped
+// alongside the workspace. Pin trace output to a sibling of the report file
+// in process.cwd() so traces survive regardless of --keep. Override with
+// OPENCORVUS_AGENT_TRACE_DIR if the caller wants a different location.
+if (!process.env.OPENCORVUS_AGENT_TRACE_DIR) {
+  const traceStamp = Date.now()
+  process.env.OPENCORVUS_AGENT_TRACE_DIR = path.join(
+    process.cwd(),
+    `overlay-web-benchmark-trace-${traceStamp}`,
+  )
+}
+process.stderr.write(`[trace] OPENCORVUS_AGENT_TRACE_DIR=${process.env.OPENCORVUS_AGENT_TRACE_DIR}\n`)
+
 await Instance.provide({
   directory: temp.dir,
   init: InstanceBootstrap,
