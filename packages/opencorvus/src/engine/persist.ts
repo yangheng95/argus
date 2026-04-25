@@ -739,8 +739,9 @@ type DeliveryInput = {
   report?: import("@/delivery/checks").GoalReportClaim
 }
 
-// Shared diff-stat reduction + artifact inserts. Never writes the evaluation
-// row — that's the split between persistGoalDelivery and persistTaskDelivery.
+// Diff-stat reduction + artifact inserts for the task-level delivery path.
+// Per-goal deliveries are written inline by `recordBuildAttempt`; only
+// `persistTaskDelivery` calls this helper now.
 function writeDeliveryRow(
   db: Parameters<Parameters<typeof Database.transaction>[0]>[0],
   input: {
@@ -856,27 +857,12 @@ function writeDeliveryRow(
   }
 }
 
-// Per-goal delivery: produced by pipeline/executor.ts the moment a goal_run
-// finishes. Stores the delivery row + artifacts for later aggregation, but
-// does NOT create an evaluation row — per-goal verdicts live inside the
-// task-level delivery-agent run, so a per-goal eval would sit pending forever
-// with no updater (see tick-32 bench DB: evl_*002* rows that never leave
-// inconclusive/pending). Emits DeliveryReady so bridges know to refresh.
-export function persistGoalDelivery(input: {
-  task: TaskRow
-  run: RunRow
-  goalRunID: string
-  deliveryID: string
-  delivery: DeliveryInput
-  now: number
-}) {
-  Database.transaction((db) => {
-    writeDeliveryRow(db, input)
-    Database.effect(() =>
-      EngineProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
-    )
-  })
-}
+// Per-goal deliveries are written inline by `recordBuildAttempt` (below) — it
+// owns the goal_run_id and binds the kind="delivery" artifact to it in the
+// same transaction as the goal_run_attempt insert. The standalone
+// persistGoalDelivery helper that previously sat here was retired with
+// pipeline/executor.ts in commit 54c382858 and replaced by the inline write,
+// keeping a single source of truth for goal-run delivery persistence.
 
 // Task-level delivery: produced by orchestrator's `deliver` tool after all
 // goal_runs complete. Writes the aggregated delivery row (goal_run_id=NULL) +
@@ -1388,6 +1374,13 @@ export function recordBuildAttempt(input: {
   /** Concrete failure reason when status="failed". Surfaces in describe so
    *  the orchestrator's next decision turn can read it via read_context. */
   error?: string
+  /** Per-file diffs collected from the worktree (baseRef..HEAD). When supplied
+   *  on a successful attempt with a `commitRef`, recordBuildAttempt also writes
+   *  a `kind="delivery"` artifact bound to the new goal_run id so the overlay's
+   *  right-side Files panel populates via `findDeliveryByGoalRun`. */
+  diffs?: Array<{ file: string; before: string; after: string; additions: number; deletions: number; status?: string }>
+  /** One-line build summary surfaced in the per-goal delivery payload. */
+  summary?: string
   now?: number
 }): string {
   const id = Identifier.ascending("goal_run")
@@ -1410,7 +1403,12 @@ export function recordBuildAttempt(input: {
     time_started: now,
     time_completed: now,
   }
-  Database.use((db) =>
+  const includeDelivery =
+    input.status === "completed" &&
+    !!input.commitRef &&
+    Array.isArray(input.diffs) &&
+    input.diffs.length > 0
+  Database.transaction((db) => {
     db
       .insert(EngineArtifactTable)
       .values({
@@ -1427,8 +1425,46 @@ export function recordBuildAttempt(input: {
         time_created: now,
         time_updated: now,
       })
-      .run(),
-  )
+      .run()
+
+    if (includeDelivery) {
+      const stats = input.diffs!.reduce(
+        (acc, d) => {
+          acc.additions += typeof d.additions === "number" ? d.additions : 0
+          acc.deletions += typeof d.deletions === "number" ? d.deletions : 0
+          return acc
+        },
+        { additions: 0, deletions: 0 },
+      )
+      const deliveryID = Identifier.ascending("delivery")
+      const summary = input.summary?.trim() || `Goal ${input.goalID} build delivered ${input.diffs!.length} file change(s).`
+      db
+        .insert(EngineArtifactTable)
+        .values({
+          id: deliveryID,
+          task_id: input.taskID,
+          run_id: null,
+          goal_run_id: id,
+          delivery_id: deliveryID,
+          kind: "delivery",
+          label: "delivery-goal_run",
+          payload: {
+            status: "candidate",
+            summary,
+            result: {
+              summary,
+              commit_ref: input.commitRef,
+              changed_files: input.diffs!.map((d) => d.file),
+              diffs: input.diffs,
+              stats,
+            },
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
+  })
   syncGoalStatus(input.goalID, `recordBuildAttempt:${input.status}`)
   return id
 }

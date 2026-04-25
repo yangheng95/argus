@@ -3620,7 +3620,7 @@ export function createOrchestratorTools(input: {
             target = { kind: "request", text: request }
           }
 
-          const { result, sessionID, worktreeDir } = await BuildAgent.run({
+          const { result, sessionID, worktreeDir, diffs } = await BuildAgent.run({
             target,
             task,
             context,
@@ -3645,6 +3645,8 @@ export function createOrchestratorTools(input: {
                 commitRef: result.commit_ref,
                 workspaceDir: worktreeDir,
                 error: result.error,
+                diffs,
+                summary: result.summary,
               })
             } catch (persistErr) {
               // Failing to record the attempt does NOT abort the build —
