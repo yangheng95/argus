@@ -61,52 +61,130 @@ export namespace Worktree {
   )
 
   /**
-   * Fast-forward merge a goal branch back into the primary worktree's HEAD.
+   * Surfaced when `git rebase` against the primary branch hit textual conflicts
+   * inside files. The rebase has been aborted before the throw, so the worktree
+   * branch tip is restored to its pre-rebase state — the agent can read both
+   * sides, reconcile manually, commit, and retry. This error carries the
+   * conflicting paths plus the primary tip the agent needs to compare against.
    *
-   * The standard git-worktree workflow: branch off primary HEAD → work in
-   * worktree → merge back → next worktree branches off the now-advanced
-   * primary HEAD and inherits everything. The previous code path skipped
-   * step 3 entirely — every goal branch got force-deleted by `Worktree.remove`
-   * the moment build finished, so no goal ever saw what its predecessor had
-   * produced. The "merge agent" goal observed in the overlay-web-benchmark
-   * had to re-extract the same `mirror/` artifacts from scratch because
-   * primary HEAD had no commits from goals 1-3.
-   *
-   * Strict ff-only by design (rule 1: no fallback): if HEAD has diverged
-   * from the goal branch's base — i.e. another goal already merged a
-   * conflicting change — this throws and the caller fails the goal. There
-   * is no automatic three-way / `-X theirs` rescue: that would silently
-   * pick a winner and bury the conflict, exactly the fallback shape the
-   * project's rules forbid.
-   *
-   * Always runs under `withGitLock` so concurrent goal completions do not
-   * race each other on the primary HEAD ref.
+   * Distinct from MergeFailedError (which signals infrastructure problems).
    */
-  export const mergeIntoPrimary = fn(
+  export const MergeConflictError = NamedError.create(
+    "WorktreeMergeConflictError",
+    z.object({
+      message: z.string(),
+      branch: z.string(),
+      primaryBranch: z.string(),
+      primaryTip: z.string(),
+      conflictPaths: z.array(z.string()),
+    }),
+  )
+
+  /**
+   * Bring a goal branch's commits onto the primary branch.
+   *
+   * Sequence (single canonical path, all under `withGitLock` for atomicity):
+   *   1. Resolve primary branch name (`main` or `master`) by ref probe.
+   *   2. From the goal worktree, run `git rebase <primary-branch>`. Rebase is
+   *      idempotent — when the goal branch is already on the latest primary
+   *      tip it's a no-op; when it lags it replays the goal's commits onto
+   *      the current primary tip.
+   *   3. From the primary worktree, `git merge --ff-only <branch>`. Now ff
+   *      always succeeds because step 2 just placed the goal's commits on
+   *      top of primary's tip.
+   *
+   * Rebase is NOT a fallback (rule 1) — it is the primary operation. The
+   * earlier ff-only-only design assumed serial dispatch and broke on the
+   * per-goal parallel pipeline: late goals branched from a stale primary
+   * HEAD and could never ff. Rebase preserves the goal's commits exactly
+   * (no `-X theirs` magic, no auto-pick winner), surfaces real textual
+   * conflicts via MergeConflictError, and lets the build agent reconcile
+   * via its own read/edit/write tools.
+   *
+   * On rebase conflict the function ABORTs the rebase and throws
+   * MergeConflictError. The worktree is restored to its pre-rebase tip,
+   * so subsequent retries (after the agent reconciles + commits) start
+   * from a clean slate.
+   */
+  export const mergeWithRebase = fn(
     z.object({
       branch: z
         .string()
         .describe("Local branch ref to merge (e.g. `opencorvus/build-foo`). Must already contain the goal's build commits."),
+      worktreeDir: z
+        .string()
+        .describe("Filesystem path of the goal's worktree (where rebase runs)."),
     }),
     async (input) => {
       if (!Project.isGitRepo(Instance.directory)) {
-        throw new NotGitError({ message: "mergeIntoPrimary: not a git project" })
+        throw new NotGitError({ message: "mergeWithRebase: not a git project" })
       }
       const primaryDir = await primaryWorktreeDir()
       return withGitLock(async () => {
-        const merged = await $`git merge --ff-only --no-edit ${input.branch}`
-          .quiet()
-          .nothrow()
-          .cwd(primaryDir)
-        if (merged.exitCode !== 0) {
-          const stderr = errorText(merged) || "git merge --ff-only failed"
+        // Resolve primary branch — same probe `Worktree.reset` uses, scoped
+        // to local refs only since rebase needs a ref name not a remote.
+        const mainCheck = await $`git show-ref --verify --quiet refs/heads/main`
+          .quiet().nothrow().cwd(primaryDir)
+        const masterCheck = await $`git show-ref --verify --quiet refs/heads/master`
+          .quiet().nothrow().cwd(primaryDir)
+        const primaryBranch =
+          mainCheck.exitCode === 0 ? "main" : masterCheck.exitCode === 0 ? "master" : ""
+        if (!primaryBranch) {
           throw new MergeFailedError({
-            message: `mergeIntoPrimary(${input.branch}): ${stderr}`,
+            message: `mergeWithRebase(${input.branch}): primary branch not found (no refs/heads/main or refs/heads/master)`,
+            branch: input.branch,
+          })
+        }
+
+        // Step 1 — rebase goal branch onto current primary tip from inside
+        // the goal worktree. This is the operation that resolves topology
+        // divergence; ff-merge in step 2 then becomes trivial.
+        const rebased = await $`git rebase ${primaryBranch}`
+          .quiet().nothrow().cwd(input.worktreeDir)
+        if (rebased.exitCode !== 0) {
+          // Capture conflicting paths before aborting so the caller knows
+          // exactly which files need reconciliation.
+          const conflictList = await $`git diff --name-only --diff-filter=U`
+            .quiet().nothrow().cwd(input.worktreeDir)
+          const conflictPaths = outputText(conflictList.stdout)
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+
+          await $`git rebase --abort`.quiet().nothrow().cwd(input.worktreeDir)
+
+          const primaryTipProbe = await $`git rev-parse refs/heads/${primaryBranch}`
+            .quiet().nothrow().cwd(primaryDir)
+          const primaryTip = outputText(primaryTipProbe.stdout)
+
+          throw new MergeConflictError({
+            message:
+              `mergeWithRebase(${input.branch}): rebase onto ${primaryBranch} hit conflicts in ` +
+              `${conflictPaths.length} file(s); rebase aborted, branch restored. Reconcile and retry.`,
+            branch: input.branch,
+            primaryBranch,
+            primaryTip,
+            conflictPaths,
+          })
+        }
+
+        // Step 2 — ff-merge into primary. Must succeed: the goal branch's
+        // tip is now `<primary>` + goal's rebased commits, which is a strict
+        // descendant of `<primary>` HEAD.
+        const merged = await $`git merge --ff-only --no-edit ${input.branch}`
+          .quiet().nothrow().cwd(primaryDir)
+        if (merged.exitCode !== 0) {
+          const stderr = errorText(merged) || "git merge --ff-only failed after successful rebase"
+          throw new MergeFailedError({
+            message: `mergeWithRebase(${input.branch}): post-rebase ff-merge failed: ${stderr}`,
             branch: input.branch,
             stderr,
           })
         }
-        return true
+
+        const headProbe = await $`git rev-parse HEAD`.quiet().nothrow().cwd(primaryDir)
+        const primaryHead = outputText(headProbe.stdout)
+        return { primaryBranch, primaryHead }
       })
     },
   )
