@@ -752,6 +752,27 @@ export namespace EngineService {
     return viewDelivery(delivery)
   }
 
+  /** Surface the per-session AgentTrace event stream so the overlay's debug
+   *  panel can render llm_request / agent_report bodies inline next to the
+   *  session card. Read-only; reads JSONL straight from disk and parses each
+   *  line. Returns `events: []` (200, not 404) when the trace file is absent,
+   *  because "agent ran but trace was disabled / pre-trace session" is a
+   *  legitimate state the UI distinguishes from "session not found". */
+  export async function getSessionTrace(sessionID: string): Promise<{ events: import("@/trace").AgentTrace.TraceEvent[] }> {
+    const { AgentTrace } = await import("@/trace")
+    return { events: AgentTrace.readSessionEvents(sessionID) }
+  }
+
+  /** Aggregate all sessions belonging to a task into one chronological event
+   *  stream. Used for the overlay's panel-level "Show all session trace"
+   *  affordance. Includes llm_request events that the per-task rollup file
+   *  (`_task-<id>.jsonl`) skips by design. */
+  export async function getTaskTrace(taskID: string): Promise<{ events: import("@/trace").AgentTrace.TraceEvent[] }> {
+    requireTask(taskID)
+    const { AgentTrace } = await import("@/trace")
+    return { events: AgentTrace.readTaskEvents(taskID) }
+  }
+
   export async function listArtifacts(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
     requireRun(runID)

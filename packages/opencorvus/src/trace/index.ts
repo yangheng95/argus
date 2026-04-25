@@ -70,6 +70,13 @@ export namespace AgentTrace {
     return ENABLED
   }
 
+  /** Resolve the directory trace files live in. Exposed for callers that need
+   *  to read trace artifacts (overlay debug panel, server `/session/:id/trace`
+   *  route). Mirrors the write path: env override > Instance.directory default. */
+  export function getTraceDir(): string {
+    return traceDir()
+  }
+
   function traceDir(): string {
     // Override path: benchmark runs / CI pipelines that wipe Instance.directory
     // at the end of the run (overlay-web-benchmark deletes the entire
@@ -264,6 +271,83 @@ export namespace AgentTrace {
       },
     })
     return helperSessionID
+  }
+
+  // ── Read API for debug surfaces (overlay trace panel, etc.) ──
+
+  export interface TraceEvent {
+    ts: number
+    kind: string
+    sessionID?: string
+    parentSessionID?: string
+    taskID?: string
+    agentName?: string
+    agentMode?: string
+    payload?: Record<string, unknown>
+    [key: string]: unknown
+  }
+
+  /** Read every event for a single session. Returns [] when the file does not
+   *  exist (session never produced an event) or is empty. Callers SHOULD treat
+   *  missing files as "no trace yet", not as an error. Lines that fail to parse
+   *  are skipped (defensive — append-only writes can race with reads on a
+   *  partial-line boundary). */
+  export function readSessionEvents(sessionID: string): TraceEvent[] {
+    if (!sessionID) return []
+    const file = sessionFile(sessionID)
+    let raw: string
+    try {
+      raw = fs.readFileSync(file, { encoding: "utf-8" })
+    } catch {
+      return []
+    }
+    return parseJsonl(raw)
+  }
+
+  /** Read all events for a task by scanning `_index.jsonl` for sessionIDs
+   *  whose `taskID` matches, then merging each session's full event stream
+   *  in chronological order. Helper sessions (no taskID) are excluded. The
+   *  per-task rollup file (`_task-<id>.jsonl`) only receives `agent_report`
+   *  events, so for the overlay's "Show all session trace" view we re-derive
+   *  from the per-session files to surface llm_request payloads too. */
+  export function readTaskEvents(taskID: string): TraceEvent[] {
+    if (!taskID) return []
+    const indexPath = indexFile()
+    let indexRaw: string
+    try {
+      indexRaw = fs.readFileSync(indexPath, { encoding: "utf-8" })
+    } catch {
+      return []
+    }
+    const indexEntries = parseJsonl(indexRaw)
+    const sessionIDs = new Set<string>()
+    for (const entry of indexEntries) {
+      if (typeof entry.taskID !== "string" || entry.taskID !== taskID) continue
+      const sid = entry.sessionID
+      if (typeof sid === "string" && sid.length > 0) sessionIDs.add(sid)
+    }
+    const all: TraceEvent[] = []
+    for (const sid of sessionIDs) {
+      for (const event of readSessionEvents(sid)) all.push(event)
+    }
+    all.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0))
+    return all
+  }
+
+  function parseJsonl(raw: string): TraceEvent[] {
+    if (!raw) return []
+    const result: TraceEvent[] = []
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        const parsed = JSON.parse(trimmed) as TraceEvent
+        result.push(parsed)
+      } catch {
+        // Skip malformed line — append-only writes can race a partial flush.
+      }
+    }
+    return result
   }
 
   /** Capture an agent's terminal report. Used by runAgentSession,

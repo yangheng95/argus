@@ -28,6 +28,7 @@ import {
   TaskAccepted,
   TaskEvent,
   Task,
+  TraceEventList,
   UpdateGoalInput,
 } from "@/engine/model"
 import { taskRewindCursor } from "@/engine/rewind"
@@ -879,6 +880,49 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ goalRunID: z.string().min(1) })),
       async (c) => {
         return c.json(await EngineService.getGoalRunDelivery(c.req.valid("param").goalRunID))
+      },
+    )
+    .get(
+      "/session/:sessionID/trace",
+      describeRoute({
+        summary: "Get session AgentTrace events",
+        operationId: "session.trace",
+        responses: {
+          200: {
+            description: "Session AgentTrace events",
+            content: {
+              "application/json": {
+                schema: resolver(TraceEventList),
+              },
+            },
+          },
+        },
+      }),
+      validator("param", z.object({ sessionID: z.string().min(1) })),
+      async (c) => {
+        return c.json(await EngineService.getSessionTrace(c.req.valid("param").sessionID))
+      },
+    )
+    .get(
+      "/task/:taskID/trace",
+      describeRoute({
+        summary: "Get task AgentTrace events (all sessions)",
+        operationId: "task.trace",
+        responses: {
+          200: {
+            description: "Aggregated task AgentTrace events",
+            content: {
+              "application/json": {
+                schema: resolver(TraceEventList),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: z.string().min(1) })),
+      async (c) => {
+        return c.json(await EngineService.getTaskTrace(c.req.valid("param").taskID))
       },
     )
     .get(
