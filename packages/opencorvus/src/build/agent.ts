@@ -27,6 +27,7 @@ import z from "zod"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { $ } from "bun"
+import { tool, type ToolSet } from "ai"
 import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
 import { Instance } from "@/project/instance"
@@ -187,6 +188,89 @@ export namespace BuildAgent {
 
       const buildPromptText = () => buildUserPrompt(input.target, input.context)
 
+      // Tracks whether `merge_back` ever returned `merged` for this build
+      // session. The post-run guard below uses it to reject "agent claimed
+      // passed but never published to primary" — the agent owns merge in the
+      //切法-A design, so a missed/failed merge_back call must demote the
+      // verdict. Captured in closure so the tool's execute() and the
+      // post-run code share state without a side-channel.
+      let mergedHead: string | undefined
+
+      const buildToolKit: { tools: ToolSet; getCollector: () => unknown } = ownsWorktree && worktreeBranch && worktreeDir
+        ? {
+            tools: {
+              merge_back: tool({
+                description:
+                  "Publish your goal branch's commits onto the project's primary " +
+                  "branch (main/master). Runs `git rebase <primary>` inside this " +
+                  "worktree, then `git merge --ff-only` on the primary worktree, " +
+                  "atomically under a host-side lock so concurrent goals do not " +
+                  "race each other.\n\n" +
+                  "Call this AFTER you have committed all your changes and your " +
+                  "verification passed, and BEFORE emitting StructuredOutput. It " +
+                  "is the LAST git-affecting action of the session.\n\n" +
+                  "Returns one of:\n" +
+                  "  • {status:'merged', primary_head, primary_branch} — done; emit " +
+                  "    StructuredOutput status=passed with commit_ref=primary_head.\n" +
+                  "  • {status:'conflict', primary_branch, primary_tip, " +
+                  "    conflict_paths[]} — rebase hit textual conflicts and was " +
+                  "    aborted (your branch is back to its pre-rebase tip). Read " +
+                  "    each conflict path on both sides via `git show " +
+                  "    <primary>:<path>` and your worktree, reconcile manually, " +
+                  "    `git add` + `git commit`, then call merge_back again.\n" +
+                  "  • {status:'error', reason} — infrastructure problem; report it " +
+                  "    via StructuredOutput status=failed.",
+                inputSchema: z.object({}),
+                execute: async () => {
+                  try {
+                    const result = await Worktree.mergeWithRebase({
+                      branch: worktreeBranch!,
+                      worktreeDir: worktreeDir!,
+                    })
+                    mergedHead = result.primaryHead
+                    return {
+                      status: "merged" as const,
+                      primary_head: result.primaryHead,
+                      primary_branch: result.primaryBranch,
+                    }
+                  } catch (err) {
+                    if (err instanceof Worktree.MergeConflictError) {
+                      const data = (err as { data: {
+                        branch: string
+                        primaryBranch: string
+                        primaryTip: string
+                        conflictPaths: string[]
+                      } }).data
+                      return {
+                        status: "conflict" as const,
+                        primary_branch: data.primaryBranch,
+                        primary_tip: data.primaryTip,
+                        conflict_paths: data.conflictPaths,
+                        hint:
+                          "Rebase aborted; branch restored. Read each path on " +
+                          "both sides (git show " + data.primaryBranch + ":<path> vs your " +
+                          "worktree), reconcile, git add + git commit, then call " +
+                          "merge_back again.",
+                      }
+                    }
+                    return {
+                      status: "error" as const,
+                      reason: err instanceof Error ? err.message : String(err),
+                    }
+                  }
+                },
+              }),
+            },
+            getCollector: () => undefined as unknown,
+          }
+        : {
+            // Caller-owned worktrees (input.workDir set) skip merge_back — the
+            // caller manages publishing. The agent prompt is gated on the
+            // tool's presence so the LLM does not invent the call.
+            tools: {},
+            getCollector: () => undefined as unknown,
+          }
+
       let out
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
@@ -206,15 +290,7 @@ export namespace BuildAgent {
           taskID: input.task.id,
           model: input.model,
           signal: input.signal,
-          // Build's ambient toolset is surfaced through the agent system
-          // (bash / read / write / edit / …); runner registers no extra
-          // agent-scoped tools on top. Empty tool kit + runner-supplied
-          // enableMap means the build agent sees its default tools via
-          // SessionPrompt.prompt's normal resolution path.
-          toolKit: {
-            tools: {},
-            getCollector: () => undefined as unknown,
-          },
+          toolKit: buildToolKit,
           buildUserPrompt: buildPromptText,
           skillsStage: "build",
           skillTaskSignals: taskSignals,
@@ -224,44 +300,24 @@ export namespace BuildAgent {
           },
         })
         parsed = BuildResultSchema.safeParse(out.structured)
-        // Fast-forward merge the goal branch back into primary HEAD before
-        // teardown. This is the standard git-worktree pattern: branch off
-        // primary → work in worktree → merge back so the next worktree (and
-        // any cross-goal artifact like `mirror/`) inherits the work via git.
-        // Skipped on:
-        //  - caller-owned worktrees (input.workDir set) — caller manages git
-        //  - structured-output failures or non-passed verdicts — there's
-        //    nothing useful to publish to primary
-        // ff-only is intentional (rule 1): a divergence here means another
-        // goal already merged conflicting work, and the conflict must be
-        // surfaced to the orchestrator, not silently three-way merged.
+
+        // Capture the goal's diff against its original baseRef while the
+        // worktree's git dir is still healthy — overlay's per-goal delivery
+        // panel reads this. Independent of merge outcome (we still want to
+        // show what the agent changed even if the merge step was skipped).
         if (
           ownsWorktree &&
-          worktreeBranch &&
+          worktreeDir &&
+          baseRef &&
           parsed.success &&
-          parsed.data.status === "passed" &&
-          parsed.data.commit_ref
+          parsed.data.status === "passed"
         ) {
-          // Capture diffs BEFORE merge-back so the worktree's own git can
-          // resolve `<baseRef>..HEAD` without ambiguity. Merge is ff-only,
-          // so primary's HEAD will equal the worktree's branch tip after —
-          // collecting after the merge would still work, but doing it here
-          // keeps both operations bound to the worktree's own git dir.
-          if (baseRef && worktreeDir) {
-            diffs = await collectGoalDiffs(worktreeDir, baseRef).catch((err) => {
-              log.warn("build agent: collectGoalDiffs failed — overlay panel will show empty file list", {
-                taskID: input.task.id,
-                error: err instanceof Error ? err.message : String(err),
-              })
-              return undefined
+          diffs = await collectGoalDiffs(worktreeDir, baseRef).catch((err) => {
+            log.warn("build agent: collectGoalDiffs failed — overlay panel will show empty file list", {
+              taskID: input.task.id,
+              error: err instanceof Error ? err.message : String(err),
             })
-          }
-          await Worktree.mergeIntoPrimary({ branch: worktreeBranch })
-          log.info("build agent: merged goal branch into primary", {
-            taskID: input.task.id,
-            branch: worktreeBranch,
-            commit_ref: parsed.data.commit_ref,
-            diffFiles: diffs?.length ?? 0,
+            return undefined
           })
         }
       } finally {
@@ -281,6 +337,42 @@ export namespace BuildAgent {
         )
       }
 
+      // Post-run guard: agent owns merge_back in the切法-A design. If the
+      // agent reported passed without a successful merge_back call, the goal
+      // never published to primary — demote to failed with a concrete reason
+      // so the orchestrator's retry/replan logic acts on the real state.
+      // Caller-owned worktrees opt out (caller publishes themselves).
+      if (
+        ownsWorktree &&
+        worktreeBranch &&
+        parsed.data.status === "passed" &&
+        !mergedHead
+      ) {
+        log.warn("build agent: passed verdict without successful merge_back — demoting to failed", {
+          taskID: input.task.id,
+          sessionID: out.session.id,
+          worktreeBranch,
+        })
+        parsed = {
+          success: true as const,
+          data: {
+            ...parsed.data,
+            status: "failed" as const,
+            error:
+              "merge_back was not called or did not succeed; goal never published to primary " +
+              "(切法-A: build agent owns merge). Re-run with explicit merge_back invocation.",
+          },
+        }
+      } else if (mergedHead && parsed.data.status === "passed") {
+        // Rewrite commit_ref to the merged primary HEAD so downstream readers
+        // (delivery overlay, evaluator) point at the published commit, not
+        // the agent's pre-rebase tip (which may differ after rebase replay).
+        parsed = {
+          success: true as const,
+          data: { ...parsed.data, commit_ref: mergedHead.slice(0, 12) },
+        }
+      }
+
       log.info("build agent finished", {
         taskID: input.task.id,
         sessionID: out.session.id,
@@ -288,6 +380,7 @@ export namespace BuildAgent {
         commit_ref: parsed.data.commit_ref,
         testCount: parsed.data.tests.length,
         worktreeBranch,
+        merged: Boolean(mergedHead),
       })
 
       return {
