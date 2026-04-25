@@ -1,5 +1,5 @@
 /**
- * runAgentSession — the single entry point every OpenCorvus agent runs through.
+ * runAgentSession — the single entry point every OpenCorvus WORKER agent runs through.
  *
  * Position in the architecture: agents have one shape. Each agent module
  * (architect / requirements / build / delivery / fidelity / prosecutor /
@@ -21,9 +21,49 @@
  * — is centralised here.
  *
  * Per CLAUDE.md rule 24, this is the deliberate abstraction of a repeating
- * pattern. Per rule 22, no agent owns its own copy of this loop. Per rule 1
- * there is no fallback path: a missing model, an aborted signal, or a
+ * pattern. Per rule 22, no worker agent owns its own copy of this loop. Per
+ * rule 1 there is no fallback path: a missing model, an aborted signal, or a
  * collector that violates its agent's own contract throws.
+ *
+ * ── NON-GOAL: the orchestrator agent does NOT use this entry point ─────────
+ *
+ * `src/orchestrator/agent.ts::Orchestrator.processTask` is the HOST of the
+ * worker-session pattern this runner abstracts, not one of its users. It
+ * deliberately bypasses runAgentSession because three of its concerns
+ * cannot collapse into the worker shape without forcing `if (kind ===
+ * "orchestrator")` branches into the runner body — which would violate
+ * rule 22 (no double source) and rule 26 (no over-engineering):
+ *
+ *   1. Two-part system prompt (cacheable static + dynamic per-wake context
+ *      from describe / iteration history / latest verdict). The runner takes
+ *      a single composed string; the orchestrator's static / dynamic split
+ *      is a 1h-cache optimisation that has no analog for worker agents.
+ *
+ *   2. `withStepHook` wrapping `withExtraTools` so a deferred-stop finalizer
+ *      runs after every assistant step. Worker agents have no equivalent
+ *      step-level coordination need — their session terminates on the
+ *      collector's contract being met (build/delivery) or stepCountIs (fidelity
+ *      / prosecutor). Adding step-hook plumbing to the runner would saddle
+ *      every worker with the orchestrator's dispatch-model overhead.
+ *
+ *   3. Stream errors are persisted as `engine_artifact kind="orchestrator-
+ *      stream-error"` and consumed by the next wake's LLM via describe (rule
+ *      23 — orchestrator decides recovery). The runner converts stream
+ *      errors into thrown AgentRunError; that's the right shape for workers
+ *      whose caller decides recovery, but it's the wrong shape for an agent
+ *      whose recovery loop is itself driven by another LLM turn.
+ *
+ * The orchestrator additionally owns concurrency state (`running.set(taskID,
+ * ctrl)`), `stopSignal` deferred-stop plumbing, and SerialQueue-driven wake
+ * scheduling — none of which the runner models, by design.
+ *
+ * Anyone considering "consolidating orchestrator onto runAgentSession":
+ * stop. The orchestrator is the worker abstraction's HOST, not a worker.
+ * If the runner ever needs to gain features for the orchestrator, you are
+ * almost certainly looking at a missing capability that should be added to
+ * the orchestrator's own shape (orchestrator/agent.ts), not pushed through
+ * this entry point.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 import type { LanguageModel } from "ai"
 import type { TextHooks } from "@/llm/api"
