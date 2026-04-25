@@ -239,7 +239,7 @@ const DEFAULT_BAIDU_REFERENCE = path.join(import.meta.dir, "assets", "baidu.png"
 const referenceImages = rawReferenceImages.length > 0
   ? rawReferenceImages
   : (!requestFile && !requestAttachment ? [DEFAULT_BAIDU_REFERENCE] : [])
-const DEFAULT_TASK_REQUEST = `请帮我复刻百度的主页，要包含后端实现，是一个完整的系统，网页组件交互等军要实现`
+const DEFAULT_TASK_REQUEST = `请帮我复刻百度的主页，要包含后端实现，是一个完整的系统，网页组件交互等均要实现`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
@@ -926,6 +926,17 @@ try {
       .then((body) => String(body.task_id || ""))
     if (!taskID) throw new Error("Task creation did not return task_id")
     eventStream = subscribeTaskEvents(taskID)
+    // Resume hint: print everything needed to re-attach with --resume-* flags
+    // after a kill. Without this the user has to dig the tempdir paths out of
+    // earlier log lines (or guess), which makes resume effectively unusable.
+    logLine(`[overlay-benchmark] RESUME-INFO taskID=${taskID}`)
+    logLine(`[overlay-benchmark] RESUME-INFO home=${temp.home}`)
+    logLine(`[overlay-benchmark] RESUME-INFO project=${temp.dir}`)
+    logLine(
+      `[overlay-benchmark] RESUME-CMD bun run script/benchmark/overlay-web-benchmark.ts ` +
+        `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" ` +
+        `"--stall-timeout-ms=1200000" "--planning-stall-timeout-ms=7200000"`,
+    )
 
     if (page) {
       planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
