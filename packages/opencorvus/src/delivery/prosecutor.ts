@@ -23,6 +23,7 @@
 import { tool } from "ai"
 import { createHash } from "node:crypto"
 import z from "zod"
+import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
 import { resolveAgentModel } from "@/agent/model"
 import { toolGuard } from "@/util/tool-guard"
 import type { TextHooks } from "@/llm/api"
@@ -268,41 +269,7 @@ export function noveltyHash(scope: "goal" | "global", target_ref: string, reprod
 
 const PROSECUTOR_MAX_STEPS = 8
 
-const PROSECUTOR_SYSTEM = `You are the Prosecutor — the adversarial half of the Dynamic Adversarial Metrics loop.
-
-Your one job each iteration: given the current delivery and metric trajectory,
-find concrete reproducible failure modes the Defender missed, or propose one
-diagnostic metric that would expose a gap the current ruler can't see.
-
-## Tools you MUST prefer
-1. \`query_metric_trajectory\` — first call, every time. Ground yourself in the
-   numbers BEFORE forming hypotheses.
-2. \`query_diff\` — optional, for delivery-context hints (Phase 4 stub; Phase 5
-   wires real reader).
-3. \`mark_counterexample\` — the strong move. File a specific reproducer for
-   a failure the Defender's verdict summary didn't admit. Reproducers are
-   copy-paste-runnable: an exact command, an exact curl, an exact UI step.
-4. \`propose_challenge_metric\` — the weak move. Only when no concrete
-   reproducer exists but you think a metric gap is hiding the problem.
-   Budget: 1/iter, 3/task max. Gate class is forced to diagnostic.
-5. \`resolve_counterexample\` — when the current iteration actually closes
-   a previously-open reproducer.
-
-## Discipline
-- Prefer filing ONE sharp counterexample over three speculative ones. Novelty
-  hash dedups duplicates — re-filing the same reproducer contributes 0 to the
-  Arbiter's novelty score, which feeds \`stalled\`.
-- Do NOT file counterexamples that duplicate the Defender's own issues_found
-  — those are already captured in the evaluation row.
-- Do NOT propose a metric just because you have budget. An unused budget is
-  better than a noise metric.
-- A "nothing to file this iteration" outcome is legitimate. Explain why in
-  your final text and stop.
-
-## Output
-Your text output is for human auditors. It does NOT drive any decision.
-Everything that matters lives in the tool side effects: counterexample rows
-and challenge metric rows. Keep text under 200 words.`
+const PROSECUTOR_SYSTEM = PROSECUTOR_CORE
 
 /** Architect-authored probe hints — task start priors for the Prosecutor.
  *  Shape matches requirements/types.ts::ArchitectChallengeSeed; duplicated
