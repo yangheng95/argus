@@ -33,6 +33,7 @@ import { loadBenchmarkEnv, ensureBenchmarkModel, env } from "./env"
 import { extractPage } from "../../src/mirror/url/extract"
 import { compilePageToXML } from "../../src/mirror/url/compile"
 import { analyzePage, generateTokensFile, generateAppFile, buildSharedContext } from "../../src/mirror/url/pattern"
+import { buildClonePrompt, buildCloneFeedback } from "../../src/mirror/url/prompt"
 import { renderFiles } from "../../src/mirror/visual/render"
 import { evaluateVisual } from "../../src/mirror/visual/evaluate"
 import { compareText, extractTextFromTree } from "../../src/mirror/shared/content-compare"
@@ -309,7 +310,7 @@ async function main() {
           }
         }
 
-        const promptText = buildPrompt({
+        const promptText = buildClonePrompt({
           iter,
           referenceUrl: REFERENCE_URL,
           targetScore: TARGET_SCORE,
@@ -359,7 +360,7 @@ async function main() {
           record.durationMs = Date.now() - iterStart
           report.iterations.push(record)
           await writeReport(report)
-          lastFeedback = `Iteration ${iter} did not produce index.html. Create it at the output root with Tailwind CDN and inline React.`
+          lastFeedback = `Iteration ${iter} did not produce index.html. Create it at the output root as a single-file vanilla-CSS document — one <style> block under <head>, design tokens injected as :root custom properties, no Tailwind, no JS framework.`
           continue
         }
 
@@ -469,7 +470,7 @@ async function main() {
         report.finalScore = Math.max(report.finalScore, record.score)
 
         // Build diff-guided feedback for the next iteration.
-        lastFeedback = buildFeedback({
+        lastFeedback = buildCloneFeedback({
           iter,
           evalReport,
           diffPath,
@@ -494,142 +495,8 @@ async function main() {
   process.exit(report.accepted ? 0 : 1)
 }
 
-// ─── Prompt / feedback builders ──────────────────────────────────────────
-
-function buildPrompt(input: {
-  iter: number
-  referenceUrl: string
-  targetScore: number
-  viewport: { width: number; height: number }
-  outputDir: string
-  sharedContext: string
-  xmlIRBytes: number
-  scaffold: ProjectScaffold
-  previousFeedback?: string
-}): string {
-  const sectionList = input.scaffold.sections
-    .map((s) => `- ${s.name} (${s.elementCount} el, ${s.bounds.w}×${s.bounds.h}px)`)
-    .join("\n")
-  const patternList = input.scaffold.catalog.patterns
-    .slice(0, 10)
-    .map(
-      (p) =>
-        `- ${p.name} × ${p.instanceCount}${p.props.length > 0 ? ` — props: ${p.props.map((pp) => `${pp.name}: ${pp.type}`).join(", ")}` : ""}`,
-    )
-    .join("\n")
-
-  const iterationHeader =
-    input.iter === 1
-      ? `You are cloning ${input.referenceUrl} as a single-file static HTML page.`
-      : `Iteration ${input.iter}. The previous attempt did not meet the target visual similarity. **Add missing elements with \`edit\`** — do NOT rewrite the whole file. Preserve every section that already matches.`
-
-  const body = `
-${iterationHeader}
-
-# Goal
-Produce an \`index.html\` at the root of the working directory that visually reproduces
-${input.referenceUrl} with overall score ≥ ${input.targetScore}/100.
-Score = (SSIM × 50) + ((100 − pixelDiff%) × 0.5). Structural fidelity and colour
-placement matter most.
-
-# Viewport
-${input.viewport.width} × ${input.viewport.height} (logical).
-
-# Working directory
-${input.outputDir}
-
-# Deterministic artefacts already on disk (do NOT regenerate these from scratch)
-- \`page-ir.xml\`           — ${input.xmlIRBytes} bytes of structured XML IR describing the page
-- \`shared-context.md\`     — concise design-token + pattern summary
-- \`scaffold.json\`         — ProjectScaffold (file paths + contracts)
-- \`design-tokens.ts\`      — COLORS / FONTS / SPACING / RADII constants
-- \`App.tsx\`               — pre-generated App composition (reference only; you can inline)
-- \`reference.png\`         — pixel-perfect reference screenshot
-
-# Rules
-1. **Single-file STATIC HTML**: write exactly one \`index.html\` with **inline CSS only**.
-   NO JavaScript frameworks. NO React, Vue, Babel, JSX. NO client-side rendering.
-   Every visible text node must be present as raw HTML text in the file — so that
-   a static HTML reader sees the page's content without any JS execution.
-2. **Only CSS dependency allowed**: Tailwind CDN (\`https://cdn.tailwindcss.com\`).
-   Tailwind classes + your own \`<style>\` block. Nothing else.
-3. Use the design tokens from \`design-tokens.ts\` — do not invent new colours/fonts/spacings.
-4. Use **exact text** from the XML IR (\`<Text …>content</Text>\`) and \`Section Text\` catalogs.
-   Do not paraphrase headings, nav labels, or button text.
-5. Use **exact image paths**: \`Section Images\` catalogs list \`img-N: path\` — reference
-   the local paths where present, fall back to the original URLs otherwise.
-6. Structure must match the section list exactly (in order, with matching bounds).
-7. Do not fetch \`${input.referenceUrl}\` at runtime; the clone must be fully static.
-8. Before writing \`index.html\`, \`read\` \`page-ir.xml\` and at least \`shared-context.md\`.
-
-# Section summary
-${sectionList || "- (no sections)"}
-
-# Detected component patterns
-${patternList || "- (none)"}
-
-${input.previousFeedback ? `# Diff feedback from previous iteration\n${input.previousFeedback}\n` : ""}
-# Deliverable
-Write \`index.html\`. When finished, reply briefly with the list of top-level sections
-you rendered and any known gaps.
-`.trim()
-
-  return body
-}
-
-function buildFeedback(input: {
-  iter: number
-  evalReport: Awaited<ReturnType<typeof evaluateVisual>>
-  diffPath: string
-  referencePath: string
-  targetScore: number
-  bestScore: number
-  missingTokens: string[]
-}): string {
-  const r = input.evalReport
-  const renderedPath = input.referencePath.replace("reference.png", `rendered-${input.iter}.png`)
-  const gapToTarget = Math.max(0, input.targetScore - r.overallScore)
-
-  // Cluster missing tokens into short chunks so the agent sees concrete phrases
-  // rather than a long flat list that it glosses over.
-  const missing = input.missingTokens.slice(0, 30)
-  const missingLines =
-    missing.length > 0
-      ? `Missing textual content (these strings appear in the reference but NOT in your rendered \`index.html\`):\n${missing
-          .map((t) => `  - "${t}"`)
-          .join("\n")}\n\nAdd every missing string to \`index.html\` in its correct section. Use the \`Section Text\` catalog in \`page-ir.xml\` to find the right parent node for each.`
-      : "Text coverage is complete — remaining gap is structural/visual only."
-
-  const regressionWarning =
-    input.bestScore > r.overallScore
-      ? `\n**Regression guard**: a previous iteration scored ${input.bestScore}/100, and we restored \`index.html\` to that best version. Do NOT rewrite the whole file with \`write\` — use \`edit\` to ADD missing elements. Deleting existing correct markup has cost us points before.\n`
-      : ""
-
-  return `
-Previous iteration scored ${r.overallScore}/100 (target ≥ ${input.targetScore}, gap = ${gapToTarget}).
-Best iteration so far: ${input.bestScore}/100.
-
-Metrics:
-  - SSIM structural similarity: ${r.ssimScore.toFixed(3)}
-  - Pixel diff: ${r.pixelDiffPercent.toFixed(2)}% (${r.mismatchedPixels}/${r.totalPixels} px)
-  - Dimension match: ${r.dimensionsMatch}
-
-Artefacts (read them with the \`read\` tool):
-  - Reference screenshot: ${input.referencePath}
-  - Your render:          ${renderedPath}
-  - Pixel diff heatmap:   ${input.diffPath}
-${regressionWarning}
-${missingLines}
-
-Operating guidance:
-  1. Use \`edit\` (NOT \`write\`) to append missing elements to the existing \`index.html\`.
-  2. Do NOT remove any element that is already rendering correctly.
-  3. Start with the largest red-zone in the diff image, then move to smaller ones.
-  4. Colours MUST come from \`design-tokens.ts\` (COLORS constant). Do not invent hex values.
-
-Make targeted edits, then stop. Reply with a list of the specific sections you modified.
-`.trim()
-}
+// Prompt + feedback builders live in src/mirror/url/prompt.ts (single source
+// shared with the webpage-generate skill — rule 22).
 
 /** Convert an OS path to a `file:///` URL usable by puppeteer. */
 function pathToFileUrl(p: string): string {
