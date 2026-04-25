@@ -81,8 +81,11 @@ export namespace RequirementsAgent {
    * Goal decomposition happens downstream in the Architect, not here.
    */
   export async function run(input: RunInput): Promise<RequirementsResult> {
-    const taskWorkDir = extractWorkDir(input.request)
-    const plannerTools = await filterAgentTools(createPlannerTools(taskWorkDir), "requirements")
+    // Rule 11 / rule 25: the working directory is a structural fact
+    // (`Instance.directory`), not something to keyword-regex out of the
+    // user's free-form request. `createPlannerTools()` resolves to the
+    // correct root via Instance.directory by default.
+    const plannerTools = await filterAgentTools(createPlannerTools(), "requirements")
     const outputToolKit = createRequirementsOutputTools()
 
     const context = prefetchContext(input.title, input.request)
@@ -151,17 +154,6 @@ export namespace RequirementsAgent {
 
     return result
   }
-}
-
-// ---------------------------------------------------------------------------
-// Working-directory extraction — pass-through to planner tools.
-// ---------------------------------------------------------------------------
-
-function extractWorkDir(request: string): string | undefined {
-  const m =
-    request.match(/(?:绝对路径|absolute path)[：:\s]*([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i) ??
-    request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
-  return m ? m[1].replace(/[/\\]+$/, "") : undefined
 }
 
 // ---------------------------------------------------------------------------
