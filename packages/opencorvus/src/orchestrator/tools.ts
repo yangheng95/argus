@@ -3627,6 +3627,29 @@ export function createOrchestratorTools(input: {
         // so the agent receives acceptance_specs / owned_paths / depends_on
         // directly. For pure request path, the LLM-supplied `request` is
         // the user message.
+        //
+        // Coordinator Run lazy-create: the unified-teardown spec collapsed
+        // dispatch_goal/create_run/exec_goal into this single `build` tool,
+        // but stripped the run-creation step that dispatch_goal used to do.
+        // Without a parent kind="run" artifact, deliver's
+        // `findActiveRunForTask` short-circuits with "No active run", and
+        // `listGoalRunsForRun` finds no goal_run_attempts (they were being
+        // written with run_id=null). Restore the invariant: when build is
+        // dispatched against a goal, ensure a coordinator Run exists for
+        // this task so the goal_run_attempt + per-goal delivery artifacts
+        // anchor to it (rule 22 — single source: build is the dispatcher,
+        // build owns the run). Task-level (request-only) builds skip this;
+        // they have no goal to bind to and deliver isn't part of that path.
+        let coordinatorRunID: string | undefined
+        if (attachedGoalID) {
+          const ensured = await ensureDispatchableRunForSingleGoal()
+          if ("error" in ensured) {
+            if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+            return `build: cannot ensure coordinator run for goal ${attachedGoalID} — ${ensured.error}`
+          }
+          coordinatorRunID = ensured.run.id
+        }
+
         try {
           const { BuildAgent } = await import("@/build/agent")
           let target: import("@/build/types").BuildTarget
@@ -3752,6 +3775,7 @@ export function createOrchestratorTools(input: {
                 status: result.status === "passed" ? "completed" : "failed",
                 commitRef: result.commit_ref,
                 workspaceDir: worktreeDir,
+                runID: coordinatorRunID,
                 error: result.error,
                 diffs,
                 summary: result.summary,

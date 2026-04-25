@@ -1371,6 +1371,16 @@ export function recordBuildAttempt(input: {
   status: "completed" | "failed"
   commitRef?: string
   workspaceDir?: string
+  /**
+   * Coordinator run id (kind="run" artifact) this attempt belongs to. The
+   * unified `build` tool lazy-creates a parent run on first dispatch so
+   * deliver's per-run aggregation (`listGoalRunsForRun`) and publish path
+   * (`findDeliveryByRun`) can locate the goal_run_attempt rows. Pass undefined
+   * only for legacy / synthetic attempts that genuinely have no coordinator
+   * envelope; the artifact column accepts null but most lookups won't find
+   * rows that bypass the coordinator.
+   */
+  runID?: string
   /** Concrete failure reason when status="failed". Surfaces in describe so
    *  the orchestrator's next decision turn can read it via read_context. */
   error?: string
@@ -1414,10 +1424,13 @@ export function recordBuildAttempt(input: {
       .values({
         id,
         task_id: input.taskID,
-        // No coordinator Run in the post-phase-5 build flow. run_id is
-        // nullable; null + the goal_run_id self-reference suffices for
-        // the chain-tip walk in goal-status.ts.
-        run_id: null,
+        // Coordinator Run id passed by the unified `build` tool. When the
+        // pipeline build flow ensures a parent run exists (lazy-create on
+        // first dispatch), this binds the goal_run_attempt to that run so
+        // deliver's `listGoalRunsForRun` and `findDeliveryByRun` resolve.
+        // Null only for synthetic / legacy attempts with no coordinator
+        // envelope (rare; deliver will not aggregate them).
+        run_id: input.runID ?? null,
         goal_run_id: id,
         kind: "goal_run_attempt",
         label: `attempt-${input.status}`,
@@ -1443,7 +1456,7 @@ export function recordBuildAttempt(input: {
         .values({
           id: deliveryID,
           task_id: input.taskID,
-          run_id: null,
+          run_id: input.runID ?? null,
           goal_run_id: id,
           delivery_id: deliveryID,
           kind: "delivery",
