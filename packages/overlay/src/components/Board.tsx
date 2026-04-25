@@ -11,7 +11,6 @@ import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 import { deliveryGoalProgress } from "../utils/goal-workflow";
-import { TracePanel } from "./TracePanel";
 import { GoalWorkflowList } from "./GoalWorkflowGroup";
 import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
@@ -394,13 +393,11 @@ export function Board(props: BoardProps) {
       {/* ── Data-driven unified layout ── */}
       {/* Sections appear based on their data availability, not a mode flag. */}
 
-      {/* Live AgentTrace stream — replaces the old MiniWorkflow pipeline bar.
-          Always rendered so the operator can see WHERE the trace surface is
-          even before a task is selected; the empty state inside TracePanel
-          carries the "no events yet" message. Conditional rendering hid
-          the panel entirely when selectedTaskID was nullish, which read as
-          "the trace feature is missing" instead of "no events yet". */}
-      <TracePanel taskID={boardStore.selectedTaskID ?? ""} />
+      {/* Right-panel TracePanel removed 2026-04-26 — task-trace surface
+          underdelivered (path-mismatch failure mode + slow whole-task disk
+          reads). Per-session trace remains accessible via the 🔍 button on
+          each card (Card.tsx) and via Conversation.tsx's "Show all session
+          trace" toggle, both still mount <TracePanel sessionID={...}>. */}
 
       {/* TODO(2026-04-20): 需求分析 / 架构检查 / 评估指标 / 交付 / interactions
           五个板块整体下线等重做。当前仅保留 workflow 进度条 + goals + ChangesPanel
