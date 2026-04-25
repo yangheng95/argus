@@ -131,7 +131,7 @@ For each round:
    - `webpage_text_diff` — list of reference strings absent from your render. Single most effective signal.
    - Inspect `mirror/diff.png` — the largest red regions point you at the next correction.
    - Optional: call `webpage_compile` to read `mirror/page-ir.xml` for section structure context, or `webpage_analyze` for `mirror/scaffold.json` token / pattern catalogue. Skip these if `text_diff` + `diff.png` is enough.
-2. **Edit** `index.html` (use the `edit` tool — never rewrite the whole file with `write` and never re-run `webpage_compile_html` mid-iteration; the compiler always reproduces the original DOM and would clobber your fixes):
+2. **Edit** `index.html` (prefer the `edit` tool for targeted patches; you may also re-run `webpage_compile_html` if you re-extracted or want to rebase your edits on the authoritative DOM — be aware it will overwrite the file):
    - Insert any strings reported by `webpage_text_diff`, placed in the right section per `page-ir.xml`'s `Section Text` catalogue. Keep wording verbatim.
    - Replace placeholder image src values when `mirror/images/` is missing the asset (use the original remote URL from `extracted-page.json` as a fallback).
    - Adjust styles only where `diff.png` flags a clear regression — colour drift fixes use the values copied from `mirror/design-tokens.ts`; never invent hex codes.
