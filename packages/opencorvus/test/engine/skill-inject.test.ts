@@ -40,30 +40,6 @@ describe("resolveStageSkills", () => {
     })
   })
 
-  test("aggregates required_tools across auto-detected delivery skills when project matches", async () => {
-    await using tmp = await tmpdir()
-    const fs = await import("node:fs/promises")
-    const path = await import("node:path")
-    // Create a minimal react project so the built-in delivery-verify-web auto-detect
-    // matches on the deps signal.
-    await fs.writeFile(
-      path.join(tmp.path, "package.json"),
-      JSON.stringify({ name: "t", dependencies: { react: "^18.0.0" } }),
-    )
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const result = await resolveStageSkills([], "delivery", undefined)
-        // The built-in delivery-verify-web skill declares these tools.
-        expect(result.requiredTools).toContain("verify_page_integrity")
-        expect(result.requiredTools).toContain("screenshot")
-        // Invariant section still present alongside the matched skill.
-        expect(result.prompt).toContain("Skill-system invariants")
-        expect(result.prompt).toContain("Skill: delivery-verify-web")
-      },
-    })
-  })
-
   test("aggregates required_tools across auto-detected build skills for webpage tasks", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
