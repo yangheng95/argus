@@ -297,6 +297,62 @@ export namespace Agent {
         // pre-migration path. SessionLoop reads this as the `stopWhen`
         // equivalent for the orchestrator's child session.
         steps: 20,
+        // Whitelist: orchestrator is a SCHEDULER, not an executor. The benchmark
+        // caught it bypassing the build agent entirely (calling webpage_extract
+        // / webpage_compile_html / webpage_render / webpage_evaluate / bash /
+        // edit / read directly across 20 steps) because the default toolset
+        // exposed every executor surface. Rule 22 — one role per tool list.
+        // Allowed:
+        //   - dispatch tools (the orchestrator's actual job)
+        //   - observation tools (read_context, query_failed_goals, *_report)
+        //   - user interaction (question)
+        //   - bookkeeping (todoread, todowrite, memory, schedule, skill, panel)
+        // Excluded:
+        //   - filesystem / shell (bash, read, edit, write, glob, search_code,
+        //     external_code_search, lsp, codesearch, list)
+        //   - mirror toolchain (webpage_extract / compile / compile_html /
+        //     analyze / render / evaluate / text_diff) — these belong to build
+        //   - network (webfetch, websearch) — same reason
+        //   - sub-agent dispatch via the generic `task` tool — orchestrator uses
+        //     the explicit `build` / `requirements` / etc. tools instead
+        tools: {
+          include: [
+            // dispatch
+            "build",
+            "requirements",
+            "design_analysis",
+            "architect",
+            "fidelity",
+            "deliver",
+            "prosecute",
+            "publish_delivery",
+            "analyze_intent",
+            "modify_goal",
+            "refine",
+            "restart_from_stage",
+            "fail_task",
+            "cancel_task",
+            "retry_task",
+            "inject_operator_message",
+            // observation (read-only views of task state)
+            "query_failed_goals",
+            "read_context",
+            "task_report",
+            "goal_report",
+            "analytics",
+            "query_metric_trajectory",
+            // user interaction
+            "question",
+            // own bookkeeping
+            "todowrite",
+            "todoread",
+            "memory",
+            "schedule",
+            "skill",
+            "panel",
+            "tui",
+          ],
+        },
         options: {},
         mode: "primary",
         native: true,
