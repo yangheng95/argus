@@ -1416,6 +1416,23 @@ export function createOrchestratorTools(input: {
         })
 
         if (verdict.verdict === "faithful") {
+          try {
+            const { recordFidelityAttempt } = await import("@/engine/persist")
+            recordFidelityAttempt({
+              taskID,
+              sessionID: fidelitySession.id,
+              specSnapshotID: activeSpec.id,
+              verdict: "faithful",
+              issuesCount: verdict.issues.length,
+              correctionsCount: 0,
+              missingCount: 0,
+            })
+          } catch (err) {
+            log.error("fidelity: recordFidelityAttempt failed", {
+              taskID,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          }
           return SubAgentProtocol.yieldResult({
             headline: `Fidelity verdict: faithful — goal set covers user intent. NEXT: dispatch \`build({ goalID })\` per goal.`,
             fields: [
@@ -1490,6 +1507,24 @@ export function createOrchestratorTools(input: {
         }
 
         for (const g of persisted) ensureGoalInWorkflow(g.id, g.title)
+
+        try {
+          const { recordFidelityAttempt } = await import("@/engine/persist")
+          recordFidelityAttempt({
+            taskID,
+            sessionID: fidelitySession.id,
+            specSnapshotID: activeSpec.id,
+            verdict: "needs_correction",
+            issuesCount: verdict.issues.length,
+            correctionsCount: verdict.corrections.length,
+            missingCount: verdict.missingGoals.length,
+          })
+        } catch (err) {
+          log.error("fidelity: recordFidelityAttempt failed", {
+            taskID,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
 
         return SubAgentProtocol.yieldResult({
           headline:
@@ -1624,6 +1659,25 @@ export function createOrchestratorTools(input: {
           proposed: pRes.challenges_proposed,
           resolved: pRes.counterexamples_resolved,
         })
+
+        try {
+          const { recordProsecutorAttempt } = await import("@/engine/persist")
+          recordProsecutorAttempt({
+            taskID,
+            deliveryID: delivery.id,
+            sessionID: input.agentSessionID,
+            iteration,
+            counterexamplesFiled: pRes.counterexamples_filed,
+            challengesProposed: pRes.challenges_proposed,
+            counterexamplesResolved: pRes.counterexamples_resolved,
+            rationale: pRes.rationale,
+          })
+        } catch (err) {
+          log.error("prosecute: recordProsecutorAttempt failed", {
+            taskID,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
 
         return SubAgentProtocol.yieldResult({
           headline:
@@ -1847,7 +1901,7 @@ export function createOrchestratorTools(input: {
     }),
 
     read_context: tool({
-      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries. Use this to gather information before making decisions. Returns only the latest state per goal — historical evaluations/deliveries older than the latest per-goal entry are omitted to keep prompts bounded.",
+      description: "Read current task context: goal states, delivery verdicts, Decision Log, delivery summaries, fidelity/prosecutor attempts. Use this to gather information before making decisions. Returns only the latest state per goal / per spec snapshot / per delivery — historical entries older than the latest are omitted to keep prompts bounded.",
       inputSchema: z.object({
         scope: z.enum(["goals", "evaluations", "decisions", "deliveries", "all"]).default("all").describe("What to read"),
       }),
@@ -1940,6 +1994,90 @@ export function createOrchestratorTools(input: {
               const diffs = (d.delivery!.result as any)?.diffs as Array<{ file: string }> | undefined
               sections.push(`- goal_run ${d.goalRunID} [${d.status}]: ${d.delivery!.summary}`)
               if (diffs?.length) sections.push(`  files: ${diffs.map(f => f.file).join(", ")}`)
+            }
+          }
+        }
+
+        if (scope === "all") {
+          // Fidelity / prosecutor attempts: surface the FACT that these stages
+          // ran for the current spec snapshot / delivery. Without this the
+          // orchestrator-LLM cannot tell "fidelity returned faithful (no goal
+          // change)" from "fidelity never called" — same death-loop shape that
+          // commit 7acb5f17f addressed for build via recordBuildAttempt.
+          const { EngineArtifactTable } = await import("@/engine/engine.sql")
+          const { desc } = await import("@/storage/db")
+          const activeSpec = findActiveSpecForTask(taskID)
+          if (activeSpec) {
+            const fidelityRow = Database.use((db) =>
+              db
+                .select()
+                .from(EngineArtifactTable)
+                .where(
+                  and(
+                    eq(EngineArtifactTable.task_id, taskID),
+                    eq(EngineArtifactTable.kind, "fidelity_attempt"),
+                  ),
+                )
+                .orderBy(desc(EngineArtifactTable.time_created))
+                .limit(1)
+                .get(),
+            )
+            if (fidelityRow) {
+              const p = (fidelityRow.payload ?? {}) as Record<string, unknown>
+              const matchesSnapshot = p.spec_snapshot_id === activeSpec.id
+              sections.push(
+                `\n## Fidelity (latest)`,
+                `- verdict: ${String(p.verdict ?? "unknown")}` +
+                  ` — issues=${Number(p.issues_count ?? 0)} corrections=${Number(p.corrections_count ?? 0)} missing=${Number(p.missing_count ?? 0)}` +
+                  (matchesSnapshot ? " (current spec snapshot)" : " (STALE — newer spec snapshot exists; re-run fidelity)"),
+              )
+            }
+          }
+          const lastDeliveryRow = Database.use((db) =>
+            db
+              .select()
+              .from(EngineArtifactTable)
+              .where(
+                and(
+                  eq(EngineArtifactTable.task_id, taskID),
+                  eq(EngineArtifactTable.kind, "delivery"),
+                ),
+              )
+              .orderBy(desc(EngineArtifactTable.time_created))
+              .limit(1)
+              .get(),
+          )
+          const lastDeliveryID: string | null = lastDeliveryRow?.delivery_id ?? null
+          if (lastDeliveryID) {
+            const prosecutorRow = Database.use((db) =>
+              db
+                .select()
+                .from(EngineArtifactTable)
+                .where(
+                  and(
+                    eq(EngineArtifactTable.task_id, taskID),
+                    eq(EngineArtifactTable.kind, "prosecutor_attempt"),
+                    eq(EngineArtifactTable.delivery_id, lastDeliveryID),
+                  ),
+                )
+                .orderBy(desc(EngineArtifactTable.time_created))
+                .limit(1)
+                .get(),
+            )
+            if (prosecutorRow) {
+              const p = (prosecutorRow.payload ?? {}) as Record<string, unknown>
+              sections.push(
+                `\n## Prosecutor (latest, delivery ${lastDeliveryID})`,
+                `- iteration=${Number(p.iteration ?? 0)}` +
+                  ` filed=${Number(p.counterexamples_filed ?? 0)}` +
+                  ` proposed=${Number(p.challenges_proposed ?? 0)}` +
+                  ` resolved=${Number(p.counterexamples_resolved ?? 0)}`,
+              )
+            } else {
+              sections.push(
+                `\n## Prosecutor (latest, delivery ${lastDeliveryID})`,
+                `- not run for this delivery — call \`prosecute\` after \`deliver\` and before \`publish_delivery\`.`,
+              )
             }
           }
         }
