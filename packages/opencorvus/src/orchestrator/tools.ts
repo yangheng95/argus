@@ -3661,6 +3661,25 @@ export function createOrchestratorTools(input: {
 
           if (isTaskLevelBuild) await trackStepComplete("build")
 
+          // Phase-level completion event — overlay tree-writer uses this to
+          // mark the spinning build session card as terminal. Without it the
+          // card stays in "running" state forever even though BuildAgent.run
+          // already resolved. Mirrors RequirementsCompleted / ArchitectCompleted
+          // / FidelityReviewCompleted shape.
+          EngineProtocol.emit(
+            EngineEvent.BuildCompleted,
+            {
+              taskID,
+              sessionID,
+              goalID: attachedGoalID,
+              status: result.status === "passed" ? "passed" : "failed",
+              error: result.error,
+              commitRef: result.commit_ref,
+              summary: result.summary,
+            },
+            { source: "orchestrator.build" },
+          )
+
           // Build does NOT mark the task complete — deliver must accept.
           // Return the structured payload so the orchestrator can judge
           // whether build actually addressed the prior rejection before
@@ -3690,6 +3709,22 @@ export function createOrchestratorTools(input: {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })
           if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+          // Terminal-error completion event so the UI build card unwinds
+          // even when BuildAgent.run threw before producing a session id.
+          // sessionID falls back to the orchestrator's own session so the
+          // event still has a target to attach the error message to.
+          EngineProtocol.emit(
+            EngineEvent.BuildCompleted,
+            {
+              taskID,
+              sessionID: input.agentSessionID,
+              goalID: attachedGoalID,
+              status: "error",
+              error: msg,
+              summary: `Build failed: ${msg}`,
+            },
+            { source: "orchestrator.build" },
+          )
           // Build itself failed (LLM error, tool guard fault, worktree
           // creation failed, etc.) — distinct from deliver-rejection.
           // Surface the error so the orchestrator decides (retry / fail_task).
