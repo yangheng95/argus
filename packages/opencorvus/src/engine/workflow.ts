@@ -13,6 +13,7 @@
  * 路径，每个步骤映射到一个已存在的 Orchestrator 工具，工作流只在 system prompt 中以
  * "推荐路径 + 当前进度" 的形式注入。
  */
+import { createDecisionLog } from "@/decision-log"
 import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
 import {
@@ -129,8 +130,17 @@ export interface WorkflowState {
 const DIRECT: MiniWorkflow = {
   id: "direct",
   name: "Direct",
-  description: "即时 build → deliver 对抗式迭代。用于单文件 / bugfix / 配置 / 短调试 — 无需 goal 分解。",
+  description: "analyze_intent → build → deliver 对抗式迭代。用于单文件 / bugfix / 配置 / 短调试 — 无需 goal 分解。",
   steps: [
+    {
+      id: "analyze_intent",
+      tool: "analyze_intent",
+      label: "Intent",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。每个 task 都跑（fresh / re-entry / scope change）。如返回 blocker clarifications，必须先调 question 再继续。",
+      scope: "task",
+      skippable: false,
+      after: [],
+    },
     {
       id: "build",
       tool: "build",
@@ -138,7 +148,7 @@ const DIRECT: MiniWorkflow = {
       hint: "调用 build agent 直接实现请求（read/write/edit/bash）。完成后必须 call deliver — 不再自动 complete 任务。",
       scope: "task",
       skippable: false,
-      after: [],
+      after: ["analyze_intent"],
     },
     {
       id: "deliver",
@@ -162,8 +172,17 @@ const DIRECT: MiniWorkflow = {
 const PIPELINE: MiniWorkflow = {
   id: "pipeline",
   name: "Pipeline",
-  description: "(design_analysis 可选) → requirements → architect → per-goal[build] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
+  description: "analyze_intent → (design_analysis) → requirements → architect → per-goal[build] → deliver。多文件功能 / UI 复刻 / 跨模块重构。",
   steps: [
+    {
+      id: "analyze_intent",
+      tool: "analyze_intent",
+      label: "Intent",
+      hint: "解读用户真实意图：意图分类、复杂度、缺失槽位、阻断澄清。每个 task 都跑（fresh / re-entry / scope change）。如返回 blocker clarifications，必须先调 question 再继续。",
+      scope: "task",
+      skippable: false,
+      after: [],
+    },
     {
       id: "design_analysis",
       tool: "design_analysis",
@@ -171,7 +190,7 @@ const PIPELINE: MiniWorkflow = {
       hint: "分析视觉参考（图片/URL），提取布局、样式、组件清单。仅前端/UI 任务且有视觉参考时触发。",
       scope: "task",
       skippable: true,
-      after: [],
+      after: ["analyze_intent"],
     },
     {
       id: "requirements",
@@ -329,6 +348,10 @@ function taskStepStatusByTool(
   tool: string,
 ): GoalStepStatus["status"] {
   switch (tool) {
+    case "analyze_intent":
+      return createDecisionLog(taskID).read().some((e) => e.phase === "intent_analysis")
+        ? "completed"
+        : "pending"
     case "design_analysis": {
       const specs = task.design_specs
       return Array.isArray(specs) && specs.length > 0 ? "completed" : "pending"

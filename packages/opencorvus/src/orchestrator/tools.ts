@@ -1716,15 +1716,22 @@ export function createOrchestratorTools(input: {
       }),
       execute: async () => {
         const task = requireTask(taskID)
-        const { IntentAnalysisAgent } = await import("@/intent-analysis/agent")
-        const out = await IntentAnalysisAgent.analyze({
-          request: task.request,
-          title: task.title,
-          taskID,
-          parentSessionID: input.agentSessionID,
-          signal: input.signal,
-          onStatus: () => {},
-        })
+        await trackStepStart("analyze_intent")
+        let out
+        try {
+          const { IntentAnalysisAgent } = await import("@/intent-analysis/agent")
+          out = await IntentAnalysisAgent.analyze({
+            request: task.request,
+            title: task.title,
+            taskID,
+            parentSessionID: input.agentSessionID,
+            signal: input.signal,
+            onStatus: () => {},
+          })
+        } catch (err) {
+          await trackStepComplete("analyze_intent", undefined, true)
+          throw err
+        }
         const r = out.result
         const blockers = r.clarifications.filter((c) => c.priority === "blocker")
         const nices = r.clarifications.filter((c) => c.priority === "nice")
@@ -1777,6 +1784,8 @@ export function createOrchestratorTools(input: {
             reason: "Nice-to-have clarifications — downstream picks the most reasonable answer if a decision hinges on one.",
           })
         }
+
+        await trackStepComplete("analyze_intent")
 
         return SubAgentProtocol.yieldResult({
           headline:
