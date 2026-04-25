@@ -3503,6 +3503,37 @@ export function createOrchestratorTools(input: {
             signal: input.signal,
           })
 
+          // Record the build outcome as a goal_run_attempt artifact so
+          // describe / read_context derive the goal as passed/failed and
+          // the orchestrator's next decision turn doesn't re-dispatch
+          // the same goal indefinitely. Goal-only path (pipeline workflow):
+          // the direct workflow has no goal row to attribute the attempt
+          // to and orchestrator already reads the build tool_result text.
+          if (attachedGoalID) {
+            try {
+              const { recordBuildAttempt } = await import("@/engine/persist")
+              recordBuildAttempt({
+                taskID,
+                goalID: attachedGoalID,
+                sessionID,
+                status: result.status === "passed" ? "completed" : "failed",
+                commitRef: result.commit_ref,
+                workspaceDir: worktreeDir,
+                error: result.error,
+              })
+            } catch (persistErr) {
+              // Failing to record the attempt does NOT abort the build —
+              // the LLM still gets the tool_result text. Log loudly so
+              // it's visible during benchmarks; the loop guard
+              // (MAX_TASK_ITERATIONS) will catch the runaway if persists
+              // are silently dropped.
+              log.error("build: recordBuildAttempt failed", {
+                taskID, goalID: attachedGoalID,
+                error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+              })
+            }
+          }
+
           if (isTaskLevelBuild) await trackStepComplete("build")
 
           // Build does NOT mark the task complete — deliver must accept.
