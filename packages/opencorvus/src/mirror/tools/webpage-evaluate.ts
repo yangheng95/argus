@@ -43,8 +43,11 @@ Use as step 6 of the webpage-generate workflow. Feed the diff image path back to
       .describe(`Directory used to resolve relative paths and for default diff output. Defaults to \`${DEFAULT_MIRROR_SUBDIR}\` under the current worktree (matching webpage_extract's default).`)
       .optional(),
   }),
-  async execute(params) {
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+  async execute(params, ctx) {
+    const outputDir = await resolveMirrorOutputDir({
+      override: params.outputDir,
+      sessionID: ctx.sessionID,
+    })
 
     const resolve = (p: string) => (path.isAbsolute(p) ? p : path.resolve(outputDir, p))
     const referencePath = resolve(params.reference)
