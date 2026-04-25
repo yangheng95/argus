@@ -194,39 +194,10 @@ async function buildPromptParts(
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
-  const { multimodal, referenceOnly } = AttachmentStore.partition(attachments)
+  const { referenceOnly } = AttachmentStore.partition(attachments)
   const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
-  const fileParts = await AttachmentStore.loadFileParts(multimodal)
-
-  const parts: Array<
-    | { type: "text"; text: string }
-    | { type: "file"; url: string; mime: string; filename?: string }
-  > = [{ type: "text", text: enrichedText }]
-
-  for (const fp of fileParts) {
-    if ("image" in fp && fp.image) {
-      const data = typeof fp.image === "string" ? fp.image : undefined
-      if (data) parts.push({ type: "file", url: data, mime: "image/*" })
-      continue
-    }
-    if ("file" in fp && fp.file) {
-      const f = fp.file as { data?: string | Uint8Array; mediaType?: string; filename?: string }
-      if (typeof f.data === "string") {
-        parts.push({ type: "file", url: f.data, mime: f.mediaType ?? "application/octet-stream", filename: f.filename })
-      } else if (f.data instanceof Uint8Array) {
-        const base64 = Buffer.from(f.data).toString("base64")
-        const mime = f.mediaType ?? "application/octet-stream"
-        parts.push({
-          type: "file",
-          url: `data:${mime};base64,${base64}`,
-          mime,
-          filename: f.filename,
-        })
-      }
-    }
-  }
-
-  return parts
+  const inlineParts = await AttachmentStore.inlineFileParts(attachments)
+  return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
 }
 
 function buildUserPrompt(

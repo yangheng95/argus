@@ -154,10 +154,13 @@ export namespace AttachmentStore {
     filename?: string
   }
 
-  type FilePart = {
+  /** Shape of an inline user-message file part — matches `PromptInput.parts`
+   *  / `RunAgentSessionInput.buildUserParts` so it can be spliced directly
+   *  into the user message without further translation. */
+  export type InlineFilePart = {
     type: "file"
-    data: Buffer
-    mediaType: string
+    url: string
+    mime: string
     filename?: string
   }
 
@@ -201,21 +204,36 @@ export namespace AttachmentStore {
   }
 
   /**
-   * Read the bytes for each multimodal attachment and return AI-SDK FilePart
-   * objects ready to splice into the user message content array. Throws if
-   * any URL is unresolvable — partial attachment delivery would silently
+   * Read the bytes for each multimodal-supported attachment and return user-message
+   * `type:"file"` parts (data-URL form) ready to splice directly into a
+   * `PromptInput.parts` / `RunAgentSessionInput.buildUserParts` array.
+   *
+   * Single source of truth (rule 22): every producer-agent (orchestrator /
+   * design-analyst / requirements / delivery) used to roll its own
+   * partition+read+base64 pipeline AND mis-decoded the prior `loadFileParts`
+   * result shape (`"image" in fp` / `"file" in fp` checks that never matched
+   * the actual return value), silently dropping every multimodal attachment
+   * — the LLM was hallucinating from prompt text alone. This helper is the
+   * single conversion path; callers must not re-wrap its output.
+   *
+   * Skips non-multimodal MIMEs (those go through `renderReferenceList`).
+   * Throws if any URL is unresolvable — partial attachment delivery would
    * mislead the agent (it would believe it saw all references).
    */
-  export async function loadFileParts(multimodal: readonly AttachmentLike[]): Promise<FilePart[]> {
+  export async function inlineFileParts(
+    attachments: readonly AttachmentLike[] | undefined,
+  ): Promise<InlineFilePart[]> {
+    const { multimodal } = partition(attachments)
     if (multimodal.length === 0) return []
     return Promise.all(multimodal.map(async (a) => {
       const located = nameFromUrl(String(a.url ?? ""))
       if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
       const bytes = await read(located.projectID, located.name)
+      const mime = String(a.mime)
       return {
         type: "file" as const,
-        data: bytes,
-        mediaType: String(a.mime),
+        url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
+        mime,
         ...(a.filename ? { filename: a.filename } : {}),
       }
     }))
