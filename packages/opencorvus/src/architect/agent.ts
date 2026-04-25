@@ -83,9 +83,10 @@ export namespace ArchitectAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    onSessionCreated?: (sessionID: string) => void
   }
 
-  export async function coordinate(input: CoordinateInput): Promise<ArchitectResult> {
+  export async function coordinate(input: CoordinateInput): Promise<ArchitectResult & { sessionID: string }> {
     const seedGoals: RegisteredGoal[] = input.goals.map((g) => ({
       id: g.id,
       title: g.title,
@@ -118,6 +119,9 @@ export namespace ArchitectAgent {
       model: input.model,
       signal: input.signal,
       onStatus: input.onStatus ?? (() => {}),
+      onSessionCreated: input.onSessionCreated
+        ? (session) => { input.onSessionCreated!(session.id) }
+        : undefined,
       toolKit: {
         tools: { ...plannerTools, ...outputToolKit.tools },
         getCollector: () => outputToolKit.getCollector(),
@@ -210,6 +214,7 @@ export namespace ArchitectAgent {
       traceability: collector.traceability,
       contracts,
       summary: collector.summary || "Architect decomposition",
+      sessionID: out.session.id,
     }
   }
 }

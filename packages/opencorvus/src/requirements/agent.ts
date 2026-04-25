@@ -72,6 +72,10 @@ export namespace RequirementsAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    /** Fires once the runner session is created so callers (orchestrator
+     *  dispatch tools) can capture the id for SSE event emission without
+     *  needing a wrapper session. Rule 22 — single session per sub-agent. */
+    onSessionCreated?: (sessionID: string) => void
     /** Optional Decision Log — seeded with foundational decisions. */
     decisionLog?: DecisionLog
   }
@@ -80,7 +84,7 @@ export namespace RequirementsAgent {
    * Parse a task request into REQ-N requirements + foundational decisions.
    * Goal decomposition happens downstream in the Architect, not here.
    */
-  export async function run(input: RunInput): Promise<RequirementsResult> {
+  export async function run(input: RunInput): Promise<RequirementsResult & { sessionID: string }> {
     // Rule 11 / rule 25: the working directory is a structural fact
     // (`Instance.directory`), not something to keyword-regex out of the
     // user's free-form request. `createPlannerTools()` resolves to the
@@ -99,6 +103,9 @@ export namespace RequirementsAgent {
       model: input.model,
       signal: input.signal,
       onStatus: input.onStatus,
+      onSessionCreated: input.onSessionCreated
+        ? (session) => { input.onSessionCreated!(session.id) }
+        : undefined,
       toolKit: {
         tools: { ...plannerTools, ...outputToolKit.tools },
         getCollector: () => outputToolKit.getCollector(),
@@ -152,7 +159,7 @@ export namespace RequirementsAgent {
       }
     }
 
-    return result
+    return { ...result, sessionID: out.session.id }
   }
 }
 

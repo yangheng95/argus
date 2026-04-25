@@ -61,9 +61,10 @@ export namespace DesignAnalystAgent {
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
+    onSessionCreated?: (sessionID: string) => void
   }
 
-  export async function analyze(input: AnalyzeInput): Promise<Result> {
+  export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
     const plannerTools = await filterAgentTools(createPlannerTools(), "design-analyst")
     const screenshotToolKit = createUrlScreenshotTool()
     const outputToolKit = createDesignOutputTools()
@@ -91,6 +92,9 @@ export namespace DesignAnalystAgent {
       model: input.model,
       signal: input.signal,
       onStatus: input.onStatus,
+      onSessionCreated: input.onSessionCreated
+        ? (session) => { input.onSessionCreated!(session.id) }
+        : undefined,
       toolKit: {
         tools: {
           ...plannerTools,
@@ -128,6 +132,7 @@ export namespace DesignAnalystAgent {
       specs,
       designSystem: structured.design_system,
       techStack: structured.tech_stack,
+      sessionID: out.session.id,
     }
   }
 
