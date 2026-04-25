@@ -1434,6 +1434,115 @@ export function recordBuildAttempt(input: {
 }
 
 /**
+ * Record a fidelity-review attempt as an append-only artifact so the
+ * orchestrator's read_context can surface "fidelity already ran with verdict X
+ * for spec snapshot Y". Without this the LLM has no way to distinguish
+ * "fidelity was never called" from "fidelity ran and returned faithful (no
+ * goal change)" — same death-loop shape rule 23 / commit 7acb5f17f addressed
+ * for build.
+ */
+export function recordFidelityAttempt(input: {
+  taskID: string
+  /** The fidelity child session id — surfaces in overlay nesting. */
+  sessionID: string
+  /** Spec snapshot the goal set was reviewed against. The orchestrator may
+   *  legitimately re-run fidelity after architect lands a NEW snapshot, so
+   *  read_context must scope the latest-attempt lookup by snapshot id. */
+  specSnapshotID: string
+  verdict: "faithful" | "needs_correction"
+  issuesCount: number
+  correctionsCount: number
+  missingCount: number
+  reason?: string
+  now?: number
+}): string {
+  const id = Identifier.ascending("artifact")
+  const now = input.now ?? Date.now()
+  const payload = {
+    spec_snapshot_id: input.specSnapshotID,
+    session_id: input.sessionID,
+    verdict: input.verdict,
+    issues_count: input.issuesCount,
+    corrections_count: input.correctionsCount,
+    missing_count: input.missingCount,
+    reason: input.reason ?? null,
+    time_completed: now,
+  }
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        run_id: null,
+        goal_run_id: null,
+        kind: "fidelity_attempt",
+        label: `verdict-${input.verdict}`,
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  return id
+}
+
+/**
+ * Record a prosecutor-pass attempt as an append-only artifact. Counterexample
+ * rows (engine_counterexample) and challenge metric specs are already
+ * persisted by the prosecutor itself; this artifact records the FACT that the
+ * adversarial pass ran for a given (delivery, iteration) tuple so the
+ * orchestrator's read_context can show "prosecutor: ran for iteration N"
+ * versus the prior implicit gap where zero counterexamples filed was
+ * indistinguishable from "never called".
+ */
+export function recordProsecutorAttempt(input: {
+  taskID: string
+  /** Delivery row this adversarial pass targeted. Same id read by `prosecute`
+   *  to fetch the defender verdict (orchestrator/tools.ts). */
+  deliveryID: string
+  /** Prosecutor child session id — surfaces in overlay nesting. */
+  sessionID: string
+  /** Iteration index inside the delivery trajectory; matches readIterationHistory. */
+  iteration: number
+  counterexamplesFiled: number
+  challengesProposed: number
+  counterexamplesResolved: number
+  rationale?: string
+  now?: number
+}): string {
+  const id = Identifier.ascending("artifact")
+  const now = input.now ?? Date.now()
+  const payload = {
+    session_id: input.sessionID,
+    iteration: input.iteration,
+    counterexamples_filed: input.counterexamplesFiled,
+    challenges_proposed: input.challengesProposed,
+    counterexamples_resolved: input.counterexamplesResolved,
+    rationale: input.rationale ?? null,
+    time_completed: now,
+  }
+  Database.use((db) =>
+    db
+      .insert(EngineArtifactTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        delivery_id: input.deliveryID,
+        run_id: null,
+        goal_run_id: null,
+        kind: "prosecutor_attempt",
+        label: `iter-${input.iteration}`,
+        payload,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  return id
+}
+
+/**
  * Record an orchestrator stream-error fact as an append-only artifact.
  *
  * Used when the orchestrator's own LLM stream aborts mid-decision (provider

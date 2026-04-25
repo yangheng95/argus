@@ -111,6 +111,8 @@ export type EngineArtifactKind =
   | "verification-evidence"
   | "delivery"
   | "goal_run_attempt"
+  | "fidelity_attempt"
+  | "prosecutor_attempt"
   | "run"
   | "orchestrator-stream-error"
 export type EngineDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"

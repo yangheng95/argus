@@ -137,7 +137,7 @@ export namespace Agent {
       build: {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
-        tools: { exclude: ["planner", "panel", "tui", "task_report", "analytics"] },
+        tools: { exclude: ["panel", "tui", "task_report", "analytics"] },
         options: {},
         prompt: PROMPT_BUILD,
         permission: PermissionNext.merge(
@@ -330,14 +330,32 @@ export namespace Agent {
         hidden: true,
       },
       planner: {
+        // Per-goal implementation planner, dispatched by the build agent via
+        // the `task` tool. Reads the GoalContract + Architect decisions and
+        // produces a stepwise execution plan that the build agent then
+        // implements. The pre-phase-5 path that ran planner before every
+        // goal was deleted (commit a9c3cb5d3); planner is now subagent-mode
+        // so build calls it autonomously when a goal warrants up-front
+        // decomposition, instead of running unconditionally.
         name: "planner",
-        description: "Planner agent. Produces per-goal implementation plans from GoalContracts + Architect decisions.",
+        description: "Per-goal implementation planner. Reads the GoalContract + Architect decisions and produces a stepwise execution plan. Dispatch from the build agent (via the `task` tool) when a goal is large enough to benefit from up-front decomposition before edits.",
         prompt: PLANNER_CORE,
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            // planner inherits `task: "allow"` from defaults; explicitly
+            // deny so a planner subagent cannot recursively spawn another
+            // planner / general / explore (mirrors `general` agent).
+            task: "deny",
+            todoread: "allow",
+            todowrite: "allow",
+          }),
+          user,
+        ),
         options: {},
-        mode: "primary",
+        mode: "subagent",
         native: true,
-        hidden: true,
       },
       "design-analyst": {
         name: "design-analyst",
