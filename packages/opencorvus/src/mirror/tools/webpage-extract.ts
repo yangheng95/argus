@@ -66,7 +66,10 @@ Use this as step 1 of the webpage-generate workflow. Requires network access to 
       metadata: { url: params.url },
     })
 
-    const outputDir = await resolveMirrorOutputDir(params.outputDir)
+    const outputDir = await resolveMirrorOutputDir({
+      override: params.outputDir,
+      sessionID: ctx.sessionID,
+    })
 
     const viewport = {
       width: params.viewport_width ?? 1440,
