@@ -562,7 +562,6 @@
   "workflow.architect_contracts": "contracts",
   "workflow.architect_generating": "Coordinating cross-goal contracts...",
   "workflow.goals": "Goals",
-  "workflow.goals_label": "Goals",
   "workflow.interactions": "Interactions",
   "workflow.requirements": "Requirements",
   "workflow.requirements_generating": "Analyzing requirements...",
