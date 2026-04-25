@@ -293,10 +293,15 @@ export namespace Agent {
         // Prompt is constructed dynamically per-wake in src/orchestrator/agent.ts
         // (buildSystemParts). No static core prompt — the orchestrator's
         // context depends on live task/goal/run state.
-        // steps=20 matches the MAX_STEPS budget used by the pre-phase-3
-        // pre-migration path. SessionLoop reads this as the `stopWhen`
-        // equivalent for the orchestrator's child session.
-        steps: 20,
+        // steps=80 sized for the full pipeline workflow in one session:
+        // intent_analysis → design_analysis → requirements → architect →
+        // fidelity → N builds → deliver → prosecute → publish_delivery, plus
+        // skill loads, todowrite/read, and observation tool calls between
+        // each. Observed 2026-04-25 with the previous steps=20 cap: a 3-goal
+        // pipeline ran exactly 20 llm_requests and stopped without ever
+        // reaching deliver — the deliver-pending auto-rewake fired but the
+        // task had already burned a full session on dispatch.
+        steps: 80,
         // Whitelist: orchestrator is a SCHEDULER, not an executor. The benchmark
         // caught it bypassing the build agent entirely (calling webpage_extract
         // / webpage_compile_html / webpage_render / webpage_evaluate / bash /
