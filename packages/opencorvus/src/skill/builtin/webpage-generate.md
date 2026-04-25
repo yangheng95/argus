@@ -174,28 +174,15 @@ For each round:
    - Preserve every element that's already rendering correctly — deleting correct markup costs points you won't recover.
 3. Re-run `webpage_render`.
 4. Re-run `webpage_evaluate`.
-5. If `score ≥ target`, proceed to step 8.
+5. If `score ≥ target`, you are done — proceed to "What success looks like" below.
 6. If `score < target` and you've completed fewer than **8 rounds**, go back to #1.
-7. If you've completed 8 rounds and the score still lags, STOP. Do NOT run step 8 cleanup. Report the final score, the biggest remaining diff regions, and any obvious blockers (e.g. dynamic content that cannot be statically cloned).
+7. If you've completed 8 rounds and the score still lags, STOP. Report the final score, the biggest remaining diff regions, and any obvious blockers (e.g. dynamic content that cannot be statically cloned).
 
 Track your round count explicitly in your reasoning. Do not hand-wave ("I've done several rounds"); count them.
 
-## Step 8 — Clean up intermediate artifacts
+## DO NOT delete `mirror/` artifacts
 
-**Gate**: only run this step when the most recent `webpage_evaluate` score was ≥ target. If the loop in step 7 bailed out without reaching target, SKIP step 8 entirely — the forensic artifacts stay under `mirror/` so the user can inspect what failed.
-
-**Keep**:
-- `index.html` — the final clone
-- `images/` — the image assets the HTML references (promoted out of `mirror/images/` in step 4)
-
-**Delete** the entire mirror folder in one shot:
-
-```bash
-rm -rf ./mirror
-rm -f best-index.html
-```
-
-Verify afterwards with `ls` — the working directory must contain **only** `index.html` and `images/`. If `index.html` still imports `design-tokens.ts` at this stage, that is a bug — the colour values should have been inlined in step 4.
+The mirror toolchain output (`extracted-page.json`, `page-ir.xml`, `scaffold.json`, `design-tokens.ts`, `App.tsx`, `shared-context.md`, `images/`, `reference.png`) MUST stay in the worktree. Subsequent goals + delivery agents read these artifacts to verify and refine your work; the build runtime ff-only merges your goal branch back into primary HEAD so the next worktree inherits them via git. Removing them mid-pipeline breaks cross-goal sharing (rule 22 — single source of truth lives in git, not regenerated per goal). The deliverable is `index.html` + `images/`; mirror artifacts are scratch but they are git-tracked scratch — leave them in place.
 
 ## What success looks like
 
