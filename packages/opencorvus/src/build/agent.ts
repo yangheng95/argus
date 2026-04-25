@@ -24,6 +24,7 @@
  */
 
 import z from "zod"
+import { $ } from "bun"
 import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
 import { Instance } from "@/project/instance"
@@ -34,6 +35,7 @@ import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import type { FileDiff } from "@/snapshot/types"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
@@ -123,6 +125,12 @@ export namespace BuildAgent {
     /** The worktree directory used by this run. Absent when the caller
      *  supplied `workDir` (caller already has it). */
     worktreeDir?: string
+    /** Per-file diffs from worktree base → goal branch HEAD. Captured before
+     *  cleanup so the orchestrator can persist a per-goal delivery artifact
+     *  the overlay's right-side panel reads via `findDeliveryByGoalRun`.
+     *  Empty / undefined when no merge-back happened (failed build, caller-
+     *  owned worktree, or no commit_ref). */
+    diffs?: FileDiff[]
   }
 
   /**
@@ -142,6 +150,12 @@ export namespace BuildAgent {
       const ownsWorktree = !input.workDir
       let worktreeDir = input.workDir
       let worktreeBranch: string | undefined
+      // Worktree HEAD commit at creation time. Equals primary HEAD because
+      // Worktree.create branches off it; we capture the SHA so post-build
+      // diff extraction can compute baseRef..HEAD inside the worktree
+      // without depending on git merge-base (which fails after merge-back
+      // when ff-only collapses both refs to the same tip).
+      let baseRef: string | undefined
       if (ownsWorktree) {
         const targetLabel = labelFromTarget(input.target)
         const info = await Worktree.create({ name: `build-${targetLabel}` })
@@ -155,6 +169,7 @@ export namespace BuildAgent {
           runID: findActiveRunForTask(input.task.id)?.id,
           goalID: input.target.kind === "goal" ? input.target.id : undefined,
         })
+        baseRef = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim() || undefined
       }
 
       // Stage-skill injection for build: the resolved skill block is
@@ -184,6 +199,7 @@ export namespace BuildAgent {
 
       let out
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
+      let diffs: FileDiff[] | undefined
       try {
         out = await runAgentSession({
           kind: "build",
@@ -228,11 +244,26 @@ export namespace BuildAgent {
           parsed.data.status === "passed" &&
           parsed.data.commit_ref
         ) {
+          // Capture diffs BEFORE merge-back so the worktree's own git can
+          // resolve `<baseRef>..HEAD` without ambiguity. Merge is ff-only,
+          // so primary's HEAD will equal the worktree's branch tip after —
+          // collecting after the merge would still work, but doing it here
+          // keeps both operations bound to the worktree's own git dir.
+          if (baseRef && worktreeDir) {
+            diffs = await collectGoalDiffs(worktreeDir, baseRef).catch((err) => {
+              log.warn("build agent: collectGoalDiffs failed — overlay panel will show empty file list", {
+                taskID: input.task.id,
+                error: err instanceof Error ? err.message : String(err),
+              })
+              return undefined
+            })
+          }
           await Worktree.mergeIntoPrimary({ branch: worktreeBranch })
           log.info("build agent: merged goal branch into primary", {
             taskID: input.task.id,
             branch: worktreeBranch,
             commit_ref: parsed.data.commit_ref,
+            diffFiles: diffs?.length ?? 0,
           })
         }
       } finally {
@@ -265,9 +296,80 @@ export namespace BuildAgent {
         result: parsed.data,
         sessionID: out.session.id,
         worktreeDir: ownsWorktree ? worktreeDir : undefined,
+        diffs,
       }
     })
   }
+}
+
+// ---------------------------------------------------------------------------
+// Diff collection
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect per-file diffs for the goal's worktree branch as `baseRef..HEAD`.
+ * Returns FileDiff objects with full before/after blobs so the overlay's
+ * goal-run delivery endpoint can serve diff previews without a separate
+ * git read at click time. Mirrors the shape of `Snapshot.diffFull` so the
+ * existing `viewDelivery` / overlay diff service consume the same schema
+ * as the task-level delivery path.
+ *
+ * Filters out worktree scratch (`.opencorvus/`) so the panel doesn't list
+ * worktree-internal files like ownership markers.
+ */
+async function collectGoalDiffs(worktreeDir: string, baseRef: string): Promise<FileDiff[]> {
+  const headRaw = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim()
+  if (!headRaw || headRaw === baseRef) return []
+
+  const status = new Map<string, "added" | "deleted" | "modified">()
+  const statusOut = (
+    await $`git -c core.quotepath=false diff --no-ext-diff --name-status --no-renames ${baseRef} ${headRaw} -- .`
+      .quiet()
+      .nothrow()
+      .cwd(worktreeDir)
+      .text()
+  ).trim()
+  for (const line of statusOut.split("\n")) {
+    if (!line) continue
+    const [code, file] = line.split("\t")
+    if (!code || !file) continue
+    const kind = code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified"
+    status.set(file, kind)
+  }
+
+  const numstatOut = (
+    await $`git -c core.quotepath=false diff --no-ext-diff --no-renames --numstat ${baseRef} ${headRaw} -- .`
+      .quiet()
+      .nothrow()
+      .cwd(worktreeDir)
+      .text()
+  ).trim()
+
+  const result: FileDiff[] = []
+  for (const line of numstatOut.split("\n")) {
+    if (!line) continue
+    const [additions, deletions, file] = line.split("\t")
+    if (!file) continue
+    if (file.startsWith(".opencorvus/") || file === ".opencorvus-meta.json") continue
+    const isBinary = additions === "-" && deletions === "-"
+    const before = isBinary
+      ? ""
+      : (await $`git show ${baseRef}:${file}`.quiet().nothrow().cwd(worktreeDir).text())
+    const after = isBinary
+      ? ""
+      : (await $`git show ${headRaw}:${file}`.quiet().nothrow().cwd(worktreeDir).text())
+    const added = isBinary ? 0 : parseInt(additions, 10)
+    const removed = isBinary ? 0 : parseInt(deletions, 10)
+    result.push({
+      file,
+      before,
+      after,
+      additions: Number.isFinite(added) ? added : 0,
+      deletions: Number.isFinite(removed) ? removed : 0,
+      status: status.get(file) ?? "modified",
+    })
+  }
+  return result
 }
 
 // ---------------------------------------------------------------------------
