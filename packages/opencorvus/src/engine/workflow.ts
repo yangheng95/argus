@@ -193,22 +193,18 @@ const PIPELINE: MiniWorkflow = {
     },
     {
       // Per-goal 实现：每个 goal 派发到 build agent（在 worktree 中）。
-      // 真实派发由 GoalPool 完成，工具入口是 `dispatch_goal`，但语义上每个
-      // goal 就是一次"build"调用，UI label 与 direct 路径保持一致。
-      //
-      // 单次 dispatch_goal 调用内部串联 plan → build → evaluate 三个 phase
-      // （对应 session kind planner / build / evaluator）。phase 状态从
-      // goal_run.status 投影，不是各自独立的 tool 调用 —— orchestrator
-      // 看到的仍是一个 step。见 specs/new-arch/07-panel-reactivity §phase 规则。
+      // 真实派发由 GoalPool 完成，工具入口是 `dispatch_goal`。phase-5/6 的
+      // GoalPool → parallel-tool-call 迁移后 planner 已被删除（commit
+      // a9c3cb5d3）；executor 直接读 acceptance specs + architect 契约执行，
+      // 不再有 plan 预 pass。所以本 step 只剩单个 build phase。
       id: "build",
       tool: "dispatch_goal",
       label: "Executor",
-      hint: "执行器在隔离 worktree 中调度 plan → build 两个 phase 跑完一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
+      hint: "执行器在隔离 worktree 中跑 build phase 完成一个 goal。GoalPool 自动派发；orchestrator 只管触发。",
       scope: "goal",
       skippable: false,
       after: ["architect"],
       phases: [
-        { id: "plan",  label: "Plan",  sessionKind: "planner" },
         { id: "build", label: "Build", sessionKind: "build" },
       ],
     },
