@@ -1,14 +1,16 @@
 // ── TracePanel ──
 //
-// Renders AgentTrace events for a session or task. Each event is collapsed
-// to a one-line header (ts · kind · agent) by default; clicking expands the
-// full payload as pretty-printed JSON so the operator can inspect the LLM
-// request body, agent report collector dump, or stream errors that produced
-// a particular assistant turn.
+// Renders AgentTrace events for a session or task. Each event collapses to a
+// one-line headline that extracts the semantic meaning of the event (which
+// agent, what it produced, did it succeed) so the operator can scan the trace
+// without expanding everything. Click to expand for the raw JSON payload —
+// the source-of-truth dump that drove the headline.
 //
 // Two entry points:
 //   <TracePanel sessionID="..." /> — per-session (the 🔍 button on a card)
-//   <TracePanel taskID="..." />    — task-wide aggregate ("Show all" button)
+//   <TracePanel taskID="..." />    — task-wide aggregate, also used as the
+//                                    persistent right-panel trace stream
+//                                    when no `onClose` is provided.
 
 import { For, Show, createMemo, createResource, createSignal } from "solid-js";
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent } from "../services/trace";
@@ -36,10 +38,86 @@ function payloadJson(event: TraceEvent): string {
   }
 }
 
-function eventTitle(event: TraceEvent): string {
-  const parts: string[] = [event.kind];
-  if (event.agentName) parts.push(event.agentName);
-  return parts.filter(Boolean).join(" · ");
+// ── Per-kind headline extractors ─────────────────────────────────────────
+// Trace events are heterogeneous (session_open / llm_request / agent_report /
+// agent_report_failure / helper_llm_call / orchestrator_wake / ...). Each kind
+// stores its own shape under `payload`. The headline below pulls the
+// fields that matter for at-a-glance scanning, leaving the raw JSON to
+// the expanded view for full inspection.
+
+function summariseCollector(collector: unknown): string {
+  if (!collector || typeof collector !== "object") return "";
+  const c = collector as Record<string, unknown>;
+  const parts: string[] = [];
+  if (Array.isArray(c.specs)) parts.push(`${c.specs.length} specs`);
+  if (Array.isArray(c.requirements)) parts.push(`${c.requirements.length} reqs`);
+  if (Array.isArray(c.goals)) parts.push(`${c.goals.length} goals`);
+  if (Array.isArray(c.collector)) parts.push(`${c.collector.length} items`);
+  if (Array.isArray((c as any).slots)) parts.push(`${((c as any).slots as unknown[]).length} slots`);
+  return parts.join(" / ");
+}
+
+function lastAssistantToolCalls(messages: unknown[]): string[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { role?: string; content?: unknown } | undefined;
+    if (!m || m.role !== "assistant") continue;
+    const content = m.content;
+    if (!Array.isArray(content)) return [];
+    const calls: string[] = [];
+    for (const p of content) {
+      if (p && typeof p === "object" && (p as any).type === "tool-call") {
+        const name = (p as any).toolName;
+        if (typeof name === "string") calls.push(name);
+      }
+    }
+    return calls;
+  }
+  return [];
+}
+
+function eventHeadline(event: TraceEvent): string {
+  const kind = event.kind;
+  const agent = event.agentName ? event.agentName : "";
+  const payload = (event.payload ?? {}) as Record<string, unknown>;
+  switch (kind) {
+    case "session_open": {
+      const first = typeof payload.firstEvent === "string" ? ` · ${payload.firstEvent}` : "";
+      return `open · ${agent || "session"}${first}`;
+    }
+    case "llm_request": {
+      const msgs = Array.isArray(payload.messages) ? (payload.messages as unknown[]) : [];
+      const calls = lastAssistantToolCalls(msgs);
+      const tail = calls.length > 0 ? ` → ${calls.slice(0, 4).join(", ")}${calls.length > 4 ? ` +${calls.length - 4}` : ""}` : "";
+      return `llm_request · ${agent || "?"} · ${msgs.length} msgs${tail}`;
+    }
+    case "agent_report":
+    case "agent_report_retry_final": {
+      const structuredOK = payload.structured !== undefined && payload.structured !== null;
+      const collector = summariseCollector(payload.collector);
+      const errs = Array.isArray(payload.streamErrors) ? (payload.streamErrors as unknown[]).length : 0;
+      const tail = [
+        structuredOK ? "structured ✓" : "structured ✗",
+        collector,
+        errs ? `${errs} stream-err` : "",
+      ].filter(Boolean).join(" · ");
+      return `agent_report · ${agent || "?"} · ${tail}`;
+    }
+    case "agent_report_failure":
+    case "orchestrator_wake_failure": {
+      const err = (payload.error ?? (payload as any).reason ?? "(no message)") as unknown;
+      return `${kind} · ${agent || "?"} · ${String(err).slice(0, 120)}`;
+    }
+    case "orchestrator_wake": {
+      const reason = typeof (payload as any).reason === "string" ? (payload as any).reason : "";
+      return `orchestrator_wake${reason ? ` · ${reason}` : ""}`;
+    }
+    case "helper_llm_call": {
+      const purpose = (payload as any).purpose ?? (payload as any).label ?? "";
+      return `helper_llm_call${purpose ? ` · ${purpose}` : ""}`;
+    }
+    default:
+      return `${kind}${agent ? ` · ${agent}` : ""}`;
+  }
 }
 
 function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
@@ -53,7 +131,7 @@ function TraceEventRow(props: { event: TraceEvent; defaultOpen?: boolean }) {
         onClick={() => setOpen((v) => !v)}
       >
         <span class="trace-event-ts">{formatTime(props.event.ts)}</span>
-        <span class="trace-event-kind">{eventTitle(props.event)}</span>
+        <span class="trace-event-kind">{eventHeadline(props.event)}</span>
         <Show when={props.event.sessionID}>
           <span class="trace-event-sid" title={props.event.sessionID}>
             {String(props.event.sessionID).slice(-8)}
