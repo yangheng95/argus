@@ -444,11 +444,18 @@ export function createOrchestratorTools(input: {
   const tools = {
     requirements: tool({
       description:
-        "Parse the user's task into REQ-N requirements plus foundational " +
-        "technical decisions (runtime, framework, test strategy). Goal " +
-        "decomposition, metric specs, challenge seeds, traceability, and " +
-        "cross-goal contracts are all produced by the Architect — do NOT " +
-        "expect them from this step.",
+        "OPTIONAL stage agent. Parse the user's task into REQ-N requirements plus " +
+        "foundational technical decisions (runtime, framework, test strategy, " +
+        "package_manager, communication_protocol). Goal decomposition / metric specs / " +
+        "challenge seeds / traceability / cross-goal contracts are all produced by " +
+        "the Architect — do NOT expect them from this step.\n\n" +
+        "USE WHEN: the work is multi-file with implicit acceptance criteria, OR you " +
+        "intend to call `architect` next (architect needs the REQ-N rows), OR " +
+        "foundational decisions are ambiguous and the build agent would otherwise " +
+        "guess.\n" +
+        "SKIP WHEN: trivial direct edit (single-file bug fix, typo / config tweak); " +
+        "build agent can run against the user's text alone and `deliver` has enough " +
+        "signal in the request to verify.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to analyze requirements"),
       }),
@@ -1066,14 +1073,19 @@ export function createOrchestratorTools(input: {
 
     architect: tool({
       description:
-        "Decompose the task into goals. The Architect reads the REQ-N list + " +
-        "foundational decisions produced by requirements, explores the codebase, " +
-        "and registers the final goal set (including metric specs, challenge " +
-        "seeds, traceability, cross-goal contracts, and integrity verdict). " +
-        "Call after `requirements`. Call again (as a re-run) when delivery " +
-        "rejects the current goal set and the problem is structural rather " +
-        "than a point fix; Architect will refine the existing goals instead " +
-        "of throwing them away.",
+        "OPTIONAL stage agent. Decompose the task into goals. The Architect reads the " +
+        "REQ-N list + foundational decisions produced by requirements, explores the " +
+        "codebase, and registers the final goal set (metric specs, challenge seeds, " +
+        "traceability, cross-goal contracts).\n\n" +
+        "USE WHEN: the work fans into multiple parallel goals (independent " +
+        "owned_paths, cross-goal contracts), OR you need explicit acceptance specs " +
+        "per goal so per-goal builds and `deliver` have something concrete to verify " +
+        "against. Requires a `requirements` spec snapshot to run against — call " +
+        "`requirements` first.\n" +
+        "SKIP WHEN: the work fits one goal (the build agent's own todo list is " +
+        "enough); every fix lives inside one file or one symbol's call sites.\n" +
+        "Re-run on delivery rejection when the rejection points at structural / " +
+        "coverage problems; for contract-level point fixes prefer `modify_goal`.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run architect"),
       }),
@@ -1327,16 +1339,23 @@ export function createOrchestratorTools(input: {
 
     integrity: tool({
       description:
-        "Multi-dimension review of architect output: goal_fidelity (coverage of " +
-        "the original user request), technical_feasibility (imports / exports / " +
-        "owned_paths / dep graph viability), hallucination (ungrounded REQs / " +
-        "specs / contracts), solution_quality (granularity, acceptance-spec " +
-        "strength, ownership, ordering). Call AFTER `architect` lands a goal " +
-        "set, BEFORE dispatching `build`. The reviewer returns a per-dimension " +
-        "verdict (pass / concerns / needs_correction); on aggregate " +
-        "needs_correction the orchestrator re-upserts the corrected goal set " +
-        "against the same spec snapshot. Re-run when delivery feedback hints " +
-        "the goal set drifted (vs. a structural rewrite, which is `architect`).",
+        "OPTIONAL audit agent. Multi-dimension review of architect output along four " +
+        "axes: goal_fidelity (coverage of the original user request), " +
+        "technical_feasibility (imports / exports / owned_paths / dep graph viability), " +
+        "hallucination (ungrounded REQs / specs / contracts — DIAGNOSTIC: findings " +
+        "trigger upstream rework, never goal mutations), solution_quality " +
+        "(granularity, acceptance-spec strength, ownership, ordering). Returns a " +
+        "per-dimension verdict (pass / concerns / needs_correction) plus an aggregate " +
+        "(worst-of). On aggregate `needs_correction` the orchestrator re-upserts the " +
+        "corrected goal set against the same spec snapshot.\n\n" +
+        "USE WHEN: architect just produced a non-trivial goal graph (≥3 goals, OR " +
+        "cross-goal contracts, OR foundational decisions architect derived rather " +
+        "than user-stated), OR delivery feedback hints the decomposition has drifted " +
+        "from user intent.\n" +
+        "SKIP WHEN: architect produced exactly one goal whose contract trivially " +
+        "matches the user request, OR you already ran integrity for this spec " +
+        "snapshot and have no new signal. Requires architect goals on the active " +
+        "spec snapshot.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run integrity review"),
       }),
@@ -1717,19 +1736,24 @@ export function createOrchestratorTools(input: {
 
     analyze_intent: tool({
       description:
-        "Reconstruct the user's real intent from a (typically terse) request. " +
-        "The agent reads the request, the existing work record on this task " +
-        "(decision log, prior delivery rejections, refine notes when present), " +
-        "and uses read-only codebase tools (read/find/search/list) to ground " +
-        "complexity and scope estimates in the repo's actual shape. Output is " +
-        "a structured IntentAnalysisResult: intent class, complexity band, " +
-        "extracted slots, missing-info keys, blocker / nice clarifications, " +
-        "overall confidence, and a one-sentence summary. " +
-        "Call BEFORE `requirements` on a fresh pipeline task. On a re-entry " +
-        "(refine / restart_from_stage / operator_message that changes scope), " +
-        "call again so downstream agents see the updated reading. Use the " +
-        "blocker clarifications, if any, as the input to a `question` call " +
-        "before spending budget on requirements / architect.",
+        "OPTIONAL stage agent. Reconstruct the user's real intent from a (typically " +
+        "terse) request. Reads the request, the existing work record on this task " +
+        "(decision log, prior delivery rejections, refine notes when present), and " +
+        "uses read-only codebase tools (read/find/search/list) to ground complexity " +
+        "and scope estimates in the repo's actual shape. Output: an " +
+        "IntentAnalysisResult (intent class, complexity band, extracted slots, " +
+        "missing-info keys, blocker / nice clarifications, overall confidence, " +
+        "one-sentence summary).\n\n" +
+        "USE WHEN: terse request, ambiguous scope, multiple plausible intent classes " +
+        "(feature vs refactor vs bug-fix), the user's intent might silently mislead " +
+        "downstream stages, OR re-entering after operator_message / refine / " +
+        "restart_from_stage that may have shifted scope. If it returns blocker " +
+        "clarifications, call `question` with them BEFORE spending budget on " +
+        "requirements / architect / build.\n" +
+        "SKIP WHEN: the request is already explicit (concrete file path + concrete " +
+        "change), OR a previous analyze_intent on this task is still valid, OR the " +
+        "work is a clear single-edit fix where downstream agents have nothing to " +
+        "misread.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to run intent analysis (first-wake / re-entry / scope change)"),
       }),
