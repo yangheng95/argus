@@ -19,7 +19,7 @@ export const XmlIRSectionRangeSchema = z.object({
 
 export const XmlIRSchema = z.object({
   /** Origin of the IR — callers may route to source-specific handling. */
-  source: z.enum(["figma", "url"]),
+  source: z.enum(["figma", "url", "image"]),
   /** The XML payload. */
   xml: z.string(),
   /** Byte length of `xml` (UTF-8). Denormalised for quick budget checks. */

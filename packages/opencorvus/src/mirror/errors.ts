@@ -30,11 +30,11 @@ export const UrlExtractError = NamedError.create(
   }),
 )
 
-/** Compiling an IR (CompressedDesign or ExtractedPage) to XML failed. */
+/** Compiling an IR (CompressedDesign / ExtractedPage / ImageAnalysis) to XML failed. */
 export const CompileError = NamedError.create(
   "MirrorCompileError",
   z.object({
-    source: z.enum(["figma", "url"]),
+    source: z.enum(["figma", "url", "image"]),
     reason: z.string(),
   }),
 )

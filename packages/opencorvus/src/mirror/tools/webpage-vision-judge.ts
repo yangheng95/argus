@@ -24,7 +24,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
 
-import { generateObject } from "ai"
+import { streamObject } from "ai"
 
 import { Tool } from "../../tool/tool"
 import { Provider } from "../../provider/provider"
@@ -166,7 +166,11 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
 
     let verdict: z.infer<typeof VerdictSchema>
     try {
-      const result = await generateObject({
+      // streamObject (rule 27 — every LLM interaction is streaming). The SDK
+      // enforces VerdictSchema on the streamed JSON; partial-stream draining
+      // surfaces validation failures at the same point a generateObject call
+      // would have thrown.
+      const result = streamObject({
         model: language,
         schema: VerdictSchema,
         messages: [
@@ -182,7 +186,8 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
           },
         ],
       })
-      verdict = result.object
+      for await (const _ of result.partialObjectStream) { void _ }
+      verdict = (await result.object) as z.infer<typeof VerdictSchema>
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err)
       const errName = err instanceof Error ? err.name : "UnknownError"
@@ -190,7 +195,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       const cause = err instanceof Error && "cause" in err ? (err as { cause?: unknown }).cause : undefined
       const causeMessage =
         cause instanceof Error ? cause.message : cause !== undefined ? String(cause) : undefined
-      log.error("vision judge generateObject failed", {
+      log.error("vision judge streamObject failed", {
         providerID: parsed.providerID,
         modelID: parsed.modelID,
         errName,

@@ -184,10 +184,7 @@ export function compileImageAnalysisToXML(analysis: ImageAnalysis): XmlIR {
   const parsed = ImageAnalysisSchema.safeParse(analysis)
   if (!parsed.success) {
     throw new CompileError({
-      // `source: "url"` is reused for now because XmlIRSchema's `source`
-      // enum is `"figma" | "url"`. When a real downstream needs to dispatch
-      // on image origin, expand the XmlIR schema enum and update both.
-      source: "url",
+      source: "image",
       reason: `ImageAnalysisSchema rejected payload: ${parsed.error.message}`,
     })
   }
@@ -209,7 +206,7 @@ export function compileImageAnalysisToXML(analysis: ImageAnalysis): XmlIR {
   const xml = sections.join("\n")
   const bytes = Buffer.byteLength(xml, "utf8")
   const ir: XmlIR = {
-    source: "url", // see CompileError comment above
+    source: "image",
     xml,
     bytes,
     estimatedTokens: estimateTokens(xml),
