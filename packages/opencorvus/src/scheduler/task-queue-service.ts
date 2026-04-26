@@ -63,6 +63,50 @@ export namespace TaskQueueService {
     await Promise.allSettled(started)
   }
 
+  export type QueuedTaskStatus = {
+    taskID: string
+    sessionID: string
+    status: "queued" | "retrying" | "running" | "completed" | "failed"
+    retryCount: number
+    maxRetries: number
+    source: string
+    prompt: string
+    error: string | null
+    startedAt: number | null
+    completedAt: number | null
+    updatedAt: number
+  }
+
+  export function getStatus(input: { sessionID: string; taskID: string; source: string }): QueuedTaskStatus | null {
+    const row = Database.use((db) =>
+      db
+        .select()
+        .from(TaskQueueTable)
+        .where(
+          and(
+            eq(TaskQueueTable.id, input.taskID),
+            eq(TaskQueueTable.session_id, input.sessionID),
+            eq(TaskQueueTable.source, input.source),
+          ),
+        )
+        .get(),
+    )
+    if (!row) return null
+    return {
+      taskID: row.id,
+      sessionID: row.session_id,
+      status: row.status,
+      retryCount: row.retry_count,
+      maxRetries: row.max_retries,
+      source: row.source,
+      prompt: row.prompt,
+      error: row.error_message ?? null,
+      startedAt: row.time_started ?? null,
+      completedAt: row.time_completed ?? null,
+      updatedAt: row.time_updated,
+    }
+  }
+
   export async function executePrompt(raw: { sessionID: string; prompt: unknown; source?: string }) {
     const input = z
       .object({
