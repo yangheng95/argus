@@ -1,263 +1,317 @@
 # HTTP API reference
 
-All HTTP endpoints exposed by `opencorvus serve`, grouped by module. Route registration: `packages/opencorvus/src/server/app.ts` + `server.ts`.
+> This file is generated from `packages/sdk/openapi.json` by `bun run docs:api`. Do not edit by hand — changes will be overwritten on the next CI run.
 
 ## Authentication
 
-All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients must provide HTTP Basic Auth (empty username, password = env var value).
+All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients must use HTTP Basic Auth (empty username, password = env var value).
 
-## Endpoints by module
+## Endpoints
 
 ### Global
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/global/health` | Health check |
-| GET | `/event` | Primary SSE event stream |
-| PATCH | `/global/config` | Update global config (emits `config.changed`) |
-| POST | `/global/dispose` | Dispose instance (emits `global.disposed`, then closes) |
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/event` | Subscribe to events | `event.subscribe` |
+| GET | `/global/config` | Get global configuration | `global.config.get` |
+| PATCH | `/global/config` | Update global configuration | `global.config.update` |
+| POST | `/global/dispose` | Dispose instance | `global.dispose` |
+| GET | `/global/event` | Get global events | `global.event` |
+| GET | `/global/health` | Get health | `global.health` |
+| GET | `/global/tasks` | List tasks across projects | `task.global.list` |
+| POST | `/instance/dispose` | Dispose instance | `instance.dispose` |
+| POST | `/log` | Write log | `app.log` |
+| GET | `/log/tail` | Read recent logs | `log.tail` |
+| POST | `/restart` | Restart the server | `server.restart` |
+| POST | `/shutdown` | Shutdown the server | `server.shutdown` |
 
-Source: `src/server/routes/global.ts`
+### Authentication
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| DELETE | `/auth/{providerID}` | Remove auth credentials | `auth.remove` |
+| PUT | `/auth/{providerID}` | Set auth credentials | `auth.set` |
+
+### Configuration
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/command` | List commands | `command.list` |
+| GET | `/config` | Get configuration | `config.get` |
+| PATCH | `/config` | Update configuration (JSON Merge Patch) | `config.update` |
+| GET | `/config/prompt` | List prompt catalog | `config.prompt` |
+| GET | `/config/providers` | List config providers | `config.providers` |
+| GET | `/formatter` | Get formatter status | `formatter.status` |
+| GET | `/path` | Get paths | `path.get` |
+
+### Project
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/project` | List all projects | `project.list` |
+| GET | `/project/current` | Get current project | `project.current` |
+| POST | `/project/current/init-git` | Initialize git in current directory | `project.current.initGit` |
+| PATCH | `/project/{projectID}` | Update project | `project.update` |
+| GET | `/vcs` | Get VCS info | `vcs.get` |
 
 ### Task / Orchestrator
 
-Core business routes (`src/server/routes/orchestrator.ts`):
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/task` | Create task; 503 on planner failure |
-| GET | `/tasks` | List tasks |
-| GET | `/task/:id` | Task detail |
-| GET | `/task/:id/board` | Kanban view |
-| GET | `/task/:id/progress` | Progress aggregate |
-| GET | `/task/:id/brief` | Brief summary |
-| GET | `/task/:id/transcript` | Conversation transcript |
-| GET | `/task/:id/runs` | Run list |
-| GET | `/task/:id/interactions` | Interaction history |
-| GET | `/task/:id/events` | **SSE task detail stream** (`?after=<sequence>` for resumption) |
-| POST | `/task/:id/message` | Append follow-up message |
-| POST | `/task/:id/inject` | Inject message into an active session |
-| POST | `/task/:id/retry` | Retry with same plan |
-| POST | `/task/:id/replan` | New plan version; 503 on planner failure |
-| POST | `/task/:id/cancel` | Cancel |
-| GET | `/task/events` | **SSE task-list change notifications** |
-| GET | `/run/:id` | Run detail |
-| GET | `/run/:id/executor` | Run executor status |
-| POST | `/interaction/:id/reject` | Reject an interaction request |
-| PATCH | `/goal/:id` | Update goal description and criteria |
-| DELETE | `/goal/:id` | Delete goal |
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/goal-run/{goalRunID}/delivery` | Get goal-run delivery | `goalRun.delivery` |
+| DELETE | `/goal/{goalID}` | Delete goal | `goal.delete` |
+| PATCH | `/goal/{goalID}` | Update goal | `goal.update` |
+| POST | `/interaction/{interactionID}/reject` | Reject interaction | `interaction.reject` |
+| POST | `/interaction/{interactionID}/reply` | Reply to interaction | `interaction.reply` |
+| GET | `/run/{runID}` | Get run | `run.get` |
+| POST | `/run/{runID}/abort` | Abort run | `run.abort` |
+| GET | `/run/{runID}/artifacts` | List run artifacts | `run.artifacts` |
+| GET | `/run/{runID}/brief` | Get run brief | `run.brief` |
+| GET | `/run/{runID}/delivery` | Get run delivery | `run.delivery` |
+| GET | `/run/{runID}/evaluations` | List run evaluations | `run.evaluations` |
+| GET | `/run/{runID}/executor` | Get run executor session | `run.executorSession` |
+| POST | `/task` | Create task | `task.create` |
+| PATCH | `/task-queue/reorder` | Reorder queued tasks in a directory | `task.queue.reorder` |
+| GET | `/task/events` | Subscribe to global task-list change notifications | `task.list.events` |
+| DELETE | `/task/{taskID}` | Delete task | `task.delete` |
+| GET | `/task/{taskID}` | Get task | `task.get` |
+| GET | `/task/{taskID}/board` | Get task board | `task.board` |
+| GET | `/task/{taskID}/brief` | Get task brief | `task.brief` |
+| PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
+| POST | `/task/{taskID}/cancel` | Cancel task | `task.cancel` |
+| GET | `/task/{taskID}/conversation` | Hydrate task conversation state | `task.conversation` |
+| GET | `/task/{taskID}/events` | Subscribe to task events | `task.events` |
+| POST | `/task/{taskID}/followup` | Generate follow-up suggestion | `task.followup` |
+| POST | `/task/{taskID}/inject` | Inject message into running task | `task.inject` |
+| GET | `/task/{taskID}/interactions` | List task interactions | `task.interactions` |
+| POST | `/task/{taskID}/message` | Handle task message | `task.message` |
+| GET | `/task/{taskID}/progress` | Get task progress | `task.progress` |
+| POST | `/task/{taskID}/replan` | Replan task | `task.replan` |
+| POST | `/task/{taskID}/retry` | Retry task | `task.retry` |
+| POST | `/task/{taskID}/rewind` | Rewind task timeline to a specific event (projection cursor, history stays intact) | `task.rewind` |
+| POST | `/task/{taskID}/rewind/clear` | Clear the rewind cursor (undo the rewind) | `task.rewind.clear` |
+| GET | `/task/{taskID}/runs` | List task runs | `task.runs` |
+| GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) | `task.trace` |
+| GET | `/task/{taskID}/transcript` | Get task transcript | `task.transcript` |
+| GET | `/tasks` | List project tasks | `task.list` |
 
 ### Session
 
-`src/server/routes/session-*.ts`:
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET/POST | `/session` | List / create |
-| GET/DELETE | `/session/:id` | Detail / delete |
-| POST | `/session/:id/prompt` | Sync prompt |
-| POST | `/session/:id/promptAsync` | Async prompt (via TaskQueue) |
-| POST | `/session/:id/command` | Execute slash command |
-| POST | `/session/:id/shell` | Execute shell |
-| GET | `/session/:id/messages` | Messages |
-| POST | `/session/:id/share` | Create share link |
-| POST | `/session/:id/summarize` | Summarize |
-| POST | `/session/:id/compact` | Compact context |
-
-### File
-
-`src/server/routes/file.ts`:
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/find?pattern=<regex>` | ripgrep search (≤10 results) |
-| GET | `/find/file?query=<glob>&type=<file\|directory>&limit=<n>` | Filename match (default 10, ≤200) |
-| GET | `/find/symbol?query=<q>` | LSP symbol search (currently empty) |
-| GET | `/file?path=<p>` | Directory listing |
-| GET | `/file/content?path=<p>` | File content |
-| GET | `/file/status` | Git status |
-
-### Attachment / Channel
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/attachment/:projectID/:name` | Task attachment (Content-Type by extension, `Cache-Control: public, max-age=31536000, immutable`) |
-| GET | `/channel` | Channel integrations list |
-| POST | `/channel/attachment` | Create temp channel attachment → signed URL |
-| GET | `/channel/attachment/:id` | Read temp attachment |
-| POST | `/channel/message` | Bridge channel message into task board |
-| GET | `/channel/runtime` | channel-runtime status |
-| POST | `/channel/runtime/restart` | Restart channel-runtime |
-
-### MCP
-
-`src/server/routes/mcp-*.ts`:
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/mcp` | All MCP server statuses |
-| POST | `/mcp` | Dynamically add MCP server |
-| POST | `/mcp/:name/auth` | Start OAuth, return authorization URL |
-| POST | `/mcp/:name/auth/callback` | Complete OAuth (submit code) |
-| POST | `/mcp/:name/auth/authenticate` | Start OAuth & wait for callback (opens browser) |
-| DELETE | `/mcp/:name/auth` | Clear OAuth credentials |
-| POST | `/mcp/:name/connect` / `/disconnect` | Connect / disconnect |
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/session` | List sessions | `session.list` |
+| POST | `/session` | Create session | `session.create` |
+| GET | `/session/status` | Get session status | `session.status` |
+| DELETE | `/session/{sessionID}` | Delete session | `session.delete` |
+| GET | `/session/{sessionID}` | Get session | `session.get` |
+| PATCH | `/session/{sessionID}` | Update session | `session.update` |
+| POST | `/session/{sessionID}/abort` | Abort session | `session.abort` |
+| GET | `/session/{sessionID}/children` | Get session children | `session.children` |
+| POST | `/session/{sessionID}/command` | Send command | `session.command` |
+| GET | `/session/{sessionID}/diff` | Get message diff | `session.diff` |
+| POST | `/session/{sessionID}/fork` | Fork session | `session.fork` |
+| POST | `/session/{sessionID}/init` | Initialize session | `session.init` |
+| GET | `/session/{sessionID}/message` | Get session messages | `session.messages` |
+| POST | `/session/{sessionID}/message` | Send message | `session.prompt` |
+| DELETE | `/session/{sessionID}/message/{messageID}` | Delete message | `session.deleteMessage` |
+| GET | `/session/{sessionID}/message/{messageID}` | Get message | `session.message` |
+| DELETE | `/session/{sessionID}/message/{messageID}/part/{partID}` | (no summary) | `part.delete` |
+| PATCH | `/session/{sessionID}/message/{messageID}/part/{partID}` | (no summary) | `part.update` |
+| POST | `/session/{sessionID}/prompt_async` | Send async message | `session.prompt_async` |
+| GET | `/session/{sessionID}/prompt_async/{taskID}` | Get async prompt task status | `session.prompt_async_status` |
+| POST | `/session/{sessionID}/revert` | Revert message | `session.revert` |
+| POST | `/session/{sessionID}/shell` | Run shell command | `session.shell` |
+| POST | `/session/{sessionID}/summarize` | Summarize session | `session.summarize` |
+| GET | `/session/{sessionID}/todo` | Get session todos | `session.todo` |
+| GET | `/session/{sessionID}/trace` | Get session AgentTrace events | `session.trace` |
+| POST | `/session/{sessionID}/unrevert` | Restore reverted messages | `session.unrevert` |
 
 ### Executor
 
-`src/server/routes/executor.ts`:
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/executor` | List executors | `executor.list` |
+| GET | `/executor/{executorID}/model` | Get executor model | `executor.getModel` |
+| PATCH | `/executor/{executorID}/model` | Set executor model | `executor.setModel` |
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/executor` | All executors with availability and discovery |
-| GET | `/executor/:id/model` | Get active LLM |
-| PATCH | `/executor/:id/model` | Set LLM; body `{model?}`; 404 if executor doesn't support switching |
+### Coding
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| POST | `/coding/message/stream` | Send coding assistant message with streaming | `coding.message.stream` |
+| GET | `/coding/session/{sessionID}/messages` | Get coding session messages | `coding.session.messages` |
+
+### Channel
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/channel` | List channels | `channel.list` |
+| POST | `/channel/attachment` | Create a temporary channel attachment URL | `channel.attachment.create` |
+| GET | `/channel/attachment/{id}` | Read a temporary channel attachment | `channel.attachment.get` |
+| POST | `/channel/message` | Handle channel message | `channel.message` |
+| GET | `/channel/runtime` | Get managed channel runtime | `channel.runtime` |
+| POST | `/channel/runtime/restart` | Restart managed channel runtime | `channel.runtime.restart` |
+
+### Gateway
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/gateway/capabilities` | List gateway capabilities | `gateway.capabilities` |
+| POST | `/gateway/channel/{platform}/message` | Handle gateway channel message | `gateway.channel.message` |
+| POST | `/gateway/control/action` | Run gateway control action | `gateway.control.action` |
+| POST | `/gateway/control/message` | Handle gateway control message | `gateway.control.message` |
+| GET | `/gateway/stats` | Get gateway stats | `gateway.stats` |
+
+### Attachment
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/attachment/{projectID}/{name}` | Fetch a task attachment | `attachment.get` |
+
+### Panel
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/panel/capabilities` | List panel capabilities | `panel.capabilities` |
+| GET | `/panel/knowledge/memory` | List memory files for current project | `panel.knowledge.memory.list` |
+| POST | `/panel/knowledge/memory/search` | Search memories | `panel.knowledge.memory.search` |
+| DELETE | `/panel/knowledge/memory/{id}` | Delete memory file | `panel.knowledge.memory.delete` |
+| GET | `/panel/knowledge/memory/{id}` | Get memory file content (all chunks) | `panel.knowledge.memory.get` |
+| POST | `/panel/message` | Handle desktop panel message | `panel.message` |
+| POST | `/panel/message/stream` | Handle desktop panel message with streaming | `panel.message.stream` |
 
 ### Skill
 
-`src/server/routes/skill.ts`:
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/agent` | List agents | `app.agents` |
+| GET | `/skill` | List skills | `app.skills` |
+| GET | `/skill/directories` | Get skill directories | `skill.directories` |
+| POST | `/skill/install` | Install or import a skill source | `skill.install` |
+| GET | `/skill/installed` | List installed skills | `skill.installed` |
+| GET | `/skill/market` | List skill markets | `skill.market` |
+| POST | `/skill/policy` | Set skill permission policy | `skill.policy` |
+| POST | `/skill/remove` | Remove a skill source | `skill.remove` |
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/skill` | All skills |
-| GET | `/skill/installed` | Installed (with source + policy) |
-| GET | `/skill/market` | Marketplace entries |
-| GET | `/skill/directories` | Config, installed, remote cache dirs |
-| POST | `/skill/install` | Install from local / URL / Git |
-| POST | `/skill/remove` | Remove |
-| POST | `/skill/policy` | Set global allow/ask/deny policy |
+### Control
 
-### PTY / Trace / Export / TUI / Panel
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/control/timeline` | Get control timeline | `control.timeline` |
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET/POST | `/pty` | List / create |
-| GET/PUT/DELETE | `/pty/:id` | Detail / update / delete |
-| GET | `/pty/:id/connect` | **WebSocket** real-time PTY (needs `Upgrade: websocket`) |
-| GET | `/trace` | Task trace IDs |
-| GET | `/trace/:taskID` | Trace history |
-| GET | `/trace/:taskID/stream` | **SSE trace stream** (replay + live, 15s heartbeat) |
-| GET | `/export/task/:taskID` | Export complete task data |
-| GET | `/export/session/:sessionID` | Export session |
-| POST | `/tui/runtime/start` | Start / connect TUI subprocess |
-| GET | `/tui/runtime/status` | TUI runtime status |
-| POST | `/tui/runtime/stop` | Stop |
-| POST | `/tui/runtime/submit-task` | Submit a task; optionally wait |
-| POST | `/tui/runtime/proxy` | Proxy request to TUI |
-| POST | `/tui/runtime/task-status` | Query queued task status by taskID |
-| GET | `/panel/capabilities` | Panel capability query |
-| POST | `/panel/message` | Control message (sync) |
-| POST | `/panel/message/stream` | Control message (SSE stream) |
-| GET/POST/DELETE | `/panel/knowledge/memory[/...]` | Memory management and search |
+### Export
 
-The full list (including `/experimental/*`, `/coding/*`, `/gateway/*`) lives in `packages/opencorvus/src/server/routes/`. Only the stable set is listed here.
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/export/session/{sessionID}` | Export session messages | `export.session` |
+| GET | `/export/task/{taskID}` | Export full task data | `export.task` |
 
-## SSE event schema
+### MCP
 
-All events are JSON strings in the SSE frame's `data` field.
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/mcp` | Get MCP status | `mcp.status` |
+| POST | `/mcp` | Add MCP server | `mcp.add` |
+| DELETE | `/mcp/{name}/auth` | Remove MCP OAuth | `mcp.auth.remove` |
+| POST | `/mcp/{name}/auth` | Start MCP OAuth | `mcp.auth.start` |
+| POST | `/mcp/{name}/auth/authenticate` | Authenticate MCP OAuth | `mcp.auth.authenticate` |
+| POST | `/mcp/{name}/auth/callback` | Complete MCP OAuth | `mcp.auth.callback` |
+| POST | `/mcp/{name}/connect` | (no summary) | `mcp.connect` |
+| POST | `/mcp/{name}/disconnect` | (no summary) | `mcp.disconnect` |
 
-### System & config
+### Permission
 
-| Event | Payload | When |
-|---|---|---|
-| `server.connected` | `{}` | SSE connection open |
-| `server.heartbeat` | `{}` | Every 10 s |
-| `server.instance.disposed` | `{ directory }` | Instance disposed (stream closes after) |
-| `global.disposed` | `{}` | After `POST /global/dispose` |
-| `config.changed` | Merged Config | After `PATCH /config` or `PATCH /global/config` |
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/permission` | List pending permissions | `permission.list` |
+| POST | `/permission/{requestID}/reply` | Respond to permission request | `permission.reply` |
 
-Sources: `src/bus/index.ts:13`, `src/server/event.ts:5`, `src/config/config.ts:1414`
+### Provider
 
-### Session
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/provider` | List providers | `provider.list` |
+| GET | `/provider/auth` | Get provider auth methods | `provider.auth` |
+| POST | `/provider/hexin/refresh` | Refresh hexin gateway model list | `provider.hexin.refresh` |
+| POST | `/provider/{providerID}/auth/execute` | Execute auth method | `provider.auth.execute` |
+| POST | `/provider/{providerID}/auth/prompts` | Get auth prompts | `provider.auth.prompts` |
+| POST | `/provider/{providerID}/oauth/authorize` | OAuth authorize | `provider.oauth.authorize` |
+| POST | `/provider/{providerID}/oauth/callback` | OAuth callback | `provider.oauth.callback` |
+| POST | `/provider/{providerID}/test` | Test provider connection | `provider.test` |
 
-| Event | When |
-|---|---|
-| `session.created` / `session.updated` / `session.deleted` | Lifecycle |
-| `session.diff` | File changes produced |
-| `session.error` | Error inside session |
-| `session.status` | `idle` / `busy` / `retry` |
-| `session.idle` | Transitioned to idle |
+### Question
 
-Source: `src/session/index.ts:191`, `src/session/status.ts:28`
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/question` | List pending questions | `question.list` |
+| POST | `/question/{requestID}/reject` | Reject question request | `question.reject` |
+| POST | `/question/{requestID}/reply` | Reply to question request | `question.reply` |
 
-### Messages
+### PTY
 
-| Event | When |
-|---|---|
-| `message.updated` | Created or updated |
-| `message.removed` | Deleted |
-| `message.part.updated` | Part created / updated |
-| `message.part.delta` | Streaming delta (`field` + `delta`) |
-| `message.part.removed` | Part deleted |
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/pty` | List PTY sessions | `pty.list` |
+| POST | `/pty` | Create PTY session | `pty.create` |
+| DELETE | `/pty/{ptyID}` | Remove PTY session | `pty.remove` |
+| GET | `/pty/{ptyID}` | Get PTY session | `pty.get` |
+| PUT | `/pty/{ptyID}` | Update PTY session | `pty.update` |
+| GET | `/pty/{ptyID}/connect` | Connect to PTY session | `pty.connect` |
 
-Source: `src/session/message.ts:451`
+### File / Search
 
-### Permission / Question
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/file` | List files | `file.list` |
+| GET | `/file/content` | Read file | `file.read` |
+| GET | `/file/status` | Get file status | `file.status` |
+| GET | `/find` | Find text | `find.text` |
+| GET | `/find/file` | Find files | `find.files` |
+| GET | `/find/symbol` | Find symbols | `find.symbols` |
+| GET | `/lsp` | Get LSP status | `lsp.status` |
 
-| Event | When |
-|---|---|
-| `permission.asked` | AI requests permission |
-| `permission.replied` | `once` / `always` / `reject` |
-| `question.asked` | AI initiates Q&A |
-| `question.replied` / `question.rejected` | Answered / rejected |
+### TUI
 
-Sources: `src/permission/next.ts:119`, `src/question/index.ts:65`
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/tui/control/next` | Get next TUI request | `tui.control.next` |
+| POST | `/tui/control/response` | Submit TUI response | `tui.control.response` |
+| POST | `/tui/execute-command` | Execute TUI command | `tui.executeCommand` |
+| POST | `/tui/open-help` | Open help dialog | `tui.openHelp` |
+| POST | `/tui/open-models` | Open models dialog | `tui.openModels` |
+| POST | `/tui/open-sessions` | Open sessions dialog | `tui.openSessions` |
+| POST | `/tui/open-themes` | Open themes dialog | `tui.openThemes` |
+| POST | `/tui/publish` | Publish TUI event | `tui.publish` |
+| POST | `/tui/runtime/proxy` | Proxy control to managed TUI | `tui.runtime.proxy` |
+| POST | `/tui/runtime/start` | Start or connect TUI runtime | `tui.runtime.start` |
+| GET | `/tui/runtime/status` | Get TUI runtime status | `tui.runtime.status` |
+| POST | `/tui/runtime/stop` | Stop TUI runtime | `tui.runtime.stop` |
+| POST | `/tui/runtime/submit-task` | Submit task to managed TUI and optionally wait | `tui.runtime.submitTask` |
+| POST | `/tui/runtime/task-status` | Get runtime task status | `tui.runtime.taskStatus` |
+| POST | `/tui/select-session` | Select session | `tui.selectSession` |
+| POST | `/tui/show-toast` | Show TUI toast | `tui.showToast` |
+| GET | `/tui/status` | Get TUI status | `tui.status` |
 
-### Task / Orchestrator
+### Experimental
 
-The `orchestrator.` prefix is stripped before delivery:
-
-| Event | When |
-|---|---|
-| `task.created` / `task.updated` / `task.message` | Lifecycle |
-| `task.connected` / `task.heartbeat` | SSE handshake / 10s keepalive |
-| `spec.created` / `spec.updated` / `spec.approved` | Spec phase |
-| `plan.created` / `plan.activated` | Plan version |
-| `goal.progress` / `goal.passed` / `goal.failed` | Goal lifecycle |
-| `goal.workflow.progress` | Goal workflow steps |
-| `milestone.activated` / `milestone.passed` / `milestone.failed` | Milestones |
-| `run.created` / `run.updated` / `run.progress` / `run.output` | Run lifecycle |
-| `interaction.requested` / `interaction.resolved` | Human-in-the-loop |
-| `delivery.ready` | Delivery ready |
-| `evaluation.completed` | Evaluation done (verdict in payload) |
-| `agent.updated` | Agent internal stage (tool-call start/end) |
-| `workflow.selected` / `workflow.step.updated` | Workflow |
-| `requirements.completed` / `architect.completed` | Requirements / architecture phase done |
-
-Source: `src/orchestrator/model.ts:810`
-
-### Task list (`/task/events`)
-
-| Event | Payload |
-|---|---|
-| `task-list.connected` | `{ type, taskID: null, sequence: 0 }` |
-| `task-list.heartbeat` | Every 10 s |
-| _any task aggregate event_ | `{ type, taskID, sequence }` |
-
-### PTY / MCP / misc
-
-| Event | When |
-|---|---|
-| `pty.created` / `pty.updated` / `pty.exited` / `pty.deleted` | PTY lifecycle |
-| `mcp.tools_changed` / `mcp.prompts_changed` / `mcp.resources_changed` | MCP server change |
-| `mcp.browser_open_failed` | OAuth browser open fail |
-| `file.edited` / `file.watcher.updated` | Filesystem |
-| `project.updated` | Project properties |
-| `vcs.branch_updated` | Git branch switch |
-| `lsp.updated` | LSP state |
-| `session.compaction.compacted` | Compaction done |
-| `installation.updated` / `installation.update_available` | Installation |
-| `task-queue.completed` | Async prompt done |
-| `trace.event` | Trace record |
-
-## Error format
-
-| HTTP | Case |
-|---|---|
-| 400 | Validation failed |
-| 404 | `{ name, data: { message } }` (NamedError) |
-| 409 | Active executor session prevents dispose |
-| 500 | `{ name: "Unknown", data: { message } }` |
-| 503 | Planner failed (`POST /task` or `/task/:id/replan`) |
-
-Sources: `src/server/server.ts:47`, `src/server/error.ts`
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/experimental/event-schedule` | List event-triggered tasks | `experimental.eventschedule.list` |
+| POST | `/experimental/event-schedule` | Create event-triggered task | `experimental.eventschedule.create` |
+| DELETE | `/experimental/event-schedule/{id}` | Cancel event-triggered task | `experimental.eventschedule.delete` |
+| GET | `/experimental/resource` | Get MCP resources | `experimental.resource.list` |
+| GET | `/experimental/schedule` | List scheduled tasks | `experimental.schedule.list` |
+| POST | `/experimental/schedule` | Create scheduled task | `experimental.schedule.create` |
+| DELETE | `/experimental/schedule/{id}` | Cancel scheduled task | `experimental.schedule.delete` |
+| GET | `/experimental/scratchpad` | Get scratchpad content | `experimental.scratchpad.get` |
+| GET | `/experimental/session` | List sessions | `experimental.session.list` |
+| GET | `/experimental/task-plan` | List tasks for a session | `experimental.taskplan.list` |
+| GET | `/experimental/tool` | List tools | `tool.list` |
+| GET | `/experimental/tool/ids` | List tool IDs | `tool.ids` |
+| GET | `/experimental/workspace` | List workspaces | `experimental.workspace.list` |
+| DELETE | `/experimental/workspace/{id}` | Remove workspace | `experimental.workspace.remove` |
+| POST | `/experimental/workspace/{id}` | Create workspace | `experimental.workspace.create` |
+| DELETE | `/experimental/worktree` | Remove worktree | `worktree.remove` |
+| GET | `/experimental/worktree` | List worktrees | `worktree.list` |
+| POST | `/experimental/worktree` | Create worktree | `worktree.create` |
+| POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
