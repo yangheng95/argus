@@ -1,16 +1,22 @@
 // ── TracePanel ──
 //
-// Renders AgentTrace events for a session or task. Each event collapses to a
-// one-line headline that extracts the semantic meaning of the event (which
-// agent, what it produced, did it succeed) so the operator can scan the trace
-// without expanding everything. Click to expand for the raw JSON payload —
-// the source-of-truth dump that drove the headline.
+// Renders AgentTrace events. Each event collapses to a one-line headline
+// that extracts the semantic meaning of the event (which agent, what it
+// produced, did it succeed) so the operator can scan the trace without
+// expanding everything. Click to expand for the raw JSON payload — the
+// source-of-truth dump that drove the headline. The header carries three
+// actions: 📋 Copy (dump the entire trace as JSON to clipboard), ↻ Refresh,
+// ✕ Close (when an `onClose` is supplied).
 //
-// Two entry points:
-//   <TracePanel sessionID="..." /> — per-session (the 🔍 button on a card)
-//   <TracePanel taskID="..." />    — task-wide aggregate, also used as the
-//                                    persistent right-panel trace stream
-//                                    when no `onClose` is provided.
+// Active entry point:
+//   <TracePanel sessionID="..." /> — per-session, mounted by the 🔍 button
+//                                    on each card (see Card.tsx).
+//
+// The taskID mode of the prop is preserved for future cross-session views
+// but is currently unused — the panel-level "Show all session trace" bar
+// and the right-panel task-trace surface were both removed in 2026-04-26
+// (see Board.tsx for the rationale). Operators wanting cross-session
+// context dump JSON via the per-session Copy button instead.
 
 import { For, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent, type TraceFetchResult } from "../services/trace";
@@ -173,6 +179,41 @@ export function TracePanel(props: TracePanelProps) {
     setRefreshTick((v) => v + 1);
   };
 
+  // ── Copy trace as JSON ────────────────────────────────────────────────
+  // The full event array (post-fetch, in chronological order) goes onto the
+  // clipboard so the operator can paste it into a log viewer / issue / LLM.
+  // Includes traceDir + target metadata so the dump is self-describing.
+  const [copyState, setCopyState] = createSignal<"idle" | "ok" | "err">("idle");
+  let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
+  const copyTrace = async () => {
+    const result = data();
+    const target = "sessionID" in props && props.sessionID
+      ? { kind: "session" as const, id: props.sessionID }
+      : "taskID" in props && props.taskID
+      ? { kind: "task" as const, id: props.taskID }
+      : null;
+    if (!target) return;
+    const dump = {
+      kind: target.kind,
+      id: target.id,
+      traceDir: result?.traceDir ?? "",
+      enabled: result?.enabled ?? null,
+      events: result?.events ?? [],
+      copiedAt: Date.now(),
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
+      setCopyState("ok");
+    } catch {
+      setCopyState("err");
+    }
+    if (copyResetTimer) clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => setCopyState("idle"), 1500);
+  };
+  onCleanup(() => {
+    if (copyResetTimer) clearTimeout(copyResetTimer);
+  });
+
   // Auto-refresh: when a task / session is bound, poll every 4s so the panel
   // picks up new events without the operator having to hit ↻. Cleanup ensures
   // the timer dies when the panel unmounts (task switch / panel close). The
@@ -208,6 +249,23 @@ export function TracePanel(props: TracePanelProps) {
       <div class="trace-panel-head">
         <span class="trace-panel-title">{titleText()}</span>
         <span class="trace-panel-actions">
+          <button
+            type="button"
+            class="trace-panel-copy"
+            onClick={copyTrace}
+            disabled={!hasTarget() || (events().length === 0 && !data())}
+            data-state={copyState()}
+            title={
+              copyState() === "ok"
+                ? "Copied"
+                : copyState() === "err"
+                ? "Copy failed (clipboard blocked)"
+                : "Copy trace as JSON"
+            }
+            aria-label="Copy trace as JSON"
+          >
+            {copyState() === "ok" ? "✓" : copyState() === "err" ? "✗" : "⧉"}
+          </button>
           <button type="button" class="trace-panel-refresh" onClick={refresh} title="Refresh">
             ↻
           </button>

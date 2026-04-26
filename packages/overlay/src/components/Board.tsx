@@ -393,11 +393,13 @@ export function Board(props: BoardProps) {
       {/* ── Data-driven unified layout ── */}
       {/* Sections appear based on their data availability, not a mode flag. */}
 
-      {/* Right-panel TracePanel removed 2026-04-26 — task-trace surface
-          underdelivered (path-mismatch failure mode + slow whole-task disk
-          reads). Per-session trace remains accessible via the 🔍 button on
-          each card (Card.tsx) and via Conversation.tsx's "Show all session
-          trace" toggle, both still mount <TracePanel sessionID={...}>. */}
+      {/* Trace surface 2026-04-26: only the per-card 🔍 button (Card.tsx)
+          mounts <TracePanel sessionID={...}>. Both the right-panel and the
+          conversation-level "Show all session trace" toggle were removed —
+          task-trace was a slow whole-task disk read with frequent
+          path-mismatch failure modes. Operators wanting cross-session
+          context now use the per-session 📋 Copy button on each TracePanel
+          to dump the JSON dump into a log viewer or LLM. */}
 
       {/* TODO(2026-04-20): 需求分析 / 架构检查 / 评估指标 / 交付 / interactions
           五个板块整体下线等重做。当前仅保留 workflow 进度条 + goals + ChangesPanel

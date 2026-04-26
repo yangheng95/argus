@@ -4,7 +4,6 @@ import { cardTreeStore } from "../store/card-tree";
 import { boardStore } from "../store/board";
 import { t } from "../utils/i18n";
 import { setupAutoScroll } from "../utils/dom-utils";
-import { TracePanel } from "./TracePanel";
 
 function clipText(value: string, limit = 96): string {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -43,11 +42,6 @@ export function Conversation(props: { container: HTMLElement }) {
   const hasItems = () => cardTreeStore.order.length > 0;
 
   const [tracking, setTracking] = createSignal(true);
-  // Panel-level "Show all session trace" toggle. Renders a TracePanel scoped
-  // to the currently selected task, aggregating every session's events in
-  // chronological order. Sits above the card list so it doesn't disrupt the
-  // conversation flow when closed.
-  const [taskTraceOpen, setTaskTraceOpen] = createSignal(false);
   const currentTaskID = () => String(boardStore.selectedTaskID || boardStore.board?.task?.id || "");
   const taskContextItem = () => {
     const taskID = currentTaskID();
@@ -113,29 +107,6 @@ export function Conversation(props: { container: HTMLElement }) {
 
   return (
     <>
-      <Show when={hasItems() && currentTaskID()}>
-        <div class="conversation-trace-bar">
-          <button
-            type="button"
-            class="conversation-trace-toggle"
-            classList={{ "conversation-trace-toggle--open": taskTraceOpen() }}
-            aria-pressed={taskTraceOpen()}
-            onClick={() => setTaskTraceOpen((v) => !v)}
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <circle cx="7" cy="7" r="4" stroke="currentColor" stroke-width="1.5" fill="none" />
-              <path d="M10 10l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            </svg>
-            <span>{taskTraceOpen() ? "Hide all session trace" : "Show all session trace"}</span>
-          </button>
-        </div>
-        <Show when={taskTraceOpen()}>
-          <TracePanel
-            taskID={currentTaskID()}
-            onClose={() => setTaskTraceOpen(false)}
-          />
-        </Show>
-      </Show>
       <Show when={!hasItems() && taskContextID()}>
         <div class="chat-empty chat-empty--task" data-status={selectedTaskStatus()}>
           <div class="chat-empty-marker" aria-hidden="true">
