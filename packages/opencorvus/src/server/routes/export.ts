@@ -45,16 +45,16 @@ export const ExportRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(z.object({
-                  task: z.any(),
-                  plan: z.any().optional(),
-                  goals: z.any().array(),
-                  milestones: z.any().array(),
-                  runs: z.any().array(),
-                  interactions: z.any().array(),
-                  snapshots: z.any().array(),
-                  deliveries: z.any().array(),
-                  evaluations: z.any().array(),
-                  artifacts: z.any().array(),
+                  task: z.unknown(),
+                  plan: z.unknown().optional(),
+                  goals: z.unknown().array(),
+                  milestones: z.unknown().array(),
+                  runs: z.unknown().array(),
+                  interactions: z.unknown().array(),
+                  snapshots: z.unknown().array(),
+                  deliveries: z.unknown().array(),
+                  evaluations: z.unknown().array(),
+                  artifacts: z.unknown().array(),
                 })),
               },
             },
@@ -110,8 +110,8 @@ export const ExportRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(z.object({
-                  session: z.any(),
-                  messages: z.any().array(),
+                  session: z.unknown(),
+                  messages: z.unknown().array(),
                 })),
               },
             },
