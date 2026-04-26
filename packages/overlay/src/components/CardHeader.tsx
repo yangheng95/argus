@@ -1,6 +1,12 @@
 import { Show, createSignal } from "solid-js";
 import { displayToolIcon } from "../utils/tool";
-import { collectCardText, type CardNode } from "../utils/card-tree";
+import {
+  collectCardText,
+  collectLatestActivityText,
+  collectTodoSummary,
+  collectActivityCounts,
+  type CardNode,
+} from "../utils/card-tree";
 import { t } from "../utils/i18n";
 import { goalRevisionLabel } from "../utils/goal-label";
 
@@ -47,18 +53,30 @@ function previewPlainText(text: string): string {
     .replace(/<\/?[A-Za-z][\w:-]*>/g, " ");
 }
 
-function collapsedPreviewText(text: string, title?: string, limit = 96): string {
-  const normalized = previewPlainText(text).replace(/\s+/g, " ").trim();
-  if (!normalized) return "";
+/** Sanitize markdown noise but PRESERVE line breaks — the operator wants
+ *  to read the latest message in full (line-clamped to N lines by CSS,
+ *  not by string truncation). Only collapses runs of horizontal
+ *  whitespace inside a line; newlines stay intact. */
+function collapsedPreviewText(text: string, title?: string): string {
+  const sanitized = previewPlainText(text)
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\s+|\s+$/g, "");
+  if (!sanitized) return "";
   const normalizedTitle = String(title || "").replace(/\s+/g, " ").trim();
-  let preview = normalized;
-  if (normalizedTitle && preview.toLowerCase().startsWith(normalizedTitle.toLowerCase())) {
-    preview = preview.slice(normalizedTitle.length).replace(/^[\s:：-]+/, "").trim();
+  let preview = sanitized;
+  // Strip a leading title duplication only when it sits on the very first
+  // line — preserves intentional repetition deeper in the body.
+  if (normalizedTitle) {
+    const firstLine = preview.split("\n", 1)[0];
+    if (firstLine.toLowerCase().startsWith(normalizedTitle.toLowerCase())) {
+      const stripped = firstLine.slice(normalizedTitle.length).replace(/^[\s:：-]+/, "");
+      preview = (stripped + preview.slice(firstLine.length)).replace(/^\s+/, "");
+    }
   }
-  if (!preview) return "";
-  if (preview.length <= limit) return preview;
-  return `${preview.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
+  return preview;
 }
+
 
 async function writeClipboard(text: string): Promise<boolean> {
   if (!text) return false;
@@ -98,11 +116,27 @@ export function CardHeader(props: {
     isStageCard(props.node) &&
     typeof props.node.time === "number" &&
     props.node.time > 0;
+  const collapsedActive = () =>
+    !props.expanded && isStageCard(props.node) && props.node.kind !== "tool";
   const collapsedPreview = () =>
-    !props.expanded && isStageCard(props.node) && props.node.kind !== "tool"
-      ? collapsedPreviewText(collectCardText(props.node), props.node.title)
+    collapsedActive()
+      ? collapsedPreviewText(collectLatestActivityText(props.node), props.node.title)
       : "";
-  const hasSecondaryText = () => !!props.node.subtitle || !!collapsedPreview();
+  const todoSummary = () => (collapsedActive() ? collectTodoSummary(props.node) : null);
+  const todoProgressPct = () => {
+    const s = todoSummary();
+    if (!s || s.total === 0) return 0;
+    return Math.round((s.completed / s.total) * 100);
+  };
+  const activityCounts = () => (collapsedActive() ? collectActivityCounts(props.node) : null);
+  const hasAnyActivity = () => {
+    const a = activityCounts();
+    return !!a && (a.messages + a.tools + a.agents + a.skills) > 0;
+  };
+  // Drives `card__head--with-meta` (flex-start vs center). Only true when
+  // we render a row BELOW the title row — subtitle is inline, so it does
+  // not count toward "needs vertical alignment to top".
+  const hasSecondaryText = () => !!collapsedPreview() || !!todoSummary();
   const stepRevisionLabel = () =>
     props.node.kind === "step"
       ? goalRevisionLabel(props.node.round, props.node.attempt)
@@ -170,24 +204,82 @@ export function CardHeader(props: {
       </Show>
       <div class="card__main">
         <div class="card__title-row">
-          <span class="card__title">{t(props.node.title)}</span>
           <Show when={stepRevisionLabel()} fallback={
             <Show when={(props.node.round ?? 0) > 0}>
-              <span class="card__round">#{props.node.round}</span>
+              <span class="card__round card__round--lead">#{props.node.round}</span>
             </Show>
           }>
-            <span class="card__round">{stepRevisionLabel()}</span>
+            <span class="card__round card__round--lead">{stepRevisionLabel()}</span>
+          </Show>
+          <span class="card__title">{t(props.node.title)}</span>
+          <Show when={props.node.subtitle}>
+            <span class="card__subtitle" title={props.node.subtitle}>{props.node.subtitle}</span>
+          </Show>
+          <span class="card__title-spacer" aria-hidden="true" />
+          <Show when={hasAnyActivity()}>
+            {(_) => {
+              const c = () => activityCounts()!;
+              return (
+                <div
+                  class="card__activity-stats"
+                  title={`messages ${c().messages} · tools ${c().tools} · agents ${c().agents} · skills ${c().skills}`}
+                >
+                  <Show when={c().messages > 0}>
+                    <span class="card__stat" data-kind="messages" title={`${c().messages} messages`}>
+                      <span class="card__stat-icon" aria-hidden="true">{"💬"}</span>
+                      <span class="card__stat-value">{c().messages}</span>
+                    </span>
+                  </Show>
+                  <Show when={c().tools > 0}>
+                    <span class="card__stat" data-kind="tools" title={`${c().tools} tool calls`}>
+                      <span class="card__stat-icon" aria-hidden="true">{"🛠"}</span>
+                      <span class="card__stat-value">{c().tools}</span>
+                    </span>
+                  </Show>
+                  <Show when={c().agents > 0}>
+                    <span class="card__stat" data-kind="agents" title={`${c().agents} agent spawns`}>
+                      <span class="card__stat-icon" aria-hidden="true">{"🤖"}</span>
+                      <span class="card__stat-value">{c().agents}</span>
+                    </span>
+                  </Show>
+                  <Show when={c().skills > 0}>
+                    <span class="card__stat" data-kind="skills" title={`${c().skills} skill invocations`}>
+                      <span class="card__stat-icon" aria-hidden="true">{"🎯"}</span>
+                      <span class="card__stat-value">{c().skills}</span>
+                    </span>
+                  </Show>
+                </div>
+              );
+            }}
           </Show>
         </div>
-        <Show when={hasSecondaryText()}>
-          <div class="card__meta-row">
-            <Show when={props.node.subtitle}>
-              <span class="card__subtitle" title={props.node.subtitle}>{props.node.subtitle}</span>
-            </Show>
-            <Show when={collapsedPreview()}>
-              <span class="card__collapsed-preview" title={collapsedPreview()}>{collapsedPreview()}</span>
-            </Show>
+        <Show when={collapsedPreview()}>
+          <div class="card__preview-row">
+            <span class="card__collapsed-preview" title={collapsedPreview()}>{collapsedPreview()}</span>
           </div>
+        </Show>
+        <Show when={todoSummary()}>
+          {(summary) => (
+            <div
+              class="card__todo-summary"
+              title={`${summary().completed}/${summary().total} done${summary().current ? ` · ${summary().current}` : ""}`}
+            >
+              <span
+                class="card__todo-progress"
+                role="progressbar"
+                aria-valuenow={summary().completed}
+                aria-valuemin={0}
+                aria-valuemax={summary().total}
+                style={{ "--pct": `${todoProgressPct()}%` }}
+              />
+              <span class="card__todo-count">
+                {summary().completed}/{summary().total}
+              </span>
+              <Show when={summary().current}>
+                <span class="card__todo-current">{summary().current}</span>
+              </Show>
+            </div>
+          )}
         </Show>
       </div>
       <div class="card__actions">

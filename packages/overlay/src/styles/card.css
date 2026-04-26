@@ -189,16 +189,23 @@ body[data-theme="light"] .card[data-depth="0"] {
   gap: 2px;
 }
 
-.card__title-row,
-.card__meta-row {
+.card__title-row {
   min-width: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: calc(8px * var(--ui-scale, 1));
+  flex-wrap: nowrap;
 }
 
-.card__meta-row {
-  font-size: var(--card-sub-size);
+.card__title-spacer {
+  flex: 1 1 auto;
+  min-width: 12px;
+}
+
+.card__preview-row {
+  min-width: 0;
+  display: flex;
+  margin-top: 3px;
 }
 
 .card__actions {
@@ -244,27 +251,62 @@ body[data-theme="light"] .card[data-depth="0"] {
 body[data-theme="light"] .card__round {
   background: rgba(0, 0, 0, 0.06);
 }
+/* Goal index badge — pushed to the LEFT of the title so #G1V1 reads
+ * before the goal name. Slightly stronger contrast than the normal
+ * round chip because it acts as the goal's primary identifier. */
+.card__round--lead {
+  margin-right: 4px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--card-stage, var(--text)) 90%, var(--text));
+  background: color-mix(in srgb, var(--card-stage, var(--text-muted)) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--card-stage, var(--text-muted)) 28%, transparent);
+}
 
 .card__subtitle {
-  flex: 0 1 34%;
+  /* Now lives INLINE in the title row (not on its own meta row). Use a
+   * flexible width so a long subtitle doesn't shove the activity stats
+   * off-screen on narrow cards — title gets first dibs, subtitle ellipses. */
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 50%;
   font-size: var(--card-sub-size);
   color: color-mix(in srgb, var(--text-soft) 92%, var(--text-muted));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 400;
+  position: relative;
+  padding-left: 10px;
+  margin-left: 2px;
+}
+.card__subtitle::before {
+  content: "·";
+  position: absolute;
+  left: 2px;
+  color: color-mix(in srgb, var(--text-muted) 60%, transparent);
 }
 
 .card__collapsed-preview {
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
   font-size: var(--card-sub-size);
-  color: color-mix(in srgb, var(--text-muted) 88%, transparent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--text-muted) 92%, transparent);
   font-weight: 400;
+  /* Up to 10 lines, preserving newlines from the original message — no
+   * ellipsis-padding for short messages, no truncation in the middle of
+   * a thought. CSS handles overflow via -webkit-line-clamp. */
+  display: -webkit-box;
+  -webkit-line-clamp: 10;
+  line-clamp: 10;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  word-break: break-word;
+  border-left: 2px solid color-mix(in srgb, var(--card-stage, var(--text-muted)) 35%, transparent);
+  padding-left: 8px;
 }
 
 .card__chevron {
@@ -273,6 +315,114 @@ body[data-theme="light"] .card__round {
   color: var(--text-muted);
   transition: transform 140ms ease;
   padding-left: 2px;
+}
+
+/* Collapsed-only todo summary — bottom row under the preview line.
+ * Only emitted when the card subtree contains a TodoWrite tool call, so
+ * cards without a plan stay compact. Progress bar stretches to fill the
+ * row so wide cards aren't dominated by 56px of bar in 1000px of space. */
+.card__todo-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  min-width: 0;
+  font-size: var(--card-sub-size);
+  color: color-mix(in srgb, var(--text-muted) 90%, transparent);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.card__todo-progress {
+  flex: 1 1 auto;
+  min-width: 60px;
+  max-width: 240px;
+  position: relative;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 20%, transparent);
+  overflow: hidden;
+}
+.card__todo-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--pct, 0%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-soft) 70%, transparent),
+    color-mix(in srgb, var(--text) 75%, transparent)
+  );
+  border-radius: inherit;
+  transition: width 200ms ease;
+}
+
+.card__todo-count {
+  flex: 0 0 auto;
+  font-size: calc(var(--card-sub-size) - 1px);
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.card__todo-current {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--text-soft) 80%, var(--text-muted));
+}
+
+/* Activity stat pills — sit INLINE in the title row, pushed to the right
+ * by .card__title-spacer. Compact monochrome pills so the title remains
+ * the dominant element. Per-kind subtle accent via data-kind. */
+.card__activity-stats {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(var(--card-sub-size) - 1px);
+  color: color-mix(in srgb, var(--text-muted) 92%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.card__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+  line-height: 1.1;
+}
+.card__stat[data-kind="messages"] {
+  background: color-mix(in srgb, #6aa9ff 14%, transparent);
+  border-color: color-mix(in srgb, #6aa9ff 22%, transparent);
+}
+.card__stat[data-kind="tools"] {
+  background: color-mix(in srgb, #ffb966 14%, transparent);
+  border-color: color-mix(in srgb, #ffb966 22%, transparent);
+}
+.card__stat[data-kind="agents"] {
+  background: color-mix(in srgb, #c2a8ff 14%, transparent);
+  border-color: color-mix(in srgb, #c2a8ff 24%, transparent);
+}
+.card__stat[data-kind="skills"] {
+  background: color-mix(in srgb, #6ee7b7 14%, transparent);
+  border-color: color-mix(in srgb, #6ee7b7 24%, transparent);
+}
+
+.card__stat-icon {
+  font-size: calc(var(--card-sub-size) - 1px);
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.card__stat-value {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
 .card__copy {
