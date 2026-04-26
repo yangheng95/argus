@@ -7,7 +7,7 @@ import { Message } from "@/session/message"
 import { Log } from "@/util/log"
 import { Database, eq } from "@/storage/db"
 import { MessageTable, type SessionKind } from "@/session/session.sql"
-import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParentID } from "./task-event"
+import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParentID } from "../task-event"
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let initialized = false
@@ -97,17 +97,6 @@ export function overlayMeta(
     )
   }
   if (role === "user") {
-    // Non-root sessions only receive user-role messages that the engine
-    // synthesizes as a dispatch brief for the sub-agent — goal contract +
-    // architect consensus + intent-bundle pointer (goal/runner.ts), planner
-    // / build scaffolding, retry feedback, delivery seed prompts. The
-    // orchestrator is the author, not the human. Resolve role to
-    // "orchestrator" so the overlay renders the same full-featured card
-    // styling it already uses on the root main channel, while keeping
-    // channel=session.kind so the card still groups under the sub-agent's
-    // phase/stage. Previously this returned resolvedRole="user" which
-    // presented an orchestrator-authored briefing as if a human had typed
-    // it, producing the unreadable wall of small text in phase cards.
     return { resolvedRole: "orchestrator", channel: kind }
   }
   return { resolvedRole: kind, channel: kind }
@@ -126,10 +115,6 @@ function sessionFromProperties(properties: Record<string, unknown>) {
   return ""
 }
 
-// Cache message-level info (role) so part/delta events can resolve metadata
-// without hitting SQLite on the hot path. This is only a fast path:
-// `saveMessage -> updatePart -> updateMessage` legitimately emits part events
-// before message.updated, so cache misses must fall back to the persisted row.
 const messageRoleCache = new Map<string, string>()
 
 function rememberMessageRole(messageID: string, role: string) {
@@ -218,10 +203,6 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
       ...(parentSessionID ? { parentSessionID } : {}),
     }
   }
-  // Part events do not carry `info`. Stamp channel/goalID/parentSessionID
-  // onto `part` itself so the overlay's handlePartUpdated can build the
-  // correctly-staged card on the first event — no stub/backfill dance.
-  // The top-level copies below remain for non-info/non-part event shapes.
   if (enriched.part && typeof enriched.part === "object") {
     enriched.part = {
       ...(enriched.part as any),
@@ -246,21 +227,11 @@ async function bridgeEvent<Definition extends typeof Message.Event[keyof typeof 
   const sessionID = sessionFromProperties(properties)
   if (!sessionID) return
   const taskID = taskIDForSession(sessionID)
-  if (!taskID) {
-    // Standalone sessions (MCP / Debug / Coding / Panel / generic Session.create)
-    // legitimately don't belong to any task. They still emit message events
-    // to the general Bus for their own UIs; the task-scoped protocol_event
-    // store just doesn't persist them. This is by design — not a bug.
-    return
-  }
+  if (!taskID) return
   let enriched: Record<string, unknown>
   try {
     enriched = enrichProperties(properties, sessionID, taskID)
   } catch (err) {
-    // overlayMeta's invariants (kind present, no assistant on root, etc.)
-    // guard the overlay's rendering contract. A violation is a data-model
-    // bug, but we must not crash the Bus subscriber — that would take down
-    // every other task's SSE with one broken row. Loud log + skip.
     log.error("bridge: enrichment failed — dropping event", {
       type: def.type,
       sessionID,
@@ -311,6 +282,29 @@ function bridgeDelta(properties: Record<string, unknown>) {
   })
 }
 
+// Cross-Instance event types and their handlers (registry replaces the prior
+// if-chain on event type — additions don't require touching dispatch logic).
+const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) => Promise<void> | void> = {
+  [Message.Event.Updated.type]: async (props) => {
+    cacheMessageInfo(props)
+    await bridgeEvent(Message.Event.Updated, props)
+  },
+  [Message.Event.PartUpdated.type]: async (props) => {
+    await bridgeEvent(Message.Event.PartUpdated, props)
+  },
+  [Message.Event.Removed.type]: async (props) => {
+    await bridgeEvent(Message.Event.Removed, props)
+  },
+  [Message.Event.PartRemoved.type]: async (props) => {
+    await bridgeEvent(Message.Event.PartRemoved, props)
+  },
+  [Message.Event.PartDelta.type]: (props) => {
+    bridgeDelta(props)
+  },
+}
+
+const MESSAGE_TYPES = new Set(Object.keys(CROSS_INSTANCE_HANDLERS))
+
 export function ensureTaskMessageProtocolBridge() {
   if (initialized) return
   initialized = true
@@ -337,42 +331,20 @@ export function ensureTaskMessageProtocolBridge() {
   // Bus.publish() never reaches the main Instance's subscribers. GlobalBus
   // sees all Instances; we re-execute inside the host Instance context so
   // Database / ProtocolStore use the main DB, not the worktree's.
-  const MESSAGE_TYPES = new Set([
-    Message.Event.Updated.type,
-    Message.Event.PartUpdated.type,
-    Message.Event.Removed.type,
-    Message.Event.PartRemoved.type,
-    Message.Event.PartDelta.type,
-  ])
   GlobalBus.on("event", (envelope) => {
     if (!envelope.payload || !MESSAGE_TYPES.has(envelope.payload.type)) return
     if (envelope.directory === hostDirectory) return
     const props = envelope.payload.properties
     if (!props) return
+    const handler = CROSS_INSTANCE_HANDLERS[envelope.payload.type]
+    if (!handler) return
     void enqueueBridgeWork(async () => {
-      await Instance.provide({ directory: hostDirectory, fn: async () => {
-        const type = envelope.payload.type
-        if (type === Message.Event.Updated.type) {
-          cacheMessageInfo(props)
-          await bridgeEvent(Message.Event.Updated, props)
-          return
-        }
-        if (type === Message.Event.PartUpdated.type) {
-          await bridgeEvent(Message.Event.PartUpdated, props)
-          return
-        }
-        if (type === Message.Event.Removed.type) {
-          await bridgeEvent(Message.Event.Removed, props)
-          return
-        }
-        if (type === Message.Event.PartRemoved.type) {
-          await bridgeEvent(Message.Event.PartRemoved, props)
-          return
-        }
-        if (type === Message.Event.PartDelta.type) {
-          await bridgeDelta(props)
-        }
-      }})
+      await Instance.provide({
+        directory: hostDirectory,
+        fn: async () => {
+          await handler(props)
+        },
+      })
     }).catch((err) => {
       log.error("bridge: cross-instance relay failed", {
         type: envelope.payload?.type,

@@ -39,8 +39,8 @@ import { Session } from "@/session"
 import { Message } from "@/session/message"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { sessionGoalID, taskSession } from "./task-event"
-import { ensureTaskMessageProtocolBridge, overlayMeta } from "./task-message-protocol-bridge"
+import { sessionGoalID, taskSession } from "@/orchestrator/task-event"
+import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
 
 const ReorderTaskQueueInput = z.object({
   directory: z.string().min(1),
