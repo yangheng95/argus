@@ -1059,7 +1059,7 @@ body[data-theme="light"] .card__round {
 }
 
 
-/* ── AgentTrace surface (🔍 button + inline TracePanel + panel-level bar) ── */
+/* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
 
 .card__trace {
   flex: none;
@@ -1126,7 +1126,8 @@ body[data-theme="light"] .card__round {
   gap: 4px;
 }
 .trace-panel-refresh,
-.trace-panel-close {
+.trace-panel-close,
+.trace-panel-copy {
   border: 0;
   background: transparent;
   color: var(--text-muted);
@@ -1137,9 +1138,20 @@ body[data-theme="light"] .card__round {
   line-height: 1;
 }
 .trace-panel-refresh:hover,
-.trace-panel-close:hover {
+.trace-panel-close:hover,
+.trace-panel-copy:hover:not([disabled]) {
   color: var(--text-strong);
   background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+}
+.trace-panel-copy[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.trace-panel-copy[data-state="ok"] {
+  color: var(--accent-positive, #6ec46e);
+}
+.trace-panel-copy[data-state="err"] {
+  color: var(--accent-negative, #d05c5c);
 }
 .trace-panel-empty {
   padding: 12px 14px;
@@ -1220,37 +1232,6 @@ body[data-theme="light"] .card__round {
   background: rgba(255, 255, 255, 0.02);
   max-height: 360px;
   overflow-y: auto;
-}
-
-/* Panel-level "Show all session trace" bar at the top of the conversation. */
-.conversation-trace-bar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.04));
-}
-.conversation-trace-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
-}
-.conversation-trace-toggle:hover {
-  color: var(--accent-info, #6cb6ff);
-  background: var(--surface-hover, rgba(255, 255, 255, 0.04));
-  border-color: var(--border, rgba(255, 255, 255, 0.08));
-}
-.conversation-trace-toggle--open {
-  color: var(--accent-info, #6cb6ff);
-  border-color: var(--border, rgba(255, 255, 255, 0.12));
-  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
 }
 
 /* ==========================================================================
@@ -1473,26 +1454,7 @@ body[data-theme="light"] .card__round {
 }
 
 .interaction-card__custom-input,
-.trace-panel,
-.conversation-trace-toggle {
+.trace-panel {
   border-radius: calc(6px * var(--ui-scale, 1)) !important;
   box-shadow: none !important;
-}
-
-.conversation-trace-bar {
-  padding: calc(6px * var(--ui-scale, 1)) calc(4px * var(--ui-scale, 1));
-  border-bottom: 0;
-}
-
-.conversation-trace-toggle {
-  border-color: var(--card-border);
-  background: var(--surface-inset);
-  color: var(--text-soft);
-}
-
-.conversation-trace-toggle:hover,
-.conversation-trace-toggle--open {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
-  background: var(--accent-dim);
 }
