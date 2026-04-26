@@ -598,6 +598,7 @@ async function runWithExternalProvider(args: {
   const prompt = promptText
   const events: CodingEventInfo[] = []
   let toolUseCount = 0
+  let textCharCount = 0
   let doneOutput: string | undefined
   let errored: string | undefined
 
@@ -641,6 +642,7 @@ async function runWithExternalProvider(args: {
           if (activeReasoning) await flushReasoning(true)
           if (!activeText) activeText = { id: Identifier.ascending("part"), buf: "" }
           activeText.buf += event.text
+          textCharCount += event.text.length
           await flushText(false)
           break
         }
@@ -756,6 +758,7 @@ async function runWithExternalProvider(args: {
         status: "failed" as const,
         commit_ref: "",
         summary: `external executor ${args.executor} reported error: ${errored}`,
+        patch_summary: "",
         tests: [],
         error: errored,
       },
@@ -772,7 +775,8 @@ async function runWithExternalProvider(args: {
         commit_ref: "",
         summary:
           doneOutput?.trim() ||
-          `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textBuf.length} chars)`,
+          `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
+        patch_summary: "",
         tests: [],
       },
     }
@@ -794,6 +798,7 @@ async function runWithExternalProvider(args: {
           status: "failed" as const,
           commit_ref: "",
           summary: `merge_back conflict on ${args.worktreeBranch} → ${data.primaryBranch}`,
+          patch_summary: "",
           tests: [],
           error: `Rebase aborted: conflict paths ${data.conflictPaths.join(", ")}`,
         },
@@ -805,6 +810,7 @@ async function runWithExternalProvider(args: {
         status: "failed" as const,
         commit_ref: "",
         summary: `merge_back error on ${args.worktreeBranch}`,
+        patch_summary: "",
         tests: [],
         error: err instanceof Error ? err.message : String(err),
       },
@@ -818,7 +824,8 @@ async function runWithExternalProvider(args: {
       commit_ref: mergedHead.slice(0, 12),
       summary:
         doneOutput?.trim() ||
-        `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textBuf.length} chars)`,
+        `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textCharCount} chars)`,
+      patch_summary: "",
       tests: [],
     },
     mergedHead,
