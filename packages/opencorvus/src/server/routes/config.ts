@@ -97,7 +97,7 @@ export const ConfigRoutes = lazy(() =>
             description: "Prompt catalog entries",
             content: {
               "application/json": {
-                schema: resolver(z.array(z.any())),
+                schema: resolver(z.array(z.unknown())),
               },
             },
           },

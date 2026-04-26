@@ -38,7 +38,7 @@ export function CodingRoutes() {
             description: "Streaming coding assistant events",
             content: {
               "text/event-stream": {
-                schema: resolver(z.any()),
+                schema: resolver(z.unknown()),
               },
             },
           },
@@ -175,7 +175,7 @@ export function CodingRoutes() {
             description: "Session messages",
             content: {
               "application/json": {
-                schema: resolver(z.any()),
+                schema: resolver(z.unknown()),
               },
             },
           },

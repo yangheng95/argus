@@ -21,8 +21,8 @@ function executorModel(id: string) {
 const ExecutorToolInfo = z.object({
   name: z.string(),
   description: z.string(),
-  inputSchema: z.record(z.string(), z.any()).optional(),
-  metadata: z.record(z.string(), z.any()).optional(),
+  inputSchema: z.record(z.string(), z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
 const ExecutorInfo = z.object({
@@ -34,7 +34,7 @@ const ExecutorInfo = z.object({
   protocol: z.string(),
   protocolVersion: z.string(),
   transport: z.enum(["inproc", "stdio", "ws", "http"]),
-  features: z.record(z.string(), z.any()),
+  features: z.record(z.string(), z.unknown()),
   tools: ExecutorToolInfo.array(),
   detail: z.string(),
   version: z.string().optional(),

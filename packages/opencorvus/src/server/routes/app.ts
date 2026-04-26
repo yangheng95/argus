@@ -275,7 +275,7 @@ export function AppRoutes(root: Hono) {
           level: z.enum(["debug", "info", "error", "warn"]).meta({ description: "Log level" }),
           message: z.string().meta({ description: "Log message" }),
           extra: z
-            .record(z.string(), z.any())
+            .record(z.string(), z.unknown())
             .optional()
             .meta({ description: "Additional metadata for the log entry" }),
         }),
