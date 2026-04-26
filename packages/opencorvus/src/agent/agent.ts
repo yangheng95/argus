@@ -105,6 +105,8 @@ export namespace Agent {
       webpage_extract: "allow",
       webpage_compile: "allow",
       webpage_analyze: "allow",
+      webpage_image_extract: "allow",
+      webpage_image_compile: "allow",
       webpage_render: "allow",
       webpage_evaluate: "allow",
       webpage_text_diff: "allow",

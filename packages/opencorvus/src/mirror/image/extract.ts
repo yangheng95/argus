@@ -1,0 +1,236 @@
+/**
+ * Image → `ImageAnalysis` — vision-LLM structural inference.
+ *
+ * Image2code analogue of `mirror/url/extract.ts` (puppeteer DOM extraction)
+ * and `mirror/figma/fetch-tree.ts` (REST API fetch). Pure function + Zod
+ * boundary; no filesystem I/O beyond reading the input image bytes (caller
+ * may pass either a path or a pre-loaded Buffer).
+ *
+ * Adaptations vs `opencode-private/packages/mirror/src/service/image-extract.ts`:
+ *   - Streams via AI SDK `streamObject` instead of `trackedChatCompletion`
+ *     (rule 27: streaming-only LLM calls). The SDK's structured-output
+ *     channel enforces the schema, so no `extractFencedCode` / `parseJSON` /
+ *     `validateAnalysis` defensive parsing.
+ *   - Throws `ImageExtractError` (typed) instead of generic Error (rule 1).
+ *   - Multi-image merge folds into one `ImageAnalysis` exactly as upstream
+ *     did — palettes union, fonts deduped, trees stacked under per-image
+ *     wrapper containers so spatial ordering survives.
+ *   - No retry loop. The caller (skill / orchestrator) decides retry policy.
+ *     Burying retries here would mask real model misconfigurations (wrong
+ *     model id, no vision capability, payload too large).
+ */
+
+import { readFile } from "node:fs/promises"
+import path from "node:path"
+import { extname } from "node:path"
+
+import { streamObject, type LanguageModel, type ModelMessage } from "ai"
+
+import { Log } from "@/util/log"
+import { ImageExtractError } from "../errors"
+import {
+  ImageAnalysisSchema,
+  type ImageAnalysis,
+  type ImageElement,
+} from "../ir/image-analysis"
+import { imageExtractMessages } from "./prompt"
+
+const log = Log.create({ service: "mirror.image.extract" })
+
+const MIME_BY_EXT: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+}
+
+export interface ImageExtractInputImage {
+  /** Filesystem path (read inline) or pre-loaded bytes. Path is resolved
+   *  against `worktree` if set. */
+  path?: string
+  data?: Buffer | Uint8Array
+  /** Required when `data` is supplied (no extension to infer from). */
+  mediaType?: string
+}
+
+export interface ImageExtractInput {
+  /** One or more reference screenshots. When multiple are supplied each is
+   *  analyzed independently and the results merged (palette / fonts unioned,
+   *  trees stacked under per-image wrapper containers in input order). */
+  images: ImageExtractInputImage[]
+  /** Vision-capable language model (caller resolves `Provider.getLanguage`). */
+  model: LanguageModel
+  /** Optional contextual hint (e.g. "homepage of e-commerce site"). */
+  pageHint?: string
+  /** Optional UI library name surfaced to the model so it can tag matched
+   *  components via `componentHint`. */
+  componentLibrary?: string
+  /** Sandboxes filesystem reads to this directory. When set, every input
+   *  `path` must resolve inside it. */
+  worktree?: string
+  signal?: AbortSignal
+  onProgress?: (msg: string) => void
+}
+
+/** Atomic vision-LLM extraction. Returns a single merged `ImageAnalysis`. */
+export async function extractImage(input: ImageExtractInput): Promise<ImageAnalysis> {
+  if (input.images.length === 0) {
+    throw new ImageExtractError({ reason: "no images supplied" })
+  }
+
+  const loaded = await Promise.all(
+    input.images.map(async (entry, i) => loadImage(entry, input.worktree, i)),
+  )
+
+  input.onProgress?.(`Analyzing ${loaded.length} image(s) with vision model`)
+
+  const analyses = await Promise.all(
+    loaded.map(async (img, i) => {
+      const { system, messages } = imageExtractMessages({
+        images: [{ data: img.data, mediaType: img.mediaType }],
+        pageHint: input.pageHint,
+        componentLibrary: input.componentLibrary,
+      })
+
+      let analysis: ImageAnalysis | undefined
+      try {
+        const result = streamObject({
+          model: input.model,
+          schema: ImageAnalysisSchema,
+          system,
+          messages: messages as unknown as ModelMessage[],
+          abortSignal: input.signal,
+        })
+        // Drain the partial-object stream — required to surface validation
+        // failures and to materialise the final value.
+        for await (const _ of result.partialObjectStream) { void _ }
+        analysis = (await result.object) as ImageAnalysis
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        log.error("image extract: vision-LLM call failed", {
+          imagePath: img.label,
+          reason,
+        })
+        throw new ImageExtractError({
+          reason: `vision-LLM call failed for image ${i + 1}/${loaded.length}: ${reason}`,
+          imagePath: img.label,
+          cause: reason,
+        })
+      }
+
+      input.onProgress?.(`Analyzed image ${i + 1}/${loaded.length}`)
+      return analysis
+    }),
+  )
+
+  return mergeAnalyses(analyses)
+}
+
+interface LoadedImage {
+  data: Buffer
+  mediaType: string
+  label: string
+}
+
+async function loadImage(
+  entry: ImageExtractInputImage,
+  worktree: string | undefined,
+  index: number,
+): Promise<LoadedImage> {
+  if (entry.data) {
+    if (!entry.mediaType) {
+      throw new ImageExtractError({
+        reason: `image ${index + 1}: mediaType is required when supplying raw bytes`,
+      })
+    }
+    return {
+      data: entry.data instanceof Buffer ? entry.data : Buffer.from(entry.data),
+      mediaType: entry.mediaType,
+      label: `<bytes #${index + 1}>`,
+    }
+  }
+  if (!entry.path) {
+    throw new ImageExtractError({
+      reason: `image ${index + 1}: must supply either path or data`,
+    })
+  }
+
+  const abs = worktree ? path.resolve(worktree, entry.path) : path.resolve(entry.path)
+  if (worktree) {
+    const root = path.resolve(worktree) + path.sep
+    if (!(abs + path.sep).startsWith(root)) {
+      throw new ImageExtractError({
+        reason: `image path escapes worktree: ${entry.path}`,
+        imagePath: entry.path,
+      })
+    }
+  }
+
+  const ext = extname(abs).toLowerCase()
+  const mediaType = entry.mediaType ?? MIME_BY_EXT[ext]
+  if (!mediaType) {
+    throw new ImageExtractError({
+      reason: `unsupported image extension "${ext}" (path: ${abs})`,
+      imagePath: entry.path,
+    })
+  }
+
+  let bytes: Buffer
+  try {
+    bytes = await readFile(abs)
+  } catch (err) {
+    throw new ImageExtractError({
+      reason: `cannot read image at ${abs}: ${err instanceof Error ? err.message : String(err)}`,
+      imagePath: entry.path,
+    })
+  }
+
+  return { data: bytes, mediaType, label: abs }
+}
+
+/** Merge per-image analyses into a single `ImageAnalysis`. Single-image
+ *  inputs short-circuit to identity. */
+function mergeAnalyses(analyses: ImageAnalysis[]): ImageAnalysis {
+  if (analyses.length === 1) return analyses[0]
+
+  const merged: ImageAnalysis = {
+    description: analyses
+      .map((a, i) => `[Image ${i + 1}] ${a.description}`)
+      .join(" | "),
+    viewport: analyses[0].viewport,
+    tokens: { colors: {}, fonts: [], textStyles: [] },
+    tree: [],
+    confidence: 0,
+  }
+
+  const fontSet = new Set<string>()
+  let totalConfidence = 0
+
+  for (let i = 0; i < analyses.length; i++) {
+    const a = analyses[i]
+    Object.assign(merged.tokens.colors, a.tokens.colors)
+    for (const f of a.tokens.fonts) fontSet.add(f)
+    merged.tokens.textStyles.push(...a.tokens.textStyles)
+
+    if (a.tree.length === 1) {
+      const root = a.tree[0]
+      merged.tree.push({ ...root, name: root.name || `image-${i + 1}-section` })
+    } else {
+      const wrapper: ImageElement = {
+        name: `image-${i + 1}-section`,
+        role: "section",
+        bounds: { x: 0, y: 0, w: a.viewport.width, h: a.viewport.height },
+        layout: { direction: "vertical" },
+        children: a.tree,
+      }
+      merged.tree.push(wrapper)
+    }
+    totalConfidence += a.confidence
+  }
+
+  merged.tokens.fonts = [...fontSet]
+  merged.confidence = totalConfidence / analyses.length
+  return merged
+}

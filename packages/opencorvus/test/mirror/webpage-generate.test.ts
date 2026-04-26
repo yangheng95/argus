@@ -25,7 +25,10 @@ describe("webpage-generate dependency guards", () => {
     expect(parsed.content).toContain("vanilla CSS")
     expect(parsed.content).toContain(":root")
     expect(parsed.content).toContain("Steps 1–3 are **strictly serial**")
-    expect(parsed.content).toMatch(/hand-write|Hand-write|HAND-WRITE/)
+    // Skill must say the LLM writes the page itself (no magic compile tool).
+    // Phrasing was refactored from "hand-write" to the tech-stack-neutral
+    // "you implement" / "you implement the page" — same invariant.
+    expect(parsed.content).toMatch(/you implement (the )?page/i)
     expect(parsed.content).not.toMatch(/Tailwind CDN|cdn\.tailwindcss\.com/)
     expect(parsed.content).not.toContain("`webpage_compile_html`")
   })

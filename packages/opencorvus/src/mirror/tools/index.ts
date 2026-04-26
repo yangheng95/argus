@@ -3,23 +3,31 @@
  * in `src/mirror/`. Registered in `src/tool/registry.ts`.
  *
  * Exposed tools:
- *   - webpage_extract       URL → ExtractedPage + reference screenshot
- *   - webpage_compile       ExtractedPage → XML IR (compact prompt-friendly)
- *   - webpage_analyze       ExtractedPage → ProjectScaffold + pre-generated files
- *   - webpage_render        index.html → PNG screenshot
- *   - webpage_evaluate      (reference, rendered) → score + diff PNG
- *   - webpage_text_diff     reference DOM vs rendered DOM → missing tokens
- *   - webpage_vision_judge  (reference, rendered) → vision-LLM verdict + ranked diffs
+ *   - webpage_extract         URL → ExtractedPage + reference screenshot
+ *   - webpage_compile         ExtractedPage → XML IR (compact prompt-friendly)
+ *   - webpage_analyze         ExtractedPage → ProjectScaffold + pre-generated files
+ *   - webpage_image_extract   Image(s) → ImageAnalysis (vision-LLM)
+ *   - webpage_image_compile   ImageAnalysis → XML IR (same dialect as URL flow)
+ *   - webpage_render          index.html → PNG screenshot
+ *   - webpage_evaluate        (reference, rendered) → score + diff PNG
+ *   - webpage_text_diff       reference DOM vs rendered DOM → missing tokens
+ *   - webpage_vision_judge    (reference, rendered) → vision-LLM verdict + ranked diffs
  *
- * A skill (\`src/skill/builtin/webpage-generate.md\`) composes them for the
- * agent; no tool calls another tool internally. The deliverable `index.html`
- * is hand-written by the LLM using vanilla CSS — see `src/mirror/url/prompt.ts`
- * for the single-source prompt contract shared with benchmark scripts.
+ * Two skills compose them for the build agent:
+ *   - \`src/skill/builtin/webpage-generate.md\`  URL → clone (DOM extract path)
+ *   - \`src/skill/builtin/image-generate.md\`    Image → clone (vision-extract path)
+ *
+ * No tool calls another tool internally. The deliverable is hand-written by
+ * the LLM using whatever stack the brief calls for — see
+ * \`src/mirror/url/prompt.ts\` (URL) and \`src/mirror/image/prompt.ts\`
+ * (image) for the single-source extract prompts.
  */
 
 export { WebpageExtractTool } from "./webpage-extract"
 export { WebpageCompileTool } from "./webpage-compile"
 export { WebpageAnalyzeTool } from "./webpage-analyze"
+export { WebpageImageExtractTool } from "./webpage-image-extract"
+export { WebpageImageCompileTool } from "./webpage-image-compile"
 export { WebpageRenderTool } from "./webpage-render"
 export { WebpageEvaluateTool } from "./webpage-evaluate"
 export { WebpageTextDiffTool } from "./webpage-text-diff"
