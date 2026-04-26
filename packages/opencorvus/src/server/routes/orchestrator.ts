@@ -32,6 +32,7 @@ import {
   UpdateGoalInput,
 } from "@/engine/model"
 import { taskRewindCursor } from "@/engine/rewind"
+import { TaskQueueReorderError } from "@/engine/queue"
 import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
 import { Session } from "@/session"
@@ -40,6 +41,18 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { sessionGoalID, taskSession } from "./task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "./task-message-protocol-bridge"
+
+const ReorderTaskQueueInput = z.object({
+  directory: z.string().min(1),
+  orderedTaskIDs: z.array(z.string()).default([]),
+  revision: z.string().optional(),
+})
+
+const ReorderTaskQueueResult = z.object({
+  directory: z.string(),
+  revision: z.string(),
+  queuedTaskIDs: z.array(z.string()),
+})
 
 export const EngineRoutes = lazy(() =>
   new Hono()
@@ -146,6 +159,36 @@ export const EngineRoutes = lazy(() =>
           limit: query.limit,
           cursor: query.cursor,
         }))
+      },
+    )
+    .patch(
+      "/task-queue/reorder",
+      describeRoute({
+        summary: "Reorder queued tasks in a directory",
+        operationId: "task.queue.reorder",
+        responses: {
+          200: {
+            description: "Updated directory queue order",
+            content: {
+              "application/json": {
+                schema: resolver(ReorderTaskQueueResult),
+              },
+            },
+          },
+          409: { description: "Queue revision conflict" },
+          422: { description: "Invalid queued task ordering" },
+        },
+      }),
+      validator("json", ReorderTaskQueueInput),
+      async (c) => {
+        try {
+          return c.json(await EngineService.reorderTaskQueue(c.req.valid("json")))
+        } catch (error) {
+          if (error instanceof TaskQueueReorderError) {
+            throw new HTTPException(error.code === "conflict" ? 409 : 422, { message: error.message })
+          }
+          throw error
+        }
       },
     )
     .get(
@@ -867,10 +910,10 @@ export const EngineRoutes = lazy(() =>
         operationId: "goalRun.delivery",
         responses: {
           200: {
-            description: "Goal-run delivery",
+            description: "Goal-run delivery, or null when the goal_run exists but has not produced a delivery yet (in-flight build).",
             content: {
               "application/json": {
-                schema: resolver(Delivery),
+                schema: resolver(Delivery.nullable()),
               },
             },
           },
