@@ -43,6 +43,7 @@ import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
+import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import type { FileDiff } from "@/snapshot/types"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -243,7 +244,7 @@ export namespace BuildAgent {
         request_text: input.task.request ?? "",
       }
 
-      const buildPromptText = () => buildUserPrompt(input.target, input.context)
+      const buildPromptText = () => buildUserPrompt(input.target, input.context, { cwd: worktreeDir ?? Instance.directory })
       // Forward task.attachments (user's reference image, e.g. ainvest.png) as
       // multimodal user-message parts so the build LLM physically sees what to
       // clone — text design_specs alone don't carry pixel-level layout/colour
@@ -1068,9 +1069,24 @@ function buildSessionTitle(target: BuildTarget): string {
   return `Build: ${snippet}${target.text.length > 60 ? "…" : ""}`
 }
 
-function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
+function buildUserPrompt(
+  target: BuildTarget,
+  context: BuildAgent.BuildContext | undefined,
+  opts: { cwd: string },
+): string {
+  // Mirror toolchain teaching is shared across all sub-agents that may
+  // touch URL/visual-clone work. The build agent is the one actually
+  // performing the clone, so it MUST see the pipeline steering — without
+  // this section the LLM falls back to webfetch and never invokes
+  // webpage_extract / compile / analyze / render / evaluate. Cache scan
+  // uses the worktree cwd so prior captures (from architect's reconnaissance
+  // or a previous build retry) are surfaced as "do not re-extract".
+  const mirrorSection = buildMirrorToolsPromptSection({ cwd: opts.cwd })
+
   if (target.kind === "goal") {
     const lines: string[] = []
+    lines.push(mirrorSection)
+    lines.push("")
 
     // ── Upstream context (rule 23): the goal contract is a compressed view;
     //    the build agent benefits from the original Requirements list and
@@ -1174,6 +1190,8 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     return lines.join("\n")
   }
   return [
+    mirrorSection,
+    "",
     "# Request",
     "",
     target.text,
