@@ -1,6 +1,6 @@
 import { OpencodeExecutor } from "./opencode"
 import { ManagedCodingExecutor } from "./managed"
-import type { CodingProvider, CodingToolInfo, ExecutorAdapter, ExecutorNameInfo } from "./contract"
+import type { CodingProvider, CodingProviderOptions, ExecutorAdapter, ExecutorNameInfo } from "./contract"
 import { ExecutorNotConfiguredError } from "./contract"
 
 const base = () =>
@@ -12,7 +12,7 @@ const state = {
   items: base(),
 }
 
-const providerRegistry = new Map<string, { provider: CodingProvider; options: Record<string, any> }>()
+const providerRegistry = new Map<string, { provider: CodingProvider; options: CodingProviderOptions }>()
 
 export namespace ExecutorRegistry {
   function get(name: ExecutorNameInfo): ExecutorAdapter | undefined {
@@ -37,13 +37,7 @@ export namespace ExecutorRegistry {
   export function registerCoding(
     name: Exclude<ExecutorNameInfo, "opencode">,
     provider: CodingProvider,
-    options: {
-      model?: string | (() => string | undefined)
-      cwd?: string | (() => string | undefined)
-      system?: string | (() => string | undefined)
-      maxTurns?: number | (() => number | undefined)
-      tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
-    },
+    options: CodingProviderOptions,
   ) {
     // Store provider + options so createInstance() can spawn fresh adapters
     providerRegistry.set(name, { provider, options })
@@ -62,16 +56,12 @@ export namespace ExecutorRegistry {
   }
 
   /**
-   * Returns the raw `CodingProvider` for an external executor (claude-code,
-   * codex). Throws ExecutorNotConfiguredError if the executor was not
-   * registered via `registerCoding`. The "opencode" executor is NOT a
-   * CodingProvider — it routes through the in-process SessionPrompt path,
-   * which BuildAgent invokes via `runAgentSession` directly.
-   *
-   * Used by BuildAgent to dispatch goal work to the external coding agent
-   * (claude-code SDK / codex CLI) instead of running the in-process LLM.
+   * Returns the registered CodingProvider together with the dynamic options
+   * that feed model/system/maxTurns/tools into provider.run(). Direct callers
+   * such as BuildAgent must use this rather than the provider alone; otherwise
+   * the external executor loses its OpenCorvus tool surface.
    */
-  export function getCodingProvider(name: Exclude<ExecutorNameInfo, "opencode">): CodingProvider {
+  export function requireCoding(name: Exclude<ExecutorNameInfo, "opencode">) {
     const entry = providerRegistry.get(name)
     if (!entry) {
       throw new ExecutorNotConfiguredError({
@@ -79,11 +69,12 @@ export namespace ExecutorRegistry {
         message: `coding provider not registered: ${name}`,
       })
     }
-    return entry.provider
+    return entry
   }
 
   export function reset() {
     state.items = base()
+    providerRegistry.clear()
   }
 
   export function has(name: ExecutorNameInfo) {

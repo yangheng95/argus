@@ -898,7 +898,7 @@ try {
         budget: {
           maxRuns,
           maxFixRuns,
-          ...(maxExecutorGroups != null && maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
+          ...(maxExecutorGroups != null ? { maxExecutorGroups } : {}),
         },
         ...(DELIVERY_VERIFY_CMD || figmaUrl
           ? {
@@ -953,7 +953,7 @@ try {
         budget: {
           maxRuns,
           maxFixRuns,
-          ...(maxExecutorGroups != null && maxExecutorGroups > 1 ? { maxExecutorGroups } : {}),
+          ...(maxExecutorGroups != null ? { maxExecutorGroups } : {}),
         },
       }),
     }).catch(() => undefined)

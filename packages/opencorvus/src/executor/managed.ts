@@ -3,7 +3,7 @@ import { Snapshot } from "@/snapshot"
 import { Log } from "@/util/log"
 import { createEventQueue, type EventQueue } from "@/util/event-queue"
 import { EngineConfig } from "@/engine/config"
-import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./contract"
+import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingProviderOptions, type ExecutorStatusInfo } from "./contract"
 import type { ExecutorAdapter } from "./contract"
 
 const log = Log.create({ service: "managed-executor" })
@@ -35,13 +35,7 @@ type State = {
 export const ManagedCodingExecutor = {
   create(
     provider: CodingProvider,
-    options: {
-      model?: string | (() => string | undefined)
-      cwd?: string | (() => string | undefined)
-      system?: string | (() => string | undefined)
-      maxTurns?: number | (() => number | undefined)
-      tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
-    },
+    options: CodingProviderOptions,
   ): ExecutorAdapter {
     const tasks = new Map<string, State>()
     const latest = new Map<string, string>()

@@ -59,6 +59,21 @@ describe("claude agent sdk options", () => {
     expect(options?.permissionMode).toBe("plan")
     expect(options?.allowDangerouslySkipPermissions).toBe(false)
     expect(options?.allowedTools).toEqual([])
+    expect(options?.mcpServers).toBeUndefined()
+  })
+
+  test("exposes OpenCorvus MCP server to Claude SDK runs", async () => {
+    const cwd = "D:\\repo\\worktree"
+
+    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "build", cwd }))
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    const servers = options?.mcpServers as Record<string, { command?: string; args?: string[] }> | undefined
+    expect(servers?.opencorvus?.command).toBe(process.execPath)
+    expect(servers?.opencorvus?.args).toContain("mcp")
+    expect(servers?.opencorvus?.args).toContain("serve")
+    expect(servers?.opencorvus?.args).toContain("--cwd")
+    expect(servers?.opencorvus?.args).toContain(cwd)
   })
 })
 

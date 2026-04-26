@@ -3,6 +3,7 @@ import { query, type ElicitationRequest, type ElicitationResult, type Permission
 import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
 import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
+import { MCPServe } from "@/mcp/serve"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
@@ -20,6 +21,7 @@ export type ClaudeAgentClient = {
     sessionID?: string
     toolMode?: z.infer<typeof CodingRunInput>["toolMode"]
     sandbox?: z.infer<typeof CodingRunInput>["sandbox"]
+    mcpServers?: Record<string, { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }>
     signal?: AbortSignal
     onApproval?(input: {
       id: string
@@ -133,6 +135,7 @@ export namespace ClaudeAgentExecutor {
             allowDangerouslySkipPermissions: mode === "bypassPermissions",
             effort: effort(),
             maxBudgetUsd: maxBudget(),
+            mcpServers: input.toolMode === "none" ? undefined : opencorvusMcpServers(input.cwd),
             allowedTools: allowed,
             disallowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS),
             abortController: abortController(input.signal),
@@ -200,6 +203,18 @@ export namespace ClaudeAgentExecutor {
         }
       },
     })
+  }
+}
+
+function opencorvusMcpServers(cwd?: string) {
+  const mcp = MCPServe.command(cwd ?? process.cwd())
+  return {
+    [mcp.name]: {
+      type: "stdio" as const,
+      command: mcp.command,
+      args: mcp.args,
+      env: mcp.env,
+    },
   }
 }
 
