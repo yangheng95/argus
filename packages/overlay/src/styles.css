@@ -3759,9 +3759,16 @@ code .file-link:hover {
 
 /* Tool calls — compact inline */
 .msg-tool {
+  /* Two-row chip: row 1 = icon + name + status (always visible at a
+   * glance), row 2 = detail (file path / command / query) wrapping to
+   * full width. The previous single-row layout forced detail into a
+   * horizontal-scroll on the SAME line as the name, which buried any
+   * path > ~40 chars and made multi-line scripts unreadable. */
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--ui-gap-md);
+  gap: var(--ui-gap-md) var(--ui-gap-md);
+  row-gap: 4px;
   position: relative;
   padding: calc(var(--ui-input-padding-y) + 1px) var(--ui-input-padding-x)
     calc(var(--ui-input-padding-y) + 1px) calc(var(--ui-input-padding-x) + 12px);
@@ -3797,10 +3804,16 @@ code .file-link:hover {
   background: color-mix(in srgb, var(--bad) 82%, transparent);
 }
 
+/* Visual order on the chip:
+ *   row 1 → icon (0) · name (1) · spacer · status (2)
+ *   row 2 → detail (3, flex-basis 100%)
+ * DOM order is icon → name → detail → status, so we use flex `order` to
+ * keep status next to the name and push detail to its own row. */
 .tool-icon {
   flex-shrink: 0;
   font-size: var(--ui-font-body);
   line-height: 1;
+  order: 0;
 }
 
 .tool-name {
@@ -3809,31 +3822,31 @@ code .file-link:hover {
   font-family: var(--mono);
   font-size: var(--ui-font-control);
   flex-shrink: 0;
+  order: 1;
 }
 
 .tool-detail {
-  color: var(--text-soft);
-  flex: 1;
+  /* Full-width second row — wraps naturally, no horizontal scroll. */
+  flex: 0 0 100%;
+  order: 3;
   min-width: 0;
+  color: var(--text-soft);
   display: block;
-  overflow-x: auto;
-  overflow-y: hidden;
-  text-overflow: clip;
-  white-space: nowrap;
-  word-break: normal;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   font-family: var(--mono);
   font-size: var(--ui-font-control);
-  line-height: 1.4;
-  scrollbar-width: none;
-}
-
-.tool-detail::-webkit-scrollbar {
-  display: none;
+  line-height: 1.45;
+  margin-left: calc(var(--ui-font-body) + var(--ui-gap-md));
 }
 
 .tool-status {
   flex-shrink: 0;
   margin-left: auto;
+  /* Pin status pill to row 1 so it sits next to the tool name regardless
+   * of whether detail wrapped to row 2. */
+  order: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
