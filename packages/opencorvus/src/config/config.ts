@@ -1163,6 +1163,14 @@ export namespace Config {
             .min(0)
             .optional()
             .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
+          threshold: z
+            .number()
+            .min(0.1)
+            .max(1)
+            .optional()
+            .describe(
+              "Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.",
+            ),
         })
         .optional(),
       assistant: z

@@ -30,6 +30,7 @@ export namespace SessionCompaction {
   }
 
   const COMPACTION_BUFFER = 20_000
+  const COMPACTION_THRESHOLD_DEFAULT = 0.7
 
   export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
@@ -46,7 +47,14 @@ export namespace SessionCompaction {
     const usable = input.model.limit.input
       ? input.model.limit.input - reserved
       : context - ProviderTransform.maxOutputTokens(input.model)
-    return count >= usable
+
+    // Trigger compaction once a fraction of the usable window is consumed
+    // — leaves room for the assistant's next reply instead of waiting until
+    // the context is literally full (which would force a mid-turn overflow).
+    // Default 0.7 = compact at 70% utilization. Operators can override via
+    // `config.compaction.threshold` in opencorvus.jsonc.
+    const threshold = config.compaction?.threshold ?? COMPACTION_THRESHOLD_DEFAULT
+    return count >= usable * threshold
   }
 
   export const PRUNE_MINIMUM = 20_000
