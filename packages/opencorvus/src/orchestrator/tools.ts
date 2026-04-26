@@ -2330,37 +2330,12 @@ export function createOrchestratorTools(input: {
       execute: async () => {
         const task = requireTask(taskID)
 
-        // Goal-completeness gate: refuse deliver when any registered goal is
-        // still in `pending` or `running` (i.e. not terminal). Without this,
-        // the orchestrator LLM can call `deliver` mid-build, which aggregates
-        // zero per-goal diffs (no goal_run_attempt → no delivery row → empty
-        // worktree to verify). The visual hard gate then immediately rejects
-        // an empty page, wasting a 2-3 minute delivery cycle. This is a
-        // contract check on the deliver tool's input, not a state machine —
-        // the LLM decides whether to wait, retry the goal, or fail_task; the
-        // tool just refuses to ship something it can't possibly ship.
-        const _goalsForGate = listGoals(taskID)
-        if (_goalsForGate.length > 0) {
-          const { goalStatusByID } = await import("@/engine/describe")
-          const blockers = _goalsForGate
-            .map((g) => ({ id: g.id, title: g.title, status: goalStatusByID(g.id) }))
-            .filter((g) => g.status === "pending" || g.status === "running")
-          if (blockers.length > 0) {
-            const summary = blockers.map((b) => `${b.id}=${b.status}`).join(", ")
-            return (
-              `deliver: cannot ship — ${blockers.length} goal(s) not yet terminal: ${summary}. ` +
-              `Wait for them to reach passed/failed (or call retry_task / fail_task / modify_goal). ` +
-              `Delivering now would aggregate zero per-goal diffs and hit the visual hard gate on an empty worktree.`
-            )
-          }
-        }
-
-        // Stateless / unconditional deliver (rule 23) past the gate: every
-        // task ends through this agent regardless of *which* terminal verdict
-        // its goals reached. If no coordinator run exists yet (direct path,
-        // or every goal failed/skipped) we lazy-bootstrap one when goals are
-        // present; otherwise proceed with a null run id and let the delivery
-        // agent decide on the available state.
+        // Stateless / unconditional deliver (rule 23): every task ends through
+        // this agent regardless of upstream state. No "execute goals first"
+        // gate. If no coordinator run exists yet (e.g. direct request-only
+        // path, or LLM chose to deliver before any build) we lazy-bootstrap
+        // one when there are goals to anchor it; otherwise we proceed with a
+        // null run id and let the delivery agent decide on the available state.
         let activeRun = findActiveRunForTask(task.id)
         if (!activeRun && listGoals(taskID).length > 0) {
           const ensured = await ensureDispatchableRunForSingleGoal()
