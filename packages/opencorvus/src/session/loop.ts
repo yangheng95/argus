@@ -584,25 +584,41 @@ export namespace SessionLoop {
     const toolCount = Object.keys(tools).length
     let userMsgCount = 0
     let assistantMsgCount = 0
-    let totalContentChars = 0
     let imageCount = 0
     let toolCallCount = 0
 
     for (const msg of modelMessages) {
       if (msg.role === "user") userMsgCount++
       if (msg.role === "assistant") assistantMsgCount++
-
-      if (typeof msg.content === "string") {
-        totalContentChars += msg.content.length
-      } else if (Array.isArray(msg.content)) {
+      if (Array.isArray(msg.content)) {
         for (const part of msg.content) {
-          if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
           if ("type" in part && part.type === "image") imageCount++
-          if ("type" in part && part.type === "tool-result") toolCallCount++
+          if ("type" in part && (part.type === "tool-call" || part.type === "tool-result")) toolCallCount++
         }
       }
     }
 
+    // Estimate the size of the actual outgoing prompt by serialising the
+    // entire `modelMessages` array — same approach as opencode upstream's
+    // `SessionCompaction.estimate`. The earlier inline walker only summed
+    // `part.text.length` and skipped tool-call args + tool-result outputs,
+    // which dominates an autonomous tool-heavy agent's prompt body. The
+    // resulting 10-20× under-count kept the predictive compaction
+    // threshold (`0.9 * usableBudget`) unreachable even when the real
+    // prompt crossed the provider's input cap, and the provider rejected
+    // with HTTP 400 (`Range of input length should be [1, 258048]`).
+    // Serialising the whole array counts text, tool-call args, tool-result
+    // output, image placeholders, role markers — every byte the provider
+    // will see. Single source of truth for token-budget tracking
+    // (CLAUDE.md rule 22), no double estimator path (rule 4 root cause:
+    // measure what we actually send, not a partial sample).
+    let promptJsonLength: number
+    try {
+      promptJsonLength = JSON.stringify(modelMessages).length
+    } catch {
+      promptJsonLength = 0
+    }
+    const totalContentChars = promptJsonLength
     const contentTokensEst = Math.round(totalContentChars / 4)
     const imageTokensEst = imageCount * 1600
     const totalTokensEst = systemTokensEst + contentTokensEst + imageTokensEst
