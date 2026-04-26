@@ -497,6 +497,24 @@ export namespace EngineService {
         attachmentRefs.push({ ...ref, intent, source: "user-upload" })
       }
     }
+    // Materialize the intent bundle on disk BEFORE the queue picks the task
+    // up, so when the orchestrator / planner / architect wake their stage
+    // prompts (which reference `.opencorvus/intent/request.md`) resolve to
+    // a real file. Without this, architect-generated goal objectives like
+    // "see .opencorvus/intent/request.md §3" point at nothing — the
+    // executor either misses the reference or hallucinates a body. See
+    // `src/intent/bundle.ts` header for the full rationale.
+    const { IntentBundle } = await import("@/intent/bundle")
+    await IntentBundle.write({
+      projectID: Instance.project.id,
+      taskID,
+      request: input.request,
+      attachments: attachmentRefs.length ? attachmentRefs : undefined,
+      source: input.source,
+      kind: input.kind,
+      createdAt: now,
+    })
+
     // Async pipeline: persist task immediately, run stages in background
     try {
       persistQueuedTask({
