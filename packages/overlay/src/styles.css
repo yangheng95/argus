@@ -3866,7 +3866,11 @@ code .file-link:hover {
   word-break: break-word;
   overflow-x: auto;
 }
-/* Streaming tool input — shows partial JSON as LLM generates it */
+/* Streaming tool input — shows partial JSON as LLM generates it.
+ * No height clamp: this only renders inside an EXPANDED card body, which
+ * the operator has explicitly opened. Truncating here forced a nested
+ * scroll on top of the page scroll — the "high-not-成-low-not-就" pattern
+ * that buried the bottom of any input over ~12 lines. */
 .msg-tool-input {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
   padding: calc(6px * var(--ui-scale)) var(--ui-input-padding-x);
@@ -3879,9 +3883,6 @@ code .file-link:hover {
   color: var(--text-muted);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: calc(200px * var(--ui-scale));
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 .msg-tool-error {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
@@ -6200,13 +6201,16 @@ select.field-input option {
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: bold; }
 
-/* ── Tool code block ── */
+/* ── Tool code block ──
+ * No max-height: file content (write/edit/read) renders in full when the
+ * card is expanded. The previous 600px nested scroll forced the operator
+ * to scroll-inside-scroll for any file >~30 lines and routinely hid the
+ * tail of patches. */
 .msg-tool-code {
   margin: 4px 0 2px 0;
 }
 .msg-tool-code pre {
-  max-height: 600px;
-  overflow-y: auto;
+  /* no height clamp — show every line */
 }
 .msg-tool-expand {
   display: block;
