@@ -1064,6 +1064,17 @@ export const EngineRoutes = lazy(() =>
     )
     .patch(
       "/goal/:goalID",
+      describeRoute({
+        summary: "Update goal",
+        operationId: "goal.update",
+        responses: {
+          200: {
+            description: "Goal updated",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
+          ...errors(404),
+        },
+      }),
       validator("param", z.object({ goalID: z.string() })),
       validator("json", UpdateGoalInput),
       async (c) => {
@@ -1072,6 +1083,17 @@ export const EngineRoutes = lazy(() =>
     )
     .delete(
       "/goal/:goalID",
+      describeRoute({
+        summary: "Delete goal",
+        operationId: "goal.delete",
+        responses: {
+          200: {
+            description: "Goal deleted",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
+          ...errors(404),
+        },
+      }),
       validator("param", z.object({ goalID: z.string() })),
       async (c) => {
         return c.json(await EngineService.deleteGoal(c.req.valid("param").goalID))
