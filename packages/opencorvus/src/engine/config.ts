@@ -201,7 +201,7 @@ const DEFAULTS: EngineConfigType = {
   },
   max_runs: 15,            // was 10
   max_fix_runs: 20,
-  max_executor_groups: 3,
+  max_executor_groups: 5,
   default_workflow: "pipeline",
   workflows: [],
 }
