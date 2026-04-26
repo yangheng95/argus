@@ -5,18 +5,9 @@ import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ToolAdapterRegistry, protocolInfo } from "@/executor/protocol"
 import { ExecutorDiscovery } from "@/executor/discovery"
 import { ExecutorRegistry } from "@/executor/registry"
+import { envKeyFor, getModelOverride, setModelOverride } from "@/executor/runtime-env"
 import { NotFoundError } from "../../storage/db"
 import { lazy } from "../../util/lazy"
-
-const EXECUTOR_MODEL_ENV: Record<string, string> = {
-  codex: "OPENCORVUS_EXECUTOR_CODEX_MODEL",
-  "claude-code": "OPENCORVUS_EXECUTOR_CLAUDE_MODEL",
-}
-
-function executorModel(id: string) {
-  const key = EXECUTOR_MODEL_ENV[id]
-  return key ? process.env[key] : undefined
-}
 
 const ExecutorToolInfo = z.object({
   name: z.string(),
@@ -100,7 +91,7 @@ export const ExecutorRoutes = lazy(() => {
           tools: tools.codex,
           detail: found.codex.detail,
           version: found.codex.version,
-          model: executorModel("codex"),
+          model: getModelOverride("codex"),
         },
         {
           id: "claude-code",
@@ -115,7 +106,7 @@ export const ExecutorRoutes = lazy(() => {
           tools: tools.claude,
           detail: found["claude-code"].detail,
           version: found["claude-code"].version,
-          model: executorModel("claude-code"),
+          model: getModelOverride("claude-code"),
         },
       ])
     },
@@ -140,7 +131,7 @@ export const ExecutorRoutes = lazy(() => {
     }),
     async (c) => {
       const executorID = c.req.param("executorID")
-      return c.json({ model: executorModel(executorID) })
+      return c.json({ model: getModelOverride(executorID) })
     },
   )
 
@@ -166,15 +157,12 @@ export const ExecutorRoutes = lazy(() => {
     }),
     async (c) => {
       const executorID = c.req.param("executorID")
-      const envKey = EXECUTOR_MODEL_ENV[executorID]
-      if (!envKey) throw new NotFoundError({ message: `executor does not support model switching: ${executorID}` })
+      if (!envKeyFor(executorID)) {
+        throw new NotFoundError({ message: `executor does not support model switching: ${executorID}` })
+      }
       const body = await c.req.json<{ model?: string }>()
       const model = typeof body?.model === "string" ? body.model.trim() : ""
-      if (model) {
-        process.env[envKey] = model
-      } else {
-        delete process.env[envKey]
-      }
+      setModelOverride(executorID, model || null)
       return c.json({ ok: true })
     },
   )
