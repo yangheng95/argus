@@ -47,6 +47,17 @@ export const AnalyzeError = NamedError.create(
   }),
 )
 
+/** Vision-LLM image analysis failed (model rejected the payload, returned
+ *  malformed JSON, or could not produce a valid `ImageAnalysis`). */
+export const ImageExtractError = NamedError.create(
+  "MirrorImageExtractError",
+  z.object({
+    reason: z.string(),
+    imagePath: z.string().optional(),
+    cause: z.string().optional(),
+  }),
+)
+
 /** Visual render (static server + headless browser) failed. */
 export const RenderError = NamedError.create(
   "MirrorRenderError",

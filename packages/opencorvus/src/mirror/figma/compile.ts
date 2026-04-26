@@ -17,6 +17,11 @@
 
 import { escapeXmlAttr } from "../shared/xml-escape"
 import { estimateTokens } from "../shared/token-estimator"
+import {
+  joinAttrs,
+  compileSizeAttr,
+  compileTextStyle,
+} from "../shared/compile-helpers"
 import type {
   CompressedDesign,
   CompressedNode,
@@ -27,55 +32,6 @@ import { XmlIRSchema, type XmlIR } from "../ir/xml-ir"
 // because downstream tools never vary this. If a future skill needs text
 // truncation it should do so before passing the design in.
 const COMPILE_MAX_TEXT_LEN = Infinity
-
-// ─── ir-utils (folded in) ────────────────────────────────────────────────
-
-interface TextStyleInput {
-  font?: string
-  size?: number
-  weight?: number
-  color?: string
-  lineHeight?: number | string
-  letterSpacing?: number | string
-  align?: string
-  decoration?: string
-  textCase?: string
-}
-
-interface CompileTextStyleOptions {
-  suppressDefaultAlign?: boolean
-  lineHeightUnit?: string
-}
-
-function joinAttrs(...parts: string[]): string {
-  return parts.filter(Boolean).join(" ")
-}
-
-function compileSizeAttr(bounds: { w: number; h: number } | undefined): string {
-  if (!bounds) return ""
-  return `size="${bounds.w}x${bounds.h}"`
-}
-
-function compileTextStyle(input: TextStyleInput, options?: CompileTextStyleOptions): string {
-  const parts: string[] = []
-  if (input.font) parts.push(input.font)
-  if (input.size) parts.push(`${input.size}px`)
-  if (input.weight) parts.push(String(input.weight))
-  if (input.color) parts.push(input.color)
-  if (input.lineHeight !== undefined) {
-    const unit = options?.lineHeightUnit ?? ""
-    parts.push(`lh:${input.lineHeight}${unit}`)
-  }
-  if (input.letterSpacing) parts.push(`ls:${input.letterSpacing}`)
-  if (input.align) {
-    if (!(options?.suppressDefaultAlign && input.align === "left")) {
-      parts.push(`align:${input.align}`)
-    }
-  }
-  if (input.decoration) parts.push(`decoration:${input.decoration}`)
-  if (input.textCase) parts.push(`case:${input.textCase}`)
-  return parts.join(" ")
-}
 
 // ─── Name sanitisation ───────────────────────────────────────────────────
 

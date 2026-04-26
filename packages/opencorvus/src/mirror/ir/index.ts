@@ -7,5 +7,6 @@
  */
 export * from "./compressed-design"
 export * from "./extracted-page"
+export * from "./image-analysis"
 export * from "./xml-ir"
 export * from "./scaffold"
