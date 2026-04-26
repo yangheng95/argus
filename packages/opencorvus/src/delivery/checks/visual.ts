@@ -125,22 +125,26 @@ async function findProjectRoot(startDir: string): Promise<string | undefined> {
 }
 
 /**
- * Prefer a project-owned server script (`server`, `start`, `preview`) over
- * the fallback static server when the delivered app ships both a frontend
- * and a backend — typically an Express server that serves the built dist
+ * Prefer a project-owned launch script (`server`, `start`, `preview`, `dev`)
+ * over the static-file fallback when the delivered app ships both a frontend
+ * and a backend — typically an Express/Hono server that serves the built dist
  * AND answers `/api/*` fetches. Static-only serving leaves the frontend
  * stuck on loading states (bench7 rendered a sidebar but "Loading usage
  * data…" froze the main panel).
  *
  * Resolution order mirrors "what a user would actually run to preview":
- *   1. `server` — convention in the benchmark task PRDs for an Express
- *      backend that also hosts the built SPA.
- *   2. `start` — the traditional Node/Express entry.
- *   3. `preview` — Vite's own "serve built output" script; reasonable when
- *      the app is frontend-only.
- * `dev` is intentionally excluded: HMR servers have unpredictable readiness
- * signals and occasionally re-render between the initial paint and a stable
- * frame, which would make SSIM non-deterministic.
+ *   1. `server` — convention in benchmark PRDs for a backend that also hosts
+ *      the built SPA on a single port.
+ *   2. `start` — traditional Node entry that boots the production server.
+ *   3. `preview` — Vite's "serve built output" script when the app is
+ *      frontend-only AND a `bun run build` has produced `dist/`.
+ *   4. `dev` — last-resort full-stack runner. Most full-stack benchmark
+ *      deliverables (vite frontend on :3000 + backend on :3001 with a
+ *      vite proxy) only declare `dev` because that's the script a developer
+ *      runs. The earlier exclusion was rooted in SSIM determinism concerns
+ *      that no longer apply: the delivery agent now scores via vision
+ *      comparison (renderPage) rather than pixel-perfect SSIM, so HMR
+ *      reflows between paints are tolerable.
  */
 interface ProjectLaunchScript {
   script: string
@@ -155,7 +159,7 @@ async function pickProjectLaunchScript(projectRoot: string): Promise<ProjectLaun
     return undefined
   }
   const scripts = pkg.scripts ?? {}
-  for (const name of ["server", "start", "preview"] as const) {
+  for (const name of ["server", "start", "preview", "dev"] as const) {
     const command = scripts[name]
     if (typeof command === "string" && command.trim().length > 0) {
       return { script: name, command }
@@ -526,7 +530,19 @@ export async function renderPage(opts: {
     // build on first request. Configurable via opts.navigationTimeoutMs so
     // benchmarks with slower runners can override without editing source.
     const navigationTimeoutMs = opts.navigationTimeoutMs ?? 90_000
-    await page.goto(target, { waitUntil: "networkidle0", timeout: navigationTimeoutMs })
+    // `load` (window.onload) instead of `networkidle0`: most benchmark
+    // deliverables run via `bun run dev` where vite keeps an HMR websocket
+    // open indefinitely — networkidle0 would NEVER settle and the entire
+    // navigation budget would expire even when the page rendered fine.
+    // `load` fires when DOM + initial CSS/JS/fonts are loaded, which is
+    // sufficient for a faithful screenshot. The settle wait below covers
+    // React hydration that runs after the load event.
+    await page.goto(target, { waitUntil: "load", timeout: navigationTimeoutMs })
+    // React/Vue/SPA hydration often fires after `load`. Without this delay
+    // the screenshot can capture the un-hydrated shell ("Loading…" / empty
+    // root). 2.5s is a conservative cap — most apps hydrate in <500ms but
+    // a cold first-paint with code-splitting can stretch to 1-2s.
+    await new Promise((r) => setTimeout(r, 2_500))
     await page.screenshot({
       path: renderedPath,
       type: "png",
