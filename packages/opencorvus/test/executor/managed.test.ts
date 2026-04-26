@@ -139,6 +139,32 @@ describe("managed coding executor", () => {
     ]])
   })
 
+  test("registerCoding preserves provider options for direct external dispatch", () => {
+    const provider = CodexExecutor.create({
+      responses: {
+        create() {
+          return feed([])
+        },
+      },
+    })
+    const tools = [
+      { type: "function" as const, name: "shell_command", description: "run shell", inputSchema: { type: "object" } },
+    ]
+
+    ExecutorRegistry.registerCoding("codex", provider, {
+      cwd: "/repo",
+      tools: () => tools,
+    })
+
+    const registration = ExecutorRegistry.requireCoding("codex")
+    expect(registration.provider).toBe(provider)
+    expect(typeof registration.options.tools).toBe("function")
+    expect((registration.options.tools as () => typeof tools)()).toBe(tools)
+
+    ExecutorRegistry.reset()
+    expect(() => ExecutorRegistry.requireCoding("codex")).toThrow()
+  })
+
   test("registerCoding adapts claude provider and supports abort", async () => {
     const stopped: string[] = []
     const provider = ClaudeCodeExecutor.create(() =>

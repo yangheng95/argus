@@ -38,7 +38,7 @@ import { Ownership } from "@/engine/ownership"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { ExecutorRegistry } from "@/executor/registry"
-import { record, structuredInput, type CodingEventInfo } from "@/executor/contract"
+import { record, structuredInput, type CodingEventInfo, type CodingProviderOptions } from "@/executor/contract"
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import type { VisualSpec } from "@/design-analyst/types"
@@ -626,7 +626,7 @@ async function runWithExternalProvider(args: {
   buildPromptText: () => string
   signal?: AbortSignal
 }): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
-  const provider = ExecutorRegistry.getCodingProvider(args.executor)
+  const { provider, options } = ExecutorRegistry.requireCoding(args.executor)
 
   const session = await Session.createNext({
     kind: "build",
@@ -749,8 +749,26 @@ async function runWithExternalProvider(args: {
     })
   }
 
+  const configuredTools = resolveCodingOption(options.tools)
+  const runInput = {
+    model: resolveCodingOption(options.model),
+    prompt,
+    cwd: args.worktreeDir,
+    system: resolveCodingOption(options.system),
+    maxTurns: resolveCodingOption(options.maxTurns),
+    tools: configuredTools,
+    signal: args.signal,
+  }
+
+  log.info("build agent (external) provider input ready", {
+    executor: args.executor,
+    taskID: args.taskID,
+    sessionID: session.id,
+    toolCount: configuredTools?.length ?? 0,
+  })
+
   try {
-    for await (const event of provider.run({ prompt, cwd: args.worktreeDir, signal: args.signal })) {
+    for await (const event of provider.run(runInput)) {
       events.push(event)
       switch (event.type) {
         case "text_delta": {
@@ -954,6 +972,11 @@ async function runWithExternalProvider(args: {
     },
     mergedHead,
   }
+}
+
+function resolveCodingOption<T>(input: CodingProviderOptions[keyof CodingProviderOptions] | undefined): T | undefined {
+  if (typeof input === "function") return (input as () => T | undefined)()
+  return input as T | undefined
 }
 
 // ---------------------------------------------------------------------------

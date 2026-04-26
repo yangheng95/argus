@@ -47,6 +47,14 @@ export const CodingResumeInput = CodingRunInput.extend({
 export type CodingRunInfo = z.infer<typeof CodingRunInput> & { signal?: AbortSignal }
 export type CodingResumeInfo = z.infer<typeof CodingResumeInput> & { signal?: AbortSignal }
 
+export type CodingProviderOptions = {
+  model?: string | (() => string | undefined)
+  cwd?: string | (() => string | undefined)
+  system?: string | (() => string | undefined)
+  maxTurns?: number | (() => number | undefined)
+  tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
+}
+
 export const PlanningStage = z.enum(["spec", "plan"])
 export type PlanningStageInfo = z.infer<typeof PlanningStage>
 

@@ -6,56 +6,40 @@
    ───────────────────────────────────────────────────────────── */
 
 :root {
-  --card-gap: calc(10px * var(--ui-scale, 1));
-  --card-radius: calc(12px * var(--ui-scale, 1));
-  --card-pad-x: calc(13px * var(--ui-scale, 1));
-  --card-pad-y: calc(10px * var(--ui-scale, 1));
-  --card-indent: calc(14px * var(--ui-scale, 1));
-  --card-bg-0: rgba(255, 255, 255, 0.038);
-  --card-bg-1: rgba(255, 255, 255, 0.056);
-  --card-bg-hover: rgba(255, 255, 255, 0.072);
-  --card-border: rgba(255, 255, 255, 0.078);
-  --card-border-strong: rgba(255, 255, 255, 0.12);
-  --card-line: rgba(255, 255, 255, 0.14);
-  --card-line-dim: rgba(255, 255, 255, 0.07);
+  --card-gap: calc(8px * var(--ui-scale, 1));
+  --card-radius: calc(8px * var(--ui-scale, 1));
+  --card-pad-x: calc(11px * var(--ui-scale, 1));
+  --card-pad-y: calc(8px * var(--ui-scale, 1));
+  --card-indent: calc(12px * var(--ui-scale, 1));
+  --card-bg-0: var(--surface-inset, rgba(255, 255, 255, 0.04));
+  --card-bg-1: var(--surface, rgba(255, 255, 255, 0.06));
+  --card-bg-hover: var(--surface-hover, rgba(255, 255, 255, 0.08));
+  --card-border: var(--border, rgba(255, 255, 255, 0.1));
+  --card-border-strong: var(--border-strong, rgba(255, 255, 255, 0.16));
+  --card-line: color-mix(in srgb, var(--accent, #64b9a6) 44%, transparent);
+  --card-line-dim: var(--border, rgba(255, 255, 255, 0.08));
+  --card-title-size: var(--ui-font-body, 12px);
+  --card-sub-size: var(--ui-font-control, 11px);
+  --card-meta-size: var(--ui-font-meta, 11px);
 
-  --card-title-size: clamp(12px, calc(12.5px * var(--ui-scale, 1)), 14px);
-  --card-sub-size: clamp(11px, calc(11px * var(--ui-scale, 1)), 12px);
-  --card-meta-size: clamp(10px, calc(10px * var(--ui-scale, 1)), 11px);
+  --card-stage-user: var(--accent, #64b9a6);
+  --card-stage-assistant: #7aa7c7;
+  --card-stage-orchestrator: #ad99d4;
+  --card-stage-spec: #78b9cf;
+  --card-stage-requirements: var(--warn, #c28b55);
+  --card-stage-design-analyst: #c184a7;
+  --card-stage-architect: #a9a0d8;
+  --card-stage-planner: #81adc8;
+  --card-stage-goal: #9ca7d0;
+  --card-stage-executor: #d39a62;
+  --card-stage-build: #d08664;
+  --card-stage-evaluator: #62bca9;
+  --card-stage-delivery: var(--good, #69b578);
+  --card-stage-tool: #8f9b96;
 
-  --card-stage-user: #94a3b8;
-  --card-stage-assistant: #6ea3ff;
-  --card-stage-orchestrator: #9b8cff;
-  --card-stage-spec: #6ec1e4;
-  --card-stage-requirements: #f59e0b;
-  --card-stage-design-analyst: #ec4899;
-  --card-stage-architect: #b584f3;
-  --card-stage-planner: #7dbcff;
-  --card-stage-goal: #a78bfa;
-  --card-stage-executor: #f2994a;
-  --card-stage-build: #e5844d;
-  --card-stage-evaluator: #2dd4bf;
-  --card-stage-delivery: #5fad56;
-  --card-stage-tool: #8b92a0;
-
-  /* System meta-note palette (interactions, compaction summaries, etc.) */
-  --card-system-rail: #d6a84e;
-  --card-system-bg: rgba(214, 168, 78, 0.08);
-  --card-system-border: rgba(214, 168, 78, 0.22);
-}
-
-body[data-theme="light"],
-[data-theme="light"] {
-  --card-bg-0: rgba(0, 0, 0, 0.035);
-  --card-bg-1: rgba(0, 0, 0, 0.05);
-  --card-bg-hover: rgba(0, 0, 0, 0.07);
-  --card-border: rgba(0, 0, 0, 0.1);
-  --card-border-strong: rgba(0, 0, 0, 0.18);
-  --card-line: rgba(0, 0, 0, 0.16);
-  --card-line-dim: rgba(0, 0, 0, 0.09);
-  --card-system-rail: #b4802c;
-  --card-system-bg: rgba(180, 128, 44, 0.07);
-  --card-system-border: rgba(180, 128, 44, 0.2);
+  --card-system-rail: var(--warn, #c28b55);
+  --card-system-bg: var(--warn-dim, rgba(194, 139, 85, 0.14));
+  --card-system-border: color-mix(in srgb, var(--warn, #c28b55) 28%, transparent);
 }
 
 /* ── Container ────────────────────────────────────────────── */
@@ -1267,4 +1251,248 @@ body[data-theme="light"] .card__round {
   color: var(--accent-info, #6cb6ff);
   border-color: var(--border, rgba(255, 255, 255, 0.12));
   background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+}
+
+/* ==========================================================================
+   Overlay Workbench Card Redesign
+   Final card layer: compact timeline rows, explicit status rails, no lifted
+   decorative card stack. Conversation items should scan like an event log.
+   ========================================================================== */
+
+.card {
+  border-radius: var(--card-radius) !important;
+  border: 1px solid var(--card-border) !important;
+  background: var(--card-bg-0) !important;
+  margin: var(--card-gap) 0 !important;
+  box-shadow: none !important;
+  overflow: hidden;
+  transform: none !important;
+}
+
+.card[data-depth="0"] {
+  box-shadow: none !important;
+}
+
+.card[data-depth="0"]:hover {
+  background: var(--card-bg-hover) !important;
+  border-color: var(--card-border-strong) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.card[data-depth="0"][data-kind="agent"],
+.card[data-depth="0"][data-kind="goal"],
+.card[data-depth="0"][data-kind="phase"],
+.card[data-depth="0"][data-kind="step"],
+.card[data-depth="0"][data-kind="tool"] {
+  border-left: 3px solid var(--card-stage, var(--card-line)) !important;
+  background: var(--card-bg-0) !important;
+}
+
+.card:not([data-depth="0"]) {
+  border: 0 !important;
+  border-left: 2px solid var(--card-line-dim) !important;
+  border-radius: 0 !important;
+  margin: calc(6px * var(--ui-scale, 1)) 0 !important;
+  background: transparent !important;
+  opacity: 1 !important;
+}
+
+.card:not([data-depth="0"]):hover {
+  background: transparent !important;
+}
+
+.card__head {
+  min-height: calc(34px * var(--ui-scale, 1)) !important;
+  gap: calc(8px * var(--ui-scale, 1));
+  padding: var(--card-pad-y) var(--card-pad-x) !important;
+  background: transparent !important;
+  border-bottom: 1px solid transparent !important;
+  line-height: 1.35;
+}
+
+.card--expanded > .card__head {
+  border-bottom-color: var(--card-line-dim) !important;
+}
+
+.card__head[role="button"]:hover {
+  background: color-mix(in srgb, var(--card-bg-hover) 68%, transparent) !important;
+}
+
+.card:not([data-depth="0"]) .card__head {
+  min-height: calc(28px * var(--ui-scale, 1)) !important;
+  padding: calc(6px * var(--ui-scale, 1)) calc(9px * var(--ui-scale, 1)) !important;
+}
+
+.card__title-row {
+  gap: calc(7px * var(--ui-scale, 1));
+}
+
+.card__title {
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.card__subtitle {
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+
+.card__round,
+.card__badge,
+.card__stat,
+.card__todo-count,
+.card__token-hint {
+  border-radius: calc(5px * var(--ui-scale, 1)) !important;
+  letter-spacing: 0;
+}
+
+.card__badge {
+  width: calc(18px * var(--ui-scale, 1));
+  height: calc(18px * var(--ui-scale, 1));
+  min-width: calc(18px * var(--ui-scale, 1));
+  padding: 0;
+  border: 1px solid var(--card-border);
+  background: var(--surface, transparent);
+  color: var(--text-muted);
+  box-shadow: none !important;
+}
+
+.card__badge--done {
+  color: var(--good);
+  background: var(--good-dim);
+  border-color: color-mix(in srgb, var(--good) 28%, transparent);
+}
+
+.card__badge--error {
+  color: var(--bad);
+  background: var(--bad-dim);
+  border-color: color-mix(in srgb, var(--bad) 30%, transparent);
+}
+
+.card__badge--running {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+.card__body {
+  padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x) !important;
+  background: transparent;
+  line-height: 1.55;
+}
+
+.card:not([data-depth="0"]) > .card__body {
+  padding: calc(6px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(8px * var(--ui-scale, 1)) calc(12px * var(--ui-scale, 1)) !important;
+}
+
+.card__children {
+  gap: calc(6px * var(--ui-scale, 1));
+  margin-top: calc(8px * var(--ui-scale, 1));
+}
+
+.card__copy,
+.card__rewind,
+.card__trace,
+.card__chevron {
+  border-radius: calc(5px * var(--ui-scale, 1));
+}
+
+.card__copy,
+.card__rewind,
+.card__trace {
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
+  opacity: 0.52;
+}
+
+.card__head:hover .card__copy,
+.card__head:hover .card__rewind,
+.card__head:hover .card__trace,
+.card__copy:focus-visible,
+.card__rewind:focus-visible,
+.card__trace:focus-visible {
+  opacity: 1;
+}
+
+.card__activity-stats {
+  gap: calc(4px * var(--ui-scale, 1));
+}
+
+.card__stat {
+  min-height: calc(18px * var(--ui-scale, 1));
+  padding: 0 calc(5px * var(--ui-scale, 1));
+  background: var(--subtle-2);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.card__collapsed-preview,
+.card__todo-current {
+  color: var(--text-soft);
+}
+
+.card[data-kind="message"] {
+  background: var(--surface-inset) !important;
+  border-color: var(--card-border) !important;
+}
+
+.card[data-kind="message"][data-role="user"] {
+  background: var(--accent-dim) !important;
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent) !important;
+  border-left: 3px solid var(--accent) !important;
+  box-shadow: none !important;
+}
+
+.card[data-kind="message"][data-role="user"] > .card__head .card__title {
+  color: var(--text-strong);
+}
+
+.card[data-kind="message"][data-role="system"] {
+  background: var(--card-system-bg) !important;
+  border-color: var(--card-system-border) !important;
+  border-left: 2px solid var(--card-system-rail) !important;
+}
+
+.card[data-depth="0"][data-kind="message"] > .card__head,
+.card[data-depth="0"][data-kind="message"] > .card__body {
+  border-bottom: 0 !important;
+}
+
+.interaction-card {
+  border-radius: var(--card-radius) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--card-border)) !important;
+  border-left: 3px solid var(--card-stage, var(--accent)) !important;
+  background: var(--surface-inset) !important;
+  box-shadow: none !important;
+  padding: calc(10px * var(--ui-scale, 1)) var(--card-pad-x);
+}
+
+.interaction-card__title {
+  letter-spacing: 0;
+}
+
+.interaction-card__custom-input,
+.trace-panel,
+.conversation-trace-toggle {
+  border-radius: calc(6px * var(--ui-scale, 1)) !important;
+  box-shadow: none !important;
+}
+
+.conversation-trace-bar {
+  padding: calc(6px * var(--ui-scale, 1)) calc(4px * var(--ui-scale, 1));
+  border-bottom: 0;
+}
+
+.conversation-trace-toggle {
+  border-color: var(--card-border);
+  background: var(--surface-inset);
+  color: var(--text-soft);
+}
+
+.conversation-trace-toggle:hover,
+.conversation-trace-toggle--open {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: var(--accent-dim);
 }
