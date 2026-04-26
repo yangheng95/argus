@@ -54,7 +54,7 @@ Do NOT use it when the user provided a live URL — that path goes through `webp
 
 ## Step 1 — Vision-extract the reference
 
-Call `webpage_image_extract` with `images=[<path-to-screenshot>]` (multiple images supported when the user attached several mockups — they merge into one analysis). Defaults are right for most cases.
+Call `webpage_image_extract` with `images=["references/<filename>"]` — the host already staged every user-attached image into your worktree's `references/` subdirectory before you started, so use those worktree-relative paths verbatim. The "Staged Reference Files" section in your user message lists the exact paths to pass; do NOT `cp` or `glob` the files yourself. Multiple images supported when several mockups were attached — they merge into one analysis.
 
 Artifacts land under `mirror/`:
 
