@@ -12,6 +12,7 @@ import {
   interactionToSyntheticMessages,
   partitionInteractions,
 } from "../utils/interaction";
+import { normalizeToolPartRecord } from "../utils/tool";
 
 // ── Types ──
 
@@ -255,8 +256,11 @@ function normalizeLoadedPart(
   messageID: string,
   sessionID: string,
   index: number,
+  previousPart?: Part,
 ): Part {
-  const part: Record<string, any> = record(input) ? { ...input } : { type: "text", text: String(input || "") };
+  const seed: Record<string, any> = record(input) ? { ...input } : { type: "text", text: String(input || "") };
+  const normalized = normalizeToolPartRecord(seed, previousPart);
+  const part: Record<string, any> = record(normalized) ? { ...normalized } : seed;
   const id =
     typeof part.id === "string" && part.id.trim()
       ? part.id.trim()
@@ -287,11 +291,22 @@ function normalizeLoadedMessage(input: any): Message {
     typeof info.sessionID === "string" && info.sessionID.trim()
       ? info.sessionID.trim()
       : "";
-  const parts = Array.isArray(message.parts)
-    ? message.parts.map((part: any, index: number) =>
-        normalizeLoadedPart(part, id, sessionID, index),
-      )
-    : [];
+  const partsSource = Array.isArray(message.parts) ? message.parts : [];
+  const parts: Part[] = [];
+  const partIndex = new Map<string, number>();
+  for (let index = 0; index < partsSource.length; index += 1) {
+    const rawPart = partsSource[index];
+    const rawID = typeof rawPart?.id === "string" && rawPart.id.trim() ? rawPart.id.trim() : "";
+    const previous = rawID ? parts[partIndex.get(rawID) ?? -1] : undefined;
+    const normalizedPart = normalizeLoadedPart(rawPart, id, sessionID, index, previous);
+    const existingIndex = partIndex.get(normalizedPart.id);
+    if (existingIndex !== undefined) {
+      parts[existingIndex] = normalizedPart;
+      continue;
+    }
+    partIndex.set(normalizedPart.id, parts.length);
+    parts.push(normalizedPart);
+  }
   return {
     ...message,
     info: {

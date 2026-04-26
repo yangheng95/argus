@@ -341,6 +341,48 @@ describe("codex app server executor", () => {
     expect(toolResult?.meta?.["item_id"]).toBe("item_write")
   })
 
+  test("keeps completed command execution details on tool results", async () => {
+    const provider = CodexAppServerExecutor.create(client([
+      {
+        type: "notification",
+        method: "item/completed",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          item: {
+            id: "cmd_1",
+            type: "commandExecution",
+            command: "bun test test/executor/codex-app-server.test.ts",
+            output: "ok",
+            status: "completed",
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/completed",
+        params: {
+          threadId: "thr_1",
+          turn: {
+            id: "turn_1",
+            items: [],
+            status: "completed",
+            error: null,
+          },
+        },
+      },
+    ]))
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+
+    expect(toolResult?.id).toBe("cmd_1")
+    expect(toolResult?.name).toBe("Bash")
+    expect(toolResult?.input).toEqual({ command: "bun test test/executor/codex-app-server.test.ts" })
+    expect(toolResult?.output).toBe("ok")
+    expect(toolResult?.meta?.["item_type"]).toBe("commandExecution")
+  })
+
   test("stops streaming once the current turn completes", async () => {
     const provider = CodexAppServerExecutor.create({
       async initialize() {

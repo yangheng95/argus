@@ -5982,9 +5982,13 @@ export type AppSkillsResponses = {
          */
         has_attachment_image?: boolean
         /**
-         * True when the task request text contains an http(s) URL.
+         * True when the task request text contains an http(s) URL — explicitly EXCLUDING figma.com URLs (those drive `request_contains_figma_url`).
          */
         request_contains_url?: boolean
+        /**
+         * True when the task request text contains a figma.com URL (file / design / proto / board path). Mutually exclusive with `request_contains_url` by construction in deriveUrlSignals.
+         */
+        request_contains_figma_url?: boolean
         /**
          * Any of the listed npm/bun scripts exists in the project's package.json.
          */

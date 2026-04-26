@@ -2,7 +2,14 @@
 
 ## 警告
 
-如果开始进行大规模长时间无人值守的自动化重构，必须每个session必须设置一个5分钟的session级cron，循环警告claude code/codex严格遵循claude.md规则，对照文档进行如实实施（在标记中标记已完成部分）。并git push --no-verify上传代码，直到重构结束。重构结束后必须删除cron，不要留下任何无意义的cron。cron的message以[CRON]开头，方便检索和清理。
+如果开始进行大规模长时间无人值守的自动化重构，必须每个session必须设置一个5分钟的session级cron:
+
+- 循环警告claude code/codex严格遵循claude.md规则
+- 对照文档进行如实实施（在标记中标记已完成部分）。
+- 严格根据本规则进行自动化工作，不要等待用户的指令来执行每一步。你必须根据你的专业知识和项目现状，主动执行每一步，直到重构结束。
+- 并git push --no-verify上传代码，直到重构结束。
+- 重构结束后必须删除cron，不要留下任何无意义的cron。
+- 对cron的message回复以[CRON]开头，方便检索和清理。
 
 ## 规则
 

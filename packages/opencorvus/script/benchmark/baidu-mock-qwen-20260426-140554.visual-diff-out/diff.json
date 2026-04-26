@@ -1,0 +1,33 @@
+{
+  "passed": false,
+  "reason": "below_both",
+  "mssim": 0.6869196325256618,
+  "threshold": 0.85,
+  "worstThreshold": 0.55,
+  "distribution": {
+    "min": -0.5775116081371332,
+    "p1": -0.3907921309084116,
+    "p5": -0.11360380049969732,
+    "p25": 0.21958775504200656,
+    "mean": 0.6869196325256618
+  },
+  "gate": {
+    "meanPassed": false,
+    "worstPassed": false
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "rendered": {
+    "path": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\baidu-mock-qwen-20260426-140554.visual-diff-out\\rendered.png",
+    "width": 1440,
+    "height": 900
+  },
+  "reference": {
+    "path": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\assets\\baidu.png",
+    "width": 1440,
+    "height": 900
+  },
+  "ssimPerformanceMs": 308
+}

@@ -39,10 +39,160 @@ function singleLine(value: unknown): string {
     .trim();
 }
 
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
 export function toolNameKey(name: string): string {
   return String(name || "")
     .toLowerCase()
     .replace(/[\s_-]+/g, "");
+}
+
+function normalizeToolPartKind(type: unknown): "tool" | "tool_call" | "tool_result" | null {
+  const key = toolNameKey(typeof type === "string" ? type : "");
+  if (key === "tool" || key === "toolinvocation") return "tool";
+  if (key === "toolcall" || key === "tooluse") return "tool_call";
+  if (key === "toolresult") return "tool_result";
+  return null;
+}
+
+function parseToolInputValue(value: unknown): unknown {
+  if (Array.isArray(value)) return stableClone(value);
+  if (record(value)) return stableClone(value);
+  if (typeof value !== "string") return value;
+
+  const text = value.trim();
+  if (!text) return {};
+  if (
+    (text.startsWith("{") && text.endsWith("}")) ||
+    (text.startsWith("[") && text.endsWith("]"))
+  ) {
+    try {
+      return stableClone(JSON.parse(text));
+    } catch {
+      // fall through to raw command text
+    }
+  }
+  return { raw: value };
+}
+
+function serializeToolField(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value == null) return undefined;
+  if (Array.isArray(value)) {
+    const textItems = value.flatMap((item) => {
+      if (typeof item === "string") return item ? [item] : [];
+      if (!record(item)) return [];
+      const text = firstNonEmptyString((item as any).text, (item as any).content);
+      return text ? [text] : [];
+    });
+    if (textItems.length === value.length && textItems.length > 0) {
+      return textItems.join("\n\n").trim();
+    }
+    return JSON.stringify(stableClone(value), null, 2);
+  }
+  if (record(value)) {
+    const text = firstNonEmptyString((value as any).text, (value as any).content);
+    if (text) return text;
+    return JSON.stringify(stableClone(value), null, 2);
+  }
+  return String(value);
+}
+
+export function normalizeToolPartRecord(part: unknown, previous?: unknown): unknown {
+  if (!record(part)) return part;
+
+  const kind = normalizeToolPartKind((part as any).type);
+  if (!kind) return part;
+
+  const next = part as Record<string, any>;
+  const prev = record(previous) ? (previous as Record<string, any>) : {};
+  const nextState = record(next.state) ? { ...next.state } : {};
+  const prevState = record(prev.state) ? { ...prev.state } : {};
+  const nextMeta = record(next.meta)
+    ? (next.meta as Record<string, any>)
+    : record(next.metadata)
+      ? (next.metadata as Record<string, any>)
+      : {};
+  const prevMeta = record(prev.meta)
+    ? (prev.meta as Record<string, any>)
+    : record(prev.metadata)
+      ? (prev.metadata as Record<string, any>)
+      : {};
+
+  const label =
+    firstNonEmptyString(
+      next.tool,
+      next.toolName,
+      next.name,
+      nextMeta.tool_name,
+      nextMeta.name,
+      prev.tool,
+      prev.toolName,
+      prev.name,
+      prevMeta.tool_name,
+    ) || "tool";
+  const callID = firstNonEmptyString(
+    next.callID,
+    next.toolUseID,
+    next.tool_use_id,
+    nextMeta.call_id,
+    nextMeta.tool_use_id,
+    prev.callID,
+    prev.toolUseID,
+    prev.tool_use_id,
+    typeof next.id === "string" ? next.id : "",
+  );
+
+  const inputCandidate =
+    nextState.input ??
+    next.input ??
+    next.arguments ??
+    next.args ??
+    prevState.input;
+  const outputCandidate =
+    nextState.output ??
+    next.output ??
+    next.content ??
+    next.result ??
+    prevState.output;
+  const errorCandidate =
+    nextState.error ??
+    next.error ??
+    next.stderr ??
+    prevState.error;
+
+  const input = inputCandidate === undefined ? undefined : parseToolInputValue(inputCandidate);
+  const output = outputCandidate === undefined ? undefined : serializeToolField(outputCandidate);
+  const error = errorCandidate === undefined ? undefined : serializeToolField(errorCandidate);
+
+  let status =
+    normalizeToolStatus(nextState.status) ||
+    normalizeToolStatus(next.status) ||
+    normalizeToolStatus(prevState.status);
+  if (!status && kind === "tool_result") status = error ? "error" : "completed";
+  if (!status && kind === "tool" && (output || error)) {
+    status = error ? "error" : "completed";
+  }
+
+  const state: Record<string, unknown> = { ...prevState, ...nextState };
+  if (input !== undefined) state.input = input;
+  if (output !== undefined) state.output = output;
+  if (error !== undefined) state.error = error;
+  if (status) state.status = status;
+
+  return {
+    ...prev,
+    ...next,
+    type: "tool",
+    tool: label,
+    ...(callID ? { callID } : {}),
+    state,
+  };
 }
 
 function toolInputCommand(input: any): string {
@@ -158,6 +308,25 @@ export function displayToolIcon(name: string): string {
   return "\u26A1";
 }
 
+export type ToolDisplayStatus = "pending" | "running" | "completed" | "error";
+
+export interface ToolDisplayModel {
+  icon: string;
+  label: string;
+  detail: string;
+  status?: ToolDisplayStatus;
+  statusLabel: string;
+}
+
+export function normalizeToolStatus(status: unknown): ToolDisplayStatus | undefined {
+  const value = typeof status === "string" ? status.trim().toLowerCase() : "";
+  if (value === "pending") return "pending";
+  if (value === "running") return "running";
+  if (value === "completed") return "completed";
+  if (value === "error" || value === "failed") return "error";
+  return undefined;
+}
+
 // ── Tool detail ──
 
 /** Returns a human-readable detail string for a tool invocation.
@@ -239,6 +408,55 @@ export function displayToolDetail(
   return "";
 }
 
+export function describeToolCall(
+  name: string,
+  input: unknown,
+  state: unknown,
+  base = "",
+): ToolDisplayModel {
+  const label = typeof name === "string" && name.trim() ? name.trim() : "tool";
+  const status = normalizeToolStatus(record(state) ? (state as any).status : undefined);
+  return {
+    icon: displayToolIcon(label),
+    label,
+    detail: displayToolDetail(label, input, state, base),
+    status,
+    statusLabel: status ? toolStatusLabel(status) : "",
+  };
+}
+
+export function describeToolPart(
+  part: unknown,
+  base = "",
+): ToolDisplayModel | null {
+  const normalized = normalizeToolPartRecord(part);
+  if (!record(normalized)) return null;
+  const type = typeof (normalized as any).type === "string" ? (normalized as any).type : "";
+  if (type !== "tool") {
+    return null;
+  }
+
+  const state = record((normalized as any).state) ? (normalized as any).state : {};
+  const name =
+    typeof (normalized as any).tool === "string" && (normalized as any).tool.trim()
+      ? (normalized as any).tool.trim()
+      : typeof (normalized as any).toolName === "string" && (normalized as any).toolName.trim()
+        ? (normalized as any).toolName.trim()
+        : "tool";
+  const input =
+    record(state) && "input" in state
+      ? (state as any).input
+      : "input" in (normalized as any)
+        ? (normalized as any).input
+        : "arguments" in (normalized as any)
+          ? (normalized as any).arguments
+          : "args" in (normalized as any)
+            ? (normalized as any).args
+            : {};
+
+  return describeToolCall(name, input, state, base);
+}
+
 export function displayToolArguments(
   name: string,
   input: unknown,
@@ -253,8 +471,9 @@ export function displayToolArguments(
 // ── Tool status label ──
 
 export function toolStatusLabel(status: string): string {
-  if (status === "completed") return t("task.status.completed");
-  if (status === "running") return t("common.active");
-  if (status === "error") return t("common.error");
+  const normalized = normalizeToolStatus(status);
+  if (normalized === "completed") return t("task.status.completed");
+  if (normalized === "running") return t("common.active");
+  if (normalized === "error") return t("common.error");
   return t("checks.pending");
 }

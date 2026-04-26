@@ -172,6 +172,8 @@ export const CodingEvent = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("tool_result"),
     id: z.string(),
+    name: z.string().optional(),
+    input: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
     output: z.string(),
     meta: Meta.optional(),
   }),
