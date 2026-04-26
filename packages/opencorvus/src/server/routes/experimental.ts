@@ -4,6 +4,7 @@ import z from "zod"
 import { ToolRegistry } from "../../tool/registry"
 import { Worktree } from "../../worktree"
 import { Workspace } from "../../workspace/workspace"
+import { MCP } from "../../mcp"
 import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { TaskPlan } from "../../memory/task-plan"
@@ -13,7 +14,6 @@ import { EventService } from "../../scheduler/event-service"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { ExperimentalSessionResourceRoutes } from "./experimental-session-resource"
 
 // Workspace shape for the workspace sub-tree (mounted at /workspace)
 const WorkspaceRoutes = lazy(() =>
@@ -482,6 +482,22 @@ export const ExperimentalRoutes = lazy(() =>
         return c.json({ content: Scratchpad.get(sessionId) })
       },
     )
-    // === experimental session/resource (kept until P4.5 capability migration is complete) ===
-    .route("/", ExperimentalSessionResourceRoutes()),
+    // === MCP resources ===
+    .get(
+      "/resource",
+      describeRoute({
+        summary: "Get MCP resources",
+        description: "Get all available MCP resources from connected servers. Optionally filter by name.",
+        operationId: "experimental.resource.list",
+        responses: {
+          200: {
+            description: "MCP resources",
+            content: { "application/json": { schema: resolver(z.record(z.string(), MCP.Resource)) } },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(await MCP.resources())
+      },
+    ),
 )
