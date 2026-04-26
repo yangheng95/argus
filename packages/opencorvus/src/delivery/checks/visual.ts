@@ -183,7 +183,7 @@ async function pickProjectLaunchScript(projectRoot: string): Promise<ProjectLaun
 async function startProjectServer(
   projectRoot: string,
   script: ProjectLaunchScript,
-  opts: { timeoutMs?: number; ports?: number[] } = {},
+  opts: { timeoutMs?: number } = {},
 ): Promise<{ url: string; close: () => Promise<void> }> {
   // 90s default: a cold merged worktree often needs `bun install` (20-50s)
   // and/or `vite build` (5-30s) before `bun run server|start|preview` can
@@ -192,7 +192,6 @@ async function startProjectServer(
   // unbuilt index.html, and let puppeteer hang on `networkidle0` for 60s —
   // the user-facing symptom was "Navigation timeout of 60000 ms exceeded".
   const timeoutMs = opts.timeoutMs ?? 90_000
-  const ports = opts.ports ?? [3000, 3001, 3002, 8000, 8080, 5173, 4173, 5000]
   // Run via `bun run`; inherits PATH so npx/vite/tsx on the project lockfile resolve.
   const child: ChildProcess = spawn("bun", ["run", script.script], {
     cwd: projectRoot,
@@ -200,8 +199,29 @@ async function startProjectServer(
     shell: process.platform === "win32",
   })
   const captured: string[] = []
-  child.stdout?.on("data", (chunk: Buffer) => captured.push(chunk.toString("utf8")))
-  child.stderr?.on("data", (chunk: Buffer) => captured.push(chunk.toString("utf8")))
+  // Parse spawned launch script's stdout for the bound URL it advertises
+  // (vite/CRA/Next/Hono all print "Local:   http://localhost:NNNN/" on
+  // startup). Polling a hardcoded port list returned ANY responding port —
+  // including the developer's own dev server on 5173 — and the harness
+  // ended up screenshotting the wrong app entirely (rule 25: no hardcoded
+  // resource lists). Capturing the launch script's own URL announcement
+  // is the only honest way to identify "the port THIS process bound".
+  const URL_PATTERN = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::(\d+))?\/?/i
+  let detectedUrl: string | undefined
+  const onChunk = (chunk: Buffer) => {
+    const text = chunk.toString("utf8")
+    captured.push(text)
+    if (!detectedUrl) {
+      const match = text.match(URL_PATTERN)
+      if (match) {
+        // Normalize 0.0.0.0 → 127.0.0.1 so puppeteer can connect locally.
+        const port = match[1] ?? "80"
+        detectedUrl = `http://127.0.0.1:${port}`
+      }
+    }
+  }
+  child.stdout?.on("data", onChunk)
+  child.stderr?.on("data", onChunk)
   const closed = new Promise<void>((resolve) => child.once("exit", () => resolve()))
 
   const close = async () => {
@@ -229,20 +249,20 @@ async function startProjectServer(
           `project server exited early (code=${child.exitCode}): ${tail || "<no output>"}`,
         )
       }
-      for (const port of ports) {
-        try {
-          const ok = await probeHttp(`http://127.0.0.1:${port}`)
-          if (ok) return { url: `http://127.0.0.1:${port}`, close }
-        } catch {
-          /* try next */
-        }
+      if (detectedUrl) {
+        // URL announced; verify it actually accepts HTTP before returning so
+        // we don't hand puppeteer a port that hasn't bound yet (vite often
+        // prints "Local:" a few hundred ms before the listener is live).
+        const ok = await probeHttp(detectedUrl)
+        if (ok) return { url: detectedUrl, close }
       }
       await new Promise((r) => setTimeout(r, 500))
     }
     const tail = captured.join("").slice(-800)
     throw new Error(
-      `project server did not accept HTTP on ${ports.join("/")} within ${timeoutMs}ms. ` +
-        `Last output: ${tail || "<no output>"}`,
+      detectedUrl
+        ? `project server announced ${detectedUrl} but did not accept HTTP within ${timeoutMs}ms. Last output: ${tail || "<no output>"}`
+        : `project server did not announce a localhost URL on stdout within ${timeoutMs}ms. Last output: ${tail || "<no output>"}`,
     )
   } catch (err) {
     await close()
