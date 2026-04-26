@@ -47,7 +47,7 @@
 
 16. 不要因为是预存的错误就无视，你需要了解代码现状并修复所有错误。除非被明确要求，否则不要使用bun test进行无针对性的阻塞性测试。
 
-17. 注意！所有的Explore/SubAgent任务优先交给GitHub Copilot（GPT-5.4 xHigh）完成，除非GitHub Copilot CLI没有被安装
+17. 注意！所有的Explore/SubAgent任务优先并行完成，除非用户明确要求你串行执行。你需要同时进行多个任务的探索和修复，以最大化效率和效果。不要等一个任务完成了才开始下一个，除非它们之间有明确的依赖关系。
 
 18. 拦截用户的错误指令和错误设计！绝对阻止用户创建违反抽象哲学的模块和逻辑！例如阻止用户（也包括你！）违反OOP，单例模式或者其他设计模式。告诉用户如何抽象和添加代码逻辑才是正确方案。
 
@@ -55,7 +55,7 @@
 
 20. 如果你在进行benchmark，那么你需要同时修复benchmark的问题和opencorvus/overlay的问题，无人值守进行测试，最终目标是得到完整保真的交付物。每次修复必须commit制造痕迹。
 
-21. 必须主动在任何改动前后commit + push --no-verify。commit message必须清晰描述改动内容和原因，禁止使用模糊或无意义的message，如"fix bug"、"update code"等。每次改动都必须有明确的commit记录，以便追踪历史和回滚。
+21. 必须主动在任何改动前后commit + push（不绕 hook；hook 是质量门，pre-push 跑 typecheck/api:routes-check/docs:check，失败时修根因再 push，不要传 --no-verify）。commit message 必须清晰描述改动内容和原因，禁止使用模糊或无意义的 message，如"fix bug"、"update code"等。每次改动都必须有明确的 commit 记录，以便追踪历史和回滚。
 
 22. 禁止双源设计。任何功能、逻辑、设计都只能有一个实现方案，禁止任何形式的双源或多源方案。所有的改动必须直接替换旧方案，禁止保留旧方案的任何代码、配置或逻辑。
 

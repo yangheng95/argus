@@ -18,3 +18,5 @@ if (process.versions.bun !== expectedBunVersion) {
 }
 '
 bun typecheck
+bun run api:routes-check
+bun run docs:check
