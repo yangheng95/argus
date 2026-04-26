@@ -2,6 +2,15 @@
 
 OpenCorvus's job: **turn a natural-language request into verified code changes, reliably**. Reliability requires a pipeline of specialized agents that check each other, where every failure has a recovery path and every state is traceable.
 
+## HTTP API runtime layering
+
+The HTTP server (`packages/opencorvus/src/server/server.ts`) splits routes into two real layers:
+
+- **Control plane** — `/global/*`, `/auth/*`, `/ui/*`, plus `/log`, `/shutdown`, `/restart` are mounted before the `Instance.provide` middleware. They work even when no project directory is open. Use these for health checks, server lifecycle, and authentication.
+- **Instance-scoped** — every other route (`/session`, `/task`, `/run`, `/mcp`, `/tui`, `/experimental`, `/panel`, …) runs inside `Instance.provide({ directory, init: InstanceBootstrap })`. They require a project directory (resolved from `?directory=` query or `x-opencorvus-directory` header).
+
+Route handlers themselves do not read `process.env`, do not call `Database.use(...)`, do not open SQL tables, and do not use `z.any()`. The boundary is enforced by `bun run api:routes-check` and the bilingual API reference is regenerated from OpenAPI by `bun run docs:api` / `docs:check`.
+
 ## Six-layer pipeline
 
 ```

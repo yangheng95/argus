@@ -15,6 +15,7 @@
     "typecheck:fresh": "bun run ./script/clean-cache.ts && bun run typecheck",
     "docs:api": "bun run ./packages/opencorvus/script/docs/render-api-md.ts",
     "docs:check": "bun run ./packages/opencorvus/script/docs/render-api-md.ts --check",
+    "api:routes-check": "bun run ./packages/opencorvus/script/check/routes.ts",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"
   },
