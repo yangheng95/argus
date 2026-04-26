@@ -1,7 +1,7 @@
 # OpenCorvus HTTP API 专业化重构方案（v2，防漂移版）
 
 date: 2026-04-26
-status: ready-to-execute
+status: done (2026-04-26, commits 0578e4413..6e1a9b647)
 scope:
 - `packages/opencorvus/src/server/server.ts`
 - `packages/opencorvus/src/server/routes/`
@@ -763,3 +763,55 @@ kill %1
 - 新增 `feedback_api_doc_single_source.md`：api.md 由 OpenAPI 生成；BASELINE_BUMP 规则；docs:check 进 CI。
 - 新增 `project_server_layering.md`：记录 control-plane（`server.ts:113-115`）vs instance-scoped（`server.ts:131` AppRoutes）运行时分层；豁免路径 `/log /shutdown /restart`。
 - 更新 `project_product_docs.md`：把"21 个 md 文件"改为"由 OpenAPI 生成"，避免数字漂移。
+
+---
+
+## 10. 完成情况（2026-04-26 落地）
+
+12 个 commit 串行落地（`P0 → P1 → P2 → P3 → P4 → P4.5 → P5 → P6 → P7 → P8 → P9 → P10`），全部通过 pre-push hook（typecheck + api:routes-check + docs:check）：
+
+```
+6e1a9b647  P10  chore(ci): wire api:routes-check and docs:check; document control-plane layering
+d8cf8d46f  P9   refactor(runtime): lift env/db access out of route layer
+16ed73029  P8   refactor(api): replace z.any() with z.unknown() across remaining routes
+4e5179627  P7   refactor(orchestrator): move non-route helpers out of routes/; replace event if-chain with registry
+8a3a8937e  P6   refactor(routes): inline panel-knowledge into panel.ts; consolidate mount
+ca39e83f4  P5   refactor(routes,session): collapse session-{management,interaction}-* into session.ts
+833f31db2  P4.5 refactor(routes): drop /experimental/session dual path; inline /resource
+17bee0495  P4   refactor(routes,scheduler): collapse experimental-* and workspace; lift sql to scheduler
+2e3ee0b33  P3   refactor(routes): collapse tui-* into tui.ts; lift env to Flag, any to z.unknown
+b82c1f1a4  P2   refactor(routes): collapse mcp-{core,auth,connection} into mcp.ts
+2948fa980  P1   docs(api): generate api.md from openapi.json (single source of truth)
+0578e4413  P0   refactor(api): name goal.update/goal.delete operationIds; record P0 decisions
+```
+
+**§6 最终验收实测**（HEAD = 6e1a9b647）：
+
+| 指标 | 期望 | 实测 |
+|---|---|---|
+| `ls routes/*.ts \| wc -l` | ≤ 25 | **24** |
+| `grep -c '"operationId"' openapi.json` | ≥ 187 | **193** |
+| 路径派生 operationId（`patchGoal:goalID` 等） | 0 | **0** |
+| `goal.update` / `goal.delete` 计数 | ≥ 2 | **2** |
+| `bun run api:routes-check` | exit 0 | **ok — 6 rules clean across 24 files** |
+| `bun run docs:check` | exit 0 | **ok (193 ops, 23 groups)** |
+| `bun run typecheck` | exit 0 | **0 errors** |
+| routes/ `z.any(` | 0 | **0** |
+| routes/ `Database.use(` | 0 | **0** |
+| routes/ `process.env` | 0 | **0** |
+| routes/ event-type if-chain | 0 | **0** |
+| 6 个新规则 + pre-push hook | 接通 | **接通**（`.husky/pre-push` 跑 typecheck + api:routes-check + docs:check） |
+
+**外部契约影响**：
+
+- 新增 3 个 operationId：`goal.update`、`goal.delete`、`session.listGlobal`
+- 删除 1 个 operationId：`experimental.session.list`（pre-invariant 已 grep `packages/{overlay,console,sdk}` 0 处源码引用）
+- 修复 2 个畸形 operationId：`patchGoal:goalID` → `goal.update`，`deleteGoal:goalID` → `goal.delete`（畸形名带 `:` 在 JS 不是合法标识符，几乎不可能被使用）
+- 全部 ~190 个其他 operationId 的 path/method/operationId 保持不变 → SDK 客户端零代码变更
+
+**保留未做的事**（按 R26 不过度工程）：
+
+- 未把所有 inline `z.object({...})` 提取到 `src/server/schemas/`（仅当跨文件复用才提取，本次无需）。
+- 未给 `api.md` 生成器加 per-endpoint 详情块（请求/响应 schema 摘要、curl 示例）；当前是端点表格 + auth + 章节分组。后续按需扩展生成器即可，不影响本次重构的契约。
+- 未触碰用户现有 WIP（`packages/opencorvus/src/gateway/`、`channel-config/src/index.ts`、`engine/queue.ts` 等）；提交属用户自身工作。
+- 未重新生成并提交 `packages/sdk/openapi.json` 与 `packages/sdk/js/src/gen/*`（这两个生成产物当前混入用户 WIP 的 gateway 路由，留给用户在自己的 commit 中一次性同步）。
