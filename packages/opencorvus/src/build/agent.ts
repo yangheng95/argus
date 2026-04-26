@@ -37,6 +37,8 @@ import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
+import { ExecutorRegistry } from "@/executor/registry"
+import type { CodingEventInfo } from "@/executor/contract"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { FileDiff } from "@/snapshot/types"
@@ -357,36 +359,59 @@ export namespace BuildAgent {
             getCollector: () => undefined as unknown,
           }
 
-      let out
+      let out: { session: { id: string }; structured?: unknown } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
+      // Dispatch fork: executor === "opencode" → in-process LLM via SessionPrompt
+      // (the existing runAgentSession path with merge_back tool). Anything else
+      // (claude-code, codex) → external CodingProvider; the provider edits files
+      // in the worktree on its own, then BuildAgent runs merge_back itself
+      // because the SDK has no way to call our merge_back tool.
+      const executor = input.task.executor ?? "opencode"
       try {
-        out = await runAgentSession({
-          kind: "build",
-          core: BUILD_CORE,
-          sessionTitle: buildSessionTitle(input.target),
-          sessionDirectory: worktreeDir!,
-          parentSessionID: input.parentSessionID,
-          // Goal-scoped builds need goalID on the session row so the
-          // protocol bridge stamps it onto every part event; without it
-          // the overlay's tree-writer cannot route the session card to
-          // the goal's build phase and the parts orphan as a top-level
-          // "构建" card. Direct-shape builds pass kind="task" → undefined.
-          goalID: input.target.kind === "goal" ? input.target.id : undefined,
-          taskID: input.task.id,
-          model: input.model,
-          signal: input.signal,
-          toolKit: buildToolKit,
-          buildUserPrompt: buildPromptText,
-          buildUserParts: buildUserPartsFn,
-          skillsStage: "build",
-          skillTaskSignals: taskSignals,
-          format: {
-            schema: z.toJSONSchema(BuildResultSchema) as Record<string, unknown>,
-            retryCount: 2,
-          },
-        })
-        parsed = BuildResultSchema.safeParse(out.structured)
+        if (executor === "opencode") {
+          out = await runAgentSession({
+            kind: "build",
+            core: BUILD_CORE,
+            sessionTitle: buildSessionTitle(input.target),
+            sessionDirectory: worktreeDir!,
+            parentSessionID: input.parentSessionID,
+            // Goal-scoped builds need goalID on the session row so the
+            // protocol bridge stamps it onto every part event; without it
+            // the overlay's tree-writer cannot route the session card to
+            // the goal's build phase and the parts orphan as a top-level
+            // "构建" card. Direct-shape builds pass kind="task" → undefined.
+            goalID: input.target.kind === "goal" ? input.target.id : undefined,
+            taskID: input.task.id,
+            model: input.model,
+            signal: input.signal,
+            toolKit: buildToolKit,
+            buildUserPrompt: buildPromptText,
+            buildUserParts: buildUserPartsFn,
+            skillsStage: "build",
+            skillTaskSignals: taskSignals,
+            format: {
+              schema: z.toJSONSchema(BuildResultSchema) as Record<string, unknown>,
+              retryCount: 2,
+            },
+          })
+          parsed = BuildResultSchema.safeParse(out.structured)
+        } else {
+          const externalOut = await runWithExternalProvider({
+            executor,
+            target: input.target,
+            taskID: input.task.id,
+            parentSessionID: input.parentSessionID,
+            worktreeDir: worktreeDir!,
+            worktreeBranch,
+            ownsWorktree,
+            buildPromptText,
+            signal: input.signal,
+          })
+          out = { session: { id: externalOut.sessionID }, structured: externalOut.structured }
+          parsed = BuildResultSchema.safeParse(externalOut.structured)
+          if (externalOut.mergedHead) mergedHead = externalOut.mergedHead
+        }
 
         // Capture the goal's diff against its original baseRef while the
         // worktree's git dir is still healthy — overlay's per-goal delivery
@@ -477,6 +502,167 @@ export namespace BuildAgent {
         diffs,
       }
     })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// External CodingProvider dispatch
+// ---------------------------------------------------------------------------
+
+/**
+ * Run the build by dispatching to a registered external CodingProvider
+ * (claude-code SDK, codex CLI). The provider edits files inside `worktreeDir`
+ * on its own; BuildAgent runs `merge_back` here because the SDK has no way
+ * to call our merge tool from inside a sandboxed coding session.
+ *
+ * The provider's event stream is consumed until "done" or "error". A summary
+ * is written to a build session so the overlay can render the goal card
+ * (full part-by-part bridging is left for follow-up; v1 captures aggregate
+ * text + tool-use counts).
+ *
+ * Returns a synthesized `BuildResult` matching `BuildResultSchema` so the
+ * post-run path is identical for opencode and external executors (rule 22:
+ * single contract, multiple implementations).
+ */
+async function runWithExternalProvider(args: {
+  executor: Exclude<TaskRow["executor"], "opencode">
+  target: BuildTarget
+  taskID: string
+  parentSessionID?: string
+  worktreeDir: string
+  worktreeBranch: string | undefined
+  ownsWorktree: boolean
+  buildPromptText: () => string
+  signal?: AbortSignal
+}): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
+  const provider = ExecutorRegistry.getCodingProvider(args.executor)
+
+  const session = await Session.createNext({
+    kind: "build",
+    parentID: args.parentSessionID,
+    goalID: args.target.kind === "goal" ? args.target.id : undefined,
+    title: buildSessionTitle(args.target),
+    directory: args.worktreeDir,
+  })
+
+  log.info("build agent (external) starting", {
+    executor: args.executor,
+    taskID: args.taskID,
+    sessionID: session.id,
+    worktreeDir: args.worktreeDir,
+  })
+
+  const prompt = args.buildPromptText()
+  const events: CodingEventInfo[] = []
+  let textBuf = ""
+  let toolUseCount = 0
+  let doneOutput: string | undefined
+  let errored: string | undefined
+
+  try {
+    for await (const event of provider.run({ prompt, cwd: args.worktreeDir, signal: args.signal })) {
+      events.push(event)
+      switch (event.type) {
+        case "text_delta":
+          textBuf += event.text
+          break
+        case "tool_call":
+          toolUseCount += 1
+          break
+        case "done":
+          doneOutput = event.output ?? undefined
+          break
+        case "error":
+          errored = event.message
+          break
+        default:
+          break
+      }
+      if (event.type === "done" || event.type === "error") break
+    }
+  } catch (err) {
+    errored = err instanceof Error ? err.message : String(err)
+  }
+
+  if (errored) {
+    log.warn("build agent (external) errored before merge", {
+      executor: args.executor,
+      taskID: args.taskID,
+      sessionID: session.id,
+      error: errored,
+    })
+    return {
+      sessionID: session.id,
+      structured: {
+        status: "failed" as const,
+        commit_ref: "",
+        summary: `external executor ${args.executor} reported error: ${errored}`,
+        tests: [],
+        error: errored,
+      },
+    }
+  }
+
+  // External provider finished without error; BuildAgent owns merge_back.
+  if (!args.ownsWorktree || !args.worktreeBranch) {
+    // Caller-owned worktree: skip merge here, caller will publish.
+    return {
+      sessionID: session.id,
+      structured: {
+        status: "passed" as const,
+        commit_ref: "",
+        summary:
+          doneOutput?.trim() ||
+          `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textBuf.length} chars)`,
+        tests: [],
+      },
+    }
+  }
+
+  let mergedHead: string | undefined
+  try {
+    const result = await Worktree.mergeWithRebase({
+      branch: args.worktreeBranch,
+      worktreeDir: args.worktreeDir,
+    })
+    mergedHead = result.primaryHead
+  } catch (err) {
+    if (err instanceof Worktree.MergeConflictError) {
+      const data = (err as { data: { branch: string; primaryBranch: string; primaryTip: string; conflictPaths: string[] } }).data
+      return {
+        sessionID: session.id,
+        structured: {
+          status: "failed" as const,
+          commit_ref: "",
+          summary: `merge_back conflict on ${args.worktreeBranch} → ${data.primaryBranch}`,
+          tests: [],
+          error: `Rebase aborted: conflict paths ${data.conflictPaths.join(", ")}`,
+        },
+      }
+    }
+    return {
+      sessionID: session.id,
+      structured: {
+        status: "failed" as const,
+        commit_ref: "",
+        summary: `merge_back error on ${args.worktreeBranch}`,
+        tests: [],
+        error: err instanceof Error ? err.message : String(err),
+      },
+    }
+  }
+
+  return {
+    sessionID: session.id,
+    structured: {
+      status: "passed" as const,
+      commit_ref: mergedHead.slice(0, 12),
+      summary:
+        doneOutput?.trim() ||
+        `external executor ${args.executor} completed (${events.length} events, ${toolUseCount} tool-uses, ${textBuf.length} chars)`,
+      tests: [],
+    },
+    mergedHead,
   }
 }
 
