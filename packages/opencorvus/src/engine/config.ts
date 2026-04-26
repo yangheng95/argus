@@ -59,6 +59,24 @@ interface IntentAnalysisConfig {
 }
 
 /**
+ * BuildConfig — per-goal build agent stage. Skills here are injected into the
+ * build session's system prompt every time, regardless of task signals. The
+ * mirror toolchain (webpage-generate / image-generate / figma-generate) is the
+ * canonical clone SOP, and forcing it into every build session makes the LLM
+ * reach for `webpage_extract` → `compile` → `analyze` → `render` → `evaluate`
+ * → `vision_judge` instead of writing HTML by hand from the visual contract.
+ *
+ * The skill files themselves remain auto_detect-aware (webpage-generate gates
+ * on a URL signal in its body), so non-visual builds harmlessly ignore the
+ * mirror SOP — but visual ones can never miss it because of a signal heuristic
+ * misfire (rule 22: explicit > implicit when correctness depends on it).
+ */
+interface BuildConfig {
+  max_steps: number
+  skills: string[]
+}
+
+/**
  * ActivityConfig — chunk-driven inactivity thresholds.
  *
  * These drive `withStreamActivity` (util/stream-activity.ts) at every
@@ -124,6 +142,7 @@ export interface EngineConfigType {
   delivery_visual: DeliveryVisualConfig
   design_analyst: DesignAnalystConfig
   intent_analysis: IntentAnalysisConfig
+  build: BuildConfig
   activity: ActivityConfig
   max_runs: number
   max_fix_runs: number
@@ -184,6 +203,13 @@ const DEFAULTS: EngineConfigType = {
   intent_analysis: {
     max_steps: 1000,
     skills: [],
+  },
+  build: {
+    max_steps: 1000,
+    // Mirror toolchain SOP is force-loaded into every build session so the
+    // LLM never hand-writes a clone from the visual contract alone (rule 22:
+    // single source of truth for cloning is the skill body, not the prompt).
+    skills: ["webpage-generate", "image-generate", "figma-generate"],
   },
   activity: {
     // Reasoning models can stream reasoning deltas every few seconds;
@@ -293,6 +319,10 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     intent_analysis: {
       max_steps: user?.intent_analysis?.max_steps ?? DEFAULTS.intent_analysis.max_steps,
       skills: user?.intent_analysis?.skills ?? DEFAULTS.intent_analysis.skills,
+    },
+    build: {
+      max_steps: user?.build?.max_steps ?? DEFAULTS.build.max_steps,
+      skills: user?.build?.skills ?? DEFAULTS.build.skills,
     },
     activity: {
       session_llm_idle_ms:
