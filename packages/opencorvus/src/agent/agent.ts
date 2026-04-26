@@ -144,7 +144,7 @@ export namespace Agent {
       build: {
         name: "build",
         description: "The default agent. Executes tools based on configured permissions.",
-        tools: { exclude: ["panel", "tui", "task_report", "analytics"] },
+        tools: { exclude: ["panel", "task_report", "analytics"] },
         options: {},
         prompt: PROMPT_BUILD,
         permission: PermissionNext.merge(
@@ -165,7 +165,7 @@ export namespace Agent {
       general: {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
-        tools: { exclude: ["planner", "panel", "tui", "task_report", "analytics"] },
+        tools: { exclude: ["planner", "panel", "task_report", "analytics"] },
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -280,7 +280,7 @@ export namespace Agent {
         // otherwise thin per-goal verification. Adversarial review across 3+
         // goals in one delivery context dilutes attention; parallel general
         // / explore subagents get a goal each with clean context.
-        tools: { exclude: ["planner", "panel", "tui", "task_report", "goal_report", "analytics"] },
+        tools: { exclude: ["planner", "panel", "task_report", "goal_report", "analytics"] },
         // Inherit the shared `defaults` ruleset (task: "allow" included) so
         // subagent dispatch does not trip the permission "ask" default and
         // hang the flow waiting for a non-existent operator. Without this
@@ -359,7 +359,6 @@ export namespace Agent {
             "schedule",
             "skill",
             "panel",
-            "tui",
           ],
         },
         options: {},
