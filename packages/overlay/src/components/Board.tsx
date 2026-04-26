@@ -16,6 +16,7 @@ import { RequirementsPanel } from "./RequirementsPanel";
 import { ArchitectPanel } from "./ArchitectPanel";
 import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
 import { InteractionCardList, type InteractionData } from "./InteractionCard";
+import { BoardIntro } from "./BoardIntro";
 
 // ── Status utilities ──
 
@@ -389,6 +390,15 @@ export function Board(props: BoardProps) {
           onCancel={props.onCancel}
         />
       </div>
+
+      {/* Empty-state intro: when no task is selected the right panel was
+          a blank box. Show a brief explainer of the two task modes
+          (workflow / build) and the main agents in the pipeline so the
+          operator knows what they're about to invoke. Disappears the
+          moment a task is selected. */}
+      <Show when={!boardStore.selectedTaskID && !board()?.task?.id}>
+        <BoardIntro />
+      </Show>
 
       {/* ── Data-driven unified layout ── */}
       {/* Sections appear based on their data availability, not a mode flag. */}

@@ -1170,6 +1170,91 @@ body[data-theme="light"] .card__round {
   padding: 4px 0;
 }
 
+/* ── BoardIntro: right-panel empty state when no task is selected ───── */
+.board-intro {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14px * var(--ui-scale, 1));
+  padding: calc(14px * var(--ui-scale, 1)) calc(16px * var(--ui-scale, 1));
+  color: var(--text-soft, #c9c9c9);
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  line-height: 1.55;
+}
+.board-intro__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.board-intro__title {
+  margin: 0;
+  font-size: calc(14px * var(--ui-scale, 1));
+  font-weight: 600;
+  color: var(--text-strong, #eee);
+  letter-spacing: 0.01em;
+}
+.board-intro__tagline {
+  margin: 0;
+  color: var(--text-muted, #9a9a9a);
+}
+.board-intro__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.board-intro__section-title {
+  margin: 0;
+  font-size: calc(11px * var(--ui-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9a9a9a);
+}
+.board-intro__modes,
+.board-intro__agents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.board-intro__mode,
+.board-intro__agent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
+  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
+  border-radius: calc(6px * var(--ui-scale, 1));
+  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+}
+.board-intro__mode-label,
+.board-intro__agent-name {
+  font-weight: 600;
+  color: var(--text-strong, #eee);
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  font-size: calc(11.5px * var(--ui-scale, 1));
+}
+.board-intro__mode-desc,
+.board-intro__agent-desc {
+  color: var(--text-soft, #c0c0c0);
+}
+.board-intro__mode[data-mode="workflow"] .board-intro__mode-label {
+  color: var(--accent, #6cb6ff);
+}
+.board-intro__mode[data-mode="build"] .board-intro__mode-label {
+  color: var(--accent-positive, #6ec46e);
+}
+.board-intro__foot {
+  border-top: 1px dashed var(--card-border, rgba(255, 255, 255, 0.06));
+  padding-top: calc(10px * var(--ui-scale, 1));
+}
+.board-intro__hint {
+  margin: 0;
+  color: var(--text-muted, #909090);
+  font-size: calc(11.5px * var(--ui-scale, 1));
+}
+
 .trace-event {
   border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.04));
 }
