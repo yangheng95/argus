@@ -41,6 +41,7 @@ import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { FileDiff } from "@/snapshot/types"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
+import { AttachmentStore } from "@/storage/attachment-store"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 
@@ -187,6 +188,24 @@ export namespace BuildAgent {
       }
 
       const buildPromptText = () => buildUserPrompt(input.target, input.context)
+      // Forward task.attachments (user's reference image, e.g. ainvest.png) as
+      // multimodal user-message parts so the build LLM physically sees what to
+      // clone — text design_specs alone don't carry pixel-level layout/colour
+      // information, root cause of "engine accepts but visual fidelity 0.237"
+      // (rule 4: root-cause not bandage).
+      const taskAttachments = (Array.isArray(input.task.attachments)
+        ? (input.task.attachments as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
+        : []
+      ).filter((a) => typeof a?.url === "string" && typeof a?.mime === "string")
+      const buildUserPartsFn = taskAttachments.length > 0
+        ? async () => {
+            const text = buildPromptText()
+            const { referenceOnly } = AttachmentStore.partition(taskAttachments)
+            const inline = await AttachmentStore.inlineFileParts(taskAttachments)
+            const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+            return [{ type: "text" as const, text: enrichedText }, ...inline]
+          }
+        : undefined
 
       // Tracks whether `merge_back` ever returned `merged` for this build
       // session. The post-run guard below uses it to reject "agent claimed
@@ -292,6 +311,7 @@ export namespace BuildAgent {
           signal: input.signal,
           toolKit: buildToolKit,
           buildUserPrompt: buildPromptText,
+          buildUserParts: buildUserPartsFn,
           skillsStage: "build",
           skillTaskSignals: taskSignals,
           format: {

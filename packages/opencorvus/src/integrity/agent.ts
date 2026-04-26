@@ -41,6 +41,7 @@ import { renderVisualContractPromptSection } from "@/design-analyst/prompt-secti
 import type { DecisionLog } from "@/decision-log"
 import type { ParsedRequirement, RequirementsDecision } from "@/requirements/types"
 import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
+import { AttachmentStore } from "@/storage/attachment-store"
 import {
   ALL_INTEGRITY_ISSUE_TYPES,
   INTEGRITY_DIMENSIONS,
@@ -203,6 +204,10 @@ export async function reviewIntegrity(input: {
   requirementDecisions?: RequirementsDecision[]
   designSpecs?: VisualSpec[]
   decisionLog?: DecisionLog
+  /** Task attachments (user reference images) — forwarded to the reviewer as
+   *  multimodal user-message parts so visual goal-fidelity judgements have the
+   *  pixels in front of them, not just text design_specs. */
+  attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
   signal?: AbortSignal
   /** Task ID for cache stickiness + the IntegrityReviewCompleted aggregate. */
   taskID?: string
@@ -391,6 +396,15 @@ export async function reviewIntegrity(input: {
       getCollector: () => collector,
     },
     buildUserPrompt: () => buildIntegrityPrompt(input),
+    buildUserParts: (input.attachments && input.attachments.length > 0)
+      ? async () => {
+          const text = buildIntegrityPrompt(input)
+          const { referenceOnly } = AttachmentStore.partition(input.attachments!)
+          const inline = await AttachmentStore.inlineFileParts(input.attachments!)
+          const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+          return [{ type: "text" as const, text: enrichedText }, ...inline]
+        }
+      : undefined,
     onSessionCreated: (session) => {
       input.onSessionCreated?.(session.id)
       emitIntegrityLifecycle("started", input.taskID, session.id, 0, 0)
