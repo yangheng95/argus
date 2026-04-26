@@ -17,6 +17,7 @@ import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { withStreamActivity } from "@/util/stream-activity"
+import { normalizeToolInput } from "./tool-input-norm"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -207,6 +208,21 @@ export namespace SessionProcessor {
                   // pause is scoped to known stream-pause semantics (tool-call
                   // boundary), not a generic disable switch.
                   gate.pause()
+                  // AI SDK contract: tool-call.input is `unknown` — providers
+                  // may stream JSON-stringified args. Normalize at this single
+                  // boundary so the schema record invariant holds. Symmetric
+                  // with the outbound site (message.ts safeToolInput) — see
+                  // tool-input-norm.ts header for the original incident.
+                  const norm = normalizeToolInput(value.input)
+                  if (!norm.ok) {
+                    log.warn("malformed tool-call input — skipping part write", {
+                      tool: value.toolName,
+                      callID: value.toolCallId,
+                      reason: norm.reason,
+                    })
+                    break
+                  }
+                  const normalizedInput = norm.value
                   const match = toolcalls[value.toolCallId]
                   if (match) {
                     const part = await Session.updatePart({
@@ -214,7 +230,7 @@ export namespace SessionProcessor {
                       tool: value.toolName,
                       state: {
                         status: "running",
-                        input: value.input,
+                        input: normalizedInput,
                         time: {
                           start: Date.now(),
                         },
@@ -233,7 +249,7 @@ export namespace SessionProcessor {
                           p.type === "tool" &&
                           p.tool === value.toolName &&
                           p.state.status !== "pending" &&
-                          JSON.stringify(p.state.input) === JSON.stringify(value.input),
+                          JSON.stringify(p.state.input) === JSON.stringify(normalizedInput),
                       )
 
                     if (exactMatch) {
@@ -244,7 +260,7 @@ export namespace SessionProcessor {
                         sessionID: input.assistantMessage.sessionID,
                         metadata: {
                           tool: value.toolName,
-                          input: value.input,
+                          input: normalizedInput,
                         },
                         always: [value.toolName],
                         ruleset: agent.permission ?? [],
@@ -261,11 +277,17 @@ export namespace SessionProcessor {
                   gate.resume()
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
+                    // tool-result echoes the original input; normalize against
+                    // the same provider quirk as tool-call. On normalize fail,
+                    // the authoritative input lives on the matched ToolPart
+                    // (already validated when written at tool-call time).
+                    const echo = normalizeToolInput(value.input)
+                    const resolvedInput = echo.ok ? echo.value : match.state.input
                     await Session.updatePart({
                       ...match,
                       state: {
                         status: "completed",
-                        input: value.input ?? match.state.input,
+                        input: resolvedInput,
                         output: value.output.output,
                         metadata: value.output.metadata,
                         title: value.output.title,
@@ -287,11 +309,13 @@ export namespace SessionProcessor {
                   gate.resume()
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
+                    const echo = normalizeToolInput(value.input)
+                    const resolvedInput = echo.ok ? echo.value : match.state.input
                     await Session.updatePart({
                       ...match,
                       state: {
                         status: "error",
-                        input: value.input ?? match.state.input,
+                        input: resolvedInput,
                         error: (value.error as any).toString(),
                         time: {
                           start: match.state.time.start,
