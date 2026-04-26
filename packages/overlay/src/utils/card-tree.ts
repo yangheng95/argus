@@ -12,7 +12,7 @@
 //     used by Card / CardHeader.
 import { cardTreeStore } from "../store/card-tree";
 import type { StepPayload } from "../store/card-tree";
-import { toolNameKey } from "./tool";
+import { toolNameKey, displayToolIcon, displayToolDetail } from "./tool";
 
 export type { StepPayload } from "../store/card-tree";
 
@@ -270,4 +270,255 @@ export function collectCardText(node: CardNode): string {
     if (sub) chunks.push(sub);
   }
   return chunks.filter(Boolean).join("\n\n");
+}
+
+// ── Latest-activity preview (collapsed header) ──
+// Walks the subtree and keeps only the single most recent activity by
+// (card.time, part-index). An activity is either:
+//   - a text/reasoning part (assistant prose / chain-of-thought), or
+//   - a tool part (formatted as "<icon> <ToolName>: <detail>" so the
+//     operator can see "what is this card actually doing right now").
+// This is the canonical preview source — text and tool calls compete
+// for the same line so the operator always sees the actual latest
+// signal, not whichever channel happened to be picked.
+
+interface LatestHit { time: number; index: number; text: string }
+
+function toolHitText(part: any): string {
+  if (!part || part.type !== "tool") return "";
+  const name = String(part.tool || "").trim();
+  if (!name) return "";
+  const key = toolNameKey(name);
+  // Todo tools own a dedicated UI row; surfacing them here would steal
+  // attention from the actual work that happened around the plan.
+  if (TODO_TOOLS.has(key)) return "";
+  const state = part.state || {};
+  const icon = displayToolIcon(name);
+  const detail = displayToolDetail(name, state.input, state, "");
+  const head = icon ? `${icon} ${name}` : name;
+  return detail ? `${head}: ${detail}` : head;
+}
+
+function gatherLatest(node: CardNode, hits: LatestHit[]): void {
+  if (!node) return;
+  const baseTime = typeof node.time === "number" ? node.time : 0;
+  if (node.kind === "tool" && node.toolPart) {
+    const toolText = toolHitText(node.toolPart);
+    if (toolText) hits.push({ time: baseTime, index: 0, text: toolText });
+  }
+  const parts = node.parts || [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const text = partText(part);
+    if (text) {
+      hits.push({ time: baseTime, index: i, text });
+      continue;
+    }
+    const toolText = toolHitText(part);
+    if (toolText) hits.push({ time: baseTime, index: i, text: toolText });
+  }
+  for (const cid of node.childIDs || []) {
+    const child = cardTreeStore.cards[cid];
+    if (child) gatherLatest(child as unknown as CardNode, hits);
+  }
+  for (const child of node.children || []) {
+    gatherLatest(child, hits);
+  }
+}
+
+export function collectLatestActivityText(node: CardNode): string {
+  if (!node) return "";
+  const hits: LatestHit[] = [];
+  gatherLatest(node, hits);
+  if (hits.length === 0) {
+    if (node.kind === "step" && node.goalDescription) {
+      return String(node.goalDescription).trim();
+    }
+    return "";
+  }
+  let best = hits[0];
+  for (let i = 1; i < hits.length; i++) {
+    const h = hits[i];
+    if (h.time > best.time || (h.time === best.time && h.index > best.index)) {
+      best = h;
+    }
+  }
+  return best.text;
+}
+
+// ── Activity counts (collapsed header) ──
+// Tally the work that has happened inside a card subtree so the collapsed
+// header can show "🤖 2  🛠 14  🎯 1  💬 5" and the operator gets a sense
+// of activity volume without expanding the card.
+
+export interface ActivityCounts {
+  messages: number;
+  tools: number;
+  agents: number;
+  skills: number;
+}
+
+const AGENT_SPAWN_TOOLS = new Set([
+  "task", "agent", "spawnagent", "subagent",
+]);
+
+function isSkillTool(key: string): boolean {
+  // Claude-Code-style Skill tool, plus any tool whose key contains "skill"
+  // (covers "skill", "invokeskill", "useskill", etc).
+  return key === "skill" || /skill/.test(key);
+}
+
+function bumpCountsForPart(part: any, counts: ActivityCounts): void {
+  if (!part) return;
+  if (part.type === "text" || part.type === "reasoning") {
+    if (String(part.text || "").trim()) counts.messages++;
+    return;
+  }
+  if (part.type !== "tool") return;
+  const key = toolNameKey(part.tool || "");
+  if (!key) return;
+  if (AGENT_SPAWN_TOOLS.has(key)) {
+    counts.agents++;
+    return;
+  }
+  if (isSkillTool(key)) {
+    counts.skills++;
+    return;
+  }
+  counts.tools++;
+}
+
+function gatherCounts(node: CardNode, counts: ActivityCounts): void {
+  if (!node) return;
+  if (node.kind === "tool" && node.toolPart) {
+    bumpCountsForPart(node.toolPart, counts);
+  }
+  for (const part of node.parts || []) {
+    bumpCountsForPart(part, counts);
+  }
+  for (const cid of node.childIDs || []) {
+    const child = cardTreeStore.cards[cid];
+    if (child) gatherCounts(child as unknown as CardNode, counts);
+  }
+  for (const child of node.children || []) {
+    gatherCounts(child, counts);
+  }
+}
+
+export function collectActivityCounts(node: CardNode): ActivityCounts {
+  const counts: ActivityCounts = { messages: 0, tools: 0, agents: 0, skills: 0 };
+  gatherCounts(node, counts);
+  return counts;
+}
+
+// ── Todo summary (collapsed header) ──
+// Walks the subtree to find the most recent TodoWrite/UpdatePlan tool part
+// and reports counts + the in-progress (or last completed) item title.
+// Returns null when no todo tool calls exist anywhere in the subtree —
+// the header then skips the third row entirely.
+
+export interface TodoSummary {
+  total: number;
+  completed: number;
+  inProgress: number;
+  pending: number;
+  /** Title of the in_progress item, else last completed, else first pending. */
+  current: string;
+}
+
+function todoTitle(item: any): string {
+  if (!item || typeof item !== "object") return "";
+  const af = typeof item.activeForm === "string" ? item.activeForm.trim() : "";
+  const c = typeof item.content === "string" ? item.content.trim() : "";
+  return af || c;
+}
+
+function extractTodoList(part: any): any[] | null {
+  if (!part || part.type !== "tool") return null;
+  const key = toolNameKey(part.tool || "");
+  if (!TODO_TOOLS.has(key)) return null;
+  const state = part.state || {};
+  const inputTodos = state.input && Array.isArray(state.input.todos) ? state.input.todos : null;
+  if (inputTodos) return inputTodos;
+  const metaTodos = state.metadata && Array.isArray(state.metadata.todos) ? state.metadata.todos : null;
+  if (metaTodos) return metaTodos;
+  const out = typeof state.output === "string" ? state.output.trim() : "";
+  if (out.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(out);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // streaming / truncated — ignore
+    }
+  }
+  return null;
+}
+
+interface TodoHit { time: number; index: number; todos: any[] }
+
+function gatherTodos(node: CardNode, hits: TodoHit[]): void {
+  if (!node) return;
+  const baseTime = typeof node.time === "number" ? node.time : 0;
+  // kind="tool" cards carry the tool part on `toolPart` (parts[] is empty
+  // because the tool was promoted into its own card).
+  if (node.kind === "tool" && node.toolPart) {
+    const todos = extractTodoList(node.toolPart);
+    if (todos && todos.length > 0) hits.push({ time: baseTime, index: 0, todos });
+  }
+  const parts = node.parts || [];
+  for (let i = 0; i < parts.length; i++) {
+    const todos = extractTodoList(parts[i]);
+    if (todos && todos.length > 0) hits.push({ time: baseTime, index: i, todos });
+  }
+  for (const cid of node.childIDs || []) {
+    const child = cardTreeStore.cards[cid];
+    if (child) gatherTodos(child as unknown as CardNode, hits);
+  }
+  for (const child of node.children || []) {
+    gatherTodos(child, hits);
+  }
+}
+
+export function collectTodoSummary(node: CardNode): TodoSummary | null {
+  if (!node) return null;
+  const hits: TodoHit[] = [];
+  gatherTodos(node, hits);
+  if (hits.length === 0) return null;
+  let best = hits[0];
+  for (let i = 1; i < hits.length; i++) {
+    const h = hits[i];
+    if (h.time > best.time || (h.time === best.time && h.index > best.index)) {
+      best = h;
+    }
+  }
+  let completed = 0;
+  let inProgress = 0;
+  let pending = 0;
+  let inProgressTitle = "";
+  let lastCompletedTitle = "";
+  let firstPendingTitle = "";
+  for (const item of best.todos) {
+    const status = String((item as any)?.status || "").toLowerCase().trim();
+    const title = todoTitle(item);
+    if (status === "completed") {
+      completed++;
+      if (title) lastCompletedTitle = title;
+    } else if (status === "in_progress") {
+      inProgress++;
+      if (title && !inProgressTitle) inProgressTitle = title;
+    } else if (status === "cancelled") {
+      // Cancelled items don't contribute to progress, but still count toward total.
+    } else {
+      pending++;
+      if (title && !firstPendingTitle) firstPendingTitle = title;
+    }
+  }
+  const current = inProgressTitle || firstPendingTitle || lastCompletedTitle;
+  return {
+    total: best.todos.length,
+    completed,
+    inProgress,
+    pending,
+    current,
+  };
 }
