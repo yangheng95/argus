@@ -13,6 +13,8 @@
     "check:sdk-imports": "bun run ./script/check-sdk-imports.ts",
     "typecheck": "bun run check:sdk-imports && bunx turbo run typecheck",
     "typecheck:fresh": "bun run ./script/clean-cache.ts && bun run typecheck",
+    "docs:api": "bun run ./packages/opencorvus/script/docs/render-api-md.ts",
+    "docs:check": "bun run ./packages/opencorvus/script/docs/render-api-md.ts --check",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"
   },
