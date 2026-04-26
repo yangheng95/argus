@@ -121,19 +121,20 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
           messages: messages as unknown as ModelMessage[],
           abortSignal: input.signal,
         })
-        // Drain the partial-object stream — required to surface validation
-        // failures and to materialise the final value. Concurrently tap the
-        // raw text stream for diagnostics on the failure path.
-        const textTap = (async () => {
-          try {
-            for await (const chunk of result.textStream) captureRaw(chunk)
-          } catch {
-            // textStream is best-effort diagnostics; never fail the call.
+        // Single drain via fullStream — partialObjectStream and textStream
+        // share one underlying ReadableStream, so reading both concurrently
+        // throws "Invalid state: ReadableStream is locked". fullStream
+        // yields typed events that include both raw text deltas (for our
+        // diagnostic capture) and validation/error signals.
+        for await (const part of result.fullStream) {
+          if (part.type === "text-delta") {
+            const delta = (part as any).delta ?? (part as any).textDelta ?? ""
+            if (typeof delta === "string" && delta) captureRaw(delta)
+          } else if (part.type === "error") {
+            throw (part as any).error
           }
-        })()
-        for await (const _ of result.partialObjectStream) { void _ }
+        }
         analysis = (await result.object) as ImageAnalysis
-        await textTap
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err)
         const causeMsg =
