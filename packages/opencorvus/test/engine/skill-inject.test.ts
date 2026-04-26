@@ -45,9 +45,14 @@ describe("resolveStageSkills", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        // webpage-generate.md declares `{ has_attachment_image: true,
+        // request_contains_url: true }`. Under AND-of-explicit signal
+        // semantics (the matcher honors every declared signal — `false`
+        // is a real "must not"), both must hold for the skill to fire.
         const result = await resolveStageSkills([], "build", {
           request_contains_url: true,
-          request_text: "复刻 https://www.baidu.com/",
+          has_attachment_image: true,
+          request_text: "复刻 https://www.baidu.com/ — 附图为目标视觉",
         })
         expect(result.requiredTools).toContain("webpage_extract")
         expect(result.requiredTools).toContain("webpage_compile")
@@ -58,6 +63,47 @@ describe("resolveStageSkills", () => {
         expect(result.requiredTools).not.toContain("webpage_compile_html")
         expect(result.prompt).toContain("Skill-system invariants")
         expect(result.prompt).toContain("Skill: webpage-generate")
+      },
+    })
+  })
+
+  test("image-only request fires image-generate WITHOUT cross-firing webpage-generate", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // image-generate.md declares `{ has_attachment_image: true,
+        // request_contains_url: false }`. Webpage-generate also lists
+        // has_attachment_image: true but additionally requires url=true,
+        // so AND-of-explicit excludes it from this signal set.
+        const result = await resolveStageSkills([], "build", {
+          has_attachment_image: true,
+          request_contains_url: false,
+          request_text: "复刻附图所示页面（无 URL，仅截图）",
+        })
+        const skillNames = result.skills.map((s) => s.name)
+        expect(skillNames).toContain("image-generate")
+        expect(skillNames).not.toContain("webpage-generate")
+        expect(result.requiredTools).toContain("webpage_image_extract")
+        expect(result.requiredTools).toContain("webpage_image_compile")
+        expect(result.requiredTools).not.toContain("webpage_extract")
+      },
+    })
+  })
+
+  test("URL+image fires webpage-generate but not image-generate (its url=false vetoes)", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await resolveStageSkills([], "build", {
+          has_attachment_image: true,
+          request_contains_url: true,
+          request_text: "复刻 https://example.com/ — 附图作为视觉参考",
+        })
+        const skillNames = result.skills.map((s) => s.name)
+        expect(skillNames).toContain("webpage-generate")
+        expect(skillNames).not.toContain("image-generate")
       },
     })
   })
