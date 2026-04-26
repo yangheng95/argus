@@ -59,10 +59,41 @@ reproduction steps.`,
 export interface TaskSignals {
   /** Task carries a reference image attachment (PNG/JPEG/WEBP). */
   has_attachment_image?: boolean
-  /** The request text contains an http(s):// URL. */
+  /** The request text contains an http(s):// URL — explicitly EXCLUDING
+   *  figma.com URLs (those land on `request_contains_figma_url`). The split
+   *  lets `webpage-generate` and `figma-generate` skills declare mutually
+   *  exclusive signals without coordinating frontmatter (each skill remains
+   *  independent). */
   request_contains_url?: boolean
+  /** The request text contains a figma.com URL (file / design / proto /
+   *  board path). When true, `request_contains_url` is forced false by
+   *  `deriveUrlSignals` so the two are never simultaneously true. */
+  request_contains_figma_url?: boolean
   /** Raw request text — matchers may peek for keywords; prefer signals over regex. */
   request_text?: string
+}
+
+const FIGMA_URL_REGEX =
+  /\bhttps?:\/\/(?:[\w-]+\.)?figma\.com\/(?:file|design|proto|board)\b/i
+const HTTP_URL_REGEX = /\bhttps?:\/\/\S+/i
+
+/** Derive the URL-shaped signals from the active task's request text in
+ *  one place (rule 22 single source). Figma URLs are partitioned off the
+ *  generic URL signal — they do not double-count. */
+export function deriveUrlSignals(text: string | undefined): {
+  request_contains_url: boolean
+  request_contains_figma_url: boolean
+} {
+  const raw = text ?? ""
+  const hasFigma = FIGMA_URL_REGEX.test(raw)
+  // Strip figma URLs before testing for any other URL so the generic
+  // signal means "non-figma http(s) URL is present".
+  const stripped = raw.replace(FIGMA_URL_REGEX, "")
+  const hasGeneric = HTTP_URL_REGEX.test(stripped)
+  return {
+    request_contains_url: hasGeneric,
+    request_contains_figma_url: hasFigma,
+  }
 }
 
 /** Result of resolving the skills for one stage invocation. Exposed so callers
@@ -177,6 +208,9 @@ function matchesProjectOrTask(
     }
     if (wanted.request_contains_url !== undefined) {
       checks.push(wanted.request_contains_url === Boolean(taskSignals.request_contains_url))
+    }
+    if (wanted.request_contains_figma_url !== undefined) {
+      checks.push(wanted.request_contains_figma_url === Boolean(taskSignals.request_contains_figma_url))
     }
     if (wanted.package_has_script && wanted.package_has_script.length > 0) {
       const pkg = tryReadPackageJson(dir)
