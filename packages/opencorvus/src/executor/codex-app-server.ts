@@ -336,15 +336,19 @@ function* notification(threadID: string, turnID: string, method: string, params?
     if (type === "dynamicToolCall") {
       const itemID = typeof item.id === "string" ? item.id : currentTurn
       const callID = toolCallID(item.callId, itemID)
+      const toolName = String(item.tool || "tool")
       const adapter = ToolAdapterRegistry.classify(String(item.tool || ""))
+      const input: string | Record<string, unknown> = codingInput(item.arguments ?? item.input) ?? {}
       yield {
         type: "tool_result",
         id: callID,
+        name: toolName,
+        input,
         output: text(item.contentItems ?? item),
         meta: {
           item_id: itemID,
           call_id: callID,
-          tool_name: String(item.tool || ""),
+          tool_name: toolName,
           adapter: adapter?.id,
           tool_kind: adapter?.kind,
         },
@@ -361,9 +365,14 @@ function* notification(threadID: string, turnID: string, method: string, params?
       const status = typeof item.status === "string" ? item.status : ""
       const isDone = status === "completed" || status === "done" || !!output
       if (isDone) {
+        const input: string | Record<string, unknown> = type === "commandExecution"
+          ? { command: cmd }
+          : codingInput(item.arguments ?? item.input) ?? item
         yield {
           type: "tool_result" as const,
           id: itemId,
+          name: toolName,
+          input,
           output: output || cmd || `${toolName} completed`,
           meta: { thread_id: currentThread, turn_id: currentTurn, item_id: itemId, item_type: type },
         }
@@ -538,6 +547,11 @@ function toolCallID(value: unknown, generated: unknown) {
   const callID = typeof value === "string" ? value.trim() : ""
   if (callID) return callID
   return String(generated)
+}
+
+function codingInput(value: unknown): string | Record<string, unknown> | undefined {
+  if (typeof value === "string") return value
+  return record(value)
 }
 
 function approvalPolicy() {

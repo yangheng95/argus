@@ -21,14 +21,9 @@ function resolveOverlayDir(): string | undefined {
   // import.meta.dir = .../packages/opencorvus/src/server
   const pkgRoot = import.meta.dir.replace(/[/\\]src[/\\]server$/, "")
 
-  // 2. Dev vite build: packages/overlay/dist-vite has bundled JS that browsers can execute.
-  // Prefer this over raw src/ which serves .tsx that the browser cannot evaluate.
+  // 2. Workspace bundle: keep runtime and packaged delivery on the same built UI.
   const viteUi = path.resolve(pkgRoot, "../overlay/dist-vite")
   if (fs.existsSync(path.join(viteUi, "index.html"))) return viteUi
-
-  // 3. Source fallback: only useful when something else transpiles .tsx on the fly
-  const devUi = path.resolve(pkgRoot, "../overlay/src")
-  if (fs.existsSync(path.join(devUi, "index.html"))) return devUi
 
   return undefined
 }
@@ -47,7 +42,7 @@ export namespace OverlayUI {
     const handle = async (c: Context) => {
       const dir = resolveOverlayDir()
       if (!dir) {
-        return c.text("Overlay UI not found. Run build with overlay assets or start in dev mode.", 404)
+        return c.text("Overlay UI not found. Run `bun run --cwd packages/overlay build:vite` or package with bundled UI assets.", 404)
       }
 
       let reqPath = c.req.path.replace(/^\/ui/, "") || "/"

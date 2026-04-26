@@ -38,10 +38,9 @@ import { Ownership } from "@/engine/ownership"
 import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { ExecutorRegistry } from "@/executor/registry"
-import type { CodingEventInfo } from "@/executor/contract"
+import { record, structuredInput, type CodingEventInfo } from "@/executor/contract"
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
-import { Instance } from "@/project/instance"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { FileDiff } from "@/snapshot/types"
@@ -512,16 +511,105 @@ export namespace BuildAgent {
 // External CodingProvider dispatch
 // ---------------------------------------------------------------------------
 
+function externalEventMeta(event: CodingEventInfo): Record<string, unknown> {
+  return "meta" in event ? record(event.meta) ?? {} : {}
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function externalToolMetadata(event: CodingEventInfo): Record<string, unknown> {
+  const meta = externalEventMeta(event)
+  return Object.keys(meta).length > 0 ? meta : {}
+}
+
+function externalToolInput(input: unknown): Record<string, unknown> {
+  const parsed = structuredInput(input)
+  if (typeof input === "string" && parsed.value === input) return { raw: input }
+  return parsed
+}
+
+function externalToolResultName(event: Extract<CodingEventInfo, { type: "tool_result" }>): string {
+  const meta = externalEventMeta(event)
+  const named = event.name
+    || stringField(meta.tool_name)
+    || stringField(meta.tool)
+    || stringField(meta.name)
+  if (named) return named
+  const itemType = stringField(meta.item_type)
+  if (itemType === "commandExecution") return "Bash"
+  if (itemType === "fileChange") return "FileEdit"
+  if (itemType === "mcpToolCall") return "MCP"
+  return "tool"
+}
+
+function externalToolResultInput(event: Extract<CodingEventInfo, { type: "tool_result" }>): Record<string, unknown> {
+  if (event.input !== undefined) return externalToolInput(event.input)
+  const meta = externalEventMeta(event)
+  const command = stringField(meta.command)
+  if (command) return { command }
+  if (meta.arguments !== undefined) return externalToolInput(meta.arguments)
+  if (meta.input !== undefined) return externalToolInput(meta.input)
+  return {}
+}
+
+function externalQuestionLine(question: Record<string, unknown>): string {
+  const header = stringField(question.header) || stringField(question.id) || "Question"
+  const text = stringField(question.question)
+    || stringField(question.message)
+    || stringField(question.label)
+    || "Additional input required"
+  return `- ${header}: ${text}`
+}
+
+function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
+  if (event.type === "progress") {
+    const summary = event.summary || event.phase
+    return [`**${executor} progress**`, "", `Phase: ${event.phase}`, summary ? `Summary: ${summary}` : ""]
+      .filter(Boolean)
+      .join("\n")
+  }
+  if (event.type === "plan_delta") {
+    const summary = event.summary?.trim()
+    return summary ? `**${executor} plan**\n\n${summary}` : undefined
+  }
+  if (event.type === "diff_delta") {
+    const summary = event.summary?.trim()
+    return summary ? `**${executor} diff**\n\n${summary}` : undefined
+  }
+  if (event.type === "approval_request") {
+    const lines = [`**${executor} approval request**`, "", `Approval: ${event.approval}`]
+    if (event.message?.trim()) lines.push(`Message: ${event.message.trim()}`)
+    return lines.join("\n")
+  }
+  if (event.type === "input_request") {
+    const questions = (event.questions ?? []).map(externalQuestionLine)
+    return [`**${executor} input request**`, "", ...questions].join("\n")
+  }
+  if (event.type === "usage") {
+    const lines = [`**${executor} usage**`]
+    if (event.inputTokens !== undefined) lines.push(`Input tokens: ${event.inputTokens}`)
+    if (event.outputTokens !== undefined) lines.push(`Output tokens: ${event.outputTokens}`)
+    if (event.totalTokens !== undefined) lines.push(`Total tokens: ${event.totalTokens}`)
+    if (event.costUSD !== undefined) lines.push(`Cost USD: ${event.costUSD}`)
+    return lines.length > 1 ? lines.join("\n") : undefined
+  }
+  if (event.type === "error") {
+    return `**${executor} error**\n\n${event.message}`
+  }
+  return undefined
+}
+
 /**
  * Run the build by dispatching to a registered external CodingProvider
  * (claude-code SDK, codex CLI). The provider edits files inside `worktreeDir`
  * on its own; BuildAgent runs `merge_back` here because the SDK has no way
  * to call our merge tool from inside a sandboxed coding session.
  *
- * The provider's event stream is consumed until "done" or "error". A summary
- * is written to a build session so the overlay can render the goal card
- * (full part-by-part bridging is left for follow-up; v1 captures aggregate
- * text + tool-use counts).
+ * The provider's event stream is consumed until "done" or "error". Every
+ * user-visible event is persisted as normal Session parts so overlay realtime
+ * and hydrate paths share the same rendering model.
  *
  * Returns a synthesized `BuildResult` matching `BuildResultSchema` so the
  * post-run path is identical for opencode and external executors (rule 22:
@@ -607,7 +695,13 @@ async function runWithExternalProvider(args: {
   // upgrade pending → completed without a second lookup.
   let activeText: { id: string; buf: string } | undefined
   let activeReasoning: { id: string; buf: string; start: number } | undefined
-  const tools = new Map<string, { id: string; name: string; input: Record<string, unknown> | string; start: number }>()
+  const tools = new Map<string, {
+    id: string
+    name: string
+    input: Record<string, unknown>
+    metadata: Record<string, unknown>
+    start: number
+  }>()
 
   const flushText = async (final: boolean) => {
     if (!activeText) return
@@ -632,6 +726,27 @@ async function runWithExternalProvider(args: {
       time: { start: activeReasoning.start, ...(final ? { end: Date.now() } : {}) },
     })
     if (final) activeReasoning = undefined
+  }
+
+  const appendExternalEventPart = async (event: CodingEventInfo) => {
+    const text = externalEventPartText(event, args.executor)
+    if (!text) return
+    if (activeText) await flushText(true)
+    if (activeReasoning) await flushReasoning(true)
+    await Session.updatePart({
+      id: Identifier.ascending("part"),
+      sessionID: session.id,
+      messageID: assistantMessageID,
+      type: "text",
+      text,
+      kind: "control",
+      source: "system",
+      metadata: {
+        executor: args.executor,
+        eventType: event.type,
+        meta: externalEventMeta(event),
+      },
+    })
   }
 
   try {
@@ -661,8 +776,9 @@ async function runWithExternalProvider(args: {
           if (activeReasoning) await flushReasoning(true)
           const partID = Identifier.ascending("part")
           const start = Date.now()
-          const inputObj = typeof event.input === "string" ? { raw: event.input } : event.input
-          tools.set(event.id, { id: partID, name: event.name, input: inputObj, start })
+          const inputObj = externalToolInput(event.input)
+          const metadata = externalToolMetadata(event)
+          tools.set(event.id, { id: partID, name: event.name, input: inputObj, metadata, start })
           await Session.updatePart({
             id: partID,
             sessionID: session.id,
@@ -673,31 +789,36 @@ async function runWithExternalProvider(args: {
             state: {
               status: "running",
               input: inputObj,
-              metadata: {},
+              metadata,
               time: { start },
             },
+            metadata,
           })
           break
         }
         case "tool_result": {
           const t = tools.get(event.id)
-          if (!t) break
+          if (!t) toolUseCount += 1
           const end = Date.now()
+          const name = t?.name ?? externalToolResultName(event)
+          const input = t?.input ?? externalToolResultInput(event)
+          const metadata = { ...(t?.metadata ?? {}), ...externalToolMetadata(event) }
           await Session.updatePart({
-            id: t.id,
+            id: t?.id ?? Identifier.ascending("part"),
             sessionID: session.id,
             messageID: assistantMessageID,
             type: "tool",
-            tool: t.name,
+            tool: name,
             callID: event.id,
             state: {
               status: "completed",
-              input: typeof t.input === "string" ? { raw: t.input } : t.input,
+              input,
               output: event.output,
-              title: t.name,
-              metadata: {},
-              time: { start: t.start, end },
+              title: name,
+              metadata,
+              time: { start: t?.start ?? end, end },
             },
+            metadata,
           })
           tools.delete(event.id)
           break
@@ -708,12 +829,13 @@ async function runWithExternalProvider(args: {
         case "approval_request":
         case "input_request":
         case "usage":
-          // Not bridged to overlay parts in v1 — captured in `events[]` only.
+          await appendExternalEventPart(event)
           break
         case "done":
           doneOutput = event.output ?? undefined
           break
         case "error":
+          await appendExternalEventPart(event)
           errored = event.message
           break
       }
@@ -737,10 +859,12 @@ async function runWithExternalProvider(args: {
       callID,
       state: {
         status: "error",
-        input: typeof t.input === "string" ? { raw: t.input } : t.input,
+        input: t.input,
         error: "tool_call had no matching tool_result before stream end",
+        metadata: t.metadata,
         time: { start: t.start, end },
       },
+      metadata: t.metadata,
     })
   }
   await Session.updateMessage({ ...assistantMessage, time: { ...assistantMessage.time, completed: Date.now() } })

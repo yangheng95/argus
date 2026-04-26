@@ -5017,11 +5017,12 @@ code .file-link:hover {
   overflow-y: auto;
 }
 
-.session-msg-tool {
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
-  font-family: var(--font-mono);
+.session-msg .msg-tool {
   margin: 0;
+}
+
+.session-msg .tool-detail {
+  font-size: var(--ui-font-small);
 }
 
 .section-dialog-form {

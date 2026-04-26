@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-04-26T05:55:36.655Z",
+  "taskID": "",
+  "error": "Error: API 500: global/tasks\nce (http://127.0.0.1:57956/ui/assets/index-DW2cLfFJ.js:3:4348)\nasync Tn (http://127.0.0.1:57956/ui/assets/index-DW2cLfFJ.js:3:8473)",
+  "event_count": 0,
+  "stage_summary": {
+    "types": {},
+    "stages": {}
+  },
+  "events": []
+}

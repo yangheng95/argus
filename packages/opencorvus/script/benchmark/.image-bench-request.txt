@@ -1,0 +1,7 @@
+请按附图所示的网页设计，复刻一份高保真克隆：
+- 视觉还原：颜色、字体、间距、布局必须与截图一致
+- 文案与图标按截图所示原样保留
+- 交互：截图中可见的按钮、卡片、列表等基本交互行为要可点击/可悬停
+- 实现技术不限，最终需可在本地通过 webpage_render 渲染并通过 webpage_vision_judge 视觉判定
+
+由于只提供了截图（没有线上 URL），请走 image-generate 流程：webpage_image_extract → webpage_image_compile → 实现 → webpage_render + webpage_vision_judge 迭代。

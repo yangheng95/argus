@@ -10,8 +10,30 @@ import { loadConfigInfo } from "./init";
 import { checkConnection } from "./connection";
 import { reloadProjectScope } from "./config";
 import { apiJson, configure as configureApi } from "./api";
+import { selectedTaskDirectory } from "../store/board";
 import { t } from "../utils/i18n";
 import { renderMarkdown, escapeHtml } from "../utils/markdown";
+import { describeToolPart } from "../utils/tool";
+
+function renderSessionToolChip(part: any): string {
+  const display = describeToolPart(part, selectedTaskDirectory());
+  if (!display) return "";
+  const statusAttr = display.status
+    ? ` data-status="${escapeHtml(display.status)}"`
+    : "";
+  const detail = display.detail
+    ? `<span class="tool-detail">${escapeHtml(display.detail)}</span>`
+    : "";
+  const status = display.statusLabel
+    ? `<span class="tool-status" data-status="${escapeHtml(display.status || "pending")}" title="${escapeHtml(display.statusLabel)}">${escapeHtml(display.statusLabel)}</span>`
+    : "";
+  return `<div class="msg-tool"${statusAttr}>
+    <span class="tool-icon">${escapeHtml(display.icon)}</span>
+    <span class="tool-name">${escapeHtml(display.label)}</span>
+    ${detail}
+    ${status}
+  </div>`;
+}
 
 // ── Public API ──
 
@@ -274,10 +296,8 @@ export async function openBuildSessionDialog(
           .join("");
         const toolParts = parts
           .filter((p) => p.type === "tool-invocation" || p.type === "tool-call")
-          .map((p) => {
-            const name = p.toolName ?? p.tool ?? "tool";
-            return `<p class="session-msg-tool">⚙ ${escapeHtml(name)}</p>`;
-          })
+          .map((p) => renderSessionToolChip(p))
+          .filter(Boolean)
           .join("");
         if (!textParts && !toolParts) return "";
         return `<div class="session-msg" data-role="${escapeHtml(role)}">

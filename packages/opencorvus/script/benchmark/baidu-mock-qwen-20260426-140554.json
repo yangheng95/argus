@@ -1,0 +1,288 @@
+{
+  "generated_at": "2026-04-26T06:47:13.786Z",
+  "title": "Baidu qwen3.6-plus image2code",
+  "request_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\.baidu-mock-request.txt",
+  "executor": "claude-code",
+  "model": "alibaba-coding-plan-cn/qwen3.6-plus",
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+  "server": "http://127.0.0.1:63556/",
+  "taskID": "tsk_dc8652563001nhFRBleW2cEv2N",
+  "stage_timeout_ms": {
+    "spec": 86400000,
+    "planner": 86400000,
+    "tool": 600000,
+    "standby": 86400000,
+    "stall": 1200000,
+    "request": 30000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 1200000,
+  "completion_hard_timeout_ms": null,
+  "request_timeout_ms": 30000,
+  "taskStatus": "failed",
+  "evaluation": "",
+  "changedFiles": [
+    "index.html",
+    "script.js",
+    "src/mock/ads.js",
+    "src/mock/ai-recommendations.js",
+    "src/mock/analytics.js",
+    "src/mock/hot-search.js",
+    "src/mock/index.js",
+    "src/mock/search-suggestions.js",
+    "src/mock/user-status.js",
+    "styles.css",
+    "mirror/App.tsx",
+    "mirror/design-tokens.ts",
+    "mirror/extracted-page.json",
+    "mirror/image-analysis.json",
+    "mirror/page-ir.xml",
+    "mirror/reference.png",
+    "mirror/scaffold.json",
+    "mirror/shared-context.md"
+  ],
+  "transcriptCount": 254,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "暂无任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "Task state has advanced. Re-read the context snapshot and decide the next action.",
+    "liveRole": "agent",
+    "liveText": "Task state has advanced. Re-read the context snapshot and decide the next action.",
+    "reasoningVisible": false,
+    "assistantVisible": true,
+    "liveVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_dc8652563001nhFRBleW2cEv2N",
+    "boardStatus": "active",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "architect": {
+    "summary": "4 architect decisions across 3 categories",
+    "contractCount": 4,
+    "categories": [
+      "interface_contract",
+      "directory_blueprint",
+      "naming_convention"
+    ]
+  },
+  "plan": {
+    "id": "pln_dc86e5ed1001Av9dGA4tuG3cQc",
+    "version": 1,
+    "status": "active",
+    "summary": "3 goals"
+  },
+  "screenshot": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1777186032284.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 5896,
+    "resumeTaskID": null,
+    "resumeHomeDir": null
+  },
+  "timings_ms": {
+    "online": 964,
+    "submit": 1671,
+    "planning_visible": 2206,
+    "streaming_visible": 3125,
+    "task_created": 2213,
+    "task_selected": 2901,
+    "board_loaded": 2915,
+    "resumed": 5896,
+    "completed": 2464886,
+    "execution": 2463215
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+        "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_dc8652563001nhFRBleW2cEv2N"
+        ],
+        "taskList": "暂无任务",
+        "reasoning": "",
+        "assistantText": "",
+        "liveRole": "",
+        "liveText": "",
+        "visibleTurns": [],
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+        "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+        "selectedTaskID": "tsk_dc8652563001nhFRBleW2cEv2N",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_dc8652563001nhFRBleW2cEv2N"
+        ],
+        "taskList": "mirrorcode-overlay-benchmark-project-WW6z6b.../Local/Temp进行中Baidu qwen3.6-plus image2code进行中14:06:05",
+        "reasoning": "",
+        "assistantText": "Task state has advanced. Re-read the context snapshot and decide the next action.",
+        "liveRole": "agent",
+        "liveText": "Task state has advanced. Re-read the context snapshot and decide the next action.",
+        "visibleTurns": [
+          {
+            "role": "agent",
+            "text": "Task state has advanced. Re-read the context snapshot and decide the next action."
+          }
+        ],
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+          "directoryMode": "custom",
+          "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+          "workspaceTaskID": "tsk_dc8652563001nhFRBleW2cEv2N"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_dc8652563001nhFRBleW2cEv2N",
+        "boardTaskID": "tsk_dc8652563001nhFRBleW2cEv2N",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "failed",
+        "verdict": "",
+        "localExit": 1,
+        "qualityVerdict": "rejected"
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "command",
+    "command": "bun run D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\visual-diff.ts --rendered-dir=C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b --reference=D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\assets\\baidu.png --out=D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\baidu-mock-qwen-20260426-140554.visual-diff-out",
+    "exitCode": 1,
+    "stdout": "[visual-diff] rendered=C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b\\index.html reference=D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\assets\\baidu.png\n[visual-diff] FAIL mean=0.6869 (≥0.85) p5=-0.1136 (≥0.55) min=-0.5775 out=D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\baidu-mock-qwen-20260426-140554.visual-diff-out",
+    "stderr": ""
+  },
+  "artifact_audit": {
+    "source_files_added": 10,
+    "config_files_added": 0,
+    "doc_files_added": 1,
+    "source_file_count": 10,
+    "doc_file_count": 1,
+    "non_source_churn_ratio": 0.4444444444444444,
+    "readme_proliferation_count": 0,
+    "out_of_scope_file_count": 0,
+    "scaffold_noise_count": 0,
+    "placeholder_count": 0,
+    "out_of_scope_files": [],
+    "unmapped_files": [],
+    "placeholder_hits": [],
+    "duplicate_docs": [],
+    "scaffold_expansion_flags": []
+  },
+  "run_metrics": {
+    "meaningful_change_gap_ms": 819621,
+    "noop_cycle_count": 0,
+    "repeat_command_ratio": 0.9955555555555555,
+    "repeat_reasoning_similarity": 0.9955555555555555,
+    "required_check_pass_rate": 0,
+    "critical_check_pass_rate": 0,
+    "check_relevance_score": 0,
+    "verification_edit_ratio": 0,
+    "feature_coverage_p0": 0.5,
+    "scope_drift_score": 0,
+    "plan_to_change_traceability": 1,
+    "delivery_focus_score": 1
+  },
+  "failure_matrix": {
+    "verdict": "rejected",
+    "primary_failure": "verification_gap",
+    "failures": [
+      {
+        "category": "verification_gap",
+        "message": "Core delivery acceptance checks did not all pass",
+        "evidence": "taskStatus=failed, evaluationVerdict=, localVerifyExitCode=1"
+      }
+    ]
+  },
+  "manual_review_summary": "verification_gap: Core delivery acceptance checks did not all pass",
+  "overlay": {
+    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+    "selectedTaskID": "tsk_dc8652563001nhFRBleW2cEv2N",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_dc8652563001nhFRBleW2cEv2N"
+    ],
+    "taskList": "mirrorcode-overlay-benchmark-project-WW6z6b.../Local/Temp最近Baidu qwen3.6-plus image2code失败14:47:07",
+    "reasoning": "",
+    "assistantText": "Build batch settled — deliver not yet called this iteration\n1 goal_run_attempt artifact(s) landed since the last delivery verdict, but no delivery-agent-verdict followed. The workflow contract makes deliver mandatory after every build batch — passed builds are NOT terminal acceptance.\nRead the current describe / read_context state and call deliver next. If you believe deliver is not appropriate (e.g. all goals failed and need rework first), make that decision explicitly via the relevant tool (modify_goal / build with feedback / fail_task) — silence is not an option, the loop will keep waking you on this signal.",
+    "liveRole": "agent",
+    "liveText": "Previous decision turn aborted (LLM stream error)\nReason: UnknownError: unknown session error\nAborted session: ses_237754888ffeyYRhGWyL8QngPb\nRe-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).\nDecide autonomously what to do next:\n\nIf the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.\nIf the same failure repeats across decisions → call question for operator input or fail_task with a clear reason; do not loop indefinitely.\nIf a partial tool side-effect needs reconciling, address it before the next forward step.",
+    "visibleTurns": [
+      {
+        "role": "agent",
+        "text": "Previous decision turn aborted (LLM stream error)\nReason: UnknownError: unknown session error\nAborted session: ses_23775519ffferktsEotXptMieD\nRe-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).\nDecide autonomously what to do next:\n\nIf the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.\nIf the same failure repeats across decisions → call question for operator input or fail_task with a clear reason; do not loop indefinitely.\nIf a partial tool side-effect needs reconciling, address it before the next forward step."
+      },
+      {
+        "role": "agent",
+        "text": "Previous decision turn aborted (LLM stream error)\nReason: UnknownError: unknown session error\nAborted session: ses_237754bd1ffeEmRj6UkEPoHCy2\nRe-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).\nDecide autonomously what to do next:\n\nIf the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.\nIf the same failure repeats across decisions → call question for operator input or fail_task with a clear reason; do not loop indefinitely.\nIf a partial tool side-effect needs reconciling, address it before the next forward step."
+      },
+      {
+        "role": "agent",
+        "text": "Previous decision turn aborted (LLM stream error)\nReason: UnknownError: unknown session error\nAborted session: ses_237754a74ffe10eYDPZJb84G4X\nRe-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).\nDecide autonomously what to do next:\n\nIf the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.\nIf the same failure repeats across decisions → call question for operator input or fail_task with a clear reason; do not loop indefinitely.\nIf a partial tool side-effect needs reconciling, address it before the next forward step."
+      },
+      {
+        "role": "agent",
+        "text": "Previous decision turn aborted (LLM stream error)\nReason: UnknownError: unknown session error\nAborted session: ses_23775499bffeKHwo1KNHjdFvam\nRe-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).\nDecide autonomously what to do next:\n\nIf the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.\nIf the same failure repeats across decisions → call question for operator input or fail_task with a clear reason; do not loop indefinitely.\nIf a partial tool side-effect needs reconciling, address it before the next forward step."
+      },
+      {
+        "role": "agent",
+        "text": "Previous decision turn aborted (LLM stream error)\nReason: UnknownError: unknown session error\nAborted session: ses_237754888ffeyYRhGWyL8QngPb\nRe-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).\nDecide autonomously what to do next:\n\nIf the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.\nIf the same failure repeats across decisions → call question for operator input or fail_task with a clear reason; do not loop indefinitely.\nIf a partial tool side-effect needs reconciling, address it before the next forward step."
+      }
+    ],
+    "storage": {
+      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+      "directoryMode": "custom",
+      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\mirrorcode-overlay-benchmark-project-WW6z6b",
+      "workspaceTaskID": "tsk_dc8652563001nhFRBleW2cEv2N"
+    }
+  },
+  "diagnostics": {
+    "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\script\\benchmark\\baidu-mock-qwen-20260426-140554.events.json",
+    "event_count": 2475,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.task.updated": 4,
+        "orchestrator.run.created": 1,
+        "orchestrator.run.updated": 1,
+        "orchestrator.goal.passed": 2
+      },
+      "stages": {}
+    }
+  }
+}

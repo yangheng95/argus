@@ -45,7 +45,7 @@ export default defineConfig({
   },
   build: {
     outDir: "../dist-vite",
-    emptyDirBeforeBuild: true,
+    emptyOutDir: true,
     target: "esnext",
     rollupOptions: {
       external: [/^@tauri-apps\//],

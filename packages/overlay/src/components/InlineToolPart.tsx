@@ -1,6 +1,7 @@
 import { createMemo, For, Show } from "solid-js";
 import { DiffView, changeStatusLabel, type FileChange } from "./DiffView";
 import {
+  describeToolCall,
   displayToolIcon,
   displayToolDetail,
   toolStatusLabel,
@@ -221,13 +222,16 @@ function ToolDiffList(props: { items: ToolDiffItem[] }) {
 export function InlineToolPart(props: { part: any; mode?: "inline" | "block" | "body" }) {
   const mode = () => props.mode ?? "inline";
   const state = () => props.part.state || {};
-  const status = () => state().status || "pending";
   const toolName = () => props.part.tool || "unknown";
   const input = () => state().input || {};
-  const icon = () => displayToolIcon(toolName());
-  const statusLabel = () => toolStatusLabel(status());
+  const display = createMemo(() =>
+    describeToolCall(toolName(), input(), state(), selectedTaskDirectory()),
+  );
+  const status = () => display().status || "pending";
+  const icon = () => display().icon;
+  const statusLabel = () => display().statusLabel || toolStatusLabel(status());
   const detail = () => {
-    const raw = displayToolDetail(toolName(), input(), state(), selectedTaskDirectory());
+    const raw = display().detail;
     return raw && raw.toLowerCase() !== toolName().toLowerCase() ? raw : "";
   };
   const raw = () => {

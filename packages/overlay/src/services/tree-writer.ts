@@ -25,6 +25,7 @@ import { messageStore } from "../store/messages";
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message";
 import { stageAccent } from "../utils/card-color";
 import { t } from "../utils/i18n";
+import { normalizeToolPartRecord } from "../utils/tool";
 
 /** Raw i18n key for a role/stage, normalized so that backend variants
  *  ("design_analysis", "design_analyst", "design-analysis") all resolve
@@ -1318,8 +1319,12 @@ function upsertPart(sessionID: string, partID: string, part: any): void {
   const session = sessions.get(sessionID);
   if (!session) throw new Error(`upsertPart: unknown session ${sessionID}`);
   const existingIdx = session.partIndex.get(partID);
+  const previousPart = existingIdx !== undefined
+    ? cardTreeStore.cards[session.cardID].parts[existingIdx]
+    : undefined;
+  const normalizedPart = normalizeToolPartRecord(part, previousPart);
   if (existingIdx !== undefined) {
-    setCardTreeStore("cards", session.cardID, "parts", existingIdx, part);
+    setCardTreeStore("cards", session.cardID, "parts", existingIdx, normalizedPart);
     return;
   }
   setCardTreeStore(
@@ -1327,7 +1332,7 @@ function upsertPart(sessionID: string, partID: string, part: any): void {
     session.cardID,
     "parts",
     produce((parts: any[]) => {
-      parts.push(part);
+      parts.push(normalizedPart);
     }),
   );
   const newIdx = cardTreeStore.cards[session.cardID].parts.length - 1;

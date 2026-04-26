@@ -555,7 +555,27 @@ body[data-theme="light"] .card__round {
 
 /* Tool card: muted grey (no --card-stage injected for tool nodes) */
 .card[data-kind="tool"] { border-left-color: var(--card-stage-tool); }
-.card[data-kind="tool"] .card__title { font-family: var(--mono); font-weight: 500; font-size: var(--ui-font-small); }
+.card[data-kind="tool"] .card__title-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  column-gap: calc(6px * var(--ui-scale, 1));
+  row-gap: calc(2px * var(--ui-scale, 1));
+}
+.card[data-kind="tool"] .card__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: var(--ui-font-small);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.card[data-kind="tool"] .card__title-spacer {
+  display: none;
+}
 .card[data-kind="tool"] .card__meta-row {
   align-items: flex-start;
   flex-wrap: wrap;
@@ -574,6 +594,11 @@ body[data-theme="light"] .card__round {
   font-family: var(--mono);
   font-size: calc(var(--card-sub-size) - 0.2px);
   line-height: 1.46;
+  padding-left: 0;
+  margin-left: 0;
+}
+.card[data-kind="tool"] .card__subtitle::before {
+  content: none;
 }
 .card[data-kind="tool"].card--expanded {
   width: fit-content;

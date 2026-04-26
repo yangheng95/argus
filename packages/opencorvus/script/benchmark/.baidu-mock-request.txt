@@ -1,0 +1,21 @@
+请按附图（百度首页）所示的网页设计，复刻一份高保真静态克隆，并对所有数据/接口调用进行 mock：
+
+【视觉还原】
+- 颜色、字体、间距、布局必须与截图一致
+- 顶部 Logo、搜索框、搜索按钮、底部链接、热搜列表等可视组件全部要还原
+- 文案与图标按截图所示原样保留
+
+【接口 mock 要求】
+- 这是一个纯前端静态克隆，禁止任何真实的网络请求（fetch / XHR / WebSocket / SSE / 第三方 SDK 远端调用）
+- 所有数据来源（搜索建议、热搜榜、用户头像/登录状态、AI 入口推荐、广告位、统计上报等）必须 mock 成本地静态 JSON 或函数返回值
+- 所有用户交互（点击搜索、选中建议、点击热搜、登录入口、设置入口等）必须落地到 mock 函数：要么打开 mock 结果页，要么把行为打到 console / 内置 toast，禁止真的跳转到 baidu.com
+- mock 数据要尽量贴合截图里能看到的内容（例如热搜榜的标题、AI 入口的文案）
+
+【运行约束】
+- 实现技术不限，但最终产物必须可在本地通过 `webpage_render` 渲染（无需后端服务即可打开静态文件）
+- 必须通过 `webpage_vision_judge` 视觉判定与参考截图对齐
+
+【流程】
+- 由于只提供了截图（没有线上 URL），请走 image-generate 流程：
+  webpage_image_extract → webpage_image_compile → 实现 → webpage_render + webpage_vision_judge 迭代
+- 在 architect / build 阶段的契约中必须明确声明「所有 API 已 mock」这一约束，并在交付产物里附带一个 `mocks/` 目录或 `src/mock/` 模块说明每条 mock 数据的来源
