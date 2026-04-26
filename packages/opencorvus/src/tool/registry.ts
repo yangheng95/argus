@@ -32,7 +32,6 @@ import { MemoryTool } from "./memory"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { PanelTool } from "./panel"
-import { TuiTool } from "./tui"
 import { TaskReportTool } from "./task-report"
 import { GoalReportTool } from "./goal-report"
 import {
@@ -147,7 +146,6 @@ export namespace ToolRegistry {
       ScheduleTool,
       PlannerTool,
       PanelTool,
-      TuiTool,
       TaskReportTool,
       GoalReportTool,
       AnalyticsTool,
