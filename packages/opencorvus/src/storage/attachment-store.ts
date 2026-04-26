@@ -239,6 +239,131 @@ export namespace AttachmentStore {
     }))
   }
 
+  /** A staged attachment — the result of copying a content-addressed task
+   *  attachment into a build worktree's `references/` subdirectory so the
+   *  build agent sees a worktree-LOCAL relative path it can pass to tools
+   *  whose sandbox checks reject paths escaping the worktree (rule 1: the
+   *  sandbox refuses every path outside the worktree; the staging step is
+   *  what gives the agent a path inside it). */
+  export interface StagedAttachment {
+    /** Path relative to the worktree (e.g. `references/screenshot.png`). */
+    relPath: string
+    /** Absolute path inside the worktree. */
+    absPath: string
+    /** MIME type carried over from the source reference. */
+    mime: string
+    /** Original filename (when present), preserved verbatim before staging. */
+    originalFilename?: string
+  }
+
+  /** Subdirectory under each build worktree where staged user-contract
+   *  attachments live. Single source — all callers (build agent, skill
+   *  text, image-generate prompt) reference this constant. */
+  export const STAGED_REFERENCES_SUBDIR = "references"
+
+  /**
+   * Copy each multimodal task attachment into `<worktreeDir>/references/<file>`
+   * so the build agent can pass worktree-LOCAL relative paths to sandboxed
+   * tools (e.g. `webpage_image_extract` rejects any path outside the worktree
+   * via `loadImage`'s sandbox check).
+   *
+   * Why copy not symlink: cross-FS robustness on Windows (symlinks need admin
+   * by default) and content-addressed inputs are small enough that a copy
+   * costs nothing. Existing files at the destination are skipped silently —
+   * staging is idempotent and re-entrant across goal retries.
+   *
+   * Filename policy: prefer the attachment's original `filename` when it's
+   * shell-safe (ASCII alphanumerics + `._-` + spaces preserved as-is — we
+   * only ban shell metacharacters and path separators). Otherwise fall back
+   * to `attachment-<index>-<sha-prefix>.<ext>` so the LLM still gets a stable
+   * reference. CJK filenames pass through (filesystem accepts them; the
+   * sandbox check looks at path containment, not character set).
+   *
+   * Returns the staged metadata in the same order as `attachments`. Empty
+   * input returns `[]` without creating the `references/` directory.
+   */
+  export async function stageToWorktree(
+    projectID: string,
+    attachments: readonly AttachmentLike[] | undefined,
+    worktreeDir: string,
+  ): Promise<StagedAttachment[]> {
+    const { multimodal } = partition(attachments)
+    if (multimodal.length === 0) return []
+
+    const refsDir = path.join(worktreeDir, STAGED_REFERENCES_SUBDIR)
+    await fs.mkdir(refsDir, { recursive: true })
+
+    const staged: StagedAttachment[] = []
+    for (let i = 0; i < multimodal.length; i++) {
+      const a = multimodal[i]
+      const located = nameFromUrl(String(a.url ?? ""))
+      if (!located) {
+        throw new Error(
+          `AttachmentStore.stageToWorktree: attachment ${a.filename ?? a.sha ?? `#${i}`} has no resolvable url`,
+        )
+      }
+      const sourceAbs = resolveAbsolute(located.projectID, located.name)
+      if (!sourceAbs) {
+        throw new Error(
+          `AttachmentStore.stageToWorktree: attachment ${located.projectID}/${located.name} not resolvable on disk`,
+        )
+      }
+
+      const filename = chooseStagedFilename({
+        original: a.filename,
+        mime: typeof a.mime === "string" ? a.mime : "",
+        sha: a.sha,
+        index: i,
+      })
+      const destAbs = path.join(refsDir, filename)
+
+      // Idempotent — skip when destination already exists. Content-addressed
+      // sources mean re-running staging on a re-entered worktree (goal retry)
+      // is a no-op.
+      const existing = await fs.stat(destAbs).catch(() => null)
+      if (!existing) {
+        await fs.copyFile(sourceAbs, destAbs)
+      }
+
+      staged.push({
+        relPath: `${STAGED_REFERENCES_SUBDIR}/${filename}`,
+        absPath: destAbs,
+        mime: typeof a.mime === "string" ? a.mime : "application/octet-stream",
+        originalFilename: a.filename,
+      })
+    }
+    return staged
+  }
+
+  /** Render a markdown bullet list of staged attachment paths for the
+   *  build agent's user message — appended alongside / instead of the URL
+   *  reference list when staging happened. */
+  export function renderStagedList(staged: readonly StagedAttachment[]): string {
+    if (staged.length === 0) return ""
+    const lines = staged
+      .map((s) => `- \`${s.relPath}\` — ${s.mime}` + (s.originalFilename ? ` (originally \`${s.originalFilename}\`)` : ""))
+      .join("\n")
+    return (
+      `\n\n## Staged Reference Files (already inside this worktree)\n` +
+      `These files were copied here so you can pass them to tools that reject paths outside the worktree.\n` +
+      `Use the relative paths verbatim — do NOT \`cp\` them again to other locations.\n${lines}`
+    )
+  }
+
+  // ASCII-printable + space; reject shell metacharacters and path separators.
+  const SAFE_FILENAME_RE = /^[A-Za-z0-9._\-一-鿿 ]+$/
+  function chooseStagedFilename(input: {
+    original?: string
+    mime: string
+    sha?: string
+    index: number
+  }): string {
+    if (input.original && SAFE_FILENAME_RE.test(input.original)) return input.original
+    const ext = extensionFor(input.mime, input.original)
+    const shaPrefix = (input.sha ?? "").slice(0, 8) || "noref"
+    return `attachment-${input.index + 1}-${shaPrefix}.${ext}`
+  }
+
   /** Extract the stored filename (`<sha>.<ext>`) from a reference URL. */
   export function nameFromUrl(url: string): { projectID: string; name: string } | undefined {
     const prefix = `${ROUTE_PREFIX}/`

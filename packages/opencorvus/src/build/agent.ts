@@ -184,6 +184,50 @@ export namespace BuildAgent {
         baseRef = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(worktreeDir).text()).trim() || undefined
       }
 
+      // Stage user-contract image attachments into `<worktree>/references/`
+      // so the build agent can pass worktree-LOCAL relative paths to tools
+      // whose sandbox checks reject paths outside the worktree (notably
+      // `webpage_image_extract`'s `loadImage` sandbox check). Without this,
+      // the agent had to discover the attachments dir via glob/ls and copy
+      // each file by hand before each tool call — three retries observed
+      // during the first claude-sonnet bench run before Sonnet figured out
+      // the dance. The staging contract is owned by AttachmentStore (rule 22
+      // — single source for "where staged attachments live"); this build
+      // agent path just invokes it. Caller-owned worktrees (input.workDir)
+      // skip — the caller is responsible for staging in that path.
+      let stagedAttachments: AttachmentStore.StagedAttachment[] = []
+      if (ownsWorktree && worktreeDir && Array.isArray(input.task.attachments) && input.task.attachments.length > 0) {
+        try {
+          stagedAttachments = await AttachmentStore.stageToWorktree(
+            Instance.project.id,
+            input.task.attachments as Array<{
+              sha?: string
+              url?: string
+              mime?: string
+              size?: number
+              filename?: string
+            }>,
+            worktreeDir,
+          )
+          if (stagedAttachments.length > 0) {
+            log.info("build agent: staged task attachments into worktree references/", {
+              taskID: input.task.id,
+              count: stagedAttachments.length,
+              worktreeDir,
+            })
+          }
+        } catch (err) {
+          // Hard fail (rule 1) — without staging the build agent is back to
+          // the discover-and-cp dance and downstream tool calls will fail
+          // sandbox checks. Surface so the orchestrator marks the build as
+          // failed instead of silently degrading.
+          throw new Error(
+            `build agent: failed to stage task attachments into worktree references/ — ${err instanceof Error ? err.message : String(err)}`,
+            { cause: err instanceof Error ? err : undefined },
+          )
+        }
+      }
+
       // Skill auto-load goes through the runner's system-prompt path
       // (rule 22: single-source skill injection lives on the system side
       // for every agent — auto-detected, never stuffed into user prompt).
@@ -214,7 +258,18 @@ export namespace BuildAgent {
             const text = buildPromptText()
             const { referenceOnly } = AttachmentStore.partition(allMultimodal)
             const inline = await AttachmentStore.inlineFileParts(allMultimodal)
-            const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+            // Three layers of context for attachments, each with a different
+            // role and required to coexist (rule 22 — staging doesn't
+            // replace inlining; inlining doesn't replace listing):
+            //   1. inline file parts → the LLM physically sees the pixels
+            //   2. renderStagedList → tells the LLM the worktree-local path
+            //      so it can pass them to sandbox-checked tools
+            //   3. renderReferenceList → URL list for non-multimodal refs
+            //      that can't be inlined and aren't staged
+            const enrichedText =
+              text +
+              AttachmentStore.renderStagedList(stagedAttachments) +
+              AttachmentStore.renderReferenceList(referenceOnly)
             return [{ type: "text" as const, text: enrichedText }, ...inline]
           }
         : undefined
