@@ -46,6 +46,9 @@ import {
   WebpageEvaluateTool,
   WebpageTextDiffTool,
   WebpageVisionJudgeTool,
+  FigmaExtractTool,
+  FigmaCompileTool,
+  FigmaAnalyzeTool,
 } from "../mirror/tools"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
@@ -158,6 +161,9 @@ export namespace ToolRegistry {
       WebpageEvaluateTool,
       WebpageTextDiffTool,
       WebpageVisionJudgeTool,
+      FigmaExtractTool,
+      FigmaCompileTool,
+      FigmaAnalyzeTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
