@@ -85,7 +85,9 @@ export interface UserPart {
 /**
  * Build the AI SDK `messages` array (system + single user message with
  * interleaved text + image parts). The caller sets the model + schema and
- * passes the result straight to `streamObject` / `generateObject`.
+ * passes the result straight to `streamObject` (rule 27 — streaming-only;
+ * the SDK enforces the schema as the structured-output contract so no
+ * post-stream defensive parsing is needed).
  */
 export function imageExtractMessages(input: ImageExtractPromptInput): {
   system: string

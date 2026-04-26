@@ -59,7 +59,7 @@ describe("compileImageAnalysisToXML", () => {
   test("produces XmlIR with deterministic structure for the demo fixture", () => {
     const ir = compileImageAnalysisToXML(FIXTURE)
 
-    expect(ir.source).toBe("url")
+    expect(ir.source).toBe("image")
     expect(ir.bytes).toBe(Buffer.byteLength(ir.xml, "utf8"))
     expect(ir.estimatedTokens).toBeGreaterThan(0)
 
