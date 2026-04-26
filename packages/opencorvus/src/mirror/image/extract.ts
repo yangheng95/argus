@@ -95,6 +95,24 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
       })
 
       let analysis: ImageAnalysis | undefined
+      // Capture stream-text fragments so failure logs can show the actual
+      // bytes the model produced. Without this, "No object generated"
+      // alone cannot distinguish between (a) interleaved reasoning
+      // poisoning the JSON channel, (b) output truncation hitting the
+      // model's max_tokens, or (c) the provider downgrading to JSON mode
+      // and the model returning prose-wrapped JSON.
+      let rawTextLen = 0
+      let rawTextHead = ""
+      let rawTextTail = ""
+      const HEAD_BYTES = 800
+      const TAIL_BYTES = 800
+      const captureRaw = (chunk: string) => {
+        rawTextLen += chunk.length
+        if (rawTextHead.length < HEAD_BYTES) {
+          rawTextHead = (rawTextHead + chunk).slice(0, HEAD_BYTES)
+        }
+        rawTextTail = (rawTextTail + chunk).slice(-TAIL_BYTES)
+      }
       try {
         const result = streamObject({
           model: input.model,
@@ -104,19 +122,36 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
           abortSignal: input.signal,
         })
         // Drain the partial-object stream — required to surface validation
-        // failures and to materialise the final value.
+        // failures and to materialise the final value. Concurrently tap the
+        // raw text stream for diagnostics on the failure path.
+        const textTap = (async () => {
+          try {
+            for await (const chunk of result.textStream) captureRaw(chunk)
+          } catch {
+            // textStream is best-effort diagnostics; never fail the call.
+          }
+        })()
         for await (const _ of result.partialObjectStream) { void _ }
         analysis = (await result.object) as ImageAnalysis
+        await textTap
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err)
+        const causeMsg =
+          err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined
         log.error("image extract: vision-LLM call failed", {
           imagePath: img.label,
           reason,
+          cause: causeMsg,
+          rawLen: rawTextLen,
+          rawHead: rawTextHead,
+          rawTail: rawTextTail,
         })
         throw new ImageExtractError({
-          reason: `vision-LLM call failed for image ${i + 1}/${loaded.length}: ${reason}`,
+          reason:
+            `vision-LLM call failed for image ${i + 1}/${loaded.length}: ${reason}` +
+            (rawTextLen > 0 ? ` [model emitted ${rawTextLen} chars of text-stream; head=${JSON.stringify(rawTextHead.slice(0, 200))}]` : " [model emitted 0 chars on text-stream]"),
           imagePath: img.label,
-          cause: reason,
+          cause: causeMsg || reason,
         })
       }
 

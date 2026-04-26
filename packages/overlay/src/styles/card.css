@@ -294,16 +294,17 @@ body[data-theme="light"] .card__round {
   font-size: var(--card-sub-size);
   color: color-mix(in srgb, var(--text-muted) 92%, transparent);
   font-weight: 400;
-  /* Up to 10 lines, preserving newlines from the original message — no
-   * ellipsis-padding for short messages, no truncation in the middle of
-   * a thought. CSS handles overflow via -webkit-line-clamp. */
+  /* Hard cap at 3 lines — pinboard with 10+ cards × 10 lines becomes a
+   * wall of text. Short messages render in full (line-clamp doesn't
+   * pad), longer ones truncate with built-in ellipsis. Full payload
+   * lives in the title attribute (hover to read). */
   display: -webkit-box;
-  -webkit-line-clamp: 10;
-  line-clamp: 10;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: pre-wrap;
-  line-height: 1.5;
+  line-height: 1.45;
   word-break: break-word;
   border-left: 2px solid color-mix(in srgb, var(--card-stage, var(--text-muted)) 35%, transparent);
   padding-left: 8px;
