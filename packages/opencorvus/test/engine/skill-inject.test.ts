@@ -1,7 +1,51 @@
 import { describe, expect, test } from "bun:test"
-import { resolveStageSkills } from "../../src/engine/skill-inject"
+import { deriveUrlSignals, resolveStageSkills } from "../../src/engine/skill-inject"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+
+describe("deriveUrlSignals", () => {
+  test("partitions figma URLs out of the generic URL signal", () => {
+    expect(deriveUrlSignals("复刻 https://www.figma.com/design/abc/title")).toEqual({
+      request_contains_url: false,
+      request_contains_figma_url: true,
+    })
+    expect(deriveUrlSignals("clone https://example.com/")).toEqual({
+      request_contains_url: true,
+      request_contains_figma_url: false,
+    })
+    expect(deriveUrlSignals("纯文本 — 无 URL")).toEqual({
+      request_contains_url: false,
+      request_contains_figma_url: false,
+    })
+  })
+
+  test("text containing both a figma URL and another URL splits cleanly", () => {
+    const out = deriveUrlSignals(
+      "Mockup at https://www.figma.com/file/xyz, also see https://example.com/spec",
+    )
+    expect(out.request_contains_figma_url).toBe(true)
+    expect(out.request_contains_url).toBe(true)
+  })
+
+  test("recognises figma proto / board / design / file paths", () => {
+    for (const path of ["file", "design", "proto", "board"]) {
+      expect(
+        deriveUrlSignals(`https://figma.com/${path}/abc/x`).request_contains_figma_url,
+      ).toBe(true)
+    }
+  })
+
+  test("undefined / empty input is fully false", () => {
+    expect(deriveUrlSignals(undefined)).toEqual({
+      request_contains_url: false,
+      request_contains_figma_url: false,
+    })
+    expect(deriveUrlSignals("")).toEqual({
+      request_contains_url: false,
+      request_contains_figma_url: false,
+    })
+  })
+})
 
 describe("resolveStageSkills", () => {
   test("always prepends the stage invariant for delivery, even with zero skills matched", async () => {
@@ -103,6 +147,28 @@ describe("resolveStageSkills", () => {
         })
         const skillNames = result.skills.map((s) => s.name)
         expect(skillNames).toContain("webpage-generate")
+        expect(skillNames).not.toContain("image-generate")
+      },
+    })
+  })
+
+  test("figma URL ± image does NOT fire webpage-generate or image-generate", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // Even with image attached, a figma URL routes via deriveUrlSignals
+        // to { request_contains_url: false, request_contains_figma_url: true }.
+        // image-generate vetoes on figma_url=true; webpage-generate fails the
+        // url=true check (url is false here). Both abstain — leaving the
+        // figma-generate skill (added in the next commit) the lone match.
+        const result = await resolveStageSkills([], "build", {
+          has_attachment_image: true,
+          ...deriveUrlSignals("复刻 https://www.figma.com/design/abc/title"),
+          request_text: "复刻 https://www.figma.com/design/abc/title",
+        })
+        const skillNames = result.skills.map((s) => s.name)
+        expect(skillNames).not.toContain("webpage-generate")
         expect(skillNames).not.toContain("image-generate")
       },
     })

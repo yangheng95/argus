@@ -22,7 +22,7 @@ import { toolGuard } from "@/util/tool-guard"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 import { EngineConfig, clarificationTranscriptSection, operatorNotesSection } from "@/engine"
-import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
+import { deriveUrlSignals, resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { buildTaskUpstreamAgentContextSections } from "@/prompt/upstream-context"
 import { findActiveSpecForTask, findRequirements } from "@/engine/store"
 import type { RequirementRow } from "@/engine/store"
@@ -72,7 +72,7 @@ export namespace DeliveryAgent {
     const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
     const taskSignals: TaskSignals = {
       has_attachment_image: (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/")),
-      request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
+      ...deriveUrlSignals(input.task.request ?? ""),
       request_text: input.task.request,
     }
 
@@ -616,7 +616,7 @@ export async function deliveryAgentSystem(input?: VerifyInput): Promise<{ prompt
   const taskSignals: TaskSignals | undefined = input
     ? {
         has_attachment_image: (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/")),
-        request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
+        ...deriveUrlSignals(input.task.request ?? ""),
         request_text: input.task.request,
       }
     : undefined

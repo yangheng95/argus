@@ -6,6 +6,7 @@ auto_detect:
   task_signals:
     has_attachment_image: true
     request_contains_url: false
+    request_contains_figma_url: false
 priority: 60
 required_tools:
   - webpage_image_extract

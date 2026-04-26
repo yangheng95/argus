@@ -187,10 +187,11 @@ export namespace BuildAgent {
       // Skill auto-load goes through the runner's system-prompt path
       // (rule 22: single-source skill injection lives on the system side
       // for every agent — auto-detected, never stuffed into user prompt).
+      const { deriveUrlSignals } = await import("@/engine/skill-inject")
       const taskSignals: import("@/engine/skill-inject").TaskSignals = {
         has_attachment_image: Array.isArray(input.task.attachments)
           && input.task.attachments.some((a: any) => typeof a?.mime === "string" && a.mime.startsWith("image/")),
-        request_contains_url: /\bhttps?:\/\/\S+/i.test(input.task.request ?? ""),
+        ...deriveUrlSignals(input.task.request ?? ""),
         request_text: input.task.request ?? "",
       }
 
