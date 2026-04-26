@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { type Context } from "hono"
-import { TuiControlRoutes, callTui } from "../../src/server/routes/tui-control"
+import { TuiRoutes, callTui } from "../../src/server/routes/tui"
 
 function ctx(path: string, body: unknown) {
   return {
@@ -13,24 +13,24 @@ function ctx(path: string, body: unknown) {
 
 describe("server.tui-control", () => {
   test("routes responses by request id under concurrency", async () => {
-    const app = TuiControlRoutes()
+    const app = TuiRoutes()
     const left = callTui(ctx("/left", { value: "L" }))
     const right = callTui(ctx("/right", { value: "R" }))
 
-    const firstRes = await app.request("/next")
-    const secondRes = await app.request("/next")
+    const firstRes = await app.request("/control/next")
+    const secondRes = await app.request("/control/next")
     const first = (await firstRes.json()) as { id: string; path: string }
     const second = (await secondRes.json()) as { id: string; path: string }
 
     const leftId = first.path === "/left" ? first.id : second.id
     const rightId = first.path === "/right" ? first.id : second.id
 
-    await app.request("/response", {
+    await app.request("/control/response", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: rightId, body: { ok: "R" } }),
     })
-    await app.request("/response", {
+    await app.request("/control/response", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: leftId, body: { ok: "L" } }),
@@ -41,8 +41,8 @@ describe("server.tui-control", () => {
   })
 
   test("returns false for unknown response id", async () => {
-    const app = TuiControlRoutes()
-    const res = await app.request("/response", {
+    const app = TuiRoutes()
+    const res = await app.request("/control/response", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: "missing", body: { ok: true } }),
@@ -52,11 +52,11 @@ describe("server.tui-control", () => {
   })
 
   test("rejects pending request on error response", async () => {
-    const app = TuiControlRoutes()
+    const app = TuiRoutes()
     const pending = callTui(ctx("/left", { value: "L" }))
-    const req = await app.request("/next")
+    const req = await app.request("/control/next")
     const body = (await req.json()) as { id: string }
-    await app.request("/response", {
+    await app.request("/control/response", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: body.id, error: "boom" }),
@@ -65,8 +65,8 @@ describe("server.tui-control", () => {
   })
 
   test("returns 400 for malformed response payload", async () => {
-    const app = TuiControlRoutes()
-    const res = await app.request("/response", {
+    const app = TuiRoutes()
+    const res = await app.request("/control/response", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id: "missing" }),
@@ -78,16 +78,16 @@ describe("server.tui-control", () => {
     const old = process.env.OPENCORVUS_TUI_CONTROL_TIMEOUT_MS
     process.env.OPENCORVUS_TUI_CONTROL_TIMEOUT_MS = "1000"
     try {
-      const app = TuiControlRoutes()
+      const app = TuiRoutes()
       const stale = callTui(ctx("/stale", { value: "stale" }))
       await expect(stale).rejects.toThrow("tui control response timeout")
 
       const fresh = callTui(ctx("/fresh", { value: "fresh" }))
-      const next = await app.request("/next")
+      const next = await app.request("/control/next")
       const body = (await next.json()) as { id: string; path: string }
       expect(body.path).toBe("/fresh")
 
-      await app.request("/response", {
+      await app.request("/control/response", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: body.id, body: { ok: true } }),
