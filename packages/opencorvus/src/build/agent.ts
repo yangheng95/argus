@@ -91,6 +91,13 @@ export namespace BuildAgent {
      *  retry entries. Empty / undefined on the first attempt. The caller
      *  composes the markdown so this agent doesn't need DB access. */
     retryFeedback?: string
+    /** Pre-formatted multimodal file parts produced by upstream evidence —
+     *  typically the previous attempt's rendered.png from delivery's visual
+     *  hard gate so the build LLM can see what it actually produced versus
+     *  the user reference. Each entry's `url` MUST already be a data URL or
+     *  resolvable; the build agent splices these directly into the user
+     *  message after `task.attachments`. */
+    retryAttachments?: Array<{ url: string; mime: string; filename?: string }>
   }
 
   export interface RunInput {
@@ -197,11 +204,15 @@ export namespace BuildAgent {
         ? (input.task.attachments as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
         : []
       ).filter((a) => typeof a?.url === "string" && typeof a?.mime === "string")
-      const buildUserPartsFn = taskAttachments.length > 0
+      const retryAttachments = (input.context?.retryAttachments ?? []).filter(
+        (a) => typeof a?.url === "string" && typeof a?.mime === "string",
+      ) as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
+      const allMultimodal = [...taskAttachments, ...retryAttachments]
+      const buildUserPartsFn = allMultimodal.length > 0
         ? async () => {
             const text = buildPromptText()
-            const { referenceOnly } = AttachmentStore.partition(taskAttachments)
-            const inline = await AttachmentStore.inlineFileParts(taskAttachments)
+            const { referenceOnly } = AttachmentStore.partition(allMultimodal)
+            const inline = await AttachmentStore.inlineFileParts(allMultimodal)
             const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
             return [{ type: "text" as const, text: enrichedText }, ...inline]
           }
