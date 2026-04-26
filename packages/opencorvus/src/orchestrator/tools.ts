@@ -2055,7 +2055,7 @@ export function createOrchestratorTools(input: {
           // ran for the current spec snapshot / delivery. Without this the
           // orchestrator-LLM cannot tell "integrity returned pass (no goal
           // change)" from "integrity never called" — same death-loop shape that
-          // commit 7acb5f17f addressed for build via recordBuildAttempt.
+          // commit 7acb5f17f addressed for build via begin/finalizeBuildAttempt.
           const { EngineArtifactTable } = await import("@/engine/engine.sql")
           const { desc } = await import("@/storage/db")
           const activeSpec = findActiveSpecForTask(taskID)
@@ -3793,6 +3793,35 @@ export function createOrchestratorTools(input: {
             target = { kind: "request", text: request }
           }
 
+          // Open the goal_run BEFORE handing off to BuildAgent.run so the
+          // overlay's goal step card materializes at dispatch time (lazy
+          // gate: `goalWorkflows[i].steps[build].startedAt > 0`). Without
+          // this, the row only existed post-completion (single insert with
+          // time_started == time_completed), so the card spawned already-
+          // finished. Goal-path only — direct/request builds have no goal
+          // row to attach an attempt to.
+          let goalRunID: string | undefined
+          if (attachedGoalID) {
+            try {
+              const { beginBuildAttempt } = await import("@/engine/persist")
+              goalRunID = beginBuildAttempt({
+                taskID,
+                goalID: attachedGoalID,
+                runID: coordinatorRunID,
+              })
+            } catch (beginErr) {
+              // A failure here is structural — overlay won't get the
+              // running card and finalizeBuildAttempt has nothing to
+              // update. Surface and let the dispatch fail rather than
+              // silently degrade to the old "appear at completion" UX.
+              log.error("build: beginBuildAttempt failed", {
+                taskID, goalID: attachedGoalID,
+                error: beginErr instanceof Error ? beginErr.message : String(beginErr),
+              })
+              throw beginErr
+            }
+          }
+
           const { result, sessionID, worktreeDir, diffs } = await BuildAgent.run({
             target,
             task,
@@ -3801,34 +3830,41 @@ export function createOrchestratorTools(input: {
             signal: input.signal,
           })
 
-          // Record the build outcome as a goal_run_attempt artifact so
-          // describe / read_context derive the goal as passed/failed and
-          // the orchestrator's next decision turn doesn't re-dispatch
-          // the same goal indefinitely. Goal-only path (pipeline workflow):
-          // the direct workflow has no goal row to attribute the attempt
-          // to and orchestrator already reads the build tool_result text.
-          if (attachedGoalID) {
+          // Finalize the goal_run opened above. updateGoalRun writes a new
+          // append-only artifact with the terminal status + time_completed,
+          // and finalizeBuildAttempt also lays down the per-goal delivery
+          // artifact when the build passed with concrete diffs (overlay's
+          // right-side Files panel reads it via findDeliveryByGoalRun).
+          if (attachedGoalID && goalRunID) {
             try {
-              const { recordBuildAttempt } = await import("@/engine/persist")
-              recordBuildAttempt({
+              const { finalizeBuildAttempt } = await import("@/engine/persist")
+              finalizeBuildAttempt({
+                goalRunID,
                 taskID,
                 goalID: attachedGoalID,
-                sessionID,
+                runID: coordinatorRunID,
                 status: result.status === "passed" ? "completed" : "failed",
                 commitRef: result.commit_ref,
                 workspaceDir: worktreeDir,
-                runID: coordinatorRunID,
                 error: result.error,
                 diffs,
                 summary: result.summary,
               })
+              // Backfill session_id on the goal_run now that BuildAgent.run
+              // has assigned one. Routing keys on goalID, but downstream
+              // tracing (orphan detection, audit) expects session_id on the
+              // tip artifact. updateGoalRun's append model handles this.
+              if (sessionID) {
+                const { updateGoalRun } = await import("@/engine/persist")
+                updateGoalRun(goalRunID, { session_id: sessionID })
+              }
             } catch (persistErr) {
               // Failing to record the attempt does NOT abort the build —
               // the LLM still gets the tool_result text. Log loudly so
               // it's visible during benchmarks; the loop guard
               // (MAX_TASK_ITERATIONS) will catch the runaway if persists
               // are silently dropped.
-              log.error("build: recordBuildAttempt failed", {
+              log.error("build: finalizeBuildAttempt failed", {
                 taskID, goalID: attachedGoalID,
                 error: persistErr instanceof Error ? persistErr.message : String(persistErr),
               })
