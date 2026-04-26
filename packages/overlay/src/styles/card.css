@@ -1170,89 +1170,153 @@ body[data-theme="light"] .card__round {
   padding: 4px 0;
 }
 
-/* ── BoardIntro: right-panel empty state when no task is selected ───── */
+/* ── BoardIntro: right-panel empty state when no task is selected ─────
+ *
+ * Calm typographic layout — drop the per-item card bordering, the mono
+ * labels, and the uppercase section heads. Modes sit in a 2-col grid;
+ * pipeline is a numbered list with subtle rank glyphs and a left rail
+ * tinted by the accent so it reads as one ordered flow rather than a
+ * stack of identical chips.
+ */
 .board-intro {
   display: flex;
   flex-direction: column;
-  gap: calc(14px * var(--ui-scale, 1));
-  padding: calc(14px * var(--ui-scale, 1)) calc(16px * var(--ui-scale, 1));
+  gap: calc(20px * var(--ui-scale, 1));
+  padding: calc(20px * var(--ui-scale, 1)) calc(18px * var(--ui-scale, 1));
   color: var(--text-soft, #c9c9c9);
   font-size: calc(12.5px * var(--ui-scale, 1));
   line-height: 1.55;
 }
+
 .board-intro__head {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--ui-scale, 1));
 }
 .board-intro__title {
   margin: 0;
-  font-size: calc(14px * var(--ui-scale, 1));
+  font-size: calc(15.5px * var(--ui-scale, 1));
   font-weight: 600;
   color: var(--text-strong, #eee);
-  letter-spacing: 0.01em;
+  letter-spacing: -0.005em;
 }
 .board-intro__tagline {
   margin: 0;
   color: var(--text-muted, #9a9a9a);
+  font-size: calc(12px * var(--ui-scale, 1));
 }
+
 .board-intro__section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--ui-scale, 1));
 }
 .board-intro__section-title {
   margin: 0;
-  font-size: calc(11px * var(--ui-scale, 1));
+  font-size: calc(11.5px * var(--ui-scale, 1));
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--text-muted, #9a9a9a);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.board-intro__modes,
+
+/* ── Modes: two-column grid, no per-cell border ───────────────────── */
+.board-intro__modes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(10px * var(--ui-scale, 1));
+}
+.board-intro__mode {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3px * var(--ui-scale, 1));
+  padding-left: calc(10px * var(--ui-scale, 1));
+  border-left: 2px solid color-mix(in srgb, var(--text-muted, #888) 30%, transparent);
+}
+.board-intro__mode[data-mode="workflow"] {
+  border-left-color: var(--accent, #5b8def);
+}
+.board-intro__mode[data-mode="build"] {
+  border-left-color: var(--accent-positive, #6ec46e);
+}
+.board-intro__mode-label {
+  font-weight: 600;
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  color: var(--text-strong, #eee);
+  letter-spacing: 0;
+}
+.board-intro__mode-desc {
+  color: var(--text-soft, #c0c0c0);
+  font-size: calc(11.5px * var(--ui-scale, 1));
+  line-height: 1.5;
+}
+
+/* ── Agents: numbered pipeline list ───────────────────────────────── */
 .board-intro__agents {
   list-style: none;
   margin: 0;
   padding: 0;
+  counter-reset: board-intro-agents;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
-.board-intro__mode,
 .board-intro__agent {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
-  border: 1px solid var(--card-border, rgba(255, 255, 255, 0.08));
-  border-radius: calc(6px * var(--ui-scale, 1));
-  background: var(--surface-inset, rgba(255, 255, 255, 0.02));
+  counter-increment: board-intro-agents;
+  position: relative;
+  display: grid;
+  grid-template-columns: calc(22px * var(--ui-scale, 1)) 1fr;
+  column-gap: calc(10px * var(--ui-scale, 1));
+  padding: calc(8px * var(--ui-scale, 1)) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--card-border, rgba(255,255,255,0.06)) 60%, transparent);
 }
-.board-intro__mode-label,
+.board-intro__agent:last-child {
+  border-bottom: 0;
+}
+.board-intro__agent::before {
+  content: counter(board-intro-agents);
+  grid-row: 1 / span 2;
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(22px * var(--ui-scale, 1));
+  height: calc(22px * var(--ui-scale, 1));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #5b8def) 14%, transparent);
+  color: var(--accent, #5b8def);
+  font-size: calc(10.5px * var(--ui-scale, 1));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
 .board-intro__agent-name {
   font-weight: 600;
   color: var(--text-strong, #eee);
-  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
-  font-size: calc(11.5px * var(--ui-scale, 1));
+  font-size: calc(12.5px * var(--ui-scale, 1));
+  line-height: 1.25;
 }
-.board-intro__mode-desc,
 .board-intro__agent-desc {
-  color: var(--text-soft, #c0c0c0);
+  color: var(--text-soft, #b8b8b8);
+  font-size: calc(11.5px * var(--ui-scale, 1));
+  line-height: 1.5;
+  margin-top: calc(2px * var(--ui-scale, 1));
 }
-.board-intro__mode[data-mode="workflow"] .board-intro__mode-label {
-  color: var(--accent, #6cb6ff);
-}
-.board-intro__mode[data-mode="build"] .board-intro__mode-label {
-  color: var(--accent-positive, #6ec46e);
-}
+
+/* ── Foot hint ────────────────────────────────────────────────────── */
 .board-intro__foot {
-  border-top: 1px dashed var(--card-border, rgba(255, 255, 255, 0.06));
-  padding-top: calc(10px * var(--ui-scale, 1));
+  margin: 0;
+  padding-top: calc(8px * var(--ui-scale, 1));
 }
 .board-intro__hint {
   margin: 0;
   color: var(--text-muted, #909090);
   font-size: calc(11.5px * var(--ui-scale, 1));
+  font-style: italic;
+  line-height: 1.5;
 }
 
 .trace-event {
