@@ -35,6 +35,7 @@ import { CodingRoutes } from "./coding"
 import { AttachmentRoutes } from "./attachment"
 import { GatewayRoutes } from "./gateway"
 import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
+import { Env } from "@/runtime/env"
 
 const log = Log.create({ service: "server" })
 
@@ -126,7 +127,7 @@ export function AppRoutes(root: Hono) {
         const argv = process.argv
         const child = Bun.spawn(argv, {
           cwd: process.cwd(),
-          env: process.env as Record<string, string>,
+          env: Env.snapshot(),
           stdio: ["ignore", "ignore", "ignore"],
         })
         child.unref()
