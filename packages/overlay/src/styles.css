@@ -4724,65 +4724,61 @@ code .file-link:hover {
 }
 .chat-textarea::placeholder { color: var(--text-muted); }
 
+/* ────────────────────────────────────────────────────────────────────
+ * Chat send button — single source of truth.
+ *
+ * Earlier this file contained four .chat-send blocks (here, plus three
+ * later overrides at lines ~11360 / 11543 / 11854) that re-declared
+ * background, height, padding, etc. with conflicting values. R22
+ * violation; the late-source-order override always won and silently
+ * killed any tweak made here. Consolidated into THIS one rule.
+ * ────────────────────────────────────────────────────────────────── */
 .chat-send {
   align-self: stretch;
-  /* Match the .chat-textarea visible box exactly. The textarea-wrap holds
-     the textarea inside the same grid row so they share row height; force
-     the send button to 100% of that row height to make sure rounding /
-     padding inside the icon column never leaves the button looking shorter
-     than the textarea. */
   height: 100%;
-  min-width: calc(64px * var(--ui-scale));
+  min-width: calc(78px * var(--ui-scale));
   min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
-  border: 1px solid rgba(126, 168, 240, 0.34);
-  border-radius: calc(16px * var(--ui-scale) * var(--chat-compose-scale));
-  background:
-    linear-gradient(180deg, rgba(189, 215, 255, 0.3), rgba(255, 255, 255, 0.02) 28%),
-    linear-gradient(135deg, #8bb4ff, #5f88e0 56%, #4466b8 100%);
-  color: #fff;
+  padding: 0 calc(12px * var(--ui-scale));
+  border: 1px solid color-mix(in srgb, var(--accent) 46%, transparent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #08110f;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: calc(7px * var(--ui-scale) * var(--chat-compose-scale));
-  padding: 0 calc(14px * var(--ui-scale) * var(--chat-compose-scale));
   flex-shrink: 0;
   font-size: var(--ui-font-control);
   font-weight: 700;
-  letter-spacing: 0.03em;
-  transition: background 120ms, transform 120ms, opacity 120ms, box-shadow 120ms;
-  box-shadow: 0 12px 22px rgba(33, 57, 97, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  letter-spacing: 0;
   text-transform: none;
+  box-shadow: none;
+  transition: background 120ms, opacity 120ms, box-shadow 120ms;
 }
+body[data-theme="light"] .chat-send { color: #ffffff; }
 .chat-send:hover {
-  background:
-    linear-gradient(180deg, rgba(204, 224, 255, 0.32), rgba(255, 255, 255, 0.03) 26%),
-    linear-gradient(135deg, #96bcff, #678ee7 56%, #4b6fc3 100%);
-  transform: translateY(calc(-1px * var(--ui-scale)));
-  box-shadow: 0 14px 24px rgba(33, 57, 97, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  background: var(--accent-hover);
 }
 .chat-send:disabled { opacity: 0.4; cursor: default; }
 
 .chat-interrupt {
-  border-color: rgba(224, 106, 99, 0.26);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 36%),
-    linear-gradient(135deg, rgba(224, 106, 99, 0.18), rgba(224, 106, 99, 0.1));
+  border-color: color-mix(in srgb, var(--bad) 36%, transparent);
+  background: var(--bad-dim);
   color: var(--bad);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 6px 14px rgba(112, 40, 35, 0.1);
+  box-shadow: none;
 }
-
 .chat-interrupt:hover {
-  background: linear-gradient(135deg, rgba(224, 106, 99, 0.2), rgba(224, 106, 99, 0.12));
+  background: color-mix(in srgb, var(--bad) 18%, var(--bad-dim));
 }
 
 .chat-send:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(91, 141, 239, 0.22), 0 6px 12px rgba(33, 57, 97, 0.12);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
 .chat-interrupt:focus-visible {
-  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bad) 36%, transparent);
 }
 
 .chat-send-icon {
@@ -11027,27 +11023,11 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   gap: 0;
 }
 
-.pane-resizer {
-  flex-basis: var(--ui-resizer-width);
-  min-width: var(--ui-resizer-width);
-  pointer-events: auto;
-  z-index: 10;
-}
-
-.pane-resizer::before {
-  pointer-events: none;
-  top: calc(8px * var(--ui-scale));
-  bottom: calc(8px * var(--ui-scale));
-  width: 2px;
-  background: color-mix(in srgb, var(--border) 95%, transparent);
-}
-
-.pane-resizer:hover::before,
-.pane-resizer[data-active="true"]::before {
-  background: var(--accent);
-  width: 3px;
-  box-shadow: none;
-}
+/* .pane-resizer canonical rule lives at line 8278 (single source). The
+ * old workbench-redesign duplicate that lived here was a R22 violation
+ * — it only re-applied flex-basis / min-width and re-skinned the rail,
+ * both of which the canonical rule already does via --ui-resizer-width
+ * + var(--border) / var(--accent) tokens that adapt per theme. */
 
 .task-bar {
   margin: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale)) 0;
@@ -11357,34 +11337,28 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   transform: none;
 }
 
-.chat-send,
+/* .chat-send / .chat-interrupt now live as the canonical rule near
+ * line 4727; this block carried the stale duplicate. .btn-primary
+ * keeps the same accent-on-flat treatment via the rule below. */
 .btn-primary,
 body[data-theme="light"] .btn-primary {
-  border-radius: var(--radius) !important;
-  border: 1px solid color-mix(in srgb, var(--accent) 46%, transparent) !important;
-  background: var(--accent) !important;
-  color: #08110f !important;
-  box-shadow: none !important;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 46%, transparent);
+  background: var(--accent);
+  color: #08110f;
+  box-shadow: none;
   font-weight: 700;
   letter-spacing: 0;
 }
 
-body[data-theme="light"] .chat-send,
 body[data-theme="light"] .btn-primary {
-  color: #ffffff !important;
+  color: #ffffff;
 }
 
-.chat-send:hover,
 .btn-primary:hover {
-  background: var(--accent-hover) !important;
+  background: var(--accent-hover);
   transform: none;
-  box-shadow: none !important;
-}
-
-.chat-interrupt {
-  background: var(--bad-dim) !important;
-  border-color: color-mix(in srgb, var(--bad) 36%, transparent) !important;
-  color: var(--bad) !important;
+  box-shadow: none;
 }
 
 .chat-compose-meta {
@@ -11546,22 +11520,10 @@ body[data-theme="light"] .btn-primary {
   align-self: stretch;
 }
 
-.chat-send {
-  /* Stretch to grid row height — match .chat-textarea exactly. The previous
-     fixed `height: 38px` here was the actual reason the send button looked
-     shorter than the edit box even after the base rule said `align-self:
-     stretch`. Keep min-width tweak (78px) for label readability but do not
-     pin a height. */
-  align-self: stretch;
-  height: 100%;
-  min-width: calc(78px * var(--ui-scale));
-  padding: 0 calc(12px * var(--ui-scale));
-}
-
-.chat-interrupt {
-  min-width: calc(78px * var(--ui-scale));
-}
-
+/* .chat-send / .chat-interrupt now live as the canonical rule near
+ * line 4727 — duplicate height/min-width overrides removed. Keep
+ * the SVG sizing because it is purely an icon affordance, not a
+ * structural duplicate. */
 .chat-send-icon svg {
   width: calc(14px * var(--ui-scale));
   height: calc(14px * var(--ui-scale));
@@ -11851,18 +11813,10 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   background: color-mix(in srgb, var(--surface) 52%, transparent);
 }
 
-.chat-send {
-  /* Same stretch contract as the workbench-redesign block above: do NOT
-     hardcode a 36px height — let it follow the textarea-wrap row. */
-  align-self: stretch;
-  height: 100%;
-  min-width: calc(72px * var(--ui-scale));
-  background: color-mix(in srgb, var(--accent) 76%, var(--surface-strong)) !important;
-}
-
-.chat-send:hover {
-  background: color-mix(in srgb, var(--accent-hover) 82%, var(--surface-strong)) !important;
-}
+/* .chat-send / .chat-send:hover canonical rule lives near line 4727.
+ * The deeper-theme tint that was here is now folded into the canonical
+ * rule via var(--accent) / var(--accent-hover); no per-theme override
+ * needed. */
 
 .config-area {
   background: var(--inspector-surface) !important;
