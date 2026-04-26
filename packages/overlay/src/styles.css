@@ -118,7 +118,7 @@
   --ui-chat-min-width: calc(420px * var(--ui-scale));
   --ui-sidebar-width: var(--ui-rail-width);
   --ui-sections-width: var(--ui-rail-width);
-  --ui-resizer-width: calc(4px * var(--ui-scale));
+  --ui-resizer-width: calc(8px * var(--ui-scale));
   --title-size: var(--ui-font-title);
   --title-weight: 700;
   --title-track: 0.08em;
@@ -4726,8 +4726,14 @@ code .file-link:hover {
 
 .chat-send {
   align-self: stretch;
+  /* Match the .chat-textarea visible box exactly. The textarea-wrap holds
+     the textarea inside the same grid row so they share row height; force
+     the send button to 100% of that row height to make sure rounding /
+     padding inside the icon column never leaves the button looking shorter
+     than the textarea. */
+  height: 100%;
   min-width: calc(64px * var(--ui-scale));
-  min-height: auto;
+  min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
   border: 1px solid rgba(126, 168, 240, 0.34);
   border-radius: calc(16px * var(--ui-scale) * var(--chat-compose-scale));
   background:
@@ -8284,23 +8290,27 @@ body[data-theme="light"] .config-close-btn:hover {
   z-index: 3;
 }
 
+/* Persistent visible rail centered inside the (wider) hit area. The hit area
+   is var(--ui-resizer-width) (~8-10px) so users can grab the resizer; the
+   visible rail itself is 2px so it doesn't dominate the layout. */
 .pane-resizer::before {
   content: "";
   position: absolute;
-  top: calc(14px * var(--ui-scale));
-  bottom: calc(14px * var(--ui-scale));
+  top: calc(10px * var(--ui-scale));
+  bottom: calc(10px * var(--ui-scale));
   left: 50%;
-  width: 1px;
+  width: 2px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: var(--subtle-3);
-  transition: background 80ms ease, box-shadow 80ms ease;
+  background: color-mix(in srgb, var(--border, rgba(255,255,255,0.12)) 80%, transparent);
+  transition: background 80ms ease, box-shadow 80ms ease, width 80ms ease;
 }
 
 .pane-resizer:hover::before,
 .pane-resizer[data-active="true"]::before {
   background: var(--accent);
-  box-shadow: 0 0 0 1px rgba(91, 141, 239, 0.18);
+  width: 3px;
+  box-shadow: 0 0 0 1px rgba(91, 141, 239, 0.22);
 }
 
 body[data-resizing="true"] {
@@ -10809,7 +10819,7 @@ body[data-theme="dark"] {
   --ui-chat-min-width: calc(500px * var(--ui-scale));
   --ui-panel-header-height: calc(38px * var(--ui-scale));
   --ui-capsule-height: calc(28px * var(--ui-scale));
-  --ui-resizer-width: calc(7px * var(--ui-scale));
+  --ui-resizer-width: calc(10px * var(--ui-scale));
 }
 
 body[data-theme="vscode-dark"] {
@@ -11020,15 +11030,16 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 }
 
 .pane-resizer::before {
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
+  top: calc(8px * var(--ui-scale));
+  bottom: calc(8px * var(--ui-scale));
+  width: 2px;
+  background: color-mix(in srgb, var(--border) 90%, transparent);
 }
 
 .pane-resizer:hover::before,
 .pane-resizer[data-active="true"]::before {
   background: var(--accent);
+  width: 3px;
   box-shadow: none;
 }
 
