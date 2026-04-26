@@ -181,7 +181,13 @@ async function startProjectServer(
   script: ProjectLaunchScript,
   opts: { timeoutMs?: number; ports?: number[] } = {},
 ): Promise<{ url: string; close: () => Promise<void> }> {
-  const timeoutMs = opts.timeoutMs ?? 30_000
+  // 90s default: a cold merged worktree often needs `bun install` (20-50s)
+  // and/or `vite build` (5-30s) before `bun run server|start|preview` can
+  // bind a port. The previous 30s budget would consistently false-fail on
+  // the first delivery render, fall back silently to static-serving an
+  // unbuilt index.html, and let puppeteer hang on `networkidle0` for 60s —
+  // the user-facing symptom was "Navigation timeout of 60000 ms exceeded".
+  const timeoutMs = opts.timeoutMs ?? 90_000
   const ports = opts.ports ?? [3000, 3001, 3002, 8000, 8080, 5173, 4173, 5000]
   // Run via `bun run`; inherits PATH so npx/vite/tsx on the project lockfile resolve.
   const child: ChildProcess = spawn("bun", ["run", script.script], {
@@ -431,6 +437,8 @@ export async function renderPage(opts: {
   viewport?: { width: number; height: number }
   referenceForViewport?: string
   browserExecutable?: string
+  /** Override puppeteer page.goto navigation timeout. Default: 90_000ms. */
+  navigationTimeoutMs?: number
 }): Promise<{
   renderedPath: string
   viewport: { width: number; height: number }
@@ -473,27 +481,21 @@ export async function renderPage(opts: {
     const serveRoot = path.dirname(absFile)
     // Delivered apps often ship a backend (Express/bun) that serves both the
     // built SPA *and* its own `/api/*` endpoints. A static file server would
-    // 404 every data fetch and leave the UI stuck on loading states — try
-    // the project's own launch script first; fall back to static serving
-    // when no launch script is available.
+    // 404 every data fetch and leave the UI stuck on loading states — use
+    // the project's own launch script when one is declared.
+    //
+    // No silent static fallback when a launch script is declared but fails
+    // (rule 1): a failure means the merged worktree's build/server is
+    // genuinely broken — surfacing the spawn error gives the delivery agent
+    // an actionable signal ("server exited code=1, missing module foo")
+    // instead of silently rendering an unbuilt index.html that puppeteer
+    // hangs on. The static server is only used when the project does not
+    // declare any of `server` / `start` / `preview`.
     const projectRoot = await findProjectRoot(serveRoot)
     const launchScript = projectRoot ? await pickProjectLaunchScript(projectRoot) : undefined
     if (projectRoot && launchScript) {
-      try {
-        staticServer = await startProjectServer(projectRoot, launchScript)
-        target = `${staticServer.url}/`
-      } catch (err) {
-        console.error(
-          `[render-page] project launch script "${launchScript.script}" failed: ${
-            err instanceof Error ? err.message : String(err)
-          }. Falling back to static serve.`,
-        )
-        staticServer = await startStaticServer(serveRoot)
-        const fileName = path.basename(absFile)
-        target = fileName.toLowerCase() === "index.html"
-          ? `${staticServer.url}/`
-          : `${staticServer.url}/${encodeURIComponent(fileName)}`
-      }
+      staticServer = await startProjectServer(projectRoot, launchScript)
+      target = `${staticServer.url}/`
     } else {
       staticServer = await startStaticServer(serveRoot)
       const fileName = path.basename(absFile)
@@ -518,7 +520,13 @@ export async function renderPage(opts: {
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 })
-    await page.goto(target, { waitUntil: "networkidle0", timeout: 60_000 })
+    // Same reasoning as startProjectServer's 90s budget — a cold merged
+    // worktree can need a non-trivial first-paint window once the server
+    // accepts connections, especially when `vite preview` still triggers a
+    // build on first request. Configurable via opts.navigationTimeoutMs so
+    // benchmarks with slower runners can override without editing source.
+    const navigationTimeoutMs = opts.navigationTimeoutMs ?? 90_000
+    await page.goto(target, { waitUntil: "networkidle0", timeout: navigationTimeoutMs })
     await page.screenshot({
       path: renderedPath,
       type: "png",
