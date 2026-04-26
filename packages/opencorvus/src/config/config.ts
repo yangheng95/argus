@@ -1229,6 +1229,13 @@ export namespace Config {
             })
             .optional()
             .describe("Intent-analysis agent configuration — front-of-pipeline intent disambiguation. Model is configured via agent.\"intent-analysis\".model."),
+          build: z
+            .object({
+              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for build agent"),
+              skills: z.array(z.string()).optional().describe("Additional skill paths for build agent (mirror toolchain SOP defaults)"),
+            })
+            .optional()
+            .describe("Build agent configuration — per-goal build session. Model is configured via agent.\"build\".model."),
           activity: z
             .object({
               session_llm_idle_ms: z.number().int().min(1000).optional().describe("Max idle (no stream chunk) window for session LLM streams, ms"),
