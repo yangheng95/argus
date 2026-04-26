@@ -246,7 +246,7 @@ if (!defaultRefExists && rawReferenceImages.length === 0 && !requestFile && !req
 const referenceImages = rawReferenceImages.length > 0
   ? rawReferenceImages
   : (!requestFile && !requestAttachment && defaultRefExists ? [DEFAULT_REFERENCE] : [])
-const DEFAULT_TASK_REQUEST = `复刻Ainvest的页面，要求包含完整的前端和后端实现，网页组件不缺漏，组件交互完整，例如k线和指标等等`
+const DEFAULT_TASK_REQUEST = `复刻Ainvest的页面https://www.ainvest.com/market/，要求包含完整的前端和后端实现，网页组件不缺漏，组件交互完整，例如k线和指标等等`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
@@ -279,27 +279,10 @@ if (requestAttachment) {
     `Run the standard pipeline (requirements → architect → planner → executor → delivery); the attachment is ` +
     `forwarded automatically to each sub-agent and they will read it via their \`read\` tool when needed.`
 }
-if (referenceImages.length > 0) {
-  for (const img of referenceImages) {
-    const src = path.resolve(img)
-    try {
-      const bytes = await Bun.file(src).arrayBuffer()
-      const ext = path.extname(src).toLowerCase().replace(".", "")
-      const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : `image/${ext}`
-      TASK_ATTACHMENTS.push({
-        mime,
-        data: Buffer.from(bytes).toString("base64"),
-        filename: path.basename(src),
-      })
-      console.log(`[overlay-benchmark] attachment ${path.basename(src)} ${mime} ${Math.round(bytes.byteLength / 1024)}KB`)
-    } catch (e) {
-      console.warn(`[overlay-benchmark] failed to read reference image ${src}: ${e}`)
-    }
-  }
-  // Also note image filenames in the text so agents have context even without vision
-  const refLines = referenceImages.map(img => `- ${path.basename(img)}`).join("\n")
-  TASK_REQUEST += `\n\n## Reference Images\nThe following reference images are attached as visual input. They show the target UI style:\n${refLines}`
-}
+// Reference images are NOT injected as task attachments — the agent owns its
+// visual capture path (e.g. url_screenshot tool against the URL in the
+// request). The local file at DEFAULT_REFERENCE is still used for the
+// visual-diff gate and copied into the worktree's references/ dir below.
 const TASK_TITLE = flag("--title")?.trim()
   || (requestFile ? path.parse(requestFile).name : undefined)
   || (requestAttachment ? path.parse(requestAttachment).name : undefined)
