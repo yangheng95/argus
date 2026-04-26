@@ -3724,12 +3724,44 @@ export function createOrchestratorTools(input: {
                 ].join("\n")
               : undefined
 
+            // Visual feedback closure-loop: when delivery rejected on visual
+            // grounds, attach the previous rendered.png so the build LLM
+            // physically compares its output to the user reference instead of
+            // re-painting from text alone. The path is the same one the
+            // delivery service writes via runtime-evidence.
+            let retryAttachments: import("@/build/agent").BuildAgent.BuildContext["retryAttachments"]
+            if (retryEntries.length > 0) {
+              try {
+                const fsMod = await import("node:fs/promises")
+                const pathMod = await import("node:path")
+                const renderedPath = pathMod.join(
+                  Instance.directory,
+                  ".opencorvus",
+                  "delivery-hard-gate",
+                  taskID,
+                  "rendered.png",
+                )
+                const stat = await fsMod.stat(renderedPath).catch(() => undefined)
+                if (stat?.isFile()) {
+                  const bytes = await fsMod.readFile(renderedPath)
+                  retryAttachments = [{
+                    url: `data:image/png;base64,${bytes.toString("base64")}`,
+                    mime: "image/png",
+                    filename: "previous-attempt-rendered.png",
+                  }]
+                }
+              } catch {
+                /* best-effort: missing rendered.png is not fatal — retry feedback text still drives the rework */
+              }
+            }
+
             context = {
               requirements: requirements.length > 0 ? requirements : undefined,
               architectContracts: architectContracts.length > 0 ? architectContracts : undefined,
               dependencies: dependencies.length > 0 ? dependencies : undefined,
               designSpecs,
               retryFeedback,
+              retryAttachments,
             }
           } else {
             target = { kind: "request", text: request }
