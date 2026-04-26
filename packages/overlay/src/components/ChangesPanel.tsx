@@ -169,7 +169,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
                   >
                     <span class="changes-tab-label">{tabLabel(group)}</span>
                     <span class="changes-tab-count" aria-hidden="true">
-                      {group.changes.length}
+                      · {group.changes.length}
                     </span>
                   </button>
                 )
