@@ -118,7 +118,7 @@
   --ui-chat-min-width: calc(420px * var(--ui-scale));
   --ui-sidebar-width: var(--ui-rail-width);
   --ui-sections-width: var(--ui-rail-width);
-  --ui-resizer-width: calc(8px * var(--ui-scale));
+  --ui-resizer-width: calc(14px * var(--ui-scale));
   --title-size: var(--ui-font-title);
   --title-weight: 700;
   --title-track: 0.08em;
@@ -8287,22 +8287,25 @@ body[data-theme="light"] .config-close-btn:hover {
   cursor: col-resize;
   touch-action: none;
   user-select: none;
-  z-index: 3;
+  pointer-events: auto;
+  z-index: 10;
 }
 
 /* Persistent visible rail centered inside the (wider) hit area. The hit area
-   is var(--ui-resizer-width) (~8-10px) so users can grab the resizer; the
-   visible rail itself is 2px so it doesn't dominate the layout. */
+   is var(--ui-resizer-width) (~14px) so users can grab the resizer easily;
+   the visible rail itself is 2px. pointer-events:none on the pseudo so all
+   clicks land on .pane-resizer (where the listener lives), not the rail. */
 .pane-resizer::before {
   content: "";
   position: absolute;
-  top: calc(10px * var(--ui-scale));
-  bottom: calc(10px * var(--ui-scale));
+  pointer-events: none;
+  top: calc(8px * var(--ui-scale));
+  bottom: calc(8px * var(--ui-scale));
   left: 50%;
   width: 2px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--border, rgba(255,255,255,0.12)) 80%, transparent);
+  background: color-mix(in srgb, var(--border, rgba(255,255,255,0.18)) 92%, transparent);
   transition: background 80ms ease, box-shadow 80ms ease, width 80ms ease;
 }
 
@@ -10819,7 +10822,7 @@ body[data-theme="dark"] {
   --ui-chat-min-width: calc(500px * var(--ui-scale));
   --ui-panel-header-height: calc(38px * var(--ui-scale));
   --ui-capsule-height: calc(28px * var(--ui-scale));
-  --ui-resizer-width: calc(10px * var(--ui-scale));
+  --ui-resizer-width: calc(14px * var(--ui-scale));
 }
 
 body[data-theme="vscode-dark"] {
@@ -11027,13 +11030,16 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .pane-resizer {
   flex-basis: var(--ui-resizer-width);
   min-width: var(--ui-resizer-width);
+  pointer-events: auto;
+  z-index: 10;
 }
 
 .pane-resizer::before {
+  pointer-events: none;
   top: calc(8px * var(--ui-scale));
   bottom: calc(8px * var(--ui-scale));
   width: 2px;
-  background: color-mix(in srgb, var(--border) 90%, transparent);
+  background: color-mix(in srgb, var(--border) 95%, transparent);
 }
 
 .pane-resizer:hover::before,
@@ -11541,10 +11547,14 @@ body[data-theme="light"] .btn-primary {
 }
 
 .chat-send {
-  align-self: end;
+  /* Stretch to grid row height — match .chat-textarea exactly. The previous
+     fixed `height: 38px` here was the actual reason the send button looked
+     shorter than the edit box even after the base rule said `align-self:
+     stretch`. Keep min-width tweak (78px) for label readability but do not
+     pin a height. */
+  align-self: stretch;
+  height: 100%;
   min-width: calc(78px * var(--ui-scale));
-  min-height: calc(38px * var(--ui-scale));
-  height: calc(38px * var(--ui-scale));
   padding: 0 calc(12px * var(--ui-scale));
 }
 
@@ -11842,9 +11852,11 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 }
 
 .chat-send {
+  /* Same stretch contract as the workbench-redesign block above: do NOT
+     hardcode a 36px height — let it follow the textarea-wrap row. */
+  align-self: stretch;
+  height: 100%;
   min-width: calc(72px * var(--ui-scale));
-  min-height: calc(36px * var(--ui-scale));
-  height: calc(36px * var(--ui-scale));
   background: color-mix(in srgb, var(--accent) 76%, var(--surface-strong)) !important;
 }
 
