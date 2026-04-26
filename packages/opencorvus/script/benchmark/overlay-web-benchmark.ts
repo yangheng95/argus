@@ -516,26 +516,26 @@ const reportFile = report ? path.resolve(report) : path.join(process.cwd(), `ove
 // Now that temp.dir and reportFile are known, resolve DELIVERY_VERIFY_CMD.
 {
   const visualDiffScript = path.join(import.meta.dir, "visual-diff.ts")
-  // The verify command is executed through `cmd /c <string>` on Windows, where
-  // double-quoted paths get treated as literal characters by `bun.exe`'s argv
-  // parser unless the surrounding shell collapses them — and it doesn't,
-  // reliably. We only quote a path when it actually contains a space or a
-  // shell-significant character; otherwise we hand bare paths to bun.exe.
-  // All paths involved here (script dir, project worktree under %TEMP%, the
-  // reference image, the output dir) are validated below to ensure they have
-  // no spaces; if they ever do, we fall back to single-quoting (works on
-  // bash, which we use on macOS/Linux) and document the failure mode.
+  // The verify command is executed through `cmd /c <string>` on Windows or
+  // `bash -lc <string>` on POSIX (see runLocalVerify). On Windows, cmd.exe
+  // round-trips paths wrapped in `"…"` correctly — including paths with
+  // spaces and non-ASCII characters (CJK, accented chars) — because Node /
+  // bun spawn passes the argv as wide-string via CreateProcessW. The ONLY
+  // thing cmd /c cannot escape inside the outer quoted string is a literal
+  // `"` character in the path itself, which is essentially never present in
+  // real filesystem paths. On POSIX, single-quoting with the standard
+  // `'\''` escape handles every printable char.
   const SHELL_SAFE = /^[A-Za-z0-9_.:/\\-]+$/
   const safe = (s: string): string => {
     if (SHELL_SAFE.test(s)) return s
     if (process.platform === "win32") {
-      // cmd /c can't escape inner double quotes safely. We can only
-      // round-trip paths that lack whitespace and metacharacters; bail loudly
-      // rather than emit a command that will silently mangle.
-      throw new Error(
-        `[overlay-benchmark] cannot safely embed path in cmd /c command line: ${s}\n` +
-        `Move the file to a path without spaces or shell metacharacters.`,
-      )
+      if (s.includes('"')) {
+        throw new Error(
+          `[overlay-benchmark] cannot embed path containing literal '"' in cmd /c command line: ${s}\n` +
+            `Rename the file to remove the embedded double-quote character.`,
+        )
+      }
+      return `"${s}"`
     }
     return `'${s.replace(/'/g, "'\\''")}'`
   }
