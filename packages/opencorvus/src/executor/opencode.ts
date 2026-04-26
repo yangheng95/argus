@@ -12,7 +12,7 @@ import { Snapshot } from "@/snapshot"
 import { Database, eq, and, inArray } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
-import { sessionGoalID } from "@/server/routes/task-event"
+import { sessionGoalID } from "@/orchestrator/task-event"
 import { createEventQueue } from "@/util/event-queue"
 import { EngineConfig } from "@/engine/config"
 

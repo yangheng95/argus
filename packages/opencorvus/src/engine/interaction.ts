@@ -6,7 +6,7 @@ import { EngineInteractionRequestTable, type EngineMetadata, type EngineInteract
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { activeRunBySession, findInteractionByExternal, type InteractionRow } from "./store"
-import { taskIDForSession } from "@/server/routes/task-event"
+import { taskIDForSession } from "@/orchestrator/task-event"
 import { Identifier } from "@/id/id"
 import { EngineRuntime } from "./runtime"
 import type { RuntimeHooks } from "./runtime-hooks"
