@@ -749,13 +749,13 @@ async function runWithExternalProvider(args: {
     })
   }
 
-  const configuredTools = resolveCodingOption(options.tools)
+  const configuredTools = resolveOption(options.tools)
   const runInput = {
-    model: resolveCodingOption(options.model),
+    model: resolveOption(options.model),
     prompt,
     cwd: args.worktreeDir,
-    system: resolveCodingOption(options.system),
-    maxTurns: resolveCodingOption(options.maxTurns),
+    system: resolveOption(options.system),
+    maxTurns: resolveOption(options.maxTurns),
     tools: configuredTools,
     signal: args.signal,
   }
@@ -974,9 +974,9 @@ async function runWithExternalProvider(args: {
   }
 }
 
-function resolveCodingOption<T>(input: CodingProviderOptions[keyof CodingProviderOptions] | undefined): T | undefined {
+function resolveOption<T>(input: T | (() => T | undefined) | undefined): T | undefined {
   if (typeof input === "function") return (input as () => T | undefined)()
-  return input as T | undefined
+  return input
 }
 
 // ---------------------------------------------------------------------------

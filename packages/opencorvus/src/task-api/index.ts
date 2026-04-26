@@ -55,7 +55,7 @@ import {
 } from "@/engine/helpers"
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
-import { dispatchTaskLoop } from "@/engine/queue"
+import { dispatchTaskLoop, reorderQueuedTasksForCwd } from "@/engine/queue"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
@@ -68,6 +68,7 @@ import {
   isTaskCancelled,
   isTaskCompleted,
   isTaskFailed,
+  isTaskQueued,
   isTaskTerminal,
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
@@ -77,6 +78,7 @@ import {
   findArtifacts,
   findDeliveryByGoalRun,
   findDeliveryByRun,
+  findGoalRun,
   findLatestDeliveryForRun,
   findExecutorSessionByRun,
   findActivePlanForTask,
@@ -304,14 +306,42 @@ function taskSummary(rows: Array<{
 }
 
 function taskItems(rows: TaskListRow[]) {
+  const queueRevisions = new Map<string, string>()
+  const groupedQueued = new Map<string, TaskRow[]>()
+  for (const item of rows) {
+    if (!item.directory) continue
+    if (!isTaskQueued(item.task)) continue
+    const list = groupedQueued.get(item.directory) ?? []
+    list.push(item.task)
+    groupedQueued.set(item.directory, list)
+  }
+  for (const [directory, tasks] of groupedQueued.entries()) {
+    const revision = tasks
+      .slice()
+      .sort((a, b) => {
+        const criticalDelta = (a.priority === "critical" ? 0 : 1) - (b.priority === "critical" ? 0 : 1)
+        if (criticalDelta !== 0) return criticalDelta
+        if (a.queue_order !== b.queue_order) return a.queue_order - b.queue_order
+        if (a.time_created !== b.time_created) return a.time_created - b.time_created
+        return a.id.localeCompare(b.id)
+      })
+      .map((task) => `${task.id}:${task.queue_order}:${task.time_updated}`)
+      .join("|")
+    queueRevisions.set(directory, revision)
+  }
+
   return rows.map((item) => {
     const task = item.task
     const plan = findActivePlanForTask(task.id)
     const run = findActiveRunForTask(task.id)
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending").length
+    const taskView = viewTask(task, { directory: item.directory })
+    if (taskView.queue && item.directory && isTaskQueued(task)) {
+      taskView.queue.revision = queueRevisions.get(item.directory)
+    }
     return {
-      task: viewTask(task, { directory: item.directory }),
+      task: taskView,
       project: item.project,
       plan: plan ? viewPlan(plan) : undefined,
       run: run ? viewRun(run) : undefined,
@@ -733,6 +763,26 @@ export namespace EngineService {
     }
   }
 
+  export async function reorderTaskQueue(input: {
+    directory: string
+    orderedTaskIDs: string[]
+    revision?: string
+  }) {
+    const result = reorderQueuedTasksForCwd({
+      cwd: input.directory,
+      orderedTaskIDs: input.orderedTaskIDs,
+      revision: input.revision,
+    })
+    await Promise.all(result.queuedTaskIDs.map((taskID) =>
+      EngineProtocol.emit(Event.TaskUpdated, {
+        taskID,
+        status: "queued",
+        summary: "Task queue reordered",
+      }, { source: "task.queue.reorder" }),
+    ))
+    return result
+  }
+
   export async function getDelivery(runID: string) {
     // Read-only — poll loop handles state advancement asynchronously.
     // Prefer task-level delivery (goal_run_id IS NULL); fall back to any delivery for this run
@@ -745,10 +795,15 @@ export namespace EngineService {
   export async function getGoalRunDelivery(goalRunID: string) {
     // Read-only — goal-level diff previews must resolve against the
     // specific goal_run delivery instead of the task-level aggregate.
-    const delivery = findDeliveryByGoalRun(goalRunID)
-    if (!delivery) {
-      throw new NotFoundError({ message: `Delivery not found for goal_run ${goalRunID}` })
+    // Distinguish "goal_run does not exist" (true 404) from "goal_run
+    // exists but delivery has not landed yet" (legitimate in-flight state).
+    // Mirrors the convention documented on getSessionTrace below: in-flight
+    // resources return 200 with an empty payload, not 404.
+    if (!findGoalRun(goalRunID)) {
+      throw new NotFoundError({ message: `goal_run ${goalRunID} not found` })
     }
+    const delivery = findDeliveryByGoalRun(goalRunID)
+    if (!delivery) return null
     return viewDelivery(delivery)
   }
 

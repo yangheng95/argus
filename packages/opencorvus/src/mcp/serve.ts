@@ -33,52 +33,14 @@ const EXECUTOR_MODEL = {
 const TOOLSET = z.enum(["executor"])
 type Toolset = z.infer<typeof TOOLSET>
 
+// External coding executors (claude-code, codex) ship with their own
+// shell/read/edit/write/glob/grep/web-fetch/web-search tools. Re-exposing
+// those over MCP creates a double-source surface (CLAUDE.md rule 22) and
+// confuses the LLM about which one to call. Only expose the OpenCorvus
+// toolset that the host environment doesn't provide natively:
+//   - mirror toolchain (webpage_* / figma_*) — visual cloning pipeline
+//   - memory / task_report — OpenCorvus-specific coordination surface
 const EXECUTOR_TOOLS = {
-  bash: {
-    name: "shell_command",
-    annotations: {
-      destructive: true,
-      openWorld: true,
-    },
-  },
-  read: {
-    name: "read_file",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  glob: {
-    name: "find_files",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  search_code: {
-    name: "search_code",
-    annotations: {
-      readOnly: true,
-    },
-  },
-  apply_patch: {
-    name: "apply_patch",
-    annotations: {
-      destructive: true,
-    },
-  },
-  webfetch: {
-    name: "fetch_url",
-    annotations: {
-      readOnly: true,
-      openWorld: true,
-    },
-  },
-  websearch: {
-    name: "web_search",
-    annotations: {
-      readOnly: true,
-      openWorld: true,
-    },
-  },
   memory: {
     name: "memory",
     annotations: {
@@ -88,6 +50,84 @@ const EXECUTOR_TOOLS = {
   task_report: {
     name: "task_report",
     annotations: {},
+  },
+  webpage_extract: {
+    name: "webpage_extract",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  webpage_compile: {
+    name: "webpage_compile",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  webpage_analyze: {
+    name: "webpage_analyze",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_image_extract: {
+    name: "webpage_image_extract",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  webpage_image_compile: {
+    name: "webpage_image_compile",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  webpage_image_analyze: {
+    name: "webpage_image_analyze",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_render: {
+    name: "webpage_render",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_evaluate: {
+    name: "webpage_evaluate",
+    annotations: {
+      destructive: true,
+    },
+  },
+  webpage_text_diff: {
+    name: "webpage_text_diff",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  webpage_vision_judge: {
+    name: "webpage_vision_judge",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  figma_extract: {
+    name: "figma_extract",
+    annotations: {
+      openWorld: true,
+    },
+  },
+  figma_compile: {
+    name: "figma_compile",
+    annotations: {
+      readOnly: true,
+    },
+  },
+  figma_analyze: {
+    name: "figma_analyze",
+    annotations: {
+      destructive: true,
+    },
   },
 } as const
 
