@@ -101,6 +101,7 @@
 |---|---|---|---|
 | GET | `/session` | List sessions | `session.list` |
 | POST | `/session` | Create session | `session.create` |
+| GET | `/session/global` | List sessions across projects | `session.listGlobal` |
 | GET | `/session/status` | Get session status | `session.status` |
 | DELETE | `/session/{sessionID}` | Delete session | `session.delete` |
 | GET | `/session/{sessionID}` | Get session | `session.get` |

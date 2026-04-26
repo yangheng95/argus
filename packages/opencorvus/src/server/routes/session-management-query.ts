@@ -58,6 +58,65 @@ export const SessionManagementQueryRoutes = lazy(() =>
       },
     )
     .get(
+      "/global",
+      describeRoute({
+        summary: "List sessions across projects",
+        description:
+          "List sessions across all projects with cursor-based pagination and optional archived inclusion. Sets x-next-cursor response header when more results are available.",
+        operationId: "session.listGlobal",
+        responses: {
+          200: {
+            description: "List of sessions across projects",
+            content: {
+              "application/json": {
+                schema: resolver(Session.GlobalInfo.array()),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          directory: z.string().optional().meta({ description: "Filter sessions by project directory" }),
+          roots: z.coerce.boolean().optional().meta({ description: "Only return root sessions (no parentID)" }),
+          start: z.coerce
+            .number()
+            .optional()
+            .meta({ description: "Filter sessions updated on or after this timestamp (milliseconds since epoch)" }),
+          cursor: z.coerce
+            .number()
+            .optional()
+            .meta({ description: "Return sessions updated before this timestamp (milliseconds since epoch)" }),
+          search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
+          limit: z.coerce.number().optional().meta({ description: "Maximum number of sessions to return" }),
+          archived: z.coerce.boolean().optional().meta({ description: "Include archived sessions (default false)" }),
+        }),
+      ),
+      async (c) => {
+        const query = c.req.valid("query")
+        const limit = query.limit ?? 100
+        const sessions: Session.GlobalInfo[] = []
+        for await (const session of Session.listGlobal({
+          directory: query.directory,
+          roots: query.roots,
+          start: query.start,
+          cursor: query.cursor,
+          search: query.search,
+          limit: limit + 1,
+          archived: query.archived,
+        })) {
+          sessions.push(session)
+        }
+        const hasMore = sessions.length > limit
+        const list = hasMore ? sessions.slice(0, limit) : sessions
+        if (hasMore && list.length > 0) {
+          c.header("x-next-cursor", String(list[list.length - 1].time.updated))
+        }
+        return c.json(list)
+      },
+    )
+    .get(
       "/status",
       describeRoute({
         summary: "Get session status",

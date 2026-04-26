@@ -5,6 +5,29 @@ import { Scheduler } from "./index"
 import { SessionWake } from "@/session"
 import { Log } from "@/util/log"
 import { Instance, lazyInstanceState } from "@/project/instance"
+import { Identifier } from "@/id/id"
+
+export type CronJobView = {
+  id: string
+  name: string
+  expression: string
+  prompt: string
+  enabled: boolean
+  oneShot: boolean
+  lastRun: number | null
+  nextRun: number
+  failureCount: number
+  lastError: string | null
+}
+
+export type CreateCronJobInput = {
+  name: string
+  expression: string
+  prompt: string
+  projectId: string
+  sessionId?: string
+  oneShot?: boolean
+}
 
 /**
  * CronService polls due cron jobs and executes them with lease-based claims.
@@ -42,6 +65,58 @@ export namespace CronService {
 
   export async function runNow() {
     await poll()
+  }
+
+  export function list(projectID: string): CronJobView[] {
+    const rows = Database.use((db) =>
+      db.select().from(CronJobTable).where(eq(CronJobTable.project_id, projectID)).all(),
+    )
+    return rows.map((j) => ({
+      id: j.id,
+      name: j.name,
+      expression: j.expression,
+      prompt: j.prompt,
+      enabled: j.enabled,
+      oneShot: j.one_shot,
+      lastRun: j.last_run,
+      nextRun: j.next_run,
+      failureCount: j.failure_count,
+      lastError: j.last_error ?? null,
+    }))
+  }
+
+  export function create(input: CreateCronJobInput): { id: string; name: string; nextRun: number } {
+    const parsed = Cron.parse(input.expression)
+    const now = Date.now()
+    const nextRun = Cron.nextRun(parsed, now)
+    const id = Identifier.ascending("cron")
+    const oneShot = input.oneShot ?? parsed.type === "interval"
+    Database.use((db) =>
+      db
+        .insert(CronJobTable)
+        .values({
+          id,
+          project_id: input.projectId,
+          session_id: input.sessionId,
+          name: input.name,
+          expression: input.expression,
+          prompt: input.prompt,
+          enabled: true,
+          one_shot: oneShot,
+          next_run: nextRun,
+        })
+        .run(),
+    )
+    return { id, name: input.name, nextRun }
+  }
+
+  export function remove(id: string, projectID: string): void {
+    Database.use((db) =>
+      db
+        .delete(CronJobTable)
+        .where(and(eq(CronJobTable.id, id), eq(CronJobTable.project_id, projectID)))
+        .run(),
+    )
   }
 
   async function poll(): Promise<void> {

@@ -4,9 +4,34 @@ import { Database, and, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 import { SessionWake } from "@/session"
 import { Wildcard } from "@/util/wildcard"
+import { Identifier } from "@/id/id"
 import { EventJobTable } from "./event.sql"
 
 type Match = Record<string, string | number | boolean>
+
+export type EventJobView = {
+  id: string
+  name: string
+  eventType: string
+  match: Match
+  prompt: string
+  enabled: boolean
+  oneShot: boolean
+  cooldownMs: number
+  lastRun: number | null
+  lastEvent: string | null
+}
+
+export type CreateEventJobInput = {
+  name: string
+  eventType: string
+  match?: Match
+  prompt: string
+  projectId: string
+  sessionId?: string
+  oneShot?: boolean
+  cooldownMs?: number
+}
 
 export namespace EventService {
   const log = Log.create({ service: "event-service" })
@@ -30,6 +55,55 @@ export namespace EventService {
       await on(event)
     })
     log.info("event service initialized")
+  }
+
+  export function list(projectID: string): EventJobView[] {
+    const rows = Database.use((db) =>
+      db.select().from(EventJobTable).where(eq(EventJobTable.project_id, projectID)).all(),
+    )
+    return rows.map((j) => ({
+      id: j.id,
+      name: j.name,
+      eventType: j.event_type,
+      match: j.match_json ?? {},
+      prompt: j.prompt,
+      enabled: j.enabled,
+      oneShot: j.one_shot,
+      cooldownMs: j.cooldown_ms,
+      lastRun: j.last_run,
+      lastEvent: j.last_event ?? null,
+    }))
+  }
+
+  export function create(input: CreateEventJobInput): { id: string; name: string; eventType: string } {
+    const id = Identifier.ascending("cron")
+    Database.use((db) =>
+      db
+        .insert(EventJobTable)
+        .values({
+          id,
+          project_id: input.projectId,
+          session_id: input.sessionId,
+          name: input.name,
+          event_type: input.eventType,
+          match_json: input.match,
+          prompt: input.prompt,
+          enabled: true,
+          one_shot: input.oneShot ?? false,
+          cooldown_ms: input.cooldownMs ?? 0,
+        })
+        .run(),
+    )
+    return { id, name: input.name, eventType: input.eventType }
+  }
+
+  export function remove(id: string, projectID: string): void {
+    Database.use((db) =>
+      db
+        .delete(EventJobTable)
+        .where(and(eq(EventJobTable.id, id), eq(EventJobTable.project_id, projectID)))
+        .run(),
+    )
   }
 
   async function on(event: { type: string; properties: unknown }) {
