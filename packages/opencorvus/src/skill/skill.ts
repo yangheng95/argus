@@ -16,6 +16,7 @@ import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import panelMd from "./builtin/panel.md" with { type: "text" }
 import webpageGenerateMd from "./builtin/webpage-generate.md" with { type: "text" }
+import imageGenerateMd from "./builtin/image-generate.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -89,6 +90,7 @@ export namespace Skill {
   const builtins = [
     { skill: panelMd, files: {} },
     { skill: webpageGenerateMd, files: {} },
+    { skill: imageGenerateMd, files: {} },
   ] as const
 
   async function install(id: string, skill: string, files: Readonly<Record<string, string>>) {

@@ -159,15 +159,31 @@ function matchesProjectOrTask(
       if (detect.deps.some((d) => d in allDeps)) return true
     }
   }
+  // task_signals semantics:
+  //   - undefined field   → no constraint on that signal
+  //   - true               → signal must be present (truthy)
+  //   - false              → signal must be ABSENT (falsy / undefined)
+  // All explicitly-declared signals must hold (AND across the block).
+  // The prior implementation OR'd positives only and silently ignored `false`,
+  // which made it impossible to express "image but not URL" — image-generate
+  // and webpage-generate both fired on image-only requests, causing the build
+  // agent to mix URL-flow steps (webpage_extract on a screenshot) into an
+  // image task. Rule 1: `false` cannot be a no-op masquerading as a constraint.
   const wanted = detect.task_signals
   if (wanted && taskSignals) {
-    if (wanted.has_attachment_image && taskSignals.has_attachment_image) return true
-    if (wanted.request_contains_url && taskSignals.request_contains_url) return true
+    const checks: boolean[] = []
+    if (wanted.has_attachment_image !== undefined) {
+      checks.push(wanted.has_attachment_image === Boolean(taskSignals.has_attachment_image))
+    }
+    if (wanted.request_contains_url !== undefined) {
+      checks.push(wanted.request_contains_url === Boolean(taskSignals.request_contains_url))
+    }
     if (wanted.package_has_script && wanted.package_has_script.length > 0) {
       const pkg = tryReadPackageJson(dir)
       const scripts = (pkg?.scripts ?? {}) as Record<string, string>
-      if (wanted.package_has_script.some((s) => typeof scripts[s] === "string")) return true
+      checks.push(wanted.package_has_script.some((s) => typeof scripts[s] === "string"))
     }
+    if (checks.length > 0 && checks.every(Boolean)) return true
   }
   return false
 }
