@@ -10,6 +10,7 @@ priority: 60
 required_tools:
   - webpage_image_extract
   - webpage_image_compile
+  - webpage_image_analyze
   - webpage_render
   - webpage_evaluate
   - webpage_vision_judge
@@ -39,7 +40,7 @@ Non-negotiable regardless of stack:
 
 ## Critical rules
 
-- Steps 1–2 are **strictly serial**. `webpage_image_compile` reads the JSON `webpage_image_extract` writes; never batch them in the same response.
+- Steps 1–3 are **strictly serial**. Each consumes the previous step's output (`image-analysis.json` → `page-ir.xml` → `scaffold.json` + `design-tokens.ts` + `shared-context.md`); never batch them in the same response.
 - Do NOT delete `mirror/` artifacts — downstream goals + delivery agents read them.
 - Do NOT mark the goal `passed` without the visual-acceptance gate (see "Hard acceptance gate").
 - Do NOT invent text or palette values not present in the analysis output. If the analysis missed something visible in the screenshot, edit `mirror/image-analysis.json` to record it (the analysis is an estimate; the screenshot is the ground truth) and re-run compile.
@@ -75,17 +76,23 @@ If the model returns an empty tree, refuses the image, or the schema validation 
 
 Call `webpage_image_compile` (no args needed — defaults read `mirror/image-analysis.json` and write `mirror/page-ir.xml`). Pure transformation, no LLM.
 
-## Step 3 — Read the artefacts BEFORE writing
+## Step 3 — Analyze tokens + scaffold
+
+Call `webpage_image_analyze` (no args needed — defaults read `mirror/image-analysis.json` and write `mirror/scaffold.json` + `mirror/design-tokens.ts` + `mirror/App.tsx` + `mirror/shared-context.md`). Same artifact filenames the URL flow's `webpage_analyze` produces — downstream codegen reads the same files regardless of source. Pure transformation, no LLM.
+
+## Step 4 — Read the artefacts BEFORE writing
 
 `read` (the actual file contents):
 
 - `mirror/page-ir.xml` — element structure + visible text (your section catalogue)
-- `mirror/image-analysis.json` — full token tables, especially `tokens.colors` / `tokens.fonts` / `tokens.textStyles`
+- `mirror/shared-context.md` — token + section summary
+- `mirror/design-tokens.ts` — palette / fonts / spacing / radii constants
+- `mirror/scaffold.json` — full ProjectScaffold (sections, FileContracts) for fine-grained reference
 - `mirror/reference.png` — the visual target
 
-Quote the exact strings, copy the exact hex codes, follow section ordering from `page-ir.xml`. Do not paraphrase headings, nav labels, or button text — and do not invent palette values not in `tokens.colors`.
+Quote the exact strings, copy the exact hex codes from `mirror/design-tokens.ts`, follow section ordering from `page-ir.xml`. Do not paraphrase headings, nav labels, or button text — and do not invent palette values not in the tokens file.
 
-## Step 4 — Implement the page
+## Step 5 — Implement the page
 
 Whatever shape you pick, the deliverable must:
 
@@ -94,24 +101,24 @@ Whatever shape you pick, the deliverable must:
 - Wire colours / fonts / sizes through whatever convention the chosen stack uses (CSS custom properties under `:root`, Tailwind theme extension, design-token export).
 - Reference any image leaves by `name` / `alt`; this skill does not download asset URLs (image2code has no source URL to scrape from), so substitute inline SVG, CSS gradients, or solid-colour placeholders for visual elements the screenshot shows but no asset file exists for.
 
-## Step 5 — Render
+## Step 6 — Render
 
 Call `webpage_render` (defaults render `<worktree>/index.html` and write `mirror/rendered.png`). Returns render time + any console errors.
 
-## Step 6 — Evaluate
+## Step 7 — Evaluate
 
-### 6a. Visual judge (THE acceptance gate)
+### 7a. Visual judge (THE acceptance gate)
 
 Call `webpage_vision_judge`. Single-shot vision-LLM comparison of `mirror/reference.png` vs `mirror/rendered.png`. Output `mirror/vision-judge.json`:
 
 - `accepted: true|false` — the acceptance signal
 - `differences[]` — ranked list with `severity` + `region` + `observed` + `expected` + concrete `fix_hint`
 
-### 6b. SSIM score (progress + regression signal)
+### 7b. SSIM score (progress + regression signal)
 
 Call `webpage_evaluate reference=reference.png rendered=rendered.png` (both inside `mirror/`). Returns 0–100 score.
 
-## Step 7 — Iterate
+## Step 8 — Iterate
 
 **Target:** `webpage_evaluate` overall score **≥ 95** AND `webpage_vision_judge.accepted = true`.
 

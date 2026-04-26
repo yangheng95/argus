@@ -21,7 +21,12 @@ import { generateScaffold } from "./contract"
 
 // Re-export for test / skill introspection.
 export { detectPatterns, extractTokenSystem, generateScaffold }
-export { scaffoldToPlan, generateTokensFile, generateAppFile, buildSharedContext } from "./scaffold"
+export {
+  scaffoldToPlan,
+  generateTokensFile,
+  generateAppFile,
+  buildSharedContext,
+} from "../../shared/scaffold-helpers"
 export {
   fingerprint,
   fingerprintBounded,
