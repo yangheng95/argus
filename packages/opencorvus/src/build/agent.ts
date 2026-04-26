@@ -39,6 +39,9 @@ import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { ExecutorRegistry } from "@/executor/registry"
 import type { CodingEventInfo } from "@/executor/contract"
+import { Identifier } from "@/id/id"
+import { Message } from "@/session/message"
+import { Instance } from "@/project/instance"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { FileDiff } from "@/snapshot/types"
@@ -552,22 +555,158 @@ async function runWithExternalProvider(args: {
     worktreeDir: args.worktreeDir,
   })
 
-  const prompt = args.buildPromptText()
+  // Create the user-message row first (carries the build prompt) so the
+  // assistant's reply has a parent to thread under and overlay's tree-writer
+  // can render the goal-build card with the prompt header.
+  const promptText = args.buildPromptText()
+  const userMessageID = Identifier.ascending("message")
+  const userMessage: Message.User = {
+    id: userMessageID,
+    sessionID: session.id,
+    role: "user",
+    time: { created: Date.now() },
+    agent: "build",
+    model: { providerID: args.executor, modelID: args.executor },
+  }
+  await Session.updateMessage(userMessage)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    sessionID: session.id,
+    messageID: userMessageID,
+    type: "text",
+    text: promptText,
+    kind: "user_content",
+    source: "user",
+  })
+
+  const assistantMessageID = Identifier.ascending("message")
+  const assistantMessage: Message.Assistant = {
+    id: assistantMessageID,
+    sessionID: session.id,
+    role: "assistant",
+    time: { created: Date.now() },
+    parentID: userMessageID,
+    modelID: args.executor,
+    providerID: args.executor,
+    agent: "build",
+    path: { cwd: args.worktreeDir, root: Instance.worktree },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  }
+  await Session.updateMessage(assistantMessage)
+
+  const prompt = promptText
   const events: CodingEventInfo[] = []
-  let textBuf = ""
   let toolUseCount = 0
   let doneOutput: string | undefined
   let errored: string | undefined
+
+  // Live part trackers — events stream in async; we keep open part rows for
+  // text/reasoning to extend, and a callID→ToolPart map so tool_result can
+  // upgrade pending → completed without a second lookup.
+  let activeText: { id: string; buf: string } | undefined
+  let activeReasoning: { id: string; buf: string; start: number } | undefined
+  const tools = new Map<string, { id: string; name: string; input: Record<string, unknown> | string; start: number }>()
+
+  const flushText = async (final: boolean) => {
+    if (!activeText) return
+    await Session.updatePart({
+      id: activeText.id,
+      sessionID: session.id,
+      messageID: assistantMessageID,
+      type: "text",
+      text: activeText.buf,
+    })
+    if (final) activeText = undefined
+  }
+
+  const flushReasoning = async (final: boolean) => {
+    if (!activeReasoning) return
+    await Session.updatePart({
+      id: activeReasoning.id,
+      sessionID: session.id,
+      messageID: assistantMessageID,
+      type: "reasoning",
+      text: activeReasoning.buf,
+      time: { start: activeReasoning.start, ...(final ? { end: Date.now() } : {}) },
+    })
+    if (final) activeReasoning = undefined
+  }
 
   try {
     for await (const event of provider.run({ prompt, cwd: args.worktreeDir, signal: args.signal })) {
       events.push(event)
       switch (event.type) {
-        case "text_delta":
-          textBuf += event.text
+        case "text_delta": {
+          if (activeReasoning) await flushReasoning(true)
+          if (!activeText) activeText = { id: Identifier.ascending("part"), buf: "" }
+          activeText.buf += event.text
+          await flushText(false)
           break
-        case "tool_call":
+        }
+        case "reasoning_delta": {
+          if (activeText) await flushText(true)
+          if (!activeReasoning) {
+            activeReasoning = { id: Identifier.ascending("part"), buf: "", start: Date.now() }
+          }
+          activeReasoning.buf += event.text
+          await flushReasoning(false)
+          break
+        }
+        case "tool_call": {
           toolUseCount += 1
+          if (activeText) await flushText(true)
+          if (activeReasoning) await flushReasoning(true)
+          const partID = Identifier.ascending("part")
+          const start = Date.now()
+          const inputObj = typeof event.input === "string" ? { raw: event.input } : event.input
+          tools.set(event.id, { id: partID, name: event.name, input: inputObj, start })
+          await Session.updatePart({
+            id: partID,
+            sessionID: session.id,
+            messageID: assistantMessageID,
+            type: "tool",
+            tool: event.name,
+            callID: event.id,
+            state: {
+              status: "running",
+              input: inputObj,
+              metadata: {},
+              time: { start },
+            },
+          })
+          break
+        }
+        case "tool_result": {
+          const t = tools.get(event.id)
+          if (!t) break
+          const end = Date.now()
+          await Session.updatePart({
+            id: t.id,
+            sessionID: session.id,
+            messageID: assistantMessageID,
+            type: "tool",
+            tool: t.name,
+            callID: event.id,
+            state: {
+              status: "completed",
+              input: typeof t.input === "string" ? { raw: t.input } : t.input,
+              output: event.output,
+              title: t.name,
+              metadata: {},
+              time: { start: t.start, end },
+            },
+          })
+          tools.delete(event.id)
+          break
+        }
+        case "progress":
+        case "plan_delta":
+        case "diff_delta":
+        case "approval_request":
+        case "input_request":
+        case "usage":
+          // Not bridged to overlay parts in v1 — captured in `events[]` only.
           break
         case "done":
           doneOutput = event.output ?? undefined
@@ -575,14 +714,34 @@ async function runWithExternalProvider(args: {
         case "error":
           errored = event.message
           break
-        default:
-          break
       }
       if (event.type === "done" || event.type === "error") break
     }
   } catch (err) {
     errored = err instanceof Error ? err.message : String(err)
   }
+
+  // Finalize any open parts so overlay sees the closing state.
+  if (activeText) await flushText(true)
+  if (activeReasoning) await flushReasoning(true)
+  for (const [callID, t] of tools) {
+    const end = Date.now()
+    await Session.updatePart({
+      id: t.id,
+      sessionID: session.id,
+      messageID: assistantMessageID,
+      type: "tool",
+      tool: t.name,
+      callID,
+      state: {
+        status: "error",
+        input: typeof t.input === "string" ? { raw: t.input } : t.input,
+        error: "tool_call had no matching tool_result before stream end",
+        time: { start: t.start, end },
+      },
+    })
+  }
+  await Session.updateMessage({ ...assistantMessage, time: { ...assistantMessage.time, completed: Date.now() } })
 
   if (errored) {
     log.warn("build agent (external) errored before merge", {
