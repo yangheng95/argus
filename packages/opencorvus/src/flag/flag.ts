@@ -43,6 +43,9 @@ export namespace Flag {
     "OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS",
   )
   export const OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX = number("OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
+  // Dynamic getter — value read on every access so tests can mutate the env
+  // between calls without forcing a module reload.
+  export declare const OPENCORVUS_TUI_CONTROL_TIMEOUT_MS: number
   export declare const OPENCORVUS_EXPERIMENTAL_OXFMT: boolean
   export const OPENCORVUS_EXPERIMENTAL_LSP_TY = truthy("OPENCORVUS_EXPERIMENTAL_LSP_TY")
   export declare const OPENCORVUS_EXPERIMENTAL_LSP_TOOL: boolean
@@ -165,6 +168,19 @@ Object.defineProperty(Flag, "OPENCORVUS_EXPERIMENTAL_OXFMT", {
 Object.defineProperty(Flag, "OPENCORVUS_EXPERIMENTAL_LSP_TOOL", {
   get() {
     return Flag.OPENCORVUS_EXPERIMENTAL || truthy("OPENCORVUS_EXPERIMENTAL_LSP_TOOL")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "OPENCORVUS_TUI_CONTROL_TIMEOUT_MS", {
+  get() {
+    const raw = process.env["OPENCORVUS_TUI_CONTROL_TIMEOUT_MS"]
+    if (!raw) return 60_000
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return 60_000
+    if (value < 1000) return 1000
+    return Math.floor(value)
   },
   enumerable: true,
   configurable: false,
