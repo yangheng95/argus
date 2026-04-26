@@ -1,14 +1,24 @@
 /**
- * Convert a `ProjectScaffold` into the artifacts a codegen agent consumes:
- *   - `PlanFile[]` (section IR + props in notes; contracts for tier-graph)
- *   - pre-generated `design-tokens.ts` and `App.tsx` (deterministic, skip LLM)
- *   - compact shared-context string for prompt builders
+ * ProjectScaffold → codegen-artifact emitters.
  *
- * Ported verbatim from `mirror/src/infra/pattern/scaffold-to-plan.ts`.
- * Renamed to `scaffold.ts` — mirror's filename telegraphs the "→ plan"
- * pipeline direction; under the atomic-tool rule skills decide composition.
+ *   - `scaffoldToPlan(scaffold) → PlanFile[]` — feeds the codegen agent's
+ *     per-file plan (tier-graph orders these for parallel codegen).
+ *   - `generateTokensFile(scaffold) → GeneratedFile` — pre-built
+ *     `design-tokens.ts` with COLORS / FONTS / SPACING / RADII / CSS_VARS.
+ *   - `generateAppFile(scaffold) → GeneratedFile` — pre-built `App.tsx`
+ *     composing every section.
+ *   - `buildSharedContext(scaffold, meta) → string` — compact prompt-ready
+ *     token + pattern summary (2-5KB vs 50-200KB raw XML).
  *
- * Zero LLM.
+ * Originally `mirror/url/pattern/scaffold.ts` — promoted to `shared/` when
+ * image2code joined as a third source whose `analyze` step needs the same
+ * helpers (rule 22 single source). The functions are pure on
+ * `ProjectScaffold` and never reference URL-, Figma-, or image-specific
+ * fields, which is why a single shared module is the right home.
+ *
+ * No cross-module imports inside `mirror/` — depends only on `ir/scaffold`.
+ *
+ * Zero LLM, deterministic.
  */
 
 import type {
@@ -20,7 +30,7 @@ import type {
   ProjectScaffold,
   SectionContract as _SectionContract,
   TokenColor,
-} from "../../ir/scaffold"
+} from "../ir/scaffold"
 
 // ─── Scaffold → PlanFile[] ───────────────────────────────────────────────
 
@@ -215,6 +225,14 @@ ${components.join("\n")}
 
 // ─── Shared context builder ──────────────────────────────────────────────
 
+/** Source-agnostic page metadata for the shared-context preamble.
+ *  `url` is optional because image2code clones have no upstream URL. */
+export interface SharedContextMeta {
+  url?: string
+  title: string
+  viewport: { width: number; height: number }
+}
+
 /**
  * Compact context string to inject into codegen prompts — includes page
  * metadata + token summary + detected-component summary. 2-5KB vs
@@ -222,13 +240,14 @@ ${components.join("\n")}
  */
 export function buildSharedContext(
   scaffold: ProjectScaffold,
-  pageMeta: { url: string; title: string; viewport: { width: number; height: number } },
+  meta: SharedContextMeta,
 ): string {
   const parts: string[] = []
 
-  parts.push(
-    `<!-- Page: ${pageMeta.title} | URL: ${pageMeta.url} | Viewport: ${pageMeta.viewport.width}x${pageMeta.viewport.height} -->`,
-  )
+  const headerBits: string[] = [`Page: ${meta.title}`]
+  if (meta.url) headerBits.push(`URL: ${meta.url}`)
+  headerBits.push(`Viewport: ${meta.viewport.width}x${meta.viewport.height}`)
+  parts.push(`<!-- ${headerBits.join(" | ")} -->`)
 
   const t = scaffold.tokens
   if (t.colors.length > 0) {

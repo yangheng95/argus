@@ -1,0 +1,287 @@
+/**
+ * `analyzeImage(ImageAnalysis) → ProjectScaffold` — image2code's analogue of
+ * `mirror/url/pattern::analyzePage`. Pure deterministic transform. Zero LLM
+ * (the vision-LLM call already ran in `mirror/image/extract.ts`; this stage
+ * just folds its structured output into the cross-source `ProjectScaffold`
+ * contract that the build agent consumes uniformly).
+ *
+ * Why image needs an analyze stage even though the LLM already produced
+ * tokens / tree:
+ *   - Rule 22 single source. URL & figma flows publish `scaffold.json` /
+ *     `design-tokens.ts` / `shared-context.md` to `mirror/`; the build
+ *     agent's prompt + skill text reference those exact filenames. Image
+ *     used to dump only `image-analysis.json` — the build agent had to
+ *     branch per source. Producing the same artifacts puts every source
+ *     on the same downstream contract.
+ *   - Rule 24 abstraction: the `ProjectScaffold` shape is the single
+ *     downstream interface. Each upstream source's analyze synthesises
+ *     a `ProjectScaffold` from its own native IR.
+ *
+ * What's intentionally absent vs URL's `analyzePage`:
+ *   - No fingerprint-based pattern detection. The vision-LLM tree has no
+ *     CSS-grounded similarity signal to cluster on, and forcing a
+ *     pseudo-pattern pass over LLM-inferred names invites false matches.
+ *     We surface `repeatCount` hints instead via `componentHint` notes.
+ *   - No `optimizeTree` pass. The LLM already chose a useful granularity;
+ *     an additional collapse pass would erase intent.
+ *
+ * Inputs / outputs are strictly Zod-validated at the boundary (rule 1: no
+ * silent fallback when the upstream payload is shaped wrong).
+ */
+
+import { AnalyzeError } from "../errors"
+import {
+  ImageAnalysisSchema,
+  type ImageAnalysis,
+  type ImageElement,
+} from "../ir/image-analysis"
+import {
+  ComponentCatalogSchema,
+  DesignTokenSystemSchema,
+  FileContractSchema,
+  ProjectScaffoldSchema,
+  SectionContractSchema,
+  type ComponentCatalog,
+  type DesignTokenSystem,
+  type FileContract,
+  type ProjectScaffold,
+  type SectionContract,
+  type TokenColor,
+  type TokenFont,
+  type TokenRadius,
+  type TokenSpacing,
+  type TokenShadow,
+} from "../ir/scaffold"
+
+// ─── Public entry ────────────────────────────────────────────────────────
+
+export function analyzeImage(rawAnalysis: ImageAnalysis): ProjectScaffold {
+  const parsed = ImageAnalysisSchema.safeParse(rawAnalysis)
+  if (!parsed.success) {
+    throw new AnalyzeError({
+      reason: `analyzeImage: ImageAnalysisSchema rejected payload — ${parsed.error.message}`,
+    })
+  }
+  const analysis = parsed.data
+
+  const tokens = synthesiseTokenSystem(analysis)
+  const sections = synthesiseSections(analysis)
+  const tokensFile = synthesiseTokensFileContract()
+  const appFile = synthesiseAppFileContract()
+  const catalog = synthesiseCatalog(analysis)
+  const scaffold: ProjectScaffold = {
+    tokensFile,
+    sharedComponents: [],
+    sections,
+    appFile,
+    tokens,
+    catalog,
+  }
+  return ProjectScaffoldSchema.parse(scaffold)
+}
+
+// ─── Token system synthesis ──────────────────────────────────────────────
+
+const SEMANTIC_NAME_HINTS: Record<string, TokenColor["semantic"]> = {
+  background: "background",
+  bg: "background",
+  surface: "surface",
+  card: "surface",
+  border: "border",
+  divider: "border",
+  text: "text",
+  fg: "text",
+  foreground: "text",
+  muted: "text-muted",
+  secondary: "text-muted",
+  caption: "text-muted",
+}
+
+function inferSemantic(name: string): TokenColor["semantic"] | undefined {
+  const lower = name.toLowerCase()
+  for (const [hint, semantic] of Object.entries(SEMANTIC_NAME_HINTS)) {
+    if (lower.includes(hint)) return semantic
+  }
+  return undefined
+}
+
+function synthesiseTokenSystem(analysis: ImageAnalysis): DesignTokenSystem {
+  const colors: TokenColor[] = Object.entries(analysis.tokens.colors).map(([name, value]) => ({
+    value,
+    frequency: 1,
+    semantic: inferSemantic(name),
+  }))
+
+  // Aggregate font weights/sizes from textStyles per family. The LLM lists
+  // fonts as a flat string[] separately and may also give per-style font
+  // hints in textStyles[].font — both feed into the same TokenFont entry.
+  const fontMap = new Map<string, { weights: Set<number>; sizes: Set<number> }>()
+  for (const family of analysis.tokens.fonts) {
+    if (!fontMap.has(family)) fontMap.set(family, { weights: new Set(), sizes: new Set() })
+  }
+  for (const ts of analysis.tokens.textStyles) {
+    const family = ts.font ?? "default"
+    if (!fontMap.has(family)) fontMap.set(family, { weights: new Set(), sizes: new Set() })
+    const entry = fontMap.get(family)!
+    if (Number.isFinite(ts.weight)) entry.weights.add(ts.weight)
+    if (Number.isFinite(ts.size)) entry.sizes.add(ts.size)
+  }
+  const fonts: TokenFont[] = [...fontMap.entries()].map(([family, agg]) => ({
+    family,
+    weights: [...agg.weights].sort((a, b) => a - b),
+    sizes: [...agg.sizes].sort((a, b) => a - b),
+  }))
+
+  const spacing = aggregateSpacing(analysis.tree)
+  const radii = aggregateRadii(analysis.tree)
+  const shadows = aggregateShadows(analysis.tree)
+
+  return {
+    colors,
+    spacing,
+    fonts,
+    radii,
+    shadows,
+    customProperties: {},
+  }
+}
+
+function aggregateSpacing(tree: ImageElement[]): TokenSpacing[] {
+  const counts = new Map<number, number>()
+  walk(tree, (el) => {
+    if (el.style?.padding) {
+      for (const v of el.style.padding) bumpCount(counts, v)
+    }
+    if (typeof el.layout?.gap === "number") bumpCount(counts, el.layout.gap)
+  })
+  return [...counts.entries()]
+    .filter(([px]) => px > 0)
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .slice(0, 16)
+    .map(([px, frequency]) => ({ px, frequency }))
+}
+
+function aggregateRadii(tree: ImageElement[]): TokenRadius[] {
+  const counts = new Map<number, number>()
+  walk(tree, (el) => {
+    const r = el.style?.borderRadius
+    const px = typeof r === "number" ? r : typeof r === "string" ? parseInt(r, 10) : NaN
+    if (Number.isFinite(px) && px > 0) bumpCount(counts, px)
+  })
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .slice(0, 8)
+    .map(([px, frequency]) => ({ px, frequency }))
+}
+
+function aggregateShadows(tree: ImageElement[]): TokenShadow[] {
+  const counts = new Map<string, number>()
+  walk(tree, (el) => {
+    if (el.style?.shadow) bumpCount(counts, el.style.shadow)
+  })
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([value, frequency]) => ({ value, frequency }))
+}
+
+function bumpCount<K>(map: Map<K, number>, key: K): void {
+  map.set(key, (map.get(key) ?? 0) + 1)
+}
+
+function walk(tree: ImageElement[], visit: (el: ImageElement) => void): void {
+  const stack = [...tree]
+  while (stack.length > 0) {
+    const el = stack.pop()!
+    visit(el)
+    if (el.children) stack.push(...el.children)
+  }
+}
+
+// ─── Section + file synthesis ────────────────────────────────────────────
+
+function synthesiseSections(analysis: ImageAnalysis): SectionContract[] {
+  return analysis.tree.map((el, i) => {
+    const name = sanitiseName(el.role || el.name || `section-${i + 1}`)
+    const fileName = pascalCase(name)
+    const elementCount = countElements(el)
+    const file: FileContract = {
+      filePath: `packages/app/src/sections/${fileName}.tsx`,
+      exportName: fileName,
+      isDefaultExport: false,
+      propsInterface: "",
+      imports: {},
+      patterns: el.componentHint ? [el.componentHint] : [],
+      sectionIR: undefined,
+    }
+    const section: SectionContract = {
+      name,
+      role: el.role,
+      bounds: el.bounds,
+      file: FileContractSchema.parse(file),
+      subComponents: [],
+      elementCount,
+    }
+    return SectionContractSchema.parse(section)
+  })
+}
+
+function synthesiseTokensFileContract(): FileContract {
+  return FileContractSchema.parse({
+    filePath: "packages/app/src/design-tokens.ts",
+    exportName: "designTokens",
+    isDefaultExport: false,
+    propsInterface: "",
+    imports: {},
+    patterns: [],
+  })
+}
+
+function synthesiseAppFileContract(): FileContract {
+  return FileContractSchema.parse({
+    filePath: "packages/app/src/App.tsx",
+    exportName: "App",
+    isDefaultExport: false,
+    propsInterface: "",
+    imports: {},
+    patterns: [],
+  })
+}
+
+function synthesiseCatalog(analysis: ImageAnalysis): ComponentCatalog {
+  const totalElements = analysis.tree.reduce((sum, el) => sum + countElements(el), 0)
+  // Image2code skips fingerprint-based pattern detection — see file header.
+  // `componentHint` annotations on individual elements still surface via
+  // FileContract.patterns; the catalog itself stays empty so downstream
+  // readers (overlay token panel, codegen prompt) don't see fabricated
+  // pattern entries that aren't real shared components.
+  return ComponentCatalogSchema.parse({
+    patterns: [],
+    totalElements,
+    coveredElements: 0,
+  })
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function countElements(el: ImageElement): number {
+  let n = 1
+  if (el.children) for (const child of el.children) n += countElements(child)
+  return n
+}
+
+function sanitiseName(raw: string): string {
+  return raw
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "section"
+}
+
+function pascalCase(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1).toLowerCase())
+    .join("")
+    || "Section"
+}
