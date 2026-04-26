@@ -305,7 +305,6 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | POST | `/experimental/schedule` | Create scheduled task | `experimental.schedule.create` |
 | DELETE | `/experimental/schedule/{id}` | Cancel scheduled task | `experimental.schedule.delete` |
 | GET | `/experimental/scratchpad` | Get scratchpad content | `experimental.scratchpad.get` |
-| GET | `/experimental/session` | List sessions | `experimental.session.list` |
 | GET | `/experimental/task-plan` | List tasks for a session | `experimental.taskplan.list` |
 | GET | `/experimental/tool` | List tools | `tool.list` |
 | GET | `/experimental/tool/ids` | List tool IDs | `tool.ids` |
