@@ -43,7 +43,6 @@ import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
-import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import type { FileDiff } from "@/snapshot/types"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -244,7 +243,7 @@ export namespace BuildAgent {
         request_text: input.task.request ?? "",
       }
 
-      const buildPromptText = () => buildUserPrompt(input.target, input.context, { cwd: worktreeDir ?? Instance.directory })
+      const buildPromptText = () => buildUserPrompt(input.target, input.context)
       // Forward task.attachments (user's reference image, e.g. ainvest.png) as
       // multimodal user-message parts so the build LLM physically sees what to
       // clone — text design_specs alone don't carry pixel-level layout/colour
@@ -409,6 +408,7 @@ export namespace BuildAgent {
             worktreeBranch,
             ownsWorktree,
             buildPromptText,
+            taskSignals,
             signal: input.signal,
           })
           out = { session: { id: externalOut.sessionID }, structured: externalOut.structured }
@@ -625,6 +625,7 @@ async function runWithExternalProvider(args: {
   worktreeBranch: string | undefined
   ownsWorktree: boolean
   buildPromptText: () => string
+  taskSignals?: import("@/engine/skill-inject").TaskSignals
   signal?: AbortSignal
 }): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
   const { provider, options } = ExecutorRegistry.requireCoding(args.executor)
@@ -750,12 +751,30 @@ async function runWithExternalProvider(args: {
     })
   }
 
+  // Auto-detect build-stage skills for the same taskSignals the in-process
+  // opencode path uses, and append the skill bundle (stage invariant + matched
+  // skill bodies, e.g. webpage-generate.md / image-generate.md) to the system
+  // prompt forwarded to the external coding provider. Without this, claude-code
+  // / codex never see the mirror SOP, the hard "no text-only fallback" rule, or
+  // the `webpage_vision_judge` acceptance gate, and degrade to writing HTML by
+  // hand from the visual contract alone (rule 22: single source of truth for
+  // skill teaching is the skill file, NOT a stripped-down prompt section).
+  const orchCfg = await EngineConfig.get()
+  const buildSkillsCfg = (orchCfg as unknown as { build?: { skills?: string[] } }).build?.skills ?? []
+  const { resolveStageSkills } = await import("@/engine/skill-inject")
+  const resolvedSkills = await resolveStageSkills(buildSkillsCfg, "build", args.taskSignals)
+  const baseSystem = resolveOption<string>(options.system)
+  const composedSystem = [baseSystem ?? "", resolvedSkills.prompt]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("\n\n")
+
   const configuredTools = resolveOption(options.tools)
   const runInput = {
     model: resolveOption(options.model),
     prompt,
     cwd: args.worktreeDir,
-    system: resolveOption(options.system),
+    system: composedSystem.length > 0 ? composedSystem : undefined,
     maxTurns: resolveOption(options.maxTurns),
     tools: configuredTools,
     signal: args.signal,
@@ -766,6 +785,10 @@ async function runWithExternalProvider(args: {
     taskID: args.taskID,
     sessionID: session.id,
     toolCount: configuredTools?.length ?? 0,
+    skillCount: resolvedSkills.skills.length,
+    skillNames: resolvedSkills.skills.map((s) => s.name),
+    requiredTools: resolvedSkills.requiredTools,
+    systemChars: composedSystem.length,
   })
 
   try {
@@ -1069,24 +1092,9 @@ function buildSessionTitle(target: BuildTarget): string {
   return `Build: ${snippet}${target.text.length > 60 ? "…" : ""}`
 }
 
-function buildUserPrompt(
-  target: BuildTarget,
-  context: BuildAgent.BuildContext | undefined,
-  opts: { cwd: string },
-): string {
-  // Mirror toolchain teaching is shared across all sub-agents that may
-  // touch URL/visual-clone work. The build agent is the one actually
-  // performing the clone, so it MUST see the pipeline steering — without
-  // this section the LLM falls back to webfetch and never invokes
-  // webpage_extract / compile / analyze / render / evaluate. Cache scan
-  // uses the worktree cwd so prior captures (from architect's reconnaissance
-  // or a previous build retry) are surfaced as "do not re-extract".
-  const mirrorSection = buildMirrorToolsPromptSection({ cwd: opts.cwd })
-
+function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext): string {
   if (target.kind === "goal") {
     const lines: string[] = []
-    lines.push(mirrorSection)
-    lines.push("")
 
     // ── Upstream context (rule 23): the goal contract is a compressed view;
     //    the build agent benefits from the original Requirements list and
@@ -1190,8 +1198,6 @@ function buildUserPrompt(
     return lines.join("\n")
   }
   return [
-    mirrorSection,
-    "",
     "# Request",
     "",
     target.text,
