@@ -3646,6 +3646,32 @@ export function createOrchestratorTools(input: {
               return `build: goal ${attachedGoalID} not found; register via architect first.`
             }
             const dependsOn = Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : []
+
+            // Dependency gate: refuse dispatch when any prerequisite goal has
+            // not yet reached "passed". The architect's depends_on graph is
+            // the single source of truth for ordering; orchestrator LLMs were
+            // observed dispatching the entire goal set in a 28-second burst
+            // without honoring the graph, which (a) wastes worktrees on goals
+            // whose imports don't exist yet, and (b) makes per-goal merge_back
+            // race against parallel siblings. Return an instruction string so
+            // the LLM gets actionable feedback to wait for the named goal(s)
+            // before retrying — no state machine, just contract enforcement.
+            if (dependsOn.length > 0) {
+              const { goalStatusByID } = await import("@/engine/describe")
+              const unresolved = dependsOn
+                .map((depID) => ({ id: depID, status: goalStatusByID(depID) }))
+                .filter((d) => d.status !== "passed")
+              if (unresolved.length > 0) {
+                if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
+                const blockers = unresolved.map((d) => `${d.id}=${d.status}`).join(", ")
+                return (
+                  `build: cannot dispatch ${attachedGoalID} — depends_on prerequisites not yet passed: ${blockers}. ` +
+                  `Wait for those goals to complete (rerun build for any failed/pending dep, or re-check via read_context) before dispatching this one. ` +
+                  `Architect's depends_on graph is binding: implementing this goal before its imports exist will produce a worktree that fails the merge_back stage.`
+                )
+              }
+            }
+
             target = {
               kind: "goal",
               id: goal.id,
