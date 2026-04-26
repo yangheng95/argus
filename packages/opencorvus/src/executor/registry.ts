@@ -61,6 +61,27 @@ export namespace ExecutorRegistry {
     return require(name)
   }
 
+  /**
+   * Returns the raw `CodingProvider` for an external executor (claude-code,
+   * codex). Throws ExecutorNotConfiguredError if the executor was not
+   * registered via `registerCoding`. The "opencode" executor is NOT a
+   * CodingProvider — it routes through the in-process SessionPrompt path,
+   * which BuildAgent invokes via `runAgentSession` directly.
+   *
+   * Used by BuildAgent to dispatch goal work to the external coding agent
+   * (claude-code SDK / codex CLI) instead of running the in-process LLM.
+   */
+  export function getCodingProvider(name: Exclude<ExecutorNameInfo, "opencode">): CodingProvider {
+    const entry = providerRegistry.get(name)
+    if (!entry) {
+      throw new ExecutorNotConfiguredError({
+        executor: name,
+        message: `coding provider not registered: ${name}`,
+      })
+    }
+    return entry.provider
+  }
+
   export function reset() {
     state.items = base()
   }
