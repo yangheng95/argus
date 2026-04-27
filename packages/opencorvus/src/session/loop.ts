@@ -48,6 +48,20 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
+// Reminder injected as a synthetic user message when the model finishes a
+// turn without calling StructuredOutput. Replaces the "fail-fast → outer
+// retry" path that cost 20-30 min per miss on long build sessions
+// (kimi-k2.5 reliably forgets the terminal call on multi-step turns).
+const STRUCTURED_OUTPUT_REMINDER = `<system-reminder>
+You ended your last turn without calling StructuredOutput. The conversation cannot complete until you do.
+
+Required action: emit a single StructuredOutput tool call whose input strictly matches the JSON schema you were given. No prose, no other tools — just StructuredOutput.
+
+If your previous reasoning needs adjustment to fit the schema, do that adjustment inside the StructuredOutput call payload itself.
+</system-reminder>`
+
+const MAX_STRUCTURED_OUTPUT_REMINDERS = 2
+
 export namespace SessionLoop {
   const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
 
@@ -195,6 +209,21 @@ export namespace SessionLoop {
     }
     if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
     return { lastUser, lastAssistant, lastFinished, tasks }
+  }
+
+  // Count assistant turns since `userID` that ended with the
+  // StructuredOutputError reminder marker. Used to bound the in-session
+  // retry loop in processTurn so a model that keeps refusing to call
+  // StructuredOutput cannot consume the entire `agent.steps` budget.
+  function countPriorStructuredOutputErrors(msgs: Message.WithParts[], userID: string): number {
+    let count = 0
+    for (const msg of msgs) {
+      if (msg.info.role !== "assistant") continue
+      if (msg.info.id <= userID) continue
+      const err = (msg.info as Message.Assistant).error
+      if (err?.name === "StructuredOutputError") count++
+    }
+    return count
   }
 
   function shouldEnterStandby(input: { lastUser: Message.User; lastAssistant: Message.Assistant | undefined }) {
@@ -720,9 +749,52 @@ export namespace SessionLoop {
 
     const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
     if (modelFinished && !processor.message.error && format.type === "json_schema") {
+      // Count how many prior assistant messages in this conversation have
+      // already failed the same way since the user's prompt that opened
+      // the turn. The reminder loop is bounded so a stubborn model cannot
+      // burn the whole `agent.steps` budget on this one error.
+      const priorReminders = countPriorStructuredOutputErrors(input.msgs, input.lastUser.id)
+
+      if (priorReminders < MAX_STRUCTURED_OUTPUT_REMINDERS) {
+        // Stamp the error on this turn's assistant message so the trace
+        // records "tried, missed, recovering" rather than silent retry.
+        processor.message.error = new Message.StructuredOutputError({
+          message: `Model did not produce structured output (attempt ${priorReminders + 1}/${MAX_STRUCTURED_OUTPUT_REMINDERS + 1}); injecting in-session reminder`,
+          retries: priorReminders,
+        }).toObject()
+        await Session.updateMessage(processor.message)
+
+        // In-session reminder via synthetic user message. Same primitive
+        // that runSubtask uses (lines ~376) so existing message-stream
+        // consumers (compaction, replay, UI hide via `synthetic: true`)
+        // already understand it. The next loop iteration sees this user
+        // message and re-prompts the model with toolChoice still pinned to
+        // StructuredOutput. Avoids the 20-30 min cost of throwing the whole
+        // session away on a transient miss (observed with kimi-k2.5 build
+        // sessions in the 2026-04-27 ainvest benchmark).
+        const reminderMsg: Message.User = {
+          id: Identifier.ascending("message"),
+          sessionID: input.sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: input.lastUser.agent,
+          model: input.lastUser.model,
+        }
+        await Session.updateMessage(reminderMsg)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: reminderMsg.id,
+          sessionID: input.sessionID,
+          type: "text",
+          text: STRUCTURED_OUTPUT_REMINDER,
+          synthetic: true,
+        } satisfies Message.TextPart)
+        return "continue" as const
+      }
+
       processor.message.error = new Message.StructuredOutputError({
-        message: "Model did not produce structured output",
-        retries: 0,
+        message: `Model did not produce structured output after ${MAX_STRUCTURED_OUTPUT_REMINDERS} reminders`,
+        retries: priorReminders,
       }).toObject()
       await Session.updateMessage(processor.message)
       return "stop" as const
