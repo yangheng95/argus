@@ -8823,6 +8823,12 @@ export type TaskConversationResponses = {
             buildSessionID?: string
             workspaceDir?: string
             changedFiles?: Array<string>
+            changedFileDiffs?: Array<{
+              file: string
+              additions: number
+              deletions: number
+              status: "added" | "deleted" | "modified"
+            }>
             diffStats?: {
               files?: number
               additions?: number
@@ -9298,6 +9304,12 @@ export type TaskBoardResponses = {
           buildSessionID?: string
           workspaceDir?: string
           changedFiles?: Array<string>
+          changedFileDiffs?: Array<{
+            file: string
+            additions: number
+            deletions: number
+            status: "added" | "deleted" | "modified"
+          }>
           diffStats?: {
             files?: number
             additions?: number
@@ -9556,6 +9568,89 @@ export type TaskInjectResponses = {
 }
 
 export type TaskInjectResponse = TaskInjectResponses[keyof TaskInjectResponses]
+
+export type TaskSessionReplyData = {
+  body?: {
+    message: string
+    attachments?: Array<{
+      mime: string
+      url: string
+      filename?: string
+    }>
+  }
+  path: {
+    taskID: string
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/session/{sessionID}/reply"
+}
+
+export type TaskSessionReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskSessionReplyError = TaskSessionReplyErrors[keyof TaskSessionReplyErrors]
+
+export type TaskSessionReplyResponses = {
+  /**
+   * Reply accepted
+   */
+  202: {
+    task_id: string
+    session_id: string
+    message_id: string
+  }
+}
+
+export type TaskSessionReplyResponse = TaskSessionReplyResponses[keyof TaskSessionReplyResponses]
+
+export type TaskSessionCancelData = {
+  body?: never
+  path: {
+    taskID: string
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/session/{sessionID}/cancel"
+}
+
+export type TaskSessionCancelErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskSessionCancelError = TaskSessionCancelErrors[keyof TaskSessionCancelErrors]
+
+export type TaskSessionCancelResponses = {
+  /**
+   * Agent session cancelled
+   */
+  200: {
+    task_id: string
+    session_id: string
+    cancelled: true
+  }
+}
+
+export type TaskSessionCancelResponse = TaskSessionCancelResponses[keyof TaskSessionCancelResponses]
 
 export type TaskCancelData = {
   body?: never
