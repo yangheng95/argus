@@ -271,6 +271,10 @@ import type {
   TaskRewindResponses,
   TaskRunsErrors,
   TaskRunsResponses,
+  TaskSessionCancelErrors,
+  TaskSessionCancelResponses,
+  TaskSessionReplyErrors,
+  TaskSessionReplyResponses,
   TaskTraceErrors,
   TaskTraceResponses,
   TaskTranscriptErrors,
@@ -4764,6 +4768,85 @@ export class List extends HeyApiClient {
   }
 }
 
+export class Session3 extends HeyApiClient {
+  /**
+   * Reply directly to a task agent session
+   *
+   * Append a human-authored message to a non-orchestrator task agent session. This is scoped input for the target agent session, not a global task routing command.
+   */
+  public reply<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      sessionID: string
+      directory?: string
+      message?: string
+      attachments?: Array<{
+        mime: string
+        url: string
+        filename?: string
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "message" },
+            { in: "body", key: "attachments" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskSessionReplyResponses, TaskSessionReplyErrors, ThrowOnError>({
+      url: "/task/{taskID}/session/{sessionID}/reply",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Cancel a task agent session
+   *
+   * Abort the active SessionLoop for a non-orchestrator task agent session. This cancels the local agent turn without changing global task orchestration.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskSessionCancelResponses, TaskSessionCancelErrors, ThrowOnError>({
+      url: "/task/{taskID}/session/{sessionID}/cancel",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Rewind extends HeyApiClient {
   /**
    * Clear the rewind cursor (undo the rewind)
@@ -5814,6 +5897,11 @@ export class Task extends HeyApiClient {
   private _list?: List
   get list2(): List {
     return (this._list ??= new List({ client: this.client }))
+  }
+
+  private _session?: Session3
+  get session(): Session3 {
+    return (this._session ??= new Session3({ client: this.client }))
   }
 
   private _rewind?: Rewind
