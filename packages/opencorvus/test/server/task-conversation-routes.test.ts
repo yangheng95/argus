@@ -96,6 +96,85 @@ describe("task conversation routes", () => {
     })
   })
 
+  test("GET /task/:taskID/conversation hydrates persisted executor run events", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            source: "panel",
+            title: "hydrate executor history",
+            request: "hydrate executor history",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        await EngineProtocol.emit(Event.RunProgress, {
+          taskID,
+          runID,
+          type: "tool_call",
+          summary: "executor started tool",
+          payload: {
+            id: "call_1",
+            name: "shell",
+            input: { command: "echo hydrate" },
+          },
+        }, { source: "test.server" })
+        await EngineProtocol.emit(Event.RunOutput, {
+          taskID,
+          runID,
+          type: "stdout",
+          text: "hydrate output\n",
+        }, { source: "test.server" })
+
+        const response = await app.request(`/task/${taskID}/conversation`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as {
+          lastSequence?: number
+          events?: Array<{
+            type?: string
+            sequence?: number
+            run_id?: string
+            payload?: { type?: string; text?: string; payload?: Record<string, unknown> }
+          }>
+        }
+        const progress = body.events?.find((item) => item.type === "run.progress")
+        const output = body.events?.find((item) => item.type === "run.output")
+
+        expect(progress).toBeDefined()
+        expect(progress?.run_id).toBe(runID)
+        expect(progress?.payload?.type).toBe("tool_call")
+        expect(progress?.payload?.payload).toEqual({
+          id: "call_1",
+          name: "shell",
+          input: { command: "echo hydrate" },
+        })
+        expect(output).toBeDefined()
+        expect(output?.run_id).toBe(runID)
+        expect(output?.payload?.text).toBe("hydrate output\n")
+        expect(output?.sequence).toBeGreaterThan(0)
+        expect(body.lastSequence).toBeGreaterThanOrEqual(output?.sequence ?? 0)
+      },
+    })
+  })
+
   test("POST /task/:taskID/session/:sessionID/reply appends overlay direct user input to an agent session", async () => {
     await using tmp = await tmpdir({ git: true })
 
