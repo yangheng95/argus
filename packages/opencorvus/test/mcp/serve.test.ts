@@ -9,12 +9,11 @@ describe("mcp.serve", () => {
     mock.restore()
   })
 
-  test("builds a re-entrant command for executor toolset", () => {
-    const spec = MCPServe.command("/repo")
-    expect(spec.name).toBe("opencorvus")
-    expect(spec.command.length).toBeGreaterThan(0)
-    expect(spec.args[0]).toEndWith("stdio.ts")
-    expect(spec.args.slice(-4)).toEqual(["--cwd", "/repo", "--toolset", "executor"])
+  test("builds an HTTP McpHttpServerConfig pointing at the embedded transport", () => {
+    const config = MCPServe.url(new URL("http://127.0.0.1:7878"), { directory: "/repo" })
+    expect(config.type).toBe("http")
+    expect(config.url).toBe("http://127.0.0.1:7878/mcp/transport")
+    expect(decodeURIComponent(config.headers["x-opencorvus-directory"])).toBe("/repo")
   })
 
   test("exposes the executor MCP toolset", async () => {

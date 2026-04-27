@@ -26,6 +26,16 @@ mock.module("@anthropic-ai/claude-agent-sdk", () => ({
   },
 }))
 
+// The executor MCP transport is now embedded in the running HTTP server. The
+// tests don't spin up Bun.serve, so stub Server.url() to return a fixed base
+// URL — this keeps the tests focused on the SDK options shape rather than
+// network plumbing.
+mock.module("../../src/server/server", () => ({
+  Server: {
+    url: () => new URL("http://127.0.0.1:7878/"),
+  },
+}))
+
 const { ClaudeAgentExecutor } = await import("../../src/executor/claude-agent")
 
 describe("claude agent sdk options", () => {
@@ -37,7 +47,7 @@ describe("claude agent sdk options", () => {
   })
 
   test("defaults to bypassPermissions for headless runs", async () => {
-    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "test" }))
+    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "test", cwd: "D:\\repo\\worktree" }))
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
     expect(options?.permissionMode).toBe("bypassPermissions")
@@ -47,7 +57,7 @@ describe("claude agent sdk options", () => {
   test("honors explicit permission mode overrides", async () => {
     process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "default"
 
-    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "test" }))
+    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "test", cwd: "D:\\repo\\worktree" }))
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
     expect(options?.permissionMode).toBe("default")
@@ -71,15 +81,19 @@ describe("claude agent sdk options", () => {
     await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "build", cwd }))
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
-    const servers = options?.mcpServers as Record<string, { command?: string; args?: string[] }> | undefined
-    expect(servers?.opencorvus?.command).toBe(process.execPath)
-    expect(servers?.opencorvus?.args?.[0]).toEndWith("stdio.ts")
-    expect(servers?.opencorvus?.args).toContain("--cwd")
-    expect(servers?.opencorvus?.args).toContain(cwd)
+    const servers = options?.mcpServers as
+      | Record<string, { type?: string; url?: string; headers?: Record<string, string> }>
+      | undefined
+    expect(servers?.opencorvus?.type).toBe("http")
+    expect(servers?.opencorvus?.url).toBe("http://127.0.0.1:7878/mcp/transport")
+    const directoryHeader = servers?.opencorvus?.headers?.["x-opencorvus-directory"]
+    expect(directoryHeader && decodeURIComponent(directoryHeader)).toBe(cwd)
   })
 
   test("teaches Claude Code the MCP-prefixed OpenCorvus tool names", async () => {
-    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "build", system: "base system" }))
+    await collect(
+      ClaudeAgentExecutor.createSdk().run({ prompt: "build", system: "base system", cwd: "D:\\repo\\worktree" }),
+    )
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
     const systemPrompt = options?.systemPrompt as { append?: string } | undefined

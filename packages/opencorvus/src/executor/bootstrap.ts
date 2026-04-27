@@ -8,6 +8,7 @@ import { CodexAppServerClientProcess } from "./codex-app-server-client"
 import { CodexAppServerExecutor } from "./codex-app-server"
 import { ClaudeAgentExecutor } from "./claude-agent"
 import { MCPServe } from "@/mcp/serve"
+import { Server } from "@/server/server"
 
 const log = Log.create({ service: "executor.bootstrap" })
 
@@ -86,8 +87,15 @@ function codexProvider(command: string[]) {
     return CodexCLIExecutor.create({ command })
   }
   return CodexAppServerExecutor.create((cwd?: string) => {
-    const mcp = MCPServe.command(cwd ?? Instance.directory)
-    const mcpArgs = JSON.stringify(mcp.args)
+    // Codex connects to opencorvus's embedded HTTP MCP transport at
+    // /mcp/transport (single-source per CLAUDE.md rule 22 — no stdio child).
+    // Codex's documented TOML schema for HTTP MCP servers is
+    // `[mcp_servers.<name>] url=...`; we inject it via `-c key=value`
+    // overrides. Note: if OPENCORVUS_SERVER_PASSWORD is set, codex must send
+    // HTTP Basic auth, which codex 0.x does not natively support — the
+    // claude-code executor handles this via the SDK's `headers` field.
+    const baseUrl = Server.url()
+    const config = MCPServe.url(baseUrl, { directory: cwd ?? Instance.directory })
     return CodexAppServerClientProcess.create({
       command: [
         ...command,
@@ -95,9 +103,7 @@ function codexProvider(command: string[]) {
         "--listen",
         "stdio://",
         "-c",
-        `mcp_servers.opencorvus.command="${mcp.command}"`,
-        "-c",
-        `mcp_servers.opencorvus.args=${mcpArgs}`,
+        `mcp_servers.${MCPServe.ServerName}.url="${config.url}"`,
       ],
       cwd,
     })
