@@ -17,11 +17,10 @@
 // must match the old-pipeline snapshot byte-for-byte. The equivalence test
 // in `test/new-writer-equivalence.test.ts` enforces this.
 
-import { createEffect, createRoot } from "solid-js";
+import { createEffect } from "solid-js";
 import { produce } from "solid-js/store";
 import { cardTreeStore, setCardTreeStore, type CardNode, type CardStatus } from "../store/card-tree";
 import { boardStore, setBoardProjectionHandler } from "../store/board";
-import { messageStore } from "../store/messages";
 import { agentStageLabel, normalizeAgentRole, roleLabel } from "../utils/message";
 import { stageAccent } from "../utils/card-color";
 import { t } from "../utils/i18n";
@@ -35,7 +34,7 @@ import { normalizeToolPartRecord } from "../utils/tool";
 function roleTitleKey(name: string): string {
   return `chat.role.${normalizeAgentRole(name)}`;
 }
-import { interactionToSyntheticMessages, partitionInteractions } from "../utils/interaction";
+import { interactionToCardSeeds, partitionInteractions } from "../utils/interaction";
 import {
   isSubagentPhaseCompletedEventType,
   isTreeWriterNoopEventType,
@@ -157,84 +156,6 @@ export function resetWriter(): void {
       for (const k of Object.keys(c)) delete c[k];
     }),
   );
-}
-
-/** Message ids we've already mirrored from messageStore → cardTreeStore so
- *  the synthetic-projection effect stays idempotent across re-runs. */
-const syntheticMirrorIDs = new Set<string>();
-
-function isSyntheticMessage(message: any): boolean {
-  if (!message) return false;
-  if (message._synthetic === true) return true;
-  const id = typeof message?.info?.id === "string" ? message.info.id : "";
-  return id.startsWith("pending-") || id.startsWith("ctx:");
-}
-
-function syntheticCardID(messageID: string): string {
-  return `synthetic:${messageID}`;
-}
-
-function projectSyntheticMessages(allMessages: any[]): void {
-  // Compute the new set of ids we should be mirroring.
-  const alive = new Set<string>();
-  for (const m of allMessages) {
-    if (!isSyntheticMessage(m)) continue;
-    const id = String(m?.info?.id || "");
-    if (!id) continue;
-    alive.add(id);
-  }
-
-  // Remove cards for messages that are no longer synthetic / present.
-  const removedIDs: string[] = [];
-  for (const id of syntheticMirrorIDs) {
-    if (alive.has(id)) continue;
-    const cardID = syntheticCardID(id);
-    if (cardTreeStore.cards[cardID]) {
-      setCardTreeStore(
-        "cards",
-        produce((c: Record<string, CardNode>) => {
-          delete c[cardID];
-        }),
-      );
-      removedIDs.push(cardID);
-    }
-    syntheticMirrorIDs.delete(id);
-  }
-
-  // Upsert cards for currently-synthetic messages.
-  for (const m of allMessages) {
-    if (!isSyntheticMessage(m)) continue;
-    const id = String(m?.info?.id || "");
-    if (!id) continue;
-    const cardID = syntheticCardID(id);
-    // No assistant-fallback (一个萝卜一个坑). Synthetic messages must carry an
-    // explicit role; if a synthesizer forgot to set it, throw loudly so the
-    // upstream emitter is fixed instead of mis-attributing the card.
-    const rawRole = m?.info?.role;
-    if (typeof rawRole !== "string" || rawRole.length === 0) {
-      throw new Error(`synthetic message ${id} missing info.role; emitter must set role explicitly`);
-    }
-    const role = rawRole;
-    const time = Number(m?.info?.time?.created || 0);
-    if (!(time > 0)) {
-      throw new Error(`synthetic message ${id} missing info.time.created; messageStore emitter is the single source of truth`);
-    }
-    const parts = Array.isArray(m.parts) ? m.parts.slice() : [];
-    setCardTreeStore("cards", cardID, {
-      id: cardID,
-      kind: "message",
-      role,
-      title: roleTitleKey(role),
-      parts,
-      childIDs: [],
-      time,
-    });
-    syntheticMirrorIDs.add(id);
-  }
-
-  // Re-emit order so synthetic cards surface (or disappear) alongside
-  // structured cards. They sort chronologically among top-level entries.
-  rebuildTopLevelOrder();
 }
 
 /** Top-level dispatcher. Unknown event types throw by design (rule 1:
@@ -1585,16 +1506,16 @@ function interactionCardTime(cardID: string): number {
   return Number(cardTreeStore.cards[cardID]?.time || 0);
 }
 
-function upsertInteractionCard(message: any): string {
-  const messageID = String(message?.info?.id || "");
-  if (!messageID) throw new Error("interaction message missing id");
-  const cardID = interactionCardID(messageID);
-  const role = String(message?.info?.role || "system");
-  const time = Number(message?.info?.time?.created || 0);
+function upsertInteractionCard(seed: { info: { id: string; role: string; time: { created: number } }; parts: any[] }): string {
+  const seedID = String(seed?.info?.id || "");
+  if (!seedID) throw new Error("interaction card seed missing info.id");
+  const cardID = interactionCardID(seedID);
+  const role = String(seed?.info?.role || "system");
+  const time = Number(seed?.info?.time?.created || 0);
   if (!(time > 0)) {
-    throw new Error(`interaction message ${messageID} missing info.time.created; server emitter is the single source of truth`);
+    throw new Error(`interaction card seed ${seedID} missing info.time.created; server emitter is the single source of truth`);
   }
-  const parts = Array.isArray(message?.parts) ? message.parts.slice() : [];
+  const parts = Array.isArray(seed?.parts) ? seed.parts.slice() : [];
   setCardTreeStore("cards", cardID, {
     id: cardID,
     kind: "message",
@@ -1619,13 +1540,13 @@ function rebuildInteractionCards(board: any): {
 
   const addMessages = (items: any[], sessionID?: string) => {
     const ordered = (Array.isArray(items) ? items : [])
-      .flatMap((interaction) => interactionToSyntheticMessages(interaction))
+      .flatMap((interaction) => interactionToCardSeeds(interaction))
       .sort(
         (left, right) =>
           Number(left?.info?.time?.created || 0) - Number(right?.info?.time?.created || 0),
       );
-    for (const message of ordered) {
-      const cardID = upsertInteractionCard(message);
+    for (const seed of ordered) {
+      const cardID = upsertInteractionCard(seed);
       aliveCardIDs.add(cardID);
       if (sessionID) {
         const session = sessions.get(sessionID);
@@ -1899,15 +1820,9 @@ setBoardProjectionHandler(() => {
 });
 rebuildBoardDerivedCards();
 
-createRoot(() => {
-  // Pending / synthetic messages (see services/chat.ts) land in
-  // `messageStore.messages` via `setMessages` — NOT through the SSE routing
-  // that `applyEvent` consumes. Mirror them into `cardTreeStore` as
-  // synthetic top-level cards so optimistic-update bubbles survive the
-  // renderer's switch to cardTreeStore. Real SSE messages do NOT pass through
-  // this effect (they have real `info.sessionID` values and live in session
-  // cards already built by `handleMessageUpdated`).
-  createEffect(() => {
-    projectSyntheticMessages(messageStore.messages);
-  });
-});
+// Synthetic-message projection removed: chat.ts no longer writes
+// `_synthetic: true` placeholders into messageStore.messages (the
+// optimistic user bubble now comes through ingestPersistedMessage with
+// the real server-issued message id). Interactions are projected directly
+// into cardTreeStore via rebuildInteractionCards/upsertInteractionCard.
+// One source per card; no parallel synthetic mirror to keep in sync.

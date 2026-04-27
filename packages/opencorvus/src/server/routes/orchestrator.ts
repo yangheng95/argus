@@ -41,7 +41,6 @@ import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "
 import { ProtocolStore } from "@/protocol/store"
 import { Identifier } from "@/id/id"
 import { Session } from "@/session"
-import { SessionStatus } from "@/session/status"
 import { Message } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
 import { errors } from "../error"
@@ -770,15 +769,23 @@ export const EngineRoutes = lazy(() =>
           })
         }
         await Session.touch(target.session.id)
-        if (SessionStatus.get(target.session.id).type === "idle") {
-          void SessionPrompt.loop({ sessionID: target.session.id }).catch((error) => {
-            log.error("direct agent session reply loop failed", {
-              sessionID: target.session.id,
-              taskID: params.taskID,
-              error,
-            })
+        // Always call SessionPrompt.loop unconditionally — its internal
+        // `start()` returns undefined when state already exists, so a busy
+        // session's existing loop just joins this caller into its callback
+        // queue while the running iteration finishes; the next iteration's
+        // top-of-loop Message.stream() then picks up the message we just
+        // appended. Gating on `SessionStatus === "idle"` was a status/loop
+        // double source (rule 22) that stranded the reply when status was
+        // briefly "busy" but the loop was already exiting — the cancel()
+        // tail in loop.ts then cleared state, leaving the message in DB
+        // with no listener. (rule 23: no FSM gate; loop owns the lifecycle.)
+        void SessionPrompt.loop({ sessionID: target.session.id }).catch((error) => {
+          log.error("direct agent session reply loop failed", {
+            sessionID: target.session.id,
+            taskID: params.taskID,
+            error,
           })
-        }
+        })
         return c.json({
           task_id: params.taskID,
           session_id: target.session.id,

@@ -141,8 +141,11 @@ async function continueTaskMessage(
 
   // Append the user message to session history — the describe layer and
   // orchestrator prompt both read session messages, so appending here is
-  // how the new message becomes visible to whatever runs next.
-  await appendTaskSessionMessage(task, text, attachments)
+  // how the new message becomes visible to whatever runs next. Surface the
+  // persisted message back to the caller so the HTTP response can carry the
+  // real user-message id straight into the overlay (no client-side
+  // synthetic placeholder; rule 22 single source).
+  const persisted = await appendTaskSessionMessage(task, text, attachments)
 
   const attachmentSummary = attachments.length > 0
     ? [
@@ -167,6 +170,7 @@ async function continueTaskMessage(
     mode: "scheduler" as const,
     resumed: true,
     status: deriveTaskStatus(task) as string,
+    user_message: persisted,
   }
 }
 
@@ -208,11 +212,11 @@ async function appendTaskSessionMessage(
   task: TaskRow,
   text: string,
   attachments: AttachmentStore.Reference[] = [],
-) {
+): Promise<{ info: Message.User; parts: Message.Part[] } | undefined> {
   if (!task.session_id) return
   const ctx = await messageContext(task.session_id)
   if (!ctx) return
-  const msg = await Session.updateMessage({
+  const info = (await Session.updateMessage({
     id: Identifier.ascending("message"),
     role: "user",
     sessionID: task.session_id,
@@ -221,29 +225,35 @@ async function appendTaskSessionMessage(
     },
     agent: ctx.agent,
     model: ctx.model,
-  } satisfies Message.User)
+  } satisfies Message.User)) as Message.User
+  const parts: Message.Part[] = []
   if (text.length > 0) {
-    await Session.updatePart({
+    const textPart: Message.TextPart = {
       id: Identifier.ascending("part"),
-      messageID: msg.id,
+      messageID: info.id,
       sessionID: task.session_id,
       type: "text",
       text,
       kind: "user_content",
-    } satisfies Message.TextPart)
+    }
+    await Session.updatePart(textPart)
+    parts.push(textPart)
   }
   for (const ref of attachments) {
-    await Session.updatePart({
+    const filePart: Message.FilePart = {
       id: Identifier.ascending("part"),
-      messageID: msg.id,
+      messageID: info.id,
       sessionID: task.session_id,
       type: "file",
       mime: ref.mime,
       url: ref.url,
       filename: ref.filename,
-    })
+    }
+    await Session.updatePart(filePart)
+    parts.push(filePart)
   }
   await Session.touch(task.session_id)
+  return { info, parts }
 }
 
 async function messageContext(_sessionID: string) {
@@ -1283,6 +1293,7 @@ export namespace EngineService {
       kind: "note" as const,
       message,
       should_resume: note.resumed,
+      user_message: note.user_message,
     }
   }
 
