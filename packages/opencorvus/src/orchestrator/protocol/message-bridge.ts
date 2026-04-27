@@ -36,14 +36,25 @@ export type OverlayChannel = "main" | Exclude<SessionKind, "root">
  *  a human spoke. */
 export type OverlayResolvedRole = "user" | OverlayChannel
 
+type OverlayMessageInfo = {
+  role?: string
+  extra?: Record<string, unknown>
+}
+
+function isOverlayDirectReply(info: OverlayMessageInfo): boolean {
+  return info.extra?.overlay_direct_reply === true
+}
+
 /**
  * Compute overlay metadata for a message event.
  *
  * Contract (driven by `session.kind`):
  * - User on root → resolvedRole="user", channel="main" (top-level user bubble)
- * - User on sub-agent session → resolvedRole="orchestrator", channel=session.kind
- *   (engine-synthesized dispatch brief — orchestrator authors it; the card
- *    still lives under the sub-agent's phase/stage)
+ * - User on sub-agent session → resolvedRole="orchestrator", channel=session.kind,
+ *   unless `extra.overlay_direct_reply=true` marks a human overlay reply.
+ *   Plain child-session user messages are engine-synthesized dispatch briefs:
+ *   orchestrator authors them, and the card still lives under the sub-agent's
+ *   phase/stage.
  * - Assistant on sub-agent session → resolvedRole=session.kind, channel=session.kind
  * - Assistant on root → invalid: root sessions only hold user-authored content
  *
@@ -54,7 +65,7 @@ export type OverlayResolvedRole = "user" | OverlayChannel
 export function overlayMeta(
   sessionID: string,
   rootSessionID: string,
-  info: { role?: string },
+  info: OverlayMessageInfo,
 ): { resolvedRole: OverlayResolvedRole; channel: OverlayChannel } {
   // No "assistant" fallback (rule: 一个萝卜一个坑). Every message MUST carry
   // an explicit role. Falling back silently routes role-less messages into
@@ -97,7 +108,7 @@ export function overlayMeta(
     )
   }
   if (role === "user") {
-    return { resolvedRole: "orchestrator", channel: kind }
+    return { resolvedRole: isOverlayDirectReply(info) ? "user" : "orchestrator", channel: kind }
   }
   return { resolvedRole: kind, channel: kind }
 }
@@ -115,14 +126,14 @@ function sessionFromProperties(properties: Record<string, unknown>) {
   return ""
 }
 
-const messageRoleCache = new Map<string, string>()
+const messageInfoCache = new Map<string, { role: string; extra?: Record<string, unknown> }>()
 
-function rememberMessageRole(messageID: string, role: string) {
+function rememberMessageInfo(messageID: string, info: { role: string; extra?: Record<string, unknown> }) {
   if (!messageID) return
-  messageRoleCache.set(messageID, role)
-  if (messageRoleCache.size > 500) {
-    const first = messageRoleCache.keys().next().value
-    if (first) messageRoleCache.delete(first)
+  messageInfoCache.set(messageID, info)
+  if (messageInfoCache.size > 500) {
+    const first = messageInfoCache.keys().next().value
+    if (first) messageInfoCache.delete(first)
   }
 }
 
@@ -135,10 +146,13 @@ function cacheMessageInfo(properties: Record<string, unknown>) {
       `must set role explicitly; no "assistant" fallback (一个萝卜一个坑).`,
     )
   }
-  rememberMessageRole(info.id, info.role)
+  rememberMessageInfo(info.id, {
+    role: info.role,
+    ...(info.extra && typeof info.extra === "object" ? { extra: info.extra as Record<string, unknown> } : {}),
+  })
 }
 
-function readPersistedMessageRole(messageID: string): string | undefined {
+function readPersistedMessageInfo(messageID: string): { role: string; extra?: Record<string, unknown> } | undefined {
   const row = Database.use((db) =>
     db
       .select({ data: MessageTable.data })
@@ -150,24 +164,38 @@ function readPersistedMessageRole(messageID: string): string | undefined {
     ? (row.data as Record<string, unknown>).role
     : undefined
   if (typeof role !== "string" || !role) return undefined
-  rememberMessageRole(messageID, role)
-  return role
+  const extra = row?.data && typeof row.data === "object" && "extra" in row.data
+    ? (row.data as Record<string, unknown>).extra
+    : undefined
+  const info = {
+    role,
+    ...(extra && typeof extra === "object" ? { extra: extra as Record<string, unknown> } : {}),
+  }
+  rememberMessageInfo(messageID, info)
+  return info
 }
 
-function roleForEvent(properties: Record<string, unknown>): string {
+function infoForEvent(properties: Record<string, unknown>): { role: string; extra?: Record<string, unknown> } {
   const info = properties.info as any
   if (info && typeof info === "object" && info.role) {
-    return String(info.role)
+    return {
+      role: String(info.role),
+      ...(info.extra && typeof info.extra === "object" ? { extra: info.extra as Record<string, unknown> } : {}),
+    }
+  }
+  const part = properties.part as any
+  if (part?.metadata?.overlay_direct_reply === true) {
+    return { role: "user", extra: { overlay_direct_reply: true } }
   }
   const messageID =
-    (properties.part as any)?.messageID ||
+    part?.messageID ||
     (properties as any).messageID ||
     ""
-  if (messageID && messageRoleCache.has(messageID)) {
-    return messageRoleCache.get(messageID)!
+  if (messageID && messageInfoCache.has(messageID)) {
+    return messageInfoCache.get(messageID)!
   }
   if (messageID) {
-    const persisted = readPersistedMessageRole(messageID)
+    const persisted = readPersistedMessageInfo(messageID)
     if (persisted) return persisted
     throw new Error(
       `bridge: message ${messageID} missing role in cache and DB while enriching event`,
@@ -187,9 +215,9 @@ function enqueueBridgeWork(work: () => Promise<void>) {
  * Source of truth: session.kind, session.goal_id, session.parent_id.
  */
 function enrichProperties(properties: Record<string, unknown>, sessionID: string, taskID: string): Record<string, unknown> {
-  const role = roleForEvent(properties)
+  const info = infoForEvent(properties)
   const rootSessionID = taskSession(taskID) || ""
-  const meta = overlayMeta(sessionID, rootSessionID, { role })
+  const meta = overlayMeta(sessionID, rootSessionID, info)
   const goalID = sessionGoalID(sessionID)
   const parentSessionID = sessionParentID(sessionID)
   const enriched = { ...properties }

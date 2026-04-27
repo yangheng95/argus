@@ -903,7 +903,7 @@ export const AgentSessionAttachmentInput = z.object({
 
 export const AgentSessionReplyInput = z.object({
   message: z.string().trim().min(1),
-  attachments: AgentSessionAttachmentInput.array().optional(),
+  attachments: AgentSessionAttachmentInput.array().default([]),
 })
 
 export const AgentSessionReplyResult = z.object({
