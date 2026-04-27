@@ -775,18 +775,13 @@ export function setSseConnected(connected: boolean) {
 }
 
 export function clearMessages() {
-  // batch coalesces both setStore writes into a single reactivity round —
-  // without it, every effect that subscribes to either `messages` or
-  // `messagesBySession` runs twice on a clear.
-  batch(() => {
-    setStore("messages", []);
-    setStore(
-      "messagesBySession",
-      produce((current: Record<string, Message[]>) => {
-        for (const key of Object.keys(current)) delete current[key];
-      }),
-    );
-  });
+  setStore("messages", []);
+  setStore(
+    "messagesBySession",
+    produce((current: Record<string, Message[]>) => {
+      for (const key of Object.keys(current)) delete current[key];
+    }),
+  );
   messageIndex.clear();
   _pendingParts.clear();
 }

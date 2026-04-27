@@ -11,7 +11,6 @@ import {
   createMemo,
   onCleanup,
   For,
-  Index,
   Show,
 } from "solid-js";
 import { setupAutoScroll } from "../utils/dom-utils";
@@ -564,13 +563,9 @@ export function LogViewer(props: LogViewerProps) {
               <div class="empty-hint">{t("log.empty")}</div>
             }
           >
-            {/* Index over For: log entries are append-only after filter
-                regenerates the array; rows never reorder mid-list. Index
-                reuses DOM by position so growing the log doesn't re-key
-                every prior line. */}
-            <Index each={entries()} fallback={null}>
-              {(entry) => <LogLine entry={entry()} />}
-            </Index>
+            <For each={entries()} fallback={null}>
+              {(entry) => <LogLine entry={entry} />}
+            </For>
           </Show>
         </div>
       </div>
