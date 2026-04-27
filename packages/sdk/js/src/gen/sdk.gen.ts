@@ -238,6 +238,8 @@ import type {
   TaskCancelErrors,
   TaskCancelResponses,
   TaskConversationErrors,
+  TaskConversationEventsErrors,
+  TaskConversationEventsResponses,
   TaskConversationResponses,
   TaskCreateErrors,
   TaskCreateResponses,
@@ -4768,6 +4770,48 @@ export class List extends HeyApiClient {
   }
 }
 
+export class Conversation extends HeyApiClient {
+  /**
+   * Page task conversation replay events
+   *
+   * Return a bounded protocol_event slice for rebuilding task conversation history after the initial hydrate.
+   */
+  public events<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      after?: number
+      until?: number
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "after" },
+            { in: "query", key: "until" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      TaskConversationEventsResponses,
+      TaskConversationEventsErrors,
+      ThrowOnError
+    >({
+      url: "/task/{taskID}/conversation/events",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Session3 extends HeyApiClient {
   /**
    * Reply directly to a task agent session
@@ -5897,6 +5941,11 @@ export class Task extends HeyApiClient {
   private _list?: List
   get list2(): List {
     return (this._list ??= new List({ client: this.client }))
+  }
+
+  private _conversation?: Conversation
+  get conversation2(): Conversation {
+    return (this._conversation ??= new Conversation({ client: this.client }))
   }
 
   private _session?: Session3

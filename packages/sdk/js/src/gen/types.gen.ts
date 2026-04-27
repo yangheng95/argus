@@ -8880,6 +8880,12 @@ export type TaskConversationResponses = {
         [key: string]: unknown
       }
     }>
+    eventReplay: {
+      cursor: number
+      latestSequence: number
+      complete: boolean
+      limit: number
+    }
     view: {
       topLevelSessionIDs: Array<string>
       sessions: Array<{
@@ -8901,6 +8907,58 @@ export type TaskConversationResponses = {
 }
 
 export type TaskConversationResponse = TaskConversationResponses[keyof TaskConversationResponses]
+
+export type TaskConversationEventsData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+    after?: number
+    until?: number
+    limit?: number
+  }
+  url: "/task/{taskID}/conversation/events"
+}
+
+export type TaskConversationEventsErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskConversationEventsError = TaskConversationEventsErrors[keyof TaskConversationEventsErrors]
+
+export type TaskConversationEventsResponses = {
+  /**
+   * Task conversation event page
+   */
+  200: {
+    events: Array<{
+      event_id: string
+      task_id: string
+      run_id?: string
+      type: string
+      emittedAt: number
+      timestamp: number
+      sequence?: number
+      summary: string
+      payload: {
+        [key: string]: unknown
+      }
+    }>
+    eventReplay: {
+      cursor: number
+      latestSequence: number
+      complete: boolean
+      limit: number
+    }
+  }
+}
+
+export type TaskConversationEventsResponse = TaskConversationEventsResponses[keyof TaskConversationEventsResponses]
 
 export type TaskBriefData = {
   body?: never
