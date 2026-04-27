@@ -40,6 +40,22 @@ describe("mcp.serve", () => {
     )
   })
 
+  test("exports Claude-compatible object input schemas", async () => {
+    const defs = await MCPServe.toolDefinitions("executor", { includeProxied: false })
+    for (const def of defs) {
+      expect(def.inputSchema.type).toBe("object")
+      expect(def.inputSchema.anyOf).toBeUndefined()
+      expect(def.inputSchema.oneOf).toBeUndefined()
+      expect(def.inputSchema.allOf).toBeUndefined()
+    }
+    const memory = defs.find((item) => item.name === "memory")
+    expect(memory?.inputSchema.required).toEqual(["action"])
+    expect(memory?.inputSchema.properties?.action).toEqual({
+      type: "string",
+      enum: ["search", "get", "write", "list", "delete"],
+    })
+  })
+
   test("maps executor tools to Claude Code MCP-prefixed names", () => {
     expect(MCPServe.claudeToolName("webpage_extract")).toBe("mcp__opencorvus__webpage_extract")
     expect(MCPServe.normalizeClaudeToolName("mcp__opencorvus__webpage_compile")).toBe("webpage_compile")
