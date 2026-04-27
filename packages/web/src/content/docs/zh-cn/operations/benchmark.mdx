@@ -108,4 +108,4 @@ DASHSCOPE_API_KEY=sk-... OPENCORVUS_CHANNEL=local \
 
 然后另开终端跑 `bun run script/eval-e2e.ts`。
 
-Server 必须带 `DASHSCOPE_API_KEY`，否则 executor 返回空响应，所有任务 <10s 失败。
+Server 必须带 `DASHSCOPE_API_KEY`，否则 executor 返回空响应，所有任务在 10 秒内失败。
