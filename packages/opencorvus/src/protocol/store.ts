@@ -1,5 +1,5 @@
 import { Identifier } from "@/id/id"
-import { Database, and, asc, desc, eq, gt } from "@/storage/db"
+import { Database, and, asc, desc, eq, gt, lte } from "@/storage/db"
 import { Channel } from "@/util/channel"
 import { withKeyedLock } from "@/util/lock"
 import { Log } from "@/util/log"
@@ -189,19 +189,23 @@ export namespace ProtocolStore {
     return withKeyedLock(eventLocks, eventKey(input), async () => insert(nextAggregateSequence(input.aggregate, input.aggregate_id)))
   }
 
-  export function listTaskEventsAfter(taskID: string, sequence: number) {
-    return Database.use((db) =>
-      db
+  export function listTaskEventsAfter(taskID: string, sequence: number, opts?: { until?: number; limit?: number }) {
+    const conditions = [
+      eq(ProtocolEventTable.aggregate_type, "task"),
+      eq(ProtocolEventTable.task_id, taskID),
+      gt(ProtocolEventTable.seq, sequence),
+    ]
+    if (typeof opts?.until === "number") {
+      conditions.push(lte(ProtocolEventTable.seq, opts.until))
+    }
+    return Database.use((db) => {
+      const query = db
         .select()
         .from(ProtocolEventTable)
-        .where(and(
-          eq(ProtocolEventTable.aggregate_type, "task"),
-          eq(ProtocolEventTable.task_id, taskID),
-          gt(ProtocolEventTable.seq, sequence),
-        ))
+        .where(and(...conditions))
         .orderBy(asc(ProtocolEventTable.seq), asc(ProtocolEventTable.id))
-        .all(),
-    ).map(eventView)
+      return typeof opts?.limit === "number" ? query.limit(opts.limit).all() : query.all()
+    }).map(eventView)
   }
 
   export function listTaskEvents(taskID: string) {
