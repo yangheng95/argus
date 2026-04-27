@@ -686,6 +686,17 @@ export const TaskBoardGoalStepPayload = z.object({
   buildSessionID: z.string().optional(),
   workspaceDir: z.string().optional(),
   changedFiles: z.array(z.string()).optional(),
+  /** Per-file diff stats sourced from the goal_run delivery row. Carries
+   *  additions/deletions/status so the overlay's ChangesPanel renders
+   *  +N/-N immediately from the board payload — no second `goal-run/<id>/delivery`
+   *  fetch needed (rule 22: single source for the per-file numbers).
+   *  Sibling to `changedFiles`; one row per file in the same order. */
+  changedFileDiffs: z.array(z.object({
+    file: z.string(),
+    additions: z.number(),
+    deletions: z.number(),
+    status: z.enum(["added", "deleted", "modified"]),
+  })).optional(),
   diffStats: z.object({
     files: z.number().optional(),
     additions: z.number().optional(),
@@ -882,6 +893,29 @@ export const TaskConversationHydration = z.object({
   timeline: z.array(z.any()),
   events: TaskEvent.array(),
   view: TaskConversationView,
+})
+
+export const AgentSessionAttachmentInput = z.object({
+  mime: z.string(),
+  url: z.string(),
+  filename: z.string().optional(),
+})
+
+export const AgentSessionReplyInput = z.object({
+  message: z.string().trim().min(1),
+  attachments: AgentSessionAttachmentInput.array().optional(),
+})
+
+export const AgentSessionReplyResult = z.object({
+  task_id: Identifier.schema("task"),
+  session_id: Identifier.schema("session"),
+  message_id: Identifier.schema("message"),
+})
+
+export const AgentSessionCancelResult = z.object({
+  task_id: Identifier.schema("task"),
+  session_id: Identifier.schema("session"),
+  cancelled: z.literal(true),
 })
 
 /** AgentTrace event surfaced to the overlay debug panel. Shape mirrors what

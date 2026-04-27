@@ -55,14 +55,30 @@ function goalWorkflowStubs(workflows: any[]): ChangeGroup[] {
       const payloads = Array.isArray(goal?.steps)
         ? goal.steps
             .map((step: any) => step?.payload)
-            .filter((payload: any) => payload && (Array.isArray(payload.changedFiles) || payload.diffStats))
+            .filter((payload: any) => payload && (Array.isArray(payload.changedFiles) || Array.isArray(payload.changedFileDiffs) || payload.diffStats))
         : [];
       const goalRunID = typeof goal?.goalRunID === "string" && goal.goalRunID
         ? goal.goalRunID
         : undefined;
       const seen = new Set<string>();
       const changes: FileChange[] = [];
+      // Prefer payload.changedFileDiffs (carries per-file additions/deletions
+      // from the persisted goal_run delivery row, populated by board.ts)
+      // over the bare `changedFiles` string list, which has no stat numbers
+      // and would render as +0/-0 on every row. The diff fetch below is the
+      // fallback for older payloads written before changedFileDiffs landed.
       for (const payload of payloads) {
+        for (const entry of Array.isArray(payload?.changedFileDiffs) ? payload.changedFileDiffs : []) {
+          const file = typeof entry?.file === "string" ? entry.file : "";
+          if (!file || seen.has(file)) continue;
+          seen.add(file);
+          changes.push({
+            file,
+            status: entry?.status === "added" || entry?.status === "deleted" ? entry.status : "modified",
+            additions: typeof entry?.additions === "number" ? entry.additions : 0,
+            deletions: typeof entry?.deletions === "number" ? entry.deletions : 0,
+          });
+        }
         for (const file of Array.isArray(payload?.changedFiles) ? payload.changedFiles : []) {
           if (typeof file !== "string" || !file || seen.has(file)) continue;
           seen.add(file);
@@ -183,6 +199,12 @@ export async function resolveCurrentChangeGroups(): Promise<ChangeGroup[]> {
   return Promise.all(
     groups.map(async (group) => {
       if (!group.goalRunID && !group.runID) return group;
+      // Skip the API fetch when the stub already carries real per-file numbers
+      // (board payload's changedFileDiffs path). The fetch is only needed to
+      // upgrade to full before/after blobs for the workspace diff dialog,
+      // which lazy-loads via resolveDiff() at click time.
+      const hasRealStats = group.changes.some((c) => (c.additions ?? 0) > 0 || (c.deletions ?? 0) > 0);
+      if (hasRealStats) return group;
       try {
         const changes = group.goalRunID
           ? await fetchGoalRunDiffs(group.goalRunID)

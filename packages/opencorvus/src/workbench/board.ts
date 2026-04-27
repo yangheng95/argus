@@ -963,16 +963,38 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   let buildSessionID: string | undefined
   let workspaceDir: string | undefined
   let changedFiles: string[] | undefined
+  let changedFileDiffs: GoalStepPayload["changedFileDiffs"]
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
   if (goalRun) {
     buildSessionID = goalRun.session_id ?? undefined
     workspaceDir = goalRun.workspace_dir ?? undefined
     const delivery = findDeliveryByGoalRun(goalRun.id)
-    const result = delivery?.result as { changed_files?: string[]; diffs?: { file?: string }[]; stats?: { additions?: number; deletions?: number } } | null
+    const result = delivery?.result as {
+      changed_files?: string[]
+      diffs?: { file?: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string }[]
+      stats?: { additions?: number; deletions?: number }
+    } | null
+    const diffRows = Array.isArray(result?.diffs)
+      ? result.diffs
+          .filter((d): d is { file: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string } =>
+            !!d && typeof d.file === "string",
+          )
+          .map((d) => ({
+            file: d.file,
+            additions: typeof d.additions === "number" ? d.additions : 0,
+            deletions: typeof d.deletions === "number" ? d.deletions : 0,
+            status: (d.status === "added" || d.status === "deleted" || d.status === "modified")
+              ? d.status
+              : (typeof d.before === "string" && d.before === "" && typeof d.after === "string" && d.after !== "")
+                ? "added" as const
+                : (typeof d.after === "string" && d.after === "" && typeof d.before === "string" && d.before !== "")
+                  ? "deleted" as const
+                  : "modified" as const,
+          }))
+      : []
     changedFiles = result?.changed_files
-      ?? (Array.isArray(result?.diffs)
-        ? result.diffs.map((d) => d.file).filter((f): f is string => typeof f === "string")
-        : undefined)
+      ?? (diffRows.length > 0 ? diffRows.map((d) => d.file) : undefined)
+    changedFileDiffs = diffRows.length > 0 ? diffRows : undefined
     diffStats = {
       files: changedFiles?.length,
       additions: result?.stats?.additions,
@@ -1002,7 +1024,7 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   ) {
     return undefined
   }
-  return { planNodes, buildSessionID, workspaceDir, changedFiles, diffStats, checks, evalSummary, verdict }
+  return { planNodes, buildSessionID, workspaceDir, changedFiles, changedFileDiffs, diffStats, checks, evalSummary, verdict }
 }
 
 /** Build architect summary from Decision Log */
