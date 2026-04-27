@@ -28,17 +28,25 @@ import {
 } from "../services/executor";
 import { t } from "../utils/i18n";
 
-const FALLBACK_EXECUTOR_ORDER = ["opencode", "codex", "claude-code"];
+// Canonical executor order. The chip and menu render these three slots
+// even before /executor has responded — opencode is always selectable
+// (executor.ts:executorSelectable falls through to true for it), so the
+// user can always change executor. Discovered descriptors from the
+// store override the placeholder so labels/version/model surface once
+// loadExecutors() lands. Any non-canonical executor the server reports
+// gets appended at the tail.
+const CANONICAL_EXECUTOR_ORDER = ["opencode", "codex", "claude-code"] as const;
 
 function orderExecutors(items: ExecutorDescriptor[]): ExecutorDescriptor[] {
   const byID = new Map(items.map((item) => [item.id, item]));
   const ordered: ExecutorDescriptor[] = [];
-  for (const id of FALLBACK_EXECUTOR_ORDER) {
-    const found = byID.get(id);
-    if (found) ordered.push(found);
+  for (const id of CANONICAL_EXECUTOR_ORDER) {
+    ordered.push(byID.get(id) ?? { id });
   }
   for (const item of items) {
-    if (!FALLBACK_EXECUTOR_ORDER.includes(item.id)) ordered.push(item);
+    if (!CANONICAL_EXECUTOR_ORDER.includes(item.id as (typeof CANONICAL_EXECUTOR_ORDER)[number])) {
+      ordered.push(item);
+    }
   }
   return ordered;
 }
@@ -90,12 +98,15 @@ export function ExecutorSelector() {
   }
 
   return (
-    <Show when={executors().length > 0}>
-      <div
-        class="executor-selector"
-        data-open={open() ? "true" : "false"}
-        ref={(el) => (rootRef = el)}
-      >
+    // Always render — see orderExecutors above. Hiding on empty list
+    // would make the chip invisible whenever /executor hadn't responded
+    // yet (cold start, offline, or a fresh install with nothing
+    // discovered) even though `opencode` is always selectable.
+    <div
+      class="executor-selector"
+      data-open={open() ? "true" : "false"}
+      ref={(el) => (rootRef = el)}
+    >
         <button
           type="button"
           class="executor-chip"
@@ -181,6 +192,5 @@ export function ExecutorSelector() {
           </div>
         </Show>
       </div>
-    </Show>
   );
 }
