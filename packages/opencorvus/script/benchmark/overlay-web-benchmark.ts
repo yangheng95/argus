@@ -279,6 +279,18 @@ const DIAG_TYPES = new Set([
   "orchestrator.integrity.review.progress",
   "orchestrator.integrity.review.chunk",
   "orchestrator.integrity.review.completed",
+  // Stage-completion milestones. Without these the benchmark log shows the
+  // task entering a phase (intent-analysis → requirements → architect → …)
+  // but never the structured terminal record — making it impossible to tell
+  // a long-running stage apart from a stalled one. Each event carries
+  // status=completed|error|failed and stage-specific counts (requirementCount,
+  // contractCount, layoutSections, …) which surface in formatEventLine.
+  "orchestrator.requirements.completed",
+  "orchestrator.architect.completed",
+  "orchestrator.design_analysis.completed",
+  "orchestrator.build.completed",
+  "orchestrator.delivery.ready",
+  "orchestrator.evaluation.completed",
 ])
 const projectDir = flag("--project-dir")
 const temp = {
@@ -528,17 +540,20 @@ function errorLine(value: string) {
   console.error(value)
 }
 
-function formatEventLine(entry: {
-  type: string
-  kind: string
-  stage: string
-  status: string
-  progressType: string
-  summary: string
-  text: string
-  toolName: string
-  goalRunID: string
-}) {
+function formatEventLine(
+  entry: {
+    type: string
+    kind: string
+    stage: string
+    status: string
+    progressType: string
+    summary: string
+    text: string
+    toolName: string
+    goalRunID: string
+  },
+  props: Record<string, unknown> = {},
+) {
   // message.part.updated / message.updated fire on every token chunk during
   // streaming — printing each one floods stdout and obscures real milestones.
   // Drop them entirely; the SSE counters + per-stage logs already capture
@@ -589,6 +604,62 @@ function formatEventLine(entry: {
     return `[overlay-benchmark] integrity.review.completed verdict=${verdict || "?"} ` +
       `dims=[${dimText}] totals=i${issueCount}/c${correctionCount}/m${missingCount} ` +
       `summary="${summary}"`
+  }
+  // Stage-completion milestones. The flattened entry only keeps a few text
+  // fields, but each stage's structured payload (counts, categories, …) is
+  // in `props`. Surface the most useful per-stage numbers so a human reading
+  // the log can tell at a glance whether the stage produced anything.
+  if (entry.type === "orchestrator.requirements.completed") {
+    const status = String(props.status ?? entry.status ?? "")
+    const requirements = props.requirementCount ?? "?"
+    const goals = props.goalCount ?? "?"
+    const decisions = props.decisionCount ?? "?"
+    const traceability = props.traceabilityCount ?? "?"
+    const integrity = props.integrityScore ?? "?"
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
+    return `[overlay-benchmark] requirements.completed status=${status} ` +
+      `req=${requirements} goals=${goals} decisions=${decisions} ` +
+      `trace=${traceability} integrityScore=${integrity}${error} summary="${summary}"`
+  }
+  if (entry.type === "orchestrator.architect.completed") {
+    const status = String(props.status ?? entry.status ?? "")
+    const contracts = props.contractCount ?? "?"
+    const cats = Array.isArray(props.categories) ? (props.categories as string[]).join(",") : ""
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
+    return `[overlay-benchmark] architect.completed status=${status} ` +
+      `contracts=${contracts} categories=[${cats}]${error} summary="${summary}"`
+  }
+  if (entry.type === "orchestrator.design_analysis.completed") {
+    const status = String(props.status ?? entry.status ?? "")
+    const sections = props.layoutSections ?? "?"
+    const tokens = props.styleTokens ?? "?"
+    const components = props.componentCount ?? "?"
+    const interactions = props.interactionCount ?? "?"
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
+    return `[overlay-benchmark] design_analysis.completed status=${status} ` +
+      `sections=${sections} tokens=${tokens} components=${components} ` +
+      `interactions=${interactions}${error} summary="${summary}"`
+  }
+  if (entry.type === "orchestrator.build.completed") {
+    const status = String(props.status ?? entry.status ?? "")
+    const goalID = props.goalID ? ` goal=${String(props.goalID)}` : ""
+    const commit = props.commitRef ? ` commit=${String(props.commitRef).slice(0, 12)}` : ""
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
+    return `[overlay-benchmark] build.completed status=${status}${goalID}${commit}${error} summary="${summary}"`
+  }
+  if (entry.type === "orchestrator.delivery.ready") {
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    return `[overlay-benchmark] delivery.ready summary="${summary}"`
+  }
+  if (entry.type === "orchestrator.evaluation.completed") {
+    const status = String(props.status ?? entry.status ?? "")
+    const verdict = String(props.verdict ?? "")
+    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
+    return `[overlay-benchmark] evaluation.completed status=${status} verdict=${verdict} summary="${summary}"`
   }
   const summary = entry.summary || entry.text
   const parts = [
@@ -696,7 +767,7 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     terminalSignalResolver = null
     if (resolver) resolver()
   }
-  const line = formatEventLine(entry)
+  const line = formatEventLine(entry, normalized.props)
   if (line && line !== lastActivityLine) {
     lastActivityLine = line
     activityLine(line)
