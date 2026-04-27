@@ -29,7 +29,7 @@ fixing it.
 
 ## Submission
 
-Submission is split across one tool per dimension plus a terminal finalize call.
+Submission is split across one tool per dimension plus a terminal StructuredOutput call.
 Per-tool inputs are small and self-contained — large nested verdict payloads
 trigger JSON-parse loops on smaller models, which is why each dimension is its
 own tool with a dimension-scoped issue-type enum.
@@ -47,16 +47,16 @@ restricted per dimension; you cannot file e.g. `granularity_off` under
 which field is wrong and you must call that single tool again.
 
 After every dimension is submitted, close with EXACTLY ONE call:
-  `finalize_integrity_review({ summary })`
+  `StructuredOutput({ summary })`
 
 `summary` is one operator-readable sentence stating the worst dimension and the
 dominant signal ("solution_quality: concerns; 3 weak_acceptance specs across
 goal_backend"). The aggregate verdict is computed from the per-dimension
 verdicts you already submitted — you do NOT supply a top-level verdict.
 
-Any dimension you fail to submit before `finalize_integrity_review` is recorded
-as `concerns` with a synthesized "not addressed by reviewer" issue, so omitting
-a dimension is loud, not silent.
+Any missing dimension or missing StructuredOutput is a hard contract failure. Do
+not stop with plain text, and do not call StructuredOutput before all dimension
+tools have completed.
 
 ## AcceptanceSpec — REQUIRED shape for every spec you emit
 

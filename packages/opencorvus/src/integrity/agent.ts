@@ -26,16 +26,16 @@
  *   • Diagnostic-only dimensions (see registry: hallucination) get a slimmer
  *     schema with no corrections / missing_goals fields — the schema itself
  *     prevents diagnostic dimensions from mutating goals.
- *   • The LLM closes with `finalize_integrity_review({ summary })`. Any
- *     dimension that was never submitted is synthesized as `concerns` so the
- *     orchestrator notices the omission. Aggregate verdict is the worst
- *     per-dimension verdict (computed here, not by the LLM).
+ *   • The LLM closes with SessionLoop's `StructuredOutput({ summary })`.
+ *     The runtime accepts the run only when every dimension has been
+ *     submitted and the structured terminal output is present. Aggregate
+ *     verdict is the worst per-dimension verdict (computed here, not by the
+ *     LLM).
  */
 import { tool } from "ai"
 import z from "zod"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import { Log } from "@/util/log"
-import { resolveAgentModel } from "@/agent/model"
 import { runAgentSession } from "@/agent/runner"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
@@ -177,9 +177,10 @@ function buildDimensionInput(d: IntegrityDimension) {
   })
 }
 
-const FinalizeInput = z.object({
+export const IntegrityFinalSchema = z.object({
   summary: z.string().min(1),
 })
+export type IntegrityFinal = z.infer<typeof IntegrityFinalSchema>
 
 // ---------------------------------------------------------------------------
 // Verdict aggregation — pure function, single source for "what beats what"
@@ -207,7 +208,7 @@ function aggregateVerdict(dimensions: readonly IntegrityDimensionResult[]): Inte
  * Run integrity review across every registered dimension. No codebase
  * exploration. The reviewer compares the goal set + upstream evidence against
  * the user request and submits one structured verdict per dimension via
- * `submit_<dimension_id>_verdict`, then closes with `finalize_integrity_review`.
+ * `submit_<dimension_id>_verdict`, then closes with StructuredOutput.
  */
 export async function reviewIntegrity(input: {
   userRequest: string
@@ -246,9 +247,8 @@ export async function reviewIntegrity(input: {
     )
   }
 
-  // Empty-goal-set and missing-model paths are soft exits that synthesize a
-  // verdict without invoking the LLM. Both need a sessionID for the overlay
-  // to render a card — create a transient session up front.
+  // Empty-goal-set is a deterministic contract failure. It needs a sessionID
+  // for the overlay to render a card, but it never pretends the review passed.
   if (goals.length === 0) {
     const dim: IntegrityDimensionResult = {
       id: "goal_fidelity",
@@ -262,31 +262,14 @@ export async function reviewIntegrity(input: {
     if (softSessionID) input.onSessionCreated?.(softSessionID)
     return { ...result, sessionID: softSessionID ?? "" }
   }
-  const model = await resolveAgentModel("integrity", { taskID: input.taskID }).catch(() => undefined)
-  if (!model) {
-    log.warn("no LLM available for integrity review, skipping")
-    const passDimensions: IntegrityDimensionResult[] = INTEGRITY_DIMENSIONS.map((d) => ({
-      id: d.id,
-      verdict: "pass" as const,
-      issues: [],
-      corrections: [],
-      missingGoals: [],
-    }))
-    const result = synthesizeResult(passDimensions, "No model available — integrity review skipped.")
-    const softSessionID = await emitSoftIntegrity(input, result)
-    if (softSessionID) input.onSessionCreated?.(softSessionID)
-    return { ...result, sessionID: softSessionID ?? "" }
-  }
 
   const goalIDs = new Set(goals.map((g) => g.id))
   const collector: {
     dimensions: Map<IntegrityDimension["id"], IntegrityDimensionResult>
     droppedCorrections: string[]
-    result: IntegrityResult | undefined
   } = {
     dimensions: new Map(),
     droppedCorrections: [],
-    result: undefined,
   }
 
   function buildDimensionTool(d: IntegrityDimension) {
@@ -358,53 +341,6 @@ export async function reviewIntegrity(input: {
     INTEGRITY_DIMENSIONS.map((d) => [`submit_${d.id}_verdict`, buildDimensionTool(d)] as const),
   )
 
-  const finalizeTool = tool({
-    description:
-      "Finalize the integrity review. Call EXACTLY ONCE after submitting EVERY dimension. " +
-      "Aggregate verdict is computed from the per-dimension verdicts you already submitted; " +
-      "you only supply the operator-readable summary headline.",
-    inputSchema: FinalizeInput,
-    execute: async ({ summary }) => {
-      const normalised: IntegrityDimensionResult[] = []
-      const missing: string[] = []
-      for (const reg of INTEGRITY_DIMENSIONS) {
-        const got = collector.dimensions.get(reg.id)
-        if (got) {
-          normalised.push(got)
-          continue
-        }
-        // The reviewer never submitted this dimension — synthesize a defensive
-        // `concerns` so the orchestrator notices the omission rather than
-        // silently treating it as `pass`.
-        missing.push(reg.id)
-        normalised.push({
-          id: reg.id,
-          verdict: "concerns",
-          issues: [
-            {
-              type: reg.issueTypes[0]!,
-              description: `Dimension '${reg.id}' was not submitted by the reviewer — treat as unverified.`,
-            },
-          ],
-          corrections: [],
-          missingGoals: [],
-        })
-      }
-      const result = synthesizeResult(normalised, summary)
-      collector.result = result
-
-      const notes: string[] = []
-      if (collector.droppedCorrections.length > 0) {
-        notes.push(`dropped ${collector.droppedCorrections.length} correction(s) referencing unknown goal IDs: ${collector.droppedCorrections.join(", ")}`)
-      }
-      if (missing.length > 0) {
-        notes.push(`synthesized concerns for unsubmitted dimension(s): ${missing.join(", ")}`)
-      }
-      const note = notes.length > 0 ? ` (${notes.join("; ")})` : ""
-      return `OK: aggregate verdict "${result.verdict}" recorded — ${result.dimensions.map((d) => `${d.id}=${d.verdict}`).join(", ")}${note}`
-    },
-  })
-
   const startedAt = Date.now()
   const out = await runAgentSession({
     kind: "integrity",
@@ -412,10 +348,9 @@ export async function reviewIntegrity(input: {
     sessionTitle: `Integrity Review: ${input.taskTitle}`,
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
-    model: { providerID: model.providerID, modelID: model.api.id },
     signal: input.signal,
     toolKit: {
-      tools: { ...dimensionTools, finalize_integrity_review: finalizeTool },
+      tools: dimensionTools,
       getCollector: () => collector,
     },
     buildUserPrompt: () => buildIntegrityPrompt(input),
@@ -444,27 +379,41 @@ export async function reviewIntegrity(input: {
         : null
       return { dispose: () => { if (ticker) clearInterval(ticker) } }
     },
+    format: {
+      schema: z.toJSONSchema(IntegrityFinalSchema) as Record<string, unknown>,
+      retryCount: 2,
+    },
   })
 
-  if (!collector.result) {
+  const structured = out.structured as IntegrityFinal | undefined
+  const missingDimensions = INTEGRITY_DIMENSIONS
+    .filter((d) => !collector.dimensions.has(d.id))
+    .map((d) => d.id)
+
+  if (!structured || missingDimensions.length > 0) {
     throw new Error(
-      `integrity reviewer did not call finalize_integrity_review ` +
-        `(sessionID=${out.session.id}, submittedDimensions=${[...collector.dimensions.keys()].join(",") || "none"}, ` +
-        `streamErrors=${out.streamErrors.length})`,
+      `integrity reviewer did not complete structured contract ` +
+        `(sessionID=${out.session.id}, structuredMissing=${!structured}, ` +
+        `submittedDimensions=${[...collector.dimensions.keys()].join(",") || "none"}, ` +
+        `missingDimensions=${missingDimensions.join(",") || "none"}, streamErrors=${out.streamErrors.length})`,
     )
   }
 
+  const normalised = INTEGRITY_DIMENSIONS.map((d) => collector.dimensions.get(d.id)!)
+  const result = synthesizeResult(normalised, structured.summary)
+
   log.info("integrity review completed", {
-    verdict: collector.result.verdict,
-    perDimension: collector.result.dimensions.map((d) => `${d.id}=${d.verdict}`).join(","),
-    issues: collector.result.issues.length,
-    corrections: collector.result.corrections.length,
-    missingGoals: collector.result.missingGoals.length,
+    verdict: result.verdict,
+    perDimension: result.dimensions.map((d) => `${d.id}=${d.verdict}`).join(","),
+    issues: result.issues.length,
+    corrections: result.corrections.length,
+    missingGoals: result.missingGoals.length,
+    droppedCorrections: collector.droppedCorrections.length,
     streamErrors: out.streamErrors.length,
   })
 
-  emitIntegrityEvent(input.taskID, out.session.id, collector.result, 1)
-  return { ...collector.result, sessionID: out.session.id }
+  emitIntegrityEvent(input.taskID, out.session.id, result, 1)
+  return { ...result, sessionID: out.session.id }
 }
 
 // ---------------------------------------------------------------------------
@@ -711,7 +660,7 @@ function buildIntegrityPrompt(input: {
     "Now walk EVERY dimension above. Cite REQ-N / spec ids / goal ids / verbatim user " +
     "phrases as evidence in each issue. For EACH dimension call its own " +
     "`submit_<dimension_id>_verdict` tool exactly once, then close with a single " +
-    "`finalize_integrity_review({ summary })` call. The runtime aggregates the " +
+    "`StructuredOutput({ summary })` call. The runtime aggregates the " +
     "per-dimension verdicts — do NOT supply a top-level verdict.",
   )
 
