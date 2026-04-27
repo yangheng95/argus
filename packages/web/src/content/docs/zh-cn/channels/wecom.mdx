@@ -3,8 +3,6 @@ title: 企业微信 (WeCom)
 description: 企业微信适配器走自建应用 + 接收消息 Webhook 模式。
 ---
 
-企业微信适配器走**自建应用 + 接收消息 Webhook** 模式。
-
 ## 前置
 
 1. 在 [企业微信管理后台](https://work.weixin.qq.com/) 创建自建应用。
@@ -29,7 +27,7 @@ export WECOM_WEBHOOK_PATH=/wecom
 
 企业微信没有显式 thread；thread key = `FromUserName + AgentID`。
 
-## Troubleshooting
+## 故障排查
 
 - **URL 验证失败**：企业微信要求公网可访问 + HTTPS；本机调试可用 Cloudflare Tunnel。
 - **消息解密失败**：EncodingAESKey 与后台不一致。

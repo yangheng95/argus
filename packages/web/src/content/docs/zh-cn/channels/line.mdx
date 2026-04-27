@@ -3,8 +3,6 @@ title: LINE
 description: LINE 适配器走 Messaging API Webhook。
 ---
 
-LINE 适配器走 **Messaging API Webhook**。
-
 ## 前置
 
 1. 在 [LINE Developers](https://developers.line.biz/) 创建 Provider → Channel（Messaging API）。
@@ -25,7 +23,7 @@ export LINE_WEBHOOK_PATH=/line
 
 LINE 为 1:1 聊天或群聊；thread key = `userId` 或 `groupId`。
 
-## Troubleshooting
+## 故障排查
 
 - **Signature validation failed**：`LINE_CHANNEL_SECRET` 错；签名算法是 HMAC-SHA256。
 - **Reply token expired**：LINE 的 replyToken 有效期 1 分钟；OpenCorvus 对长任务自动改走 push 消息。

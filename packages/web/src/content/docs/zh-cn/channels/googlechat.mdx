@@ -3,8 +3,6 @@ title: Google Chat
 description: Google Chat 适配器走 Webhook / HTTP events 模式，需一个 Google Cloud Service Account。
 ---
 
-Google Chat 适配器走 **Webhook / HTTP events** 模式，需一个 Google Cloud Service Account。
-
 ## 前置
 
 1. [Google Cloud Console](https://console.cloud.google.com/) 创建项目 → 启用 Google Chat API。
@@ -30,7 +28,7 @@ export GOOGLECHAT_WEBHOOK_PATH=/googlechat
 
 Google Chat 的 `thread.name` 直接作为 thread key。
 
-## Troubleshooting
+## 故障排查
 
 - **Bot 上线但消息无响应**：Chat API 默认仅对 Workspace 内用户生效；确认 Service Account 有域授权。
 - **JSON 解析失败**：私钥里的 `\n` 必须保留为字面量 `\n`，不能是实际换行。

@@ -3,7 +3,7 @@ title: 快捷键
 description: 自定义 OpenCorvus 的 TUI 快捷键。
 ---
 
-OpenCorvus 的 TUI 快捷键系统继承自上游 opencode。绑定写在 TUI config 里，与内置默认值合并。
+OpenCorvus 的 TUI 快捷键写在 TUI config 里，与内置默认值合并。
 
 ## 配置文件
 
@@ -19,7 +19,6 @@ OpenCorvus 的 TUI 快捷键系统继承自上游 opencode。绑定写在 TUI co
 
 ```json
 {
-  "$schema": "https://opencorvus.ai/tui.json",
   "keybinds": {
     "submit": "ctrl+enter",
     "cancel": "ctrl+c",
@@ -29,7 +28,7 @@ OpenCorvus 的 TUI 快捷键系统继承自上游 opencode。绑定写在 TUI co
 }
 ```
 
-key 名对应上游 opencode TUI 的 action ID；值为按键 chord 字符串。TUI 内打开帮助（通常是 `?`）可查看当前 build 的实时绑定。
+key 名对应 OpenCorvus TUI 的 action ID；值为按键 chord 字符串。TUI 内打开帮助（通常是 `?`）可查看当前 build 的实时绑定。
 
 ## 合并
 

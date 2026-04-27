@@ -34,7 +34,7 @@ WhatsApp 为 1:1 聊天；thread key = `wa_id`（对方手机号）。
 
 WhatsApp 有**客户启动会话**规则：对方发消息后 24 小时内才能主动回复；超时后需走 Template message。OpenCorvus 会在回复超时时报错，不静默丢弃。
 
-## Troubleshooting
+## 故障排查
 
 - **Verify Token mismatch**：确保 env 与 Meta Developer Portal 里完全一致。
 - **超 24h 窗口**：需注册 Template 并改走 `POST /messages` 的 template 参数。

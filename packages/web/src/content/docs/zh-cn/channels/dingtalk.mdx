@@ -3,8 +3,6 @@ title: 钉钉 (DingTalk)
 description: 钉钉适配器支持自建企业应用的 HTTP 回调。
 ---
 
-钉钉适配器支持 **自建企业应用** 的 HTTP 回调。
-
 ## 前置
 
 1. 在 [钉钉开放平台](https://open.dingtalk.com/) 创建企业内部应用。
@@ -30,7 +28,7 @@ export DINGTALK_WEBHOOK_PATH=/dingtalk
 
 群自定义机器人 webhook 用于**无状态推送**（例如任务完成通知），与企业应用的双向交互互补。若只做被动响应可不设。
 
-## Troubleshooting
+## 故障排查
 
 - **回调 signature 校验失败**：钉钉签名算法是 HMAC-SHA256，用 `timestamp + "\n" + appSecret` 作为 secret。
 - **消息发不出**：应用未被管理员审批发布，或未加入目标群。

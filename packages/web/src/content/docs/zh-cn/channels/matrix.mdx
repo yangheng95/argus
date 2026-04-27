@@ -3,8 +3,6 @@ title: Matrix
 description: Matrix 适配器走 Client-Server API long polling，不需要公网回调。
 ---
 
-Matrix 适配器走 **Client-Server API long polling**（`/sync` endpoint），不需要公网回调。
-
 ## 前置
 
 1. 在你的 Homeserver（如 matrix.org 或自建 Synapse）注册一个账号供 Bot 使用。
@@ -22,7 +20,7 @@ export MATRIX_SINCE_TOKEN=          # 可选，断点续传的 sync token
 
 Matrix 的 `event_id` + `rel_type: m.thread` 作为 thread key；普通消息以 `room_id` 代替。
 
-## Troubleshooting
+## 故障排查
 
 - **401 Unrecognised token**：access token 失效，重新登录获取。
 - **消息丢失**：`MATRIX_SINCE_TOKEN` 持久化未写入；重启后从最新 sync 开始，中间消息会丢。

@@ -9,7 +9,7 @@ Slack 是 OpenCorvus 的**首选远程 channel**，也是 channel-runtime 对接
 
 **生产可用**。`README.md:133` 已列为 Available。
 
-## Quick setup
+## 快速配置
 
 ### 1. 创建 Slack App
 
@@ -116,7 +116,7 @@ permission.asked   → 若开启自动回复则直接 reply；否则 @ 用户等
 
 回帖时：所有回复都会带上原 `thread_ts`，保持在同一 thread 内。
 
-## Permission 交互
+## 权限交互
 
 在 Slack 里审批权限：
 
@@ -136,7 +136,7 @@ Slack 适配器会在接收到消息后立刻给原消息加一个 emoji 反应�
 
 Slack 的 `file_share` 子类型（语音消息）会被下载并走 STT pipeline（`STT_PROVIDERS` 指定的提供者），转写文本后当作普通消息处理。
 
-## Troubleshooting
+## 故障排查
 
 **问题**：`not_in_channel` 或 `channel_not_found`
 **检查**：bot 是否被邀请进入该频道；DM 场景是否开启 `Messages Tab`。

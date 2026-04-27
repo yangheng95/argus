@@ -3,8 +3,6 @@ title: Mattermost
 description: Mattermost 适配器走 Outgoing Webhook 模式。
 ---
 
-Mattermost 适配器走 **Outgoing Webhook** 模式。
-
 ## 前置
 
 1. 在 Mattermost System Console → Integrations 启用 Outgoing Webhooks。
@@ -25,7 +23,7 @@ export MATTERMOST_WEBHOOK_PATH=/mattermost
 
 Mattermost 的 `root_id` 作为 thread key（消息所属 thread 的根消息 ID）。
 
-## Troubleshooting
+## 故障排查
 
 - **Bot 不能发消息**：检查 Bot Account 是否被加入目标 channel。
 - **附件上传 413**：Mattermost 默认单文件 50MB，在 System Console → File Storage 中调整。

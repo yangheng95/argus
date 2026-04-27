@@ -3,7 +3,7 @@ title: Keybinds
 description: Customize TUI keybinds for OpenCorvus.
 ---
 
-OpenCorvus's TUI keybind system is inherited from upstream opencode. Bindings live in your TUI config and merge with the built-in defaults.
+OpenCorvus's TUI keybinds live in your TUI config and merge with the built-in defaults.
 
 ## Configuration file
 
@@ -19,7 +19,6 @@ Place a `keybinds.jsonc` (or the `keybinds` block inside `tui.json`) under one o
 
 ```json
 {
-  "$schema": "https://opencorvus.ai/tui.json",
   "keybinds": {
     "submit": "ctrl+enter",
     "cancel": "ctrl+c",
@@ -29,7 +28,7 @@ Place a `keybinds.jsonc` (or the `keybinds` block inside `tui.json`) under one o
 }
 ```
 
-The keys mirror the action IDs from the upstream opencode TUI; values are key chord strings. Open the in-TUI help (typically `?`) to see the live binding map for your build.
+The keys are the action IDs from the OpenCorvus TUI; values are key chord strings. Open the in-TUI help (typically `?`) to see the live binding map for your build.
 
 ## Resolution
 

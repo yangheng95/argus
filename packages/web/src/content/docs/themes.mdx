@@ -1,9 +1,9 @@
 ---
 title: Themes
-description: Built-in TUI color themes inherited from upstream opencode.
+description: Built-in TUI color themes for OpenCorvus.
 ---
 
-OpenCorvus's TUI inherits its theme system from upstream opencode. Themes ship as JSON palettes; you can pick a built-in or define your own.
+OpenCorvus's TUI uses a JSON theme palette format. You can pick a built-in theme or define your own.
 
 ## Selecting a theme
 
@@ -11,14 +11,13 @@ In `tui.json` (sibling of `opencorvus.jsonc` or under `~/.config/opencorvus/`):
 
 ```json
 {
-  "$schema": "https://opencorvus.ai/tui.json",
   "theme": "tokyonight"
 }
 ```
 
 ## Built-in themes
 
-A non-exhaustive list inherited from opencode:
+A non-exhaustive list of bundled themes:
 
 - `tokyonight`
 - `catppuccin`
@@ -35,7 +34,7 @@ The exact set depends on the TUI version OpenCorvus is built against; run the in
 
 ## Custom themes
 
-Drop a JSON file under `~/.config/opencorvus/themes/<name>.json` with the standard opencode theme schema, then reference it by name in `tui.json`. The TUI hot-reloads themes when the file changes.
+Drop a JSON file under `~/.config/opencorvus/themes/<name>.json` using the standard theme palette schema, then reference it by name in `tui.json`. The TUI hot-reloads themes when the file changes.
 
 ## Server / overlay theming
 

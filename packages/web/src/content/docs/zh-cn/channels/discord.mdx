@@ -3,8 +3,6 @@ title: Discord
 description: Discord 适配器通过 Gateway WebSocket + REST API 实时接收消息，无需公网回调。
 ---
 
-Discord 适配器通过 **Gateway WebSocket + REST API** 实时接收消息，无需公网回调。
-
 ## 前置
 
 1. 在 [Discord Developer Portal](https://discord.com/developers/applications) 创建 Application → 添加 Bot。
@@ -33,7 +31,7 @@ Discord 的 **Thread**（公开/私有分支）直接映射为 OpenCorvus 的 th
 | 语音（voice message） | ✅ 走 STT |
 | Slash command | ⚠️ 暂不支持，走普通消息 |
 
-## Troubleshooting
+## 故障排查
 
 - **Bot 上线但不响应**：检查 MESSAGE CONTENT INTENT 是否开启（2022 年后 Discord 默认关闭）。
 - **附件上传失败**：免费账号单文件 ≤ 25MB，Nitro 100MB。
