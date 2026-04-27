@@ -2814,6 +2814,10 @@ export type WorktreeCreateInput = {
    * Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning.
    */
   checkout?: "sync" | "async"
+  /**
+   * When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Falls back to the standard reclaim path when the existing tree is invalid (zombie linkage, missing branch, etc.) so corrupt state never silently survives a retry.
+   */
+  reuseIfValid?: boolean
 }
 
 export type Workspace = {

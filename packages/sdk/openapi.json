@@ -33170,6 +33170,10 @@
               "sync",
               "async"
             ]
+          },
+          "reuseIfValid": {
+            "description": "When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Falls back to the standard reclaim path when the existing tree is invalid (zombie linkage, missing branch, etc.) so corrupt state never silently survives a retry.",
+            "type": "boolean"
           }
         }
       },
