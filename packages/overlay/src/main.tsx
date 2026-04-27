@@ -14,7 +14,6 @@ import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenu } from "./components/TitlebarMenu";
 import { ConnectionBadge } from "./components/ConnectionBadge";
-import { SessionTokenBadge } from "./components/SessionTokenBadge";
 import { FilesSection } from "./components/FilesSection";
 import { LogViewer } from "./components/LogViewer";
 import {
@@ -699,13 +698,6 @@ if (titlebarMenuEl) {
 const connBadgeEl = document.getElementById("solidConnBadge");
 if (connBadgeEl) {
   render(() => <ConnectionBadge />, connBadgeEl);
-}
-
-// ── Mount: SessionTokenBadge ──
-
-const sessionTokenBadgeEl = document.getElementById("solidSessionTokenBadge");
-if (sessionTokenBadgeEl) {
-  render(() => <SessionTokenBadge />, sessionTokenBadgeEl);
 }
 
 // ── Mount: TaskDirContent + TaskWorkspaceLine ──

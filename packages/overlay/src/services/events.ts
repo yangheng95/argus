@@ -25,9 +25,9 @@ import {
 } from "./event-policy";
 
 // Forward SSE events to the tree-writer. Runs alongside `enqueueEvent` so
-// the `messageStore.messages` index (still consumed by Board panels, chat
-// pending bubbles, SessionTokenBadge, and section phase detection) stays in
-// sync with the `cardTreeStore` that powers the conversation view.
+// the `messageStore.messages` index (still consumed by Board panels and
+// section phase detection) stays in sync with the `cardTreeStore` that
+// powers the conversation view.
 function writeToTree(event: any): void {
   applyTreeWriterEvent(event);
 }
