@@ -87,6 +87,11 @@ export default defineConfig({
       },
       sidebar: [
         "",
+        {
+          label: "Get Started",
+          translations: { en: "Get Started", "zh-CN": "快速开始" },
+          items: ["start/install", "start/quickstart"],
+        },
         "config",
         "providers",
         "network",
@@ -97,9 +102,14 @@ export default defineConfig({
           link: "windows-wsl",
         },
         {
+          label: "Concepts",
+          translations: { en: "Concepts", "zh-CN": "概念" },
+          items: ["concepts/architecture", "concepts/agent-loop", "concepts/goal-run-task"],
+        },
+        {
           label: "Usage",
           translations: { en: "Usage", "zh-CN": "使用" },
-          items: ["go", "tui", "cli"],
+          items: ["tui", "cli"],
         },
         {
           label: "Configure",
@@ -122,9 +132,45 @@ export default defineConfig({
           ],
         },
         {
+          label: "Channels",
+          translations: { en: "Channels", "zh-CN": "频道" },
+          items: [
+            "channels/overview",
+            "channels/slack",
+            "channels/discord",
+            "channels/feishu",
+            "channels/dingtalk",
+            "channels/wecom",
+            "channels/qq",
+            "channels/telegram",
+            "channels/whatsapp",
+            "channels/line",
+            "channels/signal",
+            "channels/matrix",
+            "channels/mattermost",
+            "channels/msteams",
+            "channels/googlechat",
+          ],
+        },
+        {
+          label: "Overlay",
+          translations: { en: "Overlay", "zh-CN": "Overlay 桌面端" },
+          items: ["overlay/overview"],
+        },
+        {
+          label: "Operations",
+          translations: { en: "Operations", "zh-CN": "运维" },
+          items: ["operations/benchmark", "operations/github-action"],
+        },
+        {
           label: "Develop",
           translations: { en: "Develop", "zh-CN": "开发" },
           items: ["sdk", "server", "plugins"],
+        },
+        {
+          label: "Reference",
+          translations: { en: "Reference", "zh-CN": "参考" },
+          items: ["reference/api", "reference/cli", "reference/sdk", "reference/env", "reference/evaluator"],
         },
       ],
       components: {
