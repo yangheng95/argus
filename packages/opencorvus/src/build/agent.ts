@@ -42,6 +42,7 @@ import { ExecutorRegistry } from "@/executor/registry"
 import { record, structuredInput, type CodingEventInfo, type CodingProviderOptions } from "@/executor/contract"
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
+import { MCPServe } from "@/mcp/serve"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { FileDiff } from "@/snapshot/types"
@@ -150,6 +151,24 @@ export namespace BuildAgent {
      *  Empty / undefined when no merge-back happened (failed build, caller-
      *  owned worktree, or no commit_ref). */
     diffs?: FileDiff[]
+  }
+
+  export function composeExternalCodingSystem(input: {
+    executor: Exclude<TaskRow["executor"], "opencode">
+    baseSystem?: string
+    skillPrompt?: string
+  }) {
+    const mcpPrompt = input.executor === "codex"
+      ? MCPServe.codingExecutorPromptSection()
+      : ""
+    const system = [input.baseSystem ?? "", mcpPrompt, input.skillPrompt ?? ""]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join("\n\n")
+    return {
+      system: system.length > 0 ? system : undefined,
+      mcpPromptInjected: mcpPrompt.length > 0,
+    }
   }
 
   /**
@@ -768,17 +787,18 @@ async function runWithExternalProvider(args: {
   const { resolveStageSkills } = await import("@/engine/skill-inject")
   const resolvedSkills = await resolveStageSkills(buildSkillsCfg, "build", args.taskSignals)
   const baseSystem = resolveOption<string>(options.system)
-  const composedSystem = [baseSystem ?? "", resolvedSkills.prompt]
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join("\n\n")
+  const composedSystem = BuildAgent.composeExternalCodingSystem({
+    executor: args.executor,
+    baseSystem,
+    skillPrompt: resolvedSkills.prompt,
+  })
 
   const configuredTools = resolveOption(options.tools)
   const runInput = {
     model: resolveOption(options.model),
     prompt,
     cwd: args.worktreeDir,
-    system: composedSystem.length > 0 ? composedSystem : undefined,
+    system: composedSystem.system,
     maxTurns: resolveOption(options.maxTurns),
     tools: configuredTools,
     signal: args.signal,
@@ -792,7 +812,8 @@ async function runWithExternalProvider(args: {
     skillCount: resolvedSkills.skills.length,
     skillNames: resolvedSkills.skills.map((s) => s.name),
     requiredTools: resolvedSkills.requiredTools,
-    systemChars: composedSystem.length,
+    mcpPromptInjected: composedSystem.mcpPromptInjected,
+    systemChars: composedSystem.system?.length ?? 0,
   })
 
   try {

@@ -187,23 +187,23 @@ export namespace MCPServe {
     return Object.keys(EXECUTOR_TOOLS).map((id) => EXECUTOR_TOOLS[id as ExecutorToolID].name)
   }
 
-  export function claudeToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
-    return `mcp__${claudeSafeName(serverName)}__${claudeSafeName(toolName)}`
+  export function codingExecutorToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
+    return `mcp__${mcpSafeName(serverName)}__${mcpSafeName(toolName)}`
   }
 
-  export function normalizeClaudeToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
-    const prefix = `mcp__${claudeSafeName(serverName)}__`
+  export function normalizeCodingExecutorToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
+    const prefix = `mcp__${mcpSafeName(serverName)}__`
     return toolName.startsWith(prefix) ? toolName.slice(prefix.length) : toolName
   }
 
-  export function claudeExecutorPromptSection(serverName = DEFAULT_SERVER_NAME) {
+  export function codingExecutorPromptSection(serverName = DEFAULT_SERVER_NAME) {
     const aliases = executorToolNames()
-      .map((name) => `- ${name} => ${claudeToolName(name, serverName)}`)
+      .map((name) => `- ${name} => ${codingExecutorToolName(name, serverName)}`)
       .join("\n")
     return [
-      "# OpenCorvus MCP tools for Claude Code",
+      "# OpenCorvus MCP tools for external coding executors",
       "",
-      `Claude Code exposes the OpenCorvus executor MCP server as ${serverName}. When task prompts, skills, or architect contracts mention a bare OpenCorvus tool name, call the exact MCP-prefixed Claude Code tool name below.`,
+      `External coding executors expose the OpenCorvus executor MCP server as ${serverName}. When task prompts, skills, or architect contracts mention a bare OpenCorvus tool name, call the exact MCP-prefixed tool name below.`,
       "",
       aliases,
       "",
@@ -392,7 +392,7 @@ export namespace MCPServe {
   }
 }
 
-function claudeSafeName(input: string) {
+function mcpSafeName(input: string) {
   return input.replace(/[^A-Za-z0-9_-]/g, "_")
 }
 
