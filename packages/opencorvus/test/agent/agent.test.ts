@@ -123,6 +123,19 @@ test("compaction agent denies all permissions", async () => {
   })
 })
 
+test("integrity agent does not expose registry tools", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const integrity = await Agent.get("integrity")
+      expect(integrity).toBeDefined()
+      expect(integrity?.hidden).toBe(true)
+      expect(integrity?.tools).toEqual({ include: [] })
+    },
+  })
+})
+
 test("custom agent from config creates new agent", async () => {
   await using tmp = await tmpdir({
     config: {

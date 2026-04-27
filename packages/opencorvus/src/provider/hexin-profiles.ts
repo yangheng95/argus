@@ -22,6 +22,7 @@ export interface HexinModelProfile {
   pdf_in: boolean
   toolcall: boolean
   context: number
+  input?: number
   output: number
 }
 
@@ -82,6 +83,20 @@ const MATCHERS: Matcher[] = [
   // mini / nano / codex branches stay conservative for the same reason —
   // each one needs its own probe before flipping its flags.
   {
+    test: (id) => /^gpt-5\.4$/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: false,
+      attachment: true,
+      image_in: true,
+      pdf_in: false,
+      toolcall: true,
+      context: 1_050_000,
+      input: 922_000,
+      output: 128_000,
+    },
+  },
+  {
     test: (id) => /^gpt-5\.\d+-mini/i.test(id),
     profile: {
       family: "gpt-5",
@@ -90,8 +105,23 @@ const MATCHERS: Matcher[] = [
       image_in: false,
       pdf_in: false,
       toolcall: true,
-      context: 128_000,
-      output: 16_384,
+      context: 400_000,
+      input: 272_000,
+      output: 128_000,
+    },
+  },
+  {
+    test: (id) => /^gpt-5\.\d+-nano/i.test(id),
+    profile: {
+      family: "gpt-5",
+      reasoning: false,
+      attachment: false,
+      image_in: false,
+      pdf_in: false,
+      toolcall: true,
+      context: 400_000,
+      input: 272_000,
+      output: 128_000,
     },
   },
   {
@@ -107,8 +137,9 @@ const MATCHERS: Matcher[] = [
       image_in: true,
       pdf_in: false,
       toolcall: true,
-      context: 128_000,
-      output: 16_384,
+      context: 400_000,
+      input: 272_000,
+      output: 128_000,
     },
   },
   {
@@ -226,4 +257,3 @@ export function profileFor(id: string): HexinModelProfile {
   log.warn("no profile for hexin model — using conservative default", { id })
   return { ...DEFAULT_PROFILE, name: displayName(id) }
 }
-
