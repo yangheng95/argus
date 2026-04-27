@@ -4,7 +4,7 @@ MCP 是 Anthropic 主导、社区维护的开放协议，定义 LLM 应用与外
 
 OpenCorvus 同时扮演：
 1. **MCP Client** — 连接外部 MCP Server，将其工具/提示词/资源暴露给内部 agent
-2. **MCP Server** — `opencorvus mcp serve` 把自身工具暴露给外部 agent（Claude Desktop、Codex 等）
+2. **MCP Server** — 运行中的 `opencorvus serve` 进程通过 Streamable HTTP 在 `/mcp/transport` 暴露自身工具给外部编码执行器
 
 源码：`packages/opencorvus/src/mcp/index.ts`、`packages/opencorvus/src/mcp/serve.ts`
 
@@ -138,25 +138,19 @@ opencorvus mcp remove-auth <server-name>
 
 ## 6. OpenCorvus 作为 MCP Server
 
-```bash
-opencorvus mcp serve --cwd /path/to/project --toolset executor
+executor 用的 MCP transport 内嵌于主 `opencorvus serve` 的 HTTP 服务器，无需单独进程。外部执行器（Claude Code 走 Anthropic Agent SDK、Codex 走 app-server）连接到：
+
+```
+POST/GET/DELETE http://<host>:<port>/mcp/transport
 ```
 
-暴露工具（`src/mcp/serve.ts:38-92`）：
+按 MCP 2025 规范走 Streamable HTTP。每个 MCP session 在 initialize 时通过 `X-Opencorvus-Directory` 请求头锁定一个工作目录；当配置了 `OPENCORVUS_SERVER_PASSWORD` 时，与其他 API 同一道 HTTP Basic 鉴权也保护此 transport。
 
-| MCP 工具 | 对应内部工具 |
-|---|---|
-| `shell_command` | `bash` |
-| `read_file` | `read` |
-| `find_files` | `glob` |
-| `search_code` | `grep` |
-| `apply_patch` | `apply_patch` |
-| `fetch_url` | `webfetch` |
-| `web_search` | `websearch` |
-| `memory` | `memory` |
-| `task_report` | `task_report` |
+OpenCorvus 自动把这个 URL 注入到执行器配置里：
+- **Claude Code**：`MCPServe.url(...)` 返回 `McpHttpServerConfig`（`{ type: "http", url, headers }`），由 Anthropic Agent SDK 通过 `--mcp-config` 转发给 claude-code CLI。
+- **Codex**：opencorvus 给 `codex app-server` 注入 `-c mcp_servers.opencorvus.url=...`。
 
-本地已连接的 MCP Server 工具也会作为代理工具一并暴露（`src/mcp/serve.ts:129-131`）。
+暴露工具（`src/mcp/serve.ts`）：`memory`、`task_report`、`webpage_*` 镜像工具链（`webpage_extract`、`webpage_compile`、`webpage_analyze`、`webpage_image_extract/compile/analyze`、`webpage_render`、`webpage_evaluate`、`webpage_text_diff`、`webpage_vision_judge`）、`figma_*` 工具链。本地已连接的外部 MCP Server 工具也会作为代理工具一并暴露。
 
 ## 7. 连接状态
 

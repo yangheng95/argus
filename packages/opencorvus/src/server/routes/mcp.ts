@@ -2,12 +2,20 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { MCP } from "../../mcp"
+import { MCPServe } from "../../mcp/serve"
 import { Config } from "../../config/config"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
-export const McpRoutes = lazy(() =>
-  new Hono()
+export const McpRoutes = lazy(() => {
+  const app = new Hono()
+  // Embedded executor MCP transport (Streamable HTTP) consumed by external
+  // coding executors (Claude Code, Codex). Single source of MCP server
+  // surface — replaces the historical `opencorvus mcp serve` stdio child.
+  // Mounted before describeRoute-instrumented routes so it isn't swept into
+  // the OpenAPI doc (it speaks JSON-RPC over POST/GET/DELETE, not REST).
+  MCPServe.mount(app)
+  return app
     // === core ===
     .get(
       "/",
@@ -224,5 +232,5 @@ export const McpRoutes = lazy(() =>
         await MCP.disconnect(name)
         return c.json(true)
       },
-    ),
-)
+    )
+})

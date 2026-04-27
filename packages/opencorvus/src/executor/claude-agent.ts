@@ -4,6 +4,8 @@ import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEvent
 import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
 import { MCPServe } from "@/mcp/serve"
+import { Server } from "@/server/server"
+import { Instance } from "@/project/instance"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
@@ -211,14 +213,14 @@ export namespace ClaudeAgentExecutor {
 }
 
 function opencorvusMcpServers(cwd?: string) {
-  const mcp = MCPServe.command(cwd ?? process.cwd())
+  // The opencorvus executor MCP server is embedded in the main HTTP server
+  // (Hono mount at /mcp/transport). The Claude Agent SDK forwards this
+  // config to claude code as `--mcp-config`, which connects via Streamable
+  // HTTP — single process, single port, no stdio child to spawn.
+  const baseUrl = Server.url()
+  const config = MCPServe.url(baseUrl, { directory: cwd ?? Instance.directory })
   return {
-    [mcp.name]: {
-      type: "stdio" as const,
-      command: mcp.command,
-      args: mcp.args,
-      env: mcp.env,
-    },
+    [MCPServe.ServerName]: config,
   }
 }
 

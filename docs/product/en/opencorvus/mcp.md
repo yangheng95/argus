@@ -4,7 +4,7 @@ MCP is an open protocol led by Anthropic that defines a standard interface betwe
 
 OpenCorvus plays two roles:
 1. **MCP Client** — connects to external MCP Servers, exposing their tools/prompts/resources to internal agents.
-2. **MCP Server** — `opencorvus mcp serve` exposes its own tools to external agents (Claude Desktop, Codex, …).
+2. **MCP Server** — the running `opencorvus serve` process exposes its own tools to external coding executors over Streamable HTTP at `/mcp/transport`.
 
 Source: `packages/opencorvus/src/mcp/index.ts`, `packages/opencorvus/src/mcp/serve.ts`
 
@@ -92,11 +92,19 @@ Status: `opencorvus mcp status`. Remove: `opencorvus mcp remove-auth <server-nam
 
 ## OpenCorvus as MCP Server
 
-```bash
-opencorvus mcp serve --cwd /path/to/project --toolset executor
+The executor MCP transport is embedded in the main `opencorvus serve` HTTP server — no separate process. External executors (Claude Code via Anthropic Agent SDK, Codex via app-server) connect to:
+
+```
+POST/GET/DELETE http://<host>:<port>/mcp/transport
 ```
 
-Exposes (`src/mcp/serve.ts:38-92`): `shell_command`, `read_file`, `find_files`, `search_code`, `apply_patch`, `fetch_url`, `web_search`, `memory`, `task_report` — plus every tool from locally connected MCP clients as a proxy tool (`src/mcp/serve.ts:129-131`).
+It speaks Streamable HTTP per the MCP 2025 spec. The session is pinned to a working directory via the `X-Opencorvus-Directory` request header at initialize time. When `OPENCORVUS_SERVER_PASSWORD` is set, the same HTTP Basic auth that protects the rest of the API gates the transport.
+
+OpenCorvus injects this URL into the executor automatically:
+- **Claude Code**: `MCPServe.url(...)` produces an `McpHttpServerConfig` (`{ type: "http", url, headers }`) which the Anthropic Agent SDK forwards to the claude-code CLI as `--mcp-config`.
+- **Codex**: opencorvus passes `-c mcp_servers.opencorvus.url=...` to `codex app-server`.
+
+Exposes (`src/mcp/serve.ts`): `memory`, `task_report`, the `webpage_*` mirror toolchain (`webpage_extract`, `webpage_compile`, `webpage_analyze`, `webpage_image_extract/compile/analyze`, `webpage_render`, `webpage_evaluate`, `webpage_text_diff`, `webpage_vision_judge`), and the `figma_*` toolchain — plus every tool from locally connected MCP clients as a proxied tool.
 
 ## Connection status
 
