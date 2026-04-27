@@ -235,7 +235,7 @@ export namespace MCPServe {
       ...proxiedTools.map((item) => ({
         name: item.key,
         description: item.description,
-        inputSchema: item.inputSchema,
+        inputSchema: inputObjectSchema(item.inputSchema),
         metadata: {
           surface: "mcp",
           proxied_client: item.client,
@@ -291,7 +291,7 @@ export namespace MCPServe {
             ...(await MCP.serverTools()).map((item) => ({
               name: item.key,
               description: item.description,
-              inputSchema: item.inputSchema,
+              inputSchema: inputObjectSchema(item.inputSchema),
               annotations: item.annotations,
               _meta: {
                 surface: "mcp",
@@ -422,16 +422,124 @@ function attachmentSummary(input: Array<{ filename?: string; mime?: string }> | 
 
 function toolSchema(schema: z.ZodType) {
   const json = z.toJSONSchema(schema) as Record<string, unknown>
-  if (json.type === "object") return json
+  return inputObjectSchema(json)
+}
+
+function inputObjectSchema(input: Record<string, unknown>) {
+  const json =
+    input.type === "object"
+      ? { ...input }
+      : {
+          type: "object",
+          ...(Array.isArray(input.required) ? { required: input.required } : {}),
+          ...(input.properties && typeof input.properties === "object"
+            ? { properties: input.properties }
+            : { properties: {} }),
+          ...(input.anyOf ? { anyOf: input.anyOf } : {}),
+          ...(input.oneOf ? { oneOf: input.oneOf } : {}),
+          ...(input.allOf ? { allOf: input.allOf } : {}),
+          additionalProperties: input.additionalProperties ?? true,
+        }
+  return flattenTopLevelCombinators(json)
+}
+
+function flattenTopLevelCombinators(input: Record<string, unknown>) {
+  const anyOf = objectBranches(input.anyOf)
+  const oneOf = objectBranches(input.oneOf)
+  const allOf = objectBranches(input.allOf)
+  if (anyOf.length === 0 && oneOf.length === 0 && allOf.length === 0) return input
+
+  const output = { ...input }
+  delete output.anyOf
+  delete output.oneOf
+  delete output.allOf
+
+  const properties: Record<string, unknown> = {
+    ...(isRecord(input.properties) ? input.properties : {}),
+  }
+  const required = new Set(arrayOfStrings(input.required))
+  for (const item of requiredForUnion(anyOf)) required.add(item)
+  for (const item of requiredForUnion(oneOf)) required.add(item)
+  for (const branch of allOf) {
+    for (const item of arrayOfStrings(branch.required)) required.add(item)
+  }
+  for (const branch of [...anyOf, ...oneOf, ...allOf]) {
+    if (!isRecord(branch.properties)) continue
+    for (const [key, value] of Object.entries(branch.properties)) {
+      properties[key] = mergePropertySchema(properties[key], value)
+    }
+  }
+
+  output.type = "object"
+  output.properties = properties
+  output.required = [...required]
+  output.additionalProperties = input.additionalProperties ?? true
+  return output
+}
+
+function requiredForUnion(branches: Record<string, unknown>[]) {
+  if (branches.length === 0) return []
+  const counts = new Map<string, number>()
+  for (const branch of branches) {
+    for (const item of arrayOfStrings(branch.required)) {
+      counts.set(item, (counts.get(item) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()].filter(([, count]) => count === branches.length).map(([key]) => key)
+}
+
+function objectBranches(input: unknown) {
+  if (!Array.isArray(input)) return []
+  return input.filter((item): item is Record<string, unknown> => isRecord(item) && item.type === "object")
+}
+
+function mergePropertySchema(left: unknown, right: unknown): unknown {
+  if (!isRecord(left)) return normalizePropertySchema(right)
+  if (!isRecord(right)) return normalizePropertySchema(left)
+  const values = [...literalValues(left), ...literalValues(right)]
+  if (values.length > 0) {
+    const next = {
+      ...left,
+      ...right,
+      type: left.type ?? right.type ?? "string",
+      enum: [...new Set(values)],
+    } as Record<string, unknown>
+    delete next.const
+    return {
+      ...next,
+    }
+  }
   return {
-    type: "object",
-    ...(Array.isArray(json.required) ? { required: json.required } : {}),
-    ...(json.properties && typeof json.properties === "object" ? { properties: json.properties } : { properties: {} }),
-    ...(json.anyOf ? { anyOf: json.anyOf } : {}),
-    ...(json.oneOf ? { oneOf: json.oneOf } : {}),
-    ...(json.allOf ? { allOf: json.allOf } : {}),
-    additionalProperties: json.additionalProperties ?? true,
+    ...left,
+    ...right,
+  }
+}
+
+function normalizePropertySchema(input: unknown): unknown {
+  if (!isRecord(input)) return input
+  const values = literalValues(input)
+  if (values.length === 0) return input
+  const output = {
+    ...input,
+    enum: [...new Set(values)],
   } as Record<string, unknown>
+  delete output.const
+  return output
+}
+
+function literalValues(input: Record<string, unknown>) {
+  const out: unknown[] = []
+  if ("const" in input) out.push(input.const)
+  if (Array.isArray(input.enum)) out.push(...input.enum)
+  return out
+}
+
+function arrayOfStrings(input: unknown) {
+  return Array.isArray(input) ? input.filter((item): item is string => typeof item === "string") : []
+}
+
+function isRecord(input: unknown): input is Record<string, unknown> {
+  return !!input && typeof input === "object" && !Array.isArray(input)
 }
 
 async function ask(
@@ -536,6 +644,8 @@ async function executeLocal(
     ],
     structuredContent: {
       title: header,
+      output: result.output,
+      text: body,
       metadata: {
         ...metadata,
         ...result.metadata,
