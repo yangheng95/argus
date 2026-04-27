@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { overlayMeta } from "../../src/server/routes/task-message-protocol-bridge"
+import { overlayMeta } from "../../src/orchestrator/protocol/message-bridge"
 import { Session } from "../../src/session"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -37,6 +37,27 @@ test("user message in a sub-agent session routes to that sub-agent's card as orc
       const meta = overlayMeta(exec.id, root.id, { role: "user" })
       expect(meta.resolvedRole).toBe("orchestrator")
       expect(meta.channel).toBe("executor")
+    },
+  })
+})
+
+test("overlay direct reply in a sub-agent session routes as human input inside that agent card", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const root = await Session.create({ kind: "root", title: "task root" })
+      const requirements = await Session.create({
+        kind: "requirements",
+        parentID: root.id,
+        title: "requirements",
+      })
+      const meta = overlayMeta(requirements.id, root.id, {
+        role: "user",
+        extra: { overlay_direct_reply: true },
+      })
+      expect(meta.resolvedRole).toBe("user")
+      expect(meta.channel).toBe("requirements")
     },
   })
 })

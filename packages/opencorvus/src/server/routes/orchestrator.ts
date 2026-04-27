@@ -7,6 +7,9 @@ import { ControlTimeline } from "@/control/timeline"
 import { projectConversationView } from "@/conversation/view"
 import {
   Artifact,
+  AgentSessionCancelResult,
+  AgentSessionReplyInput,
+  AgentSessionReplyResult,
   Budget,
   CreateTaskInput,
   Delivery,
@@ -35,12 +38,31 @@ import { taskRewindCursor } from "@/engine/rewind"
 import { TaskQueueReorderError } from "@/engine/queue"
 import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
+import { Identifier } from "@/id/id"
 import { Session } from "@/session"
+import { SessionStatus } from "@/session/status"
 import { Message } from "@/session/message"
+import { SessionPrompt } from "@/session/prompt"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { sessionGoalID, taskSession } from "@/orchestrator/task-event"
+import { Log } from "@/util/log"
+import { sessionGoalID, sessionRole, taskIDForSession, taskSession } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
+
+const DIRECT_REPLY_AGENT_KINDS = new Set([
+  "assistant",
+  "intent-analysis",
+  "requirements",
+  "design-analyst",
+  "planner",
+  "goal",
+  "architect",
+  "integrity",
+  "delivery",
+  "build",
+  "evaluator",
+])
+const log = Log.create({ service: "server.routes.orchestrator" })
 
 const ReorderTaskQueueInput = z.object({
   directory: z.string().min(1),
@@ -631,6 +653,124 @@ export const EngineRoutes = lazy(() =>
       },
     )
     .post(
+      "/task/:taskID/session/:sessionID/reply",
+      describeRoute({
+        summary: "Reply directly to a task agent session",
+        description:
+          "Append a human-authored message to a non-orchestrator task agent session. " +
+          "This is scoped input for the target agent session, not a global task routing command.",
+        operationId: "task.session.reply",
+        responses: {
+          202: {
+            description: "Reply accepted",
+            content: {
+              "application/json": {
+                schema: resolver(AgentSessionReplyResult),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id, sessionID: z.string().min(1) })),
+      validator("json", AgentSessionReplyInput),
+      async (c) => {
+        const params = c.req.valid("param")
+        const input = c.req.valid("json")
+        const target = await resolveDirectReplyTarget(params.taskID, params.sessionID)
+        const messageID = Identifier.ascending("message")
+        const message: Message.User = {
+          id: messageID,
+          sessionID: target.session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: target.agent,
+          model: target.model,
+          ...(target.variant ? { variant: target.variant } : {}),
+          extra: {
+            overlay_direct_reply: true,
+            source: "overlay_direct_reply",
+            taskID: params.taskID,
+            targetSessionID: target.session.id,
+          },
+        }
+        await Session.updateMessage(message)
+        await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID,
+          sessionID: target.session.id,
+          type: "text",
+          text: input.message,
+          kind: "user_content",
+          source: "user",
+          metadata: {
+            overlay_direct_reply: true,
+            source: "overlay_direct_reply",
+            taskID: params.taskID,
+            targetSessionID: target.session.id,
+          },
+        })
+        for (const attachment of input.attachments) {
+          await Session.updatePart({
+            id: Identifier.ascending("part"),
+            messageID,
+            sessionID: target.session.id,
+            type: "file",
+            mime: attachment.mime,
+            url: attachment.url,
+            ...(attachment.filename ? { filename: attachment.filename } : {}),
+          })
+        }
+        await Session.touch(target.session.id)
+        if (SessionStatus.get(target.session.id).type === "idle") {
+          void SessionPrompt.loop({ sessionID: target.session.id }).catch((error) => {
+            log.error("direct agent session reply loop failed", {
+              sessionID: target.session.id,
+              taskID: params.taskID,
+              error,
+            })
+          })
+        }
+        return c.json({
+          task_id: params.taskID,
+          session_id: target.session.id,
+          message_id: messageID,
+        }, 202)
+      },
+    )
+    .post(
+      "/task/:taskID/session/:sessionID/cancel",
+      describeRoute({
+        summary: "Cancel a task agent session",
+        description:
+          "Abort the active SessionLoop for a non-orchestrator task agent session. " +
+          "This cancels the local agent turn without changing global task orchestration.",
+        operationId: "task.session.cancel",
+        responses: {
+          200: {
+            description: "Agent session cancelled",
+            content: {
+              "application/json": {
+                schema: resolver(AgentSessionCancelResult),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id, sessionID: z.string().min(1) })),
+      async (c) => {
+        const params = c.req.valid("param")
+        await assertDirectAgentSession(params.taskID, params.sessionID)
+        SessionPrompt.cancel(params.sessionID)
+        return c.json({
+          task_id: params.taskID,
+          session_id: params.sessionID,
+          cancelled: true as const,
+        })
+      },
+    )
+    .post(
       "/task/:taskID/cancel",
       describeRoute({
         summary: "Cancel task",
@@ -1132,6 +1272,61 @@ export const EngineRoutes = lazy(() =>
       },
     )
 )
+
+async function assertDirectAgentSession(taskID: string, sessionID: string) {
+  const owningTask = taskIDForSession(sessionID)
+  if (owningTask !== taskID) {
+    throw new HTTPException(404, {
+      message: `Session ${sessionID} does not belong to task ${taskID}`,
+    })
+  }
+  const kind = sessionRole(sessionID)
+  if (!kind) {
+    throw new HTTPException(404, {
+      message: `Session ${sessionID} has no task agent kind`,
+    })
+  }
+  if (!DIRECT_REPLY_AGENT_KINDS.has(kind)) {
+    throw new HTTPException(400, {
+      message: `Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`,
+    })
+  }
+  return Session.get(sessionID)
+}
+
+async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
+  const session = await assertDirectAgentSession(taskID, sessionID)
+  const messages = await Session.messages({ sessionID })
+  const latest = messages
+    .map((message) => message.info)
+    .filter((info) => info.role === "user" || info.role === "assistant")
+    .sort((left, right) => (right.time?.created ?? 0) - (left.time?.created ?? 0))[0]
+
+  if (!latest) {
+    throw new HTTPException(400, {
+      message: `Session ${sessionID} has no prior model identity to continue`,
+    })
+  }
+
+  if (latest.role === "user") {
+    return {
+      session,
+      agent: latest.agent,
+      model: latest.model,
+      variant: latest.variant,
+    }
+  }
+
+  return {
+    session,
+    agent: latest.agent,
+    model: {
+      providerID: latest.providerID,
+      modelID: latest.modelID,
+    },
+    variant: latest.variant,
+  }
+}
 
 function taskEvent(taskID: string, event: { type: string; properties: Record<string, unknown> }, sequence?: number) {
   return {

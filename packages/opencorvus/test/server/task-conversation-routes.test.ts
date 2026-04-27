@@ -6,6 +6,8 @@ import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { SessionStatus } from "../../src/session/status"
+import { Message } from "../../src/session/message"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -49,10 +51,20 @@ describe("task conversation routes", () => {
           title: "fidelity replay session",
         })
 
-        await EngineProtocol.emit(Event.FidelityReviewCompleted, {
+        await EngineProtocol.emit(Event.IntegrityReviewCompleted, {
           taskID,
           sessionID: session.id,
-          verdict: "faithful",
+          verdict: "pass",
+          summary: "faithful",
+          dimensions: [
+            {
+              id: "goal_fidelity",
+              verdict: "pass",
+              issueCount: 0,
+              correctionCount: 0,
+              missingGoalCount: 0,
+            },
+          ],
           issues: [],
           corrections: [],
           missingGoals: [],
@@ -74,12 +86,138 @@ describe("task conversation routes", () => {
             payload?: { sessionID?: string }
           }>
         }
-        const event = body.events?.find((item) => item.type === "fidelity.review.completed")
+        const event = body.events?.find((item) => item.type === "integrity.review.completed")
 
         expect(event).toBeDefined()
         expect(event?.payload?.sessionID).toBe(session.id)
         expect(event?.emittedAt).toBeGreaterThan(0)
         expect(event?.emittedAt).toBe(event?.timestamp)
+      },
+    })
+  })
+
+  test("POST /task/:taskID/session/:sessionID/reply appends overlay direct user input to an agent session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "requirements",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "direct reply",
+            request: "direct reply",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        await Session.updateMessage({
+          id: Identifier.ascending("message"),
+          sessionID: requirements.id,
+          role: "user",
+          time: { created: now + 1 },
+          agent: "build",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })
+        SessionStatus.set(requirements.id, { type: "busy" })
+
+        const response = await app.request(`/task/${taskID}/session/${requirements.id}/reply`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({ message: "请把验收标准补充得更具体" }),
+        })
+
+        expect(response.status).toBe(202)
+        const body = await response.json() as { message_id?: string; session_id?: string; task_id?: string }
+        expect(body.task_id).toBe(taskID)
+        expect(body.session_id).toBe(requirements.id)
+        expect(body.message_id).toBeString()
+
+        const message = await Message.get({ sessionID: requirements.id, messageID: body.message_id! })
+        expect(message.info.role).toBe("user")
+        if (message.info.role !== "user") throw new Error("expected user message")
+        expect(message.info.extra?.overlay_direct_reply).toBe(true)
+        expect(message.parts[0]?.type).toBe("text")
+        const part = message.parts[0]
+        if (part?.type !== "text") throw new Error("expected text part")
+        expect(part.metadata?.overlay_direct_reply).toBe(true)
+        expect(part.text).toBe("请把验收标准补充得更具体")
+      },
+    })
+  })
+
+  test("POST /task/:taskID/session/:sessionID/cancel aborts only the target agent session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: root.id,
+          title: "build",
+        })
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "cancel build",
+            request: "cancel build",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+        SessionStatus.set(build.id, { type: "busy" })
+
+        const response = await app.request(`/task/${taskID}/session/${build.id}/cancel`, {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as { cancelled?: boolean; session_id?: string; task_id?: string }
+        expect(body).toEqual({
+          task_id: taskID,
+          session_id: build.id,
+          cancelled: true,
+        })
+        expect(SessionStatus.get(build.id).type).toBe("idle")
       },
     })
   })
