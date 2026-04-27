@@ -19487,6 +19487,20 @@
                     },
                     "should_resume": {
                       "type": "boolean"
+                    },
+                    "user_message": {
+                      "type": "object",
+                      "properties": {
+                        "info": {},
+                        "parts": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      },
+                      "required": [
+                        "info",
+                        "parts"
+                      ]
                     }
                   },
                   "required": [

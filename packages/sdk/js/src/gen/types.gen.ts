@@ -9584,6 +9584,10 @@ export type TaskMessageResponses = {
     kind: "goal" | "plan" | "note"
     message: string
     should_resume: boolean
+    user_message?: {
+      info: unknown
+      parts: Array<unknown>
+    }
   }
 }
 
