@@ -28,34 +28,16 @@ import {
 } from "../services/executor";
 import { t } from "../utils/i18n";
 
-// Canonical executor order. The chip and menu render these three slots
-// even before /executor has responded — opencode is always selectable
-// (executor.ts:executorSelectable falls through to true for it), so the
-// user can always change executor. Discovered descriptors from the
-// store override the placeholder so labels/version/model surface once
-// loadExecutors() lands. Any non-canonical executor the server reports
-// gets appended at the tail.
-const CANONICAL_EXECUTOR_ORDER = ["opencode", "codex", "claude-code"] as const;
-
-function orderExecutors(items: ExecutorDescriptor[]): ExecutorDescriptor[] {
-  const byID = new Map(items.map((item) => [item.id, item]));
-  const ordered: ExecutorDescriptor[] = [];
-  for (const id of CANONICAL_EXECUTOR_ORDER) {
-    ordered.push(byID.get(id) ?? { id });
-  }
-  for (const item of items) {
-    if (!CANONICAL_EXECUTOR_ORDER.includes(item.id as (typeof CANONICAL_EXECUTOR_ORDER)[number])) {
-      ordered.push(item);
-    }
-  }
-  return ordered;
-}
-
 export function ExecutorSelector() {
   const [open, setOpen] = createSignal(false);
 
+  // Chip renders from settingsStore (always present) + executorLabel
+  // (which already maps the three known ids to display strings). The menu
+  // iterates `appStore.executors` directly — whatever the backend reported.
+  // No frontend canonical list (rule 22 single source — backend's
+  // /executor route at server/routes/executor.ts owns the membership).
   const activeID = createMemo(() => settingsStore.executor || "opencode");
-  const executors = createMemo(() => orderExecutors(appStore.executors as ExecutorDescriptor[]));
+  const executors = createMemo(() => appStore.executors as ExecutorDescriptor[]);
   const activeLabel = createMemo(() => executorLabel(activeID()));
   const activeModel = createMemo(() => executorCurrentModel(activeID()));
 
@@ -98,10 +80,11 @@ export function ExecutorSelector() {
   }
 
   return (
-    // Always render — see orderExecutors above. Hiding on empty list
-    // would make the chip invisible whenever /executor hadn't responded
-    // yet (cold start, offline, or a fresh install with nothing
-    // discovered) even though `opencode` is always selectable.
+    // Chip is always rendered: activeID comes from settingsStore (never
+    // empty, defaults to "opencode") and executorLabel handles the three
+    // known ids without any backend round-trip. The menu body shows
+    // whatever appStore.executors holds — empty during the brief
+    // cold-start gap before loadExecutors() resolves, full afterwards.
     <div
       class="executor-selector"
       data-open={open() ? "true" : "false"}
