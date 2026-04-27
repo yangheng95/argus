@@ -7,8 +7,5 @@ export default {
   socialCard: "https://social-cards.sst.dev",
   github: "https://github.com/yangheng95/argus",
   discord: "https://github.com/yangheng95/argus/discussions",
-  headerLinks: [
-    { name: "app.header.home", url: "/" },
-    { name: "app.header.docs", url: "/docs/" },
-  ],
+  headerLinks: [],
 }
