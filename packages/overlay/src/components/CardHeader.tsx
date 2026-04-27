@@ -105,18 +105,16 @@ export function CardHeader(props: {
   traceOpen?: boolean;
   /** Toggle the trace panel for this card. */
   onTrace?: () => void;
-  /** Child-agent session controls. Root orchestrator/task session is not passed. */
+  /** Child-agent cancel control. Root orchestrator/task session is not
+   *  passed. Reply moved to <AgentSessionReplyBox/> at the END of the card
+   *  body — see Card.tsx. */
   agentSessionID?: string;
-  onAgentReply?: (sessionID: string, message: string) => void | Promise<void>;
   onAgentCancel?: (sessionID: string) => void | Promise<void>;
 }) {
   const badge = () => statusBadge(props.node);
   const glyph = () => leadingGlyph(props.node);
   const [copied, setCopied] = createSignal(false);
   const [rewinding, setRewinding] = createSignal(false);
-  const [replyOpen, setReplyOpen] = createSignal(false);
-  const [replyText, setReplyText] = createSignal("");
-  const [replySending, setReplySending] = createSignal(false);
   const [agentCancelling, setAgentCancelling] = createSignal(false);
   const canCopy = () => !!collectCardText(props.node);
   const canRewind = () =>
@@ -149,7 +147,6 @@ export function CardHeader(props: {
     props.node.kind === "step"
       ? goalRevisionLabel(props.node.round, props.node.attempt)
       : "";
-  const canAgentReply = () => !!props.agentSessionID && !!props.onAgentReply;
   const canAgentCancel = () =>
     props.node.status === "running" && !!props.agentSessionID && !!props.onAgentCancel;
 
@@ -190,28 +187,6 @@ export function CardHeader(props: {
       await props.onAgentCancel(props.agentSessionID);
     } finally {
       setTimeout(() => setAgentCancelling(false), 800);
-    }
-  };
-
-  const onReplyToggle = (e: MouseEvent | KeyboardEvent) => {
-    e.stopPropagation();
-    if (!canAgentReply()) return;
-    setReplyOpen((value) => !value);
-  };
-
-  const onReplySubmit = async (e: SubmitEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!props.agentSessionID || !props.onAgentReply || replySending()) return;
-    const message = replyText().trim();
-    if (!message) return;
-    setReplySending(true);
-    try {
-      await props.onAgentReply(props.agentSessionID, message);
-      setReplyText("");
-      setReplyOpen(false);
-    } finally {
-      setReplySending(false);
     }
   };
 
@@ -425,27 +400,6 @@ export function CardHeader(props: {
             </svg>
           </button>
         </Show>
-        <Show when={canAgentReply()}>
-          <button
-            type="button"
-            class="card__agent-reply-toggle"
-            classList={{ "card__agent-reply-toggle--open": replyOpen() }}
-            title={t("card.agent_reply")}
-            aria-label={t("card.agent_reply")}
-            aria-pressed={replyOpen()}
-            onClick={onReplyToggle}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onReplyToggle(e);
-              }
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M3 4.5h10v6H7l-3.5 2.5v-2.5H3z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" />
-            </svg>
-          </button>
-        </Show>
         <Show when={canRewind()}>
           <button
             type="button"
@@ -486,49 +440,6 @@ export function CardHeader(props: {
           </span>
         </Show>
       </div>
-      <Show when={replyOpen() && canAgentReply()}>
-        <form
-          class="card__agent-reply"
-          onSubmit={onReplySubmit}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <textarea
-            class="card__agent-reply-input"
-            value={replyText()}
-            rows={3}
-            placeholder={t("card.agent_reply_placeholder")}
-            disabled={replySending()}
-            onInput={(e) => setReplyText(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-          <div class="card__agent-reply-actions">
-            <button
-              type="button"
-              class="card__agent-reply-cancel"
-              disabled={replySending()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setReplyOpen(false);
-              }}
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              type="submit"
-              class="card__agent-reply-send"
-              disabled={replySending() || !replyText().trim()}
-            >
-              {replySending() ? t("card.agent_reply_sending") : t("card.agent_reply_send")}
-            </button>
-          </div>
-        </form>
-      </Show>
     </div>
   );
 }

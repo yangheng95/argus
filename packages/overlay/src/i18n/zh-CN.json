@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "f514bc6829540109"
+    "panel_revision": "00b0c6ed408d7778"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -66,7 +66,6 @@
   "card.collapse": "收起",
   "card.collapse_title": "收起这张卡片",
   "card.agent_cancel": "取消这个 agent session",
-  "card.agent_reply": "在这个 agent session 内回复",
   "card.agent_reply_placeholder": "向这个 agent session 发送局部指令...",
   "card.agent_reply_send": "回复",
   "card.agent_reply_sending": "发送中...",
@@ -218,7 +217,6 @@
     "other": "已折叠 {{count}} 行未变更内容"
   },
   "empty.delivery": "暂无交付",
-  "empty.overview": "暂无概览",
   "evaluation.context.checks": "**检查项**",
   "evaluation.context.classification": "分类：{{value}}",
   "evaluation.context.error": "评估异常：{{value}}",
@@ -231,7 +229,6 @@
   "evaluation.verdict.accepted": "通过",
   "evaluation.verdict.pending": "待定",
   "evaluation.verdict.rejected": "未通过",
-  "executor.current_model": "当前",
   "intro.aria_label": "工作流模式与主要 Agent 介绍",
   "intro.headline": "OpenCorvus 流水线一览",
   "intro.tagline": "从左侧选一个任务，或新建一个。任务一启动，右侧面板就会按下面的 Agent 顺序展示它的进度。",

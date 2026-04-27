@@ -1062,8 +1062,7 @@ body[data-theme="light"] .card__round {
 /* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
 
 .card__trace,
-.card__agent-cancel,
-.card__agent-reply-toggle {
+.card__agent-cancel {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1081,16 +1080,12 @@ body[data-theme="light"] .card__round {
 }
 .card__head:hover .card__trace,
 .card__head:hover .card__agent-cancel,
-.card__head:hover .card__agent-reply-toggle,
 .card__trace:focus-visible,
 .card__agent-cancel:focus-visible,
-.card__agent-reply-toggle:focus-visible,
-.card__trace--open,
-.card__agent-reply-toggle--open {
+.card__trace--open {
   opacity: 0.96;
 }
-.card__trace:hover,
-.card__agent-reply-toggle:hover {
+.card__trace:hover {
   color: var(--accent-info, #6cb6ff);
   background: var(--surface-hover, rgba(255, 255, 255, 0.06));
 }
@@ -1098,32 +1093,26 @@ body[data-theme="light"] .card__round {
   color: var(--bad);
   background: color-mix(in srgb, var(--bad) 14%, transparent);
 }
-.card__agent-cancel:disabled,
-.card__agent-reply-toggle:disabled {
+.card__agent-cancel:disabled {
   cursor: default;
   opacity: 0.5;
 }
-.card__trace--open,
-.card__agent-reply-toggle--open {
+.card__trace--open {
   color: var(--accent-info, #6cb6ff);
   background: var(--surface-hover, rgba(255, 255, 255, 0.08));
 }
 .card__trace + .card__chevron,
-.card__agent-cancel + .card__chevron,
-.card__agent-reply-toggle + .card__chevron {
+.card__agent-cancel + .card__chevron {
   margin-left: 0;
 }
 
-.card__head:has(.card__agent-reply) {
-  flex-wrap: wrap;
-}
-
+/* Inline reply box at the END of agent session card body. Renders via
+   <AgentSessionReplyBox/> in Card.tsx; spans full width of the card body. */
 .card__agent-reply {
-  flex: 0 0 100%;
   display: flex;
   flex-direction: column;
   gap: 7px;
-  margin-top: 3px;
+  margin-top: 8px;
   padding: 8px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-inset, #18191c) 72%, transparent);
@@ -1153,28 +1142,17 @@ body[data-theme="light"] .card__round {
   gap: 6px;
 }
 
-.card__agent-reply-cancel,
 .card__agent-reply-send {
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
   border-radius: 999px;
   padding: 4px 11px;
   font-size: var(--card-sub-size);
   font-weight: 600;
   cursor: pointer;
-}
-
-.card__agent-reply-cancel {
-  color: var(--text-muted);
-  background: transparent;
-}
-
-.card__agent-reply-send {
   color: var(--surface);
   background: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
-.card__agent-reply-cancel:disabled,
 .card__agent-reply-send:disabled {
   cursor: default;
   opacity: 0.58;
