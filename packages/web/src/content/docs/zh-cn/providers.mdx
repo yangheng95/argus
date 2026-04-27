@@ -76,7 +76,7 @@ OpenCorvus 在三种场景选模型：
 | 场景 | 配置位置 |
 |---|---|
 | 默认执行模型 | `model` 字段 |
-| 计划阶段（Task/Spec/Goal Agent） | `assistant.*.model`（可独立指定） |
+| 按 agent 模型 | `agent.<name>.model`（独立设置，见 `packages/opencorvus/src/config/config.ts:1053-1067`） |
 | Vision / 截图理解 | `OPENCORVUS_VISION_MODEL` |
 
 计划阶段与执行阶段分离的目的：**用强但慢的模型规划，用快但够用的模型执行**。典型配置：

@@ -62,9 +62,8 @@ description: 按症状定位 OpenCorvus 问题——启动、Provider、orchestr
 
 | 检查 | 说明 |
 |---|---|
-| 是否开启 `experimental.unattended` | CI/benchmark 必须开 |
-| `OPENCORVUS_PERMISSION_ASK_REPLY` | 默认 `reject`；无人值守改 `always` |
-| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | ask 超时（默认 5000ms） |
+| 是否开启 `experimental.auto_permission` | 默认 `true`，无人值守 CI/benchmark 必须开（活跃 orchestrator run 内自动用 `"once"` 回复 `permission.asked`——`src/engine/auto-permission.ts`） |
+| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | 自动放行超时，默认 `120000` ms（`src/permission/next.ts:163`），仅在 `auto_permission` 开启时生效；最小值 `1000` ms |
 
 详见 [Permissions](/docs/zh-cn/permissions/)。
 

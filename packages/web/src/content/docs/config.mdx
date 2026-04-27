@@ -70,9 +70,9 @@ Per-skill / per-tool `allow / ask / deny`. **Rule order matters, last declaratio
 
 See [Permissions](/docs/permissions/).
 
-### `experimental.unattended`
+### `experimental.auto_permission` / `experimental.auto_question`
 
-Enables unattended mode: on ask timeout, apply the default action from `OPENCORVUS_PERMISSION_ASK_REPLY` — no blocking.
+Two independent fine-grained switches (default `true` for both — `src/config/config.ts:1297-1310`) replacing the historical `experimental.unattended` umbrella flag. With `auto_permission` on, an active orchestrator run auto-replies `permission.asked` events with `"once"` so unattended runs don't block on operator input. With `auto_question` on, a stale clarification question is auto-rejected after the timeout. See [Permissions](/docs/permissions/).
 
 ### `assistant` block
 
@@ -84,7 +84,8 @@ Fine-tunes each agent (merged in `OrchestratorConfig.get()` — see `src/orchest
     "requirements": { "max_steps": 20 },
     "evaluator": { "tier": "standard" },  // core | standard | full
     "max_runs": 3,
-    "max_goal_retries": 2
+    "max_fix_runs": 2,
+    "max_executor_groups": 4
   }
 }
 ```

@@ -10,7 +10,7 @@ OpenCorvus picks a model in three scenarios; configure each independently. See [
 | Scenario | Where to set |
 |---|---|
 | Default execution model | `model` field in [config](/docs/config/) |
-| Per-agent planning model | `assistant.<name>.model` |
+| Per-agent model | `agent.<name>.model` (see `packages/opencorvus/src/config/config.ts:1053-1067`, `1191`, `1232`, `1239`, `1246`) |
 | Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` env |
 
 Example splitting plan vs execute:
@@ -18,12 +18,15 @@ Example splitting plan vs execute:
 ```jsonc
 {
   "model": "alibaba-cn/qwen3.5-plus",
-  "assistant": {
-    "requirements": { "model": "anthropic/claude-sonnet-4-6" },
-    "planner":      { "model": "anthropic/claude-sonnet-4-6" }
+  "agent": {
+    "requirements":   { "model": "anthropic/claude-sonnet-4-6" },
+    "planner":        { "model": "anthropic/claude-sonnet-4-6" },
+    "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
   }
 }
 ```
+
+The `model` key per agent is read by `Agent.state()` in `packages/opencorvus/src/agent/agent.ts:480` (`Provider.parseModel(value.model)`). Step / skill knobs for the same agents live separately under `assistant.<name>` — see [Agents](/docs/agents/#agent-budgets).
 
 ## models.dev
 
