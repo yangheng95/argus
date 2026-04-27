@@ -285,6 +285,25 @@ function convertExecutorEventToMessages(event: any, properties: any): any[] {
   return [];
 }
 
+function shouldConvertRunProgress(properties: Record<string, any>): boolean {
+  const progressType = String(properties.type || "");
+  if (
+    progressType === "protocol.raw" ||
+    progressType === "executor.status" ||
+    progressType === "executor.progress"
+  ) {
+    return false;
+  }
+  if (
+    progressType === "message.part.updated" ||
+    progressType === "message.part.delta" ||
+    progressType === "message.updated"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function replayTaskEventToTree(event: any): void {
   const type: string = event?.type || "";
   const properties = record(event?.properties)
@@ -295,22 +314,27 @@ export function replayTaskEventToTree(event: any): void {
 
   writeToTree(event);
 
-  if (type === "run.progress" || type === "run.output") {
+  if (type === "run.progress") {
+    if (!shouldConvertRunProgress(properties)) return;
+    const messages = convertExecutorEventToMessages(event, properties);
+    for (const msg of messages) {
+      writeToTree(msg);
+    }
+    return;
+  }
+
+  if (type === "run.output") {
     const messages = convertExecutorEventToMessages(
-      type === "run.output"
-        ? {
-            ...event,
-            summary:
-              typeof properties.text === "string" ? properties.text : event?.summary || "",
-          }
-        : event,
-      type === "run.output"
-        ? {
-            ...properties,
-            type: "text_delta",
-            text: typeof properties.text === "string" ? properties.text : event?.summary || "",
-          }
-        : properties,
+      {
+        ...event,
+        summary:
+          typeof properties.text === "string" ? properties.text : event?.summary || "",
+      },
+      {
+        ...properties,
+        type: "text_delta",
+        text: typeof properties.text === "string" ? properties.text : event?.summary || "",
+      },
     );
     for (const msg of messages) {
       writeToTree(msg);
@@ -396,26 +420,7 @@ export function routeSSEEvent(event: any): boolean {
   // ── Executor progress / output events → convert to standard messages ──
   if (type === "run.progress") {
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    const progressType: string = properties.type || "";
-
-    // Protocol noise — skip
-    if (
-      progressType === "protocol.raw" ||
-      progressType === "executor.status" ||
-      progressType === "executor.progress"
-    ) {
-      return true;
-    }
-
-    // OpenCode executor: these events already arrive via the direct message path.
-    // Skip to avoid duplication.
-    if (
-      progressType === "message.part.updated" ||
-      progressType === "message.part.delta" ||
-      progressType === "message.updated"
-    ) {
-      return true;
-    }
+    if (!shouldConvertRunProgress(properties)) return true;
 
     // Convert executor events (Codex/Claude-Code CodingEventInfo) to standard messages
     const messages = convertExecutorEventToMessages(event, properties);
