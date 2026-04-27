@@ -27,6 +27,8 @@ import { extname } from "node:path"
 import { streamObject, type LanguageModel, type ModelMessage } from "ai"
 
 import { Log } from "@/util/log"
+import { withStreamActivity } from "@/util/stream-activity"
+import { EngineConfig } from "@/engine/config"
 import { ImageExtractError } from "../errors"
 import {
   ImageAnalysisSchema,
@@ -113,13 +115,28 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
         }
         rawTextTail = (rawTextTail + chunk).slice(-TAIL_BYTES)
       }
+      // Independent idle gate. The session-level gate that wraps the
+      // outer agent loop (session/processor.ts) is *paused* while a tool
+      // executes — vision-LLM streaming runs inside one of those tool
+      // calls, so without its own watchdog a stuck provider connection
+      // (alibaba-coding-plan-cn was observed sitting on a vision call for
+      // 18 minutes in the 2026-04-27 ainvest benchmark) would not trip
+      // any timeout until the tool returned. We compose the caller's
+      // signal with the gate's own internal abort so either path
+      // (caller cancel or provider stall) unwinds the same way.
+      const idleMs = (await EngineConfig.get()).activity.session_llm_idle_ms
+      const gate = withStreamActivity({
+        idleMs,
+        signal: input.signal,
+        label: `mirror.image.extract:${img.label}`,
+      })
       try {
         const result = streamObject({
           model: input.model,
           schema: ImageAnalysisSchema,
           system,
           messages: messages as unknown as ModelMessage[],
-          abortSignal: input.signal,
+          abortSignal: gate.signal,
         })
         // Single drain via fullStream — partialObjectStream and textStream
         // share one underlying ReadableStream, so reading both concurrently
@@ -127,6 +144,7 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
         // yields typed events that include both raw text deltas (for our
         // diagnostic capture) and validation/error signals.
         for await (const part of result.fullStream) {
+          gate.observe()
           if (part.type === "text-delta") {
             const delta = (part as any).delta ?? (part as any).textDelta ?? ""
             if (typeof delta === "string" && delta) captureRaw(delta)
@@ -154,6 +172,8 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
           imagePath: img.label,
           cause: causeMsg || reason,
         })
+      } finally {
+        gate.dispose()
       }
 
       input.onProgress?.(`Analyzed image ${i + 1}/${loaded.length}`)
