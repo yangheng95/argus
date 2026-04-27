@@ -80,6 +80,7 @@
 | PATCH | `/task/{taskID}/budget` | Update task budget | `task.updateBudget` |
 | POST | `/task/{taskID}/cancel` | Cancel task | `task.cancel` |
 | GET | `/task/{taskID}/conversation` | Hydrate task conversation state | `task.conversation` |
+| GET | `/task/{taskID}/conversation/events` | Page task conversation replay events | `task.conversation.events` |
 | GET | `/task/{taskID}/events` | Subscribe to task events | `task.events` |
 | POST | `/task/{taskID}/followup` | Generate follow-up suggestion | `task.followup` |
 | POST | `/task/{taskID}/inject` | Inject message into running task | `task.inject` |
