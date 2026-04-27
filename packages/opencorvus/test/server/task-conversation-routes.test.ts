@@ -175,6 +175,79 @@ describe("task conversation routes", () => {
     })
   })
 
+  test("GET /task/:taskID/conversation/events pages executor replay history", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            source: "panel",
+            title: "paged executor history",
+            request: "paged executor history",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run(),
+        )
+
+        for (const text of ["one", "two", "three"]) {
+          await EngineProtocol.emit(Event.RunOutput, {
+            taskID,
+            runID,
+            type: "stdout",
+            text,
+          }, { source: "test.server" })
+        }
+
+        const first = await app.request(`/task/${taskID}/conversation/events?after=0&until=3&limit=2`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(first.status).toBe(200)
+        const firstBody = await first.json() as {
+          events?: Array<{ type?: string; payload?: { text?: string } }>
+          eventReplay?: { cursor?: number; latestSequence?: number; complete?: boolean; limit?: number }
+        }
+        expect(firstBody.events?.map((event) => event.payload?.text)).toEqual(["one", "two"])
+        expect(firstBody.eventReplay).toEqual({
+          cursor: 2,
+          latestSequence: 3,
+          complete: false,
+          limit: 2,
+        })
+
+        const second = await app.request(`/task/${taskID}/conversation/events?after=2&until=3&limit=2`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(second.status).toBe(200)
+        const secondBody = await second.json() as {
+          events?: Array<{ type?: string; payload?: { text?: string } }>
+          eventReplay?: { cursor?: number; latestSequence?: number; complete?: boolean; limit?: number }
+        }
+        expect(secondBody.events?.map((event) => event.payload?.text)).toEqual(["three"])
+        expect(secondBody.eventReplay).toEqual({
+          cursor: 3,
+          latestSequence: 3,
+          complete: true,
+          limit: 2,
+        })
+      },
+    })
+  })
+
   test("POST /task/:taskID/session/:sessionID/reply appends overlay direct user input to an agent session", async () => {
     await using tmp = await tmpdir({ git: true })
 

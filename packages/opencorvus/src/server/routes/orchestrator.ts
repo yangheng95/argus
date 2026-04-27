@@ -25,6 +25,7 @@ import {
   Run,
   TaskBoard,
   TaskBrief,
+  TaskConversationEventPage,
   TaskConversationHydration,
   TaskMessageInput,
   TaskMessageResult,
@@ -63,6 +64,13 @@ const DIRECT_REPLY_AGENT_KINDS = new Set([
   "evaluator",
 ])
 const log = Log.create({ service: "server.routes.orchestrator" })
+const CONVERSATION_EVENT_PAGE_LIMIT = 500
+
+const ConversationEventPageQuery = z.object({
+  after: z.coerce.number().int().nonnegative().default(0),
+  until: z.coerce.number().int().nonnegative().optional(),
+  limit: z.coerce.number().int().min(1).max(2000).default(CONVERSATION_EVENT_PAGE_LIMIT),
+})
 
 const ReorderTaskQueueInput = z.object({
   directory: z.string().min(1),
@@ -449,11 +457,12 @@ export const EngineRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         const taskID = c.req.valid("param").taskID
-        const board = await EngineService.getBoard(taskID, { sync: true })
-        const transcript = await loadTaskTranscript(taskID)
-        const timeline = ControlTimeline.list({ taskID })
-        const events = await EngineService.listProtocolEvents(taskID)
         const rewindCursor = taskRewindCursor(taskID)
+        const [board, transcript, timeline] = await Promise.all([
+          EngineService.getBoard(taskID, { sync: true }),
+          loadTaskTranscript(taskID),
+          Promise.resolve(ControlTimeline.list({ taskID })),
+        ])
         const filterByCursor = <T extends { info?: { time?: { created?: number } }; timestamp?: number }>(items: T[]) => {
           if (rewindCursor == null) return items
           return items.filter((item) => {
@@ -468,20 +477,59 @@ export const EngineRoutes = lazy(() =>
         }
         const filteredTranscript = filterByCursor(transcript)
         const filteredTimeline = filterByCursor(timeline)
-        const filteredEvents = filterByCursor(
-          events
-            .filter((event) => includeConversationHydrateEvent(event.type))
-            .map(protocolTaskEvent),
-        )
+        const latestSequence = Number(board.lastSequence)
+        if (!Number.isInteger(latestSequence) || latestSequence < 0) {
+          throw new Error(`conversation hydrate board.lastSequence invalid: ${JSON.stringify(board.lastSequence)}`)
+        }
+        const eventPage = conversationEventPage(taskID, {
+          after: 0,
+          until: latestSequence,
+          limit: CONVERSATION_EVENT_PAGE_LIMIT,
+          rewindCursor,
+        })
         const view = projectConversationView(board, filteredTranscript)
         return c.json({
-          lastSequence: Number(board?.lastSequence || 0),
+          lastSequence: latestSequence,
           board,
           transcript: filteredTranscript,
           timeline: filteredTimeline,
-          events: filteredEvents,
+          events: eventPage.events,
+          eventReplay: eventPage.eventReplay,
           view,
         })
+      },
+    )
+    .get(
+      "/task/:taskID/conversation/events",
+      describeRoute({
+        summary: "Page task conversation replay events",
+        description:
+          "Return a bounded protocol_event slice for rebuilding task conversation history after the initial hydrate.",
+        operationId: "task.conversation.events",
+        responses: {
+          200: {
+            description: "Task conversation event page",
+            content: {
+              "application/json": {
+                schema: resolver(TaskConversationEventPage),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator("query", ConversationEventPageQuery),
+      async (c) => {
+        const taskID = c.req.valid("param").taskID
+        const query = c.req.valid("query")
+        await EngineService.getTask(taskID)
+        return c.json(conversationEventPage(taskID, {
+          after: query.after,
+          until: query.until,
+          limit: query.limit,
+          rewindCursor: taskRewindCursor(taskID),
+        }))
       },
     )
     .get(
@@ -1364,6 +1412,33 @@ async function loadTaskTranscript(taskID: string) {
     if (goalID) (msg.info as any).goalID = goalID
   }
   return messages
+}
+
+function conversationEventPage(
+  taskID: string,
+  input: { after: number; until?: number; limit: number; rewindCursor: number | null },
+) {
+  const latestSequence = typeof input.until === "number"
+    ? input.until
+    : ProtocolStore.latestTaskSequence(taskID)
+  const rows = ProtocolStore.listTaskEventsAfter(taskID, input.after, {
+    until: latestSequence,
+    limit: input.limit,
+  })
+  const cursor = rows.reduce((max, event) => Math.max(max, event.sequence), input.after)
+  const events = rows
+    .filter((event) => includeConversationHydrateEvent(event.type))
+    .map(protocolTaskEvent)
+    .filter((event) => input.rewindCursor == null || event.timestamp <= input.rewindCursor)
+  return {
+    events,
+    eventReplay: {
+      cursor,
+      latestSequence,
+      complete: cursor >= latestSequence || rows.length === 0,
+      limit: input.limit,
+    },
+  }
 }
 
 function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEventsAfter>[number]) {

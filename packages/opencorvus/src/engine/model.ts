@@ -886,13 +886,26 @@ export const TaskConversationView = z.object({
   sessions: TaskConversationSessionView.array(),
 })
 
+export const TaskConversationEventReplay = z.object({
+  cursor: z.number().int().nonnegative(),
+  latestSequence: z.number().int().nonnegative(),
+  complete: z.boolean(),
+  limit: z.number().int().positive(),
+})
+
 export const TaskConversationHydration = z.object({
   lastSequence: z.number().int().nonnegative(),
   board: TaskBoard,
   transcript: z.array(z.any()),
   timeline: z.array(z.any()),
   events: TaskEvent.array(),
+  eventReplay: TaskConversationEventReplay,
   view: TaskConversationView,
+})
+
+export const TaskConversationEventPage = z.object({
+  events: TaskEvent.array(),
+  eventReplay: TaskConversationEventReplay,
 })
 
 export const AgentSessionAttachmentInput = z.object({

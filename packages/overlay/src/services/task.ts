@@ -35,7 +35,7 @@ import { appStore, setAppStore } from "../store/app";
 import { taskScopedPath } from "./task-path";
 import { applyDirectory } from "./workspace";
 import { resetWriter } from "./tree-writer";
-import { hydrateTaskConversation } from "./conversation";
+import { cancelConversationReplay, hydrateTaskConversation } from "./conversation";
 
 // ── Types ──
 
@@ -236,6 +236,7 @@ export async function selectTask(
   // is deferred to the next phase under epoch guard so rapid-fire clicks
   // don't trample each other.
   abortChatRequest();
+  cancelConversationReplay();
   setChatAttachments([]);
   stopSSE();
   clearBoard();
