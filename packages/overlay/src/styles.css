@@ -813,32 +813,6 @@ a { color: inherit; text-decoration: none; }
   flex-shrink: 0;
 }
 
-.session-token-badge {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  padding: calc(7px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  border-radius: 999px;
-  border: 1px solid rgba(107, 114, 128, 0.24);
-  background: rgba(17, 24, 39, 0.6);
-  color: var(--text-muted);
-  font-size: var(--ui-font-meta);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  user-select: none;
-  white-space: nowrap;
-  cursor: default;
-}
-
-.session-token-badge[data-estimated="true"] {
-  opacity: 0.78;
-  font-style: italic;
-}
-
-body[data-theme="light"] .session-token-badge {
-  border-color: rgba(15, 23, 42, 0.12);
-  background: rgba(15, 23, 42, 0.04);
-}
 /* Dot-indicator style: colored dot for status, muted text beside it.
    Avoids the heavy saturated pill — integrates quietly into the titlebar. */
 .conn-badge[data-status="online"] {
@@ -1689,15 +1663,6 @@ body[data-theme="light"] .session-token-badge {
   font-size: var(--ui-font-small);
   color: var(--text-muted);
   text-align: center;
-}
-
-.task-meta-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(6px * var(--ui-scale));
-  min-width: 0;
-  flex-wrap: nowrap;
 }
 
 .task-cwd-actions {
