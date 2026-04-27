@@ -1131,12 +1131,13 @@ export const Event = {
   ),
   /** Integrity review streaming chunk. Forwarded from the LLM stream while
    *  the tool-use loop is in flight. ONLY `reasoning-delta` is forwarded —
-   *  the `submit_integrity_verdict` tool-input JSON is protocol payload and
-   *  must never surface as visible text (that would defeat the point of
-   *  the tool-call architecture; verdict is delivered structurally via
-   *  IntegrityReviewCompleted). Non-reasoning models emit no reasoning
-   *  chunks; their sub-15s tool call needs no streaming. Throttled to
-   *  ~2 events/s to keep protocol_event row counts sane. */
+   *  the per-dimension `submit_<id>_verdict` and `finalize_integrity_review`
+   *  tool-input JSON is protocol payload and must never surface as visible
+   *  text (that would defeat the point of the tool-call architecture; verdict
+   *  is delivered structurally via IntegrityReviewCompleted). Non-reasoning
+   *  models emit no reasoning chunks; their sub-15s tool calls need no
+   *  streaming. Throttled to ~2 events/s to keep protocol_event row counts
+   *  sane. */
   IntegrityReviewChunk: BusEvent.define(
     "integrity.review.chunk",
     z.object({

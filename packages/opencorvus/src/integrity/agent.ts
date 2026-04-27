@@ -13,16 +13,23 @@
  * Adding a 5th dimension is a one-liner in `dimensions.ts`; this file is
  * fully data-driven from the registry.
  *
- * The reviewer is a single-call tool-use loop:
+ * The reviewer is a multi-call tool-use loop:
  *   • The LLM sees the original request + REQ-N + decisions + design specs
  *     + goal contracts + decision log.
- *   • It MUST invoke `submit_integrity_verdict` exactly once with a
- *     Zod-validated structured verdict. Each dimension carries its own
- *     verdict / issues / corrections / missing_goals; the aggregate verdict
- *     is the worst per-dimension verdict (computed here, not by the LLM).
- *   • Diagnostic-only dimensions (see registry: hallucination) MUST NOT
- *     emit corrections — the orchestrator re-runs upstream when it sees
- *     hallucination findings.
+ *   • For each dimension in the registry, the LLM calls `submit_<id>_verdict`
+ *     exactly once with a Zod-validated structured verdict for THAT dimension.
+ *     Per-tool schemas keep each call's JSON small (kimi-class models choke
+ *     on the 4k+ aggregate payload — 11-iteration retry storms in the wild).
+ *     Issue-type enums are scoped per dimension so the LLM cannot smuggle
+ *     issues from one dimension into another (structural, not runtime,
+ *     enforcement).
+ *   • Diagnostic-only dimensions (see registry: hallucination) get a slimmer
+ *     schema with no corrections / missing_goals fields — the schema itself
+ *     prevents diagnostic dimensions from mutating goals.
+ *   • The LLM closes with `finalize_integrity_review({ summary })`. Any
+ *     dimension that was never submitted is synthesized as `concerns` so the
+ *     orchestrator notices the omission. Aggregate verdict is the worst
+ *     per-dimension verdict (computed here, not by the LLM).
  */
 import { tool } from "ai"
 import z from "zod"
@@ -43,9 +50,7 @@ import type { ParsedRequirement, RequirementsDecision } from "@/requirements/typ
 import { buildMirrorToolsPromptSection } from "@/prompt/mirror-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 import {
-  ALL_INTEGRITY_ISSUE_TYPES,
   INTEGRITY_DIMENSIONS,
-  dimensionForIssueType,
   renderDimensionCatalogue,
   type IntegrityDimension,
   type IntegrityIssueType,
@@ -111,20 +116,14 @@ export interface IntegrityResult {
 }
 
 // ---------------------------------------------------------------------------
-// Tool input schema (snake_case at the wire to match AcceptanceSpec naming;
-// camelCase IntegrityResult on receive)
+// Tool input schemas (snake_case at the wire to match AcceptanceSpec naming;
+// camelCase IntegrityResult on receive). Per-dimension tools each carry a
+// dimension-scoped issue enum so issue-type smuggling is structurally
+// impossible; diagnostic-only dimensions get a slimmer schema with no
+// corrections / missing_goals fields.
 // ---------------------------------------------------------------------------
 
-const DimensionIDEnum = z.enum(INTEGRITY_DIMENSIONS.map((d) => d.id) as [string, ...string[]])
-const IssueTypeEnum = z.enum(ALL_INTEGRITY_ISSUE_TYPES as [string, ...string[]])
 const VerdictEnum = z.enum(["pass", "concerns", "needs_correction"])
-
-const IntegrityIssueInput = z.object({
-  type: IssueTypeEnum,
-  description: z.string().min(1),
-  goal_ids: z.array(z.string()).optional(),
-  evidence: z.string().optional(),
-})
 
 const GoalCorrectionUpdates = z.object({
   title: z.string().optional(),
@@ -150,16 +149,35 @@ const MissingGoalInput = z.object({
   reason: z.string().min(1),
 })
 
-const DimensionResultInput = z.object({
-  id: DimensionIDEnum,
-  verdict: VerdictEnum,
-  issues: z.array(IntegrityIssueInput),
-  corrections: z.array(GoalCorrectionInput),
-  missing_goals: z.array(MissingGoalInput),
-})
+function buildIssueInput(d: IntegrityDimension) {
+  // Per-dimension issue enum — schema-level guard against cross-dimension
+  // issue-type smuggling.
+  const types = d.issueTypes as readonly string[]
+  return z.object({
+    type: z.enum(types as [string, ...string[]]),
+    description: z.string().min(1),
+    goal_ids: z.array(z.string()).optional(),
+    evidence: z.string().optional(),
+  })
+}
 
-const SubmitIntegrityInput = z.object({
-  dimensions: z.array(DimensionResultInput),
+function buildDimensionInput(d: IntegrityDimension) {
+  const issue = buildIssueInput(d)
+  if (d.canProposeCorrections) {
+    return z.object({
+      verdict: VerdictEnum,
+      issues: z.array(issue),
+      corrections: z.array(GoalCorrectionInput),
+      missing_goals: z.array(MissingGoalInput),
+    })
+  }
+  return z.object({
+    verdict: VerdictEnum,
+    issues: z.array(issue),
+  })
+}
+
+const FinalizeInput = z.object({
   summary: z.string().min(1),
 })
 
@@ -186,10 +204,10 @@ function aggregateVerdict(dimensions: readonly IntegrityDimensionResult[]): Inte
 // ---------------------------------------------------------------------------
 
 /**
- * Run integrity review across every registered dimension. Single tool-call pass —
- * no codebase exploration. The reviewer compares the goal set + upstream evidence
- * against the user request and submits a structured verdict via
- * `submit_integrity_verdict`.
+ * Run integrity review across every registered dimension. No codebase
+ * exploration. The reviewer compares the goal set + upstream evidence against
+ * the user request and submits one structured verdict per dimension via
+ * `submit_<dimension_id>_verdict`, then closes with `finalize_integrity_review`.
  */
 export async function reviewIntegrity(input: {
   userRequest: string
@@ -261,70 +279,44 @@ export async function reviewIntegrity(input: {
   }
 
   const goalIDs = new Set(goals.map((g) => g.id))
-  const collector: { result: IntegrityResult | undefined } = { result: undefined }
+  const collector: {
+    dimensions: Map<IntegrityDimension["id"], IntegrityDimensionResult>
+    droppedCorrections: string[]
+    result: IntegrityResult | undefined
+  } = {
+    dimensions: new Map(),
+    droppedCorrections: [],
+    result: undefined,
+  }
 
-  const submitTool = tool({
-    description:
-      "Submit the integrity verdict for the architect output. Call EXACTLY ONCE after " +
-      "evaluating every dimension. All fields are schema-validated; on validation error " +
-      "you will receive a message describing the failure and must call again.",
-    inputSchema: SubmitIntegrityInput,
-    execute: async ({ dimensions, summary }) => {
-      // Per-dimension normalisation. Validate that each issue.type belongs to
-      // the dimension it was filed under (no smuggling), drop corrections
-      // pointing at unknown goal ids, and clear corrections on diagnostic-only
-      // dimensions (those need to surface concerns, not silently mutate goals).
-      const normalised: IntegrityDimensionResult[] = []
-      const droppedCorrections: string[] = []
-      const wrongDimensionIssues: string[] = []
-      const strippedDiagnostic: string[] = []
-
-      // Ensure every registered dimension is represented exactly once. The LLM
-      // is told to return one entry per dimension; if it omits one we synthesize
-      // a defensive `concerns` row so the orchestrator notices the omission
-      // rather than silently treating it as `pass`.
-      const supplied = new Map<string, typeof dimensions[number]>()
-      for (const d of dimensions) supplied.set(d.id, d)
-
-      for (const reg of INTEGRITY_DIMENSIONS) {
-        const sub = supplied.get(reg.id)
-        if (!sub) {
-          normalised.push({
-            id: reg.id,
-            verdict: "concerns",
-            issues: [
-              {
-                type: reg.issueTypes[0]!,
-                description: `Dimension '${reg.id}' was not addressed by the reviewer — treat as unverified.`,
-              },
-            ],
-            corrections: [],
-            missingGoals: [],
-          })
-          continue
+  function buildDimensionTool(d: IntegrityDimension) {
+    const correctionsClause = d.canProposeCorrections
+      ? ` Mutating corrections + missing_goals are allowed under this dimension; reference only goal_ids that appear in the goal list.`
+      : ` Diagnostic-only dimension — schema has no corrections / missing_goals fields.`
+    return tool({
+      description:
+        `Submit the ${d.title} (${d.id}) dimension verdict. Call EXACTLY ONCE for ` +
+        `this dimension. Allowed issue types: ${d.issueTypes.join(", ")}.${correctionsClause}`,
+      inputSchema: buildDimensionInput(d),
+      execute: async (raw) => {
+        const sub = raw as z.infer<ReturnType<typeof buildDimensionInput>> & {
+          corrections?: z.infer<typeof GoalCorrectionInput>[]
+          missing_goals?: z.infer<typeof MissingGoalInput>[]
         }
 
-        const issues: IntegrityIssue[] = []
-        for (const it of sub.issues) {
-          const owner = dimensionForIssueType(it.type as IntegrityIssueType)
-          if (owner && owner !== reg.id) {
-            wrongDimensionIssues.push(`${it.type}@${reg.id}->${owner}`)
-            continue
-          }
-          issues.push({
-            type: it.type as IntegrityIssueType,
-            description: it.description,
-            goalIDs: it.goal_ids,
-            evidence: it.evidence,
-          })
-        }
+        const issues: IntegrityIssue[] = sub.issues.map((it) => ({
+          type: it.type as IntegrityIssueType,
+          description: it.description,
+          goalIDs: it.goal_ids,
+          evidence: it.evidence,
+        }))
 
         let corrections: GoalCorrection[] = []
         let missingGoals: MissingGoal[] = []
-        if (reg.canProposeCorrections) {
-          for (const c of sub.corrections) {
+        if (d.canProposeCorrections) {
+          for (const c of sub.corrections ?? []) {
             if (!goalIDs.has(c.goal_id)) {
-              droppedCorrections.push(c.goal_id)
+              collector.droppedCorrections.push(c.goal_id)
               continue
             }
             corrections.push({
@@ -334,7 +326,7 @@ export async function reviewIntegrity(input: {
               updates: c.updates,
             })
           }
-          missingGoals = sub.missing_goals.map((m) => ({
+          missingGoals = (sub.missing_goals ?? []).map((m) => ({
             title: m.title,
             objective: m.objective,
             acceptance_specs: m.acceptance_specs,
@@ -343,16 +335,11 @@ export async function reviewIntegrity(input: {
             priority: m.priority,
             reason: m.reason,
           }))
-        } else {
-          if (sub.corrections.length > 0 || sub.missing_goals.length > 0) {
-            strippedDiagnostic.push(reg.id)
-          }
         }
 
-        // Verdict reconciliation per dimension: if the LLM said `pass` but
-        // listed issues/corrections, escalate. If it said `needs_correction`
-        // with nothing concrete, demote to `pass`. Same logic as fidelity's
-        // pre-existing reconciliation, applied per-dimension here.
+        // Verdict reconciliation: if the LLM said `pass` but listed issues /
+        // corrections, escalate. If it said `needs_correction` with nothing
+        // concrete, demote to `pass`.
         let verdict = sub.verdict as IntegrityVerdict
         if (verdict === "pass" && (issues.length > 0 || corrections.length > 0 || missingGoals.length > 0)) {
           verdict = corrections.length > 0 || missingGoals.length > 0 ? "needs_correction" : "concerns"
@@ -361,21 +348,57 @@ export async function reviewIntegrity(input: {
           verdict = "pass"
         }
 
-        normalised.push({ id: reg.id, verdict, issues, corrections, missingGoals })
-      }
+        collector.dimensions.set(d.id, { id: d.id, verdict, issues, corrections, missingGoals })
+        return `OK: ${d.id}=${verdict} recorded (${issues.length} issue(s), ${corrections.length} correction(s), ${missingGoals.length} missing_goal(s)).`
+      },
+    })
+  }
 
+  const dimensionTools = Object.fromEntries(
+    INTEGRITY_DIMENSIONS.map((d) => [`submit_${d.id}_verdict`, buildDimensionTool(d)] as const),
+  )
+
+  const finalizeTool = tool({
+    description:
+      "Finalize the integrity review. Call EXACTLY ONCE after submitting EVERY dimension. " +
+      "Aggregate verdict is computed from the per-dimension verdicts you already submitted; " +
+      "you only supply the operator-readable summary headline.",
+    inputSchema: FinalizeInput,
+    execute: async ({ summary }) => {
+      const normalised: IntegrityDimensionResult[] = []
+      const missing: string[] = []
+      for (const reg of INTEGRITY_DIMENSIONS) {
+        const got = collector.dimensions.get(reg.id)
+        if (got) {
+          normalised.push(got)
+          continue
+        }
+        // The reviewer never submitted this dimension — synthesize a defensive
+        // `concerns` so the orchestrator notices the omission rather than
+        // silently treating it as `pass`.
+        missing.push(reg.id)
+        normalised.push({
+          id: reg.id,
+          verdict: "concerns",
+          issues: [
+            {
+              type: reg.issueTypes[0]!,
+              description: `Dimension '${reg.id}' was not submitted by the reviewer — treat as unverified.`,
+            },
+          ],
+          corrections: [],
+          missingGoals: [],
+        })
+      }
       const result = synthesizeResult(normalised, summary)
       collector.result = result
 
       const notes: string[] = []
-      if (droppedCorrections.length > 0) {
-        notes.push(`dropped ${droppedCorrections.length} correction(s) referencing unknown goal IDs: ${droppedCorrections.join(", ")}`)
+      if (collector.droppedCorrections.length > 0) {
+        notes.push(`dropped ${collector.droppedCorrections.length} correction(s) referencing unknown goal IDs: ${collector.droppedCorrections.join(", ")}`)
       }
-      if (wrongDimensionIssues.length > 0) {
-        notes.push(`${wrongDimensionIssues.length} issue(s) filed under wrong dimension: ${wrongDimensionIssues.join(", ")}`)
-      }
-      if (strippedDiagnostic.length > 0) {
-        notes.push(`stripped corrections from diagnostic-only dimension(s): ${strippedDiagnostic.join(", ")}`)
+      if (missing.length > 0) {
+        notes.push(`synthesized concerns for unsubmitted dimension(s): ${missing.join(", ")}`)
       }
       const note = notes.length > 0 ? ` (${notes.join("; ")})` : ""
       return `OK: aggregate verdict "${result.verdict}" recorded — ${result.dimensions.map((d) => `${d.id}=${d.verdict}`).join(", ")}${note}`
@@ -392,7 +415,7 @@ export async function reviewIntegrity(input: {
     model: { providerID: model.providerID, modelID: model.api.id },
     signal: input.signal,
     toolKit: {
-      tools: { submit_integrity_verdict: submitTool },
+      tools: { ...dimensionTools, finalize_integrity_review: finalizeTool },
       getCollector: () => collector,
     },
     buildUserPrompt: () => buildIntegrityPrompt(input),
@@ -425,8 +448,9 @@ export async function reviewIntegrity(input: {
 
   if (!collector.result) {
     throw new Error(
-      `integrity reviewer did not call submit_integrity_verdict ` +
-        `(sessionID=${out.session.id}, streamErrors=${out.streamErrors.length})`,
+      `integrity reviewer did not call finalize_integrity_review ` +
+        `(sessionID=${out.session.id}, submittedDimensions=${[...collector.dimensions.keys()].join(",") || "none"}, ` +
+        `streamErrors=${out.streamErrors.length})`,
     )
   }
 
@@ -685,9 +709,10 @@ function buildIntegrityPrompt(input: {
 
   sections.push(
     "Now walk EVERY dimension above. Cite REQ-N / spec ids / goal ids / verbatim user " +
-    "phrases as evidence in each issue. Call `submit_integrity_verdict` ONCE with the " +
-    "per-dimension breakdown — do NOT collapse dimensions, do NOT include a top-level " +
-    "verdict (the runtime aggregates from per-dimension verdicts).",
+    "phrases as evidence in each issue. For EACH dimension call its own " +
+    "`submit_<dimension_id>_verdict` tool exactly once, then close with a single " +
+    "`finalize_integrity_review({ summary })` call. The runtime aggregates the " +
+    "per-dimension verdicts — do NOT supply a top-level verdict.",
   )
 
   return sections.join("\n\n")

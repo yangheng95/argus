@@ -17,9 +17,10 @@
  *
  * What lives in a dimension entry:
  *
- *   id          — snake_case id, used as wire identifier in submit_integrity_verdict
- *                 and as a stable key for downstream consumers (overlay rendering,
- *                 prosecutor categorisation).
+ *   id          — snake_case id, used as the suffix on the per-dimension
+ *                 `submit_<id>_verdict` tool name and as a stable key for
+ *                 downstream consumers (overlay rendering, prosecutor
+ *                 categorisation).
  *   title       — human-readable title (en).
  *   summary     — single-sentence description that appears in the agent's
  *                 system prompt header, defining the dimension to the LLM.
@@ -27,8 +28,9 @@
  *                 if you cannot describe a check in terms of "look at field X
  *                 vs source Y", it does not belong here.
  *   issueTypes  — the closed enum of issue.type values this dimension may emit.
- *                 The submission schema's discriminated union enforces it so
- *                 the LLM cannot stuff issues from one dimension into another.
+ *                 The per-dimension `submit_<id>_verdict` schema scopes its
+ *                 issue-type enum to this list, so the LLM cannot stuff issues
+ *                 from one dimension into another (structural enforcement).
  *   correctionScopes — what the dimension is allowed to PROPOSE corrections to.
  *                 goal_fidelity / solution_quality may rewrite goals; the other
  *                 two are diagnostic and surface concerns without editing goals
@@ -170,22 +172,6 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
     canProposeCorrections: true,
   },
 ] as const
-
-/** Set of every issue type the LLM may emit, derived from the registry — used
- *  for the discriminated-union schema below. Keeping it derived (vs. a parallel
- *  enum) means adding a dimension automatically extends the wire schema. */
-export const ALL_INTEGRITY_ISSUE_TYPES: readonly IntegrityIssueType[] =
-  INTEGRITY_DIMENSIONS.flatMap((d) => d.issueTypes as readonly IntegrityIssueType[])
-
-/** Lookup: which dimension owns a given issue type. The submission schema uses
- *  this to validate that an issue's type matches the dimension it was filed
- *  under (no smuggling `granularity_off` into the goal_fidelity bucket). */
-export function dimensionForIssueType(t: IntegrityIssueType): IntegrityDimension["id"] | undefined {
-  for (const d of INTEGRITY_DIMENSIONS) {
-    if (d.issueTypes.includes(t)) return d.id
-  }
-  return undefined
-}
 
 /** Render the dimension catalogue as a markdown system-prompt section. The
  *  agent's prompt assembles by concatenating this with the procedural framing
