@@ -88,12 +88,6 @@ export function ChangesPanel(props: ChangesPanelProps) {
     setSelectedGroupID(currentGroups[0]!.id);
   });
 
-  createEffect(() => {
-    const section = document.getElementById("changesSection");
-    if (!(section instanceof HTMLElement)) return;
-    section.hidden = hideEmptySelection();
-  });
-
   async function handleRowClick(group: ChangeGroup, item: FileChange) {
     if (typeof openWorkspaceDiff !== "function") return;
     const target: DiffTarget = {

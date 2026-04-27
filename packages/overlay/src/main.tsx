@@ -4,16 +4,17 @@
 // Self-sufficient — no external script dependencies.
 
 import { render } from "solid-js/web";
-import { createEffect, createRoot, createSignal, onCleanup } from "solid-js";
+import { createEffect, createRoot, createSignal } from "solid-js";
 import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
-import { Board, statusIcon as statusIconSvg } from "./components/Board";
+import { Board } from "./components/Board";
+import { TaskStatusHeader } from "./components/TaskStatusHeader";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenu } from "./components/TitlebarMenu";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { SessionTokenBadge } from "./components/SessionTokenBadge";
-import { ChangesPanel } from "./components/ChangesPanel";
+import { FilesSection } from "./components/FilesSection";
 import { LogViewer } from "./components/LogViewer";
 import {
   WorkspacePanel,
@@ -42,7 +43,6 @@ import { isTaskInterruptable } from "./store/board";
 import { setLocale } from "./utils/i18n";
 import { apiJson, configure as configureApi } from "./services/api";
 import { t } from "./utils/i18n";
-import { formatDuration } from "./utils/time";
 import { renderMarkdown, escapeHtml } from "./utils/markdown";
 import { copyChatConversation } from "./utils/transcript";
 import {
@@ -707,14 +707,22 @@ if (sessionTokenBadgeEl) {
   render(() => <SessionTokenBadge />, sessionTokenBadgeEl);
 }
 
+// ── Mount: TaskStatusHeader ──
+// Reactive replacement for the previous imperative createEffects in main.tsx
+// that toggled #taskStatus[hidden], wrote #statusIcon.innerHTML, set
+// #statusLabel textContent and ticked #taskElapsed via getElementById each
+// frame. Owns its own visibility-gated 1Hz interval via Solid lifecycle.
+
+const taskStatusMountEl = document.getElementById("solidTaskStatusMount");
+if (taskStatusMountEl) {
+  render(() => <TaskStatusHeader />, taskStatusMountEl);
+}
+
 // ── Mount: ChangesPanel ──
 
-const changesPanelEl = document.getElementById("solidChangesPanel");
-if (changesPanelEl) {
-  render(
-    () => <ChangesPanel hasSelectedTask={!!boardStore.selectedTaskID} />,
-    changesPanelEl,
-  );
+const filesSectionMountEl = document.getElementById("solidFilesSectionMount");
+if (filesSectionMountEl) {
+  render(() => <FilesSection />, filesSectionMountEl);
 }
 
 // ── Mount: LogViewer (renders its own <dialog id="logDialog">) ──
@@ -1205,63 +1213,11 @@ disposers.push(createRoot((dispose) => {
     if (toggleBtn) toggleBtn.setAttribute("aria-pressed", open ? "true" : "false");
   });
 
-  // ── Task status header (reactive) ──
-  createEffect(() => {
-    const task = (boardStore.board as any)?.task;
-    const taskStatus = document.getElementById("taskStatus");
-    const statusIconEl = document.getElementById("statusIcon");
-    const statusLabelEl = document.getElementById("statusLabel");
-    const status = task?.status || "idle";
-
-    if (taskStatus) {
-      (taskStatus as HTMLElement).hidden = !boardStore.selectedTaskID;
-    }
-    if (statusIconEl) {
-      statusIconEl.dataset.status = status;
-      statusIconEl.innerHTML = statusIconSvg(status);
-    }
-    if (statusLabelEl) {
-      statusLabelEl.textContent = boardStore.selectedTaskID
-        ? t(`task.status.${status}`)
-        : t("task.status.idle");
-    }
-  });
-
-  // ── Elapsed duration ──
-  // Only tick while the task is live AND the window is visible; otherwise the
-  // text is a static snapshot (completed tasks never change; hidden overlay
-  // doesn't need per-second updates). This eliminates an unconditional 1 Hz
-  // CPU wake + DOM reflow across the backdrop layers.
-  const [isVisible, setIsVisible] = createSignal(document.visibilityState === "visible");
-  const onVisibility = () => setIsVisible(document.visibilityState === "visible");
-  document.addEventListener("visibilitychange", onVisibility);
-  onCleanup(() => document.removeEventListener("visibilitychange", onVisibility));
-
-  createEffect(() => {
-    const elapsedEl = document.getElementById("taskElapsed");
-    if (!elapsedEl) return;
-    const task = (boardStore.board as any)?.task;
-    const startTime = task?.time?.created || 0;
-    const status = task?.status || "idle";
-    const completedTime = task?.time?.completed || 0;
-    const isLive = ["active", "queued"].includes(status);
-
-    if (!boardStore.selectedTaskID || !startTime) {
-      if (elapsedEl.textContent) elapsedEl.textContent = "";
-      return;
-    }
-    if (!isLive) {
-      elapsedEl.textContent = formatDuration((completedTime || Date.now()) - startTime);
-      return;
-    }
-    // Live task: paint once immediately, then tick 1 Hz only while visible.
-    elapsedEl.textContent = formatDuration(Date.now() - startTime);
-    if (!isVisible()) return;
-    const handle = setInterval(() => {
-      elapsedEl.textContent = formatDuration(Date.now() - startTime);
-    }, 1000);
-    onCleanup(() => clearInterval(handle));
-  });
+  // Task status header + elapsed timer moved to <TaskStatusHeader/> component
+  // (mounted into #solidTaskStatusMount above). The component owns its own
+  // visibility-gated 1Hz interval and renders all four spans (status-icon,
+  // status-label, elapsed) via Solid's reactive graph instead of four
+  // getElementById writes per board update.
 
  // interactionBridge.renderInteractions removed — the unified InteractionCard
  // renders the UI in both inline conversation and sidebar surfaces, and
