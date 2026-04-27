@@ -76,7 +76,7 @@ Three knobs:
 | Scenario | Config |
 |---|---|
 | Default execution model | `model` field |
-| Planning-phase models | `assistant.*.model` (independently set) |
+| Per-agent models | `agent.<name>.model` (independently set, see `packages/opencorvus/src/config/config.ts:1053-1067`) |
 | Vision / screenshot understanding | `OPENCORVUS_VISION_MODEL` |
 
 Splitting planning from execution lets you **plan with a strong/slow model and execute with a fast/cheaper one**:
