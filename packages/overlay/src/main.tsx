@@ -1112,14 +1112,9 @@ document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
 });
 
 disposers.push(createRoot((dispose) => {
-  createEffect(() => {
-    document.body.dataset.workspace = !appStore.connected
-      ? "offline"
-      : boardStore.selectedTaskID
-        ? "task"
-        : "empty";
-    document.body.dataset.connection = appStore.connectionStatus;
-  });
+  // body.dataset.workspace / .connection writes were dead — no CSS or JS in
+  // the codebase reads either attribute. Removed (rule 10). The static
+  // initial `data-workspace="offline"` in index.html is also stripped.
 
   createEffect(() => {
     applyTheme(settingsStore.theme);

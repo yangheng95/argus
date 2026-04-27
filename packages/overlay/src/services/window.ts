@@ -2,11 +2,8 @@
 // on the Tauri window handle or on global DOM state.
 // Exported functions:
 // setTrayAttention — toggle the tray icon attention state via Tauri
-// setConnStatus — update the DOM connection badge
 // fitBrandVersion — shrink the brand-version element to fit its container
 // syncExecutorWidth — equalise executor chip button widths
-
-import { t } from "../utils/i18n";
 
 // ── Helpers ──
 
@@ -42,23 +39,6 @@ export async function setTrayAttention(active: boolean): Promise<boolean> {
   }).catch(() => false);
   if (result) _trayAttentionEnabled = !!active;
   return !!result;
-}
-
-// ── setConnStatus ──
-// Update the DOM connection badge to reflect the current connection state.
-
-export function setConnStatus(status: "online" | "offline" | "connecting"): void {
-  if (typeof document === "undefined") return;
-  document.body.dataset.connection = status;
-  const badge = document.getElementById("solidConnBadge") as HTMLElement | null;
-  if (!badge) return;
-  badge.dataset.status = status;
-  badge.textContent =
-    status === "online"
-      ? t("titlebar.connection.online")
-      : status === "connecting"
-        ? t("titlebar.connection.connecting")
-        : t("titlebar.connection.offline");
 }
 
 // ── fitBrandVersion ──
