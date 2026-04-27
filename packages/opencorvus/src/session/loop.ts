@@ -708,7 +708,7 @@ export namespace SessionLoop {
       messages: modelMessages,
       tools,
       model: input.model,
-      toolChoice: format.type === "json_schema" ? (input.model.capabilities.reasoning ? "auto" : "required") : undefined,
+      toolChoice: structuredOutputToolChoice(format),
     })
 
     if (structured !== undefined) {
@@ -744,6 +744,10 @@ export namespace SessionLoop {
     sessionID: Identifier.schema("session"),
     resume_existing: z.boolean().optional(),
   })
+
+  export function structuredOutputToolChoice(format: z.infer<typeof Message.Format>): "required" | undefined {
+    return format.type === "json_schema" ? "required" : undefined
+  }
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
 

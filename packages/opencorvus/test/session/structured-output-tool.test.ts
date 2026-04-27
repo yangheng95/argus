@@ -33,6 +33,15 @@ function jsonSchema(shape: z.ZodType): Record<string, any> {
 }
 
 describe("SessionLoop.createStructuredOutputTool", () => {
+  test("json_schema requires a tool call for every model family", () => {
+    expect(SessionLoop.structuredOutputToolChoice({
+      type: "json_schema",
+      schema: { type: "object", properties: { answer: { type: "string" } } },
+      retryCount: 2,
+    })).toBe("required")
+    expect(SessionLoop.structuredOutputToolChoice({ type: "text" })).toBeUndefined()
+  })
+
   test("produces a tool with id=StructuredOutput and a non-empty description", () => {
     const captured: unknown[] = []
     const schemaShape = jsonSchema(z.object({ answer: z.string() }))
