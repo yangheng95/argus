@@ -1,322 +1,52 @@
 ---
 title: 命令
-description: 为重复任务创建自定义命令。
+description: 内置 slash 命令以及如何在 OpenCorvus 中定义自定义命令。
 ---
 
-自定义命令允许你指定一个提示词，当在 TUI 中执行该命令时会运行这个提示词。
+OpenCorvus 继承 opencode 的 slash 命令系统并补充若干自有命令。在 TUI 输入框或 ACP `session/prompt` 中以 `/command` 前缀调用。
 
-```bash frame="none"
-/my-command
-```
+## 内置 slash 命令
 
-自定义命令是 `/init`、`/undo`、`/redo`、`/share`、`/help` 等内置命令之外的补充。[了解更多](/docs/tui#commands)。
+| 命令 | 用途 |
+|---|---|
+| `/init` | 从当前仓库初始化 `AGENTS.md` |
+| `/share` | 为当前 session 生成分享链接 |
+| `/undo` | 回滚 agent 上一次修改（基于 snapshot） |
+| `/help` | 列出所有命令 |
 
----
+具体集合按版本不同；以 `/help` 为准。
 
-## 创建命令文件
+## 自定义命令
 
-在 `commands/` 目录中创建 markdown 文件来定义自定义命令。
+在 [config](/docs/zh-cn/config/) 的 `command` 中定义：
 
-创建 `.opencode/commands/test.md`：
-
-```md title=".opencode/commands/test.md"
----
-description: Run tests with coverage
-agent: build
-model: anthropic/claude-3-5-sonnet-20241022
----
-
-Run the full test suite with coverage report and show any failures.
-Focus on the failing tests and suggest fixes.
-```
-
-frontmatter 定义命令属性，内容则成为模板。
-
-通过输入 `/` 后跟命令名称来使用该命令。
-
-```bash frame="none"
-"/test"
-```
-
----
-
-## 配置
-
-你可以通过 OpenCode 配置或在 `commands/` 目录中创建 markdown 文件来添加自定义命令。
-
----
-
-### JSON
-
-在 OpenCode [配置](/docs/config)中使用 `command` 选项：
-
-```json title="opencode.jsonc" {4-12}
+```jsonc
 {
-  "$schema": "https://opencode.ai/config.json",
   "command": {
-    // This becomes the name of the command
     "test": {
-      // This is the prompt that will be sent to the LLM
-      "template": "Run the full test suite with coverage report and show any failures.\nFocus on the failing tests and suggest fixes.",
-      // This is shown as the description in the TUI
-      "description": "Run tests with coverage",
+      "template": "运行完整测试套件并打印失败用例。",
+      "description": "运行测试",
       "agent": "build",
-      "model": "anthropic/claude-3-5-sonnet-20241022"
+      "model": "anthropic/claude-haiku-4-6"
+    },
+    "component": {
+      "template": "创建名为 $ARGUMENTS 的 TypeScript React 组件。",
+      "description": "创建组件"
     }
   }
 }
 ```
 
-现在你可以在 TUI 中运行这个命令：
+`$ARGUMENTS` 会被替换为用户在命令名后输入的内容。
 
-```bash frame="none"
-/test
-```
+## Markdown 形式
 
----
+也可放在 `~/.config/opencorvus/commands/<name>.md` 或 `.opencorvus/commands/<name>.md`。frontmatter 写元信息（description / agent / model），正文是 prompt 模板。
 
-### Markdown
+## 命令中的权限
 
-你还可以使用 markdown 文件定义命令。将它们放在：
+自定义命令与直接 prompt 走同一权限系统。模板里若触发 `bash` 或 `write`，依然受 [Permissions](/docs/zh-cn/permissions/) 约束。
 
-- 全局：`~/.config/opencode/commands/`
-- 项目级：`.opencode/commands/`
+## Snapshot 与 `/undo`
 
-```markdown title="~/.config/opencode/commands/test.md"
----
-description: Run tests with coverage
-agent: build
-model: anthropic/claude-3-5-sonnet-20241022
----
-
-Run the full test suite with coverage report and show any failures.
-Focus on the failing tests and suggest fixes.
-```
-
-markdown 文件名即为命令名。例如，`test.md` 允许你运行：
-
-```bash frame="none"
-/test
-```
-
----
-
-## 提示词配置
-
-自定义命令的提示词支持多种特殊占位符和语法。
-
----
-
-### 参数
-
-使用 `$ARGUMENTS` 占位符向命令传递参数。
-
-```md title=".opencode/commands/component.md"
----
-description: Create a new component
----
-
-Create a new React component named $ARGUMENTS with TypeScript support.
-Include proper typing and basic structure.
-```
-
-带参数运行命令：
-
-```bash frame="none"
-/component Button
-```
-
-`$ARGUMENTS` 将被替换为 `Button`。
-
-你还可以使用位置参数访问各个参数：
-
-- `$1` - 第一个参数
-- `$2` - 第二个参数
-- `$3` - 第三个参数
-- 以此类推...
-
-例如：
-
-```md title=".opencode/commands/create-file.md"
----
-description: Create a new file with content
----
-
-Create a file named $1 in the directory $2
-with the following content: $3
-```
-
-运行命令：
-
-```bash frame="none"
-/create-file config.json src "{ \"key\": \"value\" }"
-```
-
-替换结果为：
-
-- `$1` 替换为 `config.json`
-- `$2` 替换为 `src`
-- `$3` 替换为 `{ "key": "value" }`
-
----
-
-### Shell 输出
-
-使用 _!`command`_ 将 [bash 命令](/docs/tui#bash-commands)输出注入到提示词中。
-
-例如，创建一个分析测试覆盖率的自定义命令：
-
-```md title=".opencode/commands/analyze-coverage.md"
----
-description: Analyze test coverage
----
-
-Here are the current test results:
-!`npm test`
-
-Based on these results, suggest improvements to increase coverage.
-```
-
-或者查看最近的更改：
-
-```md title=".opencode/commands/review-changes.md"
----
-description: Review recent changes
----
-
-Recent git commits:
-!`git log --oneline -10`
-
-Review these changes and suggest any improvements.
-```
-
-命令在项目的根目录中运行，其输出会成为提示词的一部分。
-
----
-
-### 文件引用
-
-使用 `@` 后跟文件名在命令中引用文件。
-
-```md title=".opencode/commands/review-component.md"
----
-description: Review component
----
-
-Review the component in @src/components/Button.tsx.
-Check for performance issues and suggest improvements.
-```
-
-文件内容会自动包含在提示词中。
-
----
-
-## 选项
-
-让我们详细了解各配置选项。
-
----
-
-### Template
-
-`template` 选项定义执行命令时发送给 LLM 的提示词。
-
-```json title="opencode.json"
-{
-  "command": {
-    "test": {
-      "template": "Run the full test suite with coverage report and show any failures.\nFocus on the failing tests and suggest fixes."
-    }
-  }
-}
-```
-
-这是一个**必需的**配置选项。
-
----
-
-### Description
-
-使用 `description` 选项提供命令功能的简要描述。
-
-```json title="opencode.json"
-{
-  "command": {
-    "test": {
-      "description": "Run tests with coverage"
-    }
-  }
-}
-```
-
-当你输入命令时，这将在 TUI 中显示为描述。
-
----
-
-### Agent
-
-使用 `agent` 配置可选地指定由哪个[代理](/docs/agents)执行此命令。
-如果这是一个[子代理](/docs/agents/#subagents)，该命令默认会触发子代理调用。
-要禁用此行为，请将 `subtask` 设置为 `false`。
-
-```json title="opencode.json"
-{
-  "command": {
-    "review": {
-      "agent": "plan"
-    }
-  }
-}
-```
-
-这是一个**可选的**配置选项。如果未指定，默认使用你当前的代理。
-
----
-
-### Subtask
-
-使用 `subtask` 布尔值强制命令触发[子代理](/docs/agents/#subagents)调用。
-如果你希望命令不污染主要上下文，这会很有用，它会**强制**代理作为子代理运行，
-即使[代理](/docs/agents)配置中的 `mode` 设置为 `primary`。
-
-```json title="opencode.json"
-{
-  "command": {
-    "analyze": {
-      "subtask": true
-    }
-  }
-}
-```
-
-这是一个**可选的**配置选项。
-
----
-
-### Model
-
-使用 `model` 配置覆盖此命令的默认模型。
-
-```json title="opencode.json"
-{
-  "command": {
-    "analyze": {
-      "model": "anthropic/claude-3-5-sonnet-20241022"
-    }
-  }
-}
-```
-
-这是一个**可选的**配置选项。
-
----
-
-## 内置命令
-
-opencode 包含多个内置命令，如 `/init`、`/undo`、`/redo`、`/share`、`/help`；[了解更多](/docs/tui#commands)。
-
-:::note
-自定义命令可以覆盖内置命令。
-:::
-
-如果你定义了同名的自定义命令，它将覆盖内置命令。
+`/undo` 能工作是因为 OpenCorvus 在每步 agent 操作前做文件 snapshot。若你在 config 里关掉 `snapshot`，`/undo` 即变为 no-op。

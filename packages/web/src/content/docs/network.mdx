@@ -1,57 +1,52 @@
 ---
 title: Network
-description: Configure proxies and custom certificates.
+description: HTTP/HTTPS proxy configuration for OpenCorvus.
 ---
 
-OpenCode supports standard proxy environment variables and custom certificates for enterprise network environments.
+OpenCorvus reads standard proxy environment variables; there is no separate proxy field in `opencorvus.jsonc`.
 
----
+## Supported variables
 
-## Proxy
+| Variable | Purpose |
+|---|---|
+| `HTTP_PROXY` / `http_proxy` | Proxy for HTTP traffic |
+| `HTTPS_PROXY` / `https_proxy` | Proxy for HTTPS traffic |
+| `NO_PROXY` / `no_proxy` | Comma-separated host patterns to bypass |
 
-OpenCode respects standard proxy environment variables.
+The detection helper lives in `packages/opencorvus/src/util/proxied.ts`:
+
+```ts
+export function proxied() {
+  return !!(process.env.HTTP_PROXY || process.env.HTTPS_PROXY ||
+            process.env.http_proxy || process.env.https_proxy)
+}
+```
+
+Bun's runtime honors these natively for `fetch()`, so all LLM providers, MCP transports, and the share endpoint route through the proxy automatically.
+
+## Usage
 
 ```bash
-# HTTPS proxy (recommended)
-export HTTPS_PROXY=https://proxy.example.com:8080
+export HTTPS_PROXY=http://127.0.0.1:7890
+export HTTP_PROXY=http://127.0.0.1:7890
+export NO_PROXY=localhost,127.0.0.1,*.internal
 
-# HTTP proxy (if HTTPS not available)
-export HTTP_PROXY=http://proxy.example.com:8080
+opencorvus serve
+```
 
-# Bypass proxy for local server (required)
-export NO_PROXY=localhost,127.0.0.1
+## TLS / custom CA
+
+For self-signed corporate certs, use Bun's standard `NODE_EXTRA_CA_CERTS` or the OS trust store:
+
+```bash
+export SSL_CERT_FILE=/etc/ssl/certs/corp-ca.pem
+opencorvus serve
 ```
 
 :::caution
-The TUI communicates with a local HTTP server. You must bypass the proxy for this connection to prevent routing loops.
+OpenCorvus does **not** ship a built-in option to disable TLS verification. If you must, use a Bun-level workaround at your own risk — it is not a supported configuration.
 :::
 
-You can configure the server's port and hostname using [CLI flags](/docs/cli#run).
+## Behavior with proxy enabled
 
----
-
-### Authenticate
-
-If your proxy requires basic authentication, include credentials in the URL.
-
-```bash
-export HTTPS_PROXY=http://username:password@proxy.example.com:8080
-```
-
-:::caution
-Avoid hardcoding passwords. Use environment variables or secure credential storage.
-:::
-
-For proxies requiring advanced authentication like NTLM or Kerberos, consider using an LLM Gateway that supports your authentication method.
-
----
-
-## Custom certificates
-
-If your enterprise uses custom CAs for HTTPS connections, configure OpenCode to trust them.
-
-```bash
-export NODE_EXTRA_CA_CERTS=/path/to/ca-cert.pem
-```
-
-This works for both proxy connections and direct API access.
+The presence of either proxy var causes some adapters (notably the share endpoint and certain telemetry hooks) to take alternate code paths — see usages of `proxied()` to find them.

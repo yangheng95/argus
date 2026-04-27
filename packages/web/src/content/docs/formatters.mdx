@@ -1,132 +1,50 @@
 ---
 title: Formatters
-description: OpenCode uses language specific formatters.
+description: How OpenCorvus auto-formats code touched by the agent.
 ---
 
-OpenCode automatically formats files after they are written or edited using language-specific formatters. This ensures that the code that is generated follows the code styles of your project.
+OpenCorvus auto-formats files the agent writes or edits, using the formatter that matches the file's language and the project's configuration. Implementation: `packages/opencorvus/src/format/`.
 
----
+## Built-in detection
 
-## Built-in
+OpenCorvus detects formatters by inspecting the project's tooling:
 
-OpenCode comes with several built-in formatters for popular languages and frameworks. Below is a list of the formatters, supported file extensions, and commands or config options it needs.
+| Formatter | Trigger |
+|---|---|
+| `prettier` | `prettier` in `package.json` deps or `.prettierrc*` config present |
+| `gofmt` | `*.go` files in repo |
+| `rustfmt` | `Cargo.toml` present |
+| `black` | `pyproject.toml` with `tool.black` or `requirements*.txt` lists `black` |
+| Project script | `package.json` `format` / `lint:fix` scripts |
 
-| Formatter            | Extensions                                                                                               | Requirements                                                                                          |
-| -------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| air                  | .R                                                                                                       | `air` command available                                                                               |
-| biome                | .js, .jsx, .ts, .tsx, .html, .css, .md, .json, .yaml, and [more](https://biomejs.dev/)                   | `biome.json(c)` config file                                                                           |
-| cargofmt             | .rs                                                                                                      | `cargo fmt` command available                                                                         |
-| clang-format         | .c, .cpp, .h, .hpp, .ino, and [more](https://clang.llvm.org/docs/ClangFormat.html)                       | `.clang-format` config file                                                                           |
-| cljfmt               | .clj, .cljs, .cljc, .edn                                                                                 | `cljfmt` command available                                                                            |
-| dart                 | .dart                                                                                                    | `dart` command available                                                                              |
-| dfmt                 | .d                                                                                                       | `dfmt` command available                                                                              |
-| gleam                | .gleam                                                                                                   | `gleam` command available                                                                             |
-| gofmt                | .go                                                                                                      | `gofmt` command available                                                                             |
-| htmlbeautifier       | .erb, .html.erb                                                                                          | `htmlbeautifier` command available                                                                    |
-| ktlint               | .kt, .kts                                                                                                | `ktlint` command available                                                                            |
-| mix                  | .ex, .exs, .eex, .heex, .leex, .neex, .sface                                                             | `mix` command available                                                                               |
-| nixfmt               | .nix                                                                                                     | `nixfmt` command available                                                                            |
-| ocamlformat          | .ml, .mli                                                                                                | `ocamlformat` command available and `.ocamlformat` config file                                        |
-| ormolu               | .hs                                                                                                      | `ormolu` command available                                                                            |
-| oxfmt (Experimental) | .js, .jsx, .ts, .tsx                                                                                     | `oxfmt` dependency in `package.json` and an [experimental env variable flag](/docs/cli/#experimental) |
-| pint                 | .php                                                                                                     | `laravel/pint` dependency in `composer.json`                                                          |
-| prettier             | .js, .jsx, .ts, .tsx, .html, .css, .md, .json, .yaml, and [more](https://prettier.io/docs/en/index.html) | `prettier` dependency in `package.json`                                                               |
-| rubocop              | .rb, .rake, .gemspec, .ru                                                                                | `rubocop` command available                                                                           |
-| ruff                 | .py, .pyi                                                                                                | `ruff` command available with config                                                                  |
-| rustfmt              | .rs                                                                                                      | `rustfmt` command available                                                                           |
-| shfmt                | .sh, .bash                                                                                               | `shfmt` command available                                                                             |
-| standardrb           | .rb, .rake, .gemspec, .ru                                                                                | `standardrb` command available                                                                        |
-| terraform            | .tf, .tfvars                                                                                             | `terraform` command available                                                                         |
-| uv                   | .py, .pyi                                                                                                | `uv` command available                                                                                |
-| zig                  | .zig, .zon                                                                                               | `zig` command available                                                                               |
+The exact registry is in `packages/opencorvus/src/format/formatter.ts`.
 
-So if your project has `prettier` in your `package.json`, OpenCode will automatically use it.
+## Configuration
 
----
+Override or extend in [config](/docs/config/) under `formatter`:
 
-## How it works
-
-When OpenCode writes or edits a file, it:
-
-1. Checks the file extension against all enabled formatters.
-2. Runs the appropriate formatter command on the file.
-3. Applies the formatting changes automatically.
-
-This process happens in the background, ensuring your code styles are maintained without any manual steps.
-
----
-
-## Configure
-
-You can customize formatters through the `formatter` section in your OpenCode config.
-
-```json title="opencode.json"
+```jsonc
 {
-  "$schema": "https://opencode.ai/config.json",
-  "formatter": {}
-}
-```
-
-Each formatter configuration supports the following:
-
-| Property      | Type     | Description                                             |
-| ------------- | -------- | ------------------------------------------------------- |
-| `disabled`    | boolean  | Set this to `true` to disable the formatter             |
-| `command`     | string[] | The command to run for formatting                       |
-| `environment` | object   | Environment variables to set when running the formatter |
-| `extensions`  | string[] | File extensions this formatter should handle            |
-
-Let's look at some examples.
-
----
-
-### Disabling formatters
-
-To disable **all** formatters globally, set `formatter` to `false`:
-
-```json title="opencode.json" {3}
-{
-  "$schema": "https://opencode.ai/config.json",
-  "formatter": false
-}
-```
-
-To disable a **specific** formatter, set `disabled` to `true`:
-
-```json title="opencode.json" {5}
-{
-  "$schema": "https://opencode.ai/config.json",
   "formatter": {
-    "prettier": {
-      "disabled": true
-    }
-  }
-}
-```
-
----
-
-### Custom formatters
-
-You can override the built-in formatters or add new ones by specifying the command, environment variables, and file extensions:
-
-```json title="opencode.json" {4-14}
-{
-  "$schema": "https://opencode.ai/config.json",
-  "formatter": {
-    "prettier": {
+    "prettier": { "disabled": true },
+    "custom-prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],
-      "environment": {
-        "NODE_ENV": "development"
-      },
+      "environment": { "NODE_ENV": "development" },
       "extensions": [".js", ".ts", ".jsx", ".tsx"]
-    },
-    "custom-markdown-formatter": {
-      "command": ["deno", "fmt", "$FILE"],
-      "extensions": [".md"]
     }
   }
 }
 ```
 
-The **`$FILE` placeholder** in the command will be replaced with the path to the file being formatted.
+- `disabled` — turn off a built-in formatter.
+- `command` — argv list; `$FILE` is replaced with the path.
+- `environment` — extra env vars for the formatter process.
+- `extensions` — file suffixes that trigger this formatter.
+
+## When formatters run
+
+Formatters run **after** a successful `write` / `edit` / `apply_patch` tool call but **before** the change is persisted to the snapshot. Failures fall through with a warning — they do not block the agent.
+
+## Disabling all formatting
+
+Set every relevant formatter to `disabled: true`, or remove its trigger (e.g., delete `.prettierrc*`). There is no global "disable formatters" switch.
