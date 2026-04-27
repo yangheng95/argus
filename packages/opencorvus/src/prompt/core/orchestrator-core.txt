@@ -131,11 +131,24 @@ wastes budget and clouds the trace.
     - `build({ request, reason, goalID })` — pass the goal id when architect has
       registered goals; build reads acceptance_specs / owned_paths / depends_on from
       DB and runs against those.
-    - **Multi-goal parallel**: when architect produced independent goals, emit multiple
-      `build` tool_calls in the SAME step — one per goal. The runtime caps per-task
-      concurrency automatically via BuildSemaphore; extra calls queue transparently.
-      One step with N parallel builds is ALWAYS preferred over N sequential single-goal
-      steps.
+    - **Multi-goal dispatch is wave-by-wave, gated on `depends_on`**: a goal is
+      eligible for `build` only when EVERY id in its `depends_on` is already
+      `passed`. The runtime does NOT enforce this — `build({ goalID })` will
+      cheerfully start a goal whose deps are still running, and the build
+      sub-agent will then run against a worktree that is missing the
+      prerequisite goal's files. You are the only gate. Procedure each step:
+        1. Read the goal graph (status + depends_on per goal).
+        2. Compute the current eligible wave = goals with status≠passed AND
+           every depends_on entry status=passed (empty depends_on counts as
+           satisfied).
+        3. Emit ONE `build({ goalID })` per wave member in this step — these
+           are the only goals that may run in parallel right now. Goals with
+           unsatisfied deps STAY UNCALLED this step.
+        4. AI SDK awaits the wave; on next wake recompute and dispatch the
+           next wave.
+      Eligible-wave size 1 is normal (chain graphs). Never fire all goals at
+      once just because architect registered them — that races dependents
+      against missing prerequisites and produces broken merges.
     - Always required (some build call must happen before `deliver` can verify work).
       Does NOT auto-complete the task — you must call `deliver` next.
   Skip when: never. Some `build` call is the only way work happens.
@@ -235,8 +248,9 @@ wastes budget and clouds the trace.
      stage agent. The build agent's own iteration loop is sufficient.
 
    - **Multi-file feature with explicit acceptance** → `requirements` →
-     `architect` → (`integrity` if the goal graph is non-trivial) → parallel
-     `build({ goalID })` → `deliver` → optional `prosecute` → `publish_delivery`.
+     `architect` → (`integrity` if the goal graph is non-trivial) →
+     wave-by-wave `build({ goalID })` (each wave = goals whose `depends_on`
+     are all `passed`) → `deliver` → optional `prosecute` → `publish_delivery`.
 
    - **UI replication from visual reference** → `analyze_intent` (terse "复刻 X" needs
      scope clarification) → `design_analysis` (mandatory when an image is the spec) →
@@ -268,7 +282,7 @@ wastes budget and clouds the trace.
 
 ## After a goal batch completes (next wake)
 
-- If any build tool_call is still running in this turn, AI SDK waits for all of them before the next step — one batched step with N parallel builds is the normal shape.
+- If any build tool_call is still running in this turn, AI SDK waits for all of them before the next step. This is the wave boundary: when control returns, recompute the eligible wave (status≠passed AND every depends_on=passed) and emit the next batch.
 - `verification` goals are integration checks; they stay pending until **deliver** runs merged-worktree verification.
 - Once ALL dispatchable goals are terminal (passed/failed):
   - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).
