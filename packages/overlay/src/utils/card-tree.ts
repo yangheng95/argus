@@ -1,135 +1,20 @@
-// ── Card Tree — CardNode type + render-side helpers ──
+// ── Card Tree — render-side helpers ──
 //
-// The canonical source of truth for the card tree is `store/card-tree.ts`
-// (`cardTreeStore`). This file holds:
+// The canonical source of truth for the card tree types (`CardNode`,
+// `CardKind`, `CardStatus`, `BoundaryPart`, `StepPayload`) is
+// `store/card-tree.ts`. Per CLAUDE.md rule 22 (no dual-source), this file
+// re-exports those types so consumers can keep importing from utils
+// without forking the type — and holds:
 //
-//  1. `CardNode` — structurally compatible with the store's CardNode so that
-//     transient card instances (nested tool cards in CardParts) and store-backed
-//     cards render through the same component path.
-//  2. `shouldPromoteTool` — historical render heuristic retained for
+//  1. `shouldPromoteTool` — historical render heuristic retained for
 //     compatibility with older callers and policy discussions.
-//  3. `defaultExpandedForNode` / `collectCardText` — render-side helpers
+//  2. `defaultExpandedForNode` / `collectCardText` — render-side helpers
 //     used by Card / CardHeader.
 import { cardTreeStore } from "../store/card-tree";
-import type { StepPayload } from "../store/card-tree";
+import type { CardNode, CardKind, CardStatus, BoundaryPart, StepPayload } from "../store/card-tree";
 import { toolNameKey, displayToolIcon, displayToolDetail } from "./tool";
 
-export type { StepPayload } from "../store/card-tree";
-
-export type CardKind = "agent" | "step" | "phase" | "tool" | "message" | "integrity";
-export type CardStatus = "pending" | "running" | "completed" | "error" | "skipped";
-
-/** A synthetic "part" inserted between messages when flattening multiple
- *  messages into a single card body. Lets <CardParts> emit a role/time
- *  separator without losing message boundaries. */
-export interface BoundaryPart {
-  type: "boundary";
-  role: string;
-  roleLabel: string;
-  time?: number;
-}
-
-export interface CardNode {
-  /** Stable folding key. */
-  id: string;
-  kind: CardKind;
-  /** For kind=message: user/system/agent role; for agent cards: stage role. */
-  role?: string;
-  /** Raw stage name (planner/executor/…) — drives per-stage accents. */
-  stage?: string;
-  /** Resolved accent colour (CSS value) for this card's stage. Undefined when
-   *  the node has no stage (e.g. plain message bubble). Written into an
-   *  inline `--card-stage` CSS variable by <Card>, consumed by card.css. */
-  accent?: string;
-  status?: CardStatus;
-  /** Header primary label. */
-  title: string;
-  /** Header secondary slot (e.g. goal id tail, path, command). */
-  subtitle?: string;
-  /** Goal index / round number; shown as #GN when > 0. */
-  round?: number;
-  /** Goal attempt / retry number; shown as Vn on goal-scoped step cards. */
-  attempt?: number;
-  /** Goal this card belongs to — stamped on the executor step card and any
-   *  goal-phase / session card routed into it. */
-  goalID?: string;
-  /** Goal description (markdown) — only set on executor step cards. */
-  goalDescription?: string;
-  /** Structured per-step content. Only set for kind="step" nodes — drives
-   *  the step body render path (changed files, diff stats, plan nodes, eval
-   *  checks, etc.) so the main conversation shows the same detail as the
-   *  sidebar Goals panel. */
-  stepPayload?: StepPayload;
-  /** For kind="step" with stepPayload.buildSessionID — exposed so the
-   *  Card renderer can wire an "Open build session" button without re-reading
-   *  board state. */
-  stepID?: string;
-  /** Flattened leaf parts (text / reasoning / tool / patch / file / subtask / boundary). */
-  parts: any[];
-  /** Inline nested cards — only set on transient CardNode instances built on
-   *  the fly by the renderer (e.g. CardParts promoting a tool part into its
-   *  own card). Store-backed cards reference children by id via `childIDs`. */
-  children?: CardNode[];
-  /** Store-backed child ids (parity with `store/card-tree.ts` CardNode). The
-   *  renderer prefers `childIDs` when present so it can dereference through
-   *  the cardTreeStore proxy and preserve fine-grained reactivity. */
-  childIDs?: string[];
-  /** Sort key (ms). Required for structural parity with the store CardNode
-   *  (see `store/card-tree.ts`). Transient tool-promoted cards are always
-   *  nested (never top-level), so the value is observation time only —
-   *  the rebuildTopLevelOrder sort never sees these. */
-  time: number;
-  /** Explicit default for the unified fold store; if omitted falls back to
-   *  (status === "running" || kind in {agent,goal}) ? open : closed. */
-  defaultExpanded?: boolean;
-  /** Raw tool part for kind="tool" nodes — rendered by <Card> via
-   *  InlineToolPart mode="body". Always undefined for non-tool kinds. */
-  toolPart?: any;
-  /**
-   * Estimated prompt-context size the LLM saw at this message, in tokens.
-   * Populated from Assistant.tokens.input (which already represents the
-   * cumulative context sent up to and including this turn — providers bill
-   * per turn on the fully-assembled message array, so there is nothing to
-   * sum client-side). Left undefined for turns that never hit the model
-   * (user bubbles, synthetic system notes). The UI renders it with low
-   * contrast and an "est." marker because the number is a provider-reported
-   * estimate and can drift slightly against actual billed tokens.
-   */
-  contextTokens?: number
-  /**
-   * True when contextTokens came from a local chars/token approximation
-   * rather than a provider-reported figure. Drives the "est." label so
-   * the operator knows which value they're looking at. When a card
-   * aggregates children, the flag is true only if no provider-reported
-   * value contributed to the aggregate maximum.
-   */
-  contextTokensEstimated?: boolean
-  /** Structured integrity review payload — only populated for kind="integrity"
-   *  nodes (produced by tree-writer on integrity.review.completed). Mirrors
-   *  the shape defined in `store/card-tree.ts` so a store CardNode is
-   *  assignable to this utils CardNode without casting. */
-  integrity?: {
-    verdict: "pass" | "concerns" | "needs_correction";
-    summary: string;
-    dimensions: Array<{
-      id: "goal_fidelity" | "technical_feasibility" | "hallucination" | "solution_quality";
-      verdict: "pass" | "concerns" | "needs_correction";
-      issueCount: number;
-      correctionCount: number;
-      missingGoalCount: number;
-    }>;
-    issues: Array<{ type: string; description: string }>;
-    corrections: Array<{
-      action: "modify" | "split" | "remove";
-      goalID: string;
-      reason: string;
-      updatesTitle?: string;
-      updatesObjective?: string;
-    }>;
-    missingGoals: Array<{ title: string; objective: string; reason?: string }>;
-    attempts: number;
-  };
-}
+export type { CardNode, CardKind, CardStatus, StepPayload, BoundaryPart } from "../store/card-tree";
 
 // ── Status normalisation ──
 
