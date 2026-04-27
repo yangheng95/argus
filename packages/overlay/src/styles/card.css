@@ -1061,7 +1061,9 @@ body[data-theme="light"] .card__round {
 
 /* ── AgentTrace surface (per-session 🔍 button + inline TracePanel) ── */
 
-.card__trace {
+.card__trace,
+.card__agent-cancel,
+.card__agent-reply-toggle {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1078,20 +1080,104 @@ body[data-theme="light"] .card__round {
   transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 .card__head:hover .card__trace,
+.card__head:hover .card__agent-cancel,
+.card__head:hover .card__agent-reply-toggle,
 .card__trace:focus-visible,
-.card__trace--open {
+.card__agent-cancel:focus-visible,
+.card__agent-reply-toggle:focus-visible,
+.card__trace--open,
+.card__agent-reply-toggle--open {
   opacity: 0.96;
 }
-.card__trace:hover {
+.card__trace:hover,
+.card__agent-reply-toggle:hover {
   color: var(--accent-info, #6cb6ff);
   background: var(--surface-hover, rgba(255, 255, 255, 0.06));
 }
-.card__trace--open {
+.card__agent-cancel:hover {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+.card__agent-cancel:disabled,
+.card__agent-reply-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.card__trace--open,
+.card__agent-reply-toggle--open {
   color: var(--accent-info, #6cb6ff);
   background: var(--surface-hover, rgba(255, 255, 255, 0.08));
 }
-.card__trace + .card__chevron {
+.card__trace + .card__chevron,
+.card__agent-cancel + .card__chevron,
+.card__agent-reply-toggle + .card__chevron {
   margin-left: 0;
+}
+
+.card__head:has(.card__agent-reply) {
+  flex-wrap: wrap;
+}
+
+.card__agent-reply {
+  flex: 0 0 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 3px;
+  padding: 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-inset, #18191c) 72%, transparent);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  cursor: default;
+}
+
+.card__agent-reply-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 64px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: var(--surface, rgba(0, 0, 0, 0.18));
+  font: inherit;
+  line-height: 1.45;
+  user-select: text;
+}
+
+.card__agent-reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.card__agent-reply-cancel,
+.card__agent-reply-send {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: var(--card-sub-size);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card__agent-reply-cancel {
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.card__agent-reply-send {
+  color: var(--surface);
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.card__agent-reply-cancel:disabled,
+.card__agent-reply-send:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 .trace-panel {
@@ -1524,13 +1610,17 @@ body[data-theme="light"] .card__round {
 .card__copy,
 .card__rewind,
 .card__trace,
+.card__agent-cancel,
+.card__agent-reply-toggle,
 .card__chevron {
   border-radius: calc(5px * var(--ui-scale, 1));
 }
 
 .card__copy,
 .card__rewind,
-.card__trace {
+.card__trace,
+.card__agent-cancel,
+.card__agent-reply-toggle {
   width: calc(22px * var(--ui-scale, 1));
   height: calc(22px * var(--ui-scale, 1));
   opacity: 0.52;
@@ -1539,9 +1629,13 @@ body[data-theme="light"] .card__round {
 .card__head:hover .card__copy,
 .card__head:hover .card__rewind,
 .card__head:hover .card__trace,
+.card__head:hover .card__agent-cancel,
+.card__head:hover .card__agent-reply-toggle,
 .card__copy:focus-visible,
 .card__rewind:focus-visible,
-.card__trace:focus-visible {
+.card__trace:focus-visible,
+.card__agent-cancel:focus-visible,
+.card__agent-reply-toggle:focus-visible {
   opacity: 1;
 }
 

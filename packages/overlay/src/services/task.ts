@@ -500,6 +500,48 @@ export async function replanTask(taskID: string): Promise<void> {
   await loadBoard();
 }
 
+// ── Public: replyToAgentSession ──
+
+/**
+ * Append scoped human input directly to a task child-agent session. This does
+ * not route through the task-level panel message endpoint.
+ */
+export async function replyToAgentSession(
+  taskID: string,
+  sessionID: string,
+  message: string,
+): Promise<void> {
+  const text = message.trim();
+  if (!taskID || !sessionID || !text) return;
+  await apiJson(
+    taskPath(taskID, `/session/${encodeURIComponent(sessionID)}/reply`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    },
+  );
+}
+
+// ── Public: cancelAgentSession ──
+
+/**
+ * Cancel a task child-agent session without changing global orchestration.
+ * Running tool chips call this too because tools execute inside the session.
+ */
+export async function cancelAgentSession(
+  taskID: string,
+  sessionID: string,
+): Promise<void> {
+  if (!taskID || !sessionID) return;
+  await apiJson(
+    taskPath(taskID, `/session/${encodeURIComponent(sessionID)}/cancel`),
+    {
+      method: "POST",
+    },
+  );
+}
+
 // ── Public: cancelTask ──
 
 /**

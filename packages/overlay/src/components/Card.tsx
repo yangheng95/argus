@@ -3,7 +3,8 @@ import type { CardNode } from "../store/card-tree";
 import { cardTreeStore, pruneCardsAfterCursor } from "../store/card-tree";
 import { defaultExpandedForNode } from "../utils/card-tree";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
-import { boardStore } from "../store/board";
+import { boardStore, rootTaskSessionID } from "../store/board";
+import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { normalizeAgentRole } from "../utils/message";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
@@ -71,6 +72,12 @@ export function Card(props: { node: CardNode; depth: number }) {
   const traceSessionID = createMemo(() =>
     props.node.kind === "agent" ? sessionIDFromCardID(props.node.id) : undefined,
   );
+  const directAgentSessionID = createMemo(() => {
+    const sessionID = traceSessionID();
+    if (!sessionID) return undefined;
+    if (sessionID === rootTaskSessionID()) return undefined;
+    return sessionID;
+  });
   const [traceOpen, setTraceOpen] = createSignal(false);
   const onTraceToggle = () => {
     if (!traceSessionID()) return;
@@ -109,6 +116,25 @@ export function Card(props: { node: CardNode; depth: number }) {
     } catch (err) {
       console.error("rewind request errored", err);
     }
+  };
+
+  const onAgentReply = async (sessionID: string, message: string) => {
+    const taskID = boardStore.selectedTaskID;
+    if (!taskID) return;
+    await replyToAgentSession(taskID, sessionID, message);
+  };
+
+  const onAgentCancel = async (sessionID: string) => {
+    const taskID = boardStore.selectedTaskID;
+    if (!taskID) return;
+    await cancelAgentSession(taskID, sessionID);
+  };
+
+  const toolCancelSessionID = () => {
+    const part = toolPart();
+    const sessionID = typeof part?.sessionID === "string" ? part.sessionID.trim() : "";
+    if (!sessionID || sessionID === rootTaskSessionID()) return undefined;
+    return sessionID;
   };
 
   // Tool-kind nodes render their body via InlineToolPart(mode="body"),
@@ -185,6 +211,9 @@ export function Card(props: { node: CardNode; depth: number }) {
         traceSessionID={traceSessionID()}
         traceOpen={traceOpen()}
         onTrace={traceSessionID() ? onTraceToggle : undefined}
+        agentSessionID={directAgentSessionID() ?? toolCancelSessionID()}
+        onAgentReply={directAgentSessionID() ? onAgentReply : undefined}
+        onAgentCancel={(directAgentSessionID() ?? toolCancelSessionID()) ? onAgentCancel : undefined}
       />
       <Show when={expanded()}>
         <div class="card__body">
