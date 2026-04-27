@@ -5,6 +5,7 @@
 import { createMemo, createSignal, onCleanup, For, Show } from "solid-js";
 import { boardStore, visibleTasks, loadTasks } from "../store/board";
 import { settingsStore } from "../store/settings";
+import { reorderTaskQueue } from "../services/task-queue";
 import { t } from "../utils/i18n";
 import { stamp } from "../utils/time";
 
@@ -64,6 +65,51 @@ function taskListBadge(item: any, queuePos?: number): string {
 
 function taskListMeta(item: any): string {
   return joinBullet([stamp(taskUpdated(item))]);
+}
+
+function queueOrder(item: any): number {
+  const value = item?.task?.queue?.order;
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+}
+
+function queueRevision(items: any[]): string | undefined {
+  for (const item of items) {
+    const revision = item?.task?.queue?.revision;
+    if (typeof revision === "string") return revision;
+  }
+  return undefined;
+}
+
+function priorityBucket(item: any): number {
+  return item?.task?.priority === "critical" ? 0 : 1;
+}
+
+function sortActiveItems(items: any[]): any[] {
+  return [...items].sort((a, b) => {
+    const ap = a?._pending ? 0 : a?.task?.status === "active" ? 1 : a?.task?.status === "queued" ? 2 : 3;
+    const bp = b?._pending ? 0 : b?.task?.status === "active" ? 1 : b?.task?.status === "queued" ? 2 : 3;
+    if (ap !== bp) return ap - bp;
+    if (ap === 2) {
+      const priorityDelta = priorityBucket(a) - priorityBucket(b);
+      if (priorityDelta !== 0) return priorityDelta;
+      const orderDelta = queueOrder(a) - queueOrder(b);
+      if (orderDelta !== 0) return orderDelta;
+    }
+    return taskUpdated(b) - taskUpdated(a);
+  });
+}
+
+function moveBefore(ids: string[], sourceID: string, targetID: string): string[] {
+  if (sourceID === targetID) return ids;
+  const next = ids.filter((id) => id !== sourceID);
+  const targetIndex = next.indexOf(targetID);
+  if (targetIndex < 0) return ids;
+  next.splice(targetIndex, 0, sourceID);
+  return next;
+}
+
+function sameOrder(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
 function projectDirectoryOf(item: any): string {
@@ -224,6 +270,13 @@ function TaskRow(props: {
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
+  canDrag?: boolean;
+  dragging?: boolean;
+  dragOver?: boolean;
+  onDragStart?: (id: string) => void;
+  onDragOver?: (id: string, event: DragEvent) => void;
+  onDrop?: (id: string, event: DragEvent) => void;
+  onDragEnd?: () => void;
 }) {
   const id = () => props.item?.task?.id || "";
   const pending = () => props.item?._pending === true;
@@ -236,14 +289,41 @@ function TaskRow(props: {
   const canDelete = () =>
     !pending() && !!id() && !!props.onDeleteTask;
   const hasActions = () => canCancel() || canDelete();
+  const canDrag = () => props.canDrag === true && status() === "queued" && !pending();
 
   return (
     <div
       class="task-row-mini global-task-row"
       data-active={isActive() ? "true" : undefined}
       data-status={status()}
+      data-draggable={canDrag() ? "true" : undefined}
+      data-dragging={props.dragging ? "true" : undefined}
+      data-drag-over={props.dragOver ? "true" : undefined}
+      draggable={canDrag()}
       title={title()}
+      onDragStart={(event) => {
+        if (!canDrag()) return;
+        event.dataTransfer?.setData("text/plain", id());
+        event.dataTransfer?.setDragImage(event.currentTarget, 10, 10);
+        props.onDragStart?.(id());
+      }}
+      onDragOver={(event) => {
+        if (!canDrag()) return;
+        props.onDragOver?.(id(), event);
+      }}
+      onDrop={(event) => {
+        if (!canDrag()) return;
+        props.onDrop?.(id(), event);
+      }}
+      onDragEnd={() => props.onDragEnd?.()}
     >
+      <Show when={canDrag()}>
+        <span class="task-row-drag-handle" title={t("task.reorder_button_title")} aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <path d="M6 3h.01M10 3h.01M6 8h.01M10 8h.01M6 13h.01M10 13h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          </svg>
+        </span>
+      </Show>
       <button
         type="button"
         class="task-row-main"
@@ -296,6 +376,13 @@ function TaskSection(props: {
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
   onCancelTask?: (id: string) => void;
+  draggingID?: string;
+  dragOverID?: string;
+  canReorder?: boolean;
+  onDragStart?: (id: string) => void;
+  onDragOver?: (id: string, event: DragEvent) => void;
+  onDrop?: (id: string, event: DragEvent) => void;
+  onDragEnd?: () => void;
 }) {
   return (
     <Show when={props.items.length > 0}>
@@ -311,6 +398,13 @@ function TaskSection(props: {
                 onSelectTask={props.onSelectTask}
                 onDeleteTask={props.onDeleteTask}
                 onCancelTask={props.onCancelTask}
+                canDrag={props.canReorder}
+                dragging={props.draggingID === (item?.task?.id || "")}
+                dragOver={props.dragOverID === (item?.task?.id || "")}
+                onDragStart={props.onDragStart}
+                onDragOver={props.onDragOver}
+                onDrop={props.onDrop}
+                onDragEnd={props.onDragEnd}
               />
             )}
           </For>
@@ -333,17 +427,19 @@ export interface TaskListProps {
 
 export function TaskList(props: TaskListProps) {
   const sortedItems = createMemo<any[]>(() => visibleTasks());
+  const [draggingID, setDraggingID] = createSignal("");
+  const [dragOverID, setDragOverID] = createSignal("");
 
-  // Queue positions are computed globally (across projects) since the backend
-  // serial queue is per-project but the UI surfaces a unified list.
+  // Queue positions mirror the backend's directory-scoped serial queue while
+  // the UI still surfaces a unified task list.
   const queuePositions = createMemo<Map<string, number>>(() => {
-    const PRIORITY_ORDER: Record<string, number> = { high: 0, normal: 1, low: 2 };
     const queued = sortedItems()
       .filter((item) => item?.task?.status === "queued" && !item?._pending)
       .sort((a, b) => {
-        const pa = PRIORITY_ORDER[a?.task?.priority ?? "normal"] ?? 1;
-        const pb = PRIORITY_ORDER[b?.task?.priority ?? "normal"] ?? 1;
-        if (pa !== pb) return pa - pb;
+        const priorityDelta = priorityBucket(a) - priorityBucket(b);
+        if (priorityDelta !== 0) return priorityDelta;
+        const orderDelta = queueOrder(a) - queueOrder(b);
+        if (orderDelta !== 0) return orderDelta;
         return (a?.task?.time?.created ?? 0) - (b?.task?.time?.created ?? 0);
       });
     const map = new Map<string, number>();
@@ -373,7 +469,10 @@ export function TaskList(props: TaskListProps) {
       if (updated > g.latest) g.latest = updated;
     }
     const activeDir = settingsStore.directory || "";
-    return [...byDir.values()].sort((a, b) => {
+    return [...byDir.values()].map((group) => ({
+      ...group,
+      active: sortActiveItems(group.active),
+    })).sort((a, b) => {
       if (a.directory === activeDir && b.directory !== activeDir) return -1;
       if (b.directory === activeDir && a.directory !== activeDir) return 1;
       return b.latest - a.latest;
@@ -384,6 +483,37 @@ export function TaskList(props: TaskListProps) {
   const activeDir = () => settingsStore.directory || "";
 
   const [retrying, setRetrying] = createSignal(false);
+
+  function queuedItems(directory: string): any[] {
+    const group = grouped().find((item) => item.directory === directory);
+    if (!group) return [];
+    return group.active.filter((item) => item?.task?.status === "queued" && !item?._pending);
+  }
+
+  async function handleDrop(directory: string, targetID: string, event: DragEvent) {
+    event.preventDefault();
+    const sourceID = draggingID();
+    setDraggingID("");
+    setDragOverID("");
+    if (!sourceID || sourceID === targetID) return;
+    const items = queuedItems(directory);
+    const ids = items.map((item) => item?.task?.id).filter(Boolean);
+    if (!ids.includes(sourceID) || !ids.includes(targetID)) return;
+    const orderedTaskIDs = moveBefore(ids, sourceID, targetID);
+    if (sameOrder(orderedTaskIDs, ids)) return;
+    try {
+      await reorderTaskQueue({
+        directory,
+        orderedTaskIDs,
+        revision: queueRevision(items),
+      });
+      await loadTasks();
+    } catch (error) {
+      console.error("[TaskList] reorder queue failed", error);
+      await loadTasks().catch(() => undefined);
+    }
+  }
+
   async function handleRetry() {
     if (retrying()) return;
     setRetrying(true);
@@ -446,6 +576,19 @@ export function TaskList(props: TaskListProps) {
                     onSelectTask={props.onSelectTask}
                     onDeleteTask={props.onDeleteTask}
                     onCancelTask={props.onCancelTask}
+                    canReorder={group.active.filter((item) => item?.task?.status === "queued" && !item?._pending).length > 1}
+                    draggingID={draggingID()}
+                    dragOverID={dragOverID()}
+                    onDragStart={setDraggingID}
+                    onDragOver={(id, event) => {
+                      event.preventDefault();
+                      if (draggingID() && id !== draggingID()) setDragOverID(id);
+                    }}
+                    onDrop={(id, event) => handleDrop(group.directory, id, event)}
+                    onDragEnd={() => {
+                      setDraggingID("");
+                      setDragOverID("");
+                    }}
                   />
                 </Show>
                 <Show when={group.recent.length > 0}>

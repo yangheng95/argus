@@ -367,6 +367,7 @@ CREATE TABLE IF NOT EXISTS engine_task (
   criteria_results       text NOT NULL DEFAULT '[]',
   kind                   text NOT NULL DEFAULT 'workflow',
   priority               text NOT NULL DEFAULT 'normal',
+  queue_order            integer NOT NULL DEFAULT 0,
   -- Phase-6-f-4: blocking_reason cache column removed. Blocking is a
   -- run-scoped signal (run.blocking_reason + pending interactions).
   error                  text,
@@ -388,6 +389,7 @@ CREATE TABLE IF NOT EXISTS engine_task (
 CREATE INDEX IF NOT EXISTS engine_task_project_idx ON engine_task (project_id);
 CREATE INDEX IF NOT EXISTS engine_task_time_completed_idx ON engine_task (time_completed);
 CREATE INDEX IF NOT EXISTS engine_task_kind_idx    ON engine_task (kind);
+CREATE INDEX IF NOT EXISTS engine_task_queue_order_idx ON engine_task (queue_order);
 CREATE UNIQUE INDEX IF NOT EXISTS engine_task_project_request_idx
   ON engine_task (project_id, request_id);
 

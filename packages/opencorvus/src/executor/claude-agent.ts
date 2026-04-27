@@ -114,6 +114,10 @@ export namespace ClaudeAgentExecutor {
         const allowed = input.toolMode === "none"
           ? []
           : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
+        const systemAppend = [
+          input.system,
+          input.toolMode === "none" ? undefined : MCPServe.claudeExecutorPromptSection(),
+        ].filter((item): item is string => Boolean(item)).join("\n\n")
 
         const handle = query({
           prompt: input.prompt,
@@ -122,11 +126,11 @@ export namespace ClaudeAgentExecutor {
             cwd: input.cwd,
             model: input.model,
             resume: input.sessionID,
-            systemPrompt: input.system
+            systemPrompt: systemAppend
               ? {
                   type: "preset",
                   preset: "claude_code",
-                  append: input.system,
+                  append: systemAppend,
                 }
               : undefined,
             maxTurns: input.maxTurns,

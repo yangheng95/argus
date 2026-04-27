@@ -33,7 +33,6 @@ import type {
   ConfigUpdateErrors,
   ConfigUpdateResponses,
   ControlTimelineResponses,
-  DeleteGoalGoalIdResponses,
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
@@ -51,7 +50,6 @@ import type {
   ExperimentalScheduleDeleteResponses,
   ExperimentalScheduleListResponses,
   ExperimentalScratchpadGetResponses,
-  ExperimentalSessionListResponses,
   ExperimentalTaskplanListResponses,
   ExperimentalWorkspaceCreateErrors,
   ExperimentalWorkspaceCreateResponses,
@@ -71,14 +69,23 @@ import type {
   FindSymbolsResponses,
   FindTextResponses,
   FormatterStatusResponses,
+  GatewayCapabilitiesResponses,
+  GatewayChannelMessageResponses,
+  GatewayControlActionResponses,
+  GatewayControlMessageResponses,
+  GatewayStatsResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
+  GoalDeleteErrors,
+  GoalDeleteResponses,
   GoalRunDeliveryErrors,
   GoalRunDeliveryResponses,
+  GoalUpdateErrors,
+  GoalUpdateResponses,
   InstanceDisposeResponses,
   InteractionRejectErrors,
   InteractionRejectResponses,
@@ -114,7 +121,6 @@ import type {
   PartDeleteResponses,
   PartUpdateErrors,
   PartUpdateResponses,
-  PatchGoalGoalIdResponses,
   PathGetResponses,
   PermissionAction,
   PermissionListResponses,
@@ -191,6 +197,7 @@ import type {
   SessionGetResponses,
   SessionInitErrors,
   SessionInitResponses,
+  SessionListGlobalResponses,
   SessionListResponses,
   SessionMessageErrors,
   SessionMessageResponses,
@@ -252,6 +259,8 @@ import type {
   TaskMessageResponses,
   TaskProgressErrors,
   TaskProgressResponses,
+  TaskQueueReorderErrors,
+  TaskQueueReorderResponses,
   TaskReplanErrors,
   TaskReplanResponses,
   TaskRetryErrors,
@@ -1497,69 +1506,6 @@ export class Workspace extends HeyApiClient {
   }
 }
 
-export class Session extends HeyApiClient {
-  /**
-   * List sessions
-   *
-   * Get a list of all OpenCorvus sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      roots?: boolean
-      start?: number
-      cursor?: number
-      search?: string
-      limit?: number
-      archived?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "roots" },
-            { in: "query", key: "start" },
-            { in: "query", key: "cursor" },
-            { in: "query", key: "search" },
-            { in: "query", key: "limit" },
-            { in: "query", key: "archived" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExperimentalSessionListResponses, unknown, ThrowOnError>({
-      url: "/experimental/session",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Resource extends HeyApiClient {
-  /**
-   * Get MCP resources
-   *
-   * Get all available MCP resources from connected servers. Optionally filter by name.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ExperimentalResourceListResponses, unknown, ThrowOnError>({
-      url: "/experimental/resource",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Schedule extends HeyApiClient {
   /**
    * List scheduled tasks
@@ -1832,20 +1778,31 @@ export class Scratchpad extends HeyApiClient {
   }
 }
 
+export class Resource extends HeyApiClient {
+  /**
+   * Get MCP resources
+   *
+   * Get all available MCP resources from connected servers. Optionally filter by name.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ExperimentalResourceListResponses, unknown, ThrowOnError>({
+      url: "/experimental/resource",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Experimental extends HeyApiClient {
   private _workspace?: Workspace
   get workspace(): Workspace {
     return (this._workspace ??= new Workspace({ client: this.client }))
-  }
-
-  private _session?: Session
-  get session(): Session {
-    return (this._session ??= new Session({ client: this.client }))
-  }
-
-  private _resource?: Resource
-  get resource(): Resource {
-    return (this._resource ??= new Resource({ client: this.client }))
   }
 
   private _schedule?: Schedule
@@ -1867,9 +1824,14 @@ export class Experimental extends HeyApiClient {
   get scratchpad(): Scratchpad {
     return (this._scratchpad ??= new Scratchpad({ client: this.client }))
   }
+
+  private _resource?: Resource
+  get resource(): Resource {
+    return (this._resource ??= new Resource({ client: this.client }))
+  }
 }
 
-export class Session2 extends HeyApiClient {
+export class Session extends HeyApiClient {
   /**
    * List sessions
    *
@@ -1918,6 +1880,7 @@ export class Session2 extends HeyApiClient {
         | "root"
         | "orchestrator"
         | "assistant"
+        | "gateway"
         | "intent-analysis"
         | "requirements"
         | "design-analyst"
@@ -1961,6 +1924,46 @@ export class Session2 extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * List sessions across projects
+   *
+   * List sessions across all projects with cursor-based pagination and optional archived inclusion. Sets x-next-cursor response header when more results are available.
+   */
+  public listGlobal<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      roots?: boolean
+      start?: number
+      cursor?: number
+      search?: string
+      limit?: number
+      archived?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "roots" },
+            { in: "query", key: "start" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "search" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "archived" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionListGlobalResponses, unknown, ThrowOnError>({
+      url: "/session/global",
+      ...options,
+      ...params,
     })
   }
 
@@ -3565,6 +3568,7 @@ export class Message extends HeyApiClient {
       directory?: string
       surface?:
         | "panel"
+        | "gateway"
         | "slack"
         | "telegram"
         | "discord"
@@ -3777,6 +3781,7 @@ export class Panel extends HeyApiClient {
       directory?: string
       surface?:
         | "panel"
+        | "gateway"
         | "slack"
         | "telegram"
         | "discord"
@@ -3822,6 +3827,7 @@ export class Panel extends HeyApiClient {
       directory?: string
       surface?:
         | "panel"
+        | "gateway"
         | "slack"
         | "telegram"
         | "discord"
@@ -3916,6 +3922,7 @@ export class Control extends HeyApiClient {
       sessionID?: string
       surface?:
         | "panel"
+        | "gateway"
         | "slack"
         | "telegram"
         | "discord"
@@ -3998,7 +4005,7 @@ export class Message2 extends HeyApiClient {
   }
 }
 
-export class Session3 extends HeyApiClient {
+export class Session2 extends HeyApiClient {
   /**
    * Get coding session messages
    *
@@ -4036,9 +4043,580 @@ export class Coding extends HeyApiClient {
     return (this._message ??= new Message2({ client: this.client }))
   }
 
-  private _session?: Session3
-  get session(): Session3 {
-    return (this._session ??= new Session3({ client: this.client }))
+  private _session?: Session2
+  get session(): Session2 {
+    return (this._session ??= new Session2({ client: this.client }))
+  }
+}
+
+export class Control2 extends HeyApiClient {
+  /**
+   * Handle gateway control message
+   *
+   * Route a remote/mobile natural-language control message through the shared control plane.
+   */
+  public message<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      text?: string
+      taskID?: string
+      sessionID?: string
+      executor?: "opencode" | "codex" | "claude-code"
+      channel?: string
+      thread?: string
+      user_id?: string
+      request_id?: string
+      source?: string
+      allow_create?: boolean
+      metadata?: {
+        [key: string]: unknown
+      }
+      attachments?: Array<{
+        mime: string
+        url: string
+        filename?: string
+      }>
+      surface?: "gateway"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "text" },
+            { in: "body", key: "taskID" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "executor" },
+            { in: "body", key: "channel" },
+            { in: "body", key: "thread" },
+            { in: "body", key: "user_id" },
+            { in: "body", key: "request_id" },
+            { in: "body", key: "source" },
+            { in: "body", key: "allow_create" },
+            { in: "body", key: "metadata" },
+            { in: "body", key: "attachments" },
+            { in: "body", key: "surface" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<GatewayControlMessageResponses, unknown, ThrowOnError>({
+      url: "/gateway/control/message",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Run gateway control action
+   *
+   * Execute a structured gateway capability action without LLM interpretation.
+   */
+  public action<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      body?:
+        | {
+            action: "view_plan"
+            taskID: string
+          }
+        | {
+            action: "view_board"
+            taskID?: string
+          }
+        | {
+            action: "view_tasks"
+          }
+        | {
+            action: "create_task"
+            request: string
+            request_id?: string
+            executor?: "opencode" | "codex" | "claude-code"
+            checks?: {
+              build?: Array<string> | false
+              test?: Array<string> | false
+              lint?: Array<string> | false
+              verify_cmd?: Array<string> | false
+              named?: {
+                [key: string]: {
+                  label?: string
+                  family?: "build" | "test" | "lint" | "verify_cmd"
+                  commands: Array<string>
+                  enabled?: boolean
+                  cwd?: string
+                }
+              }
+              startup?: {
+                command: string
+                ready_url?: string
+                ready_text?: string
+                timeout_ms?: number
+                warmup_ms?: number
+                require_exit_zero?: boolean
+                mode?: "soft" | "strict"
+              }
+              artifact?: {
+                require_changed_files?: boolean
+                min_changed_files?: number
+                require_diff?: boolean
+                require_summary?: boolean
+                mode?: "soft" | "strict"
+              }
+              visual?: {
+                target: "web"
+                url: string
+                require_text?: Array<string>
+                require_title?: string
+                timeout_ms?: number
+                mode?: "soft" | "strict"
+              }
+              puppeteer?: {
+                target: "web"
+                url: string
+                browser?: "chrome" | "edge" | "chromium"
+                executable_path?: string
+                wait_for_selector?: string
+                wait_for_text?: string
+                require_text?: Array<string>
+                require_title?: string
+                full_page?: boolean
+                viewport?: {
+                  width?: number
+                  height?: number
+                }
+                timeout_ms?: number
+                mode?: "soft" | "strict"
+              }
+              ui_review?: {
+                target: "web"
+                url?: string
+                prompt?: string
+                focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+                timeout_ms?: number
+                mode?: "soft" | "strict"
+              }
+              code_quality?: {
+                enabled?: boolean
+                prompt?: string
+                max_diffs?: number
+                mode?: "soft" | "strict"
+              }
+              code_review?: {
+                enabled?: boolean
+                prompt?: string
+                max_diffs?: number
+                mode?: "soft" | "strict"
+              }
+              dead_code_review?: {
+                enabled?: boolean
+                prompt?: string
+                max_diffs?: number
+                mode?: "soft" | "strict"
+              }
+              judge?: {
+                enabled?: boolean
+                prompt?: string
+                mode?: "soft" | "strict"
+              }
+              spec_check?: {
+                enabled?: boolean
+                prompt?: string
+                mode?: "soft" | "strict"
+              }
+              custom?: {
+                [key: string]: {
+                  [key: string]: unknown
+                }
+              }
+              timeout_ms?: number
+            }
+            routing?: {
+              spec?: "opencorvus" | "executor"
+              plan?: "opencorvus" | "executor"
+              evaluation?: "opencorvus" | "hybrid"
+            }
+            channel?: string
+            thread?: string
+            platform?:
+              | "slack"
+              | "telegram"
+              | "discord"
+              | "feishu"
+              | "whatsapp"
+              | "googlechat"
+              | "msteams"
+              | "line"
+              | "matrix"
+              | "mattermost"
+              | "signal"
+              | "wecom"
+              | "dingtalk"
+              | "qq"
+            metadata?: {
+              [key: string]: unknown
+            }
+            source?: string
+            allow_create?: boolean
+          }
+        | {
+            action: "send_task_message"
+            taskID: string
+            text: string
+            source?: string
+            user_id?: string
+          }
+        | {
+            action: "reply_interaction"
+            interactionID: string
+            reply?: "once" | "always"
+            message?: string
+          }
+        | {
+            action: "reject_interaction"
+            interactionID: string
+            message?: string
+          }
+        | {
+            action: "retry_task"
+            taskID: string
+          }
+        | {
+            action: "replan_task"
+            taskID: string
+          }
+        | {
+            action: "cancel_task"
+            taskID: string
+          }
+        | {
+            action: "update_checks"
+            taskID: string
+            selection?: {
+              [key: string]: boolean
+            }
+            checks?: {
+              build?: Array<string> | false
+              test?: Array<string> | false
+              lint?: Array<string> | false
+              verify_cmd?: Array<string> | false
+              named?: {
+                [key: string]: {
+                  label?: string
+                  family?: "build" | "test" | "lint" | "verify_cmd"
+                  commands: Array<string>
+                  enabled?: boolean
+                  cwd?: string
+                }
+              }
+              startup?: {
+                command: string
+                ready_url?: string
+                ready_text?: string
+                timeout_ms?: number
+                warmup_ms?: number
+                require_exit_zero?: boolean
+                mode?: "soft" | "strict"
+              }
+              artifact?: {
+                require_changed_files?: boolean
+                min_changed_files?: number
+                require_diff?: boolean
+                require_summary?: boolean
+                mode?: "soft" | "strict"
+              }
+              visual?: {
+                target: "web"
+                url: string
+                require_text?: Array<string>
+                require_title?: string
+                timeout_ms?: number
+                mode?: "soft" | "strict"
+              }
+              puppeteer?: {
+                target: "web"
+                url: string
+                browser?: "chrome" | "edge" | "chromium"
+                executable_path?: string
+                wait_for_selector?: string
+                wait_for_text?: string
+                require_text?: Array<string>
+                require_title?: string
+                full_page?: boolean
+                viewport?: {
+                  width?: number
+                  height?: number
+                }
+                timeout_ms?: number
+                mode?: "soft" | "strict"
+              }
+              ui_review?: {
+                target: "web"
+                url?: string
+                prompt?: string
+                focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+                timeout_ms?: number
+                mode?: "soft" | "strict"
+              }
+              code_quality?: {
+                enabled?: boolean
+                prompt?: string
+                max_diffs?: number
+                mode?: "soft" | "strict"
+              }
+              code_review?: {
+                enabled?: boolean
+                prompt?: string
+                max_diffs?: number
+                mode?: "soft" | "strict"
+              }
+              dead_code_review?: {
+                enabled?: boolean
+                prompt?: string
+                max_diffs?: number
+                mode?: "soft" | "strict"
+              }
+              judge?: {
+                enabled?: boolean
+                prompt?: string
+                mode?: "soft" | "strict"
+              }
+              spec_check?: {
+                enabled?: boolean
+                prompt?: string
+                mode?: "soft" | "strict"
+              }
+              custom?: {
+                [key: string]: {
+                  [key: string]: unknown
+                }
+              }
+              timeout_ms?: number
+            }
+          }
+        | {
+            action: "capture_overlay_screenshot"
+            match?: string
+          }
+        | {
+            action: "set_executor"
+            executor: "opencode" | "codex" | "claude-code"
+          }
+        | {
+            action: "select_task"
+            taskID: string
+          }
+        | {
+            action: "select_session"
+            sessionID: string
+          }
+        | {
+            action: "create_session"
+          }
+        | {
+            action: "fork_session"
+            sessionID: string
+          }
+        | {
+            action: "delete_session"
+            sessionID: string
+          }
+        | {
+            action: "update_goal"
+            goalID: string
+            description: string
+            acceptance_specs: Array<unknown>
+          }
+        | {
+            action: "delete_goal"
+            goalID: string
+          }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "body", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<GatewayControlActionResponses, unknown, ThrowOnError>({
+      url: "/gateway/control/action",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Channel2 extends HeyApiClient {
+  /**
+   * Handle gateway channel message
+   *
+   * Bridge an external channel message through gateway routing into the shared channel ingress path.
+   */
+  public message<ThrowOnError extends boolean = false>(
+    parameters: {
+      path_platform: string
+      directory?: string
+      channel?: string
+      thread?: string
+      text?: string
+      task_id?: string
+      user_id?: string
+      request_id?: string
+      source?: string
+      executor?: "opencode" | "codex" | "claude-code"
+      allow_create?: boolean
+      allow_session_mutation?: boolean
+      bind?: boolean
+      attachments?: Array<{
+        filename: string
+        mime: string
+        url?: string
+        data?: string
+      }>
+      metadata?: {
+        [key: string]: unknown
+      }
+      body_platform?:
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+        | "qq"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            {
+              in: "path",
+              key: "path_platform",
+              map: "platform",
+            },
+            { in: "query", key: "directory" },
+            { in: "body", key: "channel" },
+            { in: "body", key: "thread" },
+            { in: "body", key: "text" },
+            { in: "body", key: "task_id" },
+            { in: "body", key: "user_id" },
+            { in: "body", key: "request_id" },
+            { in: "body", key: "source" },
+            { in: "body", key: "executor" },
+            { in: "body", key: "allow_create" },
+            { in: "body", key: "allow_session_mutation" },
+            { in: "body", key: "bind" },
+            { in: "body", key: "attachments" },
+            { in: "body", key: "metadata" },
+            {
+              in: "body",
+              key: "body_platform",
+              map: "platform",
+            },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<GatewayChannelMessageResponses, unknown, ThrowOnError>({
+      url: "/gateway/channel/{platform}/message",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Gateway extends HeyApiClient {
+  /**
+   * List gateway capabilities
+   *
+   * Return control-plane actions available to remote/mobile gateway clients.
+   */
+  public capabilities<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<GatewayCapabilitiesResponses, unknown, ThrowOnError>({
+      url: "/gateway/capabilities",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get gateway stats
+   *
+   * Read-only project/task/channel summary for gateway panels.
+   */
+  public stats<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<GatewayStatsResponses, unknown, ThrowOnError>({
+      url: "/gateway/stats",
+      ...options,
+      ...params,
+    })
+  }
+
+  private _control?: Control2
+  get control(): Control2 {
+    return (this._control ??= new Control2({ client: this.client }))
+  }
+
+  private _channel?: Channel2
+  get channel(): Channel2 {
+    return (this._channel ??= new Channel2({ client: this.client }))
   }
 }
 
@@ -4114,6 +4692,53 @@ export class Global2 extends HeyApiClient {
       url: "/global/tasks",
       ...options,
       ...params,
+    })
+  }
+}
+
+export class Queue extends HeyApiClient {
+  /**
+   * Reorder queued tasks in a directory
+   */
+  public reorder<ThrowOnError extends boolean = false>(
+    parameters?: {
+      query_directory?: string
+      body_directory?: string
+      orderedTaskIDs?: Array<string>
+      revision?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            {
+              in: "query",
+              key: "query_directory",
+              map: "directory",
+            },
+            {
+              in: "body",
+              key: "body_directory",
+              map: "directory",
+            },
+            { in: "body", key: "orderedTaskIDs" },
+            { in: "body", key: "revision" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<TaskQueueReorderResponses, TaskQueueReorderErrors, ThrowOnError>({
+      url: "/task-queue/reorder",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -5181,6 +5806,11 @@ export class Task extends HeyApiClient {
     return (this._global ??= new Global2({ client: this.client }))
   }
 
+  private _queue?: Queue
+  get queue(): Queue {
+    return (this._queue ??= new Queue({ client: this.client }))
+  }
+
   private _list?: List
   get list2(): List {
     return (this._list ??= new List({ client: this.client }))
@@ -5489,6 +6119,169 @@ export class Interaction extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<InteractionRejectResponses, InteractionRejectErrors, ThrowOnError>({
       url: "/interaction/{interactionID}/reject",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Goal extends HeyApiClient {
+  /**
+   * Delete goal
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      goalID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "goalID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<GoalDeleteResponses, GoalDeleteErrors, ThrowOnError>({
+      url: "/goal/{goalID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update goal
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      goalID: string
+      directory?: string
+      description?: string
+      acceptance_specs?: Array<{
+        /**
+         * Stable spec ID, e.g. 'acc-login-3s'.
+         */
+        id: string
+        /**
+         * Requirement ID this spec was derived from (REQ-N).
+         */
+        source_requirement_id: string
+        /**
+         * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
+         */
+        goal_id: string
+        title: string
+        /**
+         * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
+         */
+        scenario?: {
+          given: Array<string>
+          when: Array<string>
+          then: Array<string>
+        }
+        /**
+         * At least one scorer — a spec without a scorer is untestable.
+         */
+        scorers: Array<
+          | {
+              type: "heuristic"
+              name: string
+              spec:
+                | {
+                    kind: "shell"
+                    /**
+                     * Shell command. Exit 0 = pass unless expect.exit_code set.
+                     */
+                    cmd: string
+                    cwd?: string
+                  }
+                | {
+                    kind: "script_ref"
+                    /**
+                     * Repo-relative script path.
+                     */
+                    path: string
+                    args?: Array<string>
+                  }
+              expect?: {
+                exit_code?: number
+              }
+            }
+          | {
+              type: "llm_judge"
+              name: string
+              /**
+               * Single-criterion evaluation question in natural language.
+               */
+              criteria: string
+              /**
+               * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
+               */
+              rubric?: Array<{
+                /**
+                 * Integer score for this level.
+                 */
+                score: number
+                /**
+                 * Short level label, e.g. 'fully met'.
+                 */
+                label: string
+                /**
+                 * Behavioral description: what earns this score.
+                 */
+                anchor: string
+                /**
+                 * Does this level count as pass for binary verdict?
+                 */
+                passes: boolean
+              }>
+              /**
+               * Which parts of the delivery to feed the judge. Default: delivery_summary.
+               */
+              inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
+            }
+          | {
+              type: "prebuilt"
+              name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
+              config?: {
+                [key: string]: unknown
+              }
+            }
+        >
+        severity: "essential" | "important" | "optional" | "pitfall"
+        /**
+         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
+         */
+        trigger?: "on_goal" | "on_delivery"
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "goalID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "description" },
+            { in: "body", key: "acceptance_specs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<GoalUpdateResponses, GoalUpdateErrors, ThrowOnError>({
+      url: "/goal/{goalID}",
       ...options,
       ...params,
       headers: {
@@ -6247,7 +7040,7 @@ export class Runtime2 extends HeyApiClient {
   }
 }
 
-export class Control2 extends HeyApiClient {
+export class Control3 extends HeyApiClient {
   /**
    * Get next TUI request
    *
@@ -6554,9 +7347,9 @@ export class Tui extends HeyApiClient {
     return (this._runtime ??= new Runtime2({ client: this.client }))
   }
 
-  private _control?: Control2
-  get control(): Control2 {
-    return (this._control ??= new Control2({ client: this.client }))
+  private _control?: Control3
+  get control(): Control3 {
+    return (this._control ??= new Control3({ client: this.client }))
   }
 }
 
@@ -6747,161 +7540,6 @@ export class OpencodeClient extends HeyApiClient {
     OpencodeClient.__registry.set(this, args?.key)
   }
 
-  public deleteGoalGoalId<ThrowOnError extends boolean = false>(
-    parameters: {
-      goalID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "goalID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).delete<DeleteGoalGoalIdResponses, unknown, ThrowOnError>({
-      url: "/goal/{goalID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  public patchGoalGoalId<ThrowOnError extends boolean = false>(
-    parameters: {
-      goalID: string
-      directory?: string
-      description?: string
-      acceptance_specs?: Array<{
-        /**
-         * Stable spec ID, e.g. 'acc-login-3s'.
-         */
-        id: string
-        /**
-         * Requirement ID this spec was derived from (REQ-N).
-         */
-        source_requirement_id: string
-        /**
-         * Goal ID this spec belongs to. Specs are goal-local; multiple specs may share a goal.
-         */
-        goal_id: string
-        title: string
-        /**
-         * Gherkin Given/When/Then scenario. Optional — omit for pure code checks.
-         */
-        scenario?: {
-          given: Array<string>
-          when: Array<string>
-          then: Array<string>
-        }
-        /**
-         * At least one scorer — a spec without a scorer is untestable.
-         */
-        scorers: Array<
-          | {
-              type: "heuristic"
-              name: string
-              spec:
-                | {
-                    kind: "shell"
-                    /**
-                     * Shell command. Exit 0 = pass unless expect.exit_code set.
-                     */
-                    cmd: string
-                    cwd?: string
-                  }
-                | {
-                    kind: "script_ref"
-                    /**
-                     * Repo-relative script path.
-                     */
-                    path: string
-                    args?: Array<string>
-                  }
-              expect?: {
-                exit_code?: number
-              }
-            }
-          | {
-              type: "llm_judge"
-              name: string
-              /**
-               * Single-criterion evaluation question in natural language.
-               */
-              criteria: string
-              /**
-               * Ordinal anchors, 2-5 levels. Omit for binary MET/UNMET.
-               */
-              rubric?: Array<{
-                /**
-                 * Integer score for this level.
-                 */
-                score: number
-                /**
-                 * Short level label, e.g. 'fully met'.
-                 */
-                label: string
-                /**
-                 * Behavioral description: what earns this score.
-                 */
-                anchor: string
-                /**
-                 * Does this level count as pass for binary verdict?
-                 */
-                passes: boolean
-              }>
-              /**
-               * Which parts of the delivery to feed the judge. Default: delivery_summary.
-               */
-              inputs?: Array<"delivery_summary" | "changed_files" | "requirement_text">
-            }
-          | {
-              type: "prebuilt"
-              name: "factuality" | "relevance" | "contains" | "exact_match" | "length_within" | "json_schema"
-              config?: {
-                [key: string]: unknown
-              }
-            }
-        >
-        severity: "essential" | "important" | "optional" | "pitfall"
-        /**
-         * Override default trigger. Defaults: heuristic/prebuilt=on_goal; llm_judge essential=on_goal; other=on_delivery.
-         */
-        trigger?: "on_goal" | "on_delivery"
-      }>
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "goalID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "description" },
-            { in: "body", key: "acceptance_specs" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).patch<PatchGoalGoalIdResponses, unknown, ThrowOnError>({
-      url: "/goal/{goalID}",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
   private _global?: Global
   get global(): Global {
     return (this._global ??= new Global({ client: this.client }))
@@ -6952,9 +7590,9 @@ export class OpencodeClient extends HeyApiClient {
     return (this._experimental ??= new Experimental({ client: this.client }))
   }
 
-  private _session?: Session2
-  get session(): Session2 {
-    return (this._session ??= new Session2({ client: this.client }))
+  private _session?: Session
+  get session(): Session {
+    return (this._session ??= new Session({ client: this.client }))
   }
 
   private _part?: Part
@@ -7002,6 +7640,11 @@ export class OpencodeClient extends HeyApiClient {
     return (this._coding ??= new Coding({ client: this.client }))
   }
 
+  private _gateway?: Gateway
+  get gateway(): Gateway {
+    return (this._gateway ??= new Gateway({ client: this.client }))
+  }
+
   private _server?: Server
   get server(): Server {
     return (this._server ??= new Server({ client: this.client }))
@@ -7025,6 +7668,11 @@ export class OpencodeClient extends HeyApiClient {
   private _interaction?: Interaction
   get interaction(): Interaction {
     return (this._interaction ??= new Interaction({ client: this.client }))
+  }
+
+  private _goal?: Goal
+  get goal(): Goal {
+    return (this._goal ??= new Goal({ client: this.client }))
   }
 
   private _export?: Export

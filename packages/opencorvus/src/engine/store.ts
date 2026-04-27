@@ -1260,6 +1260,10 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
     request: row.request,
     status: deriveTaskStatus(row),
     priority: row.priority,
+    queue: {
+      order: row.queue_order,
+      revision: undefined as string | undefined,
+    },
     kind: row.kind ?? "workflow",
     // Phase-6-f-4: task.blocking_reason cache removed; derive from the active
     // run when rendering.

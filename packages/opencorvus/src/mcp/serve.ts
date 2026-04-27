@@ -11,13 +11,30 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { Instance } from "@/project/instance"
-import { ToolRegistry } from "@/tool/registry"
 import { Session } from "@/session"
 import { Installation } from "@/installation"
 import { PermissionNext } from "@/permission/next"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
 import type { Message } from "@/session"
+import { Tool } from "@/tool/tool"
+import { MemoryTool } from "@/tool/memory"
+import { TaskReportTool } from "@/tool/task-report"
+import {
+  WebpageExtractTool,
+  WebpageCompileTool,
+  WebpageAnalyzeTool,
+  WebpageImageExtractTool,
+  WebpageImageCompileTool,
+  WebpageImageAnalyzeTool,
+  WebpageRenderTool,
+  WebpageEvaluateTool,
+  WebpageTextDiffTool,
+  WebpageVisionJudgeTool,
+  FigmaExtractTool,
+  FigmaCompileTool,
+  FigmaAnalyzeTool,
+} from "@/mirror/tools"
 import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
 import path from "path"
@@ -25,13 +42,9 @@ import z from "zod"
 
 const log = Log.create({ service: "mcp.serve" })
 
-const EXECUTOR_MODEL = {
-  providerID: "codex",
-  modelID: "gpt-5.3-codex",
-}
-
 const TOOLSET = z.enum(["executor"])
 type Toolset = z.infer<typeof TOOLSET>
+const DEFAULT_SERVER_NAME = "opencorvus"
 
 // External coding executors (claude-code, codex) ship with their own
 // shell/read/edit/write/glob/grep/web-fetch/web-search tools. Re-exposing
@@ -132,21 +145,73 @@ const EXECUTOR_TOOLS = {
 } as const
 
 type ExecutorToolID = keyof typeof EXECUTOR_TOOLS
+const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
+  memory: MemoryTool,
+  task_report: TaskReportTool,
+  webpage_extract: WebpageExtractTool,
+  webpage_compile: WebpageCompileTool,
+  webpage_analyze: WebpageAnalyzeTool,
+  webpage_image_extract: WebpageImageExtractTool,
+  webpage_image_compile: WebpageImageCompileTool,
+  webpage_image_analyze: WebpageImageAnalyzeTool,
+  webpage_render: WebpageRenderTool,
+  webpage_evaluate: WebpageEvaluateTool,
+  webpage_text_diff: WebpageTextDiffTool,
+  webpage_vision_judge: WebpageVisionJudgeTool,
+  figma_extract: FigmaExtractTool,
+  figma_compile: FigmaCompileTool,
+  figma_analyze: FigmaAnalyzeTool,
+}
 
 export namespace MCPServe {
   export const Toolset = TOOLSET
+  export const ServerName = DEFAULT_SERVER_NAME
 
   export function command(cwd: string) {
     return {
-      name: "opencorvus",
+      name: DEFAULT_SERVER_NAME,
       command: process.execPath,
-      args: [path.resolve(import.meta.dir, "..", "..", "src", "index.ts"), "mcp", "serve", "--cwd", cwd, "--toolset", "executor"],
+      args: [path.resolve(import.meta.dir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"],
       env: {} as Record<string, string>,
     }
   }
 
-  export async function toolDefinitions(toolset: Toolset) {
-    const tools = await runtimeTools(toolset)
+  export function executorToolNames() {
+    return Object.keys(EXECUTOR_TOOLS).map((id) => EXECUTOR_TOOLS[id as ExecutorToolID].name)
+  }
+
+  export function claudeToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
+    return `mcp__${claudeSafeName(serverName)}__${claudeSafeName(toolName)}`
+  }
+
+  export function normalizeClaudeToolName(toolName: string, serverName = DEFAULT_SERVER_NAME) {
+    const prefix = `mcp__${claudeSafeName(serverName)}__`
+    return toolName.startsWith(prefix) ? toolName.slice(prefix.length) : toolName
+  }
+
+  export function claudeExecutorPromptSection(serverName = DEFAULT_SERVER_NAME) {
+    const aliases = executorToolNames()
+      .map((name) => `- ${name} => ${claudeToolName(name, serverName)}`)
+      .join("\n")
+    return [
+      "# OpenCorvus MCP tools for Claude Code",
+      "",
+      `Claude Code exposes the OpenCorvus executor MCP server as ${serverName}. When task prompts, skills, or architect contracts mention a bare OpenCorvus tool name, call the exact MCP-prefixed Claude Code tool name below.`,
+      "",
+      aliases,
+      "",
+      "Mirror extraction artifacts must come from the mirror MCP toolchain. Do not create, copy, or handwrite mirror/reference.png, mirror/extracted-page.json, mirror/page-ir.xml, mirror/scaffold.json, mirror/design-tokens.ts, mirror/App.tsx, or mirror/shared-context.md to satisfy file-existence checks when a mirror tool is required.",
+      "If a required OpenCorvus MCP tool is missing, unavailable, or fails to start, stop and report that tool availability failure instead of fabricating the artifact.",
+    ].join("\n")
+  }
+
+  export async function toolDefinitions(toolset: Toolset, options: {
+    includeRuntime?: boolean
+    includeProxied?: boolean
+    proxiedTools?: Awaited<ReturnType<typeof MCP.serverTools>>
+  } = {}) {
+    const tools = options.includeRuntime === false ? [] : await runtimeTools(toolset)
+    const proxiedTools = options.proxiedTools ?? (options.includeProxied === false ? [] : await MCP.serverTools())
     return [
       ...tools.map((item) => ({
         name: item.name,
@@ -157,7 +222,7 @@ export namespace MCPServe {
           original_tool_id: item.id,
         },
       })),
-      ...(await MCP.serverTools()).map((item) => ({
+      ...proxiedTools.map((item) => ({
         name: item.key,
         description: item.description,
         inputSchema: item.inputSchema,
@@ -324,17 +389,23 @@ export namespace MCPServe {
   }
 }
 
+function claudeSafeName(input: string) {
+  return input.replace(/[^A-Za-z0-9_-]/g, "_")
+}
+
 async function runtimeTools(toolset: Toolset, sessionID = "ses_mcp", approved: PermissionNext.Ruleset = []) {
   const ids = toolset === "executor" ? Object.keys(EXECUTOR_TOOLS) as ExecutorToolID[] : []
-  const tools = await ToolRegistry.tools(EXECUTOR_MODEL)
-  return tools
-    .filter((item): item is (typeof tools)[number] & { id: ExecutorToolID } => ids.includes(item.id as ExecutorToolID))
-    .map((item) => ({
-      ...item,
-      name: EXECUTOR_TOOLS[item.id].name,
-      annotations: EXECUTOR_TOOLS[item.id].annotations,
-      run: (server: McpServer, args: Record<string, unknown>) => executeLocal(server, item, sessionID, approved, args),
-    }))
+  return Promise.all(ids.map(async (id) => {
+    const item = EXECUTOR_TOOL_IMPLS[id]
+    const initialized = await item.init()
+    return {
+      id: item.id,
+      ...initialized,
+      name: EXECUTOR_TOOLS[id].name,
+      annotations: EXECUTOR_TOOLS[id].annotations,
+      run: (server: McpServer, args: Record<string, unknown>) => executeLocal(server, { id: item.id, ...initialized }, sessionID, approved, args),
+    }
+  }))
 }
 
 function attachmentSummary(input: Array<{ filename?: string; mime?: string }> | undefined) {
@@ -422,7 +493,7 @@ function resourceKey(uri: string) {
 
 async function executeLocal(
   server: McpServer,
-  item: Awaited<ReturnType<typeof ToolRegistry.tools>>[number],
+  item: Awaited<ReturnType<Tool.Info["init"]>> & { id: string },
   sessionID: string,
   approved: PermissionNext.Ruleset,
   args: Record<string, unknown>,

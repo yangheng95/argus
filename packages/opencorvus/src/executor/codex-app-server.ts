@@ -302,7 +302,7 @@ function* notification(threadID: string, turnID: string, method: string, params?
   if (method === "error") {
     yield {
       type: "error",
-      message: text(data.message || data.detail || "Codex app server error"),
+      message: codexErrorMessage(data),
       meta: {
         thread_id: currentThread,
         turn_id: currentTurn,
@@ -605,6 +605,20 @@ function number(input: unknown) {
   const next = Number(input)
   if (!Number.isFinite(next) || next < 0) return undefined
   return next
+}
+
+function codexErrorMessage(input: Record<string, unknown>) {
+  const direct = text(input.message || input.detail)
+  if (direct) return direct
+  const error = record(input.error)
+  const nested = text(error?.message || error?.detail)
+  if (!nested) return "Codex app server error"
+  try {
+    const parsed = JSON.parse(nested) as Record<string, unknown>
+    return text(parsed.detail || parsed.message) || nested
+  } catch {
+    return nested
+  }
 }
 
 function requestID(input: string) {

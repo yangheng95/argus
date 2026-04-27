@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { advanceQueue, dispatchTaskLoop, taskCwd } from "../../src/engine/queue"
+import { advanceQueue, dispatchTaskLoop, reorderQueuedTasksForCwd, taskCwd } from "../../src/engine/queue"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findTask } from "../../src/engine/store"
 import { deriveTaskStatus } from "../../src/engine/task-status"
@@ -203,6 +203,98 @@ describe("engine queue", () => {
         const firstCall = runTaskLoop.mock.calls[0]?.[0] as { taskID: string; event?: unknown }
         expect(firstCall.taskID).toBe(taskID)
         expect(firstCall.event).toBeUndefined()
+      },
+    })
+  })
+
+  test("reordered queued siblings are claimed by directory queue order", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runTaskLoop = spyOn(TaskLoop, "runTaskLoop").mockResolvedValue(undefined)
+        const now = Date.now()
+        const firstID = `task_queue_first_${now}`
+        const secondID = `task_queue_second_${now}`
+        const thirdID = `task_queue_third_${now}`
+
+        Database.transaction((db) => {
+          for (const [index, id] of [firstID, secondID, thirdID].entries()) {
+            db.insert(EngineTaskTable).values({
+              id,
+              project_id: Instance.project.id,
+              source: "test",
+              title: `queued task ${index}`,
+              request: "claim by user queue order",
+              priority: "normal",
+              queue_order: index,
+              time_created: now + index,
+              time_updated: now + index,
+            }).run()
+          }
+        })
+
+        const cwd = taskCwd(firstID)
+        const result = reorderQueuedTasksForCwd({
+          cwd,
+          orderedTaskIDs: [thirdID, firstID, secondID],
+          now: now + 10,
+        })
+
+        expect(result.queuedTaskIDs).toEqual([thirdID, firstID, secondID])
+
+        await advanceQueue(cwd)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(runTaskLoop).toHaveBeenCalledTimes(1)
+        expect(runTaskLoop.mock.calls[0]?.[0]).toMatchObject({ taskID: thirdID })
+        expect(taskStatus(thirdID)).toBe("active")
+        expect(taskStatus(firstID)).toBe("queued")
+      },
+    })
+  })
+
+  test("reorder rejects active tasks and partial directory queues", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const activeID = `task_queue_locked_${now}`
+        const queuedID = `task_queue_waiting_${now}`
+
+        Database.transaction((db) => {
+          db.insert(EngineTaskTable).values({
+            id: activeID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "active locked task",
+            request: "must not be draggable",
+            priority: "normal",
+            queue_order: 0,
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          }).run()
+          db.insert(EngineTaskTable).values({
+            id: queuedID,
+            project_id: Instance.project.id,
+            source: "test",
+            title: "queued task",
+            request: "only queued tasks may be reordered",
+            priority: "normal",
+            queue_order: 1,
+            time_created: now + 1,
+            time_updated: now + 1,
+          }).run()
+        })
+
+        expect(() => reorderQueuedTasksForCwd({
+          cwd: taskCwd(activeID),
+          orderedTaskIDs: [activeID, queuedID],
+        })).toThrow("orderedTaskIDs must contain every queued task")
       },
     })
   })

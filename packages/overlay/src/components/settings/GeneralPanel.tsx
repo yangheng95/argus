@@ -5,6 +5,7 @@ import { appStore } from "../../store/app";
 import { configure as configureApi } from "../../services/api";
 import { checkConnection } from "../../services/connection";
 import { reloadProjectScope, patchConfig } from "../../services/config";
+import { applyOpacity, applyTheme, sanitizeOpacity } from "../../services/theme";
 
 export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false);
@@ -13,7 +14,8 @@ export default function GeneralPanel() {
 
   function handleThemeChange(e: Event) {
     const value = (e.currentTarget as HTMLSelectElement).value;
-    setSettingsStore("theme", value as "light" | "dark" | "vscode-dark");
+    setSettingsStore("theme", value);
+    applyTheme(value);
     saveSettings();
   }
 
@@ -25,8 +27,9 @@ export default function GeneralPanel() {
 
   function handleOpacityChange(e: Event) {
     const raw = Number((e.currentTarget as HTMLInputElement).value);
-    const value = Math.min(1, Math.max(0.1, raw / 100));
+    const value = sanitizeOpacity(raw / 100);
     setSettingsStore("opacity", value);
+    void applyOpacity(value);
     saveSettings();
   }
 

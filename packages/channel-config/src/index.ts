@@ -17,7 +17,7 @@ export const ChannelId = z.enum([
   "dingtalk",
   "qq",
 ])
-export const ChannelSurface = z.enum(["panel", ...ChannelId.options])
+export const ChannelSurface = z.enum(["panel", "gateway", ...ChannelId.options])
 
 export type ChannelName = z.infer<typeof ChannelId>
 export type ChannelField = {

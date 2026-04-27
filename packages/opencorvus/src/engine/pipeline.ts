@@ -55,6 +55,17 @@ type BudgetInput = z.infer<typeof CreateTaskInput>["budget"]
 type PriorityInput = z.infer<typeof CreateTaskInput>["priority"]
 type ChannelBindingInput = z.infer<typeof CreateTaskInput>["channelBinding"]
 
+const QUEUE_PRIORITY_BUCKET = {
+  critical: 0,
+  high: 1_000_000_000_000_000,
+  normal: 2_000_000_000_000_000,
+  low: 3_000_000_000_000_000,
+} satisfies Record<NonNullable<PriorityInput>, number>
+
+function initialQueueOrder(priority: PriorityInput | undefined, now: number) {
+  return QUEUE_PRIORITY_BUCKET[priority ?? "normal"] + now
+}
+
 // ---------------------------------------------------------------------------
 // persistQueuedTask — fast-path for POST /task (<10ms)
 // ---------------------------------------------------------------------------
@@ -91,6 +102,7 @@ export function persistQueuedTask(input: {
         executor: input.executor,
         kind: input.kind ?? "workflow",
         priority: input.priority ?? "normal",
+        queue_order: initialQueueOrder(input.priority, input.now),
         budget: budgetRow(input.budget),
         metadata: input.metadata,
         time_created: input.now,

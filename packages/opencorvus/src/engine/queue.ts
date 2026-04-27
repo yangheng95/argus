@@ -28,6 +28,106 @@ const log = Log.create({ service: "engine.queue" })
 const loopInFlight = new Set<string>()
 const queuedTaskEvents = new Map<string, OrchestratorEvent>()
 
+type QueuedTask = {
+  id: string
+  priority: string
+  queueOrder: number
+  timeCreated: number
+  timeUpdated: number
+}
+
+export class TaskQueueReorderError extends Error {
+  constructor(message: string, readonly code: "not_found" | "conflict" | "invalid_order") {
+    super(message)
+    this.name = "TaskQueueReorderError"
+  }
+}
+
+function queueRevision(tasks: Array<Pick<QueuedTask, "id" | "queueOrder" | "timeUpdated">>) {
+  return tasks.map((task) => `${task.id}:${task.queueOrder}:${task.timeUpdated}`).join("|")
+}
+
+function queuedTasksForCwd(cwd: string): QueuedTask[] {
+  if (!cwd) return []
+  return Database.use((db) =>
+    db
+      .select({
+        id: EngineTaskTable.id,
+        priority: EngineTaskTable.priority,
+        queueOrder: EngineTaskTable.queue_order,
+        timeCreated: EngineTaskTable.time_created,
+        timeUpdated: EngineTaskTable.time_updated,
+      })
+      .from(EngineTaskTable)
+      .leftJoin(SessionTable, eq(SessionTable.id, EngineTaskTable.session_id))
+      .leftJoin(ProjectTable, eq(ProjectTable.id, EngineTaskTable.project_id))
+      .where(
+        and(
+          sql`${EngineTaskTable.time_started} IS NULL`,
+          sql`${EngineTaskTable.time_completed} IS NULL`,
+          sql`COALESCE(${SessionTable.directory}, ${ProjectTable.worktree}) = ${cwd}`,
+        ),
+      )
+      .orderBy(
+        sql`CASE ${EngineTaskTable.priority} WHEN 'critical' THEN 0 ELSE 1 END`,
+        EngineTaskTable.queue_order,
+        EngineTaskTable.time_created,
+        EngineTaskTable.id,
+      )
+      .all(),
+  )
+}
+
+export function directoryQueueSnapshot(cwd: string) {
+  const queued = queuedTasksForCwd(cwd)
+  return {
+    directory: cwd,
+    revision: queueRevision(queued),
+    queuedTaskIDs: queued.map((task) => task.id),
+  }
+}
+
+export function reorderQueuedTasksForCwd(input: {
+  cwd: string
+  orderedTaskIDs: string[]
+  revision?: string
+  now?: number
+}) {
+  const cwd = input.cwd.trim()
+  if (!cwd) throw new TaskQueueReorderError("directory is required", "invalid_order")
+  const orderedTaskIDs = [...input.orderedTaskIDs]
+  if (orderedTaskIDs.length !== new Set(orderedTaskIDs).size) {
+    throw new TaskQueueReorderError("orderedTaskIDs contains duplicate task IDs", "invalid_order")
+  }
+
+  const now = input.now ?? Date.now()
+  return Database.transaction((db) => {
+    const queued = queuedTasksForCwd(cwd)
+    const currentRevision = queueRevision(queued)
+    if (input.revision !== undefined && input.revision !== currentRevision) {
+      throw new TaskQueueReorderError("directory queue changed; reload before reordering", "conflict")
+    }
+    const currentIDs = queued.map((task) => task.id)
+    const currentSet = new Set(currentIDs)
+    if (orderedTaskIDs.length !== currentIDs.length || !orderedTaskIDs.every((id) => currentSet.has(id))) {
+      throw new TaskQueueReorderError("orderedTaskIDs must contain every queued task in the directory and no active/completed tasks", "invalid_order")
+    }
+
+    for (const [index, taskID] of orderedTaskIDs.entries()) {
+      db.update(EngineTaskTable)
+        .set({ queue_order: index, time_updated: now })
+        .where(eq(EngineTaskTable.id, taskID))
+        .run()
+    }
+    const next = orderedTaskIDs.map((id, index) => ({ id, queueOrder: index, timeUpdated: now }))
+    return {
+      directory: cwd,
+      revision: queueRevision(next),
+      queuedTaskIDs: orderedTaskIDs,
+    }
+  })
+}
+
 async function launchTaskLoop(taskID: string, event: OrchestratorEvent | undefined, interrupt = false): Promise<void> {
   const [{ runTaskLoop, interruptTaskLoop }, { hooks }] = await Promise.all([
     import("@/orchestrator/loop"),
@@ -141,8 +241,10 @@ export function claimNextForCwd(cwd: string, now = Date.now()): TaskRow | undefi
                 AND COALESCE(s2.directory, p2.worktree) = ${cwd}
             )
           ORDER BY
-            CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-            t.time_created
+            CASE t.priority WHEN 'critical' THEN 0 ELSE 1 END,
+            t.queue_order,
+            t.time_created,
+            t.id
           LIMIT 1
         )`,
       )

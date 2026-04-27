@@ -271,6 +271,10 @@ export const Task = z.object({
   request: z.string(),
   status: z.enum(["queued", "active", "completed", "failed", "cancelled"]),
   priority: z.enum(["critical", "high", "normal", "low"]),
+  queue: z.object({
+    order: z.number(),
+    revision: z.string().optional(),
+  }).optional(),
   /** "workflow" — runs the full requirements→design→architect→execute→deliver pipeline.
    *  "build" — bypasses the pipeline and runs the build agent directly. Used for
    *  one-shot edits / Q&A / quick fixes. Both kinds share the same task table
