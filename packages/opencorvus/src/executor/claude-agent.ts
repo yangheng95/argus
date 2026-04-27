@@ -15,6 +15,7 @@ import {
 import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
 import { MCPServe } from "@/mcp/serve"
+import { assertExecutorModel } from "./runtime-env"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
@@ -117,6 +118,7 @@ export namespace ClaudeAgentExecutor {
   export function createSdk(executablePath?: string): CodingProvider {
     return create({
       run(input) {
+        if (input.model) assertExecutorModel("claude-code", input.model)
         // Read-only planning runs (no tools, read-only sandbox) force "plan" mode
         // regardless of OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE override.
         const mode = input.toolMode === "none" && input.sandbox === "read-only" ? "plan" : permissionMode()
@@ -143,11 +145,13 @@ export namespace ClaudeAgentExecutor {
                 }
               : undefined,
             maxTurns: input.maxTurns,
+            settingSources: ["user", "project", "local"],
             includePartialMessages: true,
             permissionMode: mode,
             allowDangerouslySkipPermissions: mode === "bypassPermissions",
             effort: effort(),
             maxBudgetUsd: maxBudget(),
+            env: claudeSdkEnv(),
             mcpServers: input.toolMode === "none" ? undefined : opencorvusMcpServers(input.cwd),
             allowedTools: allowed,
             disallowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS),
@@ -231,6 +235,13 @@ function opencorvusMcpServers(cwd?: string) {
       env: mcp.env,
     },
   }
+}
+
+export function claudeSdkEnv(source: NodeJS.ProcessEnv = process.env) {
+  const env = { ...source }
+  const baseURL = env.ANTHROPIC_BASE_URL?.trim()
+  if (baseURL) env.ANTHROPIC_BASE_URL = baseURL.replace(/\/v1\/?$/, "")
+  return env
 }
 
 async function* execute(

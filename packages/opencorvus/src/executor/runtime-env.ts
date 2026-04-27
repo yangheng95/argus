@@ -15,18 +15,35 @@ export function envKeyFor(id: ExecutorID): string | undefined {
 
 export function getModelOverride(id: ExecutorID): string | undefined {
   const key = envKeyFor(id)
-  return key ? process.env[key] : undefined
+  if (!key) return undefined
+  const model = process.env[key]?.trim()
+  if (!model) return undefined
+  assertExecutorModel(id, model, key)
+  return model
 }
 
 export function setModelOverride(id: ExecutorID, model: string | null): boolean {
   const key = envKeyFor(id)
   if (!key) return false
-  if (model === null || model === "") {
+  const next = model?.trim() ?? ""
+  if (!next) {
     delete process.env[key]
     log.info("executor model env cleared", { id, key })
   } else {
-    process.env[key] = model
-    log.info("executor model env set", { id, key, model })
+    assertExecutorModel(id, next, key)
+    process.env[key] = next
+    log.info("executor model env set", { id, key, model: next })
   }
   return true
+}
+
+export function assertExecutorModel(id: ExecutorID, model: string, key = envKeyFor(id)) {
+  if (id !== "claude-code") return
+  if (!model.includes("/")) return
+  const source = key ? `${key}=${model}` : model
+  throw new Error(
+    `Invalid claude-code executor model: ${source}. ` +
+      "Claude Code expects the native Claude CLI --model value here, not an OpenCorvus provider/model reference. " +
+      "Keep the OpenCorvus task model in opencorvus.json and set the Claude executor model separately.",
+  )
 }
