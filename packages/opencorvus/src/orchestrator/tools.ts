@@ -2327,7 +2327,7 @@ export function createOrchestratorTools(input: {
     }),
 
     deliver: tool({
-      description: "Aggregate all goal deliveries, then run the DeliveryAgent to verify build/test/startup, fix issues, and make final acceptance decision before publication. Delivery agent is the single verification gate. Check goal statuses via read_context before calling.",
+      description: "FINAL acceptance gate — call ONLY after every dispatchable goal is terminal (passed/failed) and no eligible wave remains uncalled. Aggregates goal deliveries and runs DeliveryAgent for build/test/startup verification. NEVER call while goals are pending/dispatched/running, NEVER call as a progress check, NEVER call before any build has produced material in direct mode. Always read_context first to verify the goal graph is fully resolved.",
       inputSchema: z.object({
         reason: z.string().optional().describe("Why you decided to deliver now"),
       }),
