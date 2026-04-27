@@ -323,7 +323,9 @@ function result(task: TaskRow) {
 async function commitDeliveryRound(input: {
   task: TaskRow
   iteration: number
-  verdict: { verdict: string; summary?: string; issues_found?: string[] }
+  /** Caller passes the rejection_details length (or 0 for accepted) so this
+   *  helper does not need to import the full DeliveryVerdict type. */
+  verdict: { verdict: string; summary?: string; rejection_count?: number }
 }): Promise<{ commit?: string; mode: "created_commit" | "skipped"; error?: string }> {
   const cwd = Instance.directory
   await ensureGitignore()
@@ -332,7 +334,7 @@ async function commitDeliveryRound(input: {
     const err = added.stderr.toString().trim() || added.stdout.toString().trim() || "git add -A failed"
     return { mode: "skipped", error: err }
   }
-  const issues = input.verdict.issues_found?.length ?? 0
+  const issues = input.verdict.rejection_count ?? 0
   const subject = clip(`delivery round ${input.iteration} | verdict=${input.verdict.verdict} | issues=${issues}`)
   const body = (input.verdict.summary ?? "").trim()
   const args = ["commit", "--no-gpg-sign", "--allow-empty", "-m", subject]

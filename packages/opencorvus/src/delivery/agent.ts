@@ -33,6 +33,8 @@ import {
   DeliveryVerdict,
   FrontendCheck,
   StartupVerification,
+  affectedGoalIDs,
+  issuesFound,
   type DeliveryVerdictType,
 } from "./verdict"
 
@@ -42,6 +44,8 @@ export {
   DeliveryVerdict,
   FrontendCheck,
   StartupVerification,
+  affectedGoalIDs,
+  issuesFound,
   type DeliveryVerdictType,
 }
 
@@ -136,7 +140,7 @@ export namespace DeliveryAgent {
 
     log.info("delivery agent output", {
       verdict: verdict.verdict,
-      issuesFound: verdict.issues_found.length,
+      issuesFound: issuesFound(verdict).length,
       startupSuccess: verdict.startup_verification.success,
       attempts: out.attempts,
     })
@@ -365,9 +369,8 @@ function buildUserPrompt(
     `Your verdict is authoritative for this delivery pass. Use ` +
     `\`query_metric_trajectory\` to ground yourself in prior iterations and current ` +
     `metric results, but do NOT outsource the acceptance decision to the trajectory. ` +
-    `What matters is that your \`issues_found\` and \`rejection_details\` are ` +
-    `concrete and evidence-backed: if you reject, the orchestrator reads your ` +
-    `findings to decide what to change next.\n\n` +
+    `What matters is that your \`rejection_details\` are concrete and evidence-backed: ` +
+    `if you reject, the orchestrator reads your findings to decide what to change next.\n\n` +
     `Cross-check every linked requirement (see "Linked requirements" under each ` +
     `goal): the acceptance_specs MUST collectively satisfy the REQ acceptance ` +
     `criteria. A goal whose acceptance_specs all PASS but whose linked REQ ` +
@@ -376,7 +379,7 @@ function buildUserPrompt(
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id and affected_goal_ids when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
+            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
         )
         .join("\n\n---\n\n"),
   )
@@ -503,10 +506,11 @@ function buildUserPrompt(
     "Plain-text / markdown / ```json fenced output is IGNORED — only the tool " +
     "call is read. The tool's schema is strict (Zod-validated); malformed " +
     "payloads return an error and let you call again.\n\n" +
-    "**Attribution contract enforced by the tool:**\n" +
-    "- `verdict='rejected'` REQUIRES a non-empty `affected_goal_ids`. Pick goal IDs from the `# Goals` section above — you are the attribution authority, downstream code does not second-guess.\n" +
-    "- Every `rejection_details[].goal_id` MUST appear in `affected_goal_ids`.\n" +
-    "- If a rejection spans multiple goals, list every relevant goal id in `affected_goal_ids` and emit one `rejection_details` entry per (goal, issue) pair.\n" +
+    "**Attribution contract enforced by the schema:**\n" +
+    "- `verdict='rejected'` REQUIRES a non-empty `rejection_details` array (≥1 entry). Each entry's `goal_id` picks a goal ID from the `# Goals` section above — you are the attribution authority, downstream code does not second-guess.\n" +
+    "- The set of distinct `rejection_details[].goal_id` values IS the canonical 'which goals to re-open' list. There is NO separate `affected_goal_ids` field — do not invent one.\n" +
+    "- If a rejection spans multiple goals, emit one `rejection_details` entry per (goal, issue) pair so each blamed goal carries its own per-goal explanation.\n" +
+    "- There is NO separate `issues_found` field either. The orchestrator derives the human-readable issue list from `rejection_details[].error`. Put the user-visible error text there.\n" +
     "- A delivery that is merely \"bad overall\" with no specific goal attribution is NOT a valid rejection. If you cannot name the responsible goal, investigate more — your retry budget covers it.\n\n" +
     "If submit_verdict is not called before the step budget runs out, the run is treated as a failed finalize and retried.",
   )

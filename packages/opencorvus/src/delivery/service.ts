@@ -23,7 +23,7 @@ import {
   summarizeVisualMetric,
   type VisualMetricResult,
 } from "./visual-metric"
-import { finalizeVerdict, synthesizeRuntimeRejection } from "./verdict"
+import { finalizeVerdict, issuesFound, synthesizeRuntimeRejection } from "./verdict"
 import {
   computeRuntimeEvidence,
   summarizeRuntimeViolations,
@@ -153,7 +153,7 @@ export namespace DeliveryService {
       llmVerdict: llmVerdict.verdict,
       finalVerdict: finalVerdict.verdict,
       overridden: llmVerdict.verdict !== finalVerdict.verdict,
-      issuesFound: finalVerdict.issues_found.length,
+      issuesFound: issuesFound(finalVerdict).length,
       startupSuccess: finalVerdict.startup_verification.success,
     })
     return finalVerdict

@@ -249,7 +249,17 @@ async function runTaskLoopInner(input: {
       const verdictArt = findRecentDeliveryRejection(taskID, lastReworkSeenAt)
       if (verdictArt) {
         lastReworkSeenAt = (verdictArt.time_created ?? Date.now()) + 1
+        // Persisted verdict carries `rejection_details` (per RejectedVerdict
+        // schema). Derive the human-readable issues list here — the schema's
+        // single source of truth (rule 22) means there's no separate
+        // `issues_found` shadow field on the payload anymore.
         const verdict = (verdictArt.payload ?? {}) as Record<string, unknown>
+        const rejectionDetails = Array.isArray(verdict.rejection_details)
+          ? (verdict.rejection_details as Array<{ category?: string; file?: string; error?: string; suggestion?: string }>)
+          : []
+        const issues = rejectionDetails
+          .map((d) => (typeof d.error === "string" ? d.error : ""))
+          .filter((s) => s.length > 0)
         log.info("delivery rejection detected — re-waking orchestrator", {
           taskID,
           verdictArtifactID: verdictArt.id,
@@ -257,10 +267,8 @@ async function runTaskLoopInner(input: {
         event = {
           note: OrchestratorEventNote.deliveryRejected({
             verdictSummary: typeof verdict.summary === "string" ? verdict.summary : undefined,
-            issues: Array.isArray(verdict.issues_found) ? (verdict.issues_found as string[]) : [],
-            rejectionDetails: Array.isArray(verdict.rejection_details)
-              ? (verdict.rejection_details as Array<{ category?: string; file?: string; error?: string; suggestion?: string }>)
-              : [],
+            issues,
+            rejectionDetails,
           }),
         }
         continue

@@ -4,6 +4,36 @@
  * Factored out of agent.ts so that output-tools.ts can consume the same Zod
  * shape for the mandatory `submit_verdict` tool without introducing a circular
  * import with agent.ts.
+ *
+ * Schema design rules (lessons from the 2026-04 qwen-loop incident):
+ *
+ *   1. Schema MUST tell the truth. If the runtime requires a non-empty
+ *      array, the schema says `.min(1)` — never `.default([])` paired with
+ *      an execute()-time non-empty check (the LLM gets contradictory
+ *      signals: schema says optional, prompt says required).
+ *
+ *   2. No dual-source-of-truth fields. The model lists rejection details
+ *      ONCE, in `rejection_details`. Aggregate views (which goals were
+ *      blamed, the human-readable issues list) are DERIVED via the
+ *      helpers at the bottom of this file. Older shapes had separate
+ *      `affected_goal_ids` + `issues_found` fields and a runtime
+ *      consistency check — that was three places telling the same story.
+ *
+ *   3. Discriminated union over `verdict`. Accepted and rejected payloads
+ *      have genuinely different shape requirements (rejected MUST attach
+ *      details, accepted MUST NOT). Encoding that in the schema means the
+ *      LLM picks the right branch up front instead of failing a runtime
+ *      consistency check on every retry.
+ *
+ *   4. Every required field has a runtime min-length matching the schema
+ *      min-length. `detail` and `error` strings demand reproducer-grade
+ *      content (≥8 chars), so the schema says `.min(8)` — not `.min(1)`
+ *      with the real bar buried in execute().
+ *
+ *   5. Optional fields exist only when they have a real callsite. Pure
+ *      narrative slots (`target`, `attachment_sha` on prior evidence
+ *      shape) were dropped — they were never read after submission and
+ *      just gave weak tool-callers more to JSON-stringify incorrectly.
  */
 import z from "zod"
 import type { VisualMetricResult } from "./visual-metric"
@@ -22,6 +52,13 @@ export const FrontendCheck = z.object({
   issues: z.array(z.string()).optional().describe("Frontend issues found"),
 })
 
+export const DeferredCheck = z.object({
+  name: z.string().min(1).describe("Check name (e.g. code_review, dead_code_review)"),
+  result: z.enum(["passed", "failed", "skipped"]),
+  evidence: z.string().min(1).describe("Brief evidence or reason"),
+})
+export type DeferredCheckType = z.infer<typeof DeferredCheck>
+
 /**
  * Evidence that a particular verification tool was actually called and what it
  * returned. Used to enforce skill `required_tools` contracts: a skill can
@@ -30,53 +67,85 @@ export const FrontendCheck = z.object({
  *
  * `detail` is free-form but MUST let a reviewer reproduce the check — URL,
  * selector, response hash, exit code, etc. Prose like "checked the chart" is
- * rejected as non-evidentiary.
+ * rejected as non-evidentiary; the `.min(8)` schema constraint enforces the
+ * floor inline so the LLM gets the real bar from the schema, not from
+ * runtime consistency-check feedback.
+ *
+ * Optional narrative-only fields (`target`, `attachment_sha`) were intentionally
+ * removed: nothing downstream reads them, and weak tool-calling models
+ * occasionally JSON-stringify an array-of-objects when too many optional fields
+ * pile up in a single object.
  */
 export const ToolCallEvidence = z.object({
   tool: z.string().min(1).describe("Tool name as declared on the delivery tool set (e.g. 'verify_page_integrity', 'screenshot', 'run_command')."),
   passed: z.boolean().describe("Whether this invocation passed the check the tool performed. Tools that purely gather evidence without a pass/fail semantic must still set true/false based on whether they completed successfully."),
-  target: z.string().optional().describe("The subject of the check — URL, endpoint, file path, command, selector. Populate whenever meaningful."),
-  detail: z.string().min(1).describe("Reproducer-grade evidence: headline numbers + key signals the tool reported. NOT prose narration."),
-  attachment_sha: z.string().optional().describe("SHA of any attachment (screenshot, log) produced by this call, for later inspection."),
+  detail: z.string().min(8).describe("Reproducer-grade evidence: headline numbers + key signals the tool reported. NOT prose narration. Minimum 8 characters."),
 })
 export type ToolCallEvidenceType = z.infer<typeof ToolCallEvidence>
 
-export const DeliveryVerdict = z.object({
-  verdict: z.enum(["accepted", "rejected"]),
+export const RejectionDetail = z.object({
+  goal_id: z.string().min(1).describe("The goal id (gol_...) this rejection is attributed to."),
+  category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).describe("Category of the issue. Use 'visual' when the rejection traces back to a design_spec on task.design_specs."),
+  file: z.string().optional().describe("Affected file path, if applicable"),
+  error: z.string().min(8).describe("Description of the error or issue. Minimum 8 characters of reproducer-grade signal."),
+  suggestion: z.string().optional().describe("Suggested fix approach for the executor"),
+  visual_spec_id: z.string().optional().describe("Design-analyst spec id (vis-*) this rejection violates — cite when category='visual'."),
+})
+export type RejectionDetailType = z.infer<typeof RejectionDetail>
+
+const SharedVerdictFields = {
   summary: z.string().min(1),
-  launch_command: z.string().optional().describe("The exact verified command to start the application (only present when startup_verification.success is true). Will be used to auto-launch after publish."),
   startup_verification: StartupVerification,
   frontend_check: FrontendCheck,
-  issues_found: z.array(z.string()).default([]),
-  /** The set of goal IDs the rejection attributes the failure to. The
-   *  orchestrator uses this set directly to decide which goals to re-open
-   *  via startNewAttempt — no downstream string-matching. Rule: when
-   *  `verdict === "rejected"` this array MUST be non-empty; when
-   *  `verdict === "accepted"` it is ignored (and normalized to [] by the
-   *  submit_verdict tool). Each id must also be referenced by at least one
-   *  rejection_details entry's `goal_id`, enforced at submit time. */
-  affected_goal_ids: z.array(z.string()).default([]).describe(
-    "Goal IDs this rejection blames. Required (non-empty) when verdict is rejected; must be a superset of all rejection_details[].goal_id values.",
+  deferred_checks: z.array(DeferredCheck).default([]).describe(
+    "Extended checks that the evaluator deferred to delivery. Empty when no extended checks were required.",
   ),
-  rejection_details: z.array(z.object({
-    goal_id: z.string().describe("The goal id (gol_...) this rejection is attributed to. Must appear in affected_goal_ids."),
-    category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).describe("Category of the issue. Use 'visual' when the rejection traces back to a design_spec on task.design_specs."),
-    file: z.string().optional().describe("Affected file path, if applicable"),
-    error: z.string().describe("Description of the error or issue"),
-    suggestion: z.string().optional().describe("Suggested fix approach for the executor"),
-    visual_spec_id: z.string().optional().describe("Design-analyst spec id (vis-*) this rejection violates — cite when category='visual' and the violation maps to a specific design_spec entry on task.design_specs."),
-  })).optional().describe("Structured rejection details for the executor to fix. Required when verdict is rejected."),
-  deferred_checks: z.array(z.object({
-    name: z.string().describe("Check name (e.g. code_review, dead_code_review)"),
-    result: z.enum(["passed", "failed", "skipped"]),
-    evidence: z.string().describe("Brief evidence or reason"),
-  })).optional().describe("Extended checks that the evaluator deferred to delivery"),
-  tool_call_evidence: z.array(ToolCallEvidence).default([]).describe(
-    "Evidence that the mandatory verification tools ran. Every skill-declared required_tool must appear here with passed=true before verdict='accepted' is accepted. An empty list is only valid when no injected skill declared any required_tools.",
+  // Mandatory non-empty for BOTH verdicts: even a rejection requires evidence
+  // that you actually ran probes — otherwise the rejection itself is
+  // unverified. Schema says `.min(1)` so the LLM sees "required, non-empty"
+  // up front, not via runtime feedback.
+  tool_call_evidence: z.array(ToolCallEvidence).min(1).describe(
+    "Evidence that verification tools actually ran. Required (≥1 entry) for both accepted and rejected verdicts — every verdict must be auditable. When a skill declares required_tools, every entry in that list must appear here with passed=true before verdict='accepted' is allowed.",
+  ),
+} as const
+
+export const AcceptedVerdict = z.object({
+  verdict: z.literal("accepted"),
+  ...SharedVerdictFields,
+  launch_command: z.string().optional().describe("The exact verified command to start the application (only present when startup_verification.success is true). Will be used to auto-launch after publish."),
+})
+
+export const RejectedVerdict = z.object({
+  verdict: z.literal("rejected"),
+  ...SharedVerdictFields,
+  rejection_details: z.array(RejectionDetail).min(1).describe(
+    "Per-rejection attribution. Required (≥1 entry) when verdict='rejected'. The set of distinct goal_ids is the canonical 'which goals to re-open' list — there is no separate affected_goal_ids field.",
   ),
 })
 
+export const DeliveryVerdict = z.discriminatedUnion("verdict", [AcceptedVerdict, RejectedVerdict])
+
+export type AcceptedVerdictType = z.infer<typeof AcceptedVerdict>
+export type RejectedVerdictType = z.infer<typeof RejectedVerdict>
 export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
+
+// ---------------------------------------------------------------------------
+// Derived views — the canonical way to get aggregate goal / issue lists.
+// Callers must NOT reach into rejection_details directly to derive these;
+// route through these helpers so a future schema change has one rewrite site.
+// ---------------------------------------------------------------------------
+
+/** Distinct goal IDs the rejection blames. `[]` for accepted verdicts. */
+export function affectedGoalIDs(verdict: DeliveryVerdictType): string[] {
+  if (verdict.verdict === "accepted") return []
+  return Array.from(new Set(verdict.rejection_details.map((d) => d.goal_id)))
+}
+
+/** Human-readable issue strings derived from rejection_details. `[]` for accepted. */
+export function issuesFound(verdict: DeliveryVerdictType): string[] {
+  if (verdict.verdict === "accepted") return []
+  return verdict.rejection_details.map((d) => d.error)
+}
 
 /**
  * 数值硬门（P0-B）对 LLM verdict 的最终裁定。
@@ -88,8 +157,8 @@ export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
  *
  * 调用语义：
  *  - metric.passed === true  → 原封不动返回 LLM verdict（软性瑕疵由 LLM 判）
- *  - metric.passed === false + LLM verdict === "rejected" → 合并 gate 失败
- *    到 issues_found，保持 rejected
+ *  - metric.passed === false + LLM verdict === "rejected" → 追加 gate 失败到
+ *    rejection_details，保持 rejected
  *  - metric.passed === false + LLM verdict === "accepted" → 强制翻为 rejected
  *
  * `goalIds` 来源：调用方在 service 层传入 `input.goals.map(g => g.id)`。
@@ -104,59 +173,45 @@ export function finalizeVerdict(
   if (metric.passed) return llmVerdict
 
   const failedGates = metric.gates.filter((g) => !g.passed)
-  const gateErrorLines = failedGates.map(
-    (g) => `[visual-gate/${g.name}] ${g.note}`,
-  )
   const headline =
     `Numeric visual gate failed (score=${metric.score.toFixed(3)}). ` +
     `Rendered vs reference 在 ${failedGates.length} 条硬门上未达标，LLM 的 accept 被硬门覆盖。`
 
-  const mergedIssues = Array.from(
-    new Set([...(llmVerdict.issues_found ?? []), ...gateErrorLines]),
-  )
-
-  // LLM 本来就判 rejected：保留其归因，只追加硬门证据到 issues。
-  if (llmVerdict.verdict === "rejected") {
-    return {
-      ...llmVerdict,
-      issues_found: mergedIssues,
-      summary: llmVerdict.summary
-        ? `${llmVerdict.summary}\n\n${headline}`
-        : headline,
-    }
-  }
-
-  // LLM 判了 accepted，但硬门拒绝：强制翻转为 rejected。
-  const visualRejection = failedGates.map((g) => ({
-    goal_id: goalIds[0] ?? "unknown-goal",
-    category: "visual" as const,
-    error: `${g.name}: ${g.note || `value=${g.value} threshold=${g.threshold}`}`,
-    suggestion:
-      g.name === "chart_region_density" || g.name === "unique_color_ratio"
-        ? "Render 结果过于接近空骨架——检查是否真的把数据渲染到了 DOM/canvas，而不是仅 scaffold。"
-        : g.name === "phash_hamming" || g.name === "ssim"
-          ? "整体布局/配色偏离 reference——对照 reference 重新对齐主要区块。"
-          : "对照 reference_strings 检查关键文案是否渲染到位。",
-  }))
-
-  // 额外归因到每一个 goalId，便于 orchestrator 分配 repair（与 rejection_details[].goal_id 对齐）。
   const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
-  const detailsPerGoal = allGoalIds.flatMap((gid) =>
+  const visualSuggestion = (gateName: string) =>
+    gateName === "chart_region_density" || gateName === "unique_color_ratio"
+      ? "Render 结果过于接近空骨架——检查是否真的把数据渲染到了 DOM/canvas，而不是仅 scaffold。"
+      : gateName === "phash_hamming" || gateName === "ssim"
+        ? "整体布局/配色偏离 reference——对照 reference 重新对齐主要区块。"
+        : "对照 reference_strings 检查关键文案是否渲染到位。"
+
+  const gateRejections: RejectionDetailType[] = allGoalIds.flatMap((gid) =>
     failedGates.map((g) => ({
       goal_id: gid,
       category: "visual" as const,
       error: `${g.name}: ${g.note || `value=${g.value} threshold=${g.threshold}`}`,
-      suggestion: visualRejection[0]?.suggestion,
+      suggestion: visualSuggestion(g.name),
     })),
   )
 
+  // LLM 本来就判 rejected：合并 gate 失败到现有 rejection_details，保留归因。
+  if (llmVerdict.verdict === "rejected") {
+    return {
+      ...llmVerdict,
+      summary: `${llmVerdict.summary}\n\n${headline}`,
+      rejection_details: [...llmVerdict.rejection_details, ...gateRejections],
+    }
+  }
+
+  // LLM 判了 accepted，但硬门拒绝：强制翻转为 rejected。
   return {
-    ...llmVerdict,
     verdict: "rejected",
     summary: `${headline}\n\nLLM 原 summary: ${llmVerdict.summary}`,
-    issues_found: mergedIssues,
-    affected_goal_ids: allGoalIds,
-    rejection_details: [...(llmVerdict.rejection_details ?? []), ...detailsPerGoal],
+    startup_verification: llmVerdict.startup_verification,
+    frontend_check: llmVerdict.frontend_check,
+    deferred_checks: llmVerdict.deferred_checks,
+    tool_call_evidence: llmVerdict.tool_call_evidence,
+    rejection_details: gateRejections,
   }
 }
 
@@ -165,18 +220,17 @@ export function finalizeVerdict(
  * 直接把 violations 写成 rejection_details。用于 delivery 开始就发现 goal
  * 只产出了 scaffold/空壳的场景，避免把无意义的会话丢给 LLM 浪费 token。
  *
- * 保留与 DeliveryVerdictType 完全一致的 schema，因此下游 publisher / DB / UI
- * 走同一条路径。`startup_verification` / `frontend_check` 填 attempted=true
- * 但 success=false，让调用方统一按 rejected 处理。
+ * `tool_call_evidence` 携带 runtime-evidence gate 自身的检测记录——满足新
+ * schema 的 .min(1) 必填约束，并让下游审计看到这条 rejection 是被哪个
+ * gate 抓出来的。
  */
 export function synthesizeRuntimeRejection(
   report: RuntimeEvidenceReport,
   goalIds: readonly string[],
-): DeliveryVerdictType {
+): RejectedVerdictType {
   const headline = `Runtime-evidence gate rejected delivery: ${report.violations.length} violation(s).`
-  const issues = report.violations.map((v) => `[runtime/${v.kind}] ${v.detail}`)
   const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
-  const detailsPerGoal = allGoalIds.flatMap((gid) =>
+  const detailsPerGoal: RejectionDetailType[] = allGoalIds.flatMap((gid) =>
     report.violations.map((v) => ({
       goal_id: gid,
       category: "runtime" as const,
@@ -191,24 +245,30 @@ export function synthesizeRuntimeRejection(
               : "DOM 体积/文本过薄。确认主内容区真的把数据渲染到了 DOM/canvas，而不是只放了占位。",
     })),
   )
+  const buildArtifactDetail = report.evidence.buildArtifactPath
+    ? `index.html=${report.evidence.buildArtifactPath} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
+    : "no build artifact"
   return {
     verdict: "rejected",
     summary: headline,
     startup_verification: {
       attempted: true,
       success: false,
-      output: report.evidence.buildArtifactPath
-        ? `index.html=${report.evidence.buildArtifactPath} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
-        : "no build artifact",
+      output: buildArtifactDetail,
     },
     frontend_check: {
       attempted: true,
       renders_correctly: false,
-      issues: issues.slice(0, 10),
+      issues: report.violations.map((v) => `[runtime/${v.kind}] ${v.detail}`).slice(0, 10),
     },
-    issues_found: issues,
-    affected_goal_ids: allGoalIds,
+    deferred_checks: [],
+    tool_call_evidence: [
+      {
+        tool: "runtime_evidence_gate",
+        passed: false,
+        detail: `${report.violations.length} violation(s): ${buildArtifactDetail}`,
+      },
+    ],
     rejection_details: detailsPerGoal,
-    tool_call_evidence: [],
   }
 }

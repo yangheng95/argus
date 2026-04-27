@@ -251,14 +251,21 @@ function describeVerdict(taskID: string): DeliveryVerdictDesc | undefined {
   const payload = (art.payload ?? {}) as Record<string, unknown>
   const history = readHistory(taskID)
   const lastIter = history[history.length - 1]
+  // Single source of truth (rule 22): rejection_details is the canonical
+  // structured field; the human-readable issues list is derived from each
+  // entry's `.error`, not stored as a separate `issues_found` shadow field.
+  const details = Array.isArray(payload.rejection_details)
+    ? (payload.rejection_details as DeliveryVerdictDesc["details"])
+    : []
+  const issues = details
+    .map((d) => (typeof d.error === "string" ? d.error : ""))
+    .filter((s) => s.length > 0)
   return {
     iteration: lastIter?.iteration ?? 0,
     verdict: typeof payload.verdict === "string" ? payload.verdict : "unknown",
     summary: typeof payload.summary === "string" ? payload.summary : "",
-    issues: Array.isArray(payload.issues_found) ? (payload.issues_found as string[]) : [],
-    details: Array.isArray(payload.rejection_details)
-      ? (payload.rejection_details as DeliveryVerdictDesc["details"])
-      : [],
+    issues,
+    details,
     verdict_artifact_id: art.id,
   }
 }
