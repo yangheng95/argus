@@ -87,8 +87,6 @@ import {
 import { openConfigDialog, switchConfigTab, setupDialogBackdropClose, installSettingsFormHandlers, renderAboutVersion } from "./services/dialog";
 import { installInlineLlmConfig, refreshInlineLlmConfig } from "./services/llm-inline";
 import { loadConversation } from "./store/messages";
-import { executorSelectable, executorCurrentModel, setExecutorModel } from "./services/executor";
-import { syncExecutorWidth } from "./services/window";
 import { cardTreeStore } from "./store/card-tree";
 
 // ── Module teardown ──
@@ -969,129 +967,9 @@ document.addEventListener("DOMContentLoaded", () => {
     textarea?.focus();
   });
 
-  // ── Executor selection ──
-
-  /** Map executor ID → provider IDs whose models are relevant for that executor. */
-  const EXECUTOR_PROVIDER_MAP: Record<string, string[]> = {
-    codex: ["openai-codex", "openai"],
-    "claude-code": ["anthropic"],
-  };
-
-  /** Derive model list from the live provider catalog instead of a hardcoded list. */
-  function executorModels(executorID: string): string[] {
-    const catalog = appStore.providerCatalog;
-    if (!catalog?.all) return [];
-    const providerIDs = EXECUTOR_PROVIDER_MAP[executorID];
-    if (!providerIDs) return [];
-    const models: string[] = [];
-    for (const provider of (catalog.all as any[])) {
-      if (!providerIDs.includes(provider.id)) continue;
-      if (!provider.models || typeof provider.models !== "object") continue;
-      for (const model of Object.values(provider.models) as any[]) {
-        if (model?.id) models.push(model.id);
-      }
-    }
-    return models;
-  }
-
-  function syncExecutorUI() {
-    const active = settingsStore.executor || "opencode";
-    document.querySelectorAll<HTMLElement>("[data-executor]").forEach((btn) => {
-      btn.dataset.active = String(btn.dataset.executor === active);
-    });
-  }
-  syncExecutorUI();
-  syncExecutorWidth();
-
-  function executorModelPanel(id: string): HTMLElement | null {
-    if (id === "codex") return document.getElementById("codexModelPanel");
-    if (id === "claude-code") return document.getElementById("claudeCodeModelPanel");
-    return null;
-  }
-
-  function closeAllModelPanels() {
-    document.getElementById("codexModelPanel")?.setAttribute("hidden", "");
-    document.getElementById("claudeCodeModelPanel")?.setAttribute("hidden", "");
-  }
-
-  function renderModelPanel(executorID: string) {
-    const panel = executorModelPanel(executorID);
-    if (!panel) return;
-    const current = executorCurrentModel(executorID);
-    const models = executorModels(executorID);
-    const currentLabel = current
-      ? `<div class="engine-model-current">${escapeHtml(t("executor.current_model"))}: <strong>${escapeHtml(current)}</strong></div>`
-      : "";
-    const items = models.map((mid) =>
-      `<button type="button" class="engine-model-item" data-executor-model="${escapeHtml(mid)}" data-active="${mid === current}">${escapeHtml(mid)}</button>`,
-    ).join("");
-    panel.innerHTML = currentLabel + (items || `<div class="engine-model-current">${escapeHtml(t("empty.overview"))}</div>`);
-  }
-
-  function openModelPanel(executorID: string) {
-    closeAllModelPanels();
-    const panel = executorModelPanel(executorID);
-    if (!panel) return;
-    renderModelPanel(executorID);
-    const caret = document.querySelector<HTMLElement>(`[data-executor-caret="${executorID}"]`);
-    if (caret) {
-      const rect = caret.getBoundingClientRect();
-      panel.style.top = `${Math.round(rect.bottom + 6)}px`;
-      panel.style.left = `${Math.round(rect.left + rect.width / 2)}px`;
-      panel.style.transform = "translateX(-50%)";
-    }
-    panel.removeAttribute("hidden");
-  }
-
-  const engineBar = document.getElementById("engineBar");
-  engineBar?.addEventListener("click", async (event) => {
-    // Model panel caret toggle
-    const caret = (event.target as HTMLElement).closest<HTMLElement>("[data-executor-caret]");
-    if (caret) {
-      event.stopPropagation();
-      const id = caret.dataset.executorCaret;
-      if (!id) return;
-      const panel = executorModelPanel(id);
-      if (!panel) return;
-      if (panel.hasAttribute("hidden")) {
-        openModelPanel(id);
-      } else {
-        closeAllModelPanels();
-      }
-      return;
-    }
-    // Model item selection
-    const modelItem = (event.target as HTMLElement).closest<HTMLElement>("[data-executor-model]");
-    if (modelItem) {
-      event.stopPropagation();
-      const model = modelItem.dataset.executorModel;
-      const wrap = modelItem.closest<HTMLElement>("[data-executor-wrap]");
-      const executorID = wrap?.dataset.executorWrap;
-      if (executorID && model) {
-        closeAllModelPanels();
-        await setExecutorModel(executorID, model);
-      }
-      return;
-    }
-    // Executor chip selection
-    const chip = (event.target as HTMLElement).closest<HTMLElement>("[data-executor]");
-    if (!chip || chip.classList.contains("engine-chip-caret")) return;
-    const id = chip.dataset.executor;
-    if (!id) return;
-    if (!executorSelectable(id)) return;
-    setSettingsStore("executor", id);
-    saveSettings();
-    syncExecutorUI();
-  });
-
-  // Close model panels on outside click / Escape
-  document.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement)?.closest?.("[data-executor-caret]") || (e.target as HTMLElement)?.closest?.(".engine-model-panel")) return;
-    closeAllModelPanels();
-  }, listenerOpts);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeAllModelPanels();
-  }, listenerOpts);
+  // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
+  // (chat-compose-meta-left). The component owns its own dropdown, click-out
+  // dismissal and Escape handling — Solid lifecycle disposes both on unmount.
 });
 
 // ── Initialise application ──

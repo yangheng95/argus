@@ -3,7 +3,6 @@
 // Exported functions:
 // setTrayAttention — toggle the tray icon attention state via Tauri
 // fitBrandVersion — shrink the brand-version element to fit its container
-// syncExecutorWidth — equalise executor chip button widths
 
 // ── Helpers ──
 
@@ -57,21 +56,3 @@ export function fitBrandVersion(): void {
   });
 }
 
-// ── syncExecutorWidth ──
-// Measure all executor chip buttons and set --engine-chip-width to the widest.
-
-export function syncExecutorWidth(): void {
-  const bar = document.getElementById("engineBar") as HTMLElement | null;
-  if (!bar) return;
-  bar.style.removeProperty("--engine-chip-width");
-  requestAnimationFrame(() => {
-    const buttons = [...bar.querySelectorAll<HTMLElement>("[data-executor]")];
-    const width = buttons.reduce(
-      (max, btn) => Math.max(max, Math.ceil(btn.getBoundingClientRect().width)),
-      0,
-    );
-    if (width > 0) {
-      bar.style.setProperty("--engine-chip-width", `${width}px`);
-    }
-  });
-}
