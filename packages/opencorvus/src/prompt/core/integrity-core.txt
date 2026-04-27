@@ -29,20 +29,34 @@ fixing it.
 
 ## Submission
 
-Call `submit_integrity_verdict` EXACTLY ONCE. The shape is schema-validated; if you
-get a validation error you'll see the message inline and must call again.
+Submission is split across one tool per dimension plus a terminal finalize call.
+Per-tool inputs are small and self-contained — large nested verdict payloads
+trigger JSON-parse loops on smaller models, which is why each dimension is its
+own tool with a dimension-scoped issue-type enum.
 
-Top-level fields:
-  `dimensions`     — array of per-dimension entries (one per dimension in the
-                     catalogue). Each entry: { id, verdict, issues, corrections,
-                     missing_goals }. `corrections` and `missing_goals` are EMPTY
-                     for diagnostic-only dimensions.
-  `summary`        — one sentence operator-readable headline. State the worst
-                     dimension and the dominant signal ("solution_quality:
-                     concerns; 3 weak_acceptance specs across goal_backend").
+For EACH dimension in the catalogue, call its dedicated tool EXACTLY ONCE:
+  `submit_goal_fidelity_verdict({ verdict, issues, corrections, missing_goals })`
+  `submit_technical_feasibility_verdict({ verdict, issues, corrections, missing_goals })`
+  `submit_hallucination_verdict({ verdict, issues })`
+  `submit_solution_quality_verdict({ verdict, issues, corrections, missing_goals })`
 
-Aggregate verdict is computed from `dimensions[]` — DO NOT include a top-level
-`verdict` field; the runtime derives it.
+Diagnostic-only dimensions (currently: hallucination) have NO `corrections` /
+`missing_goals` fields — the schema rejects them. Issue `type` values are
+restricted per dimension; you cannot file e.g. `granularity_off` under
+`goal_fidelity`. If the schema rejects a call, the error message will tell you
+which field is wrong and you must call that single tool again.
+
+After every dimension is submitted, close with EXACTLY ONE call:
+  `finalize_integrity_review({ summary })`
+
+`summary` is one operator-readable sentence stating the worst dimension and the
+dominant signal ("solution_quality: concerns; 3 weak_acceptance specs across
+goal_backend"). The aggregate verdict is computed from the per-dimension
+verdicts you already submitted — you do NOT supply a top-level verdict.
+
+Any dimension you fail to submit before `finalize_integrity_review` is recorded
+as `concerns` with a synthesized "not addressed by reviewer" issue, so omitting
+a dimension is loud, not silent.
 
 ## AcceptanceSpec — REQUIRED shape for every spec you emit
 
