@@ -272,22 +272,33 @@ export async function ensureGitignore() {
  * when at least one path was actually staged for removal.
  */
 async function untrackOpencorvusScratch(dir: string) {
-  const { $ } = await import("bun")
+  // Each subprocess routes through the shared `git()` helper so the
+  // 90s AbortController deadline applies. The earlier Bun `$` template
+  // path had no timeout: a hanging `git commit` on Windows (NTFS file
+  // lock, AV scan, index.lock contention) would block the bun event
+  // loop indefinitely — observed in the 2026-04-27 V2 benchmark as a
+  // 15+ minute freeze of every scheduler.poll, since `ensureGitignore`
+  // is awaited inline before `commitDeliveryRound`'s main commit.
   let anyStaged = false
   for (const target of OPENCORVUS_SCRATCH_PATHS) {
     // `git ls-files --error-unmatch` only exits 0 when at least one tracked
     // entry matches, so we can skip the (noisier) `git rm` for paths that
     // were never committed in the first place.
-    const tracked = await $`git ls-files --error-unmatch -- ${target}`.cwd(dir).quiet().nothrow()
+    const tracked = await git(["ls-files", "--error-unmatch", "--", target], { cwd: dir })
     if (tracked.exitCode !== 0) continue
-    const removed = await $`git rm -r --cached --ignore-unmatch -- ${target}`.cwd(dir).quiet().nothrow()
+    const removed = await git(["rm", "-r", "--cached", "--ignore-unmatch", "--", target], { cwd: dir })
     if (removed.exitCode === 0) anyStaged = true
   }
   if (!anyStaged) return
-  await $`git -c user.name=opencorvus -c user.email=noreply@opencorvus.ai commit --no-gpg-sign --no-verify -m ${"chore: untrack orchestrator scratch paths (.opencorvus/**, .opencorvus-meta.json)"}`
-    .cwd(dir)
-    .quiet()
-    .nothrow()
+  await git(
+    [
+      "-c", "user.name=opencorvus",
+      "-c", "user.email=noreply@opencorvus.ai",
+      "commit", "--no-gpg-sign", "--no-verify",
+      "-m", "chore: untrack orchestrator scratch paths (.opencorvus/**, .opencorvus-meta.json)",
+    ],
+    { cwd: dir },
+  )
 }
 
 function baseline(task: TaskRow) {
