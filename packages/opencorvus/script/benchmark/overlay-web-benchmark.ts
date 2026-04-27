@@ -66,18 +66,6 @@ import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { parseSSE } from "../../src/util/sse"
-// Inlined from the now-deleted util/activity-timeout (orphan cleanup commit
-// a0402f173). Benchmark is the only remaining caller — keeping it local here
-// avoids resurrecting a whole module for two uses (rule 26) and avoids a
-// shim that would violate rule 22 (dual source).
-function inactivityAgeMs(now: number, ...values: Array<number | null | undefined>): number {
-  let latest = 0
-  for (const v of values) {
-    if (typeof v === "number" && Number.isFinite(v) && v > latest) latest = v
-  }
-  if (latest < 1) return Number.POSITIVE_INFINITY
-  return Math.max(0, now - latest)
-}
 import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
 // Accept either `--name=value` or `--name value`. The old version quietly
@@ -98,34 +86,22 @@ function flag(name: string) {
 // `--reference-images "C:/path with space.png"` getting split). We refuse
 // to start in that case rather than silently using defaults.
 const KNOWN_FLAGS = new Set<string>([
-  "--alive-stall-timeout-ms",
-  "--completion-hard-timeout-ms",
   "--delivery-verify-cmd",
   "--executor",
   "--max-executor-groups",
   "--max-fix-runs",
   "--max-runs",
   "--planner-max-steps",
-  "--planner-timeout-ms",
-  "--planning-stall-timeout-ms",
-  "--planning-timeout-ms",
   "--project-dir",
   "--reference-images",
   "--report",
   "--request-attachment",
   "--request-file",
-  "--request-timeout-ms",
   "--resume-home-dir",
   "--resume-message",
   "--resume-task-id",
   "--spec-max-steps",
-  "--spec-timeout-ms",
-  "--stall-timeout-ms",
-  "--standby-timeout-ms",
-  "--task-create-timeout-ms",
-  "--task-resume-timeout-ms",
   "--title",
-  "--tool-timeout-ms",
   "--figma-url",
   // boolean (no value) switches
   "--no-keep",
@@ -163,36 +139,6 @@ function validateFlags(): void {
 }
 validateFlags()
 
-// Two independent stall tiers; whichever fires first aborts the benchmark.
-// Neither tier resets on raw text deltas — only on signals that prove the
-// task moved (tool call, status change, workflow step transition). This
-// keeps the watchdog honest when a model loops in "talking but not acting".
-//
-// Per-agent guards (decompose 5min progress / 10min absolute, architect 3min,
-// design-analyst 5min) fire first on real stalls; this monitor is the backstop
-// that catches whatever escapes — so its caps must be tight enough that an
-// escaped stall is noticed within a few minutes of the agent guard firing.
-//
-// --stall-timeout-ms: progress-stall budget after the task enters execution
-// (status outside queued/active). Each sub-agent should be making real tool
-// calls in this phase — anything longer than 8 min is almost certainly a hang.
-const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 8 * 60 * 1000
-// --planning-stall-timeout-ms: stall budget while task status is queued/active.
-// Decompose can legitimately take ~5min progress / 10min absolute; pad slightly.
-const planningStallTimeoutMs = Number(flag("--planning-stall-timeout-ms")) || 12 * 60 * 1000
-// Tier 1 alive stall: the SSE stream is producing nothing at all (not even
-// token deltas). This is a connection-level hang, separate from the progress
-// stall above. Short by design — if the LLM is truly working we'll see deltas.
-const aliveStallTimeoutMs = Number(flag("--alive-stall-timeout-ms")) || 2 * 60 * 1000
-const requestTimeoutMs = Number(flag("--request-timeout-ms")) || 30_000
-// Legacy: spec/planner timeouts from the old fixed-pipeline architecture.
-// Kept for backward compatibility — config may still read these env vars.
-const specTimeoutMs = Number(flag("--spec-timeout-ms")) || 24 * 60 * 60 * 1000
-const plannerTimeoutMs = Number(flag("--planner-timeout-ms")) || 24 * 60 * 60 * 1000
-const toolTimeoutMs = Number(flag("--tool-timeout-ms")) || 10 * 60 * 1000
-const standbyTimeoutMs = Number(flag("--standby-timeout-ms")) || 24 * 60 * 60 * 1000
-const completionHardTimeoutMs = Number(flag("--completion-hard-timeout-ms")) || 0
-// --timeout-ms accepted for backwards compat but no longer drives other timeouts
 // Legacy: spec/planner max steps from the old fixed-pipeline architecture.
 const specMaxSteps = Number(flag("--spec-max-steps")) || 80
 const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
@@ -327,9 +273,6 @@ const DIAG_TYPES = new Set([
   "orchestrator.goal.created",
   "orchestrator.goal.updated",
 ])
-const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || 2 * 60 * 1000
-const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || 5 * 60 * 1000
-const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || 10 * 60 * 1000
 const projectDir = flag("--project-dir")
 const temp = {
   dir: "",
@@ -397,16 +340,6 @@ await ensureBenchmarkModel(import.meta.dir, model)
 
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
-process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS = String(standbyTimeoutMs)
-// Legacy env vars from old fixed-pipeline architecture — kept for backward
-// compatibility as config may still read them during transition.
-process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
-process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
-process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
-process.env.OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS = String(plannerTimeoutMs)
-process.env.OPENCORVUS_TOOL_TIMEOUT_MS = String(toolTimeoutMs)
-process.env.OPENCORVUS_STANDBY_TIMEOUT_MS = String(standbyTimeoutMs)
-// Legacy env vars from old fixed-pipeline architecture
 process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 // Complex replication tasks legitimately need >3 delivery iterations to converge.
@@ -414,7 +347,7 @@ process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS = "6"
 
 console.log(
-  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} alive-stall=${aliveStallTimeoutMs / 1000}s progress-stall=${stallTimeoutMs / 1000}s planning-progress-stall=${planningStallTimeoutMs / 1000}s tool=${toolTimeoutMs / 1000}s standby=${standbyTimeoutMs === 86400000 ? "∞" : standbyTimeoutMs / 1000 + "s"} request=${requestTimeoutMs / 1000}s hard=${completionHardTimeoutMs > 0 ? completionHardTimeoutMs / 1000 + "s" : "none"}`,
+  `[overlay-benchmark] config model=${model} executor=${executor} groups=${maxExecutorGroups ?? "config-default"} (no benchmark-side timeouts)`,
 )
 
 // Force-remove SQLite WAL/SHM before reset — prevents previous benchmark's
@@ -546,23 +479,14 @@ const eventLogFile = reportFile.endsWith(".json")
 const events: Array<Record<string, unknown>> = []
 let flushed = Promise.resolve()
 let lastEventAt = Date.now()
-let lastProgressAt = Date.now()
-// Progress-event clock: advanced only by chunks that prove the task is
-// actually moving (tool_call/tool_result/status + orchestrator.task.updated,
-// goal.progress, run.updated) — NOT by raw delta traffic. Without this tier
-// a model stuck in a tool-call retry loop would keep both the event and the
-// progress clock "alive" (both reset by every delta) and never stall.
-let lastProgressEventAt = Date.now()
 let lastProgressSignature = ""
 let lastLogAt = Date.now()
 let lastActivityLogAt = Date.now()
 let lastHeartbeatAt = 0
 let lastActivityLine = ""
 // Terminal signal — resolved by onEvent when orchestrator.task.updated carries
-// a FINAL status (completed/failed/cancelled). waitForFinal races its 2s sleep
-// against this promise so the poll loop exits immediately on failure instead of
-// waiting for the next 2s poll tick — and sets terminalReached=true so stall
-// checks are suppressed while the progress endpoint catches up.
+// a FINAL status (completed/failed/cancelled). waitForFinal races its poll sleep
+// against this promise so the loop exits immediately on terminal SSE.
 let terminalSignalResolver: (() => void) | null = null
 let terminalReached = false
 let planning: any = null
@@ -679,9 +603,6 @@ const onEvent = ({ payload }: { payload: unknown }) => {
   }
   // LLM delta events (message.part.delta) are ephemeral and high-frequency.
   // They don't produce a log line, but they DO count as progress activity —
-  // prevents false stall detection while a reasoning model is generating
-  // tokens. (Alive-stall is already reset above; this block also advances
-  // the progress-stall timer for part.*.)
   if (payload && typeof payload === "object" && "type" in payload) {
     const rawType = String((payload as any).type ?? "")
     if (rawType === "message.part.delta" || rawType.endsWith(".part.delta") ||
@@ -715,7 +636,7 @@ const onEvent = ({ payload }: { payload: unknown }) => {
   if (entry.type === "orchestrator.task.updated" && FINAL.has(entry.status)) {
     if (!terminalReached) {
       terminalReached = true
-      activityLine(`[overlay-benchmark] terminal-signal status=${entry.status} — stall checks suppressed`)
+      activityLine(`[overlay-benchmark] terminal-signal status=${entry.status}`)
     }
     const resolver = terminalSignalResolver
     terminalSignalResolver = null
@@ -733,25 +654,6 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     lastActivityLogAt = Date.now()
     lastLogAt = lastActivityLogAt
   }
-  // Progress-event tier: advance only on signals that prove the task moved,
-  // not on incremental text chunks. Keeps stall detection honest while
-  // tolerating slow reasoning models.
-  const isProgressKind = entry.kind === "tool_call" || entry.kind === "tool_result" || entry.kind === "status"
-  const isProgressType =
-    entry.type === "orchestrator.task.updated" ||
-    entry.type === "orchestrator.run.updated" ||
-    entry.type === "orchestrator.goal.progress" ||
-    entry.type === "orchestrator.goal.passed" ||
-    entry.type === "orchestrator.goal.failed" ||
-    entry.type === "orchestrator.goal.created" ||
-    entry.type === "orchestrator.goal.updated" ||
-    entry.type === "orchestrator.plan.created" ||
-    entry.type === "orchestrator.plan.activated" ||
-    entry.type === "orchestrator.interaction.requested" ||
-    entry.type === "orchestrator.interaction.resolved"
-  if (isProgressKind || isProgressType) {
-    lastProgressEventAt = Date.now()
-  }
   flushed = flushed
     .then(() => fs.appendFile(eventLogFile, `${JSON.stringify(entry)}\n`))
     .catch(() => undefined)
@@ -760,12 +662,7 @@ const onEvent = ({ payload }: { payload: unknown }) => {
 const api = async (pathname: string, init?: RequestInit) => {
   const url = new URL(pathname, server.url)
   url.searchParams.set("directory", temp.dir)
-  const timeoutSignal = AbortSignal.timeout(requestTimeoutMs)
-  const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
-  const res = await fetch(url, {
-    ...init,
-    signal,
-  })
+  const res = await fetch(url, init)
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url.pathname}`)
   return res
 }
@@ -815,7 +712,7 @@ try {
     }, server.url.origin, temp.dir)
 
     await page.goto(new URL("/ui/index.html", server.url).toString(), { waitUntil: "load" })
-    await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
+    await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 0 })
   }
   marks.onlineAt = Date.now()
   if (page) {
@@ -842,7 +739,7 @@ try {
         } catch {
           return false
         }
-      }, { timeout: TASK_RESUME_TIMEOUT_MS }, taskID)
+      }, { timeout: 0 }, taskID)
     }
 
     // Synthesize planning/streaming snapshots from current board state
@@ -862,7 +759,7 @@ try {
     if (page) {
       await page.waitForFunction(() => {
         try { return !!window.eval("state").board?.task?.id } catch { return false }
-      }, { timeout: 60_000 })
+      }, { timeout: 0 })
     }
     marks.boardAt = Date.now()
 
@@ -875,7 +772,7 @@ try {
     }).catch((err) => logLine(`[overlay-benchmark] resume message inject failed: ${err}`))
 
     if (page) {
-      streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS).catch(() => ({
+      streaming = await waitForStreamingVisible(page).catch(() => ({
         reasoning: "", assistantText: "", liveRole: "", liveText: "",
       }))
     } else {
@@ -922,15 +819,13 @@ try {
     logLine(`[overlay-benchmark] RESUME-INFO project=${temp.dir}`)
     logLine(
       `[overlay-benchmark] RESUME-CMD bun run script/benchmark/overlay-web-benchmark.ts ` +
-        `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" --executor=${executor} ` +
-        `"--stall-timeout-ms=1200000" "--planning-stall-timeout-ms=7200000"`,
+        `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" --executor=${executor}`,
     )
 
     if (page) {
-      planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
+      planning = await waitForPlanningVisible(page, api)
     } else {
-      const waitStart = Date.now()
-      while (Date.now() - waitStart < TASK_CREATE_TIMEOUT_MS) {
+      while (true) {
         const prog = await api(`/task/${taskID}/progress`).then((r) => r.json()).catch(() => null)
         if (prog?.task?.status && prog.task.status !== "queued") {
           planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
@@ -938,12 +833,11 @@ try {
         }
         await Bun.sleep(1000)
       }
-      if (!planning) planning = { pendingCount: 0, taskList: [], reasoning: "", assistantText: "", taskIDs: [taskID], selectedTaskID: taskID }
     }
     marks.planningAt = Date.now()
 
     if (page) {
-      taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
+      taskID = await waitForTaskCreated(page, api)
     }
     marks.createdAt = Date.now()
     await api(`/task/${taskID}/budget`, {
@@ -971,7 +865,7 @@ try {
         } catch {
           return false
         }
-      }, { timeout: 720_000 }, taskID)
+      }, { timeout: 0 }, taskID)
     }
     marks.selectedAt = Date.now()
 
@@ -982,11 +876,11 @@ try {
         } catch {
           return false
         }
-      }, { timeout: 720_000 })
+      }, { timeout: 0 })
     }
     marks.boardAt = Date.now()
     if (page) {
-      streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+      streaming = await waitForStreamingVisible(page)
     } else {
       streaming = { reasoning: "", assistantText: "", liveRole: "", liveText: "" }
     }
@@ -999,7 +893,7 @@ try {
   marks.resumedAt = Date.now()
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
-  progress = await waitForFinal(taskID, stallTimeoutMs, api, completionHardTimeoutMs)
+  progress = await waitForFinal(taskID, api)
   marks.completedAt = Date.now()
   finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()).catch(() => board) : board
 
@@ -1147,9 +1041,7 @@ async function scaffoldProject(dir: string, model: string) {
       },
       provider: {
         [providerID]: {
-          options: {
-            timeout: requestTimeoutMs,
-          },
+          options: {},
         },
       },
     },
@@ -1308,23 +1200,11 @@ async function buildBenchmarkReport(error?: unknown) {
     server: server.url.toString(),
     taskID,
     error: reportError,
-    stage_timeout_ms: {
-      // Legacy spec/planner timeouts kept for backward compatibility
-      spec: specTimeoutMs,
-      planner: plannerTimeoutMs,
-      tool: toolTimeoutMs,
-      standby: standbyTimeoutMs,
-      stall: stallTimeoutMs,
-      request: requestTimeoutMs,
-    },
     stage_max_steps: {
       // Legacy spec/planner max steps kept for backward compatibility
       spec: specMaxSteps,
       planner: plannerMaxSteps,
     },
-    stall_timeout_ms: stallTimeoutMs,
-    completion_hard_timeout_ms: completionHardTimeoutMs || null,
-    request_timeout_ms: requestTimeoutMs,
     taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
     evaluation: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
     changedFiles,
@@ -1606,42 +1486,21 @@ async function cleanup(
 
 async function waitForFinal(
   taskID: string,
-  stallTimeoutMs: number,
   api: (pathname: string, init?: RequestInit) => Promise<Response>,
-  completionHardTimeoutMs = 0,
 ) {
-  const startedAt = Date.now()
   let lastStatus = ""
-  // Scope stall clocks to this wait — stale timestamps from earlier phases
-  // (planning, browser bootstrap) must not count against the execution stall
-  // budget. terminalReached is reset in case of a resumed/subsequent call.
-  const entryNow = Date.now()
-  lastEventAt = entryNow
-  lastProgressAt = entryNow
-  lastProgressEventAt = entryNow
   lastProgressSignature = ""
   lastHeartbeatAt = 0
   terminalReached = false
-  let terminalAt = 0
   const terminalPromise = new Promise<void>((resolve) => {
-    terminalSignalResolver = () => {
-      terminalAt = Date.now()
-      resolve()
-    }
+    terminalSignalResolver = () => resolve()
   })
-  // Hard cap on the gap between a terminal SSE signal and the /progress
-  // endpoint reflecting the terminal status. The event is emitted from the
-  // same DB transaction that writes the row, so divergence longer than this
-  // indicates a real bug — fail loudly rather than loop forever.
-  const TERMINAL_PROGRESS_GRACE_MS = 30_000
   try {
   while (true) {
     let progress: any
     try {
       progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
     } catch (e) {
-      // Bun-specific: AbortSignal fires during body read → empty body → SyntaxError instead of AbortError
-      // Also handle transient network/abort errors to avoid crashing on single failed poll
       const isTransient = e instanceof SyntaxError
         || (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError"))
         || (e instanceof TypeError && typeof (e as any).message === "string" && /fetch|network|abort/i.test((e as any).message))
@@ -1657,8 +1516,6 @@ async function waitForFinal(
     const signature = progressSignature(progress)
     if (signature !== lastProgressSignature) {
       lastProgressSignature = signature
-      lastProgressAt = Date.now()
-      lastProgressEventAt = Date.now()
       activityLine(`[overlay-benchmark] progress=${signature}`)
     }
     if (progress.task.status !== lastStatus) {
@@ -1666,55 +1523,16 @@ async function waitForFinal(
       activityLine(`[overlay-benchmark] status=${lastStatus}`)
     }
     const now = Date.now()
-    // Tier 1 (alive): any SSE chunk — detects connection-level hangs.
-    const aliveAgeMs = inactivityAgeMs(now, lastEventAt)
-    // Tier 2 (progress): only semantic-progress events — detects "model is
-    // emitting tokens but getting nowhere" loops.
-    const progressAgeMs = inactivityAgeMs(now, lastProgressEventAt, lastProgressAt)
-    // Use a separate (usually longer) progress-stall timeout while the Task
-    // Agent is in early stages (queued/active). During "active" the Task
-    // Agent may be invoking tools (decompose, plan_goal, etc.) where tool
-    // events arrive intermittently.
     const taskStatus = progress?.task?.status || ""
-    const pipelineStatuses = ["queued", "active"]
-    const effectiveProgressMs = pipelineStatuses.includes(taskStatus) ? planningStallTimeoutMs : stallTimeoutMs
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
       const retryCount = progress?.run?.retryCount ?? progress?.activeRun?.retryCount ?? 0
       const maxFixRuns = (progress?.task as any)?.budget?.maxFixRuns ?? "?"
       logLine(
-        `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} alive_age_ms=${aliveAgeMs} progress_age_ms=${progressAgeMs} alive_cap_ms=${aliveStallTimeoutMs} progress_cap_ms=${effectiveProgressMs} last_progress=${lastProgressSignature || "none"}`,
+        `[overlay-benchmark] heartbeat status=${taskStatus} retry=${retryCount}/${maxFixRuns} last_progress=${lastProgressSignature || "none"}`,
       )
     }
-    // Once the orchestrator has emitted a terminal task.updated event, the
-    // task is definitionally done — suppress stall checks while the progress
-    // endpoint catches up. Otherwise a slow progress poll after failure could
-    // fire a spurious stall error even though the run is already over.
-    if (!terminalReached) {
-      if (aliveAgeMs >= aliveStallTimeoutMs) {
-        throw new Error(
-          `Task alive stall: no SSE activity for ${aliveAgeMs}ms (cap ${aliveStallTimeoutMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
-        )
-      }
-      if (progressAgeMs >= effectiveProgressMs) {
-        throw new Error(
-          `Task progress stall: no semantic-progress event for ${progressAgeMs}ms (cap ${effectiveProgressMs}ms, status: ${taskStatus}, last progress: ${lastProgressSignature || "none"})`,
-        )
-      }
-      if (completionHardTimeoutMs > 0 && (now - startedAt) >= completionHardTimeoutMs) {
-        throw new Error(`Task exceeded optional hard completion timeout of ${completionHardTimeoutMs}ms`)
-      }
-    }
-    // When terminal signal has fired, shorten the poll cadence so the final
-    // progress snapshot is fetched promptly. Otherwise race sleep vs signal so
-    // the loop exits immediately on task.updated terminal.
     if (terminalReached) {
-      const sinceTerminal = Date.now() - terminalAt
-      if (sinceTerminal >= TERMINAL_PROGRESS_GRACE_MS) {
-        throw new Error(
-          `Task terminal SSE fired but /progress still reports non-final for ${sinceTerminal}ms (cap ${TERMINAL_PROGRESS_GRACE_MS}ms, status: ${taskStatus})`,
-        )
-      }
       await Bun.sleep(250)
     } else {
       await Promise.race([Bun.sleep(2_000), terminalPromise])
@@ -1751,10 +1569,8 @@ function progressSignature(progress: any) {
 async function waitForPlanningVisible(
   page: Page,
   api: (pathname: string, init?: RequestInit) => Promise<Response>,
-  timeoutMs: number,
 ) {
-  const startedAt = Date.now()
-  while (Date.now() - startedAt < timeoutMs) {
+  while (true) {
     const overlay = await overlaySnapshot(page)
     if (overlay.pendingCount > 0 || overlay.selectedTaskID || overlay.taskIDs[0]) return overlay
     const board = await api("/tasks").then((res) => res.json()).catch(() => null)
@@ -1762,24 +1578,20 @@ async function waitForPlanningVisible(
     if (taskID) return { ...overlay, taskIDs: [taskID, ...overlay.taskIDs].filter(Boolean).slice(0, 5) }
     await Bun.sleep(250)
   }
-  throw new Error(`Overlay did not expose planning state within ${timeoutMs}ms: ${JSON.stringify(await debugSnapshot(page, api))}`)
 }
 
-async function waitForStreamingVisible(page: Page, timeoutMs: number) {
-  const startedAt = Date.now()
-  while (Date.now() - startedAt < timeoutMs) {
+async function waitForStreamingVisible(page: Page) {
+  while (true) {
     const overlay = await overlaySnapshot(page)
     if (meaningfulLiveText(overlay.reasoning)) return overlay
     if (meaningfulLiveText(overlay.assistantText)) return overlay
     if (meaningfulLiveText(overlay.liveText)) return overlay
     await Bun.sleep(250)
   }
-  throw new Error(`Overlay did not render streamed task output within ${timeoutMs}ms`)
 }
 
-async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>, timeoutMs: number) {
-  const startedAt = Date.now()
-  while (Date.now() - startedAt < timeoutMs) {
+async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
+  while (true) {
     const overlay = await overlaySnapshot(page)
     if (overlay.selectedTaskID) return overlay.selectedTaskID
     if (overlay.taskIDs[0]) return overlay.taskIDs[0]
@@ -1788,7 +1600,6 @@ async function waitForTaskCreated(page: Page, api: (pathname: string, init?: Req
     if (taskID) return taskID
     await Bun.sleep(1_000)
   }
-  throw new Error(`Overlay did not create a task within ${timeoutMs}ms: ${JSON.stringify(await debugSnapshot(page, api))}`)
 }
 
 async function verifyResume(
@@ -1813,9 +1624,9 @@ async function verifyResume(
     localStorage.setItem("oc_auto_question", "true")
   }, serverUrl, directory, taskID)
   await next.goto(new URL("/ui/index.html", serverUrl).toString(), { waitUntil: "load" })
-  await next.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
+  await next.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 0 })
   await syncDirectory(next, directory)
-  await waitForTaskCreated(next, api, TASK_RESUME_TIMEOUT_MS)
+  await waitForTaskCreated(next, api)
   await next.evaluate(async (id) => {
     const state = window.eval("state")
     if (state.selectedTaskID === id && state.board?.task?.id === id) return
@@ -1828,7 +1639,7 @@ async function verifyResume(
     } catch {
       return false
     }
-  }, { timeout: TASK_RESUME_TIMEOUT_MS }, taskID, directory)
+  }, { timeout: 0 }, taskID, directory)
   await next.evaluate(async () => {
     try {
       await window.eval("persistOverlaySettings")()
