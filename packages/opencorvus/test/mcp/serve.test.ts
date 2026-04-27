@@ -56,10 +56,10 @@ describe("mcp.serve", () => {
     })
   })
 
-  test("maps executor tools to Claude Code MCP-prefixed names", () => {
-    expect(MCPServe.claudeToolName("webpage_extract")).toBe("mcp__opencorvus__webpage_extract")
-    expect(MCPServe.normalizeClaudeToolName("mcp__opencorvus__webpage_compile")).toBe("webpage_compile")
-    const prompt = MCPServe.claudeExecutorPromptSection()
+  test("maps executor tools to coding executor MCP-prefixed names", () => {
+    expect(MCPServe.codingExecutorToolName("webpage_extract")).toBe("mcp__opencorvus__webpage_extract")
+    expect(MCPServe.normalizeCodingExecutorToolName("mcp__opencorvus__webpage_compile")).toBe("webpage_compile")
+    const prompt = MCPServe.codingExecutorPromptSection()
     expect(prompt).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
     expect(prompt).toContain("Mirror extraction artifacts must come from the mirror MCP toolchain")
   })

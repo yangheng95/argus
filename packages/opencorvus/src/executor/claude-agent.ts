@@ -123,7 +123,7 @@ export namespace ClaudeAgentExecutor {
         const allowed = input.toolMode === "none" ? [] : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
         const systemAppend = [
           input.system,
-          input.toolMode === "none" ? undefined : MCPServe.claudeExecutorPromptSection(),
+          input.toolMode === "none" ? undefined : MCPServe.codingExecutorPromptSection(),
         ]
           .filter((item): item is string => Boolean(item))
           .join("\n\n")
