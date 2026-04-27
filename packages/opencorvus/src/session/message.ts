@@ -795,6 +795,24 @@ export namespace Message {
 
     const tools = Object.fromEntries(Array.from(toolNames).map((toolName) => [toolName, { toModelOutput }]))
 
+    // Reasoning blocks intentionally pass through unchanged. An earlier
+    // attempt stripped reasoning from every assistant message except the
+    // last to "save context" — that miscarried (rule 14: 怀疑自己，没
+    // 数据支撑就是胡说):
+    //   1. Stripping reasoning from messages BEFORE the cache breakpoint
+    //      (provider/transform.ts:applyCaching marks system[0], system[-1],
+    //      messages[-2], messages[-1]) changes the cache-prefix bytes
+    //      every turn — every request would cache-miss and pay full input
+    //      price for the entire history. Anthropic 5-min cache hit is
+    //      0.1× input price; cache write is 1.25× — even a 50%-reasoning
+    //      history costs ~80% MORE under the strip strategy than under
+    //      pass-through with cache hits.
+    //   2. Anthropic's thinking + tool_use protocol requires the
+    //      immediately-prior assistant's thinking blocks to remain when
+    //      the current request is a tool_result follow-up; "last assistant"
+    //      in our store may not coincide with that protocol position.
+    // Net: pass-through wins on cost AND correctness. Don't strip.
+
     return convertToModelMessages(
       result.filter((msg) => msg.parts.some((part) => part.type !== "step-start")),
       {

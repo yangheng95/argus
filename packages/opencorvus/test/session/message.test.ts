@@ -960,6 +960,50 @@ describe("session.message.toModelMessage", () => {
     expect(toolResults.length).toBe(1)
     expect(toolResults[0].output.value).toBe("FAILED_GOALS_SNAPSHOT")
   })
+
+  test("preserves reasoning on every assistant message — no strip (cache + Anthropic protocol)", () => {
+    // Locks in pass-through. Stripping older reasoning was tried and
+    // reverted because it broke prompt-cache hits (cache prefix bytes
+    // change every turn) and risked Anthropic's thinking+tool_use
+    // protocol requirement. See toModelMessages comment for the full
+    // rationale.
+    const turn = (i: number): Message.WithParts[] => [
+      {
+        info: userInfo(`u${i}`),
+        parts: [{ ...basePart(`u${i}`, `up${i}`), type: "text", text: `q${i}` }] as Message.Part[],
+      },
+      {
+        info: assistantInfo(`a${i}`, `u${i}`),
+        parts: [
+          {
+            ...basePart(`a${i}`, `ar${i}`),
+            type: "reasoning",
+            text: `thought-${i}`,
+            time: { start: 0 },
+          },
+          {
+            ...basePart(`a${i}`, `at${i}`),
+            type: "text",
+            text: `answer-${i}`,
+          },
+        ] as Message.Part[],
+      },
+    ]
+    const input: Message.WithParts[] = [...turn(1), ...turn(2), ...turn(3)]
+    const out = Message.toModelMessages(input, model)
+
+    const reasoningTexts: string[] = []
+    for (const msg of out) {
+      if (msg.role !== "assistant") continue
+      const content = Array.isArray(msg.content) ? msg.content : []
+      for (const part of content as Array<{ type: string; text?: string }>) {
+        if (part.type === "reasoning" && typeof part.text === "string") {
+          reasoningTexts.push(part.text)
+        }
+      }
+    }
+    expect(reasoningTexts).toStrictEqual(["thought-1", "thought-2", "thought-3"])
+  })
 })
 
 describe("session.message.fromError", () => {
