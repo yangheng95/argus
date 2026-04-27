@@ -477,29 +477,19 @@ function fromStreamEvent(sessionID: string, event?: Record<string, unknown>): Co
       }]
     }
   }
-  if (type === "content_block_start") {
-    const block = record(event.content_block)
-    if (!block) return []
-    if (block.type === "tool_use") {
-      const id = typeof block.id === "string" ? block.id : ""
-      const name = typeof block.name === "string" ? block.name : ""
-      if (!id || !name) return []
-      const adapter = ToolAdapterRegistry.classify(name)
-      return [{
-        type: "tool_call",
-        id,
-        name,
-        input: text(block.input),
-        meta: {
-          adapter: adapter?.id,
-          tool_kind: adapter?.kind,
-        },
-      }]
-    }
-  }
-  if (type === "message_start" || type === "message_stop" || type === "message_delta" || type === "content_block_stop") {
-    return []
-  }
+  // tool_use blocks are NOT emitted from stream events. Anthropic's streaming
+  // protocol seeds each tool_use's input as `{}` at content_block_start and
+  // streams the real input via input_json_delta until content_block_stop. If
+  // we emit on start, downstream sees a tool_call with input "{}" (the
+  // observed "empty bash invocation") and then a second tool_call with the
+  // full input from the assistant envelope — same id, two events, breaking
+  // any in-flight counter and (combined with the empty-env MCP regression)
+  // wedging the executor's done-detection loop forever. Single source: emit
+  // tool_call exclusively from the assistant envelope (fromAssistant), which
+  // arrives with the complete input. text_delta / thinking_delta still
+  // stream below for live rendering.
+  if (type === "content_block_start" || type === "content_block_stop") return []
+  if (type === "message_start" || type === "message_stop" || type === "message_delta") return []
   // Unknown stream events — protocol noise, do not yield
   return []
 }
