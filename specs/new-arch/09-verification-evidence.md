@@ -1,9 +1,22 @@
 # 09 — Verification Evidence
 
-> 对应代码：`src/engine/engine.sql.ts` · `src/engine/persist.ts` · `src/engine/store.ts` ·
-> `src/engine/goal-pool.ts` · `src/delivery/checks/per-goal.ts` ·
-> `src/acceptance/types.ts` · `src/delivery/tools.ts` · `src/orchestrator/tools.ts` ·
-> `src/goal/runner.ts`
+> **状态（2026-04-27）**：本 spec 设计的 evidence 模型已实施，但**底层存储已迁至
+> `engine_artifact` 通用表 + `kind="verification-evidence"`**，不再扩展 `engine_evaluation`。
+> 五张过程表（含 `engine_evaluation`）已在 Phase 6 整合到 `engine_artifact`（见
+> [02-data.md](02-data.md)）。
+>
+> 现行公开 API：
+> - `verification/persist.ts` — `persistEvidence` / `findLatestGoalRunEvidence` / `findLatestDeliveryEvidence`
+> - `verification/query.ts` — `query_evidence` tool
+> - `metrics/arbiter.ts` — signature 计算（Phase 6+ 新增）
+>
+> 本文余下章节是**设计原始论证**，作为历史决策保留；具体表名 / 字段如与代码不一致，以
+> 代码为准。
+>
+> 对应代码：`src/engine/engine.sql.ts` (EngineArtifactTable) · `src/engine/persist.ts` ·
+> `src/engine/store.ts` · `src/delivery/checks/` · `src/acceptance/types.ts` ·
+> `src/delivery/tools.ts` · `src/orchestrator/tools.ts` · `src/goal/runner.ts` ·
+> `src/verification/` · `src/metrics/arbiter.ts`
 
 ## 一句话
 

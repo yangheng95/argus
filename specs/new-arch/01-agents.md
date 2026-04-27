@@ -2,7 +2,9 @@
 
 > 对应代码：`src/orchestrator/` · `src/engine/` · `src/agent/` · `src/requirements/` ·
 > `src/architect/` · `src/planner/` · `src/design-analyst/` · `src/delivery/` · `src/delivery/checks/` ·
-> `src/executor/` · `src/pipeline/` · `src/goal/` · `src/task-api/` · `src/control/` · `src/channel/`
+> `src/executor/` · `src/goal/` · `src/task-api/` · `src/control/` · `src/channel/` · `src/decision-log/`
+>
+> 注：旧 `src/pipeline/` 已与 build tool 合并；本文档此前提到的 `src/engine/goal-pool.ts` 和 `src/pipeline/executor.ts` 在 Phase 5 后已删除。
 
 ## 核心原则
 
@@ -74,16 +76,16 @@ orchestrator/loop.ts — runTaskLoop()
                   │ 通过 tools (orchestrator/tools.ts)
                   ▼
         ┌─────────────────────────┐
-        │  GoalPool               │  engine/goal-pool.ts
-        │  submit → drain         │
-        │  inactivity timeout     │
-        │  (非硬超时)             │
+        │  build tool             │  orchestrator/tools.ts (build:)
+        │  同步执行单个 goal       │  执行体：goal/runner.ts
+        │  (旧 GoalPool / pipeline/executor.ts
+        │   已在 Phase 5 删除，   │
+        │   职责吸收至 build tool) │
         └─────────────────┬───────┘
                           │
                           ▼
         ┌─────────────────────────┐
         │  goal/runner.ts         │
-        │  pipeline/executor.ts   │
         │  Executor (worktree)    │
         │  claude-code/codex/     │
         │  opencode               │
@@ -92,20 +94,16 @@ orchestrator/loop.ts — runTaskLoop()
                           ▼
         ┌─────────────────────────┐
         │  Checks                 │  delivery/checks/
-        │  deterministic runner   │  discovery / per-goal /
-        │  + LLM judge            │  llm-judge-runner /
-        │                         │  visual
+        │  deterministic runner   │  discovery / visual /
+        │  + LLM judge            │  content-fingerprint /
+        │                         │  runtime-evidence / types
         └─────────────────┬───────┘
                           │
                           ▼
               回到 Decision Point
 ```
 
-**Loop 的四种触发（trigger.kind）**：
-1. `created` — 新任务，首次规划
-2. `batch_complete` — 一批 goal 跑完（任意 pass/fail 组合），读新鲜上下文决定下一步
-3. `delivery_rejected` — delivery agent 打回（验收不通过），带 feedback
-4. `retry` — 用户显式重试
+**Loop 触发**：早期版本使用 `trigger.kind ∈ {created, batch_complete, delivery_rejected, retry}` 枚举，已在 Phase 2 移除。当前 `runTaskLoop` 接受任意自由形式事件，由 LLM 读 `engine_*` + decision-log 事实后自行判断（参见 [15-no-fsm.md](15-no-fsm.md)）。
 
 **Loop 消灭的旧机制**（不要再引入）：
 - `recoverOrphanedTasks`（loop 本身就是生命周期；孤儿 task 由 `EngineService.init` 里的 serial-queue recovery 统一重启）
@@ -121,14 +119,21 @@ orchestrator/loop.ts — runTaskLoop()
 | Requirements | `requirements/agent.ts` | Zod tool 输出 Goals[] + 追溯矩阵 + fidelity | pipeline workflow 或 Orchestrator 判断需要 |
 | Architect | `architect/agent.ts` | 接口契约、目录蓝图、导出清单；写 decision-log | 跨目标协调需要时 |
 | Design Analyst | `design-analyst/agent.ts` | 视觉参考（Figma / 图片 / URL）→ 布局 / 样式 / 组件清单 | 有视觉参考的前端任务 |
-| Planner | `planner/agent.ts` | per-goal 实现步骤 | 当前由 `engine/goal-pool.ts` 在 per-goal build 前调用；不是 Orchestrator 的显式 tool |
-| Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 delivery_rejected 重新 call build） | 每个 workflow 末尾 |
-| Build | 由 `Agent.get("build")` 解析为 executor session | 在 worktree 中实际写代码 | Orchestrator 通过 `build` tool 调起 |
+| Planner | `planner/tools.ts` + `agent/agent.ts` 注册项 | per-goal 实现步骤；当前**无独立 `planner/agent.ts` 文件**，仅以 Agent.Info 注册 + tools 暴露，作为 build tool 的内置助手而非显式 stage tool | 由 build tool 内部按需调用；不出现在 orchestrator/tools.ts |
+| Delivery | `delivery/agent.ts` | diff 验收 + 触发回修（通过 deliver→重新 call build 的循环） | 每个 workflow 末尾 |
+| Build | `Agent.get("build")` → executor session（执行体在 `goal/runner.ts`） | 在 worktree 中实际写代码 | Orchestrator 通过 `build` tool 调起 |
 
 **Checks（原 evaluator 模块）**：移到 `delivery/checks/`，不再是独立 sub-agent。delivery agent 通过 `discovery.ts` 解析 check family，调 `per-goal.ts` / `llm-judge-runner.ts` / `visual.ts` 执行确定性或 LLM judge 验证。旧 `src/evaluator/` 目录已删除。
 
-**当前主要 stage-agent 调用点**：`orchestrator/tools.ts`（`requirements / design_analysis / architect / build / deliver`）。
-**例外**：`planner/agent.ts` 当前由 `engine/goal-pool.ts` 在 per-goal build 前调用；见 [13-agent-communication-matrix.md](13-agent-communication-matrix.md)。
+**`orchestrator/tools.ts` 当前导出 19 个 tool**（按文件出现顺序）：
+1. **Stage 调用**：`requirements`、`design_analysis`、`architect`、`build`、`deliver`、`publish_delivery`
+2. **审查 / 复核**：`integrity`（integrity reviewer）、`prosecute`（prosecutor）、`analyze_intent`
+3. **Goal 维护**：`modify_goal`、`query_failed_goals`
+4. **状态 / 上下文**：`read_context`
+5. **任务级控制**：`fail_task`、`cancel_task`、`retry_task`、`inject_operator_message`、`restart_from_stage`、`refine`
+6. **用户交互**：`question`
+
+`planner` **不**出现在 orchestrator tools 中——它的调用埋在 build tool 内部，由 build executor 按需触发；详见 [13-agent-communication-matrix.md](13-agent-communication-matrix.md)。
 
 ## Decision Log
 
@@ -143,11 +148,12 @@ orchestrator/loop.ts — runTaskLoop()
 Executor 是**外部**进程，不属于 Agent Team：
 
 - `executor/claude-code.ts` · `claude-agent.ts` · `claude-cli.ts`
-- `executor/codex-cli.ts` · `codex-app-server.ts` · `codex-app-server-client.ts`
+- `executor/codex.ts` · `codex-cli.ts` · `codex-app-server.ts` · `codex-app-server-client.ts`
 - `executor/opencode.ts`
+- 共享层：`bootstrap.ts` · `contract.ts` · `discovery.ts` · `external-process.ts` · `managed.ts` · `registry.ts` · `runtime-env.ts`
 
-注册到 `executor/registry.ts`，通过 `pipeline/executor.ts` 在 worktree 里隔离执行，
-产出 delivery diff。
+注册到 `executor/registry.ts`，由 `goal/runner.ts` 在 worktree 内隔离执行，产出 delivery diff。
+（旧 `pipeline/executor.ts` 已删除；编排层已并入 build tool + goal/runner.ts。）
 
 ## EngineService 入口一览
 

@@ -5,6 +5,13 @@
 - 替代：`15-no-fsm.md`（该文档废止，以本文为准）
 - 约束：CLAUDE.md 规则 22（禁双源）、23（禁状态机）、13（直接 reset DB）、26（禁过度工程）
 
+> **2026-04-27 状态核查**：拆除工程已基本完成（Phase 6 把 5 张过程表合并为 `engine_artifact`，
+> orphan observation 落在 `engine/orphan.ts`），但 teardown 调用图仍未完全收口：
+> - `engine/writer.ts:224` `abortRuns` 与 `engine/ownership.ts:445` `cleanup` 是两条独立清理
+>   路径，待统一到一个入口（本文 §1.5 / §12 的目标）。
+> - `session/revert.ts` 的"禁动 goal worktree"边界尚未在代码中加注释式断言。
+> 上述项作为 follow-up ticket 单独推进，不阻塞本文档主线结论。
+
 ---
 
 ## 0. 本质认知

@@ -15,9 +15,11 @@
 - **验证**：Zod schema（完整，无 `as any`）
 - **接口**：`GET /config` · `PATCH /config`（JSON Merge Patch RFC 7396）· SSE `config.changed`
 
-**字段分组**：
+**字段分组**（来源：`src/config/config.ts` 的 ConfigSchema）：
 ```
-核心：      provider · model · agent · mcp · lsp · formatter · permission · compaction
+顶层：      $schema · logLevel · server · share · autoupdate · snapshot · watcher
+           enabled_providers · tool_permissions
+           provider · model · agent · mcp · lsp · formatter · permission · compaction
            channel · command · skills · plugin · prompt · instructions · username
 
 assistant: requirements{}  ← 替代 spec
@@ -29,6 +31,8 @@ assistant: requirements{}  ← 替代 spec
 experimental: unattended · auto_permission · auto_question · batch_tool
              memory{} · mcp_timeout · primary_tools · openTelemetry
 ```
+
+> 文档此前未列出的顶级 key：`$schema` / `logLevel` / `server` / `share` / `autoupdate` / `snapshot` / `watcher`（含 `watcher.ignore`） / `enabled_providers` / `tool_permissions`（任务级权限默认值）—— 全部以 `config.ts` 现状为准。
 
 **关键原则**：此层决定「系统做什么」，跨设备/session/客户端一致。
 行为类设置（unattended / auto_permission）属于此层，**不属于 UI 偏好**。

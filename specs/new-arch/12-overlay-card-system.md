@@ -6,7 +6,12 @@
 > `packages/opencorvus/src/workbench/board.ts`
 >
 > 本文档定义 Overlay 消息卡片 / 任务卡片 / 过程卡片的统一抽象。所有新增卡片必须通过本协议
-> 接入，禁止继续以“新增一个专用 kind + 新增一套专用组件分支”的方式扩张卡片系统。
+> 接入，禁止继续以"新增一个专用 kind + 新增一套专用组件分支"的方式扩张卡片系统。
+>
+> **状态（2026-04-27）**：`store/card-tree.ts` 与 `services/tree-writer.ts` 已落地（commit
+> `8156e36e0` 把 CardNode 双源合并到 store/card-tree）；但本文档定义的 **Shell / Variant /
+> Payload / UiHints 四元抽象尚未实施** —— 当前实现仍以扁平的 `CardKind` + `StepPayload` +
+> ad-hoc 字段（`toolPart`、`integrity` 等）承载差异。本文档当前是"目标设计"，不是"代码现状"。
 
 ---
 

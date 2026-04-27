@@ -39,9 +39,10 @@
 
 **调用链**：
 ```
-Orchestrator build tool → goal/runner.ts → pipeline/executor.ts → ExecutorRegistry
+Orchestrator build tool → goal/runner.ts → ExecutorRegistry.require()
                         → worktree 隔离 → Executor 进程 → diff / delivery
 ```
+（旧 `pipeline/executor.ts` 已删除；调度逻辑直接落在 `goal/runner.ts` 和 ExecutorRegistry。）
 
 ## Plugin —— 非执行器插件
 
@@ -63,6 +64,7 @@ Orchestrator build tool → goal/runner.ts → pipeline/executor.ts → Executor
 |---|---|
 | `index.ts` | MCP client 管理（连接、生命周期） |
 | `serve.ts` | argus 自身作为 MCP server 暴露工具 |
+| `stdio.ts` | stdio transport 适配（本地子进程） |
 | `auth.ts` | MCP 鉴权 |
 | `oauth-callback.ts` · `oauth-provider.ts` | OAuth 流 |
 
