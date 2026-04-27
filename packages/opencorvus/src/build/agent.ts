@@ -568,12 +568,13 @@ function externalQuestionLine(question: Record<string, unknown>): string {
 }
 
 function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
-  if (event.type === "progress") {
-    const summary = event.summary || event.phase
-    return [`**${executor} progress**`, "", `Phase: ${event.phase}`, summary ? `Summary: ${summary}` : ""]
-      .filter(Boolean)
-      .join("\n")
-  }
+  // Progress events are intentionally NOT rendered as user-visible parts:
+  // claude-code + codex both emit a stream of fine-grained "Phase: X" /
+  // "Summary: Y" pings that bury the actual conversation under noise.
+  // The events still flow through the events[] array (so logs/diagnostics
+  // see them) — only the chat-card materialisation is dropped. Plan/diff/
+  // approval/input/usage/error remain visible because those carry decisions
+  // the operator needs to see.
   if (event.type === "plan_delta") {
     const summary = event.summary?.trim()
     return summary ? `**${executor} plan**\n\n${summary}` : undefined
