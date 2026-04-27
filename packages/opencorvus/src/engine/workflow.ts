@@ -18,7 +18,7 @@ import { EngineConfig } from "./config"
 import { goalStatusByID } from "./describe"
 import {
   findActiveSpecForTask,
-  findDeliveriesForTask,
+  findLatestDeliveryVerdictArtifact,
   findRuns,
   findTask,
   listGoals,
@@ -357,8 +357,21 @@ function taskStepStatusByTool(
     case "build":
       // direct workflow: any run (artifact kind="run") means a build occurred
       return findRuns(taskID).length > 0 ? "completed" : "pending"
-    case "deliver":
-      return findDeliveriesForTask(taskID).length > 0 ? "completed" : "pending"
+    case "deliver": {
+      // Single source of truth (rule 22): the latest delivery-agent-verdict
+      // artifact dictates this step's terminal status. Counting raw delivery
+      // artifacts conflates "some delivery row was written" (the deliver
+      // tool produces a candidate-delivery artifact BEFORE asking the agent
+      // for a verdict) with "deliver passed", which kept the workflow strip
+      // showing ✓ on rejected tasks. The transient `running` state still
+      // arrives via WorkflowStepUpdated; absence of a verdict means we never
+      // reached a terminal state for the current attempt — `pending`.
+      const verdict = findLatestDeliveryVerdictArtifact(taskID)
+      const v = (verdict?.payload as { verdict?: string } | null | undefined)?.verdict
+      if (v === "rejected") return "failed"
+      if (v === "accepted") return "completed"
+      return "pending"
+    }
     default:
       return "pending"
   }

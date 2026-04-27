@@ -86,7 +86,17 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
         <div
           class="delivery-summary md-content"
           innerHTML={renderMarkdown(
-            props.delivery?.summary || props.delivery?.result?.summary || "",
+            // Single-source rule (CLAUDE.md 22): when the delivery agent
+            // rejected, the verdict summary names the actual cause (render
+            // failure, verification miss, …). Surfacing the candidate-delivery
+            // changelog instead would hide why the gate said no. Verdict-
+            // absent: fall back to the build-summary that produced the
+            // candidate so the panel still has content while in-flight.
+            props.delivery?.verdict === "rejected"
+              ? (props.delivery?.verdictSummary ||
+                 props.delivery?.summary ||
+                 props.delivery?.result?.summary || "")
+              : (props.delivery?.summary || props.delivery?.result?.summary || ""),
           )}
         />
         <Show

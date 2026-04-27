@@ -10,6 +10,7 @@ import {
   findDeliveriesForTask,
   findEvaluationsByTask,
   findDeliveryByGoalRun,
+  findLatestDeliveryVerdictArtifactForDelivery,
   findLatestEvaluationForGoalRun,
   listGoalRunsByGoal,
   type DeliveryRow,
@@ -521,11 +522,30 @@ function viewBoardDelivery(
 ) {
   if (!row) return undefined
   const result = (row.result ?? {}) as Record<string, unknown>
+  // Project status from the delivery-agent verdict (single source — rule 22).
+  // The candidate-delivery row's `status` column tracks publish lifecycle
+  // (candidate → publishing → delivered), NOT verdict outcome — without this
+  // override a rejected delivery still surfaces as "candidate" in the overlay.
+  // Verdict-absent: keep the underlying row.status so unrun / in-flight
+  // deliveries still render their lifecycle stage.
+  const verdictArt = findLatestDeliveryVerdictArtifactForDelivery(row.id)
+  const verdictPayload = (verdictArt?.payload ?? null) as
+    | { verdict?: string; summary?: string }
+    | null
+  const verdict = verdictPayload?.verdict
+  const projectedStatus =
+    verdict === "rejected"
+      ? "failed"
+      : verdict === "accepted"
+        ? "delivered"
+        : row.status
   return {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    status: row.status,
+    status: projectedStatus,
+    verdict: verdict ?? undefined,
+    verdictSummary: verdictPayload?.summary ? clipBoard(verdictPayload.summary) : undefined,
     summary: clipBoard(row.summary),
     result: {
       summary: clipBoard(String(result.summary ?? row.summary)),
