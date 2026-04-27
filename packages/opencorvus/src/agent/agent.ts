@@ -447,6 +447,8 @@ export namespace Agent {
         name: "integrity",
         description: "Integrity review stage. Multi-dimension review of architect output: goal_fidelity / technical_feasibility / hallucination / solution_quality. System prompt is built per-call in integrity/agent.ts from the dimension registry.",
         steps: 1000,
+        // Verdict tools are injected per run; registry tools only bloat the schema.
+        tools: { include: [] as string[] },
         options: {},
         mode: "primary",
         native: true,

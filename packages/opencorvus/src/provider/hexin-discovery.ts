@@ -105,7 +105,7 @@ function buildModel(id: string): Model {
       interleaved: false,
     },
     cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-    limit: { context: profile.context, output: profile.output },
+    limit: { context: profile.context, input: profile.input, output: profile.output },
     options: {},
     headers: {},
     release_date: "",

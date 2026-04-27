@@ -42,8 +42,11 @@ const HEXIN_URL = process.env.HEXIN_OPENAI_URL?.trim()
 const HEXIN_BUILTIN_KEY = "sk-eq7WQu0ylelH6uyedbf6PA"
 const API_KEY = process.env.HEXIN_API_KEY?.trim() || HEXIN_BUILTIN_KEY
 
+type Vendor = "openai" | "anthropic"
+
 interface Args {
   model: string
+  vendor: Vendor
   out: string
   only?: string
   skip: Set<string>
@@ -53,13 +56,21 @@ function parseArgs(): Args {
   // Resolve relative to this script file, not cwd, so we don't get
   // packages/opencorvus/packages/opencorvus/... when invoked from package root.
   const defaultOut = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "out")
-  const args: Args = { model: "gpt-5.4", out: defaultOut, skip: new Set() }
+  const args: Args = { model: "gpt-5.4", vendor: "openai", out: defaultOut, skip: new Set() }
   for (const a of process.argv.slice(2)) {
     if (a.startsWith("--model=")) args.model = a.slice(8)
+    else if (a.startsWith("--vendor=")) args.vendor = (a.slice(9) as Vendor)
     else if (a.startsWith("--out=")) args.out = path.resolve(a.slice(6))
     else if (a.startsWith("--only=")) args.only = a.slice(7)
     else if (a.startsWith("--skip=")) a.slice(7).split(",").forEach((s) => args.skip.add(s.trim()))
   }
+  // Auto-derive vendor from model id when vendor was left default but model
+  // is clearly Claude. Saves a flag in the common case.
+  if (!process.argv.some((a) => a.startsWith("--vendor=")) && /^claude/i.test(args.model)) {
+    args.vendor = "anthropic"
+  }
+  // Suffix vendor onto output filenames so OpenAI + Anthropic runs don't
+  // overwrite each other.
   return args
 }
 
@@ -89,6 +100,8 @@ interface CallOpts {
   stickyKey?: string
   body: Record<string, unknown>
 }
+
+let CURRENT_VENDOR: Vendor = "openai"
 
 async function call(opts: CallOpts): Promise<ProbeRow> {
   const headers: Record<string, string> = {
@@ -135,9 +148,29 @@ async function call(opts: CallOpts): Promise<ProbeRow> {
     row.prompt_tokens = usage.prompt_tokens ?? usage.input_tokens
     row.completion_tokens = usage.completion_tokens ?? usage.output_tokens
     row.total_tokens = usage.total_tokens
-    row.cached_tokens = details.cached_tokens ?? details.cached ?? 0
-    if (typeof row.prompt_tokens === "number" && row.prompt_tokens > 0) {
-      row.cache_hit_ratio = (row.cached_tokens ?? 0) / row.prompt_tokens
+    if (CURRENT_VENDOR === "anthropic") {
+      // Anthropic prompt cache reports two distinct counters, NOT
+      // prompt_tokens_details.cached_tokens. LiteLLM passes them through
+      // either at usage root or under cache_*_input_tokens keys.
+      const cacheRead =
+        usage.cache_read_input_tokens ??
+        details.cache_read_input_tokens ??
+        details.cached_tokens ??
+        0
+      const cacheCreate =
+        usage.cache_creation_input_tokens ?? details.cache_creation_input_tokens ?? 0
+      row.cached_tokens = cacheRead
+      // For Anthropic, prompt_tokens excludes cache_read/cache_creation —
+      // total prompt = prompt_tokens + cache_read + cache_creation. Use the
+      // sum as the denominator so hit ratio reflects what % of the input
+      // bytes actually hit cache.
+      const totalInput = (row.prompt_tokens ?? 0) + cacheRead + cacheCreate
+      if (totalInput > 0) row.cache_hit_ratio = cacheRead / totalInput
+    } else {
+      row.cached_tokens = details.cached_tokens ?? details.cached ?? 0
+      if (typeof row.prompt_tokens === "number" && row.prompt_tokens > 0) {
+        row.cache_hit_ratio = (row.cached_tokens ?? 0) / row.prompt_tokens
+      }
     }
   } catch (err) {
     row.latency_ms = Math.round(performance.now() - t0)
@@ -203,12 +236,20 @@ function makeSystem(targetTokens: number, seed = "alpha"): string {
  */
 function baseBody(model: string, system: string, nonce: string, extra: Record<string, unknown> = {}) {
   const userMessage = `Reply with OK. [probe nonce=${nonce}]`
+  // Wire shape verified against the production @ai-sdk/openai-compatible
+  // adapter via trace-aisdk-wire.ts: `cache_control` lives at the MESSAGE
+  // top level (sibling of role/content), NOT inside a content array. Hexin
+  // gateway forwards that exact shape to the upstream Anthropic provider.
+  // An earlier version put cache_control on a content[].text block — that
+  // shape is silently ignored by the gateway, returning 0% cache hits in
+  // probes despite cache_control "looking right" at a glance.
+  const systemMessage: Record<string, unknown> =
+    CURRENT_VENDOR === "anthropic"
+      ? { role: "system", content: system, cache_control: { type: "ephemeral" } }
+      : { role: "system", content: system }
   return {
     model,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: userMessage },
-    ],
+    messages: [systemMessage, { role: "user", content: userMessage }],
     max_tokens: 4,
     temperature: 0,
     stream: false,
@@ -404,7 +445,8 @@ function summarize(): Summary[] {
 
 function writeReports(args: Args) {
   fs.mkdirSync(args.out, { recursive: true })
-  const ndjsonPath = path.join(args.out, "hexin-cache-probe.ndjson")
+  const suffix = args.vendor === "anthropic" ? "-anthropic" : ""
+  const ndjsonPath = path.join(args.out, `hexin-cache-probe${suffix}.ndjson`)
   fs.writeFileSync(ndjsonPath, rows.map((r) => JSON.stringify(r)).join("\n") + "\n")
 
   const summary = summarize()
@@ -433,7 +475,7 @@ function writeReports(args: Args) {
       `| ${r.probe} | ${r.variant} | ${r.iteration} | ${r.status} | ${r.prompt_tokens ?? "-"} | ${r.cached_tokens ?? "-"} | ${r.cache_hit_ratio !== undefined ? (r.cache_hit_ratio * 100).toFixed(1) + "%" : "-"} | ${r.latency_ms} | ${r.sticky_key ?? "-"} | ${r.upstream ?? "-"} |`,
     )
   }
-  const mdPath = path.join(args.out, "hexin-cache-probe.md")
+  const mdPath = path.join(args.out, `hexin-cache-probe${suffix}.md`)
   fs.writeFileSync(mdPath, md.join("\n") + "\n")
 
   console.error(`\nndjson  → ${ndjsonPath}`)
@@ -442,7 +484,8 @@ function writeReports(args: Args) {
 
 async function main() {
   const args = parseArgs()
-  console.error(`probe model=${args.model} endpoint=${HEXIN_URL} key=${API_KEY === HEXIN_BUILTIN_KEY ? "<builtin>" : "<env>"}`)
+  CURRENT_VENDOR = args.vendor
+  console.error(`probe model=${args.model} vendor=${args.vendor} endpoint=${HEXIN_URL} key=${API_KEY === HEXIN_BUILTIN_KEY ? "<builtin>" : "<env>"}`)
 
   const probes: Array<{ id: string; fn: () => Promise<void> }> = [
     { id: "0-response-cache", fn: () => probe0_response_cache(args.model) },
