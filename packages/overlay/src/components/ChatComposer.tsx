@@ -4,6 +4,7 @@
 
 import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js";
 import { t, tArray } from "../utils/i18n";
+import { ExecutorSelector } from "./ExecutorSelector";
 
 // ── Types ──
 
@@ -492,9 +493,10 @@ export function ChatComposer(props: ChatComposerProps) {
         </button>
       </div>
 
-      {/* Compose meta (version + tip) */}
+      {/* Compose meta (executor selector + version + tip) */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
+          <ExecutorSelector />
           <span class="chat-version" id="chatVersion" aria-label="Author">
             <span class="chat-version-copy">Copyright © OpenCorvus</span>
             <span class="chat-version-sep" aria-hidden="true">·</span>
