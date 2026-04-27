@@ -18,7 +18,7 @@
 // (see Board.tsx for the rationale). Operators wanting cross-session
 // context dump JSON via the per-session Copy button instead.
 
-import { For, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
+import { Index, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent, type TraceFetchResult } from "../services/trace";
 
 type TracePanelProps =
@@ -323,9 +323,13 @@ export function TracePanel(props: TracePanelProps) {
       </Show>
       <Show when={hasTarget() && events().length > 0}>
         <div class="trace-panel-body">
-          <For each={events()}>
-            {(event) => <TraceEventRow event={event} />}
-          </For>
+          {/* Index over For: trace events are append-only (4s polling adds
+              new entries to the tail; existing rows never reorder or move).
+              Index reuses DOM nodes by position, so a single new event
+              appends without re-keying every prior row. */}
+          <Index each={events()}>
+            {(event) => <TraceEventRow event={event()} />}
+          </Index>
         </div>
       </Show>
     </div>
