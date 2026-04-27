@@ -504,7 +504,7 @@ function mergePropertySchema(left: unknown, right: unknown): unknown {
       type: left.type ?? right.type ?? "string",
       enum: [...new Set(values)],
     } as Record<string, unknown>
-    delete next.const
+    delete next["const"]
     return {
       ...next,
     }
@@ -523,13 +523,13 @@ function normalizePropertySchema(input: unknown): unknown {
     ...input,
     enum: [...new Set(values)],
   } as Record<string, unknown>
-  delete output.const
+  delete output["const"]
   return output
 }
 
 function literalValues(input: Record<string, unknown>) {
   const out: unknown[] = []
-  if ("const" in input) out.push(input.const)
+  if ("const" in input) out.push(input["const"])
   if (Array.isArray(input.enum)) out.push(...input.enum)
   return out
 }
