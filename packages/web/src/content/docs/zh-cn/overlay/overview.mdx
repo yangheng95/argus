@@ -1,0 +1,114 @@
+---
+title: Overlay 桌面端
+description: OpenCorvus 的 Tauri 2 桌面面板——半透明浮层接管本机 opencorvus serve。
+---
+
+Overlay 是 OpenCorvus 的 **Tauri 2 桌面面板**：半透明浮层驻留在屏幕右下角，接管本机 `opencorvus serve`，把 agent 工作流以图形化方式呈现给你。
+
+## 技术栈
+
+| 层 | 选型 |
+|---|---|
+| 桌面容器 | Tauri 2（Rust 宿主 + WebView2/WKWebView/WebKitGTK） |
+| 前端 | Solid.js 1.9 + Vite 7 |
+| 状态管理 | Solid signals（`src/store/*`） |
+| 构建 | Bun + `tauri build` |
+| 后端通信 | SSE（EventSource）+ HTTP REST |
+
+来源：`packages/overlay/package.json`、`src-tauri/Cargo.toml`。
+
+## 启动模式
+
+### 开发
+
+```bash
+cd packages/overlay
+bun run dev        # tauri dev：Vite HMR + Rust 热重载
+bun run dev:vite   # 仅前端 Vite（调试 UI 用）
+```
+
+或从根目录：
+
+```bash
+bun run dev:overlay   # 等价于 cd packages/overlay/src-tauri && cargo run --release
+```
+
+### 打包
+
+```bash
+bun run build:overlay   # 生成平台安装包（.msi / .dmg / .deb）
+```
+
+## 核心面板
+
+| 面板 | 作用 | 文件 |
+|---|---|---|
+| **Board** | 任务总览：spec/计划/目标/评估/交付各阶段状态 | `src/components/Board.tsx` |
+| **TaskList** | 左侧任务列表，实时状态 | `src/components/TaskList.tsx` |
+| **Conversation** | Agent 对话 / 工具调用 / 推理过程 | `src/components/Conversation.tsx` |
+| **ChatComposer** | 输入框，支持发消息 / 附件 | `src/components/ChatComposer.tsx` |
+| **InteractionPanel** | 权限审批与人机确认弹层 | `src/components/InteractionPanel.tsx` |
+| **ChangesPanel** | 文件变更 diff 预览 | `src/components/ChangesPanel.tsx` |
+| **MemoryPanel** | Agent 记忆 / 上下文 | `src/components/MemoryPanel.tsx` |
+| **TracePanel** | 执行轨迹 | `src/components/TracePanel.tsx` |
+| **LogViewer** | 原始日志 | `src/components/LogViewer.tsx` |
+| **WorkflowProgressBar** | Goal 级并行进度 | `src/components/WorkflowProgressBar.tsx` |
+
+设置面板（侧边栏）：
+
+- **General** / **Providers** / **Channels** / **Orchestration** / **Permissions** / **SkillMarket**
+
+## 通信机制
+
+### SSE 事件流（两条长连接）
+
+1. **任务详情流**（选中任务时建立）
+   ```
+   GET http://127.0.0.1:7878/task/{taskID}/events?after={sequence}
+   ```
+   代码：`src/services/sse.ts:21` `startSSE()`
+   用原生 `EventSource` 绕过 WebView2 对 `fetch().body` 的缓冲延迟。
+
+2. **全局任务列表流**（应用级）
+   ```
+   GET http://127.0.0.1:7878/task/events
+   ```
+   代码：`src/services/sse.ts:104` `startTaskListSSE()`
+
+### 事件路由
+
+`src/services/events.ts:261` `routeSSEEvent()` 把事件分流：
+
+| 事件 | 目的地 |
+|---|---|
+| `message.updated / part.updated / part.delta` | messageStore 批处理 |
+| `run.progress / run.output` | 转换为标准 message 事件 |
+| `agent.updated` | agentEvents |
+| `config.changed` | 触发 `loadConfigInfo()` |
+| `task.* / goal.* / plan.*` | `handleEventStreamEvent`，debounce 刷新 Board |
+
+## Rust 侧原生能力
+
+`src-tauri/src/main.rs` 是唯一 Rust 源文件，注册所有 Tauri 命令：
+
+| 命令 | 用途 |
+|---|---|
+| `overlay_server_info` / `overlay_server_restart` | 嵌入的 opencorvus 后端进程管理 |
+| `overlay_settings_load` / `overlay_settings_save` | 设置持久化到 `.opencorvus/overlay.json` |
+| `overlay_pick_dir` / `overlay_pick_files` | 目录 / 文件选择对话框 |
+| `overlay_open_url` / `overlay_open_path` | 外部打开 |
+| `overlay_attention_set` | 托盘闪烁提示 |
+| `overlay_toggle_devtools` | 开发者工具切换 |
+
+进程清理：Windows 用 Job Object + `KILL_ON_JOB_CLOSE`；Unix 用 SIGKILL 进程组——确保 overlay 退出时后端进程及子进程全部回收。
+
+## 后端集成
+
+1. **启动时**（`main.rs` `setup`）：定位嵌入二进制 `opencorvus[.exe]`，找空闲端口 → `opencorvus serve --hostname 127.0.0.1 --port <port>`
+2. **握手**：前端 `initApp()` → `overlay_server_info` → 获取实际端口 → 更新 API 客户端基地址
+3. **健康探测**：`GET /global/health`，最多重试 8 次
+4. **重连**：每 10 秒轮询，离线后自动重启 SSE
+
+## 配置
+
+`~/.opencorvus/overlay.json` 存 UI 偏好（主题、位置、缩放、server URL override）；托盘菜单的 **Restart** 会重启后端并 `location.reload()` 前端。

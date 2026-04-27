@@ -1,0 +1,117 @@
+---
+title: 架构总览
+description: OpenCorvus 通过六层 pipeline 的专职 agent，把自然语言需求稳定地变成已验证的代码变更。
+---
+
+OpenCorvus 的职责是：**把一条自然语言需求，稳定地变成已验证的代码变更**。为了做到"稳定"，单个 LLM 是不够的——需要多个专职 agent 构成的 pipeline，互相制约、失败可回滚、状态可追溯。
+
+## HTTP API 运行时分层
+
+HTTP 服务器（`packages/opencorvus/src/server/server.ts`）把路由切成两个真实层：
+
+- **Control plane（控制面）**——`/global/*`、`/auth/*`、`/ui/*`，以及 `/log`、`/shutdown`、`/restart`，挂载在 `Instance.provide` 中间件之前。即便没有打开任何项目目录也能工作。健康检查、服务生命周期、鉴权走这层。
+- **Instance-scoped（实例域）**——其余全部路由（`/session`、`/task`、`/run`、`/mcp`、`/tui`、`/experimental`、`/panel` 等）跑在 `Instance.provide({ directory, init: InstanceBootstrap })` 内部。必须有项目目录（来自 `?directory=` query 或 `x-opencorvus-directory` header）。
+
+路由 handler 本身不读 `process.env`、不调 `Database.use(...)`、不直连 SQL 表、不使用 `z.any()`。边界由 `bun run api:routes-check` 守护；双语 API 参考由 OpenAPI 通过 `bun run docs:api` / `docs:check` 自动生成。
+
+## 六层 Pipeline
+
+```
+User 请求
+  ↓
+┌──────────────┐
+│ Channel 层   │  本地 TUI / HTTP / Slack / Telegram / …
+└──────┬───────┘
+       ↓  CreateTask
+┌──────────────┐
+│ Orchestrator │  Task/Run/Goal 生命周期、重试/重规划、预算
+└──────┬───────┘  packages/opencorvus/src/orchestrator/task-loop.ts:59
+       ↓
+┌──────────────┐
+│ Task Agent   │  主决策 LLM：调用 spec/goal/plan 子 agent
+└──────┬───────┘  packages/opencorvus/src/task-agent/agent.ts:60
+       ↓
+┌──────────────┐
+│ GoalPool     │  每个 Goal 独立 worktree，并发执行
+└──────┬───────┘  packages/opencorvus/src/orchestrator/goal-pool.ts
+       ↓
+┌──────────────┐
+│ Executor     │  opencode / codex / claude-code
+└──────┬───────┘  packages/opencorvus/src/executor/opencode.ts
+       ↓  delivery
+┌──────────────┐
+│ Evaluator    │  build/test/lint/… + LLM judge 兜底
+└──────┬───────┘  packages/opencorvus/src/evaluator/per-goal.ts
+       ↓
+ accepted / rejected
+       ↓
+ done  |  retry  |  replan
+```
+
+### 每层职责
+
+| 层 | 职责 | 关键入口 |
+|---|---|---|
+| **Channel** | 协议适配（Slack/HTTP/TUI/…），把外部消息转成 `CreateTask` | `src/channel/ingress.ts:39` |
+| **Orchestrator** | Task/Run/Goal 生命周期、重试、重规划、预算控制 | `src/orchestrator/task-loop.ts:59` |
+| **Task Agent** | 主 LLM 决策者，协调 spec/goal/plan 子 agent | `src/task-agent/agent.ts:60` |
+| **Planner** | 为单个 Goal 产出 PlanSteps | `src/planner/per-goal.ts:45` |
+| **GoalPool** | 按 `depends_on` 拓扑排序并发调度 Goal | `src/orchestrator/goal-pool.ts` |
+| **Executor** | 把 prompt 注入 coding agent，跑 agentic loop | `src/executor/opencode.ts:36` |
+| **Evaluator** | 运行确定性检查 + LLM 判决 verdict | `src/evaluator/per-goal.ts` |
+
+## 两层循环
+
+OpenCorvus 里有**两层嵌套循环**：
+
+### 外层：Task 控制循环
+
+`runTaskLoop`（`src/orchestrator/task-loop.ts:59`）：
+
+```
+while (!aborted && budget > 0) {
+  1. TaskAgent.processTask()       ← LLM 决策：下一步做什么
+  2. GoalPool.drain()              ← 并发执行所有 Goal
+  3. 回到 1 让 TaskAgent 看结果
+}
+```
+
+### 内层：Session agentic loop
+
+`SessionLoop`（`src/session/loop.ts:50`）：
+
+```
+while (session 活跃) {
+  LLM 出 tool-call → 工具执行 → 结果回填 messages → 下一轮
+}
+```
+
+连接两层的是 `OpencodeExecutor.submit`（`src/executor/opencode.ts:48`）：把 Orchestrator 的 prompt 塞进 TaskQueue，触发 `SessionLoop`。
+
+详见 [Agentic Loop](./agent-loop.md)。
+
+## 为什么是 6 层而不是 1 层
+
+一个常见疑问："为什么不能让一个大 LLM prompt 把这一切干完？"
+
+1. **各阶段的输入/输出契约不同**：spec 产出结构化规格，plan 产出有序步骤，eval 产出 verdict+证据。混在一起 LLM 会遗漏检查。
+2. **失败要能精确回滚**：spec 写错→重 spec；plan 走错→重 plan；执行错→retry；这种分级重试在"单体 agent"里做不到。
+3. **预算可控**：每阶段独立超时、独立重试次数。`.opencorvus/opencorvus.jsonc` 里的 `assistant.requirements.max_steps` / `evaluator.tier` / `max_runs` / `max_goal_retries` 都是分阶段可配置的。
+4. **人机协作粒度**：permission 审批、follow-up 消息都发生在 Task 循环里，不会污染单次 LLM 上下文。
+
+## Worktree 并行
+
+每个 Goal 独立 worktree（`src/orchestrator/goal-pool.ts`），互不干扰。最终合并由 Delivery agent 负责。
+
+这意味着：同一个 Task 可能有多个 Goal 在不同 worktree 里并行跑，失败的 Goal 重试时不影响其他 Goal。
+
+## 数据流与数据模型
+
+详见 [Goal / Run / Task](./goal-run-task.md)。
+
+## 你接下来要看的
+
+- [Goal / Run / Task 数据模型](./goal-run-task.md)
+- [Agentic Loop 内循环](./agent-loop.md)
+- [OpenCorvus 配置](../opencorvus/configuration.md)
+- [Evaluator 质量闸门](../opencorvus/evaluator.md)
