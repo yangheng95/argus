@@ -6,6 +6,7 @@ import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
 import { normalizeAgentRole } from "../utils/message";
+import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
 import { CardHeader } from "./CardHeader";
 import { CardParts } from "./CardParts";
 import { InlineToolPart } from "./InlineToolPart";
@@ -212,7 +213,6 @@ export function Card(props: { node: CardNode; depth: number }) {
         traceOpen={traceOpen()}
         onTrace={traceSessionID() ? onTraceToggle : undefined}
         agentSessionID={directAgentSessionID() ?? toolCancelSessionID()}
-        onAgentReply={directAgentSessionID() ? onAgentReply : undefined}
         onAgentCancel={(directAgentSessionID() ?? toolCancelSessionID()) ? onAgentCancel : undefined}
       />
       <Show when={expanded()}>
@@ -285,6 +285,17 @@ export function Card(props: { node: CardNode; depth: number }) {
                 )}
               </For>
             </div>
+          </Show>
+
+          {/* Inline reply box at the END of every direct-replyable agent
+              session card. Always visible (no toggle) — replaces the
+              previous CardHeader collapsible reply form so the input
+              sits where the user expects: directly after the agent's
+              latest output. */}
+          <Show when={directAgentSessionID()}>
+            <AgentSessionReplyBox
+              onSend={(message) => onAgentReply(directAgentSessionID()!, message)}
+            />
           </Show>
 
           <Show when={collapsible() && isStageCard()}>
