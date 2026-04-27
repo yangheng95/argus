@@ -44,6 +44,7 @@ import {
   requireRun,
   requireTask,
 } from "@/engine/store"
+import { effectiveMaxFixRuns } from "@/engine/helpers"
 import { goalStatusByID } from "@/engine/describe"
 import {
   GoalContractUpdateSchema,
@@ -3143,6 +3144,53 @@ export function createOrchestratorTools(input: {
               `Delivery verdict cites unknown goal_ids in rejection_details: ${unknownAffected.join(", ")}. ` +
               `Known goals for this task: ${[...goalByID.keys()].join(", ") || "(none)"}.`,
             )
+          }
+
+          // Fix-runs budget gate. `iteration` counts prior delivery rounds —
+          // every delivery_rework cycle increments it by one. Without this
+          // check the loop is unbounded: `--max-fix-runs` was rendered into
+          // the orchestrator describe context but never enforced, so the
+          // benchmark could spin indefinitely on the same rework prompt
+          // (observed in 2026-04-27 ainvest run: 4+ consecutive fix-build
+          // attempts all forgot `merge_back`, evaluator kept rejecting on
+          // the unchanged primary, and `startNewAttempt` happily opened a
+          // fresh attempt every time). When the budget is exhausted, refuse
+          // to dispatch yet another `delivery_rework` and yield a sharp
+          // signal so the orchestrator LLM must escalate (modify_goal /
+          // restart_from_stage) or call `fail_task`. Compare with `>=` so a
+          // budget of N permits N fix runs (iterations 0..N-1 open new
+          // attempts; iteration N is the cutoff).
+          const fixBudget = await effectiveMaxFixRuns(task)
+          if (iteration >= fixBudget) {
+            log.info("deliver: fix-runs budget exhausted — refusing delivery_rework", {
+              taskID,
+              iteration,
+              maxFixRuns: fixBudget,
+              issues: rejectionIssues.length,
+            })
+            try {
+              const { createDecisionLog } = await import("@/decision-log")
+              createDecisionLog(taskID).append({
+                phase: "delivery",
+                key: `delivery_budget_exhausted_${iteration}`,
+                value: `Fix-runs budget exhausted: iteration=${iteration} >= max_fix_runs=${fixBudget}. No more delivery_rework attempts will be opened.`,
+                reason: rejectionIssues.join("; "),
+              })
+            } catch {
+              /* best effort */
+            }
+            await trackStepComplete("deliver", undefined, true)
+            requestStopAfterCurrentStep("delivery_budget_exhausted")
+            return SubAgentProtocol.yieldResult({
+              headline: `Delivery rejected and fix-runs budget exhausted (iteration=${iteration}, max_fix_runs=${fixBudget}). No more delivery_rework attempts; orchestrator MUST either: (a) call restart_from_stage(plan|executor) to change strategy, OR (b) call fail_task with a final summary explaining what went wrong.`,
+              fields: [
+                ["issues_found", rejectionIssues],
+                ["iteration", String(iteration)],
+                ["max_fix_runs", String(fixBudget)],
+                ["agent_summary", verdict.summary],
+              ],
+              pointer: `verdict artifact ${verdictArtifactId}; budget exhausted, escalate or fail`,
+            })
           }
           // Per-goal rejection slice: the delivery agent already attributed
           // each rejection_details[] entry to a specific goal_id; feed that
