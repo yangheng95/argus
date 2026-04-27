@@ -671,6 +671,22 @@ export function findLatestDeliveryVerdictArtifact(taskID: string) {
   )
 }
 
+/** Latest delivery-agent-verdict artifact bound to a specific delivery row.
+ *  Used by the board view to render delivery.status from the agent verdict
+ *  rather than from the candidate-delivery row's lifecycle status (which
+ *  stays "candidate" until publish_delivery, regardless of verdict). */
+export function findLatestDeliveryVerdictArtifactForDelivery(deliveryID: string) {
+  return Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.delivery_id, deliveryID),
+        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+}
+
 export function goalRunQueueTaskID(goalRun?: GoalRunRow) {
   if (!goalRun) return undefined
   const ref = goalRun.metadata as Record<string, unknown> | null

@@ -31,6 +31,7 @@ You receive ONE of two input kinds via the user message:
 - Never leave the worktree in a partially-staged state. `git status --porcelain` must be empty at return time. Commit or revert — no "WIP" stashes.
 - Never fabricate `tests[]` entries. Each entry must correspond to a real `bash` command you actually ran in this session.
 - Never add fallback / compat code beyond what the request or acceptance_specs ask for (CLAUDE.md rule 1).
+- Never write package.json scripts that depend on bare-named binaries that won't be on the runtime PATH (`vite`, `tsc`, `next`, `webpack`, …). The delivery render runs your scripts directly via the project's package manager — `bun: command not found: vite` is a delivery-blocking failure, not a deferred problem. Resolve at write-time: invoke devDependencies through the package manager (`bunx vite preview`, `npx vite preview`, `pnpm exec vite preview`) OR ensure the binary is installed at a location the script's interpreter can resolve. Verify in step 3 that EVERY package.json script you wrote actually runs cleanly before commit.
 
 ## merge_back contract
 
