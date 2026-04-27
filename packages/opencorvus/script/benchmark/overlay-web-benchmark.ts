@@ -246,7 +246,7 @@ if (!defaultRefExists && rawReferenceImages.length === 0 && !requestFile && !req
 const referenceImages = rawReferenceImages.length > 0
   ? rawReferenceImages
   : (!requestFile && !requestAttachment && defaultRefExists ? [DEFAULT_REFERENCE] : [])
-const DEFAULT_TASK_REQUEST = `复刻Ainvest的页面https://chart.ainvest.com/NASDAQ-NVDA/ 要求包含完整的前端和后端实现，网页组件不缺漏，组件交互完整，例如k线和指标等等`
+const DEFAULT_TASK_REQUEST = `1：1复刻Ainvest的页面https://chart.ainvest.com/NASDAQ-NVDA/ 要求包含完整的前端和后端实现，网页组件不缺漏，组件交互完整，例如k线和指标等等。数据要严谨，你需要实现虚拟数据的生成引擎，而不是糊弄用静态数据`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
