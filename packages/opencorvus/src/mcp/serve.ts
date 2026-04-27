@@ -168,11 +168,22 @@ export namespace MCPServe {
   export const ServerName = DEFAULT_SERVER_NAME
 
   export function command(cwd: string) {
+    // Stdio MCP semantics: when `env` is present, the spawned child sees ONLY
+    // those vars. Returning `{}` here previously stripped SystemRoot / PATH /
+    // USERPROFILE plus every OPENCORVUS_* and provider credential, so the
+    // child crashed at process init on Windows and Claude Code surfaced zero
+    // tools from this server. Spec is the single source of truth — carry the
+    // full inherited env so every caller (Claude Agent SDK, Codex,
+    // integration tests) gets identical, working behavior.
+    const env: Record<string, string> = {}
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === "string") env[key] = value
+    }
     return {
       name: DEFAULT_SERVER_NAME,
       command: process.execPath,
       args: [path.resolve(import.meta.dir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"],
-      env: {} as Record<string, string>,
+      env,
     }
   }
 

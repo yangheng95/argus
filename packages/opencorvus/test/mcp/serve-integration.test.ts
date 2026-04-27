@@ -70,10 +70,7 @@ describe.skip("mcp.serve integration", () => {
       const transport = JsonRpcLineTransport.create({
         command: [cmd.command, ...cmd.args],
         cwd: repoRoot,
-        env: {
-          ...process.env,
-          ...cmd.env,
-        },
+        env: cmd.env,
       })
 
       try {
