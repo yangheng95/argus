@@ -118,6 +118,17 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "but the goal needs persistence), that's `infeasible_stack`.",
       "Compare every pair of goals' `owned_paths[]`. Two goals owning the same path = " +
         "`contract_collision` — a hard build-time conflict.",
+      "Merged-tree completeness. The union of all goals' `owned_paths` must materialise " +
+        "every prerequisite the user's deliverable needs to be exercised end-to-end. " +
+        "For visual / browser deliverables that includes the runnable entrypoint (root " +
+        "`index.html` or framework equivalent that delivery's renderer can load); for " +
+        "any goal whose acceptance command invokes project-wide tooling (`npm test`, " +
+        "`bun test`, `pnpm test`, root `package.json` scripts, framework binaries via " +
+        "root devDependencies), it includes the root config that makes those commands " +
+        "runnable (`package.json` scripts/devDependencies, `tsconfig.json`, test-runner " +
+        "config). When a deliverable prerequisite is unowned by every goal, that's " +
+        "`missing_capability` against an implicit infra goal — propose a corrected goal " +
+        "(or a new infra goal) that owns the missing path.",
     ],
     issueTypes: ["infeasible_stack", "missing_capability", "contract_collision", "dependency_cycle"],
     canProposeCorrections: true,
@@ -160,7 +171,15 @@ export const INTEGRITY_DIMENSIONS: readonly IntegrityDimension[] = [
         "issue, opposite direction (propose merges).",
       "Acceptance-spec strength. A `severity: 'essential'` spec backed only by a `test -f` " +
         "or a `grep` of self-written content is `weak_acceptance` — the spec passes by " +
-        "construction. A goal with zero `essential` specs is also `weak_acceptance`.",
+        "construction. A goal with zero `essential` specs is also `weak_acceptance`. " +
+        "Acceptance command external dependencies. If a scorer's shell command depends on " +
+        "tooling, scripts, or configuration the goal does NOT own (e.g. an `npm test` " +
+        "command on a goal whose `owned_paths` include no `package.json`, or a `bunx tsc` " +
+        "command on a goal that owns no `tsconfig.json`), and no ancestor goal in " +
+        "`depends_on` owns it either, that's also `weak_acceptance`: the command passes " +
+        "or fails based on state outside this plan's control. Either widen the goal's " +
+        "`owned_paths` (or its dependency's) to cover the prerequisite, or scope the " +
+        "command to files the goal actually owns (e.g. `bun test src/<goal-dir>/`).",
       "Ownership overlap. Goals can share imports/exports, but two goals editing the same " +
         "file (even if one is a directory and the other is a glob) = `ownership_overlap`. " +
         "Distinct from technical_feasibility's `contract_collision` — collision is a hard " +
