@@ -272,6 +272,13 @@ const DIAG_TYPES = new Set([
   // Task Agent tool invocations in the new agent-driven architecture
   "orchestrator.goal.created",
   "orchestrator.goal.updated",
+  // Integrity reviewer lifecycle + verdict. `chunk` is throttled reasoning-delta
+  // forwarded by the LLM stream; `completed` carries the structured per-dimension
+  // verdict that buildBenchmarkReport's `integrity` section renders.
+  "orchestrator.integrity.review.started",
+  "orchestrator.integrity.review.progress",
+  "orchestrator.integrity.review.chunk",
+  "orchestrator.integrity.review.completed",
 ])
 const projectDir = flag("--project-dir")
 const temp = {
@@ -497,6 +504,13 @@ let finalBoard: any = null
 let transcript: any = null
 let timeline: any = null
 let runs: any = null
+// Latest IntegrityReviewCompleted payload (full properties retained — the events
+// array stores only flattened fixed fields). buildBenchmarkReport reads this for
+// the `integrity` section. Each completed emission overwrites; benchmark records
+// the final verdict the orchestrator settled on, not interim ones.
+let latestIntegrity: Record<string, unknown> | null = null
+let integrityAttemptCount = 0
+let lastIntegrityProgressLogAt = 0
 
 function logLine(value: string) {
   lastLogAt = Date.now()
@@ -545,6 +559,36 @@ function formatEventLine(entry: {
   if (entry.type === "orchestrator.plan.created" || entry.type === "orchestrator.plan.activated") {
     const detail = entry.summary || entry.text
     return `[overlay-benchmark] event=${entry.type.replace("orchestrator.", "")}${detail ? ` detail=${clipText(detail, 240)}` : ""}`
+  }
+  // Integrity reviewer events. `chunk` is reasoning-delta — too noisy to print
+  // line-per-event; the alive-stall timer is what we care about. `progress` is
+  // throttled to ~once per 20s by the reviewer but still gets gated here to one
+  // log line per 10s to keep stdout readable. `started` and `completed` always
+  // print — they're the lifecycle bookends a human reading the log needs.
+  if (entry.type === "orchestrator.integrity.review.chunk") return ""
+  if (entry.type === "orchestrator.integrity.review.progress") {
+    const now = Date.now()
+    if (now - lastIntegrityProgressLogAt < 10_000) return ""
+    lastIntegrityProgressLogAt = now
+    return `[overlay-benchmark] integrity.review.progress (still working)`
+  }
+  if (entry.type === "orchestrator.integrity.review.started") {
+    return `[overlay-benchmark] integrity.review.started`
+  }
+  if (entry.type === "orchestrator.integrity.review.completed") {
+    const data = latestIntegrity ?? {}
+    const verdict = String((data as any).verdict ?? "")
+    const summary = clipText(String((data as any).summary ?? ""), 200)
+    const dims = Array.isArray((data as any).dimensions) ? (data as any).dimensions : []
+    const dimText = dims
+      .map((d: any) => `${String(d.id ?? "")}=${String(d.verdict ?? "")}(i${d.issueCount ?? 0}/c${d.correctionCount ?? 0}/m${d.missingGoalCount ?? 0})`)
+      .join(" ")
+    const issueCount = Array.isArray((data as any).issues) ? (data as any).issues.length : 0
+    const correctionCount = Array.isArray((data as any).corrections) ? (data as any).corrections.length : 0
+    const missingCount = Array.isArray((data as any).missingGoals) ? (data as any).missingGoals.length : 0
+    return `[overlay-benchmark] integrity.review.completed verdict=${verdict || "?"} ` +
+      `dims=[${dimText}] totals=i${issueCount}/c${correctionCount}/m${missingCount} ` +
+      `summary="${summary}"`
   }
   const summary = entry.summary || entry.text
   const parts = [
@@ -633,6 +677,16 @@ const onEvent = ({ payload }: { payload: unknown }) => {
     goalRunID: eventValue(normalized.payload, normalized.props, "goalRunID"),
   }
   events.push(entry)
+  // Retain the full IntegrityReviewCompleted payload — the flattened entry
+  // above keeps only fixed text fields, but the verdict / per-dimension
+  // breakdown / issues / corrections / missingGoals live in `props`. The
+  // benchmark report's `integrity` section reads from latestIntegrity; each
+  // emission overwrites so the final state is whatever the orchestrator
+  // settled on.
+  if (entry.type === "orchestrator.integrity.review.completed") {
+    integrityAttemptCount += 1
+    latestIntegrity = { ...normalized.props, sessionID: eventValue(normalized.payload, normalized.props, "sessionID") }
+  }
   if (entry.type === "orchestrator.task.updated" && FINAL.has(entry.status)) {
     if (!terminalReached) {
       terminalReached = true
@@ -1149,6 +1203,52 @@ async function runLocalVerify(cwd: string, cmd: string) {
   }
 }
 
+// Format the latest IntegrityReviewCompleted payload into a stable shape for
+// the benchmark report. Returns null when no integrity review fired (e.g. the
+// task failed before architect reached the integrity stage). Field names match
+// the IntegrityReviewCompleted Zod schema in engine/model.ts so the report
+// stays readable next to source-of-truth definitions.
+function formatIntegritySection(
+  payload: Record<string, unknown> | null,
+  attemptCount: number,
+): Record<string, unknown> | null {
+  if (!payload) return null
+  const dims = Array.isArray(payload.dimensions) ? (payload.dimensions as Array<Record<string, unknown>>) : []
+  const issues = Array.isArray(payload.issues) ? (payload.issues as Array<Record<string, unknown>>) : []
+  const corrections = Array.isArray(payload.corrections) ? (payload.corrections as Array<Record<string, unknown>>) : []
+  const missingGoals = Array.isArray(payload.missingGoals) ? (payload.missingGoals as Array<Record<string, unknown>>) : []
+  return {
+    sessionID: typeof payload.sessionID === "string" ? payload.sessionID : null,
+    verdict: typeof payload.verdict === "string" ? payload.verdict : null,
+    summary: typeof payload.summary === "string" ? payload.summary : null,
+    attempts_observed: attemptCount,
+    attempts_reported: typeof payload.attempts === "number" ? payload.attempts : null,
+    dimensions: dims.map((d) => ({
+      id: typeof d.id === "string" ? d.id : null,
+      verdict: typeof d.verdict === "string" ? d.verdict : null,
+      issueCount: typeof d.issueCount === "number" ? d.issueCount : 0,
+      correctionCount: typeof d.correctionCount === "number" ? d.correctionCount : 0,
+      missingGoalCount: typeof d.missingGoalCount === "number" ? d.missingGoalCount : 0,
+    })),
+    issues: issues.map((i) => ({
+      type: typeof i.type === "string" ? i.type : null,
+      description: typeof i.description === "string" ? i.description : null,
+    })),
+    corrections: corrections.map((c) => ({
+      action: typeof c.action === "string" ? c.action : null,
+      goalID: typeof c.goalID === "string" ? c.goalID : null,
+      reason: typeof c.reason === "string" ? c.reason : null,
+      updatesTitle: typeof c.updatesTitle === "string" ? c.updatesTitle : null,
+      updatesObjective: typeof c.updatesObjective === "string" ? c.updatesObjective : null,
+    })),
+    missingGoals: missingGoals.map((g) => ({
+      title: typeof g.title === "string" ? g.title : null,
+      objective: typeof g.objective === "string" ? g.objective : null,
+      reason: typeof g.reason === "string" ? g.reason : null,
+    })),
+  }
+}
+
 async function buildBenchmarkReport(error?: unknown) {
   const reportError = error ? String(error) : undefined
   const completedAt = marks.completedAt || Date.now()
@@ -1256,6 +1356,7 @@ async function buildBenchmarkReport(error?: unknown) {
           summary: currentFinalBoard.plan.summary ?? null,
         }
       : null,
+    integrity: formatIntegritySection(latestIntegrity, integrityAttemptCount),
     screenshot,
     resume: {
       restored: marks.resumedAt > 0,
