@@ -212,13 +212,7 @@
           <div class="chat-header-main">
             <span class="chat-title" data-i18n="chat.title">任务</span>
           </div>
-          <div class="chat-header-status">
-            <div class="task-status chat-task-status" id="taskStatus" hidden>
-              <span class="status-icon" id="statusIcon" data-status="idle" aria-hidden="true"></span>
-              <span class="status-label" id="statusLabel" data-i18n="task.status.idle">No task</span>
-              <span class="elapsed" id="taskElapsed"></span>
-            </div>
-          </div>
+          <div class="chat-header-status" id="solidTaskStatusMount"></div>
           <div class="chat-header-meta">
             <span class="chat-count" id="chatCount"></span>
             <button
@@ -270,19 +264,8 @@
         <!-- PermissionAutoResolver: headless auto-approval driver (no visible UI) -->
         <div id="solidInteractionMount"></div>
 
-        <!-- Files -->
-        <details class="section" id="changesSection" open>
-          <summary class="section-head">
-            <span class="section-icon">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h5l3 3V13.5H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 2.5v3h3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8h4M6 10.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-            </span>
-            <span class="section-title" data-i18n="section.files">Files</span>
-            <span class="section-badge" id="changesBadge"></span>
-          </summary>
-          <div class="section-body" id="changesBody">
-            <div id="solidChangesPanel"></div>
-          </div>
-        </details>
+        <!-- Files (rendered by Solid <FilesSection/>; visibility owned by its memo) -->
+        <div id="solidFilesSectionMount"></div>
 
       </div>
 
