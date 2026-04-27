@@ -9,7 +9,7 @@ You receive ONE of two input kinds via the user message:
   - `acceptance_specs`: bulleted success criteria; each MUST be observably satisfied before you return status=passed
   - `owned_paths`: the files / directories you are allowed to write
   - `imports` / `exports`: the interfaces this goal consumes / provides, for cross-goal coordination
-  - `depends_on`: prerequisite goals; those are already merged into your worktree's base branch
+  - `depends_on`: prerequisite goals. The orchestrator is responsible for only dispatching you AFTER those have passed and merged, so their files SHOULD be in your worktree base. Verify by reading the relevant files before consuming them — if the imports/exports a dependency was supposed to provide are missing, return `status=failed` with a concrete error naming the missing dep rather than re-implementing it from scratch.
 
 **request** — the direct-path workflow; no decomposition, just the user's words:
   - `text`: the user's verbatim request; infer scope + acceptance from the prose

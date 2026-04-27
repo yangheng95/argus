@@ -83,9 +83,11 @@ export namespace BuildAgent {
       spec: string
       goalIDs?: string[]
     }>
-    /** Sibling goals listed in `target.depends_on`. These already merged
-     *  into the worktree base, but the agent benefits from seeing their
-     *  titles + objectives so it knows what is already provided. */
+    /** Sibling goals listed in `target.depends_on`. The orchestrator gates
+     *  dispatch on these having passed and merged, so their files SHOULD be
+     *  in the worktree base — surfacing titles + objectives lets the build
+     *  agent recognise what is already provided and verify it before
+     *  consuming. */
     dependencies?: Array<{
       id: string
       title: string
@@ -1136,10 +1138,10 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
 
     const deps = context?.dependencies ?? []
     if (deps.length > 0) {
-      lines.push("## Dependencies (already merged into base branch)")
+      lines.push("## Dependencies (should be merged into your worktree base)")
       lines.push("")
       lines.push(
-        "These goals completed before yours. Their files are in your worktree; consume the exports they declared, do NOT re-implement them.",
+        "These goals are listed as prerequisites — the orchestrator is supposed to have waited for them to pass and merge before dispatching you, so their files SHOULD already exist in your base branch. Verify by reading them before you consume their exports. If a declared export is missing or the file is absent, do NOT re-implement it: return `status=failed` with a concrete error naming the missing dependency so the orchestrator can fix the dispatch order.",
       )
       lines.push("")
       for (const d of deps) {
