@@ -1243,10 +1243,15 @@ export namespace EngineService {
     const input = TaskMessageInput.parse(raw)
     const task = requireTask(taskID)
 
-    if (isTaskFailed(task)) {
+    if (isTaskFailed(task) || isTaskCancelled(task)) {
+      // Symmetric guard for both terminal-error states. Without the cancelled
+      // branch the message would persist via continueTaskMessage and trigger
+      // dispatchTaskLoop, but the loop has already torn down — the message
+      // strands in DB with no listener (the audit's Q1 finding).
+      const reason = isTaskCancelled(task) ? "cancelled" : "failed"
       return {
         kind: "note" as const,
-        message: "Task is failed. Retry the task before sending more guidance. This message was not recorded.",
+        message: `Task is ${reason}. Retry the task before sending more guidance. This message was not recorded.`,
         should_resume: false,
       }
     }
