@@ -171,7 +171,8 @@ Panel → PATCH /config {partial} → mergeDeep → 写文件
 | `requirements.completed` | 刷新需求分析区 |
 | `architect.completed` | 刷新 architect 区 |
 | `workflow.selected` | 更新 workflow 标识 |
-| `goal.workflow.updated` | 刷新 GoalWorkflowGroup |
+
+> 历史版本规划过 `goal.workflow.updated` 事件，当前 `engine/model.ts` 未注册——`GoalWorkflowGroup` 通过现有 `goal.*` 与 task board 重编译事件驱动刷新即可。
 
 ## 后端对接
 

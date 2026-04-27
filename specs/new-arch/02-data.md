@@ -4,10 +4,12 @@
 > `src/bus/` · `src/decision-log/` · `src/storage/` · `src/workspace/workspace.sql.ts` ·
 > `src/control/control.sql.ts`
 
-## engine 域（18 张表）
+## engine 域（13 张表）
 
 所有表定义在 `src/engine/engine.sql.ts`，命名前缀 `engine_`（历史文档里的
-`orchestrator_*` 已全部重命名为 `engine_*`）。
+`orchestrator_*` 已全部重命名为 `engine_*`）。Phase 6 把 5 张过程表（`engine_run` /
+`engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`）合并
+为单一 `engine_artifact`，按 `kind` 区分语义。
 
 ### 顶层与规格
 | 表 | 关键字段 / 状态 |
@@ -21,19 +23,14 @@
 |---|---|
 | `engine_plan_version` | status ∈ {active, superseded} |
 | `engine_milestone` | status ∈ {pending, active, passed, failed} |
-| `engine_goal` | priority ∈ {blocking, advisory}; status ∈ {pending, running, passed, failed} |
+| `engine_goal` | priority ∈ {blocking, advisory}; status ∈ {pending, running, passed, failed}; `workspace_dir` / `workspace_branch` / `workspace_base_ref`（worktree 生命周期） |
 | `engine_requirement` | 需求追溯记录（`requirements` agent 写入） |
-| `engine_goal_snapshot` | goal 快照 |
 | `engine_plan_node` | 计划步骤 |
 
-### 执行与交付
+### 执行与交付（artifact-centric）
 | 表 | 关键字段 / 状态 |
 |---|---|
-| `engine_run` | status ∈ {queued, accepted, running, blocked, completed, failed, aborted}; phase ∈ {plan, execute, evaluate, deliver, dispatch, retry} |
-| `engine_goal_run` | goal × run 关联 |
-| `engine_delivery` | 交付记录（delivery agent 打分 + 反馈） |
-| `engine_artifact` | 产物（diff / log / image / report / …） |
-| `engine_evaluation` | checks 执行结果 |
+| `engine_artifact` | **统一过程表**，`kind` 决定语义；替代旧的 `engine_run` / `engine_goal_run` / `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot`。kind 涵盖 run / goal-run / delivery / verification-evidence / goal-snapshot / diff / log / image / report 等 |
 | `engine_progress_snapshot` | 进度快照（旧名 `orchestrator_progress_snapshot` 已重命名） |
 | `engine_executor_session` | 执行器会话绑定 |
 
@@ -42,6 +39,8 @@
 |---|---|
 | `engine_interaction_request` | type ∈ {permission, question}; status ∈ {pending, …} |
 | `engine_channel_binding` | 外部 channel（platform/channel/thread） ↔ task 绑定；`ChannelIngress` 查询入口 |
+
+> 实际 `sqliteTable` 注册见 `engine.sql.ts`：EngineSpecSnapshotTable、EngineSpecItemTable、EngineTaskTable、EnginePlanVersionTable、EngineMilestoneTable、EngineGoalTable、EngineRequirementTable、EnginePlanNodeTable、EngineInteractionRequestTable、EngineArtifactTable、EngineProgressSnapshotTable、EngineExecutorSessionTable、EngineChannelBindingTable（共 13 个）。
 
 **唯一写入者**：`task-api/index.ts` 和 `engine/persist.ts` / `engine/state.ts` / `engine/store.ts`。禁止其他模块直接写 `engine_*` 表。
 
@@ -57,12 +56,13 @@
 | `todo` | session 内 todo |
 | `permission` | 权限请求（project 级全量规则集） |
 
-**SessionKind**（固定在 creation time）：`root` · `assistant` · `requirements` · `design-analyst` · `planner` · `goal` · `architect` · `delivery` · `executor` · `build` · `evaluator` · `system`。
+**SessionKind**（固定在 creation time，见 `session.sql.ts:52-68`）：`root` · `assistant` · `orchestrator` · `requirements` · `design-analyst` · `planner` · `goal` · `architect` · `delivery` · `executor` · `build` · `evaluator` · `gateway` · `intent-analysis` · `integrity` · `system`（共 16 种）。
 
 **去掉的字段 / 索引**（旧文档还在提，代码已清理）：
 - ~~`session.channel_key`~~ — Gateway 单例概念删除
 - ~~`session_gateway_singleton_idx`~~ — partial unique index 已删
-- `kind='gateway'` sessions 不再存在
+
+`kind='gateway'` 的 SessionKind **保留**——`src/gateway/` 目录仍在，承担"SDK gateway 客户端会话"职责（见 [03-control.md](03-control.md)）；只是不再有 per-channel 单例。
 
 新增的字段 `goal_id`：当 session 归属某个 goal（planner / executor / build session）时写入，overlay 据此把消息嵌在 goal 卡片下。
 

@@ -2,9 +2,14 @@
 
 > 对应代码：`src/provider/` · `src/session/llm.ts` · `src/config/config.ts`
 >
-> 实际目录：`provider/llm.ts` · `provider.ts` · `transform.ts` · `vendor.ts` · `auth.ts` ·
-> `bundled.ts` · `error.ts` · `base-url.ts` · `models.ts` · `models-snapshot.ts` ·
-> `codex-live.ts` · `dashscope.ts` · `install.ts` · `policy.ts` · `sdk/`
+> 实际目录：`provider/llm.ts` · `provider.ts` · `transform.ts` · `vendor.ts` ·
+> `vendor-headers.ts` · `vendor-messages.ts` · `auth.ts` · `bundled.ts` · `error.ts` ·
+> `base-url.ts` · `models.ts` · `models-snapshot.ts` · `dashscope.ts` · `install.ts` ·
+> `policy.ts` · `hexin-discovery.ts` · `hexin-profiles.ts`
+>
+> `vendor.ts` 已拆分为三块：核心 loader 在 `vendor.ts`、HTTP header 注入在 `vendor-headers.ts`、
+> 消息修复在 `vendor-messages.ts`。`hexin-discovery.ts` / `hexin-profiles.ts` 是项目特化的内部供应商
+> 发现机制（同心同德）。`policy.ts` 提供模型策略 / 限制校验。原 `codex-live.ts` 已删除（codex 已收编为 executor）。
 
 ## 核心挑战
 
@@ -138,13 +143,16 @@ Agent.run()                                     agent 发起 LLM 调用
 | `provider/provider.ts` | Model Registry + SDK Router + 状态管理 |
 | `provider/transform.ts` | Parameter Transform + Message 标准化 |
 | `provider/vendor.ts` | Custom Loaders — per-provider 特殊逻辑 |
+| `provider/vendor-headers.ts` | per-provider HTTP header 注入（拆自 vendor.ts） |
+| `provider/vendor-messages.ts` | per-provider 消息修复（拆自 vendor.ts） |
+| `provider/policy.ts` | 模型策略 / 输入限制校验 |
+| `provider/hexin-discovery.ts` · `hexin-profiles.ts` | 内部供应商发现 / profile 管理（项目特化） |
 | `provider/auth.ts` | Auth 管理 — API Key / OAuth / IAM |
 | `provider/error.ts` | Error Normalization + Overflow 检测 |
 | `provider/bundled.ts` | 21 个打包 SDK 映射 |
 | `provider/base-url.ts` | 自定义 base URL 解析 |
 | `provider/models.ts` · `models-snapshot.ts` | 模型元数据 + 本地快照 |
-| `provider/dashscope.ts` · `codex-live.ts` | 特殊 provider 实现 |
-| `provider/sdk/` | provider-specific SDK 定制 |
+| `provider/dashscope.ts` | 特殊 provider 实现（动态密钥） |
 | `session/llm.ts` | Session LLM — 复用 ProviderLLM helpers + plugin/trace/permission |
 | `config/config.ts` | Agent model 配置 + Provider 配置 |
 

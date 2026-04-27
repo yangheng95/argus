@@ -24,10 +24,17 @@
 | [05-config.md](05-config.md) | Unified Config 三层分离 + PATCH 流程 | F |
 | [06-provider.md](06-provider.md) | LLM Provider 六层适配 | G |
 | [07-panel.md](07-panel.md) | Workbench / Panel 重设计 + SSE 事件 | J |
-| [11-agent-oop-protocol.md](11-agent-oop-protocol.md) | Agent OOP 协议：BaseAgent / CapabilityContract / Mailbox / Registry / Whitelist | 新 |
-| [12-overlay-card-system.md](12-overlay-card-system.md) | Overlay 统一卡片系统：Shell / Payload / Policy / Writer | 新 |
+| [08-agent-tool-adapter.md](08-agent-tool-adapter.md) | Agent ↔ Tool include/exclude 适配协议 | 新 |
+| [09-verification-evidence.md](09-verification-evidence.md) | Verification Evidence（已迁移至 `engine_artifact` kind="verification-evidence"） | 新 |
+| [10-worktree-lifecycle.md](10-worktree-lifecycle.md) | Goal worktree 生命周期与 ff-only merge-back | 新 |
+| [11-agent-oop-protocol.md](11-agent-oop-protocol.md) | Agent OOP 协议：BaseAgent / CapabilityContract / Mailbox / Registry / Whitelist（草稿，未实施） | 新 |
+| [12-overlay-card-system.md](12-overlay-card-system.md) | Overlay 统一卡片系统：Shell / Payload / Policy / Writer（目标设计，未完全实施） | 新 |
 | [13-agent-communication-matrix.md](13-agent-communication-matrix.md) | Agent 通信矩阵：预期 whitelist vs 当前实现的 direct/indirect 路径 | 新 |
 | [14-agent-runtime-mode.md](14-agent-runtime-mode.md) | Agent 抽象修正：AgentSpec / RuntimeMode / ContextStrategy / BudgetPolicy | 新 |
+| [15-no-fsm.md](15-no-fsm.md) | 状态机全砍计划（DEPRECATED，并入 16） | 新 |
+| [16-unified-teardown.md](16-unified-teardown.md) | 统一拆除：向 Claude Code / Codex 极简模型看齐 | 新 |
+| [2026-04-27-task-rewind-code-resource.md](2026-04-27-task-rewind-code-resource.md) | Task rewind 与代码 worktree 资源协同 | 新 |
+| [spec-vscode-extension.md](spec-vscode-extension.md) | VSCode 扩展规格 | 新 |
 | [99-principles.md](99-principles.md) | 核心原则、anti-patterns、非协商约束 | B · E |
 
 ### 归档与工作笔记
@@ -78,7 +85,21 @@
 - [x] `src/calculator/` 已删除（零消费者，git rm）
 - [x] 2026-04-17 同步：`orchestrator/` → `engine/` · `task-agent/` → `orchestrator/` ·
       `orchestrator/service.ts` → `task-api/index.ts` · `evaluator/` → `delivery/checks/` ·
-      `control-plane/` 拆并入 `workspace/` + `util/sse.ts` · `gateway/` 整删 ·
+      `control-plane/` 拆并入 `workspace/` + `util/sse.ts` ·
       `session.channel_key` + `session_gateway_singleton_idx` 移除 ·
       `panel/api.ts` + `panel/settings.ts` 移除
+- [x] 2026-04-27 同步（本轮）：
+  - `engine_*` 表从 18 张缩到 13 张（Phase 6 把 `engine_run` / `engine_goal_run` /
+    `engine_delivery` / `engine_evaluation` / `engine_goal_snapshot` 合并为 `engine_artifact` + `kind` 区分）
+  - `engine/goal-pool.ts` 与 `pipeline/executor.ts` 已删除，调度逻辑并入 build tool + `goal/runner.ts`
+  - `orchestrator/tools.ts` 当前导出 19 个 tool（不止 `requirements / design_analysis / architect / build / deliver`）
+  - `panel/capability.ts` 当前注册 19 个 action（详见 03-control.md）
+  - `executor/` 新增 `codex.ts` / `bootstrap.ts` / `discovery.ts` / `external-process.ts` / `managed.ts` / `runtime-env.ts`
+  - `provider/` 拆出 `vendor-headers.ts` / `vendor-messages.ts`；新增 `policy.ts` / `hexin-discovery.ts` / `hexin-profiles.ts`；删除 `codex-live.ts`
+  - `mcp/` 新增 `stdio.ts`
+  - 修正：`gateway/` **未整删**，保留 3 个文件（SDK gateway 客户端会话辅助）
+  - SessionKind 枚举更新为 16 种（含 `orchestrator` / `intent-analysis` / `integrity` / 保留 `gateway`）
+  - 09-verification-evidence.md / 12-overlay-card-system.md / 11-agent-oop-protocol.md
+    在头部补"实施状态"标注，区分"目标设计"与"代码现状"
+  - 15/16 文档头部补 follow-up TODO（runtime.ts status 分支 / goal-status mapRunStatus / teardown 多源）
 - [ ] 新 SVG 三张总览图按最新 MD 重绘（暂未做）

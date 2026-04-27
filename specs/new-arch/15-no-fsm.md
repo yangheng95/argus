@@ -1,6 +1,12 @@
 # 状态机全砍（facts-only + LLM 决策）重构计划
 
 > **DEPRECATED — 2026-04-25**：本文档是 16-unified-teardown.md 的前身；阶段 7 完成后归档。请以 `specs/new-arch/16-unified-teardown.md` 为准，该文档在此规划基础上纳入了 GoalPool / AgentRuntime / 读模型切换 / schema 清零 / recovery.ts 删除的完整落地。
+>
+> **2026-04-27 状态核查**：5 张过程状态表已在 Phase 6 合并为 `engine_artifact`（见 [02-data.md](02-data.md)），
+> 但代码侧仍存在以下 FSM-shaped 残留（需在新 ticket 单独清零）：
+> - `engine/runtime.ts:123-132` 仍用 `run.status === "completed" / "failed" / "aborted"` 分支轮询，
+>   未替换为 `time_completed != null` 派生
+> - `engine/goal-status.ts:40-62` `mapRunStatus` 仍是 switch/case，与"事实派生"原则不一致
 
 - 日期：2026-04-24
 - 分支起点：`rc-2026-04-13 @ 1c07ee2d1`（wip: checkpoint before state-machine teardown）
