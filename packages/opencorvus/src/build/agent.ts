@@ -196,7 +196,14 @@ export namespace BuildAgent {
       let baseRef: string | undefined
       if (ownsWorktree) {
         const targetLabel = labelFromTarget(input.target)
-        const info = await Worktree.create({ name: `build-${targetLabel}` })
+        // `reuseIfValid: true` lets a re-attempted build pick up the prior
+        // attempt's worktree if it was preserved on disk because the agent
+        // reported `passed` without ever calling merge_back. The next
+        // attempt then only has to call merge_back over the existing files
+        // instead of regenerating them. When the prior tree is invalid or
+        // wasn't preserved (cleanup ran), Worktree.create falls back to the
+        // standard reclaim+create path so this is purely a fast path.
+        const info = await Worktree.create({ name: `build-${targetLabel}`, reuseIfValid: true })
         worktreeDir = info.directory
         worktreeBranch = info.branch
         await Ownership.Worktree.record({
@@ -386,6 +393,14 @@ export namespace BuildAgent {
       let out: { session: { id: string }; structured?: unknown } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
+      // When the agent reports `passed` but never produced a successful
+      // merge_back call, we demote the verdict to `failed` further below.
+      // We also keep the goal worktree on disk so the orchestrator's next
+      // build({goalID}) attempt can reuse it (Worktree.create with the same
+      // deterministic name reclaims the existing tree via reuseIfValid)
+      // and just call merge_back on top of the already-written files
+      // instead of regenerating ~20 minutes of code from scratch.
+      let preserveWorktreeForRetry = false
       // Dispatch fork: executor === "opencode" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
@@ -457,13 +472,36 @@ export namespace BuildAgent {
             return undefined
           })
         }
+
+        // Decide before the finally cleanup whether the next attempt should
+        // be allowed to pick up where this one left off. The "passed verdict
+        // without merge_back" case is the only one the user wants
+        // continuable: the agent wrote real files, just forgot to publish
+        // them. Genuine failures (status=failed, structured-output schema
+        // mismatch, infrastructure faults) all let cleanup proceed so the
+        // next run starts with a clean slate.
+        if (
+          ownsWorktree &&
+          worktreeBranch &&
+          parsed?.success &&
+          parsed.data.status === "passed" &&
+          !mergedHead
+        ) {
+          preserveWorktreeForRetry = true
+        }
       } finally {
-        if (ownsWorktree && worktreeDir) {
+        if (ownsWorktree && worktreeDir && !preserveWorktreeForRetry) {
           await cleanupGoalWorkspace(worktreeDir).catch((err) => {
             log.warn("build agent: cleanupGoalWorkspace failed", {
               worktreeDir,
               error: err instanceof Error ? err.message : String(err),
             })
+          })
+        } else if (preserveWorktreeForRetry && worktreeDir) {
+          log.warn("build agent: preserving worktree for retry — passed verdict without merge_back", {
+            taskID: input.task.id,
+            worktreeDir,
+            worktreeBranch,
           })
         }
       }

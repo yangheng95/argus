@@ -36,7 +36,7 @@ import { tool } from "ai"
 import z from "zod"
 import INTEGRITY_CORE from "@/prompt/core/integrity-core.txt"
 import { Log } from "@/util/log"
-import { runAgentSession } from "@/agent/runner"
+import { runAgentSessionWithRetry } from "@/agent/runner"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import type { GoalContractFields } from "@/pipeline/types"
@@ -264,15 +264,18 @@ export async function reviewIntegrity(input: {
   }
 
   const goalIDs = new Set(goals.map((g) => g.id))
-  const collector: {
+  type IntegrityCollector = {
     dimensions: Map<IntegrityDimension["id"], IntegrityDimensionResult>
     droppedCorrections: string[]
-  } = {
-    dimensions: new Map(),
-    droppedCorrections: [],
+  }
+  function buildIntegrityCollector(): IntegrityCollector {
+    return {
+      dimensions: new Map(),
+      droppedCorrections: [],
+    }
   }
 
-  function buildDimensionTool(d: IntegrityDimension) {
+  function buildDimensionTool(collector: IntegrityCollector, d: IntegrityDimension) {
     const correctionsClause = d.canProposeCorrections
       ? ` Mutating corrections + missing_goals are allowed under this dimension; reference only goal_ids that appear in the goal list.`
       : ` Diagnostic-only dimension — schema has no corrections / missing_goals fields.`
@@ -337,21 +340,60 @@ export async function reviewIntegrity(input: {
     })
   }
 
-  const dimensionTools = Object.fromEntries(
-    INTEGRITY_DIMENSIONS.map((d) => [`submit_${d.id}_verdict`, buildDimensionTool(d)] as const),
-  )
-
   const startedAt = Date.now()
-  const out = await runAgentSession({
+  // The reviewer must finish two contracts in a single attempt: every
+  // dimension submitted and a terminal StructuredOutput payload. Smaller
+  // models (kimi-k2.5 in particular) sometimes submit the dimension tools
+  // and stop without StructuredOutput, leaving `out.structured` undefined.
+  // Per CLAUDE.md rule 22/24 we run that re-attempt loop through the
+  // shared `runAgentSessionWithRetry` rather than carrying a private retry
+  // state machine; per rule 23 the retry trigger is a pure observation of
+  // the contract (collector dims + structured), no in-house FSM.
+  let lastDroppedCorrections = 0
+  const out = await runAgentSessionWithRetry<IntegrityCollector>({
     kind: "integrity",
     core: INTEGRITY_CORE,
     sessionTitle: `Integrity Review: ${input.taskTitle}`,
     parentSessionID: input.parentSessionID,
     taskID: input.taskID,
     signal: input.signal,
-    toolKit: {
-      tools: dimensionTools,
-      getCollector: () => collector,
+    maxRetries: 3,
+    toolKitFactory: () => {
+      const collector = buildIntegrityCollector()
+      const tools = Object.fromEntries(
+        INTEGRITY_DIMENSIONS.map(
+          (d) => [`submit_${d.id}_verdict`, buildDimensionTool(collector, d)] as const,
+        ),
+      )
+      return {
+        tools,
+        getCollector: () => collector,
+      }
+    },
+    isComplete: (collector, _streamErrors, structured) => {
+      const missing = INTEGRITY_DIMENSIONS
+        .filter((d) => !collector.dimensions.has(d.id))
+        .map((d) => d.id)
+      if (!structured) {
+        return {
+          ok: false,
+          reason:
+            `integrity reviewer ended without emitting StructuredOutput({summary}); ` +
+            `submittedDimensions=${[...collector.dimensions.keys()].join(",") || "none"}, ` +
+            `missingDimensions=${missing.join(",") || "none"}`,
+        }
+      }
+      if (missing.length > 0) {
+        return {
+          ok: false,
+          reason:
+            `integrity reviewer skipped dimension verdict tools — ` +
+            `missingDimensions=${missing.join(",")}, ` +
+            `submittedDimensions=${[...collector.dimensions.keys()].join(",") || "none"}`,
+        }
+      }
+      lastDroppedCorrections = collector.droppedCorrections.length
+      return { ok: true }
     },
     buildUserPrompt: () => buildIntegrityPrompt(input),
     buildUserParts: (input.attachments && input.attachments.length > 0)
@@ -385,21 +427,9 @@ export async function reviewIntegrity(input: {
     },
   })
 
-  const structured = out.structured as IntegrityFinal | undefined
-  const missingDimensions = INTEGRITY_DIMENSIONS
-    .filter((d) => !collector.dimensions.has(d.id))
-    .map((d) => d.id)
-
-  if (!structured || missingDimensions.length > 0) {
-    throw new Error(
-      `integrity reviewer did not complete structured contract ` +
-        `(sessionID=${out.session.id}, structuredMissing=${!structured}, ` +
-        `submittedDimensions=${[...collector.dimensions.keys()].join(",") || "none"}, ` +
-        `missingDimensions=${missingDimensions.join(",") || "none"}, streamErrors=${out.streamErrors.length})`,
-    )
-  }
-
-  const normalised = INTEGRITY_DIMENSIONS.map((d) => collector.dimensions.get(d.id)!)
+  const structured = out.structured as IntegrityFinal
+  const finalCollector = out.collector
+  const normalised = INTEGRITY_DIMENSIONS.map((d) => finalCollector.dimensions.get(d.id)!)
   const result = synthesizeResult(normalised, structured.summary)
 
   log.info("integrity review completed", {
@@ -408,11 +438,12 @@ export async function reviewIntegrity(input: {
     issues: result.issues.length,
     corrections: result.corrections.length,
     missingGoals: result.missingGoals.length,
-    droppedCorrections: collector.droppedCorrections.length,
+    droppedCorrections: lastDroppedCorrections,
     streamErrors: out.streamErrors.length,
+    attempts: out.attempts,
   })
 
-  emitIntegrityEvent(input.taskID, out.session.id, result, 1)
+  emitIntegrityEvent(input.taskID, out.session.id, result, out.attempts)
   return { ...result, sessionID: out.session.id }
 }
 

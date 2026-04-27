@@ -483,11 +483,19 @@ export interface RunAgentSessionWithRetryInput<C>
    *  not bleed across retries. */
   toolKitFactory: () => AgentToolKit<C>
   /** Decide whether the just-finished attempt's collector + streamErrors
-   *  constitute success. `ok=true` ends the loop and returns; `ok=false`
-   *  triggers a retry with `reason` captured into lastError. */
+   *  + terminal structured output constitute success. `ok=true` ends the
+   *  loop and returns; `ok=false` triggers a retry with `reason` captured
+   *  into lastError. The `structured` argument is the value of
+   *  `out.structured` for this attempt — defined when the agent's
+   *  `format` is set and the model emitted a schema-valid StructuredOutput
+   *  call, undefined otherwise. Agents that gate on a terminal structured
+   *  payload (e.g. integrity's IntegrityFinal summary) check it here so a
+   *  model that submits dimension tools but skips StructuredOutput
+   *  triggers a retry instead of silently passing. */
   isComplete: (
     collector: C,
     streamErrors: Array<{ reason: string; name?: string }>,
+    structured: unknown,
   ) => RetryDecision
 }
 
@@ -544,7 +552,7 @@ export async function runAgentSessionWithRetry<C>(
       continue
     }
 
-    const decision = input.isComplete(out.collector, out.streamErrors)
+    const decision = input.isComplete(out.collector, out.streamErrors, out.structured)
     if (decision.ok) {
       if (AgentTrace.isEnabled()) {
         AgentTrace.recordAgentReport({

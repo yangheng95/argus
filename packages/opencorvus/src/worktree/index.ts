@@ -212,6 +212,14 @@ export namespace Worktree {
         .enum(["sync", "async"])
         .optional()
         .describe("Deprecated. Worktree.create always waits until checkout, bootstrap, and startup scripts complete before returning."),
+      reuseIfValid: z
+        .boolean()
+        .optional()
+        .describe(
+          "When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. " +
+          "Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. " +
+          "Falls back to the standard reclaim path when the existing tree is invalid (zombie linkage, missing branch, etc.) so corrupt state never silently survives a retry.",
+        ),
     })
     .meta({
       ref: "WorktreeCreateInput",
@@ -629,6 +637,33 @@ export namespace Worktree {
     await fs.mkdir(root, { recursive: true })
 
     const base = input?.name ? slug(input.name) : ""
+
+    // Optional fast path: caller asked to reuse a previously-created worktree
+    // with the same deterministic name (build-agent retry of an attempt that
+    // produced files but skipped merge_back). Only honoured when the existing
+    // dir + git linkage is still healthy via isValid(); otherwise fall through
+    // to the regular candidate/reclaim path so the unhealthy state cannot be
+    // silently propagated.
+    if (base && input?.reuseIfValid) {
+      const directory = path.join(root, base)
+      const branch = `opencorvus/${base}`
+      const validity = await isValid(directory)
+      if (validity.valid) {
+        log.info("worktree reuse: existing valid worktree, skipping create", {
+          name: base,
+          directory,
+          branch,
+        })
+        await Project.addSandbox(Instance.project.id, directory).catch(() => undefined)
+        return Info.parse({ name: base, branch, directory })
+      }
+      log.info("worktree reuse: existing tree invalid, falling through to reclaim", {
+        name: base,
+        directory,
+        reason: validity.reason,
+      })
+    }
+
     const info = await candidate(root, base || undefined)
 
     // All git operations serialized to prevent concurrent corruption
