@@ -1,0 +1,113 @@
+---
+title: "Data model: Task / Run / Goal / Plan / Spec"
+description: Entity relationships and durable state for the orchestrator's core domain model.
+---
+
+All table definitions live in `packages/opencorvus/src/orchestrator/orchestrator.sql.ts`.
+
+## Entity relationships
+
+```
+Task (kind: "workflow" | "build")
+ ├─ Run (phase: plan | execute | evaluate | deliver)
+ │   ├─ PlanVersion (version 1, 2, ...)
+ │   │   └─ Goal[] (decomposed targets)
+ │   └─ GoalRun[] (one per goal execution)
+ │       └─ Evaluation (verdict: accepted | rejected | inconclusive)
+ └─ Delivery (status: candidate → publishing → delivered)
+SpecSnapshot (standalone; referenced by PlanVersion)
+```
+
+## Entity reference
+
+### Task (`orchestrator.sql.ts:113`)
+
+| Field | Meaning |
+|---|---|
+| `kind` | `"workflow"` (full pipeline) or `"build"` (build-only) |
+| `status` | `pending / running / done / failed / canceled` |
+| `active_run_id` | Currently active Run |
+| `active_plan_version_id` | Currently active PlanVersion |
+| `budget` | Total budget (runs / goals / tokens) |
+
+One Task may span many Runs. Each replan creates a new PlanVersion; the old one is marked `superseded`.
+
+### Run (`orchestrator.sql.ts:332`)
+
+One attempt to complete the task end-to-end. Phase advances: `plan → execute → evaluate → deliver`.
+
+### PlanVersion (`orchestrator.sql.ts:161`)
+
+- `version` — sequential number
+- `summary` — human-readable plan summary
+- `spec_snapshot_id` — ties to the spec at this version
+- New version on every replan
+
+### Goal (`orchestrator.sql.ts:205`)
+
+The smallest unit that can be executed in parallel and verified independently.
+
+| Field | Meaning |
+|---|---|
+| `title` / `objective` | Name and narrative |
+| `done_definition` | Acceptance criteria, optionally embedding executable commands (`pnpm test`, `cargo build`, …) |
+| `owned_paths[]` | Code paths owned by this goal |
+| `depends_on[]` | Upstream goals (topological order) |
+| `exports[]` / `imports[]` | Cross-goal contracts |
+
+### GoalRun (`orchestrator.sql.ts:359`)
+
+| Field | Meaning |
+|---|---|
+| `status` | `queued → planning → running → evaluating → completed / failed` |
+| `workspace_dir` | Git worktree path (one per goal) |
+| `base_ref` / `merge_ref` | Branch start / merge target |
+
+The same Goal may have multiple GoalRuns (via retry).
+
+### Evaluation (`orchestrator.sql.ts:467`)
+
+| Field | Meaning |
+|---|---|
+| `verdict` | `accepted / rejected / inconclusive` |
+| `checks[]` | Per-check results (build/test/lint/spec_check/…) |
+
+`inconclusive` means "cannot judge" — not a pass, not a fail — and triggers replan instead of retry.
+
+### Delivery (`orchestrator.sql.ts:423`)
+
+- `candidate` — passed evaluation, awaiting delivery
+- `publishing` — merging/pushing
+- `delivered` — shipped
+
+### SpecSnapshot (`orchestrator.sql.ts:36`)
+
+Produced by Spec Agent:
+
+| Field | Meaning |
+|---|---|
+| `summary` | One-liner |
+| `content` | Full spec (Markdown) |
+| `scope` | Files/modules touched |
+| `evidence[]` | Code evidence the spec is grounded on |
+
+## GoalContract: runtime contract
+
+`GoalContract` (`src/pipeline/types.ts:60`) is the **only** input to the execution pipeline and is **immutable once created**:
+
+```typescript
+interface GoalContract {
+  goal: Goal
+  planNode: PlanStep
+  run: Run
+  task: Task
+  plan: PlanVersion
+  allGoals: Goal[]  // for cross-goal dependency queries
+}
+```
+
+It guarantees a stable snapshot; concurrent modifications cannot contaminate in-flight goals.
+
+## Durable state
+
+All state lives in SQLite (default: `~/.opencorvus/opencorvus.db`) and persists across process and session boundaries. A crashed Task can resume after server restart as long as its worktree is intact.
