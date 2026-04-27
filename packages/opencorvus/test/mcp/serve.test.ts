@@ -13,35 +13,41 @@ describe("mcp.serve", () => {
     const spec = MCPServe.command("/repo")
     expect(spec.name).toBe("opencorvus")
     expect(spec.command.length).toBeGreaterThan(0)
-    expect(spec.args.slice(-6)).toEqual(["mcp", "serve", "--cwd", "/repo", "--toolset", "executor"])
+    expect(spec.args[0]).toEndWith("stdio.ts")
+    expect(spec.args.slice(-4)).toEqual(["--cwd", "/repo", "--toolset", "executor"])
   })
 
   test("exposes the executor MCP toolset", async () => {
-    await using tmp = await tmpdir({ git: true })
+    expect(MCPServe.executorToolNames().sort()).toEqual([
+      "figma_analyze",
+      "figma_compile",
+      "figma_extract",
+      "memory",
+      "task_report",
+      "webpage_analyze",
+      "webpage_compile",
+      "webpage_evaluate",
+      "webpage_extract",
+      "webpage_image_analyze",
+      "webpage_image_compile",
+      "webpage_image_extract",
+      "webpage_render",
+      "webpage_text_diff",
+      "webpage_vision_judge",
+    ].sort())
+  })
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const defs = await MCPServe.toolDefinitions("executor")
-        expect(defs.map((item) => item.name).sort()).toEqual([
-          "apply_patch",
-          "fetch_url",
-          "find_files",
-          "memory",
-          "read_file",
-          "search_code",
-          "shell_command",
-          "task_report",
-          "web_search",
-        ])
-        expect(defs.every((item) => item.metadata?.surface === "mcp")).toBe(true)
-      },
-    })
+  test("maps executor tools to Claude Code MCP-prefixed names", () => {
+    expect(MCPServe.claudeToolName("webpage_extract")).toBe("mcp__opencorvus__webpage_extract")
+    expect(MCPServe.normalizeClaudeToolName("mcp__opencorvus__webpage_compile")).toBe("webpage_compile")
+    const prompt = MCPServe.claudeExecutorPromptSection()
+    expect(prompt).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
+    expect(prompt).toContain("Mirror extraction artifacts must come from the mirror MCP toolchain")
   })
 
   test("includes proxied external MCP tools in definitions", async () => {
     await using tmp = await tmpdir({ git: true })
-    spyOn(MCP, "serverTools").mockResolvedValue([
+    const proxiedTools = [
       {
         key: "docs_lookup",
         client: "docs",
@@ -54,12 +60,12 @@ describe("mcp.serve", () => {
           },
         },
       },
-    ])
+    ]
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const defs = await MCPServe.toolDefinitions("executor")
+        const defs = await MCPServe.toolDefinitions("executor", { includeRuntime: false, proxiedTools })
         const match = defs.find((item) => item.name === "docs_lookup")
         expect(match?.metadata?.proxied_client).toBe("docs")
         expect(match?.metadata?.proxied_tool).toBe("lookup")

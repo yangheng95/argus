@@ -31,6 +31,8 @@ const { ClaudeAgentExecutor } = await import("../../src/executor/claude-agent")
 describe("claude agent sdk options", () => {
   afterEach(() => {
     delete process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE
+    delete process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS
+    delete process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS
     calls.length = 0
   })
 
@@ -60,6 +62,7 @@ describe("claude agent sdk options", () => {
     expect(options?.allowDangerouslySkipPermissions).toBe(false)
     expect(options?.allowedTools).toEqual([])
     expect(options?.mcpServers).toBeUndefined()
+    expect(options?.systemPrompt).toBeUndefined()
   })
 
   test("exposes OpenCorvus MCP server to Claude SDK runs", async () => {
@@ -70,10 +73,21 @@ describe("claude agent sdk options", () => {
     const options = calls[0]?.options as Record<string, unknown> | undefined
     const servers = options?.mcpServers as Record<string, { command?: string; args?: string[] }> | undefined
     expect(servers?.opencorvus?.command).toBe(process.execPath)
-    expect(servers?.opencorvus?.args).toContain("mcp")
-    expect(servers?.opencorvus?.args).toContain("serve")
+    expect(servers?.opencorvus?.args?.[0]).toEndWith("stdio.ts")
     expect(servers?.opencorvus?.args).toContain("--cwd")
     expect(servers?.opencorvus?.args).toContain(cwd)
+  })
+
+  test("teaches Claude Code the MCP-prefixed OpenCorvus tool names", async () => {
+    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "build", system: "base system" }))
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    const systemPrompt = options?.systemPrompt as { append?: string } | undefined
+    expect(systemPrompt?.append).toContain("base system")
+    expect(systemPrompt?.append).toContain("webpage_extract => mcp__opencorvus__webpage_extract")
+    expect(systemPrompt?.append).toContain("webpage_compile => mcp__opencorvus__webpage_compile")
+    expect(systemPrompt?.append).toContain("webpage_analyze => mcp__opencorvus__webpage_analyze")
+    expect(systemPrompt?.append).toContain("Do not create, copy, or handwrite")
   })
 })
 

@@ -11,6 +11,7 @@ export const PanelCapabilityQuery = z.object({
 
 const all = PanelSurface.options
 const panel = ["panel"] as const
+const nonGateway = PanelSurface.options.filter((surface) => surface !== "gateway")
 const CheckSelection = z.record(z.string(), z.boolean())
 
 type Shape = z.ZodRawShape
@@ -176,7 +177,7 @@ export const PanelCapabilityRegistry = list(
     action: "capture_overlay_screenshot",
     description: "Capture the current OpenCorvus GUI window and return it as an image attachment.",
     kind: "query",
-    surfaces: all,
+    surfaces: nonGateway,
     params: {
       match: z.string().optional(),
     },

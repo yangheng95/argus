@@ -1229,13 +1229,6 @@ export type EventTaskQueueCompleted = {
   }
 }
 
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
 export type EventTaskReport = {
   type: "task.report"
   properties: {
@@ -1246,6 +1239,13 @@ export type EventTaskReport = {
     next_plan?: string
     artifacts?: Array<string>
     error?: string
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
   }
 }
 
@@ -1346,6 +1346,7 @@ export type Session = {
     | "root"
     | "orchestrator"
     | "assistant"
+    | "gateway"
     | "intent-analysis"
     | "requirements"
     | "design-analyst"
@@ -1560,8 +1561,8 @@ export type Event =
   | EventTodoUpdated
   | EventTaskPlanUpdated
   | EventTaskQueueCompleted
-  | EventVcsBranchUpdated
   | EventTaskReport
+  | EventVcsBranchUpdated
   | EventGoalReport
   | EventCommandExecuted
   | EventSessionCreated
@@ -2388,6 +2389,10 @@ export type Config = {
      * Token buffer for compaction. Leaves enough window to avoid overflow during compaction.
      */
     reserved?: number
+    /**
+     * Fraction of usable context (after reserved buffer) that must be consumed before auto-compaction triggers. Defaults to 0.7 — start compacting at 70% so the agent has room to land its next reply without overflowing.
+     */
+    threshold?: number
   }
   /**
    * Assistant agent configuration — controls requirements, planner, evaluator, and delivery agent behavior
@@ -2506,6 +2511,19 @@ export type Config = {
       max_steps?: number
       /**
        * Additional skill paths for intent-analysis agent
+       */
+      skills?: Array<string>
+    }
+    /**
+     * Build agent configuration — per-goal build session. Model is configured via agent."build".model.
+     */
+    build?: {
+      /**
+       * Maximum agentic steps for build agent
+       */
+      max_steps?: number
+      /**
+       * Additional skill paths for build agent (mirror toolchain SOP defaults)
        */
       skills?: Array<string>
     }
@@ -2816,6 +2834,14 @@ export type WorktreeResetInput = {
   directory: string
 }
 
+export type McpResource = {
+  name: string
+  uri: string
+  description?: string
+  mimeType?: string
+  client: string
+}
+
 export type ProjectSummary = {
   id: string
   name?: string
@@ -2843,6 +2869,7 @@ export type GlobalSession = {
     | "root"
     | "orchestrator"
     | "assistant"
+    | "gateway"
     | "intent-analysis"
     | "requirements"
     | "design-analyst"
@@ -2873,14 +2900,6 @@ export type GlobalSession = {
     diff?: string
   }
   project: ProjectSummary | null
-}
-
-export type McpResource = {
-  name: string
-  uri: string
-  description?: string
-  mimeType?: string
-  client: string
 }
 
 export type TextPartInput = {
@@ -4193,72 +4212,6 @@ export type WorktreeResetResponses = {
 
 export type WorktreeResetResponse = WorktreeResetResponses[keyof WorktreeResetResponses]
 
-export type ExperimentalSessionListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Filter sessions by project directory
-     */
-    directory?: string
-    /**
-     * Only return root sessions (no parentID)
-     */
-    roots?: boolean
-    /**
-     * Filter sessions updated on or after this timestamp (milliseconds since epoch)
-     */
-    start?: number
-    /**
-     * Return sessions updated before this timestamp (milliseconds since epoch)
-     */
-    cursor?: number
-    /**
-     * Filter sessions by title (case-insensitive)
-     */
-    search?: string
-    /**
-     * Maximum number of sessions to return
-     */
-    limit?: number
-    /**
-     * Include archived sessions (default false)
-     */
-    archived?: boolean
-  }
-  url: "/experimental/session"
-}
-
-export type ExperimentalSessionListResponses = {
-  /**
-   * List of sessions
-   */
-  200: Array<GlobalSession>
-}
-
-export type ExperimentalSessionListResponse = ExperimentalSessionListResponses[keyof ExperimentalSessionListResponses]
-
-export type ExperimentalResourceListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/resource"
-}
-
-export type ExperimentalResourceListResponses = {
-  /**
-   * MCP resources
-   */
-  200: {
-    [key: string]: McpResource
-  }
-}
-
-export type ExperimentalResourceListResponse =
-  ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
-
 export type ExperimentalScheduleListData = {
   body?: never
   path?: never
@@ -4483,6 +4436,27 @@ export type ExperimentalScratchpadGetResponses = {
 export type ExperimentalScratchpadGetResponse =
   ExperimentalScratchpadGetResponses[keyof ExperimentalScratchpadGetResponses]
 
+export type ExperimentalResourceListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/resource"
+}
+
+export type ExperimentalResourceListResponses = {
+  /**
+   * MCP resources
+   */
+  200: {
+    [key: string]: McpResource
+  }
+}
+
+export type ExperimentalResourceListResponse =
+  ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
+
 export type SessionListData = {
   body?: never
   path?: never
@@ -4526,6 +4500,7 @@ export type SessionCreateData = {
       | "root"
       | "orchestrator"
       | "assistant"
+      | "gateway"
       | "intent-analysis"
       | "requirements"
       | "design-analyst"
@@ -4567,6 +4542,51 @@ export type SessionCreateResponses = {
 }
 
 export type SessionCreateResponse = SessionCreateResponses[keyof SessionCreateResponses]
+
+export type SessionListGlobalData = {
+  body?: never
+  path?: never
+  query?: {
+    /**
+     * Filter sessions by project directory
+     */
+    directory?: string
+    /**
+     * Only return root sessions (no parentID)
+     */
+    roots?: boolean
+    /**
+     * Filter sessions updated on or after this timestamp (milliseconds since epoch)
+     */
+    start?: number
+    /**
+     * Return sessions updated before this timestamp (milliseconds since epoch)
+     */
+    cursor?: number
+    /**
+     * Filter sessions by title (case-insensitive)
+     */
+    search?: string
+    /**
+     * Maximum number of sessions to return
+     */
+    limit?: number
+    /**
+     * Include archived sessions (default false)
+     */
+    archived?: boolean
+  }
+  url: "/session/global"
+}
+
+export type SessionListGlobalResponses = {
+  /**
+   * List of sessions across projects
+   */
+  200: Array<GlobalSession>
+}
+
+export type SessionListGlobalResponse = SessionListGlobalResponses[keyof SessionListGlobalResponses]
 
 export type SessionStatusData = {
   body?: never
@@ -6174,6 +6194,7 @@ export type PanelCapabilitiesData = {
     directory?: string
     surface?:
       | "panel"
+      | "gateway"
       | "slack"
       | "telegram"
       | "discord"
@@ -6199,6 +6220,7 @@ export type PanelCapabilitiesResponses = {
   200: {
     surface:
       | "panel"
+      | "gateway"
       | "slack"
       | "telegram"
       | "discord"
@@ -6219,6 +6241,7 @@ export type PanelCapabilitiesResponses = {
       kind: "query" | "mutation"
       surfaces: Array<
         | "panel"
+        | "gateway"
         | "slack"
         | "telegram"
         | "discord"
@@ -6238,6 +6261,7 @@ export type PanelCapabilitiesResponses = {
       local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
       local_action_surfaces?: Array<
         | "panel"
+        | "gateway"
         | "slack"
         | "telegram"
         | "discord"
@@ -6266,6 +6290,7 @@ export type PanelMessageData = {
   body?: {
     surface:
       | "panel"
+      | "gateway"
       | "slack"
       | "telegram"
       | "discord"
@@ -6347,6 +6372,7 @@ export type PanelMessageStreamData = {
   body?: {
     surface:
       | "panel"
+      | "gateway"
       | "slack"
       | "telegram"
       | "discord"
@@ -6556,6 +6582,7 @@ export type ControlTimelineData = {
     sessionID?: string
     surface?:
       | "panel"
+      | "gateway"
       | "slack"
       | "telegram"
       | "discord"
@@ -6650,6 +6677,629 @@ export type CodingSessionMessagesResponses = {
    */
   200: unknown
 }
+
+export type GatewayCapabilitiesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/gateway/capabilities"
+}
+
+export type GatewayCapabilitiesResponses = {
+  /**
+   * Gateway capabilities
+   */
+  200: {
+    surface:
+      | "panel"
+      | "gateway"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+    actions: Array<{
+      action: string
+      description: string
+      kind: "query" | "mutation"
+      surfaces: Array<
+        | "panel"
+        | "gateway"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+        | "qq"
+      >
+      local_only: boolean
+      local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
+      local_action_surfaces?: Array<
+        | "panel"
+        | "gateway"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+        | "qq"
+      >
+      schema: {
+        [key: string]: unknown
+      }
+    }>
+  }
+}
+
+export type GatewayCapabilitiesResponse = GatewayCapabilitiesResponses[keyof GatewayCapabilitiesResponses]
+
+export type GatewayStatsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    limit?: number
+  }
+  url: "/gateway/stats"
+}
+
+export type GatewayStatsResponses = {
+  /**
+   * Gateway stats
+   */
+  200: {
+    generatedAt: number
+    project: {
+      id: string
+      name?: string
+      worktree: string
+      directory: string
+    }
+    tasks: {
+      total: number
+      status: {
+        [key: string]: number
+      }
+      summary: unknown
+      recent: Array<{
+        id: string
+        title: string
+        status: string
+        priority?: string
+        directory?: string
+        updated?: number
+      }>
+    }
+    capabilities: {
+      total: number
+      queries: number
+      mutations: number
+    }
+    channelRuntime?: {
+      running: boolean
+      status: string
+      channels: Array<string>
+      detail?: string
+    }
+  }
+}
+
+export type GatewayStatsResponse = GatewayStatsResponses[keyof GatewayStatsResponses]
+
+export type GatewayControlMessageData = {
+  body?: {
+    text: string
+    taskID?: string
+    sessionID?: string
+    executor?: "opencode" | "codex" | "claude-code"
+    channel?: string
+    thread?: string
+    user_id?: string
+    request_id?: string
+    source?: string
+    allow_create?: boolean
+    metadata?: {
+      [key: string]: unknown
+    }
+    attachments?: Array<{
+      mime: string
+      url: string
+      filename?: string
+    }>
+    surface?: "gateway"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/gateway/control/message"
+}
+
+export type GatewayControlMessageResponses = {
+  /**
+   * Control message handled
+   */
+  200: {
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    message: string
+    task_id?: string
+    interaction_id?: string
+    session_id?: string
+    local_action?:
+      | {
+          type: "set_executor"
+          executor: "opencode" | "codex" | "claude-code"
+        }
+      | {
+          type: "select_task"
+          taskID: string
+        }
+      | {
+          type: "select_session"
+          sessionID: string
+        }
+      | {
+          type: "invalidate_session"
+          sessionID: string
+        }
+    attachments?: Array<{
+      mime: string
+      url: string
+      filename?: string
+    }>
+  }
+}
+
+export type GatewayControlMessageResponse = GatewayControlMessageResponses[keyof GatewayControlMessageResponses]
+
+export type GatewayControlActionData = {
+  body?:
+    | {
+        action: "view_plan"
+        taskID: string
+      }
+    | {
+        action: "view_board"
+        taskID?: string
+      }
+    | {
+        action: "view_tasks"
+      }
+    | {
+        action: "create_task"
+        request: string
+        request_id?: string
+        executor?: "opencode" | "codex" | "claude-code"
+        checks?: {
+          build?: Array<string> | false
+          test?: Array<string> | false
+          lint?: Array<string> | false
+          verify_cmd?: Array<string> | false
+          named?: {
+            [key: string]: {
+              label?: string
+              family?: "build" | "test" | "lint" | "verify_cmd"
+              commands: Array<string>
+              enabled?: boolean
+              cwd?: string
+            }
+          }
+          startup?: {
+            command: string
+            ready_url?: string
+            ready_text?: string
+            timeout_ms?: number
+            warmup_ms?: number
+            require_exit_zero?: boolean
+            mode?: "soft" | "strict"
+          }
+          artifact?: {
+            require_changed_files?: boolean
+            min_changed_files?: number
+            require_diff?: boolean
+            require_summary?: boolean
+            mode?: "soft" | "strict"
+          }
+          visual?: {
+            target: "web"
+            url: string
+            require_text?: Array<string>
+            require_title?: string
+            timeout_ms?: number
+            mode?: "soft" | "strict"
+          }
+          puppeteer?: {
+            target: "web"
+            url: string
+            browser?: "chrome" | "edge" | "chromium"
+            executable_path?: string
+            wait_for_selector?: string
+            wait_for_text?: string
+            require_text?: Array<string>
+            require_title?: string
+            full_page?: boolean
+            viewport?: {
+              width?: number
+              height?: number
+            }
+            timeout_ms?: number
+            mode?: "soft" | "strict"
+          }
+          ui_review?: {
+            target: "web"
+            url?: string
+            prompt?: string
+            focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+            timeout_ms?: number
+            mode?: "soft" | "strict"
+          }
+          code_quality?: {
+            enabled?: boolean
+            prompt?: string
+            max_diffs?: number
+            mode?: "soft" | "strict"
+          }
+          code_review?: {
+            enabled?: boolean
+            prompt?: string
+            max_diffs?: number
+            mode?: "soft" | "strict"
+          }
+          dead_code_review?: {
+            enabled?: boolean
+            prompt?: string
+            max_diffs?: number
+            mode?: "soft" | "strict"
+          }
+          judge?: {
+            enabled?: boolean
+            prompt?: string
+            mode?: "soft" | "strict"
+          }
+          spec_check?: {
+            enabled?: boolean
+            prompt?: string
+            mode?: "soft" | "strict"
+          }
+          custom?: {
+            [key: string]: {
+              [key: string]: unknown
+            }
+          }
+          timeout_ms?: number
+        }
+        routing?: {
+          spec?: "opencorvus" | "executor"
+          plan?: "opencorvus" | "executor"
+          evaluation?: "opencorvus" | "hybrid"
+        }
+        channel?: string
+        thread?: string
+        platform?:
+          | "slack"
+          | "telegram"
+          | "discord"
+          | "feishu"
+          | "whatsapp"
+          | "googlechat"
+          | "msteams"
+          | "line"
+          | "matrix"
+          | "mattermost"
+          | "signal"
+          | "wecom"
+          | "dingtalk"
+          | "qq"
+        metadata?: {
+          [key: string]: unknown
+        }
+        source?: string
+        allow_create?: boolean
+      }
+    | {
+        action: "send_task_message"
+        taskID: string
+        text: string
+        source?: string
+        user_id?: string
+      }
+    | {
+        action: "reply_interaction"
+        interactionID: string
+        reply?: "once" | "always"
+        message?: string
+      }
+    | {
+        action: "reject_interaction"
+        interactionID: string
+        message?: string
+      }
+    | {
+        action: "retry_task"
+        taskID: string
+      }
+    | {
+        action: "replan_task"
+        taskID: string
+      }
+    | {
+        action: "cancel_task"
+        taskID: string
+      }
+    | {
+        action: "update_checks"
+        taskID: string
+        selection?: {
+          [key: string]: boolean
+        }
+        checks?: {
+          build?: Array<string> | false
+          test?: Array<string> | false
+          lint?: Array<string> | false
+          verify_cmd?: Array<string> | false
+          named?: {
+            [key: string]: {
+              label?: string
+              family?: "build" | "test" | "lint" | "verify_cmd"
+              commands: Array<string>
+              enabled?: boolean
+              cwd?: string
+            }
+          }
+          startup?: {
+            command: string
+            ready_url?: string
+            ready_text?: string
+            timeout_ms?: number
+            warmup_ms?: number
+            require_exit_zero?: boolean
+            mode?: "soft" | "strict"
+          }
+          artifact?: {
+            require_changed_files?: boolean
+            min_changed_files?: number
+            require_diff?: boolean
+            require_summary?: boolean
+            mode?: "soft" | "strict"
+          }
+          visual?: {
+            target: "web"
+            url: string
+            require_text?: Array<string>
+            require_title?: string
+            timeout_ms?: number
+            mode?: "soft" | "strict"
+          }
+          puppeteer?: {
+            target: "web"
+            url: string
+            browser?: "chrome" | "edge" | "chromium"
+            executable_path?: string
+            wait_for_selector?: string
+            wait_for_text?: string
+            require_text?: Array<string>
+            require_title?: string
+            full_page?: boolean
+            viewport?: {
+              width?: number
+              height?: number
+            }
+            timeout_ms?: number
+            mode?: "soft" | "strict"
+          }
+          ui_review?: {
+            target: "web"
+            url?: string
+            prompt?: string
+            focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+            timeout_ms?: number
+            mode?: "soft" | "strict"
+          }
+          code_quality?: {
+            enabled?: boolean
+            prompt?: string
+            max_diffs?: number
+            mode?: "soft" | "strict"
+          }
+          code_review?: {
+            enabled?: boolean
+            prompt?: string
+            max_diffs?: number
+            mode?: "soft" | "strict"
+          }
+          dead_code_review?: {
+            enabled?: boolean
+            prompt?: string
+            max_diffs?: number
+            mode?: "soft" | "strict"
+          }
+          judge?: {
+            enabled?: boolean
+            prompt?: string
+            mode?: "soft" | "strict"
+          }
+          spec_check?: {
+            enabled?: boolean
+            prompt?: string
+            mode?: "soft" | "strict"
+          }
+          custom?: {
+            [key: string]: {
+              [key: string]: unknown
+            }
+          }
+          timeout_ms?: number
+        }
+      }
+    | {
+        action: "capture_overlay_screenshot"
+        match?: string
+      }
+    | {
+        action: "set_executor"
+        executor: "opencode" | "codex" | "claude-code"
+      }
+    | {
+        action: "select_task"
+        taskID: string
+      }
+    | {
+        action: "select_session"
+        sessionID: string
+      }
+    | {
+        action: "create_session"
+      }
+    | {
+        action: "fork_session"
+        sessionID: string
+      }
+    | {
+        action: "delete_session"
+        sessionID: string
+      }
+    | {
+        action: "update_goal"
+        goalID: string
+        description: string
+        acceptance_specs: Array<unknown>
+      }
+    | {
+        action: "delete_goal"
+        goalID: string
+      }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/gateway/control/action"
+}
+
+export type GatewayControlActionResponses = {
+  /**
+   * Action result
+   */
+  200: {
+    title: string
+    output: string
+    metadata: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type GatewayControlActionResponse = GatewayControlActionResponses[keyof GatewayControlActionResponses]
+
+export type GatewayChannelMessageData = {
+  body?: {
+    channel: string
+    thread: string
+    text: string
+    task_id?: string
+    user_id?: string
+    request_id?: string
+    source?: string
+    executor?: "opencode" | "codex" | "claude-code"
+    allow_create?: boolean
+    allow_session_mutation?: boolean
+    bind?: boolean
+    attachments?: Array<{
+      filename: string
+      mime: string
+      url?: string
+      data?: string
+    }>
+    metadata?: {
+      [key: string]: unknown
+    }
+    platform?:
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+      | "qq"
+  }
+  path: {
+    platform: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/gateway/channel/{platform}/message"
+}
+
+export type GatewayChannelMessageResponses = {
+  /**
+   * Channel message handled
+   */
+  200: {
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    message: string
+    task_id?: string
+    interaction_id?: string
+    session_id?: string
+    local_action?:
+      | {
+          type: "set_executor"
+          executor: "opencode" | "codex" | "claude-code"
+        }
+      | {
+          type: "select_task"
+          taskID: string
+        }
+      | {
+          type: "select_session"
+          sessionID: string
+        }
+      | {
+          type: "invalidate_session"
+          sessionID: string
+        }
+    attachments?: Array<{
+      mime: string
+      url: string
+      filename?: string
+    }>
+  }
+}
+
+export type GatewayChannelMessageResponse = GatewayChannelMessageResponses[keyof GatewayChannelMessageResponses]
 
 export type ServerShutdownData = {
   body?: never
@@ -7130,6 +7780,10 @@ export type TaskListResponses = {
         request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
         priority: "critical" | "high" | "normal" | "low"
+        queue?: {
+          order: number
+          revision?: string
+        }
         kind?: "workflow" | "build"
         blockingReason?: string
         error?: string
@@ -7273,6 +7927,10 @@ export type TaskGlobalListResponses = {
         request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
         priority: "critical" | "high" | "normal" | "low"
+        queue?: {
+          order: number
+          revision?: string
+        }
         kind?: "workflow" | "build"
         blockingReason?: string
         error?: string
@@ -7374,6 +8032,43 @@ export type TaskGlobalListResponses = {
 
 export type TaskGlobalListResponse = TaskGlobalListResponses[keyof TaskGlobalListResponses]
 
+export type TaskQueueReorderData = {
+  body?: {
+    directory: string
+    orderedTaskIDs?: Array<string>
+    revision?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/reorder"
+}
+
+export type TaskQueueReorderErrors = {
+  /**
+   * Queue revision conflict
+   */
+  409: unknown
+  /**
+   * Invalid queued task ordering
+   */
+  422: unknown
+}
+
+export type TaskQueueReorderResponses = {
+  /**
+   * Updated directory queue order
+   */
+  200: {
+    directory: string
+    revision: string
+    queuedTaskIDs: Array<string>
+  }
+}
+
+export type TaskQueueReorderResponse = TaskQueueReorderResponses[keyof TaskQueueReorderResponses]
+
 export type TaskListEventsData = {
   body?: never
   path?: never
@@ -7460,6 +8155,10 @@ export type TaskGetResponses = {
     request: string
     status: "queued" | "active" | "completed" | "failed" | "cancelled"
     priority: "critical" | "high" | "normal" | "low"
+    queue?: {
+      order: number
+      revision?: string
+    }
     kind?: "workflow" | "build"
     blockingReason?: string
     error?: string
@@ -7529,6 +8228,10 @@ export type TaskProgressResponses = {
       request: string
       status: "queued" | "active" | "completed" | "failed" | "cancelled"
       priority: "critical" | "high" | "normal" | "low"
+      queue?: {
+        order: number
+        revision?: string
+      }
       kind?: "workflow" | "build"
       blockingReason?: string
       error?: string
@@ -7796,6 +8499,10 @@ export type TaskConversationResponses = {
         request: string
         status: "queued" | "active" | "completed" | "failed" | "cancelled"
         priority: "critical" | "high" | "normal" | "low"
+        queue?: {
+          order: number
+          revision?: string
+        }
         kind?: "workflow" | "build"
         blockingReason?: string
         error?: string
@@ -8267,6 +8974,10 @@ export type TaskBoardResponses = {
       request: string
       status: "queued" | "active" | "completed" | "failed" | "cancelled"
       priority: "critical" | "high" | "normal" | "low"
+      queue?: {
+        order: number
+        revision?: string
+      }
       kind?: "workflow" | "build"
       blockingReason?: string
       error?: string
@@ -9376,7 +10087,7 @@ export type GoalRunDeliveryError = GoalRunDeliveryErrors[keyof GoalRunDeliveryEr
 
 export type GoalRunDeliveryResponses = {
   /**
-   * Goal-run delivery
+   * Goal-run delivery, or null when the goal_run exists but has not produced a delivery yet (in-flight build).
    */
   200: {
     id: string
@@ -9403,7 +10114,7 @@ export type GoalRunDeliveryResponses = {
       created: number
       updated: number
     }
-  }
+  } | null
 }
 
 export type GoalRunDeliveryResponse = GoalRunDeliveryResponses[keyof GoalRunDeliveryResponses]
@@ -9695,7 +10406,7 @@ export type InteractionRejectResponses = {
 
 export type InteractionRejectResponse = InteractionRejectResponses[keyof InteractionRejectResponses]
 
-export type DeleteGoalGoalIdData = {
+export type GoalDeleteData = {
   body?: never
   path: {
     goalID: string
@@ -9706,11 +10417,25 @@ export type DeleteGoalGoalIdData = {
   url: "/goal/{goalID}"
 }
 
-export type DeleteGoalGoalIdResponses = {
-  200: unknown
+export type GoalDeleteErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
 }
 
-export type PatchGoalGoalIdData = {
+export type GoalDeleteError = GoalDeleteErrors[keyof GoalDeleteErrors]
+
+export type GoalDeleteResponses = {
+  /**
+   * Goal deleted
+   */
+  200: boolean
+}
+
+export type GoalDeleteResponse = GoalDeleteResponses[keyof GoalDeleteResponses]
+
+export type GoalUpdateData = {
   body?: {
     description: string
     acceptance_specs: Array<{
@@ -9820,9 +10545,23 @@ export type PatchGoalGoalIdData = {
   url: "/goal/{goalID}"
 }
 
-export type PatchGoalGoalIdResponses = {
-  200: unknown
+export type GoalUpdateErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
 }
+
+export type GoalUpdateError = GoalUpdateErrors[keyof GoalUpdateErrors]
+
+export type GoalUpdateResponses = {
+  /**
+   * Goal updated
+   */
+  200: boolean
+}
+
+export type GoalUpdateResponse = GoalUpdateResponses[keyof GoalUpdateResponses]
 
 export type TaskUpdateBudgetData = {
   body?: {

@@ -152,6 +152,7 @@ export namespace Session {
         "root",
         "orchestrator",
         "assistant",
+        "gateway",
         "intent-analysis",
         "requirements",
         "design-analyst",

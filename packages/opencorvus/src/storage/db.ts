@@ -22,6 +22,13 @@ export const NotFoundError = NamedError.create(
 
 const log = Log.create({ service: "db" })
 
+function ensureSchemaCompatibility(sqlite: BunDatabase) {
+  const engineTaskColumns = sqlite.query<{ name: string }, []>("PRAGMA table_info(engine_task)").all()
+  if (engineTaskColumns.length > 0 && !engineTaskColumns.some((column) => column.name === "queue_order")) {
+    sqlite.run("ALTER TABLE engine_task ADD COLUMN queue_order integer NOT NULL DEFAULT 0")
+  }
+}
+
 
 export namespace Database {
   // Path() is a function (not a const) so it resolves OPENCORVUS_HOME lazily.
@@ -64,6 +71,7 @@ export namespace Database {
     sqlite.run("PRAGMA journal_size_limit = 67108864")
     sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
 
+    ensureSchemaCompatibility(sqlite)
     sqlite.exec(SCHEMA_DDL)
     log.info("schema applied")
 

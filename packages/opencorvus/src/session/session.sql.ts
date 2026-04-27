@@ -22,6 +22,9 @@ import { Timestamps } from "@/storage/schema.sql"
  *                  sessions (MCP, Debug, Coding, Panel, scheduled wakes). Standalone
  *                  callers are filtered out at the bridge by `taskIDForSession`
  *                  failing naturally; no separate "standalone" kind is needed.
+ *   gateway        remote/mobile control-plane session. It stores gateway
+ *                  metadata such as channel key and current cwd; it must not
+ *                  run the task scheduler itself.
  *   requirements   requirements sub-agent (goal decomposition)
  *   design-analyst design-analyst sub-agent (vision → layout/style/component spec)
  *   planner        per-goal plan phase session (writes plan brief)
@@ -50,6 +53,7 @@ export type SessionKind =
   | "root"
   | "orchestrator"
   | "assistant"
+  | "gateway"
   | "intent-analysis"
   | "requirements"
   | "design-analyst"

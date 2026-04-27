@@ -598,27 +598,35 @@ export namespace SessionLoop {
       }
     }
 
-    // Estimate the size of the actual outgoing prompt by serialising the
-    // entire `modelMessages` array — same approach as opencode upstream's
-    // `SessionCompaction.estimate`. The earlier inline walker only summed
-    // `part.text.length` and skipped tool-call args + tool-result outputs,
-    // which dominates an autonomous tool-heavy agent's prompt body. The
-    // resulting 10-20× under-count kept the predictive compaction
-    // threshold (`0.9 * usableBudget`) unreachable even when the real
-    // prompt crossed the provider's input cap, and the provider rejected
-    // with HTTP 400 (`Range of input length should be [1, 258048]`).
-    // Serialising the whole array counts text, tool-call args, tool-result
-    // output, image placeholders, role markers — every byte the provider
-    // will see. Single source of truth for token-budget tracking
-    // (CLAUDE.md rule 22), no double estimator path (rule 4 root cause:
-    // measure what we actually send, not a partial sample).
-    let promptJsonLength: number
+    // Estimate the size of the actual outgoing request. Tool-heavy agents
+    // can spend most of their input budget on tool descriptions and JSON
+    // schemas, so counting only messages makes autocompaction blind until
+    // the provider rejects the request. Keep this estimate aligned with the
+    // streamText payload shape: model messages and tool definitions are
+    // prompt input; system is estimated separately above.
+    const toolBudgetPayload = Object.fromEntries(
+      Object.entries(tools).map(([name, item]) => [
+        name,
+        {
+          id: (item as any).id,
+          description: (item as any).description,
+          inputSchema: (item as any).inputSchema,
+        },
+      ]),
+    )
+    let messagePayloadChars: number
+    let toolSchemaChars: number
     try {
-      promptJsonLength = JSON.stringify(modelMessages).length
+      messagePayloadChars = JSON.stringify(modelMessages).length
     } catch {
-      promptJsonLength = 0
+      messagePayloadChars = 0
     }
-    const totalContentChars = promptJsonLength
+    try {
+      toolSchemaChars = JSON.stringify(toolBudgetPayload).length
+    } catch {
+      toolSchemaChars = 0
+    }
+    const totalContentChars = messagePayloadChars + toolSchemaChars
     const contentTokensEst = Math.round(totalContentChars / 4)
     const imageTokensEst = imageCount * 1600
     const totalTokensEst = systemTokensEst + contentTokensEst + imageTokensEst
@@ -632,6 +640,8 @@ export namespace SessionLoop {
       messageCount: modelMessages.length,
       userMsgCount,
       assistantMsgCount,
+      messagePayloadChars,
+      toolSchemaChars,
       totalContentChars,
       contentTokensEst,
       imageCount,

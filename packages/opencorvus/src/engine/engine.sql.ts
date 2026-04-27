@@ -241,6 +241,10 @@ export const EngineTaskTable = sqliteTable(
      *  `engine/task-status.ts::deriveTaskStatus` from
      *  (time_started, time_completed, error, metadata.cancelled). */
     priority: text().notNull().$type<EngineTaskPriority>().default("normal"),
+    /** Directory-scoped runnable queue order. Active tasks are excluded from
+     *  reordering and queued siblings are claimed by this value. Priority only
+     *  seeds initial placement; user drag order rewrites this field directly. */
+    queue_order: integer().notNull().default(0),
     /** Phase-6-f-4: `blocking_reason` cache column removed. Blocking is a
      *  run-scoped signal (run.blocking_reason + pending interactions). */
     error: text(),
@@ -271,6 +275,7 @@ export const EngineTaskTable = sqliteTable(
     index("engine_task_project_idx").on(table.project_id),
     index("engine_task_time_completed_idx").on(table.time_completed),
     index("engine_task_kind_idx").on(table.kind),
+    index("engine_task_queue_order_idx").on(table.queue_order),
     uniqueIndex("engine_task_project_request_idx").on(table.project_id, table.request_id),
   ],
 )
