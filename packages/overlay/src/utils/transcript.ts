@@ -3,7 +3,6 @@
 // Exported surface:
 // formatConversationTranscript – plain-text conversation export
 // boardArtifact – find a named artifact in board.artifacts
-// syntheticTextMessage – build a synthetic message object
 // specContextText – spec → plain text
 // planContextText – plan + goals → plain text
 // goalContextText – goals[] → plain text
@@ -29,7 +28,7 @@ function record(value: any): boolean {
 }
 
 /** FNV-1a 32-bit hash (mirrors app.js hashText). */
-function hashText(value: string): string {
+export function hashText(value: string): string {
   const text = String(value || "");
   let hash = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
@@ -152,33 +151,6 @@ function errorText(key: string, error: unknown): string {
 export function boardArtifact(board: any, label: string): any {
   const list: any[] = board?.artifacts || [];
   return list.find((item) => item.label === label);
-}
-
-/**
- * Build a synthetic message object.
- * Returns null if text is empty.
- * Results are cached by ID to maintain referential stability for Solid's
- * `<For>`, which tracks items by reference.
- */
-const _syntheticCache = new Map<string, any>();
-
-export function syntheticTextMessage(
-  role: string,
-  time: number,
-  text: string,
-): any | null {
-  if (typeof text !== "string" || !text.trim()) return null;
-  const created = Number.isFinite(time) ? time : Date.now();
-  const id = `synthetic:${role}:${created}:${hashText(text)}`;
-  const cached = _syntheticCache.get(id);
-  if (cached) return cached;
-  const msg = {
-    _synthetic: true,
-    info: { id, role, resolvedRole: role, channel: "main", time: { created } },
-    parts: [{ type: "text", text }],
-  };
-  _syntheticCache.set(id, msg);
-  return msg;
 }
 
 /**

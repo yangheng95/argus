@@ -555,6 +555,18 @@ export const TaskMessageResult = z.object({
   kind: z.enum(["goal", "plan", "note"]),
   message: z.string(),
   should_resume: z.boolean(),
+  /** The persisted user `Message` row + parts the server just wrote.
+   *  Returned so the overlay can insert the real message into its store
+   *  immediately (no client-side synthetic placeholder; rule 22). The
+   *  subsequent SSE `message.updated` / `message.part.updated` events
+   *  carry the same ids and idempotently update the same rows. Absent
+   *  when the task has no session_id (e.g. failed task short-circuit). */
+  user_message: z
+    .object({
+      info: z.any(),
+      parts: z.array(z.any()),
+    })
+    .optional(),
 })
 
 export const TaskBrief = z.object({

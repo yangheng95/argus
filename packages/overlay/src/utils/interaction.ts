@@ -1,40 +1,56 @@
-// ── Interaction → synthetic message pipeline ──
+// ── Interaction → CardNode seed pipeline ──
 //
 // An interaction (permission / question / clarification) is a prompt the
 // backend raised from inside a specific session. The overlay renders it as
-// part of the conversation timeline by materialising it as one or more
-// synthetic `Message` objects that flow through the same CardParts renderer
-// as regular messages.
+// part of the conversation timeline by producing one or more "card seeds"
+// that tree-writer.upsertInteractionCard turns into CardNodes — direct,
+// no Message wrapper. Per project rule 22 (no synthetic-message
+// abstraction); the seed has only the shape upsertInteractionCard reads.
 //
-// The routing rule: an interaction whose `sessionID` matches a known agent
-// card is "claimed" by that card; interactions without a sessionID (or whose
-// session has no card yet) are returned as "unclaimed" so the caller can
-// surface them separately.
-//
-// tree-writer and the message store both consume this module so that both
-// paths agree on what "claimed" means and on the synthetic-message shape.
+// Routing: an interaction whose `sessionID` matches a known agent card
+// is "claimed" by that card; interactions without sessionID (or whose
+// session has no card yet) are "unclaimed" and surfaced separately.
 
 import {
-  syntheticTextMessage,
   interactionRequestText,
   interactionResponseText,
+  hashText,
   isAutoReplied,
 } from "./transcript";
 
-/** Convert one interaction into the synthetic `Message`(s) that render it.
+export interface InteractionCardSeed {
+  info: {
+    id: string
+    role: string
+    time: { created: number }
+  }
+  parts: any[]
+}
+
+function textSeed(role: string, time: number, text: string): InteractionCardSeed | null {
+  if (typeof text !== "string" || !text.trim()) return null;
+  const created = Number.isFinite(time) ? time : Date.now();
+  return {
+    info: {
+      id: `interaction-text:${role}:${created}:${hashText(text)}`,
+      role,
+      time: { created },
+    },
+    parts: [{ type: "text", text }],
+  };
+}
+
+/** Convert one interaction into the card seed(s) that render it.
  *
- *  - Pending permission/question → a single message carrying an
- *    `interaction-*` part so <CardParts> dispatches to <InteractionCard>.
- *  - Answered/rejected → a request-text bubble plus a response-text bubble
- *    (the transcript path — the interactive card is no longer needed).
- *  - Auto-replied permissions are filtered (they carry no user-visible
- *    signal and clutter the timeline).
+ *  - Pending permission/question → one seed carrying an `interaction-*`
+ *    part so <CardParts> dispatches to <InteractionCard>.
+ *  - Answered/rejected → a request-text bubble plus a response-text bubble.
+ *  - Auto-replied permissions are filtered (no user-visible signal).
  *  - Pending interactions of other types (no `interaction-*` part) fall
  *    through to the transcript path with just a request bubble.
  *
- *  Returns [] when the interaction is filtered; callers should treat that
- *  as "render nothing for this one". */
-export function interactionToSyntheticMessages(interaction: any): any[] {
+ *  Returns [] when the interaction is filtered; callers render nothing. */
+export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] {
   const isAutoPermission =
     interaction?.type === "permission" &&
     (interaction.status === "answered" || interaction.status === "rejected") &&
@@ -54,12 +70,9 @@ export function interactionToSyntheticMessages(interaction: any): any[] {
     if (partType) {
       return [
         {
-          _synthetic: true,
           info: {
             id: `ctx:interaction:${interaction.id}`,
             role,
-            resolvedRole: role,
-            channel: "main",
             time: { created: requestTime },
           },
           parts: [{ type: partType, interaction }],
@@ -68,23 +81,15 @@ export function interactionToSyntheticMessages(interaction: any): any[] {
     }
   }
 
-  const msgs: any[] = [];
-  const request = syntheticTextMessage(
-    role,
-    requestTime,
-    interactionRequestText(interaction),
-  );
-  if (request) msgs.push(request);
+  const seeds: InteractionCardSeed[] = [];
+  const request = textSeed(role, requestTime, interactionRequestText(interaction));
+  if (request) seeds.push(request);
   if (interaction?.status === "answered" || interaction?.status === "rejected") {
     const resolvedTime = Number(interaction.time?.resolved);
-    const response = syntheticTextMessage(
-      role,
-      resolvedTime,
-      interactionResponseText(interaction),
-    );
-    if (response) msgs.push(response);
+    const response = textSeed(role, resolvedTime, interactionResponseText(interaction));
+    if (response) seeds.push(response);
   }
-  return msgs;
+  return seeds;
 }
 
 /** Split a list of interactions into per-session buckets (for interactions

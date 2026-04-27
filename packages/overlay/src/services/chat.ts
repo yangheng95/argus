@@ -16,6 +16,7 @@ import {
   setChatAttachments,
   setMessages,
   mergeLoadedConversationMessages,
+  ingestPersistedMessage,
 } from "../store/messages";
 import { boardStore, setTasksData, loadBoard, loadTasks } from "../store/board";
 import { appStore, setConnectionStatus } from "../store/app";
@@ -356,64 +357,6 @@ export function mergeMessages(left: any[], right: any[]): any[] {
   return mergeLoadedConversationMessages(left, right);
 }
 
-function appendPendingAssistantPart(
-  requestID: string,
-  type: "text" | "reasoning",
-  delta: string,
-): void {
-  const chunk = typeof delta === "string" ? delta : "";
-  if (!requestID || !chunk) return;
-  const messageID = `pending-assistant:${requestID}`;
-  const partID = `${messageID}:${type}`;
-  let found = false;
-  const next = messageStore.messages.map((message: any) => {
-    if (message?.info?.id !== messageID) return message;
-    found = true;
-    const parts = Array.isArray(message?.parts) ? [...message.parts] : [];
-    const index = parts.findIndex((part: any) => part?.id === partID);
-    if (index >= 0) {
-      const current = parts[index];
-      parts[index] = {
-        ...current,
-        type,
-        text: `${String(current?.text || "")}${chunk}`,
-      };
-    } else {
-      parts.push({
-        id: partID,
-        type,
-        text: chunk,
-        messageID,
-        sessionID: "",
-      });
-    }
-    return {
-      ...message,
-      parts,
-    };
-  });
-  if (!found) {
-    next.push({
-      _synthetic: true,
-      info: {
-        id: messageID,
-        role: "assistant",
-        time: { created: Date.now() },
-      },
-      parts: [
-        {
-          id: partID,
-          type,
-          text: chunk,
-          messageID,
-          sessionID: "",
-        },
-      ],
-    });
-  }
-  setMessages(next);
-}
-
 function ensureTaskListEntry(
   taskID: string,
   requestID: string,
@@ -535,6 +478,14 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
         signal: controller.signal,
       },
     );
+    // Server returned the persisted user Message + parts — write them into
+    // the store immediately so the user sees their bubble before the SSE
+    // round-trip lands. Single source: same id space as the SSE events that
+    // follow, so the by-id merge in applyMessageEvent idempotently no-ops
+    // when the matching `message.updated` arrives over the bus.
+    if (result?.user_message?.info?.id) {
+      ingestPersistedMessage(result.user_message);
+    }
     await loadBoard();
     // The server may return a control-plane acknowledgement here
     // (e.g. operator note recorded). The real conversation already comes

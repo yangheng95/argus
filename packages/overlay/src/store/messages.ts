@@ -8,10 +8,6 @@ import { boardStore } from "../store/board";
 import { clearConversationUiState } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { syncSectionPhases } from "../utils/section";
-import {
-  interactionToSyntheticMessages,
-  partitionInteractions,
-} from "../utils/interaction";
 import { normalizeToolPartRecord } from "../utils/tool";
 
 // ── Types ──
@@ -39,7 +35,6 @@ export interface Part {
 export interface Message {
   info: MessageInfo;
   parts: Part[];
-  _synthetic?: boolean;
 }
 
 // ── Store ──
@@ -675,6 +670,31 @@ function flushEvents() {
   batch(() => {
     for (const event of events) {
       applyMessageEvent(event);
+    }
+  });
+}
+
+/**
+ * Ingest a persisted real Message + parts the server returned synchronously
+ * from a POST (e.g. /task/:id/message). Replays the same `message.updated`
+ * + `message.part.updated` shapes the SSE bridge would deliver, so the
+ * subsequent SSE event for the same id idempotently no-ops via the by-id
+ * merge in applyMessageEvent. Single source: one ingestion path for the
+ * real backend message, no synthetic placeholder, no double-write.
+ */
+export function ingestPersistedMessage(input: { info: any; parts: any[] }): void {
+  if (!input?.info?.id) return;
+  batch(() => {
+    applyMessageEvent({
+      type: "message.updated",
+      properties: { info: input.info },
+    });
+    for (const part of input.parts ?? []) {
+      if (!part) continue;
+      applyMessageEvent({
+        type: "message.part.updated",
+        properties: { part },
+      });
     }
   });
 }
