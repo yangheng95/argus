@@ -806,6 +806,7 @@ async function runWithExternalProvider(args: {
 
   log.info("build agent (external) provider input ready", {
     executor: args.executor,
+    executorModel: runInput.model ?? null,
     taskID: args.taskID,
     sessionID: session.id,
     toolCount: configuredTools?.length ?? 0,

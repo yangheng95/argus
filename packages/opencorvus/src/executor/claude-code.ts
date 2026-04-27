@@ -1,5 +1,6 @@
 import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
 import { decode, record, text } from "./contract"
+import { assertExecutorModel } from "./runtime-env"
 
 type Tool = {
   id: string
@@ -27,6 +28,7 @@ export namespace ClaudeCodeExecutor {
 
   export function request(raw: Parameters<typeof CodingRunInput.parse>[0]) {
     const input = CodingRunInput.parse(raw)
+    if (input.model) assertExecutorModel("claude-code", input.model)
     const tools = input.toolMode === "none" ? [] : builtins(input.tools ?? [])
     return {
       prompt: input.prompt,

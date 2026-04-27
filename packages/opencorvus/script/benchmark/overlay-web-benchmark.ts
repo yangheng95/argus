@@ -922,7 +922,7 @@ try {
     logLine(`[overlay-benchmark] RESUME-INFO project=${temp.dir}`)
     logLine(
       `[overlay-benchmark] RESUME-CMD bun run script/benchmark/overlay-web-benchmark.ts ` +
-        `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" ` +
+        `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" --executor=${executor} ` +
         `"--stall-timeout-ms=1200000" "--planning-stall-timeout-ms=7200000"`,
     )
 
