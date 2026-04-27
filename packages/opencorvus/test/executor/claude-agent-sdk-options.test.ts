@@ -26,16 +26,6 @@ mock.module("@anthropic-ai/claude-agent-sdk", () => ({
   },
 }))
 
-// The executor MCP transport is now embedded in the running HTTP server. The
-// tests don't spin up Bun.serve, so stub Server.url() to return a fixed base
-// URL — this keeps the tests focused on the SDK options shape rather than
-// network plumbing.
-mock.module("../../src/server/server", () => ({
-  Server: {
-    url: () => new URL("http://127.0.0.1:7878/"),
-  },
-}))
-
 const { ClaudeAgentExecutor } = await import("../../src/executor/claude-agent")
 
 describe("claude agent sdk options", () => {
@@ -82,12 +72,14 @@ describe("claude agent sdk options", () => {
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
     const servers = options?.mcpServers as
-      | Record<string, { type?: string; url?: string; headers?: Record<string, string> }>
+      | Record<string, { type?: string; command?: string; args?: string[]; env?: Record<string, string> }>
       | undefined
-    expect(servers?.opencorvus?.type).toBe("http")
-    expect(servers?.opencorvus?.url).toBe("http://127.0.0.1:7878/mcp/transport")
-    const directoryHeader = servers?.opencorvus?.headers?.["x-opencorvus-directory"]
-    expect(directoryHeader && decodeURIComponent(directoryHeader)).toBe(cwd)
+    expect(servers?.opencorvus?.type).toBe("stdio")
+    expect(servers?.opencorvus?.command).toBe(process.execPath)
+    expect(servers?.opencorvus?.args?.[0]).toEndWith("stdio.ts")
+    expect(servers?.opencorvus?.args).toContain("--cwd")
+    expect(servers?.opencorvus?.args).toContain(cwd)
+    expect(Object.keys(servers?.opencorvus?.env ?? {}).length).toBeGreaterThan(0)
   })
 
   test("teaches Claude Code the MCP-prefixed OpenCorvus tool names", async () => {
