@@ -216,10 +216,10 @@ export function TracePanel(props: TracePanelProps) {
 
   // Auto-refresh: when a task / session is bound, poll every 4s so the panel
   // picks up new events without the operator having to hit ↻. Cleanup ensures
-  // the timer dies when the panel unmounts (task switch / panel close). The
-  // service-layer cache is keyed by sessionID/taskID, so consecutive polls
-  // hit the in-memory cache cheaply when the trace file has not changed
-  // size — only the cache invalidation in `refresh` forces a re-read.
+  // the timer dies when the panel unmounts (task switch / panel close). Tick
+  // is skipped while the overlay window is hidden — the operator can't see
+  // the panel anyway, and we don't want to wake the JS event loop on a
+  // battery laptop while alt-tabbed away.
   let timer: ReturnType<typeof setInterval> | undefined;
   const hasTarget = createMemo(() =>
     Boolean(("sessionID" in props && props.sessionID) || ("taskID" in props && props.taskID)),
@@ -227,11 +227,24 @@ export function TracePanel(props: TracePanelProps) {
   const startPolling = () => {
     if (timer) clearInterval(timer);
     if (!hasTarget()) return;
-    timer = setInterval(refresh, 4_000);
+    timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void refresh();
+    }, 4_000);
   };
   startPolling();
+  const onVisibility = () => {
+    if (typeof document === "undefined") return;
+    if (!document.hidden && hasTarget()) void refresh();
+  };
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onVisibility);
+  }
   onCleanup(() => {
     if (timer) clearInterval(timer);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onVisibility);
+    }
   });
 
   const titleText = createMemo(() => {
