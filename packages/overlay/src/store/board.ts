@@ -3,6 +3,7 @@
 // Replaces direct reads of state.board / state.tasks.
 
 import { createStore } from "solid-js/store";
+import { batch } from "solid-js";
 import { apiHeaders, apiJson, apiUrl } from "../services/api";
 import { t } from "../utils/i18n";
 
@@ -340,8 +341,13 @@ export function applyTasks(
 ): void {
   const list = Array.isArray(tasks) ? tasks : [];
   const pending = Array.isArray(nextPending) ? nextPending : boardStore.pendingTasks;
-  setBoardStore("tasks", list);
-  if (Array.isArray(nextPending)) setBoardStore("pendingTasks", pending);
+  // batch coalesces both setBoardStore writes when both fire — without it,
+  // every consumer of either `tasks` or `pendingTasks` reruns twice on
+  // applyTasks(list, pending) (the common path in loadTasks).
+  batch(() => {
+    setBoardStore("tasks", list);
+    if (Array.isArray(nextPending)) setBoardStore("pendingTasks", pending);
+  });
   if (selectionIsOrphaned(list, pending) && _orphanedSelectionHandler) {
     _orphanedSelectionHandler();
   }

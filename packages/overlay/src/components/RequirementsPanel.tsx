@@ -6,7 +6,7 @@
  * 2. Complete — shows structured requirements list with type/priority badges
  * 3. Pending — shows "pending" hint when no data and not generating
  */
-import { For, Show } from "solid-js";
+import { For, Index, Show } from "solid-js";
 import { CardParts } from "./CardParts";
 import { orderedMessageParts } from "../utils/message";
 import { t } from "../utils/i18n";
@@ -51,9 +51,10 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
             <span class="req-streaming-label">{t("workflow.requirements_generating")}</span>
           </div>
           <div class="req-streaming-messages">
-            <For each={props.streamingMessages}>
-              {(msg) => <CardParts parts={orderedMessageParts(msg)} depth={1} />}
-            </For>
+            {/* Index over For: SSE stream is append-only, never reorders. */}
+            <Index each={props.streamingMessages}>
+              {(msg) => <CardParts parts={orderedMessageParts(msg())} depth={1} />}
+            </Index>
           </div>
         </div>
       </Show>
