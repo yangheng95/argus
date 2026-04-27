@@ -1,6 +1,5 @@
 import {
   APICallError,
-  generateText as generateTextBase,
   streamObject as streamObjectBase,
   streamText as streamTextBase,
   type StreamTextOnChunkCallback,
@@ -11,10 +10,19 @@ import {
   type ToolSet,
 } from "ai"
 
+import { Env } from "@/env"
+
 type StreamTextOnAbortCallback<TOOLS extends ToolSet> = (event: {
   readonly steps: StepResult<TOOLS>[]
 }) => PromiseLike<void> | void
-import { Env } from "@/env"
+
+export type TextHooks<TOOLS extends ToolSet = ToolSet> = {
+  onAbort?: StreamTextOnAbortCallback<TOOLS>
+  onChunk?: StreamTextOnChunkCallback<TOOLS>
+  onError?: StreamTextOnErrorCallback
+  onFinish?: StreamTextOnFinishCallback<TOOLS>
+  onStepFinish?: StreamTextOnStepFinishCallback<TOOLS>
+}
 
 const DEFAULT_TIMEOUT_MS = 5_000
 const DEFAULT_RETRIES = 2
@@ -101,37 +109,6 @@ async function call<T>(run: (attemptSignal: AbortSignal | undefined) => Promise<
     }
   }
   throw new Error("unreachable")
-}
-
-export type TextHooks<TOOLS extends ToolSet = ToolSet> = {
-  onAbort?: StreamTextOnAbortCallback<TOOLS>
-  onChunk?: StreamTextOnChunkCallback<TOOLS>
-  onError?: StreamTextOnErrorCallback
-  onFinish?: StreamTextOnFinishCallback<TOOLS>
-  onStepFinish?: StreamTextOnStepFinishCallback<TOOLS>
-}
-
-export async function completeText<TOOLS extends ToolSet>(
-  input: Parameters<typeof generateTextBase>[0] & {
-    timeoutMs?: number | false
-    retries?: number
-    retryDelayMs?: number
-  } & TextHooks<TOOLS>,
-) {
-  const { onAbort, onChunk, onError, onFinish, onStepFinish, ...rest } = input
-  const result = streamText<TOOLS>({
-    ...(rest as Parameters<typeof streamTextBase<TOOLS>>[0]),
-    onAbort,
-    onChunk,
-    onError,
-    onFinish,
-    onStepFinish,
-  })
-  return {
-    text: await result.text,
-    finishReason: await result.finishReason,
-    steps: await result.steps,
-  }
 }
 
 export function streamText<TOOLS extends ToolSet = ToolSet>(
