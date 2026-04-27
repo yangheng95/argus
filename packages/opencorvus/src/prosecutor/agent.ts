@@ -393,8 +393,17 @@ function buildProsecutorBrief(input: {
   openCounterexampleCount: number
   architectSeeds: readonly ArchitectSeedInput[]
 }): string {
-  const issues = input.defenderVerdict.issues_found ?? []
-  const rejectionDetails = input.defenderVerdict.rejection_details ?? []
+  // Discriminated-union narrowing: only rejected verdicts carry
+  // rejection_details. Accepted verdicts have no per-goal attribution
+  // (an accepted delivery has no goals to blame).
+  const rejectionDetails = input.defenderVerdict.verdict === "rejected"
+    ? input.defenderVerdict.rejection_details
+    : []
+  // Single source of truth (rule 22): the issue text and goal-attribution
+  // list are both derived from rejection_details — no `issues_found` /
+  // `affected_goal_ids` shadow fields on the verdict.
+  const issues = rejectionDetails.map((d) => d.error)
+  const affectedGoalIds = Array.from(new Set(rejectionDetails.map((d) => d.goal_id)))
   const seeds = [...input.architectSeeds].sort((a, b) => {
     const rank = { high: 0, medium: 1, low: 2 }
     return rank[a.priority_hint] - rank[b.priority_hint]
@@ -413,10 +422,10 @@ function buildProsecutorBrief(input: {
     `## Defender (DeliveryAgent) verdict — advisory, not authoritative`,
     `verdict=${input.defenderVerdict.verdict}`,
     `summary: ${input.defenderVerdict.summary}`,
-    issues.length > 0 ? `\nissues_found (${issues.length}):` : "",
+    issues.length > 0 ? `\nissues (${issues.length}):` : "",
     ...issues.map((i) => `- ${i}`),
-    (input.defenderVerdict.affected_goal_ids?.length ?? 0) > 0
-      ? `\naffected_goal_ids: ${input.defenderVerdict.affected_goal_ids.join(", ")}`
+    affectedGoalIds.length > 0
+      ? `\naffected_goal_ids: ${affectedGoalIds.join(", ")}`
       : "",
     rejectionDetails.length > 0 ? `\nrejection_details (${rejectionDetails.length}):` : "",
     ...rejectionDetails.map(

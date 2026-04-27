@@ -8,6 +8,16 @@
  * pollution (zero-width chars, code-fence drift) that previously masqueraded
  * as "empty verdict" failures.
  *
+ * The `inputSchema` (`DeliveryVerdict`) carries every structural invariant
+ * — non-empty arrays, ≥8-char details, discriminated accept/reject shapes.
+ * This `execute()` body only enforces CROSS-FIELD SEMANTIC invariants that
+ * a Zod schema cannot express:
+ *   - accepted requires startup_verification.success=true
+ *   - accepted requires frontend_check.attempted=true ⇒ renders_correctly!=false
+ *   - accepted requires no result='failed' deferred_check
+ *   - accepted requires ≥1 tool_call_evidence with passed=true
+ *   - accepted requires every skill-required_tool to appear with passed=true
+ *
  * Mirrors the architect pattern (output-tools.ts + submit_architect).
  */
 import { tool } from "ai"
@@ -38,18 +48,15 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
         "leaves the agent — plain-text / markdown output is discarded. If " +
         "submit_verdict is not called before the step budget runs out, the run " +
         "is treated as a failed parse and retried.\n\n" +
-        "Attribution contract (enforced here):\n" +
-        "- verdict='rejected' REQUIRES non-empty affected_goal_ids.\n" +
-        "- Every rejection_details[].goal_id MUST appear in affected_goal_ids.\n" +
-        "- verdict='accepted' normalizes affected_goal_ids to [] (ignored).\n" +
-        "\nInternal-consistency contract for verdict='accepted' (all enforced here — " +
-        "payload is rejected and you re-submit if any fails):\n" +
+        "Schema shape (discriminated by `verdict`):\n" +
+        "- verdict='accepted' — provide summary, startup_verification, frontend_check, deferred_checks, tool_call_evidence (≥1 entry). NO rejection_details.\n" +
+        "- verdict='rejected' — provide summary, startup_verification, frontend_check, deferred_checks, tool_call_evidence (≥1 entry), AND rejection_details (≥1 entry, every entry attributes to a goal_id).\n" +
+        "There is NO separate affected_goal_ids or issues_found field — the orchestrator derives those from rejection_details.\n" +
+        "\nCross-field rules for verdict='accepted' (enforced here — payload is rejected and you re-submit if any fails):\n" +
         "- startup_verification.attempted MUST be true AND .success MUST be true.\n" +
         "- frontend_check.attempted=true with renders_correctly=false is forbidden — that's a visual rejection.\n" +
-        "- issues_found MUST be empty (mirror of rejection_details in prose; non-empty = not spec-complete).\n" +
         "- deferred_checks MUST carry no result='failed' entries.\n" +
-        "- tool_call_evidence MUST be non-empty and MUST contain ≥1 entry with passed=true.\n" +
-        "- Every tool_call_evidence[].detail MUST be ≥8 chars of reproducer-grade signal (numbers, URLs, exit codes, selectors).\n" +
+        "- tool_call_evidence MUST contain ≥1 entry with passed=true.\n" +
         (requiredTools.length > 0
           ? `- tool_call_evidence[] MUST cover every required tool with passed=true: [${requiredTools.join(", ")}].\n`
           : "") +
@@ -59,34 +66,19 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
         "verdict='rejected' with rejection_details instead of fabricating success signals.",
       inputSchema: DeliveryVerdict,
       execute: async (input) => {
-        const obj: DeliveryVerdictType = {
-          ...input,
-          issues_found: (input.issues_found ?? []).filter(
-            (item) => typeof item === "string" && item.trim().length > 0,
-          ),
-          affected_goal_ids: Array.from(
-            new Set(
-              (input.affected_goal_ids ?? []).filter(
-                (item) => typeof item === "string" && item.trim().length > 0,
-              ),
-            ),
-          ),
-        }
-
-        if (typeof obj.launch_command === "string") {
-          const trimmed = obj.launch_command.trim().replace(/^`+|`+$/g, "").trim()
-          obj.launch_command = trimmed.length > 0 ? trimmed : undefined
-        }
+        const obj: DeliveryVerdictType = input
 
         if (obj.verdict === "accepted") {
-          obj.affected_goal_ids = []
+          if (typeof obj.launch_command === "string") {
+            const trimmed = obj.launch_command.trim().replace(/^`+|`+$/g, "").trim()
+            obj.launch_command = trimmed.length > 0 ? trimmed : undefined
+          }
 
-          // Internal-consistency floor: 'accepted' is only valid if the
-          // evidence fields themselves do not contradict the verdict.
-          // These checks fire regardless of whether a skill injected
-          // required_tools — they protect against the "time's up, emit
-          // something positive" failure mode where the agent fills the
-          // detail fields with failure signals and still claims accepted.
+          // Cross-field semantic checks — Zod cannot express "field A=true
+          // implies field B!=false". These protect against the "time's up,
+          // emit something positive" failure mode where the agent fills
+          // `success`/`renders_correctly` with truthy bits while the
+          // narrative fields contradict them.
           if (!obj.startup_verification.attempted) {
             return (
               `Error: verdict='accepted' requires startup_verification.attempted=true. ` +
@@ -116,17 +108,7 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
               `colors, missing components) per the user prompt's Stage A/B checklist.`
             )
           }
-          if (obj.issues_found.length > 0) {
-            return (
-              `Error: verdict='accepted' requires issues_found=[]. You listed ` +
-              `${obj.issues_found.length} issue(s) and still tried to accept — ` +
-              `issues_found is the human-readable mirror of rejection_details, so any ` +
-              `non-empty list indicates the delivery is not spec-complete. Either ` +
-              `fix every issue (write_file / edit_file, then re-verify), or set ` +
-              `verdict='rejected' and convert each item into a rejection_details entry.`
-            )
-          }
-          const failedDeferred = (obj.deferred_checks ?? []).filter((c) => c.result === "failed")
+          const failedDeferred = obj.deferred_checks.filter((c) => c.result === "failed")
           if (failedDeferred.length > 0) {
             return (
               `Error: verdict='accepted' requires deferred_checks to contain no ` +
@@ -136,17 +118,7 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
               `attributing each failure to a goal) or fix and re-run the check.`
             )
           }
-          const evidenceCount = (obj.tool_call_evidence ?? []).length
-          const passedEvidenceCount = (obj.tool_call_evidence ?? []).filter((e) => e.passed).length
-          if (evidenceCount === 0) {
-            return (
-              `Error: verdict='accepted' requires tool_call_evidence[] to carry at least ` +
-              `one entry — an empty evidence list means there is no reviewer-auditable ` +
-              `record that you actually verified anything. Add entries for the ` +
-              `probes you ran (verify_page_integrity, run_command, screenshot, curl, ` +
-              `etc.) with passed flags matching reality. If no probe passed, reject.`
-            )
-          }
+          const passedEvidenceCount = obj.tool_call_evidence.filter((e) => e.passed).length
           if (passedEvidenceCount === 0) {
             return (
               `Error: verdict='accepted' requires at least one tool_call_evidence[] ` +
@@ -158,7 +130,7 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
           }
           if (requiredTools.length > 0) {
             const passedTools = new Set(
-              (obj.tool_call_evidence ?? []).filter((e) => e.passed).map((e) => e.tool),
+              obj.tool_call_evidence.filter((e) => e.passed).map((e) => e.tool),
             )
             const missing = requiredTools.filter((t) => !passedTools.has(t))
             if (missing.length > 0) {
@@ -170,54 +142,19 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
               )
             }
           }
-          for (const ev of obj.tool_call_evidence ?? []) {
-            if (!ev.detail || ev.detail.trim().length < 8) {
-              return (
-                `Error: tool_call_evidence[].detail for tool="${ev.tool}" is empty or trivially short. ` +
-                `Populate with reproducer-grade evidence (numbers, URLs, exit codes, selectors), not prose narration. ` +
-                `Then resubmit.`
-              )
-            }
-          }
-        } else {
-          if (obj.affected_goal_ids.length === 0) {
-            return (
-              "Error: verdict='rejected' requires a non-empty affected_goal_ids — " +
-              "cite at least one goal id the rejection is attributed to. Call " +
-              "submit_verdict again with the corrected payload."
-            )
-          }
-          const affectedSet = new Set(obj.affected_goal_ids)
-          const details = obj.rejection_details ?? []
-          for (const d of details) {
-            if (typeof d.goal_id !== "string" || d.goal_id.trim().length === 0) {
-              return (
-                "Error: every rejection_details entry must have a non-empty " +
-                "goal_id — every rejection must be attributed to a specific goal. " +
-                "Call submit_verdict again with the corrected payload."
-              )
-            }
-            if (!affectedSet.has(d.goal_id)) {
-              return (
-                `Error: rejection_details carries goal_id="${d.goal_id}" that is ` +
-                `not listed in affected_goal_ids (${
-                  [...affectedSet].join(", ") || "empty"
-                }). Add it to affected_goal_ids or correct the rejection_details entry, ` +
-                "then call submit_verdict again."
-              )
-            }
-          }
         }
 
         collector.verdict = obj
         collector.finalized = true
 
-        const issues = obj.issues_found.length
-        const rejections = (obj.rejection_details ?? []).length
+        const rejections = obj.verdict === "rejected" ? obj.rejection_details.length : 0
+        const distinctGoals = obj.verdict === "rejected"
+          ? new Set(obj.rejection_details.map((d) => d.goal_id)).size
+          : 0
         return [
           `PASS: verdict=${obj.verdict} submitted.`,
-          `  ${issues} issues_found, ${rejections} rejection_details,`,
-          `  ${obj.affected_goal_ids.length} affected_goal_ids,`,
+          `  ${rejections} rejection_details across ${distinctGoals} goal(s),`,
+          `  ${obj.tool_call_evidence.length} tool_call_evidence entries,`,
           `  startup=${obj.startup_verification.success ? "ok" : "fail"}`,
         ].join("\n")
       },

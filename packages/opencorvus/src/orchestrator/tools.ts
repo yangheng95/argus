@@ -101,7 +101,7 @@ async function sinkDeliveryVerdictToCriteria(
     label?: string
   }> = []
 
-  for (const dc of verdict.deferred_checks ?? []) {
+  for (const dc of verdict.deferred_checks) {
     checks.push({
       name: dc.name,
       status: dc.result,
@@ -110,15 +110,19 @@ async function sinkDeliveryVerdictToCriteria(
     })
   }
 
-  for (const rd of verdict.rejection_details ?? []) {
-    const fileSuffix = rd.file ? ` @ ${rd.file}` : ""
-    const suggestion = rd.suggestion ? ` → ${rd.suggestion}` : ""
-    checks.push({
-      name: `${rd.category}${fileSuffix}`,
-      status: "failed",
-      family: rd.category,
-      evidence: `${rd.error}${suggestion}`,
-    })
+  // rejection_details only exists on RejectedVerdict (discriminated union).
+  // Accepted verdicts have nothing to flatten here.
+  if (verdict.verdict === "rejected") {
+    for (const rd of verdict.rejection_details) {
+      const fileSuffix = rd.file ? ` @ ${rd.file}` : ""
+      const suggestion = rd.suggestion ? ` → ${rd.suggestion}` : ""
+      checks.push({
+        name: `${rd.category}${fileSuffix}`,
+        status: "failed",
+        family: rd.category,
+        evidence: `${rd.error}${suggestion}`,
+      })
+    }
   }
 
   checks.push({
@@ -2622,14 +2626,26 @@ export function createOrchestratorTools(input: {
 
           const { EngineArtifactTable } = await import("@/engine/engine.sql")
           const verdictArtifactId = Identifier.ascending("artifact")
-          const renderRejectVerdict = {
-            verdict: "rejected" as const,
+          // Synthetic short-circuit verdict: render preconditions failed
+          // before the delivery agent ran. Conforms to the new RejectedVerdict
+          // schema (rule 22 — single source of truth: rejection_details
+          // carries every per-goal attribution; no shadow `issues_found` /
+          // `affected_goal_ids` fields). `tool_call_evidence` records the
+          // synthetic gate that produced this verdict so downstream readers
+          // see the same audit shape as an LLM-emitted rejection.
+          const renderRejectVerdict: import("@/delivery/agent").DeliveryVerdictType = {
+            verdict: "rejected",
             summary,
-            launch_command: undefined,
             startup_verification: { attempted: false, success: false, output: renderFailure.detail },
             frontend_check: { attempted: false, renders_correctly: false, issues: [renderFailure.detail] },
-            issues_found: [summary],
-            affected_goal_ids: goals.map((g) => g.id),
+            deferred_checks: [],
+            tool_call_evidence: [
+              {
+                tool: "render_prerequisite_gate",
+                passed: false,
+                detail: `${renderFailure.kind}: ${renderFailure.detail}`,
+              },
+            ],
             rejection_details: goals.map((g) => ({
               goal_id: g.id,
               category: "visual" as const,
@@ -2639,7 +2655,6 @@ export function createOrchestratorTools(input: {
                   ? "Produce a runnable index.html under the project root (or a path findRenderedIndex can locate)."
                   : "Fix the build so puppeteer can load and render the merged worktree.",
             })),
-            deferred_checks: [],
           }
           Database.use((db) =>
             db
@@ -2863,7 +2878,11 @@ export function createOrchestratorTools(input: {
           const roundCommit = await EngineGit.commitDeliveryRound({
             task: requireTask(taskID),
             iteration,
-            verdict,
+            verdict: {
+              verdict: verdict.verdict,
+              summary: verdict.summary,
+              rejection_count: verdict.verdict === "rejected" ? verdict.rejection_details.length : 0,
+            },
           })
           log.info("deliver: round commit", {
             taskID, iteration, mode: roundCommit.mode,
@@ -3000,14 +3019,19 @@ export function createOrchestratorTools(input: {
                 const current = requireTask(taskID)
                 const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
                 const published = findDeliveryByRun(run.id) ?? delivery
-                const verdictPayload = verdictArtifact?.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
+                const verdictPayload = verdictArtifact?.payload as
+                  | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
+                  | null
                 if (verdictPayload?.verdict) {
-                  const issues = Array.isArray(verdictPayload.issues_found)
-                    ? verdictPayload.issues_found
+                  // The persisted verdict carries rejection_details for
+                  // rejected verdicts; derive the issues list here so the
+                  // schema stays single-source-of-truth (rule 22).
+                  const issues = verdictPayload.verdict === "rejected"
+                    ? verdictPayload.rejection_details.map((d) => d.error)
                     : []
                   updateEvaluationFromDeliveryVerdict({
                     deliveryID: delivery.id,
-                    verdict: verdictPayload.verdict as "accepted" | "rejected" | "inconclusive",
+                    verdict: verdictPayload.verdict,
                     summary: verdictPayload.summary ?? "Delivery agent verification",
                     // Record agent-reported issues as structured failed-check
                     // rows for operator-facing drill-down. Convergence lives
@@ -3049,6 +3073,15 @@ export function createOrchestratorTools(input: {
           }
           await trackStepComplete("deliver", undefined, true)
 
+          // Schema invariant: at this point `verdict.verdict === "rejected"`,
+          // so `rejection_details` is the discriminated-union branch with
+          // `.min(1)` non-empty. Derive the aggregate views from it (rule 22 —
+          // single source of truth: `rejection_details` is canonical, the
+          // older `affected_goal_ids` / `issues_found` shadow fields are gone).
+          const { affectedGoalIDs, issuesFound } = await import("@/delivery/verdict")
+          const rejectionAffectedGoalIDs = affectedGoalIDs(verdict)
+          const rejectionIssues = issuesFound(verdict)
+
           // Persist the delivery-agent's advisory verdict into the evaluation
           // row for operator-facing drill-down. Convergence lives in
           // engine_iteration — this row is for audit only.
@@ -3056,7 +3089,7 @@ export function createOrchestratorTools(input: {
             deliveryID,
             verdict: verdict.verdict,
             summary: verdict.summary,
-            checks: verdict.issues_found.map((evidence, i) => ({
+            checks: rejectionIssues.map((evidence, i) => ({
               name: `issue-${i + 1}`,
               status: "failed" as const,
               evidence,
@@ -3065,9 +3098,9 @@ export function createOrchestratorTools(input: {
             now: Date.now(),
           })
 
-          // Agent verdict is "rejected" or "inconclusive" — open a fresh
-          // attempt on every goal the delivery agent attributed the
-          // rejection to (verdict.affected_goal_ids). The orchestrator's
+          // Agent verdict is "rejected" — open a fresh attempt on every
+          // goal the delivery agent attributed the rejection to (the
+          // distinct `rejection_details[].goal_id` set). The orchestrator's
           // next turn reads engine_iteration + the verdict artifact and
           // chooses strategy (modify_goal / re-run architect / fail_task);
           // the old deterministic "stalled/abort" branches were an FSM over
@@ -3081,12 +3114,13 @@ export function createOrchestratorTools(input: {
           // rejection wake note for the next orchestrator decision.
           // No task.metadata signal.
           const { startNewAttempt } = await import("@/engine/persist")
-          // Attribution is the delivery agent's job. `verdict.affected_goal_ids`
-          // is a contract-required non-empty array on rejection (enforced in
-          // the submit_verdict tool in delivery/output-tools.ts). We open a fresh attempt on exactly
-          // those goals — no string-matching of rejection_details[].file vs
-          // owned_paths here, and no "if attribution is empty, reset every
-          // passed goal" blanket policy. That blanket reset was dressed up as
+          // Attribution is the delivery agent's job. The schema's
+          // discriminated-union `RejectedVerdict` makes `rejection_details`
+          // .min(1) required, so a rejection always carries ≥1 attributed
+          // goal. We open a fresh attempt on exactly those goals — no
+          // string-matching of rejection_details[].file vs owned_paths here,
+          // and no "if attribution is empty, reset every passed goal"
+          // blanket policy. That blanket reset was dressed up as
           // "baseline correctness" but it reset goals the rejection never
           // cited and wiped valid work on every ambiguous rejection —
           // violating rule 1 (no fallback) and rule 23 (no hardcoded state
@@ -3094,7 +3128,7 @@ export function createOrchestratorTools(input: {
           const goalByID = new Map(goals.map((g) => [g.id, g]))
           const unknownAffected: string[] = []
           const toReset: typeof goals = []
-          for (const gid of verdict.affected_goal_ids) {
+          for (const gid of rejectionAffectedGoalIDs) {
             const g = goalByID.get(gid)
             if (!g) { unknownAffected.push(gid); continue }
             toReset.push(g)
@@ -3106,7 +3140,7 @@ export function createOrchestratorTools(input: {
             // not actionable as-is; fail the delivery so the orchestrator
             // re-runs instead of silently dropping those ids.
             throw new Error(
-              `Delivery verdict cites unknown affected_goal_ids: ${unknownAffected.join(", ")}. ` +
+              `Delivery verdict cites unknown goal_ids in rejection_details: ${unknownAffected.join(", ")}. ` +
               `Known goals for this task: ${[...goalByID.keys()].join(", ") || "(none)"}.`,
             )
           }
@@ -3117,27 +3151,23 @@ export function createOrchestratorTools(input: {
           // Without this, delivery_rework reworks ran against an unchanged
           // prompt (the root cause we're fixing here).
           for (const g of toReset) {
-            const ownDetails = (verdict.rejection_details ?? []).filter(
+            const ownDetails = verdict.rejection_details.filter(
               (d) => d.goal_id === g.id,
             )
-            const detailLines = ownDetails.length > 0
-              ? ownDetails.map((d) => {
-                  const parts: string[] = [`[${d.category}] ${d.error}`]
-                  if (d.file) parts.push(`(file: ${d.file})`)
-                  if (d.suggestion) parts.push(`suggestion: ${d.suggestion}`)
-                  if (d.visual_spec_id) parts.push(`visual_spec: ${d.visual_spec_id}`)
-                  return `- ${parts.join(" ")}`
-                })
-              : [`- (delivery agent attributed this goal but wrote no per-goal details)`]
+            const detailLines = ownDetails.map((d) => {
+              const parts: string[] = [`[${d.category}] ${d.error}`]
+              if (d.file) parts.push(`(file: ${d.file})`)
+              if (d.suggestion) parts.push(`suggestion: ${d.suggestion}`)
+              if (d.visual_spec_id) parts.push(`visual_spec: ${d.visual_spec_id}`)
+              return `- ${parts.join(" ")}`
+            })
             const value = [
               `Delivery agent rejected the integrated deliverable (iteration ${iteration}, agent_verdict=${verdict.verdict}).`,
               `Task-level summary: ${verdict.summary}`,
               `Issues attributed to this goal:`,
               ...detailLines,
             ].join("\n")
-            const reason = verdict.issues_found.length > 0
-              ? `Delivery rejection; ${verdict.issues_found.length} issue(s): ${verdict.issues_found.slice(0, 3).join("; ")}`
-              : `Delivery rejection; agent_verdict=${verdict.verdict}`
+            const reason = `Delivery rejection; ${rejectionIssues.length} issue(s): ${rejectionIssues.slice(0, 3).join("; ")}`
             startNewAttempt({
               goalID: g.id,
               reason: "delivery_rework",
@@ -3152,7 +3182,7 @@ export function createOrchestratorTools(input: {
               phase: "delivery",
               key: `delivery_rejection_${iteration}`,
               value: verdict.summary,
-              reason: verdict.issues_found.join("; "),
+              reason: rejectionIssues.join("; "),
             })
           } catch {
             /* best effort */
@@ -3161,16 +3191,16 @@ export function createOrchestratorTools(input: {
           log.info("deliver: rejection opened new attempts", {
             taskID,
             iteration,
-            issues: verdict.issues_found.length,
+            issues: rejectionIssues.length,
             reset_goals: toReset.length,
-            affected_goal_ids: verdict.affected_goal_ids,
+            affected_goal_ids: rejectionAffectedGoalIDs,
           })
 
           requestStopAfterCurrentStep("delivery_rework")
           return SubAgentProtocol.yieldResult({
             headline: `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}, assistant must re-plan`,
             fields: [
-              ["issues_found", verdict.issues_found],
+              ["issues_found", rejectionIssues],
               ["iteration", String(iteration)],
               ["agent_summary", verdict.summary],
             ],
@@ -3310,11 +3340,13 @@ export function createOrchestratorTools(input: {
           // No `checks` argument: the `deliver` tool already wrote the full
           // structured check set; updateEvaluationFromDeliveryVerdict
           // preserves existing checks when none are supplied.
-          const verdictPayload = verdictArtifact.payload as { verdict?: string; summary?: string; issues_found?: string[] } | null
+          const verdictPayload = verdictArtifact.payload as
+            | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
+            | null
           if (verdictPayload?.verdict) {
             updateEvaluationFromDeliveryVerdict({
               deliveryID: delivery.id,
-              verdict: verdictPayload.verdict as "accepted" | "rejected" | "inconclusive",
+              verdict: verdictPayload.verdict,
               summary: verdictPayload.summary ?? "Delivery agent verification",
               now: completed,
             })
@@ -3333,8 +3365,14 @@ export function createOrchestratorTools(input: {
           EngineMemoryBridge.flushTaskLearnings({ task, run, delivery, evaluation, plan: currentPlan })
             .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
 
-          // Auto-launch the deliverable if the delivery agent recorded a launch command
-          const launchCmd = (verdictPayload as any)?.launch_command as string | undefined
+          // Auto-launch the deliverable if the delivery agent recorded a
+          // launch command. `launch_command` exists only on AcceptedVerdict
+          // (the discriminated-union accepted branch); a published delivery
+          // is always accepted, but the verdict could nominally be malformed
+          // — narrow defensively without coercion.
+          const launchCmd = verdictPayload?.verdict === "accepted"
+            ? verdictPayload.launch_command
+            : undefined
           if (launchCmd) {
             try {
               const { Shell } = await import("@/shell/shell")

@@ -638,16 +638,21 @@ async function buildSystemParts(task: TaskRow, _event: OrchestratorEvent | undef
     if (latest) {
       ctx.push("")
       ctx.push("### Latest delivery-agent feedback")
-      const summary = typeof latest.verdict_summary === "string" ? latest.verdict_summary : ""
+      const summary = typeof latest.summary === "string" ? latest.summary : ""
       if (summary) ctx.push(`Summary: ${summary}`)
-      const issues = Array.isArray(latest.issues_found) ? (latest.issues_found as string[]) : []
+      const details = Array.isArray(latest.rejection_details)
+        ? (latest.rejection_details as Array<Record<string, string>>)
+        : []
+      // Single source of truth (rule 22): the human-readable issues list is
+      // derived from rejection_details[].error here, not stored as a
+      // separate `issues_found` field on the verdict payload.
+      const issues = details
+        .map((d) => (typeof d.error === "string" ? d.error : ""))
+        .filter((s) => s.length > 0)
       if (issues.length > 0) {
         ctx.push("Issues found:")
         for (const issue of issues) ctx.push(`  - ${issue}`)
       }
-      const details = Array.isArray(latest.rejection_details)
-        ? (latest.rejection_details as Array<Record<string, string>>)
-        : []
       if (details.length > 0) {
         ctx.push("Rejection details:")
         for (const d of details) {
