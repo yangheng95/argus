@@ -2,7 +2,7 @@
 // Solid.js port of renderTaskList / taskSection / taskRow / visibleTasks
 // Displays active and recently-completed tasks from boardStore.
 
-import { createMemo, createSignal, onCleanup, For, Show } from "solid-js";
+import { createMemo, createSelector, createSignal, onCleanup, For, Show } from "solid-js";
 import { boardStore, visibleTasks, loadTasks } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue } from "../services/task-queue";
@@ -265,7 +265,11 @@ const INTERRUPTABLE_TASK_STATUSES = new Set(["queued", "active"]);
 
 function TaskRow(props: {
   item: any;
-  selectedTaskID: string;
+  /** Solid createSelector function — returns true only for the currently
+   *  selected task id. Lets only the previously-selected and newly-selected
+   *  rows reconcile when boardStore.selectedTaskID changes, instead of
+   *  re-running every row's `isActive` memo. */
+  isSelected: (id: string) => boolean;
   queuePos?: number;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
@@ -282,7 +286,7 @@ function TaskRow(props: {
   const pending = () => props.item?._pending === true;
   const status = () => (pending() ? "active" : props.item?.task?.status || "idle");
   const title = () => taskListTitle(props.item) || id();
-  const isActive = () => !pending() && props.selectedTaskID === id();
+  const isActive = () => !pending() && props.isSelected(id());
   const badgeLabel = () => taskListBadge(props.item, props.queuePos);
   const canCancel = () =>
     !pending() && !!id() && !!props.onCancelTask && INTERRUPTABLE_TASK_STATUSES.has(status());
@@ -371,7 +375,7 @@ function TaskRow(props: {
 function TaskSection(props: {
   label: string;
   items: any[];
-  selectedTaskID: string;
+  isSelected: (id: string) => boolean;
   queuePositions?: Map<string, number>;
   onSelectTask: (id: string) => void;
   onDeleteTask?: (id: string) => void;
@@ -393,7 +397,7 @@ function TaskSection(props: {
             {(item) => (
               <TaskRow
                 item={item}
-                selectedTaskID={props.selectedTaskID}
+                isSelected={props.isSelected}
                 queuePos={props.queuePositions?.get(item?.task?.id || "")}
                 onSelectTask={props.onSelectTask}
                 onDeleteTask={props.onDeleteTask}
@@ -479,7 +483,11 @@ export function TaskList(props: TaskListProps) {
     });
   });
 
-  const selectedID = () => boardStore.selectedTaskID;
+  // createSelector returns a function that's true only for the currently
+  // selected task id. With this in place, selecting a different task
+  // re-runs the `isActive` memo on exactly two rows (previously selected,
+  // newly selected) instead of all N rows in the list. Wins scale with N.
+  const isSelected = createSelector(() => boardStore.selectedTaskID);
   const activeDir = () => settingsStore.directory || "";
 
   const [retrying, setRetrying] = createSignal(false);
@@ -571,7 +579,7 @@ export function TaskList(props: TaskListProps) {
                   <TaskSection
                     label={t("task.group.active")}
                     items={group.active}
-                    selectedTaskID={selectedID()}
+                    isSelected={isSelected}
                     queuePositions={queuePositions()}
                     onSelectTask={props.onSelectTask}
                     onDeleteTask={props.onDeleteTask}
@@ -595,7 +603,7 @@ export function TaskList(props: TaskListProps) {
                   <TaskSection
                     label={t("task.group.recent")}
                     items={group.recent}
-                    selectedTaskID={selectedID()}
+                    isSelected={isSelected}
                     onSelectTask={props.onSelectTask}
                     onDeleteTask={props.onDeleteTask}
                     onCancelTask={props.onCancelTask}
