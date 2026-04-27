@@ -3,8 +3,6 @@ title: QQ
 description: QQ 适配器接入 QQ 官方机器人平台 (bot.q.qq.com)，走 WebSocket Gateway 协议。
 ---
 
-QQ 适配器接入 **QQ 官方机器人平台**（`bot.q.qq.com`），走 WebSocket Gateway 协议。
-
 ## 前置
 
 1. 在 [QQ 机器人平台](https://bot.q.qq.com/) 注册开发者、创建 Bot。
@@ -28,7 +26,7 @@ export QQ_WEBHOOK_PATH=/qq         # 可选
 
 QQ 频道以 `channelId` 作为 thread key；群聊以 `groupOpenId` 代替。
 
-## Troubleshooting
+## 故障排查
 
 - **Bot 未响应**：QQ 官方 Bot 平台的审核状态必须是"已通过"；沙箱环境仅对指定频道生效。
 - **WebSocket 断连频繁**：QQ Gateway 心跳间隔短（约 30s），网络不稳定时会重连。

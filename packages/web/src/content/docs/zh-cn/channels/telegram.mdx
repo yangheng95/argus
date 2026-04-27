@@ -3,8 +3,6 @@ title: Telegram
 description: Telegram 适配器走 Bot API long polling，无需公网回调。
 ---
 
-Telegram 适配器走 **Bot API long polling**，无需公网回调。
-
 ## 前置
 
 1. 找 [@BotFather](https://t.me/BotFather) 创建 Bot，得到 `TELEGRAM_BOT_TOKEN`。
@@ -39,7 +37,7 @@ Telegram 的 `message_thread_id`（群主题）作为 thread key 的一部分；
 | 语音 (voice) | ✅ 走 STT |
 | 视频 / 文件 | ⚠️ 仅接收，OpenCorvus 不主动处理 |
 
-## Troubleshooting
+## 故障排查
 
 - **收不到群消息**：检查 BotFather 的 privacy 设置。
 - **回复太慢**：long polling 默认 30s 超时，正常；如需更快可改代码（不建议）。

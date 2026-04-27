@@ -1,37 +1,53 @@
 ---
 title: 代理（Agents）
-description: OpenCorvus 的 primary agent、sub-agent 与 dispatch_goal / retry_goal。
+description: OpenCorvus 中的 primary / subagent / stage 代理，以及按 agent 配置模型与预算的方式。
 ---
 
-OpenCorvus 的编排围绕 **agent** 构建。单个任务可派生多个 agent——主规划者、执行者，以及为并行 goal 派遣的一次性 sub-agent。
+OpenCorvus 的编排围绕 **agent** 构建。代理注册表（名称、模式、默认 prompt、工具白名单、权限规则集）位于 `packages/opencorvus/src/agent/agent.ts` 的 `Agent.state()`。
 
-源码：`packages/opencorvus/src/agent/`、`packages/opencorvus/src/orchestrator/`。
+## 内置代理
 
-## Primary agents
+当前注册表内置以下代理。`mode` 表示调用方式：`primary` 作为会话顶层 agent 运行；`subagent` 由其他 agent 通过 `task` 工具派发。`hidden` 表示路由槽——不会出现在选择器里，但模型 / prompt 仍可在 config 中覆盖。
 
-OpenCorvus 内置若干 primary agent：
+| Agent | 模式 | 角色 |
+|---|---|---|
+| `build` | primary | 默认 agent。在配置的权限规则下执行 read / edit / bash / mirror 工具链。 |
+| `general` | subagent | 通用多步研究 / 并行工作 agent，由 `task` 工具派发。 |
+| `explore` | subagent | 代码库探索——快速文件 / 代码搜索，默认只读。 |
+| `planner` | subagent | 单 goal 实现规划。读 GoalContract + Architect 决策，输出分步计划供 `build` 实施。 |
+| `delivery` | primary（hidden） | 交付验证 agent。校验运行时行为、做出验收判定；可派发 per-goal review 子代理。 |
+| `orchestrator` | primary（hidden） | 主 agent。通过工作流（direct 或 pipeline）调用 `build` / `requirements` / `architect` / `deliver` 等派发工具，驱动整个任务生命周期。 |
+| `requirements` | primary（hidden） | 需求阶段。把用户请求拆解为带验收规格的 `GoalContract` 列表。 |
 
-| Agent | 角色 |
-|---|---|
-| `task` | 顶层协调者，驱动 spec → goals → plan → run → eval |
-| `requirements` | 从用户请求提取可测试 spec（含验收标准） |
-| `planner` | 把 spec 分解为独立 goal |
-| `executor` | 实现 goal 的主力 |
-| `evaluator` | 跑 build/test/lint/startup/artifact 检查 |
+其他注册的代理（`architect`、`design-analyst`、`intent-analysis`、`integrity`、`prosecutor`、`summary`、`title`、`compaction`）是由 orchestrator 或 session loop 内部调用的 stage / 工具槽。它们在 config 中可见（可覆盖 model、prompt），但不可用户选择。
 
-每个 agent 的模型可独立通过 `assistant.<name>.model` 配置（见 [config](/docs/zh-cn/config/)）——常见用强/慢模型规划、用快/便宜模型执行。
+权威定义见 `packages/opencorvus/src/agent/agent.ts:144-463`。
 
-## Sub-agents
+## 子代理派发
 
-任务有多个并行 goal 时，planner 通过 **`dispatch_goal`** 工具派遣 sub-agent，每个 sub-agent 在独立的 Goal worktree（git 工作目录）里跑，结果由 orchestrator fast-forward 合并回主分支。
+子代理通过 **`task`** 工具派发（orchestrator 还会用 `build` / `requirements` / `architect` 等专用派发工具，对应它的工具白名单）。每个子代理拥有自己的 session；orchestrator 不会在已有子代理 session 上"包一层 next session"。
 
-evaluator 拒绝某个 goal 时，orchestrator 可调 **`retry_goal`** 用上次失败上下文重启一次新尝试——同一 goal，新 session。
+orchestrator 跑 `pipeline` 工作流时，每个 goal 在独立的 Goal worktree 中由 `build` 实现，仅 fast-forward 合并回主分支。
 
-每个 sub-agent 一个 session：orchestrator 不会在已有 sub-agent session 上"包一层 next session"。
+## 按 agent 配置模型
+
+每个 agent 的模型在 `agent.<name>.model` 下设置——见 `packages/opencorvus/src/config/config.ts:1053-1067`（`agent` 是 `z.object({...}).catchall(Agent)`）。相关 `assistant.<name>` 块的 describe 文案明确声明（如 `config.ts:1191`、`1232`、`1239`、`1246`）。
+
+```jsonc
+{
+  "agent": {
+    "build":          { "model": "anthropic/claude-sonnet-4-6" },
+    "planner":        { "model": "anthropic/claude-sonnet-4-6" },
+    "design-analyst": { "model": "anthropic/claude-sonnet-4-6" }
+  }
+}
+```
+
+带连字符的 agent 名（`design-analyst`、`intent-analysis`）必须加引号。
 
 ## 自定义 Agent
 
-可在 config 内联或 `~/.config/opencorvus/agents/`、`.opencorvus/agents/` markdown 文件中定义：
+可在 config 内联，或写成 markdown 放进 `~/.config/opencorvus/agents/`、`.opencorvus/agents/`：
 
 ```jsonc
 {
@@ -46,17 +62,34 @@ evaluator 拒绝某个 goal 时，orchestrator 可调 **`retry_goal`** 用上次
 }
 ```
 
-自定义 agent 继承 OpenCorvus 的工具集、权限与 channel 接入。
+自定义 agent 继承默认权限规则集（在 `agent.ts:77-140` 的 `defaults` 块构建）。
 
 ## 默认 Agent
 
-`default_agent` 指定无显式选择时使用的 agent，必须是 primary agent。
+`default_agent` 指定无显式选择时使用的 agent，必须是 primary 且非 hidden——`Agent.defaultAgent()`（`agent.ts:570-585`）会拒绝 subagent / hidden 选项。
 
-## 预算
+## Agent 预算
 
-Agent run 受 `assistant.<name>` 预算限制：
-- `max_steps` — 每次 run 的轮次上限
-- `max_runs` — orchestrator 层重试次数
-- `max_goal_retries` — 单个 sub-goal 重试次数
+各 agent 的 step 预算 / skill 路径在 `assistant.<name>` 下（config.ts:1176-1283）：
 
-这些是硬上限，防止循环失控。详见 [config](/docs/zh-cn/config/)。
+```jsonc
+{
+  "assistant": {
+    "requirements":    { "max_steps": 20 },
+    "architect":       { "max_steps": 40 },
+    "planner":         { "max_steps": 40 },
+    "delivery":        { "max_steps": 160, "max_retries": 3 },
+    "design_analyst":  { "max_steps": 30 },
+    "intent_analysis": { "max_steps": 10 },
+    "build":           { "max_steps": 80 }
+  }
+}
+```
+
+orchestrator 顶层预算直接挂在 `assistant` 下（config.ts:1255-1257）：
+
+- `assistant.max_runs` — 任务总 run 上限
+- `assistant.max_fix_runs` — 失败后修复 run 上限
+- `assistant.max_executor_groups` — 并行 executor group 上限
+
+这些是硬上限，防止失控循环。详见 [config](/docs/zh-cn/config/)。
