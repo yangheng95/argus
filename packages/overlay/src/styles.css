@@ -11247,10 +11247,6 @@ body[data-theme="light"] .btn-primary {
   box-shadow: none;
 }
 
-.chat-compose-meta {
-  display: none;
-}
-
 .field-input,
 .custom-select,
 .config-status-box,
