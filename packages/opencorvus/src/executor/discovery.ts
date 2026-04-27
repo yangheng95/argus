@@ -212,7 +212,12 @@ export namespace ExecutorDiscovery {
       locate({
         name: "claude-code",
         env: "OPENCORVUS_EXECUTOR_CLAUDE_CODE_BIN",
-        names: process.platform === "win32" ? ["claude.exe", "claude-code.exe", "claude"] : ["claude", "claude-code"],
+        // Windows: prefer the .cmd shim that npm emits — Node's child_process.spawn
+        // can launch .exe and .cmd directly but cannot execute the bare bash shim
+        // npm also drops next to them, which exits with code 1 immediately.
+        names: process.platform === "win32"
+          ? ["claude.cmd", "claude-code.cmd", "claude.exe", "claude-code.exe", "claude"]
+          : ["claude", "claude-code"],
       }),
     ])
 
