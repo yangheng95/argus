@@ -1,57 +1,52 @@
 ---
 title: 网络
-description: 配置代理和自定义证书。
+description: OpenCorvus 的 HTTP/HTTPS 代理配置。
 ---
 
-OpenCode 支持标准代理环境变量和自定义证书，适用于企业网络环境。
+OpenCorvus 直接读标准代理环境变量；`opencorvus.jsonc` 里没有单独的 proxy 字段。
 
----
+## 支持的变量
 
-## 代理
+| 变量 | 用途 |
+|---|---|
+| `HTTP_PROXY` / `http_proxy` | HTTP 流量代理 |
+| `HTTPS_PROXY` / `https_proxy` | HTTPS 流量代理 |
+| `NO_PROXY` / `no_proxy` | 逗号分隔的绕过域名 |
 
-OpenCode 遵循标准代理环境变量。
+检测辅助函数位于 `packages/opencorvus/src/util/proxied.ts`：
+
+```ts
+export function proxied() {
+  return !!(process.env.HTTP_PROXY || process.env.HTTPS_PROXY ||
+            process.env.http_proxy || process.env.https_proxy)
+}
+```
+
+Bun 运行时原生支持这些变量，因此所有 LLM provider、MCP 传输与 share 端点会自动走代理。
+
+## 使用
 
 ```bash
-# HTTPS proxy (recommended)
-export HTTPS_PROXY=https://proxy.example.com:8080
+export HTTPS_PROXY=http://127.0.0.1:7890
+export HTTP_PROXY=http://127.0.0.1:7890
+export NO_PROXY=localhost,127.0.0.1,*.internal
 
-# HTTP proxy (if HTTPS not available)
-export HTTP_PROXY=http://proxy.example.com:8080
+opencorvus serve
+```
 
-# Bypass proxy for local server (required)
-export NO_PROXY=localhost,127.0.0.1
+## TLS / 自定义 CA
+
+对于企业自签证书，使用 Bun 标准的 `NODE_EXTRA_CA_CERTS` 或系统信任库：
+
+```bash
+export SSL_CERT_FILE=/etc/ssl/certs/corp-ca.pem
+opencorvus serve
 ```
 
 :::caution
-TUI 与本地 HTTP 服务器进行通信。你必须为此连接绕过代理，以防止路由循环。
+OpenCorvus **不**提供禁用 TLS 校验的内置选项。若必须如此，需在 Bun 层面 workaround，自担风险——这不属于受支持配置。
 :::
 
-你可以使用 [CLI 标志](/docs/cli#run)来配置服务器的端口和主机名。
+## 启用代理后的行为
 
----
-
-### 身份验证
-
-如果你的代理需要基本身份验证，请在 URL 中包含凭据。
-
-```bash
-export HTTPS_PROXY=http://username:password@proxy.example.com:8080
-```
-
-:::caution
-避免将密码硬编码在代码中。请使用环境变量或安全的凭据存储方式。
-:::
-
-对于需要高级身份验证（如 NTLM 或 Kerberos）的代理，建议使用支持相应身份验证方式的 LLM 网关。
-
----
-
-## 自定义证书
-
-如果你的企业使用自定义 CA 进行 HTTPS 连接，请配置 OpenCode 以信任这些证书。
-
-```bash
-export NODE_EXTRA_CA_CERTS=/path/to/ca-cert.pem
-```
-
-此配置同时适用于代理连接和直接 API 访问。
+只要任一代理变量被设置，部分适配器（如 share 端点、某些遥测 hook）会走另一条代码路径——可在源码中搜索 `proxied()` 查看具体使用点。
