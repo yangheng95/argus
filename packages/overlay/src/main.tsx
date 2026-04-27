@@ -9,6 +9,7 @@ import { Conversation } from "./components/Conversation";
 import { TaskList } from "./components/TaskList";
 import { Board } from "./components/Board";
 import { TaskStatusHeader } from "./components/TaskStatusHeader";
+import { TaskDirContent, TaskWorkspaceLine } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenu } from "./components/TitlebarMenu";
@@ -705,6 +706,19 @@ if (connBadgeEl) {
 const sessionTokenBadgeEl = document.getElementById("solidSessionTokenBadge");
 if (sessionTokenBadgeEl) {
   render(() => <SessionTokenBadge />, sessionTokenBadgeEl);
+}
+
+// ── Mount: TaskDirContent + TaskWorkspaceLine ──
+// Reactive replacement for services/meta.ts renderMeta() — both spans now
+// derive from settingsStore.directory + boardStore.path through Solid memos.
+
+const taskDirMountEl = document.getElementById("solidTaskDirMount");
+if (taskDirMountEl) {
+  render(() => <TaskDirContent />, taskDirMountEl);
+}
+const taskWorkspaceMountEl = document.getElementById("solidTaskWorkspaceLineMount");
+if (taskWorkspaceMountEl) {
+  render(() => <TaskWorkspaceLine />, taskWorkspaceMountEl);
 }
 
 // ── Mount: TaskStatusHeader ──

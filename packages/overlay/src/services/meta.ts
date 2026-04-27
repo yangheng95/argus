@@ -2,14 +2,12 @@
 // TypeScript port of meta/changes functions
 // loadMeta, loadChanges, normalizeDiffs, diffStatus, openDiffDialog.
 
-import { appStore, setAppStore } from "../store/app";
+import { setAppStore } from "../store/app";
 import { boardStore, setPath, setVcs } from "../store/board";
 import { settingsStore } from "../store/settings";
-import { pathBreadcrumb } from "../utils/dom-utils";
-import { t } from "../utils/i18n";
 import { AppLog } from "../utils/log";
 import { apiJson } from "./api";
-import { currentExecutionDirectory, setWorkspaceDirectory } from "./workspace";
+import { setWorkspaceDirectory } from "./workspace";
 
 // ── Types ──
 
@@ -28,9 +26,10 @@ export interface DiffItem {
 
 /**
  * Fetches the current working path and VCS info from the server and updates
- * the app store.
- * Mirrors loadMeta. Calls renderMeta() in the finally-block to
- * keep the DOM in sync regardless of success or failure.
+ * the app store. The directory breadcrumb + workspace-line render through
+ * <TaskDirContent /> + <TaskWorkspaceLine /> Solid components — they react
+ * to settingsStore.directory / boardStore.path automatically; loadMeta only
+ * pushes data into the stores.
  */
 export async function loadMeta(): Promise<void> {
   const epoch = settingsStore.directoryEpoch;
@@ -66,55 +65,6 @@ export async function loadMeta(): Promise<void> {
       _metaPath: null,
       _metaVcs: null,
     }));
-  } finally {
-    renderMeta();
-  }
-}
-
-// ── renderMeta (DOM) ──
-
-/**
- * Imperatively updates the meta DOM nodes (directory breadcrumb, workspace dir,
- * git branch) from the current store state.
- * .ts — still needed by loadMeta's finally-block and the
- * 's directory setter.
- */
-function relativePathFrom(base: string, target: string): string {
-  if (!base || !target) return "";
-  const norm = (s: string) => s.replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
-  const nb = norm(base);
-  const nt = norm(target);
-  if (nt.startsWith(nb + "/")) return target.slice(base.replace(/[\\/]+$/, "").length + 1);
-  return "";
-}
-
-function shortPath(p: string): string {
-  const parts = p.replace(/[\\/]+/g, "/").replace(/\/+$/, "").split("/");
-  return parts.length <= 2 ? p : `…/${parts.slice(-2).join("/")}`;
-}
-
-export function renderMeta(): void {
-  const dirNode = document.getElementById("taskDir");
-  const workspaceNode = document.getElementById("taskWorkspaceDir");
-  const dir = settingsStore.directory || boardStore.board?.task?.directory || "";
-
-  if (dirNode) {
-    dirNode.innerHTML = pathBreadcrumb(dir);
-    dirNode.setAttribute("title", dir || t("cwd.unavailable"));
-    (dirNode as HTMLElement).dataset.empty = dir ? "false" : "true";
-    const path = dirNode.querySelector(".task-dir-path");
-    if (path instanceof HTMLElement) path.scrollLeft = path.scrollWidth;
-  }
-
-  if (workspaceNode) {
-    const workspaceText = currentExecutionDirectory();
-    const dirText = dir.replace(/[\\/]+$/, "");
-    const same = !!dirText && !!workspaceText && dirText.toLowerCase() === workspaceText.toLowerCase();
-    const show = !!workspaceText && !same;
-    const label = relativePathFrom(dirText, workspaceText) || shortPath(workspaceText);
-    workspaceNode.textContent = show ? t("cwd.execution_workspace", { value: label }) : "";
-    workspaceNode.setAttribute("title", show ? workspaceText : "");
-    (workspaceNode as HTMLElement).hidden = !show;
   }
 }
 
