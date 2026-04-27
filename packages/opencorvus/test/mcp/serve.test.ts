@@ -9,31 +9,35 @@ describe("mcp.serve", () => {
     mock.restore()
   })
 
-  test("builds an HTTP McpHttpServerConfig pointing at the embedded transport", () => {
-    const config = MCPServe.url(new URL("http://127.0.0.1:7878"), { directory: "/repo" })
-    expect(config.type).toBe("http")
-    expect(config.url).toBe("http://127.0.0.1:7878/mcp/transport")
-    expect(decodeURIComponent(config.headers["x-opencorvus-directory"])).toBe("/repo")
+  test("builds a stdio command for the executor toolset", () => {
+    const config = MCPServe.command("/repo")
+    expect(config.name).toBe("opencorvus")
+    expect(config.command).toBe(process.execPath)
+    expect(config.args[0]).toEndWith("stdio.ts")
+    expect(config.args.slice(-4)).toEqual(["--cwd", "/repo", "--toolset", "executor"])
+    expect(config.env.PATH || config.env.Path).toBeTruthy()
   })
 
   test("exposes the executor MCP toolset", async () => {
-    expect(MCPServe.executorToolNames().sort()).toEqual([
-      "figma_analyze",
-      "figma_compile",
-      "figma_extract",
-      "memory",
-      "task_report",
-      "webpage_analyze",
-      "webpage_compile",
-      "webpage_evaluate",
-      "webpage_extract",
-      "webpage_image_analyze",
-      "webpage_image_compile",
-      "webpage_image_extract",
-      "webpage_render",
-      "webpage_text_diff",
-      "webpage_vision_judge",
-    ].sort())
+    expect(MCPServe.executorToolNames().sort()).toEqual(
+      [
+        "figma_analyze",
+        "figma_compile",
+        "figma_extract",
+        "memory",
+        "task_report",
+        "webpage_analyze",
+        "webpage_compile",
+        "webpage_evaluate",
+        "webpage_extract",
+        "webpage_image_analyze",
+        "webpage_image_compile",
+        "webpage_image_extract",
+        "webpage_render",
+        "webpage_text_diff",
+        "webpage_vision_judge",
+      ].sort(),
+    )
   })
 
   test("maps executor tools to Claude Code MCP-prefixed names", () => {

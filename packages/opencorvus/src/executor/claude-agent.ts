@@ -1,11 +1,20 @@
 import z from "zod"
-import { query, type ElicitationRequest, type ElicitationResult, type PermissionResult } from "@anthropic-ai/claude-agent-sdk"
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
+import {
+  query,
+  type ElicitationRequest,
+  type ElicitationResult,
+  type PermissionResult,
+} from "@anthropic-ai/claude-agent-sdk"
+import {
+  CodingCapabilities,
+  CodingRunInput,
+  CodingResumeInput,
+  type CodingEventInfo,
+  type CodingProvider,
+} from "./contract"
 import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
 import { MCPServe } from "@/mcp/serve"
-import { Server } from "@/server/server"
-import { Instance } from "@/project/instance"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
@@ -110,16 +119,14 @@ export namespace ClaudeAgentExecutor {
       run(input) {
         // Read-only planning runs (no tools, read-only sandbox) force "plan" mode
         // regardless of OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE override.
-        const mode = input.toolMode === "none" && input.sandbox === "read-only"
-          ? "plan"
-          : permissionMode()
-        const allowed = input.toolMode === "none"
-          ? []
-          : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
+        const mode = input.toolMode === "none" && input.sandbox === "read-only" ? "plan" : permissionMode()
+        const allowed = input.toolMode === "none" ? [] : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
         const systemAppend = [
           input.system,
           input.toolMode === "none" ? undefined : MCPServe.claudeExecutorPromptSection(),
-        ].filter((item): item is string => Boolean(item)).join("\n\n")
+        ]
+          .filter((item): item is string => Boolean(item))
+          .join("\n\n")
 
         const handle = query({
           prompt: input.prompt,
@@ -181,14 +188,16 @@ export namespace ClaudeAgentExecutor {
               }
               return input.onInput({
                 id: `elicitation:${request.elicitationId || crypto.randomUUID()}`,
-                questions: [{
-                  id: request.elicitationId || crypto.randomUUID(),
-                  header: request.serverName,
-                  question: request.message,
-                  mode: request.mode,
-                  url: request.url,
-                  requested_schema: request.requestedSchema,
-                }],
+                questions: [
+                  {
+                    id: request.elicitationId || crypto.randomUUID(),
+                    header: request.serverName,
+                    question: request.message,
+                    mode: request.mode,
+                    url: request.url,
+                    requested_schema: request.requestedSchema,
+                  },
+                ],
                 meta: {
                   adapter: "request_user_input",
                   tool_kind: "input",
@@ -213,14 +222,14 @@ export namespace ClaudeAgentExecutor {
 }
 
 function opencorvusMcpServers(cwd?: string) {
-  // The opencorvus executor MCP server is embedded in the main HTTP server
-  // (Hono mount at /mcp/transport). The Claude Agent SDK forwards this
-  // config to claude code as `--mcp-config`, which connects via Streamable
-  // HTTP — single process, single port, no stdio child to spawn.
-  const baseUrl = Server.url()
-  const config = MCPServe.url(baseUrl, { directory: cwd ?? Instance.directory })
+  const mcp = MCPServe.command(cwd ?? process.cwd())
   return {
-    [MCPServe.ServerName]: config,
+    [mcp.name]: {
+      type: "stdio" as const,
+      command: mcp.command,
+      args: mcp.args,
+      env: mcp.env,
+    },
   }
 }
 
@@ -276,7 +285,6 @@ async function* execute(
   })
 
   current.query = run
-
   ;(async () => {
     try {
       for await (const message of run.stream) {
@@ -313,7 +321,8 @@ async function* execute(
 
 function mapMessage(current: SessionState, message: Record<string, unknown>): CodingEventInfo[] {
   const type = typeof message.type === "string" ? message.type : ""
-  const sessionID = typeof message.session_id === "string" ? message.session_id : current.actualID ?? current.logicalID
+  const sessionID =
+    typeof message.session_id === "string" ? message.session_id : (current.actualID ?? current.logicalID)
 
   if (type === "assistant") {
     return fromAssistant(sessionID, record(message.message))
@@ -332,65 +341,82 @@ function mapMessage(current: SessionState, message: Record<string, unknown>): Co
       costUSD: number(message.total_cost_usd),
     }
     if (message.subtype === "success") {
-      return [{
+      return [
+        {
+          type: "usage",
+          ...usage,
+          meta: {
+            session_id: sessionID,
+          },
+        },
+        {
+          type: "done",
+          sessionID,
+          output: text(message.result),
+          costUSD: number(message.total_cost_usd),
+          turns: number(message.num_turns),
+          meta: {
+            usage: record(message.usage),
+            structured_output: message.structured_output,
+            stop_reason: message.stop_reason,
+            permission_denials: message.permission_denials,
+          },
+        },
+      ]
+    }
+    return [
+      {
         type: "usage",
         ...usage,
         meta: {
           session_id: sessionID,
         },
-      }, {
-        type: "done",
-        sessionID,
-        output: text(message.result),
-        costUSD: number(message.total_cost_usd),
-        turns: number(message.num_turns),
+      },
+      {
+        type: "error",
+        message: text(
+          (Array.isArray(message.errors) ? message.errors.join("\n") : "") || message.subtype || "Claude query failed",
+        ),
         meta: {
-          usage: record(message.usage),
-          structured_output: message.structured_output,
-          stop_reason: message.stop_reason,
-          permission_denials: message.permission_denials,
+          session_id: sessionID,
+          subtype: message.subtype,
         },
-      }]
-    }
-    return [{
-      type: "usage",
-      ...usage,
-      meta: {
-        session_id: sessionID,
       },
-    }, {
-      type: "error",
-      message: text((Array.isArray(message.errors) ? message.errors.join("\n") : "") || message.subtype || "Claude query failed"),
-      meta: {
-        session_id: sessionID,
-        subtype: message.subtype,
-      },
-    }]
+    ]
   }
   if (type === "system") {
     const subtype = typeof message.subtype === "string" ? message.subtype : "system"
-    return [{
-      type: "progress",
-      phase: subtype,
-      summary: subtype,
-      meta: {
-        session_id: sessionID,
-        ...message,
+    return [
+      {
+        type: "progress",
+        phase: subtype,
+        summary: subtype,
+        meta: {
+          session_id: sessionID,
+          ...message,
+        },
       },
-    }]
+    ]
   }
   if (type === "tool_progress") {
-    return [{
-      type: "progress",
-      phase: "tool_executing",
-      summary: "tool_progress",
-      meta: {
-        session_id: sessionID,
-        ...message,
+    return [
+      {
+        type: "progress",
+        phase: "tool_executing",
+        summary: "tool_progress",
+        meta: {
+          session_id: sessionID,
+          ...message,
+        },
       },
-    }]
+    ]
   }
-  if (type === "tool_use_summary" || type === "prompt_suggestion" || type === "rate_limit_event" || type === "auth_status") {
+  if (
+    type === "tool_use_summary" ||
+    type === "prompt_suggestion" ||
+    type === "rate_limit_event" ||
+    type === "auth_status"
+  ) {
     return []
   }
   return []
@@ -469,14 +495,16 @@ function fromStreamEvent(sessionID: string, event?: Record<string, unknown>): Co
     if (delta.type === "thinking_delta") {
       const value = text(delta.thinking)
       if (!value) return []
-      return [{
-        type: "reasoning_delta",
-        text: value,
-        meta: {
-          session_id: sessionID,
-          index: event.index,
+      return [
+        {
+          type: "reasoning_delta",
+          text: value,
+          meta: {
+            session_id: sessionID,
+            index: event.index,
+          },
         },
-      }]
+      ]
     }
   }
   // tool_use blocks are NOT emitted from stream events. Anthropic's streaming

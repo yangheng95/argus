@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -11,12 +11,10 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { Instance } from "@/project/instance"
-import { InstanceBootstrap } from "@/project/bootstrap"
 import { Session } from "@/session"
 import { Installation } from "@/installation"
 import { PermissionNext } from "@/permission/next"
 import { Identifier } from "@/id/id"
-import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import type { Message } from "@/session"
 import { Tool } from "@/tool/tool"
@@ -39,7 +37,7 @@ import {
 } from "@/mirror/tools"
 import { MCP } from "@/mcp"
 import { Bus } from "@/bus"
-import type { Hono } from "hono"
+import path from "path"
 import z from "zod"
 
 const log = Log.create({ service: "mcp.serve" })
@@ -47,8 +45,6 @@ const log = Log.create({ service: "mcp.serve" })
 const TOOLSET = z.enum(["executor"])
 type Toolset = z.infer<typeof TOOLSET>
 const DEFAULT_SERVER_NAME = "opencorvus"
-const TRANSPORT_PATH = "/mcp/transport"
-const DIRECTORY_HEADER = "x-opencorvus-directory"
 
 // External coding executors (claude-code, codex) ship with their own
 // shell/read/edit/write/glob/grep/web-fetch/web-search tools. Re-exposing
@@ -167,21 +163,25 @@ const EXECUTOR_TOOL_IMPLS: Record<ExecutorToolID, Tool.Info> = {
   figma_analyze: FigmaAnalyzeTool,
 }
 
-type SessionEntry = {
-  server: McpServer
-  transport: WebStandardStreamableHTTPServerTransport
-  opencorvusSessionID: string
-  approved: PermissionNext.Ruleset
-  directory: string
-  unsubscribes: Array<() => void>
-}
-
-const sessionsByMcpId = new Map<string, SessionEntry>()
-
 export namespace MCPServe {
   export const Toolset = TOOLSET
   export const ServerName = DEFAULT_SERVER_NAME
-  export const TransportPath = TRANSPORT_PATH
+
+  export function command(cwd: string) {
+    // Stdio MCP semantics: when `env` is present, the spawned child sees only
+    // those vars. Inherit the full environment so Windows process bootstrap
+    // and provider credentials are identical for every caller.
+    const env: Record<string, string> = {}
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === "string") env[key] = value
+    }
+    return {
+      name: DEFAULT_SERVER_NAME,
+      command: process.execPath,
+      args: [path.resolve(import.meta.dir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"],
+      env,
+    }
+  }
 
   export function executorToolNames() {
     return Object.keys(EXECUTOR_TOOLS).map((id) => EXECUTOR_TOOLS[id as ExecutorToolID].name)
@@ -212,11 +212,14 @@ export namespace MCPServe {
     ].join("\n")
   }
 
-  export async function toolDefinitions(toolset: Toolset, options: {
-    includeRuntime?: boolean
-    includeProxied?: boolean
-    proxiedTools?: Awaited<ReturnType<typeof MCP.serverTools>>
-  } = {}) {
+  export async function toolDefinitions(
+    toolset: Toolset,
+    options: {
+      includeRuntime?: boolean
+      includeProxied?: boolean
+      proxiedTools?: Awaited<ReturnType<typeof MCP.serverTools>>
+    } = {},
+  ) {
     const tools = options.includeRuntime === false ? [] : await runtimeTools(toolset)
     const proxiedTools = options.proxiedTools ?? (options.includeProxied === false ? [] : await MCP.serverTools())
     return [
@@ -242,223 +245,151 @@ export namespace MCPServe {
     ]
   }
 
-  /**
-   * Build the McpHttpServerConfig that external coding executors (Claude
-   * Agent SDK, Codex) hand to their underlying coding tool so it can connect
-   * back into this opencorvus process's embedded MCP transport.
-   *
-   * `directory` pins the per-MCP-session cwd at initialize time. Auth headers
-   * are populated when OPENCORVUS_SERVER_PASSWORD is configured (basicAuth).
-   */
-  export function url(baseUrl: URL | string, opts: { directory: string }) {
-    const u = new URL(TRANSPORT_PATH, baseUrl)
-    const headers: Record<string, string> = {
-      [DIRECTORY_HEADER]: encodeURIComponent(opts.directory),
-    }
-    const password = Flag.OPENCORVUS_SERVER_PASSWORD
-    if (password) {
-      const username = Flag.OPENCORVUS_SERVER_USERNAME ?? "opencorvus"
-      const token = Buffer.from(`${username}:${password}`).toString("base64")
-      headers["Authorization"] = `Basic ${token}`
-    }
-    return {
-      type: "http" as const,
-      url: u.toString(),
-      headers,
-    }
-  }
-
-  /**
-   * Mount the executor MCP transport onto the host Hono router. The caller
-   * is expected to already have ensured Instance.provide({directory}) middleware
-   * runs ahead of this route — `app.ts:.route("/mcp", McpRoutes())` does this
-   * via the upstream `server.ts` middleware that reads X-Opencorvus-Directory.
-   */
-  export function mount(app: Hono) {
-    return app.all("/transport", async (c) => handler(c.req.raw))
-  }
-
-  /**
-   * Process one HTTP request against the executor MCP transport. Routes by
-   * the SDK's Mcp-Session-Id header: existing sessions re-enter their pinned
-   * Instance.provide scope; new initialize requests adopt the request's
-   * directory (set by upstream middleware) as the session's cwd for life.
-   */
-  export async function handler(req: Request): Promise<Response> {
-    const sessionId = req.headers.get("mcp-session-id")
-    const existing = sessionId ? sessionsByMcpId.get(sessionId) : undefined
-    if (existing) {
-      return Instance.provide({
-        directory: existing.directory,
-        init: InstanceBootstrap,
-        fn: () => existing.transport.handleRequest(req),
+  export async function serve(raw: { cwd: string; toolset: Toolset }) {
+    const input = z
+      .object({
+        cwd: z.string(),
+        toolset: TOOLSET,
       })
-    }
-    const directory = Instance.directory
-    const entry = await createSessionEntry(directory)
-    return entry.transport.handleRequest(req)
-  }
-}
+      .parse(raw)
 
-async function createSessionEntry(directory: string): Promise<SessionEntry> {
-  const opencorvusSession = await Session.createNext({
-    kind: "assistant",
-    title: "MCP executor",
-    directory,
-  })
-  const approved: PermissionNext.Ruleset = []
-  const tools = await runtimeTools("executor", opencorvusSession.id, approved)
-  const byName = new Map<string, (typeof tools)[number]>(tools.map((item) => [item.name, item]))
+    await Instance.provide({
+      directory: input.cwd,
+      fn: async () => {
+        const session = await Session.createNext({
+          kind: "assistant",
+          title: `MCP ${input.toolset}`,
+          directory: input.cwd,
+        })
+        const approved: PermissionNext.Ruleset = []
+        const tools = await runtimeTools(input.toolset, session.id, approved)
+        const byName = new Map<string, (typeof tools)[number]>(tools.map((item) => [item.name, item]))
+        const server = new McpServer({
+          name: DEFAULT_SERVER_NAME,
+          version: Installation.VERSION,
+        })
+        await Promise.all([MCP.serverTools(), MCP.serverPrompts(), MCP.serverResources()]).catch((error) => {
+          log.warn("mcp serve prewarm failed", { error: String(error) })
+        })
+        server.server.registerCapabilities({
+          tools: { listChanged: true },
+          prompts: { listChanged: true },
+          resources: { listChanged: true },
+        })
+        server.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+          tools: [
+            ...tools.map((item) => ({
+              name: item.name,
+              description: item.description,
+              inputSchema: toolSchema(item.parameters),
+              annotations: item.annotations,
+              _meta: {
+                surface: "mcp",
+                original_tool_id: item.id,
+              },
+            })),
+            ...(await MCP.serverTools()).map((item) => ({
+              name: item.key,
+              description: item.description,
+              inputSchema: item.inputSchema,
+              annotations: item.annotations,
+              _meta: {
+                surface: "mcp",
+                proxied_client: item.client,
+                proxied_tool: item.name,
+              },
+            })),
+          ],
+        }))
+        server.server.setRequestHandler(CallToolRequestSchema, async (request, _extra) => {
+          const args =
+            request.params.arguments &&
+            typeof request.params.arguments === "object" &&
+            !Array.isArray(request.params.arguments)
+              ? (request.params.arguments as Record<string, unknown>)
+              : {}
+          const local = byName.get(request.params.name)
+          if (local) return executeLocal(server, local, session.id, approved, args)
+          const proxy = await MCP.serverTools().then((items) => items.find((item) => item.key === request.params.name))
+          if (proxy) return MCP.callTool({ key: proxy.key, args }) as any
+          throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`)
+        })
+        server.server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+          prompts: (await MCP.serverPrompts()).map((item) => ({
+            name: item.key,
+            title: item.title,
+            description: item.description,
+            arguments: item.arguments,
+            _meta: {
+              surface: "mcp",
+              proxied_client: item.client,
+              proxied_prompt: item.name,
+            },
+          })),
+        }))
+        server.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+          const proxy = await MCP.serverPrompts().then((items) =>
+            items.find((item) => item.key === request.params.name),
+          )
+          if (!proxy) throw new McpError(ErrorCode.InvalidParams, `Prompt ${request.params.name} not found`)
+          const result = await MCP.getPrompt(proxy.client, proxy.name, request.params.arguments)
+          if (!result) throw new McpError(ErrorCode.InternalError, `Prompt ${proxy.name} failed`)
+          return result
+        })
+        server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+          resources: (await MCP.serverResources()).map((item) => ({
+            uri: resourceUri(item.key),
+            name: item.name,
+            title: item.title,
+            description: item.description,
+            mimeType: item.mimeType,
+            _meta: {
+              surface: "mcp",
+              proxied_client: item.client,
+              proxied_uri: item.uri,
+            },
+          })),
+        }))
+        server.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+          const key = resourceKey(request.params.uri)
+          if (!key) throw new McpError(ErrorCode.InvalidParams, `Resource ${request.params.uri} not found`)
+          const proxy = await MCP.serverResources().then((items) => items.find((item) => item.key === key))
+          if (!proxy) throw new McpError(ErrorCode.InvalidParams, `Resource ${request.params.uri} not found`)
+          const result = await MCP.readResource(proxy.client, proxy.uri)
+          if (!result) throw new McpError(ErrorCode.InternalError, `Resource ${proxy.uri} failed`)
+          return {
+            ...result,
+            contents: result.contents.map((item) => ({
+              ...item,
+              uri: resourceUri(proxy.key),
+            })),
+          }
+        })
+        const unsubscribeTools = Bus.subscribe(MCP.ToolsChanged, () => server.sendToolListChanged())
+        const unsubscribePrompts = Bus.subscribe(MCP.PromptsChanged, () => server.sendPromptListChanged())
+        const unsubscribeResources = Bus.subscribe(MCP.ResourcesChanged, () => server.sendResourceListChanged())
 
-  const server = new McpServer({
-    name: DEFAULT_SERVER_NAME,
-    version: Installation.VERSION,
-  })
-
-  await Promise.all([
-    MCP.serverTools(),
-    MCP.serverPrompts(),
-    MCP.serverResources(),
-  ]).catch((error) => {
-    log.warn("mcp serve prewarm failed", { error: String(error) })
-  })
-
-  server.server.registerCapabilities({
-    tools: { listChanged: true },
-    prompts: { listChanged: true },
-    resources: { listChanged: true },
-  })
-  server.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      ...tools.map((item) => ({
-        name: item.name,
-        description: item.description,
-        inputSchema: toolSchema(item.parameters),
-        annotations: item.annotations,
-        _meta: {
-          surface: "mcp",
-          original_tool_id: item.id,
-        },
-      })),
-      ...(await MCP.serverTools()).map((item) => ({
-        name: item.key,
-        description: item.description,
-        inputSchema: item.inputSchema,
-        annotations: item.annotations,
-        _meta: {
-          surface: "mcp",
-          proxied_client: item.client,
-          proxied_tool: item.name,
-        },
-      })),
-    ],
-  }))
-  server.server.setRequestHandler(CallToolRequestSchema, async (request, _extra) => {
-    const args =
-      request.params.arguments && typeof request.params.arguments === "object" && !Array.isArray(request.params.arguments)
-        ? request.params.arguments as Record<string, unknown>
-        : {}
-    const local = byName.get(request.params.name)
-    if (local) return executeLocal(server, local, opencorvusSession.id, approved, args)
-    const proxy = await MCP.serverTools().then((items) => items.find((item) => item.key === request.params.name))
-    if (proxy) return MCP.callTool({ key: proxy.key, args }) as any
-    throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`)
-  })
-  server.server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-    prompts: (await MCP.serverPrompts()).map((item) => ({
-      name: item.key,
-      title: item.title,
-      description: item.description,
-      arguments: item.arguments,
-      _meta: {
-        surface: "mcp",
-        proxied_client: item.client,
-        proxied_prompt: item.name,
+        const transport = new StdioServerTransport()
+        await server.connect(transport)
+        log.info("mcp server connected", { cwd: input.cwd, toolset: input.toolset, tools: tools.length })
+        process.stdin.resume()
+        try {
+          await new Promise<void>((resolve, reject) => {
+            transport.onclose = resolve
+            transport.onerror = reject
+            process.stdin.once("end", resolve)
+            process.stdin.once("close", resolve)
+          })
+        } finally {
+          unsubscribeTools?.()
+          unsubscribePrompts?.()
+          unsubscribeResources?.()
+          await server.close().catch(() => undefined)
+          await Session.remove(session.id).catch(() => undefined)
+        }
       },
-    })),
-  }))
-  server.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-    const proxy = await MCP.serverPrompts().then((items) => items.find((item) => item.key === request.params.name))
-    if (!proxy) throw new McpError(ErrorCode.InvalidParams, `Prompt ${request.params.name} not found`)
-    const result = await MCP.getPrompt(proxy.client, proxy.name, request.params.arguments)
-    if (!result) throw new McpError(ErrorCode.InternalError, `Prompt ${proxy.name} failed`)
-    return result
-  })
-  server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: (await MCP.serverResources()).map((item) => ({
-      uri: resourceUri(item.key),
-      name: item.name,
-      title: item.title,
-      description: item.description,
-      mimeType: item.mimeType,
-      _meta: {
-        surface: "mcp",
-        proxied_client: item.client,
-        proxied_uri: item.uri,
-      },
-    })),
-  }))
-  server.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const key = resourceKey(request.params.uri)
-    if (!key) throw new McpError(ErrorCode.InvalidParams, `Resource ${request.params.uri} not found`)
-    const proxy = await MCP.serverResources().then((items) => items.find((item) => item.key === key))
-    if (!proxy) throw new McpError(ErrorCode.InvalidParams, `Resource ${request.params.uri} not found`)
-    const result = await MCP.readResource(proxy.client, proxy.uri)
-    if (!result) throw new McpError(ErrorCode.InternalError, `Resource ${proxy.uri} failed`)
-    return {
-      ...result,
-      contents: result.contents.map((item) => ({
-        ...item,
-        uri: resourceUri(proxy.key),
-      })),
-    }
-  })
-
-  const entry: SessionEntry = {
-    server,
-    transport: undefined as unknown as WebStandardStreamableHTTPServerTransport,
-    opencorvusSessionID: opencorvusSession.id,
-    approved,
-    directory,
-    unsubscribes: [],
+    })
   }
-
-  entry.transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: () => crypto.randomUUID(),
-    onsessioninitialized: (sid) => {
-      sessionsByMcpId.set(sid, entry)
-      log.info("mcp session initialized", { sid, directory, tools: tools.length })
-    },
-    onsessionclosed: async (sid) => {
-      await disposeSession(sid)
-    },
-  })
-
-  entry.unsubscribes.push(
-    Bus.subscribe(MCP.ToolsChanged, () => server.sendToolListChanged()),
-    Bus.subscribe(MCP.PromptsChanged, () => server.sendPromptListChanged()),
-    Bus.subscribe(MCP.ResourcesChanged, () => server.sendResourceListChanged()),
-  )
-
-  entry.transport.onclose = () => {
-    if (entry.transport.sessionId) {
-      void disposeSession(entry.transport.sessionId)
-    }
-  }
-
-  await server.connect(entry.transport)
-  return entry
-}
-
-async function disposeSession(sid: string) {
-  const entry = sessionsByMcpId.get(sid)
-  if (!entry) return
-  sessionsByMcpId.delete(sid)
-  for (const unsubscribe of entry.unsubscribes) unsubscribe()
-  entry.unsubscribes.length = 0
-  await entry.server.close().catch(() => undefined)
-  await Session.remove(entry.opencorvusSessionID).catch(() => undefined)
-  log.info("mcp session closed", { sid })
 }
 
 function claudeSafeName(input: string) {
@@ -466,18 +397,21 @@ function claudeSafeName(input: string) {
 }
 
 async function runtimeTools(toolset: Toolset, sessionID = "ses_mcp", approved: PermissionNext.Ruleset = []) {
-  const ids = toolset === "executor" ? Object.keys(EXECUTOR_TOOLS) as ExecutorToolID[] : []
-  return Promise.all(ids.map(async (id) => {
-    const item = EXECUTOR_TOOL_IMPLS[id]
-    const initialized = await item.init()
-    return {
-      id: item.id,
-      ...initialized,
-      name: EXECUTOR_TOOLS[id].name,
-      annotations: EXECUTOR_TOOLS[id].annotations,
-      run: (server: McpServer, args: Record<string, unknown>) => executeLocal(server, { id: item.id, ...initialized }, sessionID, approved, args),
-    }
-  }))
+  const ids = toolset === "executor" ? (Object.keys(EXECUTOR_TOOLS) as ExecutorToolID[]) : []
+  return Promise.all(
+    ids.map(async (id) => {
+      const item = EXECUTOR_TOOL_IMPLS[id]
+      const initialized = await item.init()
+      return {
+        id: item.id,
+        ...initialized,
+        name: EXECUTOR_TOOLS[id].name,
+        annotations: EXECUTOR_TOOLS[id].annotations,
+        run: (server: McpServer, args: Record<string, unknown>) =>
+          executeLocal(server, { id: item.id, ...initialized }, sessionID, approved, args),
+      }
+    }),
+  )
 }
 
 function attachmentSummary(input: Array<{ filename?: string; mime?: string }> | undefined) {
@@ -505,7 +439,9 @@ async function ask(
   approved: PermissionNext.Ruleset,
   request: Omit<PermissionNext.Request, "id" | "sessionID" | "tool">,
 ) {
-  const allowed = request.patterns.every((pattern) => PermissionNext.evaluate(request.permission, pattern, approved).action === "allow")
+  const allowed = request.patterns.every(
+    (pattern) => PermissionNext.evaluate(request.permission, pattern, approved).action === "allow",
+  )
   if (allowed) return
 
   const diff = typeof request.metadata?.diff === "string" ? request.metadata.diff.slice(0, 4000) : ""
@@ -515,7 +451,9 @@ async function ask(
     request.patterns.length > 0 ? `Patterns: ${request.patterns.join(", ")}` : "",
     filepath ? `Path: ${filepath}` : "",
     diff ? `Preview:\n${diff}` : "",
-  ].filter(Boolean).join("\n\n")
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 
   const result = await server.server.elicitInput({
     mode: "form",
