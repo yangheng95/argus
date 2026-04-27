@@ -174,7 +174,12 @@ export function startConnectionMonitor(
   intervalMs = 10_000,
 ): void {
   stopConnectionMonitor();
+  // Skip the tick when the window is hidden — Tauri/WebView2 still wakes
+  // the JS event loop on setInterval, which on a battery laptop adds up
+  // over hours when the user is not looking at the overlay. We retry on
+  // visibilitychange below.
   _monitorTimer = setInterval(async () => {
+    if (typeof document !== "undefined" && document.hidden) return;
     try {
       if (!appStore.connected) {
         const ok = await checkConnection();

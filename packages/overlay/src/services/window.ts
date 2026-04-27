@@ -3,8 +3,6 @@
 // Exported functions:
 // setTrayAttention — toggle the tray icon attention state via Tauri
 // setConnStatus — update the DOM connection badge
-// startElapsedTimer — start the task elapsed-time interval
-// stopTimers — clear all active timers and stop SSE
 // fitBrandVersion — shrink the brand-version element to fit its container
 // syncExecutorWidth — equalise executor chip button widths
 
@@ -61,34 +59,6 @@ export function setConnStatus(status: "online" | "offline" | "connecting"): void
       : status === "connecting"
         ? t("titlebar.connection.connecting")
         : t("titlebar.connection.offline");
-}
-
-// ── startElapsedTimer ──
-// Start a 1-second interval that updates the elapsed-time DOM element.
-// Returns a cleanup function that clears the interval.
-// The caller is responsible for storing and cancelling the returned handle.
-// In the the handle is stored in state.elapsedTimer.
-
-export function startElapsedTimer(
-  startTime: number,
-  opts: {
-    getCompletedTime?: () => number | null | undefined;
-    formatDuration: (ms: number) => string;
-    onTick: (text: string) => void;
-  },
-): ReturnType<typeof setInterval> | null {
-  if (!startTime) {
-    opts.onTick("");
-    return null;
-  }
-  const update = () => {
-    const end = opts.getCompletedTime?.() ?? Date.now();
-    opts.onTick(opts.formatDuration(end - startTime));
-  };
-  update();
-  const completed = opts.getCompletedTime?.();
-  if (completed) return null;
-  return setInterval(update, 1000);
 }
 
 // ── fitBrandVersion ──

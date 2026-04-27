@@ -107,16 +107,17 @@ export function ChatComposer(props: ChatComposerProps) {
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
 
-  // ── Typewriter placeholder ──
-  // Cycles through a shuffled list of project-level examples when the
-  // composer is empty and unfocused. Cleared the moment the user engages.
-  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  // ── Rotating placeholder ──
+  // Cycles through a shuffled list of project-level examples while the
+  // composer sits idle (empty + unfocused). One signal write per rotation;
+  // no per-character typewriter. The previous 28–60ms typewriter loop wrote
+  // 20–70 signal-driven DOM mutations per second the entire time the
+  // composer was visible — Tauri's transparent WebView2 then alpha-blended
+  // the desktop on every frame, dominating idle power draw on laptops.
+  let rotateTimer: ReturnType<typeof setInterval> | undefined;
   let hintOrder: number[] = [];
   let hintCursor = 0;
-  const reducedMotion =
-    typeof window !== "undefined" && window.matchMedia
-      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      : false;
+  const ROTATE_MS = 7_000;
 
   function shuffleIndices(n: number): number[] {
     const arr = Array.from({ length: n }, (_, i) => i);
@@ -128,13 +129,13 @@ export function ChatComposer(props: ChatComposerProps) {
   }
 
   function stopHint() {
-    if (hintTimer) {
-      clearTimeout(hintTimer);
-      hintTimer = undefined;
+    if (rotateTimer) {
+      clearInterval(rotateTimer);
+      rotateTimer = undefined;
     }
   }
 
-  function runTypewriter(examples: string[]) {
+  function startRotate(examples: string[]) {
     stopHint();
     if (examples.length === 0) {
       setHintText("");
@@ -144,30 +145,12 @@ export function ChatComposer(props: ChatComposerProps) {
       hintOrder = shuffleIndices(examples.length);
       hintCursor = 0;
     }
-    if (reducedMotion) {
-      setHintText(examples[hintOrder[hintCursor % hintOrder.length]]);
-      return;
-    }
-    const typeChar = (full: string, n: number) => {
-      setHintText(full.slice(0, n));
-      if (n < full.length) {
-        hintTimer = setTimeout(() => typeChar(full, n + 1), 28 + Math.random() * 32);
-      } else {
-        hintTimer = setTimeout(() => eraseChar(full, n), 1600);
-      }
-    };
-    const eraseChar = (full: string, n: number) => {
-      setHintText(full.slice(0, n));
-      if (n > 0) {
-        hintTimer = setTimeout(() => eraseChar(full, n - 1), 14);
-      } else {
-        hintCursor = (hintCursor + 1) % hintOrder.length;
-        const next = examples[hintOrder[hintCursor]];
-        hintTimer = setTimeout(() => typeChar(next, 0), 320);
-      }
-    };
-    const current = examples[hintOrder[hintCursor % hintOrder.length]];
-    typeChar(current, 0);
+    setHintText(examples[hintOrder[hintCursor % hintOrder.length]!]!);
+    if (examples.length === 1) return;
+    rotateTimer = setInterval(() => {
+      hintCursor = (hintCursor + 1) % hintOrder.length;
+      setHintText(examples[hintOrder[hintCursor]!]!);
+    }, ROTATE_MS);
   }
 
   const showHint = createMemo(
@@ -177,12 +160,28 @@ export function ChatComposer(props: ChatComposerProps) {
   createEffect(() => {
     const examples = tArray("chat.placeholder_projects");
     if (showHint() && examples.length > 0) {
-      runTypewriter(examples);
+      startRotate(examples);
     } else {
       stopHint();
       setHintText("");
     }
   });
+
+  // Pause rotation when the overlay window is hidden / minimized — the user
+  // is not looking, and Tauri's WebView2 still wakes the JS event loop on
+  // setInterval ticks. visibilitychange covers minimize / alt-tab on Windows.
+  if (typeof document !== "undefined") {
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopHint();
+      } else {
+        const examples = tArray("chat.placeholder_projects");
+        if (showHint() && examples.length > 0) startRotate(examples);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    onCleanup(() => document.removeEventListener("visibilitychange", onVisibility));
+  }
 
   onCleanup(() => stopHint());
 
