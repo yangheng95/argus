@@ -91,6 +91,8 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | POST | `/task/{taskID}/rewind` | Rewind task timeline to a specific event (projection cursor, history stays intact) | `task.rewind` |
 | POST | `/task/{taskID}/rewind/clear` | Clear the rewind cursor (undo the rewind) | `task.rewind.clear` |
 | GET | `/task/{taskID}/runs` | List task runs | `task.runs` |
+| POST | `/task/{taskID}/session/{sessionID}/cancel` | Cancel a task agent session | `task.session.cancel` |
+| POST | `/task/{taskID}/session/{sessionID}/reply` | Reply directly to a task agent session | `task.session.reply` |
 | GET | `/task/{taskID}/trace` | Get task AgentTrace events (all sessions) | `task.trace` |
 | GET | `/task/{taskID}/transcript` | Get task transcript | `task.transcript` |
 | GET | `/tasks` | List project tasks | `task.list` |
