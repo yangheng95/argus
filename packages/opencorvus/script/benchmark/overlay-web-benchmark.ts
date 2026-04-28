@@ -107,7 +107,70 @@ const KNOWN_FLAGS = new Set<string>([
   "--no-keep",
   "--skip-local-verify",
   "--no-browser",
+  "--resume",
 ])
+
+// Benchmark workdirs (home, project, pptr user-data) live under <repo>/tmp
+// so they are gitignored and survive across runs without polluting the OS
+// temp dir. mkdtemp prefixes stay the same so existing log scrapers still
+// match. The script lives at <repo>/packages/opencorvus/script/benchmark,
+// so REPO_TMP is four levels up + "tmp".
+const REPO_TMP = path.resolve(import.meta.dir, "..", "..", "..", "..", "tmp")
+await fs.mkdir(REPO_TMP, { recursive: true })
+
+// State file written to <homeDir>/.benchmark-state.json once taskID is known.
+// `--resume` (no value) scans REPO_TMP for the most recent state with
+// status != "completed" and injects --resume-task-id / --resume-home-dir /
+// --project-dir into argv so downstream flag() reads pick them up. The
+// existing per-flag resume flow still works for explicit re-attaches.
+type BenchmarkState = {
+  taskID: string
+  homeDir: string
+  projectDir: string
+  executor: string
+  status: "running" | "completed" | "failed"
+  startedAt: number
+  updatedAt: number
+  error?: string
+}
+async function writeBenchmarkState(homeDir: string, state: BenchmarkState): Promise<void> {
+  const file = path.join(homeDir, ".benchmark-state.json")
+  await fs.writeFile(file, JSON.stringify({ ...state, updatedAt: Date.now() }, null, 2)).catch(() => undefined)
+}
+async function readBenchmarkState(homeDir: string): Promise<{ data: BenchmarkState; mtime: number } | undefined> {
+  const file = path.join(homeDir, ".benchmark-state.json")
+  try {
+    const stat = await fs.stat(file)
+    const data = JSON.parse(await fs.readFile(file, "utf8")) as BenchmarkState
+    return { data, mtime: stat.mtimeMs }
+  } catch { return undefined }
+}
+if (process.argv.includes("--resume")) {
+  const entries = await fs.readdir(REPO_TMP, { withFileTypes: true }).catch(() => [])
+  const candidates: Array<{ home: string; mtime: number; data: BenchmarkState }> = []
+  for (const ent of entries) {
+    if (!ent.isDirectory() || !ent.name.startsWith("mirrorcode-overlay-benchmark-home-")) continue
+    const home = path.join(REPO_TMP, ent.name)
+    const found = await readBenchmarkState(home)
+    if (!found) continue
+    if (found.data.status === "completed") continue
+    candidates.push({ home, mtime: found.mtime, data: found.data })
+  }
+  candidates.sort((a, b) => b.mtime - a.mtime)
+  const pick = candidates[0]
+  if (!pick) {
+    process.stderr.write(`[overlay-benchmark] --resume: no unfinished benchmark state under ${REPO_TMP}\n`)
+    process.exit(2)
+  }
+  process.stderr.write(
+    `[overlay-benchmark] --resume picked taskID=${pick.data.taskID} home=${pick.home} status=${pick.data.status} executor=${pick.data.executor}\n`,
+  )
+  const has = (k: string) => process.argv.some((a) => a === k || a.startsWith(`${k}=`))
+  if (!has("--resume-task-id")) process.argv.push(`--resume-task-id=${pick.data.taskID}`)
+  if (!has("--resume-home-dir")) process.argv.push(`--resume-home-dir=${pick.data.homeDir}`)
+  if (!has("--project-dir")) process.argv.push(`--project-dir=${pick.data.projectDir}`)
+  if (pick.data.executor && !has("--executor")) process.argv.push(`--executor=${pick.data.executor}`)
+}
 
 function validateFlags(): void {
   // process.argv layout: [bun, scriptPath, ...userArgs]
@@ -301,9 +364,9 @@ const temp = {
 
 temp.home = resumeHomeDir
   ? path.resolve(resumeHomeDir)
-  : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-home-"))
+  : await fs.mkdtemp(path.join(REPO_TMP, "mirrorcode-overlay-benchmark-home-"))
 if (resumeTaskID && !projectDir) throw new Error("--resume-task-id requires --project-dir")
-temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(os.tmpdir(), "mirrorcode-overlay-benchmark-project-"))
+temp.dir = projectDir ? path.resolve(projectDir) : await fs.mkdtemp(path.join(REPO_TMP, "mirrorcode-overlay-benchmark-project-"))
 temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
 // Copy request file into the project directory so the Task Agent can reference it
@@ -857,6 +920,10 @@ try {
     // Attach to an existing task without creating a new one.
     taskID = resumeTaskID
     eventStream = subscribeTaskEvents(taskID)
+    await writeBenchmarkState(temp.home, {
+      taskID, homeDir: temp.home, projectDir: temp.dir, executor,
+      status: "running", startedAt: marks.startedAt, updatedAt: Date.now(),
+    })
 
     // Navigate browser to the overlay and select the existing task
     if (page) {
@@ -942,9 +1009,13 @@ try {
       .then((body) => String(body.task_id || ""))
     if (!taskID) throw new Error("Task creation did not return task_id")
     eventStream = subscribeTaskEvents(taskID)
-    // Resume hint: print everything needed to re-attach with --resume-* flags
-    // after a kill. Without this the user has to dig the tempdir paths out of
-    // earlier log lines (or guess), which makes resume effectively unusable.
+    await writeBenchmarkState(temp.home, {
+      taskID, homeDir: temp.home, projectDir: temp.dir, executor,
+      status: "running", startedAt: marks.startedAt, updatedAt: Date.now(),
+    })
+    // Resume hint: print everything needed to re-attach. The state file at
+    // <home>/.benchmark-state.json also lets `--resume` (no value) auto-pick
+    // this run on the next launch.
     logLine(`[overlay-benchmark] RESUME-INFO taskID=${taskID}`)
     logLine(`[overlay-benchmark] RESUME-INFO home=${temp.home}`)
     logLine(`[overlay-benchmark] RESUME-INFO project=${temp.dir}`)
@@ -952,6 +1023,7 @@ try {
       `[overlay-benchmark] RESUME-CMD bun run script/benchmark/overlay-web-benchmark.ts ` +
         `--resume-task-id=${taskID} --resume-home-dir="${temp.home}" --project-dir="${temp.dir}" --executor=${executor}`,
     )
+    logLine(`[overlay-benchmark] RESUME-CMD-AUTO bun run script/benchmark/overlay-web-benchmark.ts --resume`)
 
     if (page) {
       planning = await waitForPlanningVisible(page, api)
@@ -1050,11 +1122,26 @@ try {
   logLine(`events_ndjson: ${eventLogFile}`)
 
   const pass = out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
+  if (taskID && temp.home) {
+    await writeBenchmarkState(temp.home, {
+      taskID, homeDir: temp.home, projectDir: temp.dir, executor,
+      status: pass ? "completed" : "failed",
+      startedAt: marks.startedAt, updatedAt: Date.now(),
+      ...(pass ? {} : { error: "assertions failed (see report)" }),
+    })
+  }
   if (!pass) {
     process.exit(1)
   }
 } catch (error) {
   if (!marks.completedAt) marks.completedAt = Date.now()
+  if (taskID && temp.home) {
+    await writeBenchmarkState(temp.home, {
+      taskID, homeDir: temp.home, projectDir: temp.dir, executor,
+      status: "failed", error: error instanceof Error ? error.message : String(error),
+      startedAt: marks.startedAt, updatedAt: Date.now(),
+    })
+  }
   const out = await buildBenchmarkReport(error)
   await flushed
   await Bun.write(eventFile, JSON.stringify({
@@ -1617,7 +1704,7 @@ async function launchBrowser() {
   return puppeteer.launch({
     executablePath,
     headless: false,
-    userDataDir: mkdtempSync(path.join(os.tmpdir(), "pptr-overlay-web-benchmark-")),
+    userDataDir: mkdtempSync(path.join(REPO_TMP, "pptr-overlay-web-benchmark-")),
     args: [
       "--no-sandbox",
       "--no-first-run",
