@@ -439,6 +439,17 @@ export namespace BuildAgent {
                           "merge_back again.",
                       }
                     }
+                    const mergeFailure = Worktree.mergeFailureDetail(err)
+                    if (mergeFailure) {
+                      const output = {
+                        status: "error" as const,
+                        reason: mergeFailure.reason,
+                        branch: mergeFailure.branch,
+                        ...(mergeFailure.stderr ? { stderr: mergeFailure.stderr } : {}),
+                      }
+                      lastMergeBackOutcome = `error on ${mergeFailure.branch}: ${mergeFailure.reason}`
+                      return output
+                    }
                     const reason = err instanceof Error ? err.message : String(err)
                     lastMergeBackOutcome = `error: ${reason}`
                     return {
@@ -1291,6 +1302,43 @@ async function runWithExternalProvider(args: {
           error:
             `Rebase aborted onto ${primaryBranch} (tip ${primaryTip.slice(0, 12)}); ` +
             `conflict paths: ${pathList}`,
+        },
+      }
+    }
+    const mergeFailure = Worktree.mergeFailureDetail(err)
+    if (mergeFailure) {
+      const output = {
+        status: "error" as const,
+        reason: mergeFailure.reason,
+        branch: mergeFailure.branch,
+        ...(mergeFailure.stderr ? { stderr: mergeFailure.stderr } : {}),
+      }
+      await Session.updatePart({
+        id: mergePartID,
+        sessionID: session.id,
+        messageID: assistantMessageID,
+        type: "tool",
+        tool: "merge_back",
+        callID: mergeCallID,
+        state: {
+          status: "completed",
+          input: mergeInput,
+          output: JSON.stringify(output, null, 2),
+          title: `error ${args.worktreeBranch}`,
+          metadata: mergeMetadata,
+          time: { start: mergeStarted, end: Date.now() },
+        },
+        metadata: mergeMetadata,
+      })
+      return {
+        sessionID: session.id,
+        structured: {
+          status: "failed" as const,
+          commit_ref: "",
+          summary: `merge_back returned status=error for ${args.worktreeBranch}: ${mergeFailure.reason}`,
+          patch_summary: "",
+          tests: [],
+          error: mergeFailure.reason,
         },
       }
     }

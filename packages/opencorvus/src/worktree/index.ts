@@ -60,6 +60,16 @@ export namespace Worktree {
     }),
   )
 
+  export function mergeFailureDetail(err: unknown): { reason: string; branch: string; stderr?: string } | undefined {
+    if (!MergeFailedError.isInstance(err)) return undefined
+    const { message, branch, stderr } = err.data
+    return {
+      reason: message,
+      branch,
+      ...(stderr ? { stderr } : {}),
+    }
+  }
+
   /**
    * Surfaced when `git rebase` against the primary branch hit textual conflicts
    * inside files. The rebase has been aborted before the throw, so the worktree
