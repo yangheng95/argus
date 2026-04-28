@@ -332,6 +332,28 @@ function* notification(threadID: string, turnID: string, method: string, params?
     return
   }
 
+  // Codex 0.125 in app-server protocol delivers tool-call lifecycle as
+  // OpenAI raw response items inside `rawResponseItem/completed`
+  // notifications. Log the inner item shape so we can decide whether the
+  // tool_call/tool_result pair must be decoded from `function_call` /
+  // `function_call_output` / `local_shell_call` ResponseItem variants.
+  // See codex `app-server generate-ts` ResponseItem.
+  if (method === "rawResponseItem/completed") {
+    const item = record(data.item)
+    if (item) {
+      log.info("codex rawResponseItem", {
+        type: typeof item.type === "string" ? item.type : "(unknown)",
+        callID: typeof item.call_id === "string" ? item.call_id : undefined,
+        name: typeof item.name === "string" ? item.name : undefined,
+        status: typeof item.status === "string" ? item.status : undefined,
+        itemJSON: JSON.stringify(item).slice(0, 2000),
+      })
+    }
+    // Do not yield yet — diagnostic only. Once we know the variants codex
+    // 0.125 uses for Bash and similar, add a proper decoder here.
+    return
+  }
+
   // Pair a `tool_call` event with the `tool_result` that lands on
   // `item/completed`. Codex 0.125 emits `item/started` for command/file
   // change/MCP tool items before they execute (no prior approval JSON-RPC
@@ -345,8 +367,18 @@ function* notification(threadID: string, turnID: string, method: string, params?
   // `tools` map.
   if (method === "item/started") {
     const item = record(data.item)
-    if (!item) return
+    if (!item) {
+      log.info("codex item/started missing item field", { method, paramKeys: Object.keys(data) })
+      return
+    }
     const type = typeof item.type === "string" ? item.type : ""
+    log.info("codex item/started", {
+      type,
+      itemId: typeof item.id === "string" ? item.id : undefined,
+      tool: typeof item.tool === "string" ? item.tool : undefined,
+      command: typeof item.command === "string" ? item.command.slice(0, 200) : undefined,
+      itemJSON: JSON.stringify(item).slice(0, 1500),
+    })
     if (type === "commandExecution" || type === "fileChange" || type === "mcpToolCall") {
       const itemId = typeof item.id === "string" ? item.id : currentTurn
       const toolName = type === "commandExecution" ? "Bash"
@@ -367,6 +399,13 @@ function* notification(threadID: string, turnID: string, method: string, params?
   if (method === "item/completed") {
     const item = record(data.item)
     if (!item) return
+    log.info("codex item/completed", {
+      type: typeof item.type === "string" ? item.type : "(unknown)",
+      itemId: typeof item.id === "string" ? item.id : undefined,
+      status: typeof item.status === "string" ? item.status : undefined,
+      itemJSON: JSON.stringify(item).slice(0, 1500),
+    })
+    void item
     const type = typeof item.type === "string" ? item.type : ""
     if (type === "dynamicToolCall") {
       const itemID = typeof item.id === "string" ? item.id : currentTurn
