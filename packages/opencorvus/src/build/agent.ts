@@ -807,13 +807,35 @@ function externalQuestions(event: Extract<CodingEventInfo, { type: "input_reques
     requested_schema: event.meta?.requested_schema,
   }]
   return raw.map((item, index) => {
-    const options = requestedSchemaOptions(item)
+    // Codex 0.125 elicitations (e.g. mcp_tool_call_approval) carry the choice
+    // set inline as `options: [{label,description}, ...]`. Older protocols
+    // (and ACP-style elicitations) put choices under a JSON-Schema enum at
+    // `requested_schema.properties.*.enum`. The bypass flag does NOT cover
+    // these elicitations as of codex-cli 0.125, so the host MUST surface a
+    // real options list — otherwise the auto-reply machinery falls back to
+    // free text, codex treats it as Cancel, the MCP tool never produces a
+    // tool_result, and the build agent fails with "tool_call ... ended
+    // without a matching tool_result". Inline options take precedence.
+    const options = inlineOptions(item).length > 0 ? inlineOptions(item) : requestedSchemaOptions(item)
     return {
       header: stringField(item.header) || stringField(item.id) || `Input ${index + 1}`,
       question: stringField(item.question) || stringField(item.message) || "Additional input required",
       options,
       custom: options.length === 0,
     }
+  })
+}
+
+function inlineOptions(question: Record<string, unknown>): Question.Option[] {
+  const list = Array.isArray(question.options) ? question.options : []
+  return list.flatMap((entry) => {
+    if (typeof entry === "string" && entry) return [{ label: entry, description: entry }]
+    const next = record(entry)
+    if (!next) return []
+    const label = stringField(next.label) || stringField(next.value) || stringField(next.id)
+    if (!label) return []
+    const description = stringField(next.description) || stringField(next.detail) || label
+    return [{ label, description }]
   })
 }
 

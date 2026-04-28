@@ -1834,6 +1834,51 @@ async function verifyResume(
   return next
 }
 
+// Pick a non-cancel option label, preferring the longest-living approval
+// ("Allow for this session") so subsequent same-tool calls don't re-prompt.
+// Mirrors codex's mcp_tool_call_approval option set
+// {Allow, Allow for this session, Cancel} — confirmed via
+// `codex app-server generate-ts` output (v2/ToolRequestUserInputOption).
+function pickOptionLabel(options: Array<{ label?: unknown }>): string | undefined {
+  const labels = options
+    .map((opt) => (typeof opt?.label === "string" ? opt.label.trim() : ""))
+    .filter((label): label is string => label.length > 0)
+  if (labels.length === 0) return undefined
+  const allowed = labels.filter((label) => !/^(cancel|reject|deny|no|stop|abort|decline)$/i.test(label))
+  if (allowed.length === 0) return labels[0]
+  const session = allowed.find((label) => /for this session|always/i.test(label))
+  return session ?? allowed[0]
+}
+
+// Build a ToolRequestUserInputResponse-shaped answers map for a question
+// interaction whose questions carry inline options (codex 0.125 elicitations
+// like mcp_tool_call_approval). Returns undefined when the question is a
+// free-text one — caller falls back to AUTO_REPLY in that case.
+//
+// Authority: codex `app-server generate-ts` v2/ToolRequestUserInputResponse:
+//   { answers: { [questionId: string]?: { answers: string[] } } }
+// The server's interaction reply path forwards `answers` through to
+// Question.reply → externalAnswerContent → inputResponse, which re-wraps
+// the same shape into the JSON-RPC reply codex consumes.
+function pickOptionAnswers(item: { payload?: unknown }): Record<string, string[]> | undefined {
+  const payload = item.payload && typeof item.payload === "object" ? (item.payload as { questions?: unknown }) : undefined
+  const questions = Array.isArray(payload?.questions) ? payload.questions : []
+  if (questions.length === 0) return undefined
+  const out: Record<string, string[]> = {}
+  for (const raw of questions) {
+    if (!raw || typeof raw !== "object") return undefined
+    const q = raw as { id?: unknown; header?: unknown; options?: unknown }
+    const options = Array.isArray(q.options) ? (q.options as Array<{ label?: unknown }>) : []
+    if (options.length === 0) return undefined  // free-text — caller falls back to AUTO_REPLY
+    const label = pickOptionLabel(options)
+    if (!label) return undefined
+    const key = typeof q.id === "string" && q.id ? q.id : typeof q.header === "string" && q.header ? q.header : undefined
+    if (!key) return undefined
+    out[key] = [label]
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
 async function settle(progress: any, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
   const pending = Array.isArray(progress?.pendingInteractions)
     ? progress.pendingInteractions.filter((item: { status: string }) => item.status === "pending")
@@ -1850,10 +1895,26 @@ async function settle(progress: any, api: (pathname: string, init?: RequestInit)
       })
       continue
     }
-    // Question / other interactions: the server falls back to
-    // `answersFromMessage(message)` when `answers` isn't provided. The
-    // benchmark has no way to know the question set ahead of time, so we
-    // ship AUTO_REPLY as the message and let the server split it evenly.
+    // Question interactions with fixed options (e.g. codex 0.125 emits
+    // `mcp_tool_call_approval` elicitations with
+    // `options: [{label:"Allow"},{label:"Allow for this session"},{label:"Cancel"}]`).
+    // Free-text AUTO_REPLY falls outside the option set — codex treats
+    // unrecognized text as Cancel and the MCP tool never produces a
+    // tool_result, surfacing as `tool_call ... ended without a matching
+    // tool_result` in the build agent. Caught on _session-20260429-002531.out.
+    // Send a structured answers map so the server's interaction reply path
+    // forwards a real label back to codex.
+    const answers = pickOptionAnswers(item)
+    if (answers) {
+      await api(`/interaction/${item.id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoReply: true, answers }),
+      })
+      continue
+    }
+    // Free-text question: server falls back to `answersFromMessage(message)`
+    // when `answers` isn't provided.
     await api(`/interaction/${item.id}/reply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

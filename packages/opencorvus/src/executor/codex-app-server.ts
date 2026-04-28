@@ -332,6 +332,38 @@ function* notification(threadID: string, turnID: string, method: string, params?
     return
   }
 
+  // Pair a `tool_call` event with the `tool_result` that lands on
+  // `item/completed`. Codex 0.125 emits `item/started` for command/file
+  // change/MCP tool items before they execute (no prior approval JSON-RPC
+  // request when the bypass flag is on), and goes straight to
+  // `item/completed` with status=completed afterwards. Without an explicit
+  // `item/started` handler we used to emit only the tool_result, so the
+  // build agent flagged it as `tool_result ... arrived without a prior
+  // tool_call`. The id MUST match what the matching `item/completed` will
+  // use (see the commandExecution / fileChange / mcpToolCall branch below)
+  // so the tool_call/tool_result pair correlates inside build/agent.ts
+  // `tools` map.
+  if (method === "item/started") {
+    const item = record(data.item)
+    if (!item) return
+    const type = typeof item.type === "string" ? item.type : ""
+    if (type === "commandExecution" || type === "fileChange" || type === "mcpToolCall") {
+      const itemId = typeof item.id === "string" ? item.id : currentTurn
+      const toolName = type === "commandExecution" ? "Bash"
+        : type === "fileChange" ? "FileEdit"
+        : String(item.tool || "MCP")
+      const cmd = type === "commandExecution" ? text(item.command ?? item.args?.[0] ?? "") : ""
+      yield {
+        type: "tool_call",
+        id: itemId,
+        name: toolName,
+        input: cmd || (codingInput(item.arguments ?? item.input) ?? JSON.stringify(item)),
+        meta: { thread_id: currentThread, turn_id: currentTurn, item_id: itemId, item_type: type },
+      }
+    }
+    return
+  }
+
   if (method === "item/completed") {
     const item = record(data.item)
     if (!item) return
@@ -359,34 +391,29 @@ function* notification(threadID: string, turnID: string, method: string, params?
       return
     }
     if (type === "commandExecution" || type === "fileChange" || type === "mcpToolCall") {
+      // The matching `tool_call` was emitted on `item/started` above. Here
+      // we only ever emit the `tool_result` that closes the lifecycle. The
+      // id must equal the started-event itemId so build/agent.ts's `tools`
+      // map matches the pair. Codex 0.125's bypass-flag dispatch can land
+      // `item/completed` with status="completed" almost immediately after
+      // `item/started`, which is fine: both events still flow through the
+      // same handler in order.
       const itemId = typeof item.id === "string" ? item.id : currentTurn
       const toolName = type === "commandExecution" ? "Bash"
         : type === "fileChange" ? "FileEdit"
         : String(item.tool || "MCP")
       const cmd = type === "commandExecution" ? text(item.command ?? item.args?.[0] ?? "") : ""
       const output = text(item.output ?? item.contentItems ?? item.content ?? "")
-      const status = typeof item.status === "string" ? item.status : ""
-      const isDone = status === "completed" || status === "done" || !!output
-      if (isDone) {
-        const input: string | Record<string, unknown> = type === "commandExecution"
-          ? { command: cmd }
-          : codingInput(item.arguments ?? item.input) ?? item
-        yield {
-          type: "tool_result" as const,
-          id: itemId,
-          name: toolName,
-          input,
-          output: output || cmd || `${toolName} completed`,
-          meta: { thread_id: currentThread, turn_id: currentTurn, item_id: itemId, item_type: type },
-        }
-      } else {
-        yield {
-          type: "tool_call" as const,
-          id: itemId,
-          name: toolName,
-          input: cmd || JSON.stringify(item),
-          meta: { thread_id: currentThread, turn_id: currentTurn, item_id: itemId, item_type: type },
-        }
+      const input: string | Record<string, unknown> = type === "commandExecution"
+        ? { command: cmd }
+        : codingInput(item.arguments ?? item.input) ?? item
+      yield {
+        type: "tool_result" as const,
+        id: itemId,
+        name: toolName,
+        input,
+        output: output || cmd || `${toolName} completed`,
+        meta: { thread_id: currentThread, turn_id: currentTurn, item_id: itemId, item_type: type },
       }
       return
     }
