@@ -27339,41 +27339,6 @@
           }
         ]
       },
-      "FileDiff": {
-        "type": "object",
-        "properties": {
-          "file": {
-            "type": "string"
-          },
-          "before": {
-            "type": "string"
-          },
-          "after": {
-            "type": "string"
-          },
-          "additions": {
-            "type": "number"
-          },
-          "deletions": {
-            "type": "number"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "added",
-              "deleted",
-              "modified"
-            ]
-          }
-        },
-        "required": [
-          "file",
-          "before",
-          "after",
-          "additions",
-          "deletions"
-        ]
-      },
       "UserMessage": {
         "type": "object",
         "properties": {
@@ -27409,17 +27374,8 @@
               },
               "body": {
                 "type": "string"
-              },
-              "diffs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
               }
-            },
-            "required": [
-              "diffs"
-            ]
+            }
           },
           "agent": {
             "type": "string"
@@ -29356,11 +29312,35 @@
             "properties": {
               "type": {
                 "type": "string",
-                "const": "busy"
+                "const": "streaming"
               }
             },
             "required": [
               "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "terminal"
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "completed",
+                  "error",
+                  "aborted"
+                ]
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "reason"
             ]
           }
         ]
@@ -30116,12 +30096,6 @@
               },
               "files": {
                 "type": "number"
-              },
-              "diffs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
               }
             },
             "required": [
@@ -30305,6 +30279,41 @@
         "required": [
           "type",
           "properties"
+        ]
+      },
+      "FileDiff": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "before": {
+            "type": "string"
+          },
+          "after": {
+            "type": "string"
+          },
+          "additions": {
+            "type": "number"
+          },
+          "deletions": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "added",
+              "deleted",
+              "modified"
+            ]
+          }
+        },
+        "required": [
+          "file",
+          "before",
+          "after",
+          "additions",
+          "deletions"
         ]
       },
       "Event.session.diff": {
@@ -32717,7 +32726,7 @@
                 "type": "boolean"
               },
               "auto_question": {
-                "description": "Auto-reject unanswered question interactions after the stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
+                "description": "Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
                 "default": true,
                 "type": "boolean"
               },
@@ -33429,12 +33438,6 @@
               },
               "files": {
                 "type": "number"
-              },
-              "diffs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
               }
             },
             "required": [

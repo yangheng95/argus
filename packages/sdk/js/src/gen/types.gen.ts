@@ -501,15 +501,6 @@ export type OutputFormatJsonSchema = {
 
 export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
 
-export type FileDiff = {
-  file: string
-  before: string
-  after: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
-}
-
 export type UserMessage = {
   id: string
   sessionID: string
@@ -521,7 +512,6 @@ export type UserMessage = {
   summary?: {
     title?: string
     body?: string
-    diffs: Array<FileDiff>
   }
   agent: string
   model: {
@@ -1087,7 +1077,12 @@ export type SessionStatus =
       next: number
     }
   | {
-      type: "busy"
+      type: "streaming"
+    }
+  | {
+      type: "terminal"
+      reason: "completed" | "error" | "aborted"
+      error?: string
     }
 
 export type EventSessionStatus = {
@@ -1347,7 +1342,6 @@ export type Session = {
     additions: number
     deletions: number
     files: number
-    diffs?: Array<FileDiff>
   }
   share?: {
     url: string
@@ -1409,6 +1403,15 @@ export type EventSessionDeleted = {
   properties: {
     info: Session
   }
+}
+
+export type FileDiff = {
+  file: string
+  before: string
+  after: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
 }
 
 export type EventSessionDiff = {
@@ -2649,7 +2652,7 @@ export type Config = {
      */
     auto_permission?: boolean
     /**
-     * Auto-reject unanswered question interactions after the stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
+     * Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
      */
     auto_question?: boolean
     /**
@@ -2876,7 +2879,6 @@ export type GlobalSession = {
     additions: number
     deletions: number
     files: number
-    diffs?: Array<FileDiff>
   }
   share?: {
     url: string

@@ -27,7 +27,7 @@ export namespace SessionPromptState {
   )
 
   export function assertNotBusy(sessionID: string) {
-    if (SessionStatus.get(sessionID).type === "busy") throw new Session.BusyError(sessionID)
+    if (SessionStatus.get(sessionID).type === "streaming") throw new Session.BusyError(sessionID)
   }
 
   export function start(sessionID: string) {
@@ -53,7 +53,7 @@ export namespace SessionPromptState {
     const s = state()
     const match = s[sessionID]
     if (!match) {
-      SessionStatus.set(sessionID, { type: "idle" })
+      SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" })
       return
     }
     match.abort.abort()
@@ -65,7 +65,7 @@ export namespace SessionPromptState {
     }
     match.callbacks = []
     delete s[sessionID]
-    SessionStatus.set(sessionID, { type: "idle" })
+    SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" })
     return
   }
 

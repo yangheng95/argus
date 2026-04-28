@@ -549,7 +549,8 @@ export const RunCommand = cmd({
           if (
             event.type === "session.status" &&
             event.properties.sessionID === sessionID &&
-            event.properties.status.type === "idle"
+            (event.properties.status.type === "idle" ||
+              event.properties.status.type === "terminal")
           ) {
             break
           }
