@@ -682,15 +682,8 @@ export type TextPart = {
   messageID: string
   type: "text"
   text: string
-  synthetic?: boolean
-  ignored?: boolean
   kind?: "user_content" | "control" | "context"
   source?: "user" | "system" | "evaluator" | "planner" | "goal_gate" | "task_tool"
-  audience?: {
-    model?: boolean
-    ui?: boolean
-    acp?: boolean
-  }
   time?: {
     start: number
     end?: number
@@ -2931,15 +2924,8 @@ export type TextPartInput = {
   id?: string
   type: "text"
   text: string
-  synthetic?: boolean
-  ignored?: boolean
   kind?: "user_content" | "control" | "context"
   source?: "user" | "system" | "evaluator" | "planner" | "goal_gate" | "task_tool"
-  audience?: {
-    model?: boolean
-    ui?: boolean
-    acp?: boolean
-  }
   time?: {
     start: number
     end?: number

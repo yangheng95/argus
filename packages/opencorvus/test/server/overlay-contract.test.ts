@@ -124,9 +124,9 @@ describe("overlay contract", () => {
           }
         }
 
-        // direct workflow specifically — build → deliver
+        // direct workflow specifically — optional intent check, then build → deliver
         const direct = list.find((w) => w.id === "direct")!
-        expect(direct.steps.map((s) => s.id)).toEqual(["build", "deliver"])
+        expect(direct.steps.map((s) => s.id)).toEqual(["analyze_intent", "build", "deliver"])
 
         // pipeline workflow — has goal-scope build step
         const pipeline = list.find((w) => w.id === "pipeline")!
@@ -137,7 +137,7 @@ describe("overlay contract", () => {
     })
   })
 
-  test("EngineConfig defaults workflow to pipeline (board fallback path)", async () => {
+  test("EngineConfig defaults workflow to pipeline (board default path)", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,

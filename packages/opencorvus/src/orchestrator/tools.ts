@@ -39,10 +39,12 @@ import {
   findActiveSpecForTask,
   findDeliveryByRun,
   findEvaluationByRun,
+  findLatestDeliveryVerdictArtifact,
   findPlan,
   listGoals,
   requireRun,
   requireTask,
+  type TaskRow,
 } from "@/engine/store"
 import { effectiveMaxFixRuns } from "@/engine/helpers"
 import { goalStatusByID } from "@/engine/describe"
@@ -182,12 +184,28 @@ export function createOrchestratorTools(input: {
     return reason
   }
 
-  async function switchPreExecutionPipelineBuildToDirectWorkflow(attachedGoalID?: string): Promise<void> {
+  function taskLevelBuildEligibility(task: TaskRow): { allowed: true } | { allowed: false; reason: string } {
+    if (task.kind === "build") return { allowed: true }
+    const latestDelivery = findLatestDeliveryVerdictArtifact(task.id)
+    const latestPayload = (latestDelivery?.payload ?? {}) as Record<string, unknown>
+    if (latestPayload.verdict === "rejected") return { allowed: true }
+    return {
+      allowed: false,
+      reason:
+        "task-level build without goalID is only valid for explicit kind=build tasks " +
+        "or whole-task rework after a rejected delivery verdict. This task is kind=workflow " +
+        "and has not reached a rejected delivery cycle; continue through requirements, " +
+        "architect, and per-goal build({ goalID }) instead.",
+    }
+  }
+
+  async function switchExplicitBuildTaskToDirectWorkflow(attachedGoalID?: string): Promise<void> {
     if (attachedGoalID) return
     if (!input.workflowState) return
     if (input.workflow?.id !== "pipeline") return
 
     const task = requireTask(taskID)
+    if (task.kind !== "build") return
     if (findActivePlanForTask(task.id) || findActiveRunForTask(task.id)) return
     if (listGoals(taskID).length > 0) return
 
@@ -199,11 +217,9 @@ export function createOrchestratorTools(input: {
     input.workflowState = nextState
 
     // Phase-6-f-3-bis-b: workflow selection is no longer persisted on
-    // engine_task. The next wake recomputes the same eligibility test
-    // from DB state and will arrive at the direct workflow again
-    // deterministically. We still emit the event so the overlay UI
-    // reflects the current choice live. `task` param is retained only
-    // for logging context.
+    // engine_task. Explicit kind=build tasks resolve to the direct workflow
+    // on each wake, so this in-memory switch only keeps the current prompt
+    // and overlay event aligned when a custom default started as pipeline.
     void task
     EngineProtocol.emit(EngineEvent.WorkflowSelected, {
       taskID,
@@ -2389,8 +2405,8 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // Direct-workflow fallback: when the orchestrator took the `direct`
-        // path (build → deliver, no per-goal dispatch), there are zero
+        // Direct-workflow material collection: when the task is explicit
+        // kind=build (build → deliver, no per-goal dispatch), there are zero
         // goal_runs and therefore zero aggregated diffs — but the build
         // agent still wrote files to the main worktree. Without material
         // here the delivery agent sees an empty workspace and rubber-stamps
@@ -3644,10 +3660,12 @@ export function createOrchestratorTools(input: {
 
     build: tool({
       description:
-        "Direct-path implementer. Runs the build agent (read / write / edit / bash) in-process to apply " +
-        "the requested change. USE WHEN: single-file edit, bug fix, small refactor in place, typo/comment " +
-        "fix, config tweak, short debug-and-fix, lookup-and-edit. NO requirements, NO goals, NO architect — " +
-        "build does the work end-to-end. " +
+        "Implementation dispatcher. Runs the build agent (read / write / edit / bash) in-process to apply " +
+        "one scoped change. Two valid shapes exist. `build({ goalID, request })` is the normal workflow " +
+        "shape after architect has registered goals. `build({ request })` without goalID is valid only " +
+        "when the task itself is explicit `kind=build`, or after a rejected delivery verdict when the " +
+        "whole integrated tree needs rework. Fresh `kind=workflow` tasks MUST go through requirements / " +
+        "architect before build, even if the request looks simple. " +
         "After build returns, you MUST call `deliver` next: build does NOT auto-complete the task; the only " +
         "way to mark a task accepted is through delivery's adversarial verification. Build → deliver loops " +
         "until Arbiter accepts (or hits stalled/abort). On rejection, call build again with " +
@@ -3659,12 +3677,12 @@ export function createOrchestratorTools(input: {
         request: z
           .string()
           .describe(
-            "The prompt to feed the build agent. On the first call this is usually the user's original request verbatim. On rework calls (after delivery rejection), include the user's request PLUS a concise summary of the rejection_details the build agent must address.",
+            "The prompt to feed the build agent. For kind=build tasks this can be the user's original request. For workflow rework calls, include the user's request PLUS a concise summary of the rejected delivery details the build agent must address.",
           ),
         reason: z
           .string()
           .describe(
-            "One sentence explaining why this qualifies as a direct build (not pipeline) task. Shown in the Route Decision card.",
+            "One sentence explaining why this build is valid now: either explicit kind=build, per-goal pipeline execution, or post-delivery whole-task rework.",
           ),
         goalID: z
           .string()
@@ -3685,7 +3703,16 @@ export function createOrchestratorTools(input: {
         const isTaskLevelBuild = !attachedGoalID
 
         if (isTaskLevelBuild) {
-          await switchPreExecutionPipelineBuildToDirectWorkflow(attachedGoalID)
+          const eligibility = taskLevelBuildEligibility(task)
+          if (!eligibility.allowed) {
+            log.warn("build: task-level build rejected by task kind contract", {
+              taskID,
+              taskKind: task.kind,
+              reason: eligibility.reason,
+            })
+            return `build: rejected task-level build. ${eligibility.reason}`
+          }
+          await switchExplicitBuildTaskToDirectWorkflow(attachedGoalID)
           await trackStepStart("build")
         }
 
