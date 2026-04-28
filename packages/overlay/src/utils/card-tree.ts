@@ -169,6 +169,15 @@ export function collectCardText(node: CardNode): string {
 
 interface LatestHit { time: number; index: number; text: string }
 
+// Internal-only tools whose tool name + state carry no operator-visible
+// signal. StructuredOutput is the Zod-call wrapper used for decompose /
+// architect; surfacing it as preview text produces "⚡ StructuredOutput:
+// Structured Output" — pure noise. Suppressed alongside TODO tools.
+const PREVIEW_SUPPRESS_TOOLS = new Set([
+  "structuredoutput",
+  "structured_output",
+]);
+
 function toolHitText(part: any): string {
   if (!part || part.type !== "tool") return "";
   const name = String(part.tool || "").trim();
@@ -177,6 +186,7 @@ function toolHitText(part: any): string {
   // Todo tools own a dedicated UI row; surfacing them here would steal
   // attention from the actual work that happened around the plan.
   if (TODO_TOOLS.has(key)) return "";
+  if (PREVIEW_SUPPRESS_TOOLS.has(key)) return "";
   const state = part.state || {};
   const icon = displayToolIcon(name);
   const detail = displayToolDetail(name, state.input, state, "");
@@ -184,10 +194,15 @@ function toolHitText(part: any): string {
   return detail ? `${head}: ${detail}` : head;
 }
 
-function gatherLatest(node: CardNode, hits: LatestHit[]): void {
+// Goal step cards (kind="step") want a different preview policy: the
+// operator scanning a goal needs the goal context (objective / latest
+// reasoning), not "Bash: rg --files". Tool calls are visible inside the
+// expanded card body — the collapsed line should answer "what is this
+// goal trying to do" rather than "what command is currently running".
+function gatherLatest(node: CardNode, hits: LatestHit[], suppressTools: boolean): void {
   if (!node) return;
   const baseTime = typeof node.time === "number" ? node.time : 0;
-  if (node.kind === "tool" && node.toolPart) {
+  if (!suppressTools && node.kind === "tool" && node.toolPart) {
     const toolText = toolHitText(node.toolPart);
     if (toolText) hits.push({ time: baseTime, index: 0, text: toolText });
   }
@@ -199,22 +214,24 @@ function gatherLatest(node: CardNode, hits: LatestHit[]): void {
       hits.push({ time: baseTime, index: i, text });
       continue;
     }
+    if (suppressTools) continue;
     const toolText = toolHitText(part);
     if (toolText) hits.push({ time: baseTime, index: i, text: toolText });
   }
   for (const cid of node.childIDs || []) {
     const child = cardTreeStore.cards[cid];
-    if (child) gatherLatest(child as unknown as CardNode, hits);
+    if (child) gatherLatest(child as unknown as CardNode, hits, suppressTools);
   }
   for (const child of node.children || []) {
-    gatherLatest(child, hits);
+    gatherLatest(child, hits, suppressTools);
   }
 }
 
 export function collectLatestActivityText(node: CardNode): string {
   if (!node) return "";
+  const suppressTools = node.kind === "step";
   const hits: LatestHit[] = [];
-  gatherLatest(node, hits);
+  gatherLatest(node, hits, suppressTools);
   if (hits.length === 0) {
     if (node.kind === "step" && node.goalDescription) {
       return String(node.goalDescription).trim();
