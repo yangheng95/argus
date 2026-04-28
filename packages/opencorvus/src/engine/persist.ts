@@ -654,10 +654,8 @@ export function startNewAttempt(input: {
   }
   // Event sourcing: the goal_run row itself IS the event — tip's
   // superseded_reason column + superseded_at timestamp is the persistent
-  // log of "a new attempt opened under reason X at time T." Loop-side
-  // consumers track offset via `lastReworkSeenAt` and query via
-  // `findRecentDeliveryRejection`. No separate Bus event needed; an in-memory
-  // pub/sub would only duplicate what the goal_run chain already records.
+  // log of "a new attempt opened under reason X at time T." The orchestrator
+  // reads it on the next decision turn via describe; no Bus event needed.
   syncGoalStatus(input.goalID, `startNewAttempt:${input.reason}`)
   return { supersededTipID, resetWorkspace }
 }
@@ -1354,7 +1352,7 @@ export function deleteGoal(goalID: string) {
  *
  * Without this, build agents return passed but no one writes the
  * outcome — every subsequent orchestrator wake reads `goals: pending`
- * and re-dispatches build, infinite loop until MAX_TASK_ITERATIONS.
+ * and re-dispatches build, burning decision turns indefinitely.
  *
  * Per rule 23 the LLM still owns the *decision* on what to do with the
  * outcome (call deliver, retry, fail_task). This helper only persists
@@ -1651,13 +1649,10 @@ export function recordProsecutorAttempt(input: {
  * Used when the orchestrator's own LLM stream aborts mid-decision (provider
  * onError, stream-idle watchdog, mid-stream protocol violation). Per rule 23
  * we do NOT transition the task to terminal `failed` on a transient stream
- * error — that's a state-machine reaction the orchestrator should make
- * itself on the next decision turn after reading the artifact via describe.
- *
- * The orchestrator-loop watches for this artifact via
- * `findRecentOrchestratorStreamError` and synthesises a re-wake event with
- * the structured retry note, mirroring the delivery-rejection auto-rewake
- * pattern. `MAX_TASK_ITERATIONS` (default 50) is the runaway guard.
+ * error and we do NOT auto-rewake from this artifact — both would be
+ * state-machine reactions. The orchestrator reads the artifact via describe
+ * on its next external wake and decides for itself whether to retry,
+ * restart_from_stage, or fail_task.
  */
 export function recordOrchestratorStreamError(input: {
   taskID: string

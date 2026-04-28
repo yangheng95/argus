@@ -344,13 +344,11 @@ export namespace Orchestrator {
 
       // Stream failures (mid-stream protocol violations, provider onError,
       // session-llm idle abort) are recorded as an append-only artifact.
-      // The orchestrator loop watches for this artifact and re-wakes the
-      // orchestrator with a structured retry note, identical to the
-      // delivery-rejection auto-rewake pattern. Per rule 23 we do NOT
-      // transition the task to `failed` here — the next decision turn lets
-      // the LLM read the abort fact via describe and decide itself
-      // (retry the same approach, restart from a stage, fail_task, or
-      // ask the operator). MAX_TASK_ITERATIONS is the runaway guard.
+      // Per rule 23 we do NOT transition the task to `failed` here AND we
+      // do NOT auto-rewake — both are state-machine reactions. The next
+      // external wake re-enters processTask; the LLM reads the abort fact
+      // via describe and decides itself (retry, restart_from_stage,
+      // fail_task, or ask the operator).
       if (streamErrors.length > 0) {
         const first = streamErrors[0]
         const reason = `${first?.errorName ?? "stream-error"}: ${first?.reason ?? "unknown"}`
@@ -447,50 +445,6 @@ export const OrchestratorEventNote = {
     return lines.join("\n")
   },
 
-  deliveryRejected(input: {
-    verdictSummary?: string
-    issues?: string[]
-    rejectionDetails?: Array<{ category?: string; file?: string; error?: string; suggestion?: string }>
-  }): string {
-    const issues = input.issues ?? []
-    const details = input.rejectionDetails ?? []
-    const lines: string[] = [
-      "## DELIVERY REJECTED — passed goals auto-reset to pending",
-      "",
-      "The delivery agent (adversarial evaluator) rejected the integrated deliverable.",
-      "Every passed goal in this task has been opened under a fresh attempt (superseded_reason=delivery_rework).",
-      "The dispatch loop will re-execute them under the SAME contract unless you intervene.",
-      "",
-      `**Summary**: ${input.verdictSummary ?? "No summary"}`,
-      "",
-      `**Issues found** (${issues.length}):`,
-      ...issues.map((issue) => `  - ${issue}`),
-    ]
-    if (details.length > 0) {
-      lines.push("", "**Structured rejection details**:")
-      for (const d of details) {
-        const filePart = d.file ? ` [${d.file}]` : ""
-        const sugPart = d.suggestion ? ` → Suggested: ${d.suggestion}` : ""
-        lines.push(`  - [${d.category ?? "unknown"}]${filePart}: ${d.error ?? "no description"}${sugPart}`)
-      }
-    }
-    lines.push(
-      "",
-      "## STRATEGY DECISION",
-      "",
-      "- **Contract is fine** → do nothing; the loop redispatches under the same contract.",
-      "- **Contract gap** → modify_goal (acceptance_specs, owned_paths) on affected goals.",
-      "- **Structural gap** → re-run architect to refine the goal set, then integrity to confirm coverage + feasibility.",
-      "- **Same goal-set rejected twice** → re-run architect to regenerate goals, then integrity.",
-      "- **Coverage drift (rejection cites requirements that are not in any goal)** → call integrity directly; it will re-upsert the corrected goal set against the same spec snapshot without a full architect re-run.",
-      "- **Hallucination flagged by integrity (ungrounded REQs / fabricated specs)** → restart_from_stage upstream (requirements / design_analysis) — DO NOT just edit goals; the goal layer cannot fix bad upstream input.",
-      "- **Requirements themselves wrong** → restart_from_stage('requirements').",
-      "",
-      "Focus on the SPECIFIC issues. Do NOT rework everything blindly.",
-    )
-    return lines.join("\n")
-  },
-
   operatorMessage(input: { text: string; attachmentSummary?: string }): string {
     const lines: string[] = [
       "Operator message received.",
@@ -510,60 +464,6 @@ export const OrchestratorEventNote = {
 
   retry(task: TaskRow): string {
     return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
-  },
-
-  /**
-   * Re-wake note synthesised after an orchestrator stream-error artifact is
-   * detected. The previous decision turn aborted (idle / provider onError);
-   * the next turn should re-read the session + describe snapshot and decide
-   * autonomously whether to retry the same approach, restart from a stage,
-   * or fail_task. We deliberately do NOT prescribe a retry — that would
-   * be a state-machine reaction in prose form. Per rule 23 the LLM owns
-   * the recovery decision.
-   */
-  streamErrorRetry(input: { reason: string; sessionID?: string }): string {
-    const lines: string[] = [
-      "## Previous decision turn aborted (LLM stream error)",
-      "",
-      `Reason: ${input.reason}`,
-    ]
-    if (input.sessionID) lines.push(`Aborted session: ${input.sessionID}`)
-    lines.push(
-      "",
-      "Re-read the session log + describe snapshot. The session should already contain whatever progress was achieved before the abort (completed tool calls land their tool_results regardless; a half-emitted assistant turn ends without one).",
-      "",
-      "Decide autonomously what to do next:",
-      "- If the previous turn looks recoverable (transient network hang, mid-thought interruption) → continue where you left off.",
-      "- If the same failure repeats across decisions → call `question` for operator input or `fail_task` with a clear reason; do not loop indefinitely.",
-      "- If a partial tool side-effect needs reconciling, address it before the next forward step.",
-    )
-    return lines.join("\n")
-  },
-
-  /**
-   * Re-wake note synthesised when a build batch has settled (one or more
-   * `goal_run_attempt` artifacts written) but the orchestrator's previous
-   * decision turn ended without dispatching `deliver`. Per the workflow
-   * contract `deliver` is mandatory after every build batch — without it
-   * the task can never reach an accepted terminal state. The previous
-   * turn's LLM either skipped the call (compliance drift) or stopped early
-   * because it dispatched a verification-kind goal as a build (verification
-   * goals belong to deliver, not build). Per rule 23 the LLM still decides
-   * what to call — this note just surfaces the fact and the consequence.
-   */
-  deliverPending(input: { settledGoalCount: number }): string {
-    return [
-      "## Build batch settled — `deliver` not yet called this iteration",
-      "",
-      `${input.settledGoalCount} goal_run_attempt artifact(s) landed since the last delivery verdict, ` +
-        `but no \`delivery-agent-verdict\` followed. The workflow contract makes \`deliver\` mandatory ` +
-        `after every build batch — passed builds are NOT terminal acceptance.`,
-      "",
-      "Read the current describe / read_context state and call `deliver` next. If you believe deliver " +
-        "is not appropriate (e.g. all goals failed and need rework first), make that decision explicitly " +
-        "via the relevant tool (modify_goal / build with feedback / fail_task) — silence is not an option, " +
-        "the loop will keep waking you on this signal.",
-    ].join("\n")
   },
 }
 
