@@ -95,6 +95,24 @@ describe("claude agent sdk options", () => {
     expect(systemPrompt?.append).toContain("webpage_analyze => mcp__opencorvus__webpage_analyze")
     expect(systemPrompt?.append).toContain("Do not create, copy, or handwrite")
   })
+
+  test("omits options.resume on a fresh run so Claude starts a new session", async () => {
+    // Regression: passing OpenCorvus logical IDs (ses_xxx) as `resume:` made
+    // the SDK reject the spawn with "is not a UUID and does not match any
+    // session title". A fresh run must not set resume at all.
+    await collect(
+      ClaudeAgentExecutor.createSdk().run({
+        prompt: "build",
+        cwd: "D:\\repo\\worktree",
+        sessionID: "ses_logical_fresh_run",
+      }),
+    )
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    expect(options).toBeDefined()
+    expect("resume" in (options ?? {})).toBe(false)
+  })
+
 })
 
 async function collect(input: AsyncIterable<unknown>) {
