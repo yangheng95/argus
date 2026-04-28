@@ -93,6 +93,21 @@ function codexProvider(command: string[]) {
         "app-server",
         "--listen",
         "stdio://",
+        // Disable MCP tool first-call elicitation: codex 0.125's stable
+        // `tool_call_mcp_elicitation` feature pops a "Allow MCP server X to
+        // run tool Y?" prompt the first time the model calls each MCP tool,
+        // which blocks unattended benchmark runs (caught on the
+        // 2026-04-28 codex post-fix run — build agent stalled on
+        // approving the `memory` tool). The opencorvus MCP server is
+        // owned by the host process, not a third-party server, so the
+        // elicitation has no security upside here. Pair it with
+        // `--disable guardian_approval` so codex's own command-execution
+        // Guardian also stays out of the loop — `approvalPolicy=never`
+        // already covers that intent at the app-server config layer.
+        "--disable",
+        "tool_call_mcp_elicitation",
+        "--disable",
+        "guardian_approval",
         "-c",
         `mcp_servers.${MCPServe.ServerName}.command="${mcp.command}"`,
         "-c",
