@@ -18,19 +18,23 @@ import { Bus } from "@/bus"
 import { PermissionNext } from "@/permission/next"
 import { Log } from "@/util/log"
 import { Config } from "@/config/config"
-import { activeRunBySession } from "./store"
+import { taskIDForSession } from "@/orchestrator/task-event"
+import { activeRunBySession, findActiveRunForTask } from "./store"
 
 const log = Log.create({ service: "engine.auto-permission" })
 
 async function handlePermissionAsked(request: PermissionNext.Request) {
   const cfg = await Config.get()
   if (cfg.experimental?.auto_permission !== true) return
-  const run = activeRunBySession(request.sessionID)
-  if (!run) return // not an orchestrator session
+  const directRun = activeRunBySession(request.sessionID)
+  const taskID = directRun?.task_id ?? taskIDForSession(request.sessionID)
+  if (!taskID) return
+  const run = directRun ?? findActiveRunForTask(taskID)
 
   log.info("auto-approving permission", {
     permissionID: request.id,
-    runID: run.id,
+    runID: run?.id,
+    taskID,
     permission: request.permission,
   })
 
