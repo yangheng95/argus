@@ -15,6 +15,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/event` | Subscribe to events | `event.subscribe` |
 | GET | `/global/config` | Get global configuration | `global.config.get` |
 | PATCH | `/global/config` | Update global configuration | `global.config.update` |
+| POST | `/global/db/reset` | Reset database | `global.db.reset` |
 | POST | `/global/dispose` | Dispose instance | `global.dispose` |
 | GET | `/global/event` | Get global events | `global.event` |
 | GET | `/global/health` | Get health | `global.health` |

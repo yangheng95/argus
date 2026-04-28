@@ -10,6 +10,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 import path from "path"
 import { mkdirSync } from "fs"
+import { rm } from "fs/promises"
 import * as schema from "./schema"
 import { SCHEMA_DDL } from "./ddl"
 
@@ -34,8 +35,13 @@ export namespace Database {
   // Path() is a function (not a const) so it resolves OPENCORVUS_HOME lazily.
   // Required for benchmark isolation — benchmarks set OPENCORVUS_HOME at runtime
   // after static imports have already completed.
+  // Default: cwd (project-local, mirrors Global.Path.config). OPENCORVUS_HOME
+  // explicit override still uses the portable Global.Path.data layout.
   export function Path() {
-    return path.join(Global.Path.data, "opencorvus.db")
+    if (process.env.OPENCORVUS_HOME?.trim()) {
+      return path.join(Global.Path.data, "opencorvus.db")
+    }
+    return path.join(process.cwd(), "opencorvus.db")
   }
   type Schema = typeof schema
   export type Transaction = SQLiteTransaction<"sync", void, Schema>
@@ -86,6 +92,34 @@ export namespace Database {
     sqlite.close()
     state.sqlite = undefined
     Client.reset()
+  }
+
+  // Atomic on-disk wipe shared by `opencorvus db reset` CLI and the
+  // /global/db/reset HTTP backdoor. Caller is responsible for disposing
+  // any in-memory Instance handles BEFORE invoking — otherwise WAL flush
+  // races leave half-released file locks on Windows.
+  export async function reset(): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
+    close()
+    const dbPath = Path()
+    const cwdPrimary = process.cwd()
+    const targets: Array<{ label: string; path: string }> = [
+      { label: "db", path: dbPath },
+      { label: "db-wal", path: `${dbPath}-wal` },
+      { label: "db-shm", path: `${dbPath}-shm` },
+      { label: "snapshot", path: path.join(Global.Path.data, "snapshot") },
+      { label: "cwd-worktrees", path: path.join(cwdPrimary, ".opencorvus", "worktrees") },
+      { label: "cwd-ownership", path: path.join(cwdPrimary, ".opencorvus", "ownership") },
+    ]
+    const results: Array<{ label: string; path: string; ok: boolean; error?: string }> = []
+    for (const target of targets) {
+      try {
+        await rm(target.path, { recursive: true, force: true })
+        results.push({ ...target, ok: true })
+      } catch (err) {
+        results.push({ ...target, ok: false, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+    return results
   }
 
   /**

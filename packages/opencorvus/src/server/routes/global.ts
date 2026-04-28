@@ -9,6 +9,7 @@ import { Installation } from "@/installation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
+import { Database } from "../../storage/db"
 import { errors } from "../error"
 
 const log = Log.create({ service: "server" })
@@ -184,6 +185,48 @@ export const GlobalRoutes = lazy(() =>
           },
         })
         return c.json(true)
+      },
+    )
+    .post(
+      "/db/reset",
+      describeRoute({
+        summary: "Reset database",
+        description:
+          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-cwd worktree/ownership markers. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+        operationId: "global.db.reset",
+        responses: {
+          200: {
+            description: "Reset results",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    targets: z.array(
+                      z.object({
+                        label: z.string(),
+                        path: z.string(),
+                        ok: z.boolean(),
+                        error: z.string().optional(),
+                      }),
+                    ),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(409),
+        },
+      }),
+      async (c) => {
+        const { hasActiveSessions } = await import("@/engine/runtime")
+        if (hasActiveSessions()) {
+          return c.json({ error: "Active executor sessions exist, refusing DB reset" }, 409)
+        }
+        await Instance.disposeAll().catch(() => undefined)
+        const targets = await Database.reset()
+        log.warn("db reset via /global/db/reset", { targets })
+        return c.json({ ok: targets.every((t) => t.ok), targets })
       },
     ),
 )

@@ -1,10 +1,7 @@
 import type { Argv } from "yargs"
 import { spawn } from "child_process"
-import { rm } from "fs/promises"
-import path from "path"
 import { Database } from "../../storage/db"
 import { Database as BunDatabase } from "bun:sqlite"
-import { Global } from "../../global"
 import { Instance } from "../../project/instance"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
@@ -94,34 +91,9 @@ const ResetCommand = cmd({
     }
 
     await Instance.disposeAll().catch(() => undefined)
-    Database.close()
-
-    const targets: Array<{ label: string; path: string }> = []
-    const dbPath = Database.Path()
-    targets.push({ label: "db", path: dbPath })
-    targets.push({ label: "db-wal", path: `${dbPath}-wal` })
-    targets.push({ label: "db-shm", path: `${dbPath}-shm` })
-    targets.push({ label: "snapshot", path: path.join(Global.Path.data, "snapshot") })
-
-    // Instance-scoped paths are only known when an Instance is live. The
-    // reset is invoked standalone (no Instance.provide context), so we
-    // clean what we can reach via Global paths. Worktrees live under
-    // `<primary>/.opencorvus/worktrees/` — primary is the project the
-    // user is currently in, not Global.Path.data — so the operator must
-    // re-run reset from inside the project root OR clean worktrees
-    // manually (`rm -rf .opencorvus/worktrees .opencorvus/ownership`).
-    const cwdPrimary = process.cwd()
-    targets.push({ label: "cwd-worktrees", path: path.join(cwdPrimary, ".opencorvus", "worktrees") })
-    targets.push({ label: "cwd-ownership", path: path.join(cwdPrimary, ".opencorvus", "ownership") })
-
-    for (const target of targets) {
-      try {
-        await rm(target.path, { recursive: true, force: true })
-        console.log(`✓ ${target.label}: ${target.path}`)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        console.log(`✗ ${target.label}: ${target.path} (${msg})`)
-      }
+    const results = await Database.reset()
+    for (const r of results) {
+      console.log(`${r.ok ? "✓" : "✗"} ${r.label}: ${r.path}${r.ok ? "" : ` (${r.error})`}`)
     }
     console.log("")
     console.log("opencorvus db reset complete. Next process start will rebuild schema from DDL.")

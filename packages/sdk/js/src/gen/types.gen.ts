@@ -470,36 +470,6 @@ export type EventGlobalDisposed = {
   }
 }
 
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
-  metadata: {
-    [key: string]: unknown
-  }
-  always: Array<string>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-    autoReply: boolean
-  }
-}
-
 export type EventLspClientDiagnostics = {
   type: "lsp.client.diagnostics"
   properties: {
@@ -605,6 +575,23 @@ export type StructuredOutputError = {
   }
 }
 
+export type StructuredOutputPayloadError = {
+  name: "StructuredOutputPayloadError"
+  data: {
+    message: string
+    reason: string
+  }
+}
+
+export type TerminalToolMissingError = {
+  name: "TerminalToolMissingError"
+  data: {
+    message: string
+    toolName: string
+    retries: number
+  }
+}
+
 export type ContextOverflowError = {
   name: "ContextOverflowError"
   data: {
@@ -643,6 +630,8 @@ export type AssistantMessage = {
     | MessageOutputLengthError
     | MessageAbortedError
     | StructuredOutputError
+    | StructuredOutputPayloadError
+    | TerminalToolMissingError
     | ContextOverflowError
     | ApiError
   parentID: string
@@ -979,6 +968,36 @@ export type EventMessagePartRemoved = {
     sessionID: string
     messageID: string
     partID: string
+  }
+}
+
+export type PermissionRequest = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: Array<string>
+  metadata: {
+    [key: string]: unknown
+  }
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+    autoReply: boolean
   }
 }
 
@@ -1417,6 +1436,8 @@ export type EventSessionError = {
       | MessageOutputLengthError
       | MessageAbortedError
       | StructuredOutputError
+      | StructuredOutputPayloadError
+      | TerminalToolMissingError
       | ContextOverflowError
       | ApiError
   }
@@ -1533,8 +1554,6 @@ export type Event =
   | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
-  | EventPermissionAsked
-  | EventPermissionReplied
   | EventLspClientDiagnostics
   | EventLspUpdated
   | EventMessageUpdated
@@ -1542,6 +1561,8 @@ export type Event =
   | EventMessagePartUpdated
   | EventMessagePartDelta
   | EventMessagePartRemoved
+  | EventPermissionAsked
+  | EventPermissionReplied
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -3222,6 +3243,30 @@ export type GlobalDisposeResponses = {
 }
 
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
+
+export type GlobalDbResetData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/db/reset"
+}
+
+export type GlobalDbResetResponses = {
+  /**
+   * Reset results
+   */
+  200: {
+    ok: boolean
+    targets: Array<{
+      label: string
+      path: string
+      ok: boolean
+      error?: string
+    }>
+  }
+}
+
+export type GlobalDbResetResponse = GlobalDbResetResponses[keyof GlobalDbResetResponses]
 
 export type AuthRemoveData = {
   body?: never

@@ -161,6 +161,65 @@
         ]
       }
     },
+    "/global/db/reset": {
+      "post": {
+        "operationId": "global.db.reset",
+        "summary": "Reset database",
+        "description": "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-cwd worktree/ownership markers. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+        "responses": {
+          "200": {
+            "description": "Reset results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "label",
+                          "path",
+                          "ok"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "targets"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.global.db.reset({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/auth/{providerID}": {
       "put": {
         "operationId": "auth.set",
@@ -27184,121 +27243,6 @@
           "properties"
         ]
       },
-      "PermissionRequest": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^per.*"
-          },
-          "sessionID": {
-            "type": "string",
-            "pattern": "^ses.*"
-          },
-          "permission": {
-            "type": "string"
-          },
-          "patterns": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "metadata": {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {}
-          },
-          "always": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "tool": {
-            "type": "object",
-            "properties": {
-              "messageID": {
-                "type": "string"
-              },
-              "callID": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "messageID",
-              "callID"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "sessionID",
-          "permission",
-          "patterns",
-          "metadata",
-          "always"
-        ]
-      },
-      "Event.permission.asked": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "permission.asked"
-          },
-          "properties": {
-            "$ref": "#/components/schemas/PermissionRequest"
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.permission.replied": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "permission.replied"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "requestID": {
-                "type": "string"
-              },
-              "reply": {
-                "type": "string",
-                "enum": [
-                  "once",
-                  "always",
-                  "reject"
-                ]
-              },
-              "autoReply": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "sessionID",
-              "requestID",
-              "reply",
-              "autoReply"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.lsp.client.diagnostics": {
         "type": "object",
         "properties": {
@@ -27648,6 +27592,66 @@
           "data"
         ]
       },
+      "StructuredOutputPayloadError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "StructuredOutputPayloadError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message",
+              "reason"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
+      "TerminalToolMissingError": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "const": "TerminalToolMissingError"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "toolName": {
+                "type": "string"
+              },
+              "retries": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "message",
+              "toolName",
+              "retries"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ]
+      },
       "ContextOverflowError": {
         "type": "object",
         "properties": {
@@ -27770,6 +27774,12 @@
               },
               {
                 "$ref": "#/components/schemas/StructuredOutputError"
+              },
+              {
+                "$ref": "#/components/schemas/StructuredOutputPayloadError"
+              },
+              {
+                "$ref": "#/components/schemas/TerminalToolMissingError"
               },
               {
                 "$ref": "#/components/schemas/ContextOverflowError"
@@ -28965,6 +28975,121 @@
               "sessionID",
               "messageID",
               "partID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "PermissionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^per.*"
+          },
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses.*"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "patterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "always": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tool": {
+            "type": "object",
+            "properties": {
+              "messageID": {
+                "type": "string"
+              },
+              "callID": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "messageID",
+              "callID"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "sessionID",
+          "permission",
+          "patterns",
+          "metadata",
+          "always"
+        ]
+      },
+      "Event.permission.asked": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.asked"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/PermissionRequest"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.permission.replied": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.replied"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "requestID": {
+                "type": "string"
+              },
+              "reply": {
+                "type": "string",
+                "enum": [
+                  "once",
+                  "always",
+                  "reject"
+                ]
+              },
+              "autoReply": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "sessionID",
+              "requestID",
+              "reply",
+              "autoReply"
             ]
           }
         },
@@ -30263,6 +30388,12 @@
                     "$ref": "#/components/schemas/StructuredOutputError"
                   },
                   {
+                    "$ref": "#/components/schemas/StructuredOutputPayloadError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TerminalToolMissingError"
+                  },
+                  {
                     "$ref": "#/components/schemas/ContextOverflowError"
                   },
                   {
@@ -30652,12 +30783,6 @@
             "$ref": "#/components/schemas/Event.global.disposed"
           },
           {
-            "$ref": "#/components/schemas/Event.permission.asked"
-          },
-          {
-            "$ref": "#/components/schemas/Event.permission.replied"
-          },
-          {
             "$ref": "#/components/schemas/Event.lsp.client.diagnostics"
           },
           {
@@ -30677,6 +30802,12 @@
           },
           {
             "$ref": "#/components/schemas/Event.message.part.removed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.asked"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.replied"
           },
           {
             "$ref": "#/components/schemas/Event.tui.prompt.append"

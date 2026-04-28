@@ -77,6 +77,7 @@ import type {
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
+  GlobalDbResetResponses,
   GlobalDisposeResponses,
   GlobalEventResponses,
   GlobalHealthResponses,
@@ -406,6 +407,20 @@ export class Config extends HeyApiClient {
   }
 }
 
+export class Db extends HeyApiClient {
+  /**
+   * Reset database
+   *
+   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-cwd worktree/ownership markers. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
+   */
+  public reset<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).post<GlobalDbResetResponses, unknown, ThrowOnError>({
+      url: "/global/db/reset",
+      ...options,
+    })
+  }
+}
+
 export class Global extends HeyApiClient {
   /**
    * Get health
@@ -446,6 +461,11 @@ export class Global extends HeyApiClient {
   private _config?: Config
   get config(): Config {
     return (this._config ??= new Config({ client: this.client }))
+  }
+
+  private _db?: Db
+  get db(): Db {
+    return (this._db ??= new Db({ client: this.client }))
   }
 }
 

@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "00b0c6ed408d7778"
+    "panel_revision": "78f0491e292f2d19"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -475,6 +475,9 @@
   "settings.username": "Username",
   "sidebar.close": "Collapse sidebar",
   "sidebar.open": "Open sidebar",
+  "sidebar.reset_db_confirm": "DESTRUCTIVE: wipe the OpenCorvus SQLite DB, snapshot cache, and per-cwd worktree/ownership markers? Active sessions will block this. The page will reload after reset.",
+  "sidebar.reset_db_blocked": "DB reset blocked: there are active executor sessions. Cancel them first.",
+  "sidebar.reset_db_failed": "DB reset failed: {{error}}",
   "sidebar.title": "Task List",
   "skill.add": "Add Skill",
   "skill.browse_folder": "Browse Folder",
