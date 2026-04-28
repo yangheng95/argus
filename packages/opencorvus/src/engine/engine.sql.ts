@@ -374,7 +374,7 @@ export const EngineGoalTable = sqliteTable(
     // or engine/describe.ts::describeGoal. Dep-failure propagation is the
     // LLM's decision (it reads depends_on + each dep's terminal flags in
     // the describe snapshot), not a schema column.
-    /** Per-goal retry counter. Incremented each time retry_goal resets this goal. */
+    /** Per-goal implementation version counter. V label = retry_count + 1. */
     retry_count: integer().notNull().default(0),
     /** Goal-scoped live workspace directory reused across retries until terminal cleanup. */
     workspace_dir: text(),

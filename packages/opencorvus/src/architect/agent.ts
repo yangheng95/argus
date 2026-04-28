@@ -61,11 +61,16 @@ const VALID_CATEGORIES = new Set<ArchitectDecisionKey>([
 // ---------------------------------------------------------------------------
 
 export namespace ArchitectAgent {
+  type ExistingGoalInput = GoalContractFields & {
+    order_index?: number
+    retry_count?: number
+  }
+
   export interface CoordinateInput {
     /** Existing goals to seed the collector with. Empty list on the first
      *  pass (Architect decomposes from scratch); non-empty on a re-run
      *  (Architect refines against delivery feedback). */
-    goals: GoalContractFields[]
+    goals: ExistingGoalInput[]
     taskRequest: string
     taskTitle: string
     taskID?: string
@@ -304,7 +309,7 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
         ? specsRaw.slice(0, ARCHITECT_SPECS_CAP) + `… (truncated; ${specs.length} specs total, full bodies in spec snapshot)`
         : specsRaw
       return [
-        `## ${g.id}: ${g.title}`,
+        `## #G${(g.order_index ?? 0) + 1}V${(g.retry_count ?? 0) + 1} ${g.id}: ${g.title}`,
         `objective: ${g.objective}`,
         `acceptance_specs (${specs.length}):\n${specsTrim}`,
         `owned_paths: ${g.owned_paths.join(", ") || "(none)"}`,
