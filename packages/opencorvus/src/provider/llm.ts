@@ -1,203 +1,35 @@
 /**
- * Unified LLM call layer.
+ * Provider-side LLM helpers reused by `session/llm.ts`.
  *
- * Two entry points:
+ * As of Phase E of specs/new-arch/2026-04-28-structured-output-systemic-fix.md
+ * this module no longer exposes its own `streamText` entry point. The earlier
+ * `ProviderLLM.stream()` was a parallel agent-level stream wrapper that
+ * carried its own `toolChoice` typedef (limited to the string forms
+ * `auto / required / none`), creating a dual-source risk vs `LLM.stream`'s
+ * widened `{ type: "tool", toolName: string }` form. The function had
+ * already been migrated away from by every agent (task-agent, decompose,
+ * architect, planner — all now route through `SessionPrompt.prompt` →
+ * `SessionLoop` → `LLM.stream`), so it was dead code that could only drift
+ * out of sync with the canonical session stream. Rule 2 (delete旧) +
+ * rule 22 (no dual sources) → remove.
  *
- * 1. `ProviderLLM.stream()` — agent-level streamText with full provider
- *    adaptation.  Used by orchestrator, requirements, architect, planner.
+ * What this module still owns:
  *
- * 2. `ProviderLLM.wrapModel()` / `ProviderLLM.baseHeaders()` — low-level
- *    helpers reused by session/llm.ts which needs its own streamText call
- *    for session-specific concerns (plugin hooks, permission filtering,
- *    LLM traces, telemetry, tool repair, inactivity timeout).
+ *   - `wrapModel(language, model, options)` — wraps a `LanguageModelV2`
+ *     with the message-transform middleware that normalises messages for
+ *     the target provider (Anthropic empty-content filtering, modality
+ *     pruning, cache markers, …). Used by `session/llm.ts:241`.
  *
- * Provider-specific adaptation (providerOptions, maxOutputTokens, message
- * normalization, request headers) is handled here so that callers never
- * need to know Anthropic requires `max_tokens` or OpenAI needs `store: false`.
+ *   - `baseHeaders(model, stickyKey?)` — default request headers including
+ *     LiteLLM-fronted gateway sticky-routing for hexin. Used by
+ *     `session/llm.ts:170`.
  */
-import {
-  streamText,
-  wrapLanguageModel,
-  type ModelMessage,
-  type StreamTextOnChunkCallback,
-  type StreamTextOnErrorCallback,
-  type StreamTextOnStepFinishCallback,
-  type StreamTextResult,
-  type ToolSet,
-} from "ai"
-import { mergeDeep } from "remeda"
+import { wrapLanguageModel } from "ai"
 import { Provider } from "./provider"
 import { ProviderTransform } from "./transform"
 import { applyVendorHeaders } from "./vendor-headers"
-import { Flag } from "@/flag/flag"
-import { Log } from "@/util/log"
-
-const log = Log.create({ service: "provider-llm" })
 
 export namespace ProviderLLM {
-
-  export interface StreamInput {
-    /** Resolved model object — NOT a raw LanguageModelV2 */
-    model: Provider.Model
-    /** System prompt(s).  Joined with newline if string[]. */
-    system: string | string[]
-    /** Conversation messages */
-    messages: ModelMessage[]
-
-    // ── Agent concerns (all optional) ──
-    tools?: ToolSet
-    toolChoice?: "auto" | "required" | "none"
-    abortSignal?: AbortSignal
-    /** AI SDK stopWhen condition (e.g. stepCountIs(20)) */
-    stopWhen?: any
-    maxRetries?: number
-
-    // ── Callbacks ──
-    onChunk?: StreamTextOnChunkCallback<ToolSet>
-    onError?: StreamTextOnErrorCallback
-    onStepFinish?: StreamTextOnStepFinishCallback<ToolSet>
-
-    // ── Overrides (rare — let the layer compute by default) ──
-    /** Override auto-computed maxOutputTokens */
-    maxOutputTokens?: number
-    temperature?: number
-    topP?: number
-    topK?: number
-    /** Merged INTO auto-computed providerOptions (does not replace) */
-    extraProviderOptions?: Record<string, any>
-    /** Merged INTO auto-computed headers (does not replace) */
-    extraHeaders?: Record<string, string>
-    /** Full options override — merged into base options before providerOptions computation.
-     *  Used by session/llm.ts to inject plugin-mutated options. */
-    optionsOverride?: Record<string, any>
-
-    /** Cache key for providers that use explicit prompt caching (OpenAI, OpenRouter, etc.).
-     *  For agent calls, pass a task-scoped key (e.g. `task-${taskID}`).
-     *  Session-level calls use sessionID directly via ProviderTransform.options(). */
-    cacheKey?: string
-  }
-
-  /**
-   * Stream an LLM call with full provider adaptation.
-   *
-   * Handles: LanguageModelV2 creation, providerOptions, maxOutputTokens,
-   * message transform middleware, request headers.
-   */
-  export async function stream(input: StreamInput): Promise<StreamTextResult<ToolSet, unknown>> {
-    const { model } = input
-
-    // 1. Resolve LanguageModelV2
-    const language = await Provider.getLanguage(model)
-
-    // 2. Compute base options (provider-specific: reasoning, caching, store, etc.)
-    // Reaching this point implies the provider is already loaded (model was
-    // resolved upstream); a missing entry is a real bug we want to surface.
-    const providerInfo = await Provider.getProvider(model.providerID)
-    if (!providerInfo) {
-      throw new Error(
-        `ProviderLLM.stream: provider ${model.providerID} is not loaded — ` +
-        `model resolution succeeded but provider registry lookup returned undefined. ` +
-        `This is a provider/state initialization bug.`,
-      )
-    }
-    const baseOptions = ProviderTransform.options({
-      model,
-      sessionID: input.cacheKey || "",
-      providerOptions: providerInfo.options,
-    })
-
-    // Merge overrides (model-level options, caller overrides)
-    const options: Record<string, any> = input.optionsOverride
-      ? mergeDeep(baseOptions, input.optionsOverride)
-      : mergeDeep(baseOptions, model.options ?? {})
-
-    // 3. Compute providerOptions (namespace-wrapped for the correct SDK key)
-    let providerOptions = ProviderTransform.providerOptions(model, options)
-    if (input.extraProviderOptions) {
-      providerOptions = mergeDeep(providerOptions, input.extraProviderOptions)
-    }
-
-    // 4. Compute maxOutputTokens
-    const maxOutputTokens = input.maxOutputTokens ?? ProviderTransform.maxOutputTokens(model)
-
-    // 5. Build request headers (baseHeaders handles hexin sticky routing)
-    const autoHeaders = baseHeaders(model, input.cacheKey)
-    const headers = input.extraHeaders
-      ? { ...autoHeaders, ...input.extraHeaders }
-      : autoHeaders
-
-    // 6. Wrap model with message-transform middleware
-    const wrappedModel = wrapLanguageModel({
-      model: language,
-      middleware: [
-        {
-          async transformParams(args: any) {
-            if (args.type === "stream") {
-              args.params.prompt = ProviderTransform.message(
-                args.params.prompt,
-                model,
-                options,
-              )
-            }
-            return args.params
-          },
-        },
-      ],
-    })
-
-    // 7. Build system messages
-    const systemParts = Array.isArray(input.system) ? input.system : [input.system]
-    const systemMessages: ModelMessage[] = systemParts
-      .filter(Boolean)
-      .map((s) => ({ role: "system" as const, content: s }))
-
-    log.info("stream", {
-      providerID: model.providerID,
-      modelID: model.id,
-      maxOutputTokens: maxOutputTokens ?? null,
-      toolCount: input.tools ? Object.keys(input.tools).length : 0,
-      providerOptionsKeys: Object.keys(providerOptions),
-      headersKeys: Object.keys(headers),
-      systemPartCount: systemMessages.length,
-      messageCount: input.messages.length,
-    })
-
-    // 8. Call streamText — the ONLY streamText call site for agent code.
-    //    No mid-run context pruning. A sub-agent's full streamText is one
-    //    coherent reasoning lifecycle; arbitrarily dropping its earlier
-    //    tool rounds mid-stream made it forget its own work (e.g. requirements
-    //    re-emitted register_goal because eviction hid prior registrations).
-    //    Step caps (`stopWhen=stepCountIs(N)`) bound run length; cost is
-    //    controlled at the model-selection layer, not by amputating memory.
-    return streamText({
-      model: wrappedModel,
-      providerOptions,
-      maxOutputTokens,
-      headers,
-      // AI SDK `maxRetries` retries the initial request on transient HTTP
-      // errors (ECONNRESET, 5xx, 429 without Retry-After, etc.) using built-in
-      // exponential backoff (2s × 2^n, per @ai-sdk/core). This only covers
-      // request-setup failures — once the stream has started emitting chunks,
-      // a mid-stream drop is NOT retried here (the caller has already
-      // committed to consuming chunks). Default 3 gives us ~14s of backoff
-      // before giving up, which absorbs most provider hiccups.
-      maxRetries: input.maxRetries ?? 3,
-      messages: [...systemMessages, ...input.messages],
-      tools: input.tools,
-      toolChoice: input.toolChoice,
-      temperature: input.temperature,
-      topP: input.topP,
-      topK: input.topK,
-      abortSignal: input.abortSignal,
-      ...(input.stopWhen ? { stopWhen: input.stopWhen } : {}),
-      ...(input.onChunk ? { onChunk: input.onChunk } : {}),
-      ...(input.onError ? { onError: input.onError } : {}),
-      ...(input.onStepFinish ? { onStepFinish: input.onStepFinish } : {}),
-    })
-  }
-
-  // ── Low-level helpers (reused by session/llm.ts) ──
-
   /**
    * Wrap a LanguageModelV2 with the message-transform middleware that
    * normalizes messages for the target provider (Anthropic empty-content
