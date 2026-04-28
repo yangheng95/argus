@@ -959,8 +959,15 @@ function resolvePhaseOrSessionCardID(
           childIDs: [],
           phaseID: phase.phaseID,
           phaseSessionKind: stage,
+          phaseSessionID: sessionID,
           time,
         });
+      } else if (cardTreeStore.cards[phaseCardID]!.phaseSessionID !== sessionID) {
+        // Same phaseCardID but new sessionID means the absorbed session
+        // was replaced (e.g. a rewind / re-dispatch within the same goal
+        // run). Track the latest one so the reply box always targets the
+        // session whose parts are currently streaming.
+        setCardTreeStore("cards", phaseCardID, "phaseSessionID", sessionID);
       }
       return { cardID: phaseCardID, isPhase: true };
     }

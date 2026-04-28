@@ -126,6 +126,14 @@ export interface CardNode {
    *  resolveSessionContainerCardID to route incoming session cards. Only
    *  set for kind="phase" nodes. */
   phaseSessionKind?: string;
+  /** SessionID of the sub-agent session whose parts this phase card has
+   *  absorbed. Set by `resolvePhaseOrSessionCardID` when the phase card
+   *  is materialized — phase cards fold their session into themselves so
+   *  no `kind="agent"` card exists, but the AgentSessionReplyBox still
+   *  needs the sessionID to POST `/task/:taskID/session/:sessionID/reply`.
+   *  Without this field the user has no way to reply to the running
+   *  build / planner session, even though the route accepts it. */
+  phaseSessionID?: string;
   /** Inline leaves — text / reasoning / tool / patch / file / subtask / boundary /
    *  interaction-question / interaction-permission. Tool parts that are "promoted"
    *  become their own CardNode instead (with `toolPart` populated). */
