@@ -249,30 +249,30 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
  * MB by re-snapshotting the full message on every update.
  */
 function bridgeEvent(type: string, properties: Record<string, unknown>) {
-  const sessionID = sessionFromProperties(properties)
-  if (!sessionID) return
-  const taskID = taskIDForSession(sessionID)
-  if (!taskID) return
-  let enriched: Record<string, unknown>
+  // Top-level guard: subscribers run synchronously inside Bus.dispatch's for-loop;
+  // a sync throw here would abort dispatch for sibling subscribers. Old code hid
+  // this behind enqueueBridgeWork's swallowed promise — keep the same behaviour
+  // explicitly so transient DB / lookup failures degrade an event, not the bus.
   try {
-    enriched = enrichProperties(properties, sessionID, taskID)
-  } catch (err) {
-    log.error("bridge: enrichment failed — dropping event", {
+    const sessionID = sessionFromProperties(properties)
+    if (!sessionID) return
+    const taskID = taskIDForSession(sessionID)
+    if (!taskID) return
+    const enriched = enrichProperties(properties, sessionID, taskID)
+    ProtocolStore.dispatchEphemeral({
       type,
-      sessionID,
+      aggregate: "task",
       taskID,
+      sessionID,
+      source: "session.bridge",
+      payload: enriched,
+    })
+  } catch (err) {
+    log.warn("bridge: dropping event after error", {
+      type,
       error: err instanceof Error ? err.message : String(err),
     })
-    return
   }
-  ProtocolStore.dispatchEphemeral({
-    type,
-    aggregate: "task",
-    taskID,
-    sessionID,
-    source: "session.bridge",
-    payload: enriched,
-  })
 }
 
 // Cross-Instance event types and their handlers. Additions don't require
