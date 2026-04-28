@@ -278,6 +278,99 @@ describe("codex app server executor", () => {
     expect(result.filter((item) => item.type === "input_request").length).toBe(2)
   })
 
+  test("leaves server requests pending until the owner responds", async () => {
+    const responses: Array<{ id: string | number; result?: Record<string, unknown>; error?: Record<string, unknown> }> = []
+    let release: (() => void) | undefined
+    const provider = CodexAppServerExecutor.create({
+      async initialize() {
+        return {}
+      },
+      async threadStart() {
+        return {
+          thread: {
+            id: "thr_hold",
+          },
+        }
+      },
+      async threadResume() {
+        return {
+          thread: {
+            id: "thr_hold",
+          },
+        }
+      },
+      async turnStart() {
+        return {
+          turn: {
+            id: "turn_hold",
+          },
+        }
+      },
+      async turnInterrupt() {
+        return true
+      },
+      async respond(input) {
+        responses.push(input)
+      },
+      async *events() {
+        yield {
+          type: "request",
+          id: 7,
+          method: "item/commandExecution/requestApproval",
+          params: {
+            threadId: "thr_hold",
+            turnId: "turn_hold",
+            command: "git status",
+          },
+        }
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+        yield {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_hold",
+            turn: {
+              id: "turn_hold",
+              items: [],
+              status: "completed",
+              error: null,
+            },
+          },
+        }
+      },
+    })
+
+    const iterator = provider.run({ sessionID: "ses_build", prompt: "test" })[Symbol.asyncIterator]()
+    expect((await iterator.next()).value?.type).toBe("progress")
+    expect((await iterator.next()).value).toMatchObject({
+      type: "approval_request",
+      id: "7",
+    })
+    expect(responses).toEqual([])
+
+    await provider.respond?.({
+      sessionID: "ses_build",
+      requestID: "7",
+      kind: "approval",
+      response: {
+        decision: "accept",
+      },
+    })
+    expect(responses).toEqual([{
+      id: 7,
+      result: {
+        decision: "accept",
+      },
+      error: undefined,
+    }])
+    const done = iterator.next()
+    await Bun.sleep(0)
+    release?.()
+    expect((await done).value?.type).toBe("done")
+  })
+
   test("keeps dynamic tool call and result IDs aligned", async () => {
     const provider = CodexAppServerExecutor.create(client([
       {
