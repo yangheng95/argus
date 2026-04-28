@@ -1538,16 +1538,16 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
       lines.push(`**Exports this goal must provide**: ${target.exports.join(", ")}`)
     }
     lines.push("")
-    lines.push(
-      "Explore → implement within owned_paths → verify via bash → commit → call report_build_passed or report_build_failed exactly once.",
-    )
+    lines.push("Orchestrator is asking build to implement this goal, verify it, and report the result.")
     return lines.join("\n")
   }
   return [
+    "# Delegation",
+    "",
+    "Orchestrator is asking build to implement this request, verify it, and report the result.",
+    "",
     "# Request",
     "",
     target.text,
-    "",
-    "Explore the repo to understand scope, implement the change, verify via bash (tests / build / run), commit, and call report_build_passed or report_build_failed exactly once with your final report.",
   ].join("\n")
 }

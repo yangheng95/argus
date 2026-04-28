@@ -452,10 +452,10 @@ function buildProsecutorBrief(input: {
   }
   lines.push(
     ``,
-    `## Your turn`,
-    `Call query_metric_trajectory first. Then file at most one concrete counterexample`,
-    `if you find a reproducible failure the Defender missed, or propose at most one`,
-    `diagnostic challenge metric if you think the ruler is blind to a real failure mode.`,
+    `## Delegation`,
+    `Orchestrator is asking prosecutor to look for at most one concrete counterexample`,
+    `the Defender missed, or at most one diagnostic challenge metric if the current`,
+    `ruler is blind to a real failure mode.`,
     `When in doubt, write nothing — "no new signal this iteration" is a valid outcome.`,
   )
   return lines.filter((l) => l !== "").join("\n")

@@ -217,6 +217,7 @@ function buildUserPrompt(
 ): string {
   const sections: string[] = []
 
+  sections.push("# Delegation\n\nOrchestrator is asking requirements to extract the task requirements and foundational decisions.")
   sections.push(`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`)
 
   if (input.taskID) {
@@ -241,12 +242,6 @@ function buildUserPrompt(
   }
 
   sections.push(buildMirrorToolsPromptSection({ cwd: Instance.directory }))
-
-  sections.push(
-    "Parse the user request. Call register_requirement per REQ-N entry, " +
-      "register_decision per foundational decision (runtime / backend / test framework). " +
-      "Then call submit_requirements with no arguments to close the analysis.",
-  )
 
   return sections.join("\n\n")
 }

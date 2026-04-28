@@ -736,11 +736,8 @@ function buildIntegrityPrompt(input: {
   }
 
   sections.push(
-    "Now walk EVERY dimension above. Cite REQ-N / spec ids / goal ids / verbatim user " +
-    "phrases as evidence in each issue. For EACH dimension call its own " +
-    "`submit_<dimension_id>_verdict` tool exactly once, then close with a single " +
-    "`submit_integrity_review()` call. The runtime aggregates the " +
-    "per-dimension verdicts — do NOT supply a top-level verdict.",
+    "Now review every dimension above. Cite REQ-N / spec ids / goal ids / verbatim user " +
+    "phrases as evidence in each issue.",
   )
 
   return sections.join("\n\n")
