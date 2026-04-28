@@ -88,9 +88,7 @@ const log = Log.create({ service: "orchestrator" })
 
 export interface OrchestratorEvent {
   /** Free-form "reason for wake" string rendered as this wake's model input.
-   *  If absent, the task's original request is
-   *  used when the orchestrator has no prior invocation for this task;
-   *  otherwise a generic "re-read context and decide" prompt is used. */
+   *  If absent, the task's original request is used. */
   note?: string
   /** Present only when the wake is caused by an operator-typed message.
    *  Passed to `createOrchestratorTools` so the `inject_operator_message`
@@ -206,15 +204,13 @@ export namespace Orchestrator {
         Object.keys(guard.tools).map((name) => [name, true]),
       )
 
-      // 4. Build prompt. First wake uses the task's original request as the
-      //    user message (the user's actual intent). Subsequent wakes use the
-      //    event.note if provided, otherwise a generic re-read instruction.
-      //    No trigger-kind switch — every decision branch downstream reads
-      //    the describe snapshot, not this string.
+      // 4. Build prompt. Caller-supplied notes are real wake messages
+      //    (operator text / retry reason / batch-complete note). When no
+      //    caller note exists, reuse the task's original user request; every
+      //    decision branch downstream reads the describe snapshot, not an
+      //    invented re-read instruction.
       const system = await buildSystemParts(task, event, workflow, workflowState)
-      const userText = isFirstWake
-        ? task.request
-        : (event?.note ?? "Task state has advanced. Re-read the context snapshot and decide the next action.")
+      const userText = orchestratorUserText(task, event)
       // Build multimodal content when task has file attachments (only for the
       // first wake, because that is when the user's original attachments are
       // introduced). AttachmentStore.partition routes image/audio/video/pdf
@@ -455,6 +451,10 @@ export const OrchestratorEventNote = {
   retry(task: TaskRow): string {
     return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
   },
+}
+
+export function orchestratorUserText(task: Pick<TaskRow, "request">, event?: Pick<OrchestratorEvent, "note">): string {
+  return event?.note ?? task.request
 }
 
 // ---------------------------------------------------------------------------
