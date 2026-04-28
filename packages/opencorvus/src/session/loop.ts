@@ -192,6 +192,51 @@ export namespace SessionLoop {
   }
 
   /**
+   * Decide whether the just-finished assistant turn should enter the
+   * StructuredOutput recovery channel (stamp `StructuredOutputError` and
+   * inject the reminder synthetic user message).
+   *
+   * Rules — see specs/new-arch/2026-04-28-structured-output-systemic-fix.md §D:
+   *
+   *   1. Only the json_schema output contract requires a terminal
+   *      StructuredOutput call; for `text` output we never stamp.
+   *   2. If the model already finalised by calling StructuredOutput
+   *      (validated args reached `onSuccess`), the contract is satisfied.
+   *   3. If a provider/runtime error is already recorded on this turn, do
+   *      NOT overwrite it with a structured-miss error — the retry layer
+   *      must see the original cause.
+   *   4. A turn that ends with `finish=tool-calls` is the model still
+   *      executing its tool flow (e.g. the integrity reviewer between two
+   *      `submit_<dim>_verdict` calls). It is NOT a structured miss; we
+   *      let the loop continue so the model can keep working toward
+   *      StructuredOutput.
+   *   5. A turn that ends with `finish=unknown` means the stream returned
+   *      without a recognised finish reason (typically a mid-stream cut /
+   *      provider-side hiccup). The loop already continues naturally on
+   *      that path; we do NOT escalate it to a structured miss. The
+   *      previous gate excluded this reason for the same reason; Phase D
+   *      preserves that behaviour.
+   *   6. Any other non-tool-call finish (`stop / length / content-filter /
+   *      error / etc.`) without a StructuredOutput call IS a miss →
+   *      enter recovery.
+   */
+  export type TurnFinishReason = string | undefined
+  export function shouldEnterStructuredOutputRecovery(input: {
+    finish: TurnFinishReason
+    structuredCalled: boolean
+    formatType: "text" | "json_schema" | undefined
+    hasExistingError: boolean
+  }): boolean {
+    if (input.formatType !== "json_schema") return false
+    if (input.structuredCalled) return false
+    if (input.hasExistingError) return false
+    if (!input.finish) return false
+    if (input.finish === "tool-calls") return false
+    if (input.finish === "unknown") return false
+    return true
+  }
+
+  /**
    * Predictive-compaction decision constants (Phase C).
    *
    * `PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT` — fraction of the model's
@@ -969,8 +1014,14 @@ export namespace SessionLoop {
       return "stop" as const
     }
 
-    const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
-    if (modelFinished && !processor.message.error && format.type === "json_schema") {
+    if (
+      shouldEnterStructuredOutputRecovery({
+        finish: processor.message.finish,
+        structuredCalled: structured !== undefined,
+        formatType: format.type,
+        hasExistingError: !!processor.message.error,
+      })
+    ) {
       // Reuse the count we already computed at the top of this turn so
       // both `turnToolChoice` and the reminder bound see the same number.
       const priorReminders = priorReminderCount
