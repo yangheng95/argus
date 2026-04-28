@@ -313,6 +313,12 @@ export namespace BuildAgent {
       // verdict. Captured in closure so the tool's execute() and the
       // post-run code share state without a side-channel.
       let mergedHead: string | undefined
+      // Latest non-merged outcome from the merge_back tool. The post-run
+      // guard appends this to the demoted-error string so callers (overlay,
+      // evaluator, log scrapers) can see the *real* reason — conflict paths,
+      // infrastructure error, etc. — instead of the generic "merge_back was
+      // not called" placeholder.
+      let lastMergeBackOutcome: string | undefined
 
       type BuildCollector = {
         result?: BuildResult
@@ -416,28 +422,28 @@ export namespace BuildAgent {
                       primary_branch: result.primaryBranch,
                     }
                   } catch (err) {
-                    if (err instanceof Worktree.MergeConflictError) {
-                      const data = (err as { data: {
-                        branch: string
-                        primaryBranch: string
-                        primaryTip: string
-                        conflictPaths: string[]
-                      } }).data
+                    if (Worktree.MergeConflictError.isInstance(err)) {
+                      const { primaryBranch, primaryTip, conflictPaths } = err.data
+                      lastMergeBackOutcome =
+                        `conflict on ${primaryBranch} (tip ${primaryTip.slice(0, 12)}); ` +
+                        `paths: ${conflictPaths.join(", ")}`
                       return {
                         status: "conflict" as const,
-                        primary_branch: data.primaryBranch,
-                        primary_tip: data.primaryTip,
-                        conflict_paths: data.conflictPaths,
+                        primary_branch: primaryBranch,
+                        primary_tip: primaryTip,
+                        conflict_paths: conflictPaths,
                         hint:
                           "Rebase aborted; branch restored. Read each path on " +
-                          "both sides (git show " + data.primaryBranch + ":<path> vs your " +
+                          "both sides (git show " + primaryBranch + ":<path> vs your " +
                           "worktree), reconcile, git add + git commit, then call " +
                           "merge_back again.",
                       }
                     }
+                    const reason = err instanceof Error ? err.message : String(err)
+                    lastMergeBackOutcome = `error: ${reason}`
                     return {
                       status: "error" as const,
-                      reason: err instanceof Error ? err.message : String(err),
+                      reason,
                     }
                   }
                 },
@@ -579,15 +585,17 @@ export namespace BuildAgent {
 
       if (!parsed || !parsed.success) {
         if (mergeBackBlockedReport) {
+          const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
           parsed = {
             success: true as const,
             data: {
               status: "failed" as const,
-              summary: "Build session ended before merge_back completed.",
+              summary: `Build session ended before merge_back completed: ${lastOutcome}`,
               patch_summary: "",
               tests: [],
               error:
                 "report_build_passed was rejected because merge_back had not succeeded; " +
+                `last merge_back outcome: ${lastOutcome}; ` +
                 "the model did not repair the session by calling merge_back before the run ended.",
             },
           }
@@ -609,14 +617,18 @@ export namespace BuildAgent {
         parsed.data.status === "passed" &&
         !mergedHead
       ) {
+        const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
+        const priorError = parsed.data.error?.trim()
+        const guardError =
+          "merge_back was not called or did not succeed inside the build session; " +
+          `last merge_back outcome: ${lastOutcome}; ` +
+          "goal never published to primary (切法-A: build agent owns merge)."
         parsed = {
           success: true as const,
           data: {
             ...parsed.data,
             status: "failed" as const,
-            error:
-              "merge_back was not called or did not succeed inside the build session; " +
-              "goal never published to primary (切法-A: build agent owns merge).",
+            error: priorError ? `${guardError} | upstream error: ${priorError}` : guardError,
           },
         }
       } else if (mergedHead && parsed.data.status === "passed") {
@@ -683,7 +695,7 @@ function externalToolResultName(event: Extract<CodingEventInfo, { type: "tool_re
   if (itemType === "commandExecution") return "Bash"
   if (itemType === "fileChange") return "FileEdit"
   if (itemType === "mcpToolCall") return "MCP"
-  return "tool"
+  return "tool_result_without_matching_call"
 }
 
 function externalToolResultInput(event: Extract<CodingEventInfo, { type: "tool_result" }>): Record<string, unknown> {
@@ -703,6 +715,30 @@ function externalQuestionLine(question: Record<string, unknown>): string {
     || stringField(question.label)
     || "Additional input required"
   return `- ${header}: ${text}`
+}
+
+function singleLineText(value: string, limit = 220): string {
+  const text = value.replace(/\s+/g, " ").trim()
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
+}
+
+export function externalToolProtocolErrorMessage(input: {
+  executor: string
+  kind: "unmatched_result" | "unclosed_call"
+  callID: string
+  toolName?: string
+}): string {
+  const toolPart = input.toolName ? ` for ${input.toolName}` : ""
+  if (input.kind === "unmatched_result") {
+    return (
+      `External executor protocol error (${input.executor}): tool_result id="${input.callID}"${toolPart} ` +
+      "arrived without a prior tool_call; refusing to run host merge_back because tool telemetry is misaligned."
+    )
+  }
+  return (
+    `External executor protocol error (${input.executor}): tool_call id="${input.callID}"${toolPart} ` +
+    "ended without a matching tool_result; refusing to run host merge_back because tool telemetry is incomplete."
+  )
 }
 
 function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
@@ -833,6 +869,7 @@ async function runWithExternalProvider(args: {
   let textCharCount = 0
   let doneOutput: string | undefined
   let errored: string | undefined
+  const protocolErrors: string[] = []
 
   // Live part trackers — events stream in async; we keep open part rows for
   // text/reasoning to extend, and a callID→ToolPart map so tool_result can
@@ -1004,13 +1041,46 @@ async function runWithExternalProvider(args: {
         }
         case "tool_result": {
           const t = tools.get(event.id)
-          if (!t) toolUseCount += 1
           const end = Date.now()
           const name = t?.name ?? externalToolResultName(event)
           const input = t?.input ?? externalToolResultInput(event)
           const metadata = { ...(t?.metadata ?? {}), ...externalToolMetadata(event) }
+          if (!t) {
+            const protocolError = externalToolProtocolErrorMessage({
+              executor: args.executor,
+              kind: "unmatched_result",
+              callID: event.id,
+              toolName: name,
+            })
+            protocolErrors.push(protocolError)
+            await Session.updatePart({
+              id: Identifier.ascending("part"),
+              sessionID: session.id,
+              messageID: assistantMessageID,
+              type: "tool",
+              tool: name,
+              callID: event.id,
+              state: {
+                status: "error",
+                input,
+                error: `${protocolError} Output preview: ${singleLineText(event.output)}`,
+                metadata: {
+                  ...metadata,
+                  protocol_error: "unmatched_tool_result",
+                  output: event.output,
+                },
+                time: { start: end, end },
+              },
+              metadata: {
+                ...metadata,
+                protocol_error: "unmatched_tool_result",
+              },
+            })
+            errored = protocolError
+            break
+          }
           await Session.updatePart({
-            id: t?.id ?? Identifier.ascending("part"),
+            id: t.id,
             sessionID: session.id,
             messageID: assistantMessageID,
             type: "tool",
@@ -1045,7 +1115,7 @@ async function runWithExternalProvider(args: {
           errored = event.message
           break
       }
-      if (event.type === "done" || event.type === "error") break
+      if (errored || event.type === "done" || event.type === "error") break
     }
   } catch (err) {
     errored = err instanceof Error ? err.message : String(err)
@@ -1058,6 +1128,13 @@ async function runWithExternalProvider(args: {
   if (activeReasoning) await flushReasoning(true)
   for (const [callID, t] of tools) {
     const end = Date.now()
+    const protocolError = externalToolProtocolErrorMessage({
+      executor: args.executor,
+      kind: "unclosed_call",
+      callID,
+      toolName: t.name,
+    })
+    protocolErrors.push(protocolError)
     await Session.updatePart({
       id: t.id,
       sessionID: session.id,
@@ -1068,13 +1145,14 @@ async function runWithExternalProvider(args: {
       state: {
         status: "error",
         input: t.input,
-        error: "tool_call had no matching tool_result before stream end",
+        error: protocolError,
         metadata: t.metadata,
         time: { start: t.start, end },
       },
       metadata: t.metadata,
     })
   }
+  if (!errored && protocolErrors.length > 0) errored = protocolErrors.join("\n")
   await Session.updateMessage({ ...assistantMessage, time: { ...assistantMessage.time, completed: Date.now() } })
 
   if (errored) {
@@ -1089,7 +1167,7 @@ async function runWithExternalProvider(args: {
       structured: {
         status: "failed" as const,
         commit_ref: "",
-        summary: `external executor ${args.executor} reported error: ${errored}`,
+        summary: `external executor ${args.executor} stopped before host merge_back: ${singleLineText(errored)}`,
         patch_summary: "",
         tests: [],
         error: errored,
@@ -1115,36 +1193,138 @@ async function runWithExternalProvider(args: {
   }
 
   let mergedHead: string | undefined
+  const mergeCallID = Identifier.ascending("call")
+  const mergePartID = Identifier.ascending("part")
+  const mergeStarted = Date.now()
+  const mergeInput = {
+    branch: args.worktreeBranch,
+    worktreeDir: args.worktreeDir,
+    executor: args.executor,
+  }
+  const mergeMetadata = {
+    source: "host",
+    executor: args.executor,
+    operation: "merge_back",
+  }
+  await Session.updatePart({
+    id: mergePartID,
+    sessionID: session.id,
+    messageID: assistantMessageID,
+    type: "tool",
+    tool: "merge_back",
+    callID: mergeCallID,
+    state: {
+      status: "running",
+      input: mergeInput,
+      title: `publishing ${args.worktreeBranch}`,
+      metadata: mergeMetadata,
+      time: { start: mergeStarted },
+    },
+    metadata: mergeMetadata,
+  })
   try {
     const result = await Worktree.mergeWithRebase({
       branch: args.worktreeBranch,
       worktreeDir: args.worktreeDir,
     })
     mergedHead = result.primaryHead
+    const output = {
+      status: "merged" as const,
+      primary_head: result.primaryHead,
+      primary_branch: result.primaryBranch,
+    }
+    await Session.updatePart({
+      id: mergePartID,
+      sessionID: session.id,
+      messageID: assistantMessageID,
+      type: "tool",
+      tool: "merge_back",
+      callID: mergeCallID,
+      state: {
+        status: "completed",
+        input: mergeInput,
+        output: JSON.stringify(output, null, 2),
+        title: `merged ${result.primaryBranch}@${result.primaryHead.slice(0, 12)}`,
+        metadata: mergeMetadata,
+        time: { start: mergeStarted, end: Date.now() },
+      },
+      metadata: mergeMetadata,
+    })
   } catch (err) {
-    if (err instanceof Worktree.MergeConflictError) {
-      const data = (err as { data: { branch: string; primaryBranch: string; primaryTip: string; conflictPaths: string[] } }).data
+    if (Worktree.MergeConflictError.isInstance(err)) {
+      const { primaryBranch, primaryTip, conflictPaths } = err.data
+      const pathList = conflictPaths.join(", ")
+      const output = {
+        status: "conflict" as const,
+        primary_branch: primaryBranch,
+        primary_tip: primaryTip,
+        conflict_paths: conflictPaths,
+        hint: "Rebase aborted; branch restored. Reconcile the listed paths, commit, then retry merge_back.",
+      }
+      await Session.updatePart({
+        id: mergePartID,
+        sessionID: session.id,
+        messageID: assistantMessageID,
+        type: "tool",
+        tool: "merge_back",
+        callID: mergeCallID,
+        state: {
+          status: "completed",
+          input: mergeInput,
+          output: JSON.stringify(output, null, 2),
+          title: `conflict ${args.worktreeBranch} -> ${primaryBranch}`,
+          metadata: mergeMetadata,
+          time: { start: mergeStarted, end: Date.now() },
+        },
+        metadata: mergeMetadata,
+      })
       return {
         sessionID: session.id,
         structured: {
           status: "failed" as const,
           commit_ref: "",
-          summary: `merge_back conflict on ${args.worktreeBranch} → ${data.primaryBranch}`,
+          summary:
+            `merge_back rebase aborted on ${args.worktreeBranch} → ${primaryBranch} ` +
+            `(${conflictPaths.length} conflict${conflictPaths.length === 1 ? "" : "s"}): ${pathList}`,
           patch_summary: "",
           tests: [],
-          error: `Rebase aborted: conflict paths ${data.conflictPaths.join(", ")}`,
+          error:
+            `Rebase aborted onto ${primaryBranch} (tip ${primaryTip.slice(0, 12)}); ` +
+            `conflict paths: ${pathList}`,
         },
       }
     }
+    const detail = err instanceof Error ? err.message : String(err)
+    const output = {
+      status: "error" as const,
+      reason: detail,
+    }
+    await Session.updatePart({
+      id: mergePartID,
+      sessionID: session.id,
+      messageID: assistantMessageID,
+      type: "tool",
+      tool: "merge_back",
+      callID: mergeCallID,
+      state: {
+        status: "completed",
+        input: mergeInput,
+        output: JSON.stringify(output, null, 2),
+        title: `error ${args.worktreeBranch}`,
+        metadata: mergeMetadata,
+        time: { start: mergeStarted, end: Date.now() },
+      },
+      metadata: mergeMetadata,
+    })
     return {
       sessionID: session.id,
       structured: {
         status: "failed" as const,
         commit_ref: "",
-        summary: `merge_back error on ${args.worktreeBranch}`,
+        summary: `merge_back returned status=error for ${args.worktreeBranch}: ${detail}`,
         patch_summary: "",
         tests: [],
-        error: err instanceof Error ? err.message : String(err),
+        error: detail,
       },
     }
   }

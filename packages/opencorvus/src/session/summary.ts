@@ -92,7 +92,15 @@ export namespace SessionSummary {
         deletions: diffs.reduce((sum, x) => sum + x.deletions, 0),
         files: diffs.length,
       },
-    }).catch(() => undefined)
+    }).catch((err) => {
+      // Don't take down the diff/event publish below — this is best-effort
+      // metadata. But surface the cause so a stuck overlay summary header can
+      // be traced to a write failure instead of disappearing silently.
+      log.warn("setSummary failed; overlay header may be stale", {
+        sessionID: input.sessionID,
+        error: err,
+      })
+    })
     await Storage.write(["session_diff", input.sessionID], diffs)
     Bus.publish(Session.Event.Diff, {
       sessionID: input.sessionID,

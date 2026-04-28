@@ -46,6 +46,59 @@ function firstNonEmptyString(...values: unknown[]): string {
   return "";
 }
 
+function parseDisplayRecord(value: unknown): Record<string, unknown> | undefined {
+  if (record(value)) return value as Record<string, unknown>;
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  if (!text.startsWith("{") || !text.endsWith("}")) return undefined;
+  try {
+    const parsed = JSON.parse(text);
+    return record(parsed) ? parsed as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function shortValue(value: unknown, limit = 96): string {
+  const text = singleLine(value);
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+}
+
+function shortSha(value: unknown): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.length > 12 ? text.slice(0, 12) : text;
+}
+
+function displayToolResultDetail(name: string, state: Record<string, unknown>): string {
+  const output = parseDisplayRecord(state.output);
+  if (!output) return "";
+  const status = firstNonEmptyString(output.status);
+  if (!status) return "";
+
+  const n = toolNameKey(name);
+  if (n === "mergeback") {
+    const primaryBranch = firstNonEmptyString(output.primary_branch, output.primaryBranch);
+    if (status === "merged") {
+      const head = shortSha(output.primary_head ?? output.primaryHead);
+      return `merged ${primaryBranch || "primary"}${head ? `@${head}` : ""}`;
+    }
+    if (status === "conflict") {
+      const paths = Array.isArray(output.conflict_paths)
+        ? output.conflict_paths.filter((item) => typeof item === "string")
+        : [];
+      const count = paths.length;
+      const suffix = count > 0 ? ` (${count} file${count === 1 ? "" : "s"})` : "";
+      return `conflict ${primaryBranch || "primary"}${suffix}`;
+    }
+    if (status === "error") {
+      return `error: ${shortValue(output.reason ?? output.error ?? output.message)}`;
+    }
+  }
+
+  const reason = firstNonEmptyString(output.reason, output.error, output.message, output.summary);
+  return reason ? `${status}: ${shortValue(reason)}` : `status=${shortValue(status)}`;
+}
+
 export function toolNameKey(name: string): string {
   return String(name || "")
     .toLowerCase()
@@ -400,11 +453,25 @@ export function displayToolDetail(
     return (safeInput as any).description || (safeInput as any).prompt || "";
   if (typeof (safeInput as any).raw === "string" && (safeInput as any).raw.trim())
     return (safeInput as any).raw.trim();
+  const resultDetail = displayToolResultDetail(name, safeState as Record<string, unknown>);
+  if (resultDetail) return resultDetail;
   if (
     ((safeState as any).status === "completed" || (safeState as any).status === "running") &&
-    typeof (safeState as any).title === "string"
+    typeof (safeState as any).title === "string" &&
+    (safeState as any).title.trim()
   )
     return (safeState as any).title;
+  // Generic detail extraction for tools outside the named handlers
+  // (report_build_passed, report_build_failed, StructuredOutput, etc.).
+  // Error text wins over raw output because failures must be visible at a
+  // glance; string input fields are used only when no result text exists.
+  const errorText = shortValue((safeState as any).error);
+  if (errorText) return errorText;
+  const outputText = shortValue((safeState as any).output);
+  if (outputText) return outputText;
+  for (const value of Object.values(safeInput)) {
+    if (typeof value === "string" && value.trim()) return shortValue(value);
+  }
   return "";
 }
 

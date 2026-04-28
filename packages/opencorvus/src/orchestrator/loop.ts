@@ -172,7 +172,10 @@ async function runTaskLoopInner(input: {
     await Orchestrator.processTask(taskID, event)
   } catch (err) {
     if (signal?.aborted) return
-    log.error("orchestrator error at decision point", { taskID, error: String(err) })
+    // Pass the Error object directly so Log.formatError walks the stack +
+    // err.cause chain. String(err) collapses to message-only and hides the
+    // underlying provider/transport/DB cause.
+    log.error("orchestrator error at decision point", { taskID, error: err })
   }
 
   log.info("task loop exited", { taskID })

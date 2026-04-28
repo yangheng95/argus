@@ -362,6 +362,47 @@ export namespace SessionLoop {
   }
 
   /**
+   * Compose a one-line context snippet describing what an assistant turn
+   * actually emitted. Appended onto recovery error messages so callers see
+   * concrete evidence of what the model did instead of the generic
+   * "model did not call X" placeholder.
+   *
+   * Snippet shape: `tools=[a,b,c]; text="first 200 chars…"; finish=stop`.
+   * Fields are omitted when they are empty so the snippet stays terse.
+   */
+  async function summarizeAssistantTurn(
+    messageID: string,
+    finish: TurnFinishReason,
+  ): Promise<string> {
+    const parts = await Message.parts(messageID).catch((err) => {
+      log.warn("recovery snippet: failed to load assistant parts", { messageID, error: err })
+      return [] as Message.Part[]
+    })
+    const toolNames: string[] = []
+    let textBody = ""
+    for (const part of parts) {
+      if (part.type === "tool") {
+        const name = (part as Message.ToolPart).tool
+        if (name) toolNames.push(name)
+        continue
+      }
+      if (part.type === "text") {
+        const text = (part as Message.TextPart).text ?? ""
+        if (text.trim() && !textBody) textBody = text.trim()
+      }
+    }
+    const segments: string[] = []
+    if (toolNames.length > 0) segments.push(`tools=[${toolNames.join(",")}]`)
+    if (textBody) {
+      const snippet = textBody.length > 200 ? `${textBody.slice(0, 200)}…` : textBody
+      segments.push(`text=${JSON.stringify(snippet)}`)
+    }
+    if (toolNames.length === 0 && !textBody) segments.push("turn produced no tool calls or text")
+    if (finish) segments.push(`finish=${finish}`)
+    return segments.join("; ")
+  }
+
+  /**
    * Predictive-compaction decision constants (Phase C).
    *
    * `PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT` — fraction of the model's
@@ -1125,8 +1166,11 @@ export namespace SessionLoop {
         hasExistingError: !!processor.message.error,
       })
     ) {
+      const context = await summarizeAssistantTurn(processor.message.id, processor.message.finish)
       processor.message.error = new Message.StructuredOutputError({
-        message: "Model did not produce structured output before the turn ended",
+        message:
+          `Model did not produce structured output before the turn ended ` +
+          `(finish=${processor.message.finish ?? "unset"}); ${context}`,
         retries: 0,
       }).toObject()
       await Session.updateMessage(processor.message)
@@ -1141,8 +1185,11 @@ export namespace SessionLoop {
         hasExistingError: !!processor.message.error,
       })
     ) {
+      const context = await summarizeAssistantTurn(processor.message.id, processor.message.finish)
       processor.message.error = new Message.TerminalToolMissingError({
-        message: `Model did not call terminal tool ${terminalToolContract.toolName} before the turn ended`,
+        message:
+          `Model did not call terminal tool ${terminalToolContract.toolName} before the turn ended ` +
+          `(finish=${processor.message.finish ?? "unset"}); ${context}`,
         toolName: terminalToolContract.toolName,
         retries: 0,
       }).toObject()
