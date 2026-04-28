@@ -72,7 +72,6 @@ CREATE TABLE IF NOT EXISTS session (
   summary_additions  integer,
   summary_deletions  integer,
   summary_files      integer,
-  summary_diffs      text,
   revert             text,
   permission         text,
   metadata           text,

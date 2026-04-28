@@ -1,7 +1,6 @@
 import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Instance } from "@/project/instance"
-import { EngineProtocol } from "@/engine/protocol"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
 import { Log } from "@/util/log"
@@ -11,7 +10,6 @@ import { taskIDForSession, taskSession, sessionRole, sessionGoalID, sessionParen
 
 const log = Log.create({ service: "task-message-protocol-bridge" })
 let initialized = false
-let bridgeQueue = Promise.resolve()
 
 // ── Overlay rendering metadata ──
 //
@@ -204,12 +202,6 @@ function infoForEvent(properties: Record<string, unknown>): { role: string; extr
   throw new Error("bridge: event missing both info.role and messageID")
 }
 
-function enqueueBridgeWork(work: () => Promise<void>) {
-  const pending = bridgeQueue.then(work)
-  bridgeQueue = pending.then(() => undefined, () => undefined)
-  return pending
-}
-
 /**
  * Stamp resolvedRole / channel / goalID / parentSessionID onto every event.
  * Source of truth: session.kind, session.goal_id, session.parent_id.
@@ -247,11 +239,16 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
   return enriched
 }
 
-/** Persist a message event to protocol_event (has sequence, replayable on reconnect). */
-async function bridgeEvent<Definition extends typeof Message.Event[keyof typeof Message.Event]>(
-  def: Definition,
-  properties: Record<string, unknown>,
-) {
+/**
+ * Push a message event through live SSE subscriptions only.
+ *
+ * Message events are NEVER persisted to `protocol_event`. Source of truth for
+ * messages is the `message` / `part` tables — clients hydrate from those on
+ * reconnect (see Session.messages). Persisting would be a 双源 violation
+ * (rule 23) and historically blew up `protocol_event.payload` to hundreds of
+ * MB by re-snapshotting the full message on every update.
+ */
+function bridgeEvent(type: string, properties: Record<string, unknown>) {
   const sessionID = sessionFromProperties(properties)
   if (!sessionID) return
   const taskID = taskIDForSession(sessionID)
@@ -261,39 +258,7 @@ async function bridgeEvent<Definition extends typeof Message.Event[keyof typeof 
     enriched = enrichProperties(properties, sessionID, taskID)
   } catch (err) {
     log.error("bridge: enrichment failed — dropping event", {
-      type: def.type,
-      sessionID,
-      taskID,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return
-  }
-  log.info("bridge → protocol", {
-    type: def.type,
-    sessionID,
-    taskID,
-    resolvedRole: (enriched as Record<string, unknown>).resolvedRole,
-    channel: (enriched as Record<string, unknown>).channel,
-    msgID: (properties.info as any)?.id ?? (properties.part as any)?.messageID ?? "",
-  })
-  await EngineProtocol.emit(def as any, enriched as any, {
-    taskID,
-    sessionID,
-    source: "session.bridge",
-  })
-}
-
-/** Push a delta through live subscriptions only (no DB, no sequence). */
-function bridgeDelta(properties: Record<string, unknown>) {
-  const sessionID = sessionFromProperties(properties)
-  if (!sessionID) return
-  const taskID = taskIDForSession(sessionID)
-  if (!taskID) return
-  let enriched: Record<string, unknown>
-  try {
-    enriched = enrichProperties(properties, sessionID, taskID)
-  } catch (err) {
-    log.error("bridge: delta enrichment failed — dropping event", {
+      type,
       sessionID,
       taskID,
       error: err instanceof Error ? err.message : String(err),
@@ -301,7 +266,7 @@ function bridgeDelta(properties: Record<string, unknown>) {
     return
   }
   ProtocolStore.dispatchEphemeral({
-    type: Message.Event.PartDelta.type,
+    type,
     aggregate: "task",
     taskID,
     sessionID,
@@ -310,24 +275,24 @@ function bridgeDelta(properties: Record<string, unknown>) {
   })
 }
 
-// Cross-Instance event types and their handlers (registry replaces the prior
-// if-chain on event type — additions don't require touching dispatch logic).
-const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) => Promise<void> | void> = {
-  [Message.Event.Updated.type]: async (props) => {
+// Cross-Instance event types and their handlers. Additions don't require
+// touching dispatch logic — register the type → handler here.
+const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) => void> = {
+  [Message.Event.Updated.type]: (props) => {
     cacheMessageInfo(props)
-    await bridgeEvent(Message.Event.Updated, props)
+    bridgeEvent(Message.Event.Updated.type, props)
   },
-  [Message.Event.PartUpdated.type]: async (props) => {
-    await bridgeEvent(Message.Event.PartUpdated, props)
+  [Message.Event.PartUpdated.type]: (props) => {
+    bridgeEvent(Message.Event.PartUpdated.type, props)
   },
-  [Message.Event.Removed.type]: async (props) => {
-    await bridgeEvent(Message.Event.Removed, props)
+  [Message.Event.Removed.type]: (props) => {
+    bridgeEvent(Message.Event.Removed.type, props)
   },
-  [Message.Event.PartRemoved.type]: async (props) => {
-    await bridgeEvent(Message.Event.PartRemoved, props)
+  [Message.Event.PartRemoved.type]: (props) => {
+    bridgeEvent(Message.Event.PartRemoved.type, props)
   },
   [Message.Event.PartDelta.type]: (props) => {
-    bridgeDelta(props)
+    bridgeEvent(Message.Event.PartDelta.type, props)
   },
 }
 
@@ -338,27 +303,27 @@ export function ensureTaskMessageProtocolBridge() {
   initialized = true
   const hostDirectory = Instance.directory
 
-  Bus.subscribe(Message.Event.Updated, (event) => enqueueBridgeWork(async () => {
+  Bus.subscribe(Message.Event.Updated, (event) => {
     cacheMessageInfo(event.properties)
-    await bridgeEvent(Message.Event.Updated, event.properties)
-  }))
-  Bus.subscribe(Message.Event.PartUpdated, (event) => enqueueBridgeWork(async () => {
-    await bridgeEvent(Message.Event.PartUpdated, event.properties)
-  }))
-  Bus.subscribe(Message.Event.Removed, (event) => enqueueBridgeWork(async () => {
-    await bridgeEvent(Message.Event.Removed, event.properties)
-  }))
-  Bus.subscribe(Message.Event.PartRemoved, (event) => enqueueBridgeWork(async () => {
-    await bridgeEvent(Message.Event.PartRemoved, event.properties)
-  }))
-  Bus.subscribe(Message.Event.PartDelta, (event) => enqueueBridgeWork(async () => {
-    await bridgeDelta(event.properties)
-  }))
+    bridgeEvent(Message.Event.Updated.type, event.properties)
+  })
+  Bus.subscribe(Message.Event.PartUpdated, (event) => {
+    bridgeEvent(Message.Event.PartUpdated.type, event.properties)
+  })
+  Bus.subscribe(Message.Event.Removed, (event) => {
+    bridgeEvent(Message.Event.Removed.type, event.properties)
+  })
+  Bus.subscribe(Message.Event.PartRemoved, (event) => {
+    bridgeEvent(Message.Event.PartRemoved.type, event.properties)
+  })
+  Bus.subscribe(Message.Event.PartDelta, (event) => {
+    bridgeEvent(Message.Event.PartDelta.type, event.properties)
+  })
 
   // Cross-Instance bridge: executor sessions run in worktree Instances whose
   // Bus.publish() never reaches the main Instance's subscribers. GlobalBus
   // sees all Instances; we re-execute inside the host Instance context so
-  // Database / ProtocolStore use the main DB, not the worktree's.
+  // Database lookups (sessionRole etc.) use the main DB, not the worktree's.
   GlobalBus.on("event", (envelope) => {
     if (!envelope.payload || !MESSAGE_TYPES.has(envelope.payload.type)) return
     if (envelope.directory === hostDirectory) return
@@ -366,13 +331,11 @@ export function ensureTaskMessageProtocolBridge() {
     if (!props) return
     const handler = CROSS_INSTANCE_HANDLERS[envelope.payload.type]
     if (!handler) return
-    void enqueueBridgeWork(async () => {
-      await Instance.provide({
-        directory: hostDirectory,
-        fn: async () => {
-          await handler(props)
-        },
-      })
+    void Instance.provide({
+      directory: hostDirectory,
+      fn: () => {
+        handler(props)
+      },
     }).catch((err) => {
       log.error("bridge: cross-instance relay failed", {
         type: envelope.payload?.type,

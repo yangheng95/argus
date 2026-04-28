@@ -1434,7 +1434,6 @@ function conversationEventPage(
   })
   const cursor = rows.reduce((max, event) => Math.max(max, event.sequence), input.after)
   const events = rows
-    .filter((event) => includeConversationHydrateEvent(event.type))
     .map(protocolTaskEvent)
     .filter((event) => input.rewindCursor == null || event.timestamp <= input.rewindCursor)
   return {
@@ -1473,14 +1472,3 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
   }
 }
 
-function includeConversationHydrateEvent(type: string): boolean {
-  // Message events are already represented by `transcript`; replaying them
-  // here would duplicate cards. Executor run events are not in transcript and
-  // must be hydrated so task switches can rebuild the same execution record
-  // that live SSE produced.
-  return !(
-    type === "message.updated" ||
-    type === "message.part.updated" ||
-    type === "message.part.delta"
-  )
-}

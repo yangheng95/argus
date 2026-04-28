@@ -1,7 +1,6 @@
 import { sqliteTable, text, integer, index, primaryKey } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { Message } from "./message"
-import type { Snapshot } from "@/snapshot"
 import type { PermissionNext } from "@/permission/next"
 import { Timestamps } from "@/storage/schema.sql"
 
@@ -93,7 +92,6 @@ export const SessionTable = sqliteTable(
     summary_additions: integer(),
     summary_deletions: integer(),
     summary_files: integer(),
-    summary_diffs: text({ mode: "json" }).$type<Snapshot.FileDiff[]>(),
     revert: text({ mode: "json" }).$type<{ messageID: string; partID?: string; snapshot?: string; diff?: string }>(),
     permission: text({ mode: "json" }).$type<PermissionNext.Ruleset>(),
     /** Free-form per-session metadata. */
