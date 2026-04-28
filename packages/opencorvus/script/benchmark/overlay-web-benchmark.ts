@@ -388,6 +388,12 @@ if (resumeTaskID) {
     await fs.rm(path.join(temp.dir, "opencorvus.json"), { force: true })
     await fs.rm(path.join(temp.dir, ".opencorvus"), { recursive: true, force: true })
     await fs.mkdir(temp.config, { recursive: true })
+    await fs.mkdir(path.join(temp.dir, ".opencorvus"), { recursive: true })
+    // Re-register the benchmark model. scaffoldProject does this for fresh
+    // projects; here we just write the model config (no scaffolding) so the
+    // existing source tree is preserved and the orchestrator boots with an
+    // LLM available — without this it crashes with MissingModelConfigError.
+    await writeBenchmarkModelConfig(temp.dir, model)
   }
 }
 // Re-inject local provider configs after scaffoldProject (which overwrites config-override)
@@ -1148,6 +1154,10 @@ async function scaffoldProject(dir: string, model: string) {
       2,
     ),
   )
+  await writeBenchmarkModelConfig(dir, model)
+}
+
+async function writeBenchmarkModelConfig(dir: string, model: string) {
   const providerID = model.split("/")[0] || "openai"
   const config = JSON.stringify(
     {
