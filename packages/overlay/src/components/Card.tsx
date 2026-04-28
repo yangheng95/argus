@@ -74,7 +74,19 @@ export function Card(props: { node: CardNode; depth: number }) {
     props.node.kind === "agent" ? sessionIDFromCardID(props.node.id) : undefined,
   );
   const directAgentSessionID = createMemo(() => {
-    const sessionID = traceSessionID();
+    // kind="agent" cards encode the sessionID in their card id. kind="phase"
+    // cards absorb their sub-agent session's parts into themselves and
+    // therefore never produce a `kind="agent"` card — but the underlying
+    // session still exists in the backend and accepts /reply, so we surface
+    // the absorbed sessionID via `phaseSessionID` so the reply box renders
+    // on phase cards (build / planner) the same as on standalone agent
+    // cards (requirements / architect / design-analyst / delivery / ...).
+    const sessionID =
+      props.node.kind === "agent"
+        ? traceSessionID()
+        : props.node.kind === "phase"
+          ? props.node.phaseSessionID
+          : undefined;
     if (!sessionID) return undefined;
     if (sessionID === rootTaskSessionID()) return undefined;
     return sessionID;

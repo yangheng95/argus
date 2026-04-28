@@ -95,6 +95,14 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   expect(snapshot.nodes[buildWorkerCardID]).toBeUndefined();
   expect(snapshot.nodes[plannerCardID]).toBeUndefined();
 
+  // Phase cards must surface the absorbed sessionID via `phaseSessionID` so
+  // the inline AgentSessionReplyBox in Card.tsx can target the running
+  // sub-agent session. Without this, build / planner have no side-channel
+  // for user → sub-agent reply during execution — the route accepts it
+  // (DIRECT_REPLY_AGENT_KINDS includes "build"), but the UI has no input.
+  expect(snapshot.nodes[buildPhaseID]!.phaseSessionID).toBe(BUILD_SID);
+  expect(snapshot.nodes[planPhaseID]!.phaseSessionID).toBe(PLANNER_SID);
+
   // Build phase's parts include the tool call + text from the build worker
   // session (msg_build_1). Planner phase's parts include the planner's text.
   const buildParts = snapshot.nodes[buildPhaseID]!.parts;
