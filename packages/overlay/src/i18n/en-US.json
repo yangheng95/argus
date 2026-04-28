@@ -548,7 +548,7 @@
   "titlebar.connection.offline": "Offline",
   "titlebar.connection.online": "Online",
   "titlebar.full_transcript": "Show full transcript",
-  "titlebar.full_transcript_hint": "Reveal hidden control text, internal tool steps, and raw assistant output.",
+  "titlebar.full_transcript_hint": "Show control text, internal tool steps, and raw assistant output.",
   "titlebar.logs": "Logs",
   "titlebar.maximize": "Maximize",
   "titlebar.minimize": "Minimize",

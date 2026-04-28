@@ -256,7 +256,6 @@ export namespace SessionPrompt {
                 messageID: info.id,
                 sessionID: input.sessionID,
                 type: "text",
-                synthetic: true,
                 text: `Reading MCP resource: ${part.filename} (${uri})`,
               },
             ]
@@ -277,7 +276,6 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    synthetic: true,
                     text: content.text as string,
                   })
                 } else if ("blob" in content && content.blob) {
@@ -286,7 +284,6 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    synthetic: true,
                     text: `[Binary content: ${mimeType}]`,
                   })
                 }
@@ -304,7 +301,6 @@ export namespace SessionPrompt {
                 messageID: info.id,
                 sessionID: input.sessionID,
                 type: "text",
-                synthetic: true,
                 text: `Failed to read MCP resource ${part.filename}: ${message}`,
               })
             }
@@ -323,14 +319,12 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    synthetic: true,
                     text: `Called the Read tool with the following input: ${JSON.stringify({ filePath: part.filename })}`,
                   },
                   {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    synthetic: true,
                     text: textContent,
                   },
                   {
@@ -397,7 +391,6 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    synthetic: true,
                     text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
                   },
                 ]
@@ -420,14 +413,12 @@ export namespace SessionPrompt {
                       messageID: info.id,
                       sessionID: input.sessionID,
                       type: "text",
-                      synthetic: true,
                       text: result.output,
                     })
                     if (result.attachments?.length) {
                       pieces.push(
                         ...result.attachments.map((attachment) => ({
                           ...attachment,
-                          synthetic: true,
                           filename: attachment.filename ?? part.filename,
                           messageID: info.id,
                           sessionID: input.sessionID,
@@ -454,7 +445,6 @@ export namespace SessionPrompt {
                       messageID: info.id,
                       sessionID: input.sessionID,
                       type: "text",
-                      synthetic: true,
                       text: `Read tool failed to read ${filepath} with the following error: ${message}`,
                     })
                   })
@@ -480,14 +470,12 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    synthetic: true,
                     text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
                   },
                   {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    synthetic: true,
                     text: result.output,
                   },
                   {
@@ -505,7 +493,6 @@ export namespace SessionPrompt {
                   sessionID: input.sessionID,
                   type: "text",
                   text: `Called the Read tool with the following input: {"filePath":"${filepath}"}`,
-                  synthetic: true,
                 },
                 {
                   id: part.id,
@@ -534,7 +521,6 @@ export namespace SessionPrompt {
               messageID: info.id,
               sessionID: input.sessionID,
               type: "text",
-              synthetic: true,
               text:
                 " Use the above message and context to generate a prompt and call the task tool with subagent: " +
                 part.name +

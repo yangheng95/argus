@@ -84,7 +84,6 @@ export async function shell(
     messageID: userMsg.id,
     sessionID: input.sessionID,
     text: "The following tool was executed by the user",
-    synthetic: true,
   }
   await Session.updatePart(userPart)
 

@@ -32,39 +32,6 @@ export namespace SessionCompaction {
   const COMPACTION_BUFFER = 20_000
   const COMPACTION_THRESHOLD_DEFAULT = 0.7
 
-  /**
-   * Build the synthetic user-message info that `process()` enqueues after an
-   * auto-compaction so the loop continues. The original user turn's
-   * structured-output / system / tools / variant / extra fields MUST be
-   * inherited — otherwise the next loop iteration sees `format=undefined`,
-   * `resolveTools` skips the StructuredOutput injection (loop.ts:485-492),
-   * and the stage agent's core `system` prompt (loop.ts:527-530) is dropped,
-   * leaving the model without its terminal tool or its role prompt. The
-   * loop's contract continues to gate on `lastUser.format` — no second
-   * StructuredOutput injection path is added (rule 22, no dual sources).
-   * See specs/new-arch/2026-04-28-structured-output-systemic-fix.md §B.
-   */
-  export function buildContinueUserMessage(input: {
-    userMessage: Message.User
-    sessionID: string
-    now: number
-  }): Message.User {
-    const { userMessage } = input
-    return {
-      id: Identifier.ascending("message"),
-      role: "user",
-      sessionID: input.sessionID,
-      time: { created: input.now },
-      agent: userMessage.agent,
-      model: userMessage.model,
-      ...(userMessage.format ? { format: userMessage.format } : {}),
-      ...(userMessage.system ? { system: userMessage.system } : {}),
-      ...(userMessage.tools ? { tools: userMessage.tools } : {}),
-      ...(userMessage.variant ? { variant: userMessage.variant } : {}),
-      ...(userMessage.extra ? { extra: userMessage.extra } : {}),
-    }
-  }
-
   export async function isOverflow(input: { tokens: Message.Assistant["tokens"]; model: Provider.Model }) {
     const config = await Config.get()
     if (config.compaction?.auto === false) return false
@@ -240,27 +207,6 @@ When constructing the summary, try to stick to this template:
       model,
     })
 
-    if (result === "continue" && input.auto) {
-      const continueMsg = await Session.updateMessage(
-        buildContinueUserMessage({
-          userMessage,
-          sessionID: input.sessionID,
-          now: Date.now(),
-        }),
-      )
-      await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: continueMsg.id,
-        sessionID: input.sessionID,
-        type: "text",
-        synthetic: true,
-        text: "Continue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.",
-        time: {
-          start: Date.now(),
-          end: Date.now(),
-        },
-      })
-    }
     if (processor.message.error) return "stop"
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
 

@@ -47,7 +47,7 @@ describe("session.prompt missing file", () => {
         if (msg.info.role !== "user") throw new Error("expected user message")
 
         const hasFailure = msg.parts.some(
-          (part) => part.type === "text" && part.synthetic && part.text.includes("Read tool failed to read"),
+          (part) => part.type === "text" && part.text.includes("Read tool failed to read"),
         )
         expect(hasFailure).toBe(true)
 
@@ -239,9 +239,7 @@ describe.skip("session.prompt plan mode reminders", () => {
 
         if (msg.info.role !== "user") throw new Error("expected user message")
 
-        const reminder = msg.parts.find(
-          (part) => part.type === "text" && part.synthetic && part.text.includes("Plan mode is active."),
-        )
+        const reminder = msg.parts.find((part) => part.type === "text" && part.text.includes("Plan mode is active."))
         expect(reminder?.type).toBe("text")
         if (reminder?.type !== "text") throw new Error("expected reminder text")
         expect(reminder.text).toContain(".opencorvus")
@@ -288,9 +286,7 @@ describe.skip("session.prompt plan mode reminders", () => {
 
         if (msg.info.role !== "user") throw new Error("expected user message")
 
-        const reminder = msg.parts.find(
-          (part) => part.type === "text" && part.synthetic && part.text.includes("Plan mode has ended."),
-        )
+        const reminder = msg.parts.find((part) => part.type === "text" && part.text.includes("Plan mode has ended."))
         expect(reminder?.type).toBe("text")
         if (reminder?.type !== "text") throw new Error("expected reminder text")
         expect(reminder.text).toContain(".opencorvus")

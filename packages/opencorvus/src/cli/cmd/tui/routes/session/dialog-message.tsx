@@ -5,7 +5,6 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import type { PromptInfo } from "@tui/component/prompt/history"
-import { textForUI } from "@/session"
 import { useKV } from "../../context/kv.tsx"
 import { useToast } from "../../ui/toast"
 import { formatMessage } from "../../util/transcript"
@@ -46,9 +45,7 @@ export function DialogMessage(props: {
               const parts = sync.data.part[msg.id]
               const promptInfo = parts.reduce(
                 (agg, part) => {
-                  if (part.type === "text") {
-                    if (textForUI(part)) agg.input += part.text
-                  }
+                  if (part.type === "text") agg.input += part.text
                   if (part.type === "file") agg.parts.push(part)
                   return agg
                 },
@@ -105,9 +102,7 @@ export function DialogMessage(props: {
               const parts = sync.data.part[msg.id]
               return parts.reduce(
                 (agg, part) => {
-                  if (part.type === "text") {
-                    if (textForUI(part)) agg.input += part.text
-                  }
+                  if (part.type === "text") agg.input += part.text
                   if (part.type === "file") agg.parts.push(part)
                   return agg
                 },

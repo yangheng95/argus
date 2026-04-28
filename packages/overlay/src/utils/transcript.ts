@@ -66,7 +66,6 @@ function transcriptTime(value: number | undefined): string {
 function formatTranscriptText(part: any, role: string): string {
   let text: string = part?.text || "";
   if (!text.trim()) return "";
-  if (part.audience && part.audience.ui === false) return "";
   const briefRoles = ["user", "planner", "evaluator", "system"];
   if (briefRoles.includes(role) && text.includes("<assistant-brief>")) {
     text = stripAssistantBrief(text);
@@ -76,8 +75,6 @@ function formatTranscriptText(part: any, role: string): string {
 
 function formatTranscriptTool(part: any): string {
   const toolName: string = part?.tool || "unknown";
-  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
-  if (hiddenTools.includes(toolName.toLowerCase())) return "";
   const st = part?.state || {};
   const detail = displayToolDetail(toolName, st.input || {}, st);
   const status: string = st.status || "pending";

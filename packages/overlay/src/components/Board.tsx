@@ -325,11 +325,11 @@ export function Board(props: BoardProps) {
   // / executor / evaluator / ...), a goalID, and a flat `parts` array with
   // boundary markers between the messages it aggregated.
   //
-  // We re-split the card's parts at boundary markers so each synthetic
-  // message preserves per-turn reasoning ordering when `CardParts` re-renders
-  // them in the panel. One card → N synthetic messages (N = boundary count + 1,
+  // We re-split the card's parts at boundary markers so each message segment
+  // preserves per-turn reasoning ordering when `CardParts` re-renders
+  // them in the panel. One card -> N message segments (N = boundary count + 1,
   // minus empty trailing groups).
-  function cardToSyntheticMessages(card: CardNode): any[] {
+  function cardToMessageSegments(card: CardNode): any[] {
     const parts = card.parts || [];
     if (parts.length === 0) return [];
     const groups: any[] = [];
@@ -384,7 +384,7 @@ export function Board(props: BoardProps) {
     const out: any[] = [];
     for (const stage of ["spec", "goal"]) {
       for (const card of agentCardsForStage(stage)) {
-        out.push(...cardToSyntheticMessages(card));
+        out.push(...cardToMessageSegments(card));
       }
     }
     return out;

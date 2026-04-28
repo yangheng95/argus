@@ -9,9 +9,8 @@ import { Agent } from "@/agent/agent"
 /**
  * Session wake mechanism.
  *
- * Injects a synthetic user message into a session to trigger the
- * `waitForUserMessage()` listener. Same pattern as compaction.ts
- * "continue" message injection (lines 202-224).
+ * Appends a scheduled prompt as a normal session message to trigger the
+ * `waitForUserMessage()` listener.
  *
  * If the session's loop is in standby (waiting for user message),
  * the injected message will wake it. If the loop is not running,
@@ -23,7 +22,7 @@ export namespace SessionWake {
   export interface WakeInput {
     /** Existing session ID to wake. If omitted, creates a new session. */
     sessionID?: string
-    /** The prompt to inject as a synthetic user message. */
+    /** The prompt to append as the next session message. */
     prompt: string
     /** Agent name. If omitted, uses Agent.defaultAgent(). */
     agent?: string
@@ -32,7 +31,7 @@ export namespace SessionWake {
   }
 
   /**
-   * Wake a session by injecting a synthetic user message.
+   * Wake a session by appending the scheduled prompt.
    * Returns the session ID (existing or newly created).
    */
   export async function wake(input: WakeInput): Promise<string> {
@@ -57,7 +56,6 @@ export namespace SessionWake {
       model = await resolveModel(sessionID)
     }
 
-    // Inject synthetic user message (same pattern as compaction.ts line 202-224)
     const msg = await Session.updateMessage({
       id: Identifier.ascending("message"),
       role: "user",
@@ -71,8 +69,7 @@ export namespace SessionWake {
       messageID: msg.id,
       sessionID,
       type: "text",
-      synthetic: true,
-      text: `[Scheduled wake-up] ${input.prompt}`,
+      text: input.prompt,
       time: {
         start: Date.now(),
         end: Date.now(),

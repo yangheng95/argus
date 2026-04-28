@@ -77,7 +77,6 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatMessage, formatTranscript } from "../../util/transcript"
-import { textForBoth, textForUI } from "@/session"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 
@@ -260,7 +259,7 @@ export function Session() {
         const parts = sync.data.part[message.id]
         if (!parts || !Array.isArray(parts)) return false
 
-        return parts.some((part) => part && part.type === "text" && textForBoth(part))
+        return parts.some((part) => part && part.type === "text")
       })
       .sort((a, b) => a.y - b.y)
 
@@ -444,9 +443,7 @@ export function Session() {
         prompt.set(
           parts.reduce(
             (agg, part) => {
-              if (part.type === "text") {
-                if (textForUI(part)) agg.input += part.text
-              }
+              if (part.type === "text") agg.input += part.text
               if (part.type === "file") agg.parts.push(part)
               return agg
             },
@@ -678,7 +675,7 @@ export function Session() {
           const parts = sync.data.part[message.id]
           if (!parts || !Array.isArray(parts)) continue
 
-          const hasValidTextPart = parts.some((part) => part && part.type === "text" && textForBoth(part))
+          const hasValidTextPart = parts.some((part) => part && part.type === "text")
 
           if (hasValidTextPart) {
             const child = scroll.getChildren().find((child) => {
@@ -1202,7 +1199,7 @@ function UserMessage(props: {
 }) {
   const ctx = use()
   const local = useLocal()
-  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && textForUI(x) ? [x] : []))[0])
+  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" ? [x] : []))[0])
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const { theme } = useTheme()
   const [hover, setHover] = createSignal(false)

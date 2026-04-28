@@ -162,7 +162,7 @@ export function classifyMessage(msg: any, rootSessionID: string): string {
   if (AGENT_CARD_STAGES.has(resolved as AgentRole)) return resolved;
 
   // The store may receive direct message objects before overlay stamping
-  // (tests, synthetic entries, or partial reloads). The agent field is still
+  // (tests or partial reloads). The agent field is still
   // first-party message metadata, so classify it canonically here.
   const agent = String(msg?.info?.agent || "").trim().toLowerCase();
   const normalized = normalizeAgentRole(agent);

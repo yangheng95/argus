@@ -7,7 +7,6 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "@tui/component/prompt/history"
-import { textForBoth, textForUI } from "@/session"
 
 export function DialogForkFromTimeline(props: { sessionID: string; onMove: (messageID: string) => void }) {
   const sync = useSync()
@@ -24,7 +23,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
     const result = [] as DialogSelectOption<string>[]
     for (const message of messages) {
       if (message.role !== "user") continue
-      const part = (sync.data.part[message.id] ?? []).find((x) => x.type === "text" && textForBoth(x)) as TextPart
+      const part = (sync.data.part[message.id] ?? []).find((x) => x.type === "text") as TextPart
       if (!part) continue
       result.push({
         title: part.text.replace(/\n/g, " "),
@@ -38,9 +37,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
           const parts = sync.data.part[message.id] ?? []
           const initialPrompt = parts.reduce(
             (agg, part) => {
-              if (part.type === "text") {
-                if (textForUI(part)) agg.input += part.text
-              }
+              if (part.type === "text") agg.input += part.text
               if (part.type === "file") agg.parts.push(part)
               return agg
             },

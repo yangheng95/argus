@@ -4,7 +4,6 @@ import { Provider } from "../../provider/provider"
 import { Message } from "../message"
 import { LLM } from "../llm"
 import { iife } from "@/util/iife"
-import { messageControlOnly } from "../part-visibility"
 import { Log } from "../../util/log"
 
 const log = Log.create({ service: "session.prompt" })
@@ -18,11 +17,10 @@ export async function ensureTitle(input: {
   if (input.session.parentID) return
   if (!Session.isDefaultTitle(input.session.title)) return
 
-  // Find first user message that is not only control text.
-  const firstRealUserIdx = input.history.findIndex((m) => m.info.role === "user" && !messageControlOnly(m.parts))
+  const firstRealUserIdx = input.history.findIndex((m) => m.info.role === "user")
   if (firstRealUserIdx === -1) return
 
-  const isFirst = input.history.filter((m) => m.info.role === "user" && !messageControlOnly(m.parts)).length === 1
+  const isFirst = input.history.filter((m) => m.info.role === "user").length === 1
   if (!isFirst) return
 
   // Gather all messages up to and including the first real user message for context

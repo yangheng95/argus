@@ -63,8 +63,7 @@ test("wake injects the configured default model instead of inheriting the last s
       const text = last.parts.find((part) => part.type === "text")
       expect(text?.type).toBe("text")
       if (text?.type !== "text") throw new Error("expected text part")
-      expect(text.synthetic).toBe(true)
-      expect(text.text).toContain("[Scheduled wake-up] resume scheduled work")
+      expect(text.text).toBe("resume scheduled work")
     },
   })
 })
