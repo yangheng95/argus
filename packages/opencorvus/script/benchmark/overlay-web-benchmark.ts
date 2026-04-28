@@ -100,6 +100,7 @@ const KNOWN_FLAGS = new Set<string>([
   "--resume-home-dir",
   "--resume-message",
   "--resume-task-id",
+  "--max-auto-resumes",
   "--spec-max-steps",
   "--title",
   "--figma-url",
@@ -153,6 +154,11 @@ const keep = !process.argv.includes("--no-keep")
 const resumeTaskID = flag("--resume-task-id")
 const resumeHomeDir = flag("--resume-home-dir")
 const resumeMessage = flag("--resume-message") || "请继续完成项目，修复所有失败的goals并重试，直到全部通过。"
+// Auto-resume drill: when waitForFinal returns with task.status = failed
+// or cancelled, the bench cancels the active run and injects the resume
+// wake-up message instead of giving up. Bounded so a permanently broken
+// task does not loop forever. Set to 0 to disable.
+const maxAutoResumes = Number(flag("--max-auto-resumes") ?? "3")
 const headless = false
 const executor = (flag("--executor") || "opencode") as
   | "opencode"
@@ -1024,7 +1030,31 @@ try {
   marks.resumedAt = Date.now()
   board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
-  progress = await waitForFinal(taskID, api)
+  // The bench is allowed to break — orchestrator stalls, LLM aborts,
+  // sub-agent gives up. When waitForFinal returns a non-completed
+  // terminal state (failed / cancelled), cancel the dead run and inject
+  // the resume wake-up message. The orchestrator's describe-snapshot
+  // logic figures out what to redo from where it stopped. Bounded so
+  // a permanently broken task does not loop forever.
+  let autoResumes = 0
+  while (true) {
+    progress = await waitForFinal(taskID, api)
+    const status = String(progress?.task?.status ?? "")
+    if (status === "completed") break
+    if (autoResumes >= maxAutoResumes) {
+      logLine(`[overlay-benchmark] task ended status=${status} after ${autoResumes} auto-resumes — giving up`)
+      break
+    }
+    autoResumes += 1
+    logLine(`[overlay-benchmark] task ended status=${status} — auto-resume ${autoResumes}/${maxAutoResumes}, injecting wake-up`)
+    await api(`/task/${taskID}/cancel`, { method: "POST" }).catch(() => undefined)
+    await Bun.sleep(1500)
+    await api(`/task/${taskID}/message`, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ text: resumeMessage, source: "user_message" }),
+    }).catch((err) => logLine(`[overlay-benchmark] auto-resume message inject failed: ${err}`))
+  }
   marks.completedAt = Date.now()
   finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()).catch(() => board) : board
 
