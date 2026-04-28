@@ -30,6 +30,7 @@ export const SandboxMode = z.enum(["read-only", "workspace-write", "danger-full-
 export type SandboxModeInfo = z.infer<typeof SandboxMode>
 
 export const CodingRunInput = z.object({
+  sessionID: z.string().optional(),
   model: z.string().optional(),
   prompt: z.string(),
   cwd: z.string().optional(),

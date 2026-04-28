@@ -84,7 +84,7 @@ export namespace ClaudeAgentExecutor {
       capabilities,
       async *run(raw) {
         const input = CodingRunInput.parse(raw)
-        yield* execute(client, provisionalID(), input, raw.signal)
+        yield* execute(client, input.sessionID ?? provisionalID(), input, raw.signal)
       },
       async *resume(raw) {
         const input = CodingResumeInput.parse(raw)

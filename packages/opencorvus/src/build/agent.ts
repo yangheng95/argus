@@ -39,7 +39,7 @@ import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
 import { ExecutorRegistry } from "@/executor/registry"
-import { record, structuredInput, type CodingEventInfo, type CodingProviderOptions } from "@/executor/contract"
+import { record, structuredInput, type CodingEventInfo, type CodingProvider, type CodingProviderOptions } from "@/executor/contract"
 import { Identifier } from "@/id/id"
 import { Message } from "@/session/message"
 import { MCPServe } from "@/mcp/serve"
@@ -49,6 +49,8 @@ import type { FileDiff } from "@/snapshot/types"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { withStreamActivity } from "@/util/stream-activity"
+import { PermissionNext } from "@/permission/next"
+import { Question } from "@/question"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 
@@ -728,6 +730,146 @@ function externalQuestionLine(question: Record<string, unknown>): string {
   return `- ${header}: ${text}`
 }
 
+async function resolveExternalApproval(input: {
+  provider: CodingProvider
+  sessionID: string
+  event: Extract<CodingEventInfo, { type: "approval_request" }>
+}) {
+  if (!input.provider.respond) throw new Error("external executor emitted an approval request but does not support respond()")
+  const permission = input.event.approval || "external_executor"
+  const pattern = input.event.message?.trim() || permission
+  try {
+    await PermissionNext.ask({
+      sessionID: input.sessionID,
+      permission,
+      patterns: [pattern],
+      metadata: input.event.meta ?? {},
+      always: [pattern],
+      ruleset: [{ permission, pattern: "*", action: "ask" }],
+    })
+    await input.provider.respond({
+      sessionID: input.sessionID,
+      requestID: input.event.id,
+      kind: "approval",
+      response: { decision: "accept" },
+    })
+  } catch (error) {
+    await input.provider.respond({
+      sessionID: input.sessionID,
+      requestID: input.event.id,
+      kind: "approval",
+      response: {
+        decision: "decline",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    })
+  }
+}
+
+async function resolveExternalInput(input: {
+  provider: CodingProvider
+  executor: "codex" | "claude-code"
+  sessionID: string
+  event: Extract<CodingEventInfo, { type: "input_request" }>
+}) {
+  if (!input.provider.respond) throw new Error("external executor emitted an input request but does not support respond()")
+  const result = await Question.askAndFormat({
+    sessionID: input.sessionID,
+    questions: externalQuestions(input.event),
+  })
+  if (!result.answers) {
+    await input.provider.respond({
+      sessionID: input.sessionID,
+      requestID: input.event.id,
+      kind: "input",
+      error: {
+        code: -32000,
+        message: "Rejected by operator",
+      },
+    })
+    return
+  }
+
+  const content = externalAnswerContent(input.event, result.answers)
+  await input.provider.respond({
+    sessionID: input.sessionID,
+    requestID: input.event.id,
+    kind: "input",
+    response: inputResponse(input.executor, input.event, content),
+  })
+}
+
+function externalQuestions(event: Extract<CodingEventInfo, { type: "input_request" }>): Question.Info[] {
+  const raw = event.questions?.length ? event.questions : [{
+    id: event.id,
+    header: "Input",
+    question: "Additional input required",
+    requested_schema: event.meta?.requested_schema,
+  }]
+  return raw.map((item, index) => {
+    const options = requestedSchemaOptions(item)
+    return {
+      header: stringField(item.header) || stringField(item.id) || `Input ${index + 1}`,
+      question: stringField(item.question) || stringField(item.message) || "Additional input required",
+      options,
+      custom: options.length === 0,
+    }
+  })
+}
+
+function requestedSchemaOptions(question: Record<string, unknown>): Question.Option[] {
+  const schema = record(question.requested_schema) ?? record(question.requestedSchema)
+  const properties = record(schema?.properties)
+  if (!properties) return []
+  const enums = Object.values(properties).flatMap((value) => {
+    const next = record(value)
+    return Array.isArray(next?.enum) ? next.enum.filter((item): item is string => typeof item === "string") : []
+  })
+  return [...new Set(enums)].map((label) => ({
+    label,
+    description: label,
+  }))
+}
+
+function externalAnswerContent(
+  event: Extract<CodingEventInfo, { type: "input_request" }>,
+  answers: Question.Answer[],
+) {
+  const keys = externalInputKeys(event)
+  return Object.fromEntries(keys.map((key, index) => [key, (answers[index] ?? answers[0] ?? []).join(", ")]))
+}
+
+function externalInputKeys(event: Extract<CodingEventInfo, { type: "input_request" }>) {
+  const schemaKeys = [
+    ...requestedSchemaKeys(event.meta?.requested_schema),
+    ...requestedSchemaKeys(event.meta?.requestedSchema),
+  ]
+  if (schemaKeys.length > 0) return schemaKeys
+  const ids = (event.questions ?? [])
+    .map((item) => stringField(item.id) || stringField(item.header))
+    .filter((item): item is string => !!item)
+  return ids.length > 0 ? ids : [event.id]
+}
+
+function requestedSchemaKeys(schemaInput: unknown) {
+  const schema = record(schemaInput)
+  const properties = record(schema?.properties)
+  return properties ? Object.keys(properties) : []
+}
+
+function inputResponse(
+  executor: "codex" | "claude-code",
+  event: Extract<CodingEventInfo, { type: "input_request" }>,
+  content: Record<string, string>,
+) {
+  if (executor === "claude-code") return { content }
+  const adapter = stringField(event.meta?.adapter)
+  if (adapter === "request_user_input" || event.meta?.requested_schema || event.meta?.requestedSchema) {
+    return content
+  }
+  return { answers: Object.fromEntries(Object.entries(content).map(([key, value]) => [key, { answers: [value] }])) }
+}
+
 function singleLineText(value: string, limit = 220): string {
   const text = value.replace(/\s+/g, " ").trim()
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
@@ -980,6 +1122,7 @@ async function runWithExternalProvider(args: {
     label: `build-agent-external:${args.executor}:${session.id}`,
   })
   const runInput = {
+    sessionID: session.id,
     model: resolveOption(options.model),
     prompt,
     cwd: args.worktreeDir,
@@ -1113,10 +1256,16 @@ async function runWithExternalProvider(args: {
         case "progress":
         case "plan_delta":
         case "diff_delta":
-        case "approval_request":
-        case "input_request":
         case "usage":
           await appendExternalEventPart(event)
+          break
+        case "approval_request":
+          await appendExternalEventPart(event)
+          await resolveExternalApproval({ provider, sessionID: session.id, event })
+          break
+        case "input_request":
+          await appendExternalEventPart(event)
+          await resolveExternalInput({ provider, executor: args.executor, sessionID: session.id, event })
           break
         case "done":
           doneOutput = event.output ?? undefined

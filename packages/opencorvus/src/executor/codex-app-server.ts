@@ -78,7 +78,7 @@ export namespace CodexAppServerExecutor {
       capabilities,
       async *run(raw) {
         const input = CodingRunInput.parse(raw)
-        const logicalID = provisionalID()
+        const logicalID = input.sessionID ?? provisionalID()
         const client = factory(input.cwd)
         sessions.set(logicalID, { client })
         await ensure(client)
@@ -421,23 +421,8 @@ async function* request(
   client: CodexAppServerClient,
 ): AsyncGenerator<CodingEventInfo> {
   const data = item.params ?? {}
-  // codex 0.125 emits a JSON-RPC `request` (not a notification) for every
-  // MCP elicitation, command execution, file-change, and apply-patch
-  // approval round-trip and parks the turn awaiting our reply. The codex
-  // config flags (`approvalPolicy=never`, `--disable
-  // tool_call_mcp_elicitation`, `--disable guardian_approval`) suppress
-  // the *interactive* prompt path inside codex but the protocol still
-  // surfaces the request to the client; without an explicit reply codex
-  // sits forever, which is exactly the silent-stall the build agent
-  // chased on the 2026-04-28 toolpin run. Auto-approve at the protocol
-  // layer so the user-declared intent (`approvalPolicy=never`) actually
-  // reaches every codex code path. Upstream consumers still see a
-  // diagnostic event for trace, but the codex turn is unblocked
-  // synchronously.
+  void client
   if (item.method === "item/tool/requestUserInput" || item.method === "toolRequestUserInput" || item.method === "mcpServer/elicitation/request") {
-    if (client.respond) {
-      await client.respond({ id: item.id, result: { decision: "approved" } })
-    }
     yield {
       type: "input_request",
       id: String(item.id),
@@ -454,7 +439,6 @@ async function* request(
       }],
       meta: {
         request_id: item.id,
-        auto_approved: true,
         ...data,
       },
     }
@@ -488,9 +472,6 @@ async function* request(
       }
       return
     }
-    if (client.respond) {
-      await client.respond({ id: item.id, result: { decision: "approved" } })
-    }
     yield {
       type: "approval_request",
       id: String(item.id),
@@ -498,7 +479,6 @@ async function* request(
       message: text(data.reason || data.command || data.tool || item.method),
       meta: {
         request_id: item.id,
-        auto_approved: true,
         ...data,
       },
     }
