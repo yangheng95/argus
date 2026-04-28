@@ -285,16 +285,11 @@ const DIAG_TYPES = new Set([
   "orchestrator.integrity.review.progress",
   "orchestrator.integrity.review.chunk",
   "orchestrator.integrity.review.completed",
-  // Stage-completion milestones. Without these the benchmark log shows the
-  // task entering a phase (intent-analysis → requirements → architect → …)
-  // but never the structured terminal record — making it impossible to tell
-  // a long-running stage apart from a stalled one. Each event carries
-  // status=completed|error|failed and stage-specific counts (requirementCount,
-  // contractCount, layoutSections, …) which surface in formatEventLine.
-  "orchestrator.requirements.completed",
-  "orchestrator.architect.completed",
-  "orchestrator.design_analysis.completed",
-  "orchestrator.build.completed",
+  // Session lifecycle (single source). Replaces the per-phase *.completed
+  // events the benchmark used to track for stage-terminal heartbeat — the
+  // formatEventLine handler above filters streaming/idle and surfaces only
+  // terminal + retry transitions in the digest.
+  "orchestrator.session.status",
   "orchestrator.delivery.ready",
   "orchestrator.evaluation.completed",
 ])
@@ -617,51 +612,25 @@ function formatEventLine(
       `dims=[${dimText}] totals=i${issueCount}/c${correctionCount}/m${missingCount} ` +
       `summary="${summary}"`
   }
-  // Stage-completion milestones. The flattened entry only keeps a few text
-  // fields, but each stage's structured payload (counts, categories, …) is
-  // in `props`. Surface the most useful per-stage numbers so a human reading
-  // the log can tell at a glance whether the stage produced anything.
-  if (entry.type === "orchestrator.requirements.completed") {
-    const status = String(props.status ?? entry.status ?? "")
-    const requirements = props.requirementCount ?? "?"
-    const goals = props.goalCount ?? "?"
-    const decisions = props.decisionCount ?? "?"
-    const traceability = props.traceabilityCount ?? "?"
-    const integrity = props.integrityScore ?? "?"
-    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
-    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
-    return `[overlay-benchmark] requirements.completed status=${status} ` +
-      `req=${requirements} goals=${goals} decisions=${decisions} ` +
-      `trace=${traceability} integrityScore=${integrity}${error} summary="${summary}"`
-  }
-  if (entry.type === "orchestrator.architect.completed") {
-    const status = String(props.status ?? entry.status ?? "")
-    const contracts = props.contractCount ?? "?"
-    const cats = Array.isArray(props.categories) ? (props.categories as string[]).join(",") : ""
-    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
-    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
-    return `[overlay-benchmark] architect.completed status=${status} ` +
-      `contracts=${contracts} categories=[${cats}]${error} summary="${summary}"`
-  }
-  if (entry.type === "orchestrator.design_analysis.completed") {
-    const status = String(props.status ?? entry.status ?? "")
-    const sections = props.layoutSections ?? "?"
-    const tokens = props.styleTokens ?? "?"
-    const components = props.componentCount ?? "?"
-    const interactions = props.interactionCount ?? "?"
-    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
-    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
-    return `[overlay-benchmark] design_analysis.completed status=${status} ` +
-      `sections=${sections} tokens=${tokens} components=${components} ` +
-      `interactions=${interactions}${error} summary="${summary}"`
-  }
-  if (entry.type === "orchestrator.build.completed") {
-    const status = String(props.status ?? entry.status ?? "")
-    const goalID = props.goalID ? ` goal=${String(props.goalID)}` : ""
-    const commit = props.commitRef ? ` commit=${String(props.commitRef).slice(0, 12)}` : ""
-    const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)
-    const error = props.error ? ` error="${clipText(String(props.error), 200)}"` : ""
-    return `[overlay-benchmark] build.completed status=${status}${goalID}${commit}${error} summary="${summary}"`
+  // Session lifecycle milestones (single source — see
+  // packages/opencorvus/src/session/status.ts). Replaces the per-phase
+  // *.completed events the benchmark used to enumerate; counts that used
+  // to surface here are derived from boardStore in the live overlay.
+  if (entry.type === "orchestrator.session.status") {
+    const status = props.status as { type?: string; reason?: string; error?: string; attempt?: number } | undefined
+    if (!status) return ""
+    const sessionID = String(props.sessionID ?? "")
+    const t = String(status.type ?? "")
+    if (t === "terminal") {
+      const reason = String(status.reason ?? "")
+      const errPart = status.error ? ` error="${clipText(String(status.error), 200)}"` : ""
+      return `[overlay-benchmark] session.terminal session=${sessionID} reason=${reason}${errPart}`
+    }
+    if (t === "retry") {
+      return `[overlay-benchmark] session.retry session=${sessionID} attempt=${status.attempt ?? "?"}`
+    }
+    // streaming / idle: too noisy to surface line-by-line in the log digest.
+    return ""
   }
   if (entry.type === "orchestrator.delivery.ready") {
     const summary = clipText(String(props.summary ?? entry.summary ?? ""), 240)

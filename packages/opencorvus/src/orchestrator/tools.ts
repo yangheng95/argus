@@ -571,23 +571,9 @@ export function createOrchestratorTools(input: {
           }
           await trackStepComplete("requirements")
 
-          // Phase-level completion event — Panel uses this to refresh the
-          // Requirements section. goalCount/traceabilityCount are dropped
-          // (Architect emits those on its own completion event).
-          EngineProtocol.emit(
-            EngineEvent.RequirementsCompleted,
-            {
-              taskID,
-              sessionID: result.sessionID,
-              status: "completed",
-              requirementCount: result.requirements.length,
-              goalCount: 0,
-              decisionCount: result.decisions.length,
-              traceabilityCount: 0,
-              summary: result.summary,
-            },
-            { source: "orchestrator.requirements" },
-          )
+          // Card terminal status flows through session.status from
+          // session/prompt.ts; counts on the Panel are derived from
+          // boardStore. No phase-completed bus event needed.
 
           return SubAgentProtocol.yieldResult({
             headline: `SUCCESS: ${result.requirements.length} requirements, ${result.decisions.length} decisions parsed. NEXT: call architect to decompose into goals.`,
@@ -599,24 +585,10 @@ export function createOrchestratorTools(input: {
             pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
           })
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          // Error-path terminal emission. We use the runner session id
-          // captured by onSessionCreated when the agent reached at least
-          // session creation; if the failure happened before that (rare —
-          // model resolution, etc.) we attribute the card to the parent
-          // orchestrator session so the overlay still has somewhere to
-          // render the error message instead of orphaning it.
-          EngineProtocol.emit(
-            EngineEvent.RequirementsCompleted,
-            {
-              taskID,
-              sessionID: runnerSessionID ?? input.agentSessionID,
-              status: "error",
-              error: msg,
-              summary: `Requirements failed: ${msg}`,
-            },
-            { source: "orchestrator.requirements" },
-          )
+          // Card terminal flows through session.status (the runner session's
+          // actor close path emits {type:"terminal", reason:"error"}); the
+          // error message itself surfaces via the thrown error in the
+          // orchestrator's tool result. No phase-completed bus event needed.
           throw err
         } finally {
           // No caller-level guard: the pre-migration runtime enforces progress/absolute timeouts.
@@ -991,22 +963,8 @@ export function createOrchestratorTools(input: {
             byCategory: countByCategory,
           })
 
-          // Phase-level completion event — drives the overlay's
-          // design-analyst session-card terminal status write.
-          EngineProtocol.emit(
-            EngineEvent.DesignAnalysisCompleted,
-            {
-              taskID,
-              sessionID: analysis.sessionID,
-              status: "completed",
-              layoutSections: countByCategory.layout ?? 0,
-              styleTokens: (countByCategory.color ?? 0) + (countByCategory.typography ?? 0) + (countByCategory.spacing ?? 0),
-              componentCount: countByCategory.component ?? 0,
-              interactionCount: countByCategory.interaction ?? 0,
-              summary: `Visual contract ready: ${analysis.specs.length} specs (${(countByCategory.color ?? 0)}c/${(countByCategory.typography ?? 0)}t/${(countByCategory.layout ?? 0)}l/${(countByCategory.component ?? 0)}cp).`,
-            },
-            { source: "orchestrator.design_analysis" },
-          )
+          // Card terminal status flows through session.status; counts on
+          // the Panel come from boardStore. No phase-completed bus event.
 
           return SubAgentProtocol.yieldResult({
             headline:
@@ -1030,17 +988,6 @@ export function createOrchestratorTools(input: {
           await trackStepComplete("design_analysis", undefined, true)
           const msg = err instanceof Error ? err.message : String(err)
           log.error("design_analysis: failed", { taskID, error: msg })
-          EngineProtocol.emit(
-            EngineEvent.DesignAnalysisCompleted,
-            {
-              taskID,
-              sessionID: runnerSessionID ?? input.agentSessionID,
-              status: "error",
-              error: msg,
-              summary: `Design analysis failed: ${msg}`,
-            },
-            { source: "orchestrator.design_analysis" },
-          )
           throw err instanceof Error ? err : new Error(msg)
         }
       },
@@ -1274,33 +1221,8 @@ export function createOrchestratorTools(input: {
             pointer: `read_context scope=decisions (spec ${newSpecSnapshotID})`,
           })
 
-          EngineProtocol.emit(
-            EngineEvent.ArchitectCompleted,
-            {
-              taskID,
-              sessionID: result.sessionID,
-              status: "completed",
-              contractCount: result.contracts.length,
-              categories: [...new Set(result.contracts.map((c) => c.category))],
-              blueprintSummary: result.summary,
-              summary,
-            },
-            { source: "orchestrator.architect" },
-          )
-
           return summary
         } catch (err) {
-          EngineProtocol.emit(
-            EngineEvent.ArchitectCompleted,
-            {
-              taskID,
-              sessionID: runnerSessionID ?? input.agentSessionID,
-              status: "error",
-              error: err instanceof Error ? err.message : String(err),
-              summary: `Architect failed: ${err instanceof Error ? err.message : String(err)}`,
-            },
-            { source: "orchestrator.architect" },
-          )
           throw err
         }
       },
@@ -3966,24 +3888,9 @@ export function createOrchestratorTools(input: {
 
           if (isTaskLevelBuild) await trackStepComplete("build")
 
-          // Phase-level completion event — overlay tree-writer uses this to
-          // mark the spinning build session card as terminal. Without it the
-          // card stays in "running" state forever even though BuildAgent.run
-          // already resolved. Mirrors RequirementsCompleted / ArchitectCompleted
-          // / IntegrityReviewCompleted shape.
-          EngineProtocol.emit(
-            EngineEvent.BuildCompleted,
-            {
-              taskID,
-              sessionID,
-              goalID: attachedGoalID,
-              status: result.status === "passed" ? "passed" : "failed",
-              error: result.error,
-              commitRef: result.commit_ref,
-              summary: result.summary,
-            },
-            { source: "orchestrator.build" },
-          )
+          // Build session terminal flows through session.status when
+          // BuildAgent.run's underlying actor closes. The structured build
+          // report below is the orchestrator-facing tool result.
 
           // Build does NOT mark the task complete — deliver must accept.
           // Return the structured payload so the orchestrator can judge
@@ -4014,25 +3921,11 @@ export function createOrchestratorTools(input: {
           const msg = err instanceof Error ? err.message : String(err)
           log.error("build tool failed", { taskID, error: msg })
           if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
-          // Terminal-error completion event so the UI build card unwinds
-          // even when BuildAgent.run threw before producing a session id.
-          // sessionID falls back to the orchestrator's own session so the
-          // event still has a target to attach the error message to.
-          EngineProtocol.emit(
-            EngineEvent.BuildCompleted,
-            {
-              taskID,
-              sessionID: input.agentSessionID,
-              goalID: attachedGoalID,
-              status: "error",
-              error: msg,
-              summary: `Build failed: ${msg}`,
-            },
-            { source: "orchestrator.build" },
-          )
           // Build itself failed (LLM error, tool guard fault, worktree
           // creation failed, etc.) — distinct from deliver-rejection.
           // Surface the error so the orchestrator decides (retry / fail_task).
+          // Card terminal flows through session.status from the build
+          // agent's actor close path.
           throw err
         }
       },

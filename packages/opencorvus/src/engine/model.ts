@@ -1055,57 +1055,6 @@ export const Event = {
   WorkflowStepUpdated: BusEvent.define("workflow.step.updated", z.object({ taskID: Identifier.schema("task"), stepID: z.string(), goalID: z.string().optional(), status: z.enum(["pending", "running", "completed", "skipped", "failed"]), summary: z.string() })),
   GoalWorkflowProgress: BusEvent.define("goal.workflow.progress", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), completedSteps: z.number(), totalSteps: z.number(), currentStep: z.string().optional(), summary: z.string() })),
 
-  // ── Phase-level completion events (per specs/new-arch.svg "SSE 事件扩展") ──
-  // Emitted when a sub-agent finishes a major phase — success OR error.
-  // Carries `sessionID` so the overlay's tree-writer can write the terminal
-  // status back to the corresponding session card (see
-  // specs/new-arch/07-panel-reactivity.md §SSE 事件 → 精细写入). The Panel
-  // also uses the phase-specific counts (requirementCount, contractCount, …)
-  // to refresh its Requirements / Architect sections without tracking
-  // individual workflow steps. Error emissions carry `status: "error"` and
-  // `error: <message>`; success-only fields are optional on error.
-  RequirementsCompleted: BusEvent.define(
-    "requirements.completed",
-    z.object({
-      taskID: Identifier.schema("task"),
-      sessionID: z.string(),
-      status: z.enum(["completed", "error"]),
-      error: z.string().optional(),
-      requirementCount: z.number().optional(),
-      goalCount: z.number().optional(),
-      decisionCount: z.number().optional(),
-      traceabilityCount: z.number().optional(),
-      integrityScore: z.number().optional(),
-      summary: z.string(),
-    }),
-  ),
-  ArchitectCompleted: BusEvent.define(
-    "architect.completed",
-    z.object({
-      taskID: Identifier.schema("task"),
-      sessionID: z.string(),
-      status: z.enum(["completed", "error"]),
-      error: z.string().optional(),
-      contractCount: z.number().optional(),
-      categories: z.array(z.string()).optional(),
-      blueprintSummary: z.string().optional(),
-      summary: z.string(),
-    }),
-  ),
-  DesignAnalysisCompleted: BusEvent.define(
-    "design_analysis.completed",
-    z.object({
-      taskID: Identifier.schema("task"),
-      sessionID: z.string(),
-      status: z.enum(["completed", "error"]),
-      error: z.string().optional(),
-      layoutSections: z.number().optional(),
-      styleTokens: z.number().optional(),
-      componentCount: z.number().optional(),
-      interactionCount: z.number().optional(),
-      summary: z.string(),
-    }),
-  ),
   /** Integrity review lifecycle markers. The review makes a non-streaming LLM
    *  call that can take 60–180s; without these events the SSE stream falls
    *  silent long enough to trip the benchmark alive-stall detector (cap
@@ -1194,25 +1143,6 @@ export const Event = {
         reason: z.string().optional(),
       })),
       attempts: z.number(),
-    }),
-  ),
-  /** Build agent lifecycle terminal event. Emitted by the orchestrator's
-   *  `build` tool wrapper once `BuildAgent.run` resolves (success or error).
-   *  Carries the build session id so the overlay tree-writer can mark the
-   *  spinning build card as completed/failed — without this event the UI
-   *  card has no terminal signal and spins indefinitely after the agent
-   *  has actually finished. Goal-id is set for pipeline builds, absent
-   *  for direct-workflow builds. */
-  BuildCompleted: BusEvent.define(
-    "build.completed",
-    z.object({
-      taskID: Identifier.schema("task"),
-      sessionID: z.string(),
-      goalID: z.string().optional(),
-      status: z.enum(["passed", "failed", "error"]),
-      error: z.string().optional(),
-      commitRef: z.string().optional(),
-      summary: z.string(),
     }),
   ),
 }

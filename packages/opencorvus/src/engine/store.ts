@@ -823,14 +823,11 @@ export function listGoalWorkspacesForProject(projectID: string) {
  * not gate on `status` columns (rule 23: no state machine). Join with
  * SessionTable only to surface `kind` / `goal_id` for UI labelling.
  *
- * Sessions that have already emitted a phase-terminal event
- * (`*.completed` per the EngineEvent naming contract — requirements.completed,
- * architect.completed, design_analysis.completed, integrity.completed,
- * build.completed, delivery.completed, intent_analysis.completed) are
- * excluded so the overlay's spinner stops the moment the inner runner
- * concludes — without waiting for the orchestrator's next LLM step. The
- * exclusion looks at the same protocol_event table; no parallel state
- * column is introduced (rule 22 single source).
+ * Sessions that have emitted a `session.status` event with
+ * `properties.status.type === "terminal"` are excluded — that is the
+ * single-source terminal signal for any session (orchestrator root,
+ * subagent, future phases). See packages/opencorvus/src/session/status.ts
+ * and specs/new-arch/07-panel-reactivity.md §session 终态信号源.
  */
 export function listActiveSessionsForTask(taskID: string, windowMs = 60_000) {
   const threshold = Date.now() - windowMs
@@ -852,7 +849,8 @@ export function listActiveSessionsForTask(taskID: string, windowMs = 60_000) {
           sql`NOT EXISTS (
             SELECT 1 FROM protocol_event AS pe_done
             WHERE pe_done.session_id = ${ProtocolEventTable.session_id}
-              AND pe_done.type LIKE '%.completed'
+              AND pe_done.type = 'session.status'
+              AND json_extract(pe_done.payload, '$.status.type') = 'terminal'
           )`,
         ),
       )
