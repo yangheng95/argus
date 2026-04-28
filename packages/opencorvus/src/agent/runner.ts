@@ -125,6 +125,7 @@ export type SkillStage =
 export interface StructuredFormat {
   schema: Record<string, unknown>
   retryCount?: number
+  validate?: (output: unknown) => string | undefined | Promise<string | undefined>
 }
 
 export interface RunAgentSessionInput<C> {
@@ -357,7 +358,7 @@ export async function runAgentSession<C>(
   let finalMessage: Message.WithParts | undefined
   try {
     try {
-      await SessionPrompt.withExtraTools(session.id, input.toolKit.tools, async () => {
+      const promptOnce = async () => {
         const promptArgs: Parameters<typeof SessionPrompt.prompt>[0] = {
           sessionID: session.id,
           model: { providerID: model!.providerID, modelID: model!.api.id },
@@ -374,6 +375,13 @@ export async function runAgentSession<C>(
           }
         }
         finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
+      }
+      await SessionPrompt.withExtraTools(session.id, input.toolKit.tools, async () => {
+        if (input.format?.validate) {
+          await SessionPrompt.withStructuredOutputGuard(session.id, input.format.validate, promptOnce)
+          return
+        }
+        await promptOnce()
       })
     } finally {
       errorUnsub()

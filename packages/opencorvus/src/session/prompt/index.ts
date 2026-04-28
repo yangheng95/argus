@@ -44,6 +44,7 @@ export namespace SessionPrompt {
     withExtraTools,
     setStepHook,
     withStepHook,
+    withStructuredOutputGuard,
   } = SessionLoop
   export const { ShellInput, shell } = SessionShell
   export type ShellInput = SessionShell.ShellInput

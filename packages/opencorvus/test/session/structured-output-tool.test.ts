@@ -73,6 +73,28 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     expect(result.metadata).toEqual({ valid: true })
   })
 
+  test("execute rejects semantic guard failures before onSuccess", async () => {
+    const captured: unknown[] = []
+    const schemaShape = jsonSchema(z.object({ status: z.enum(["passed", "failed"]) }))
+    const t = SessionLoop.createStructuredOutputTool({
+      schema: schemaShape,
+      validate: (out) => {
+        const status = (out as { status?: unknown }).status
+        return status === "passed" ? "merge_back must complete before status=passed" : undefined
+      },
+      onSuccess: (out) => captured.push(out),
+    }) as unknown as AIToolLike
+
+    await expect(t.execute({ status: "passed" }, { toolCallId: "call_guard" }))
+      .rejects
+      .toThrow("merge_back must complete")
+    expect(captured).toEqual([])
+
+    const ok = await t.execute({ status: "failed" }, { toolCallId: "call_guard_2" })
+    expect(ok.metadata).toEqual({ valid: true })
+    expect(captured).toEqual([{ status: "failed" }])
+  })
+
   test("toModelOutput returns the tool-call result as a text block", async () => {
     const schemaShape = jsonSchema(z.object({ answer: z.string() }))
     const t = SessionLoop.createStructuredOutputTool({

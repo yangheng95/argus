@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BuildResultSchema, BuildTarget } from "../../src/build-agent/types"
+import { BuildResultSchema, BuildTarget } from "../../src/build/types"
 
 describe("BuildResultSchema", () => {
   test("accepts a passed result with commit ref and test evidence", () => {
