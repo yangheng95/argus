@@ -398,10 +398,21 @@ export async function reviewIntegrity(input: {
         .filter((d) => !collector.dimensions.has(d.id))
         .map((d) => d.id)
       if (!structured) {
+        // SessionLoop's StructuredOutput reminder + hard-pin already burned
+        // its in-session budget (MAX_STRUCTURED_OUTPUT_REMINDERS=2) before
+        // returning a structured=undefined turn — see Phase D in
+        // specs/new-arch/2026-04-28-structured-output-systemic-fix.md.
+        // Spawning another whole session against the same model and tool
+        // surface is the 90-minute retry storm we already proved useless
+        // in ainvest-20260428-100538. Mark the failure terminal so the
+        // outer retry helper fails fast and surfaces the real cause to the
+        // operator (rule 1 — no fallback that masks the structural issue).
         return {
           ok: false,
+          terminal: true,
           reason:
-            `integrity reviewer ended without emitting StructuredOutput({summary}); ` +
+            `integrity reviewer ended without emitting StructuredOutput({summary}) ` +
+            `after in-session reminder budget was exhausted; ` +
             `submittedDimensions=${[...collector.dimensions.keys()].join(",") || "none"}, ` +
             `missingDimensions=${missing.join(",") || "none"}`,
         }
