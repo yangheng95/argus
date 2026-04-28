@@ -11,6 +11,7 @@ import {
 } from "ai"
 
 import { Env } from "@/env"
+import { abortableIterable } from "@/util/stream-activity"
 
 type StreamTextOnAbortCallback<TOOLS extends ToolSet> = (event: {
   readonly steps: StepResult<TOOLS>[]
@@ -118,10 +119,26 @@ export function streamText<TOOLS extends ToolSet = ToolSet>(
   },
 ) {
   const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
-  return streamTextBase({
+  const composed = signal(abortSignal, timeout)
+  const result = streamTextBase({
     ...(rest as Parameters<typeof streamTextBase<TOOLS>>[0]),
-    abortSignal: signal(abortSignal, timeout),
+    abortSignal: composed,
     maxRetries: retries(count),
+  })
+  // The AI SDK's fullStream/textStream are AsyncIterableStreams whose
+  // backing reader.read() can park indefinitely on a stalled upstream
+  // socket; the abortSignal closes the connection but does not reject the
+  // pending read. Wrap each iterable so consumers' for-await loops throw
+  // an AbortError as soon as `composed` flips, no matter what the SDK /
+  // Bun fetch reader does internally. Other properties (usage, response,
+  // toAIStreamResponse, …) pass through unchanged via Proxy.
+  if (!composed) return result
+  return new Proxy(result, {
+    get(target, prop, receiver) {
+      if (prop === "fullStream") return abortableIterable(target.fullStream, composed)
+      if (prop === "textStream") return abortableIterable(target.textStream, composed)
+      return Reflect.get(target, prop, receiver)
+    },
   })
 }
 
@@ -132,9 +149,22 @@ export function streamObject(
   },
 ) {
   const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
-  return streamObjectBase({
+  const composed = signal(abortSignal, timeout)
+  const result = streamObjectBase({
     ...(rest as Parameters<typeof streamObjectBase>[0]),
-    abortSignal: signal(abortSignal, timeout),
+    abortSignal: composed,
     maxRetries: retries(count),
+  })
+  if (!composed) return result
+  return new Proxy(result, {
+    get(target, prop, receiver) {
+      if (prop === "partialObjectStream") return abortableIterable(target.partialObjectStream, composed)
+      if (prop === "textStream") return abortableIterable(target.textStream, composed)
+      if (prop === "elementStream") {
+        const v = (target as any).elementStream
+        return v ? abortableIterable(v, composed) : v
+      }
+      return Reflect.get(target, prop, receiver)
+    },
   })
 }
