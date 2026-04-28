@@ -1850,33 +1850,36 @@ function pickOptionLabel(options: Array<{ label?: unknown }>): string | undefine
   return session ?? allowed[0]
 }
 
-// Build a ToolRequestUserInputResponse-shaped answers map for a question
-// interaction whose questions carry inline options (codex 0.125 elicitations
-// like mcp_tool_call_approval). Returns undefined when the question is a
-// free-text one — caller falls back to AUTO_REPLY in that case.
+// Build a positional answers array for a question interaction whose questions
+// carry inline options (codex 0.125 elicitations like mcp_tool_call_approval).
+// Returns undefined when ANY question is free-text — caller falls back to
+// AUTO_REPLY in that case.
 //
-// Authority: codex `app-server generate-ts` v2/ToolRequestUserInputResponse:
-//   { answers: { [questionId: string]?: { answers: string[] } } }
-// The server's interaction reply path forwards `answers` through to
-// Question.reply → externalAnswerContent → inputResponse, which re-wraps
-// the same shape into the JSON-RPC reply codex consumes.
-function pickOptionAnswers(item: { payload?: unknown }): Record<string, string[]> | undefined {
+// Server schema (engine/model.ts ReplyInteractionInput): `answers: string[][]`
+// where outer index is the question position and inner is the answer list for
+// that question. The server then hands `answers[i]` to the host's
+// externalAnswerContent which keys it on `event.questions[i].id` before
+// re-wrapping into codex's ToolRequestUserInputResponse shape — so the
+// benchmark MUST send the positional array, NOT a record.
+//
+// Earlier bench logs showed HTTP 400 from `/interaction/.../reply` because we
+// posted `{ answers: { [id]: ["label"] } }` which violated the `z.array(...)`
+// schema check (caught on _session-20260429-005130.out at 17:06:49).
+function pickOptionAnswers(item: { payload?: unknown }): string[][] | undefined {
   const payload = item.payload && typeof item.payload === "object" ? (item.payload as { questions?: unknown }) : undefined
   const questions = Array.isArray(payload?.questions) ? payload.questions : []
   if (questions.length === 0) return undefined
-  const out: Record<string, string[]> = {}
+  const out: string[][] = []
   for (const raw of questions) {
     if (!raw || typeof raw !== "object") return undefined
-    const q = raw as { id?: unknown; header?: unknown; options?: unknown }
+    const q = raw as { options?: unknown }
     const options = Array.isArray(q.options) ? (q.options as Array<{ label?: unknown }>) : []
     if (options.length === 0) return undefined  // free-text — caller falls back to AUTO_REPLY
     const label = pickOptionLabel(options)
     if (!label) return undefined
-    const key = typeof q.id === "string" && q.id ? q.id : typeof q.header === "string" && q.header ? q.header : undefined
-    if (!key) return undefined
-    out[key] = [label]
+    out.push([label])
   }
-  return Object.keys(out).length > 0 ? out : undefined
+  return out.length > 0 ? out : undefined
 }
 
 async function settle(progress: any, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
