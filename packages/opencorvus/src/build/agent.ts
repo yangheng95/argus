@@ -1383,6 +1383,17 @@ async function runWithExternalProvider(args: {
     metadata: mergeMetadata,
   })
   try {
+    // External executors (claude-code, codex) don't have access to the
+    // OpenCorvus `merge_back` tool, so the host is the only place that
+    // knows the branch is about to be merged. Stage + commit anything
+    // the executor wrote but didn't commit before rebasing — otherwise
+    // a dirty worktree makes `git rebase` exit before it starts and the
+    // conflict-paths parser surfaces "0 conflicts" with no useful detail
+    // (the original symptom on the claude-code benchmark).
+    await Worktree.commitDirty({
+      worktreeDir: args.worktreeDir,
+      label: `${args.executor}/${args.worktreeBranch}`,
+    })
     const result = await Worktree.mergeWithRebase({
       branch: args.worktreeBranch,
       worktreeDir: args.worktreeDir,

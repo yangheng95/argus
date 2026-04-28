@@ -116,6 +116,67 @@ export namespace Worktree {
    * so subsequent retries (after the agent reconciles + commits) start
    * from a clean slate.
    */
+  /**
+   * Stage and commit any uncommitted changes in `worktreeDir` so the next
+   * `git rebase <primary>` has something concrete to replay. External
+   * executors (claude-code, codex) cannot call OpenCorvus's `merge_back`
+   * tool — the host owns finalization for them — so the host is the only
+   * place that knows the branch is about to be rebased. If the executor
+   * wrote files but never ran `git commit` (claude-code does this when
+   * the system prompt does not explicitly require a commit), `git rebase`
+   * exits non-zero before it even starts because the working tree is
+   * dirty, and the parser at `mergeWithRebase` reports `0 conflict paths`.
+   * That's the actual root cause of the "Rebase aborted onto master
+   * (...); conflict paths: " benchmark failure on the claude-code
+   * executor.
+   *
+   * Returns `{ committed: false }` if the worktree is already clean,
+   * else `{ committed: true, head }` after the new commit. Uses local
+   * git config so the commit identity does not require a global
+   * `user.email`. Idempotent: a second call on a clean tree is a no-op.
+   */
+  export const commitDirty = fn(
+    z.object({
+      worktreeDir: z.string().describe("Filesystem path of the worktree to scan + commit."),
+      label: z
+        .string()
+        .describe("Short context tag used in the commit message body (e.g. branch name or session ID).")
+        .default("opencorvus host autocommit"),
+    }),
+    async (input) => {
+      if (!Project.isGitRepo(input.worktreeDir)) {
+        throw new NotGitError({ message: `commitDirty: ${input.worktreeDir} is not a git worktree` })
+      }
+      const status = await $`git status --porcelain`.quiet().nothrow().cwd(input.worktreeDir)
+      const dirty = outputText(status.stdout).trim().length > 0
+      if (!dirty) return { committed: false as const }
+
+      // `-A` covers added / modified / deleted; `--allow-empty` is omitted on
+      // purpose — if status was non-empty but `add` produced no index change
+      // (e.g. all entries are .gitignored), we want the commit to fail loudly
+      // rather than create an empty commit that hides the misconfig.
+      const add = await $`git add -A`.quiet().nothrow().cwd(input.worktreeDir)
+      if (add.exitCode !== 0) {
+        throw new MergeFailedError({
+          message: `commitDirty: git add -A failed in ${input.worktreeDir}: ${errorText(add)}`,
+          branch: input.label,
+          stderr: errorText(add),
+        })
+      }
+      const commit = await $`git -c user.name=opencorvus -c user.email=build@opencorvus.local commit -m ${`build(host): ${input.label}`}`
+        .quiet().nothrow().cwd(input.worktreeDir)
+      if (commit.exitCode !== 0) {
+        throw new MergeFailedError({
+          message: `commitDirty: git commit failed in ${input.worktreeDir}: ${errorText(commit)}`,
+          branch: input.label,
+          stderr: errorText(commit),
+        })
+      }
+      const head = await $`git rev-parse HEAD`.quiet().nothrow().cwd(input.worktreeDir)
+      return { committed: true as const, head: outputText(head.stdout) }
+    },
+  )
+
   export const mergeWithRebase = fn(
     z.object({
       branch: z
