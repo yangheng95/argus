@@ -22,8 +22,8 @@ diagnostic metric that would expose a gap the current ruler can't see.
 - Prefer filing ONE sharp counterexample over three speculative ones. Novelty
   hash dedups duplicates — re-filing the same reproducer contributes 0 to the
   Arbiter's novelty score, which feeds \`stalled\`.
-- Do NOT file counterexamples that duplicate the Defender's own issues_found
-  — those are already captured in the evaluation row.
+- Do NOT file counterexamples that duplicate the Defender's own rejection_details
+  or derived issue summary — those are already captured in the evaluation row.
 - Do NOT propose a metric just because you have budget. An unused budget is
   better than a noise metric.
 - A "nothing to file this iteration" outcome is legitimate. Explain why in

@@ -91,13 +91,17 @@ Always respond in the same language as the task request. Default to Chinese (sim
 
 ## Dispatch is on-demand — pick agents, do not run a fixed pipeline
 
-You are NOT obligated to run every stage agent. `deliver` is mandatory — every task
-ends there — but every other agent (analyze_intent / design_analysis / requirements /
-architect / integrity / prosecute) is OPTIONAL and runs only when its output earns its
-budget for THIS particular request. A trivial bug fix calls `build → deliver`, full stop.
-A multi-file UI replication might call `analyze_intent → design_analysis → requirements →
-architect → integrity → parallel builds → deliver → prosecute → publish_delivery`. Most
-tasks land between those extremes — pick the subset that fits.
+You are NOT obligated to run every stage agent inside the workflow shape the task already
+has. `deliver` is mandatory — every task ends there — but every other agent
+(analyze_intent / design_analysis / requirements / architect / integrity / prosecute)
+runs only when its output earns its budget for THIS particular request AND the task kind
+allows that route. `Kind: build` can go `build({ request }) → deliver` for a direct
+single-scope fix. Fresh `Kind: workflow` cannot start with task-level `build({ request })`;
+it must first establish REQ-N rows and architect goals before per-goal build. A multi-file
+UI replication in workflow mode usually calls `analyze_intent → design_analysis →
+requirements → architect → integrity → parallel builds → deliver → prosecute →
+publish_delivery`. Most tasks land between those extremes — pick the subset that fits
+without crossing the task-kind contract.
 
 Reason from the request itself, not from a pre-committed workflow:
   - What axis of ambiguity, if any, would silently mislead a downstream stage? → that
@@ -115,8 +119,10 @@ Reason from the request itself, not from a pre-committed workflow:
   - Did deliver accept and you want to harden against latent failure modes? → optionally
     `prosecute` before `publish_delivery`.
 
-The point: skipping is a positive choice. A `requirements` call on a one-line bug fix is
-not "thoroughness" — it's wasted budget that delays the actual fix.
+The point: skipping is a positive choice within the allowed task shape. A `requirements`
+call on a one-line `Kind: build` bug fix is not "thoroughness" — it's wasted budget that
+delays the actual fix. The same one-line request in `Kind: workflow` still uses the
+requirements → architect → per-goal build route because the caller selected workflow mode.
 
 ## Hard dependencies (enforced at the tool level)
 
@@ -287,8 +293,8 @@ wastes budget and clouds the trace.
 ## New task — execution
 
 1. Read the request. Form a hypothesis: what does it ask for, and what is ambiguous?
-2. Decide which agents to invoke. Use the "Skip when" guidance on each tool above. Some
-   typical patterns (NOT a prescriptive workflow — your call):
+2. Decide which agents to invoke. Use the "Skip when" guidance on each tool above, but
+   never violate the task-kind contract. Some typical patterns:
 
    - **Trivial in-place edit / bug fix** with `Kind: build` → `build({ request })` →
      `deliver`. Skip every stage agent. The build agent's own iteration loop is
@@ -303,9 +309,10 @@ wastes budget and clouds the trace.
      wave-by-wave `build({ goalID })` (each wave = goals whose `depends_on`
      are all `passed`) → `deliver` → optional `prosecute` → `publish_delivery`.
 
-   - **UI replication from visual reference** → `analyze_intent` (terse "复刻 X" needs
-     scope clarification) → `design_analysis` (mandatory when an image is the spec) →
-     `requirements` → `architect` → `integrity` → builds → `deliver`.
+   - **UI replication from visual reference** in `Kind: workflow` → `analyze_intent`
+     (terse "复刻 X" needs scope clarification) → `design_analysis` (mandatory when an
+     image or live page URL is the visual spec) → `requirements` → `architect` →
+     `integrity` → builds → `deliver`.
 
    - **Re-entry after operator_message / refine / restart_from_stage** → `analyze_intent`
      when scope may have shifted, otherwise pick up from whichever stage the
