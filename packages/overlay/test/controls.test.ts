@@ -837,12 +837,10 @@ test("overlay controls trigger without runtime failures", async () => {
       drag: 0,
       hide: 0,
       minimize: 0,
-      pin: [] as boolean[],
       open: [] as string[],
       copy: [] as string[],
       created: [] as string[],
       picked: ["D:/overlay/picked", "D:/overlay/picked", "D:/overlay/workspace/app"] as string[],
-      alwaysOnTop: false,
       settings: {
         directory: "D:/overlay/workspace/app",
         directoryMode: "custom",
@@ -906,11 +904,6 @@ test("overlay controls trigger without runtime failures", async () => {
             minimize: async () => {
               state.minimize += 1
             },
-            setAlwaysOnTop: async (value: boolean) => {
-              state.alwaysOnTop = !!value
-              state.pin.push(state.alwaysOnTop)
-            },
-            isAlwaysOnTop: async () => state.alwaysOnTop,
           }
         },
       },
@@ -1082,11 +1075,6 @@ test("overlay controls trigger without runtime failures", async () => {
     await tap("#btnLocale")
     await page.waitForFunction((value) => document.documentElement.lang !== value, {}, lang)
 
-    const pin = await page.$eval("#btnPin", (node) => node.dataset.pinned)
-    seen.push("#btnPin")
-    await tap("#btnPin")
-    await page.waitForFunction((value) => document.querySelector("#btnPin")?.dataset.pinned !== value, {}, pin)
-
     seen.push("#btnMinimize")
     await tap("#btnMinimize")
     seen.push("#btnClose")
@@ -1100,7 +1088,6 @@ test("overlay controls trigger without runtime failures", async () => {
 
     const stub = await page.evaluate(() => (window as typeof window & { __overlayTest: Record<string, unknown> }).__overlayTest)
     expect(seen.length).toBeGreaterThan(5)
-    expect((stub.pin as boolean[]).length).toBeGreaterThan(0)
     expect(stub.drag).toBe(1)
     expect(stub.minimize).toBe(1)
     expect(stub.hide).toBe(1)

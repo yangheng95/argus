@@ -325,42 +325,6 @@ function hasTauriRuntime(): boolean {
   );
 }
 
-async function currentTauriWindow(): Promise<any | null> {
-  const getCurrent = (window as any).__TAURI__?.window?.getCurrentWindow;
-  if (typeof getCurrent === "function") {
-    try {
-      return getCurrent() as any;
-    } catch {
- // Not running inside Tauri
-    }
-  }
-  return null;
-}
-
-/**
- * Temporarily un-pin the always-on-top window, run `run()`, then restore the
- * pin state.
- */
-async function withUnpinned<T>(run: () => Promise<T>): Promise<T> {
-  const win = await currentTauriWindow();
-  if (
-    !win ||
-    typeof win.isAlwaysOnTop !== "function" ||
-    typeof win.setAlwaysOnTop !== "function"
-  ) {
-    return run();
-  }
-  const pinned = await win.isAlwaysOnTop().catch(() => false);
-  if (!pinned) return run();
-  await win.setAlwaysOnTop(false).catch(() => undefined);
-  try {
-    return await run();
-  } finally {
-    await win.setAlwaysOnTop(true).catch(() => undefined);
-    await win.setFocus?.().catch(() => undefined);
-  }
-}
-
 /** Produce a user-facing error message: translated key + error detail. */
 function errorText(key: string, error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error ?? "");
@@ -383,25 +347,15 @@ function joinPath(base: string, value: string): string {
 
 // ── Tauri file / directory pickers ──
 
-/**
- * Open a native directory picker, temporarily un-pinning the window.
- * Returns the selected path, or an empty string when cancelled.
- */
+/** Open a native directory picker. Returns the selected path, or an empty string when cancelled. */
 export async function pickDirectory(start?: string): Promise<string> {
-  const selected = await withUnpinned(() =>
-    tauriInvoke("overlay_pick_dir", { start: start || undefined }) as Promise<unknown>,
-  );
+  const selected = await (tauriInvoke("overlay_pick_dir", { start: start || undefined }) as Promise<unknown>);
   return typeof selected === "string" ? selected : "";
 }
 
-/**
- * Open a native multi-file picker, temporarily un-pinning the window.
- * Returns the array of selected paths.
- */
+/** Open a native multi-file picker. Returns the array of selected paths. */
 export async function pickFiles(start?: string): Promise<string[]> {
-  const result = await withUnpinned(() =>
-    tauriInvoke("overlay_pick_files", { start: start || undefined }) as Promise<unknown>,
-  );
+  const result = await (tauriInvoke("overlay_pick_files", { start: start || undefined }) as Promise<unknown>);
   return Array.isArray(result) ? result : [];
 }
 

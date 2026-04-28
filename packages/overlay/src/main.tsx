@@ -48,7 +48,7 @@ import { copyChatConversation } from "./utils/transcript";
 import {
   applyTheme,
   applyZoom,
-  applyWindowOpacity,
+  applyOpacity,
   sanitizeZoom,
   handleZoomHotkey,
   installSystemThemeListener,
@@ -1114,7 +1114,7 @@ disposers.push(createRoot((dispose) => {
   createEffect(() => {
     applyTheme(settingsStore.theme);
     applyZoom(settingsStore.zoom);
-    void applyWindowOpacity(settingsStore.opacity);
+    applyOpacity(settingsStore.opacity);
   });
 
   createEffect(() => {

@@ -1,10 +1,9 @@
 // ── WindowControls Component ──
-// Tauri window management buttons: minimize, maximize/restore, close (hide),
-// and always-on-top pin toggle. Ports setupTauri()
-// plus maximizeLabel / maximizeIcon helpers and the CLOSE_HINT_KEY logic.
+// Tauri window management buttons: minimize, maximize/restore, close (hide).
+// Ports setupTauri() plus maximizeLabel / maximizeIcon helpers and the
+// CLOSE_HINT_KEY logic.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
 import { t } from "../utils/i18n";
 import { nativeMessage } from "../services/app-dialog";
 
@@ -63,14 +62,6 @@ export function WindowControls() {
     return !!maximized;
   };
 
- // ── Sync pin (always-on-top) state ──
-  const syncPin = async (win: any): Promise<void> => {
-    if (!win) return;
-    const pinned = await win.isAlwaysOnTop?.().catch(() => false);
-    setSettingsStore("alwaysOnTop", !!pinned);
-    saveSettings();
-  };
-
  // ── Handle minimize ──
   const handleMinimize = () => {
     tauriWin()?.minimize?.().catch(() => undefined);
@@ -109,24 +100,12 @@ export function WindowControls() {
     }
   };
 
- // ── Handle pin toggle ──
-  const handlePin = async () => {
-    const win = tauriWin();
-    if (!win) return;
-    const next = !settingsStore.alwaysOnTop;
-    await win.setAlwaysOnTop?.(next).catch(() => undefined);
-    await syncPin(win);
-  };
-
  // ── Lifecycle: init Tauri and attach resize listener ──
   onMount(async () => {
     const win = await currentTauriWindow();
     if (!win) return;
     setTauriWin(win);
 
- // Apply persisted always-on-top value and sync actual state
-    await win.setAlwaysOnTop?.(settingsStore.alwaysOnTop).catch(() => undefined);
-    await syncPin(win);
     await syncMaximize(win);
 
  // Re-sync on window resize events (Tauri fires onResized when restored)
@@ -158,44 +137,10 @@ export function WindowControls() {
     onCleanup(() => titlebar?.removeEventListener("pointerdown", handleTitlebarPointerDown));
   });
 
-  const pinLabel = () =>
-    settingsStore.alwaysOnTop ? t("titlebar.pin.unpin") : t("titlebar.pin.pin");
-
   const maxLabel = () => maximizeLabel(isMaximized());
 
   return (
     <div class="titlebar-window-controls" data-no-drag="true">
-      {/* Always-on-top pin */}
-      <Show when={tauriWin() !== null}>
-        <button
-          type="button"
-          id="btnPin"
-          class="titlebar-btn"
-          data-pinned={settingsStore.alwaysOnTop ? "true" : "false"}
-          title={pinLabel()}
-          aria-label={pinLabel()}
-          onClick={() => void handlePin()}
-        >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path
-              d="M9.5 2L14 6.5l-4 1.5-4 4-1.5-1.5 4-4L7 2.5 9.5 2z"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linejoin="round"
-            />
-            <line
-              x1="2"
-              y1="14"
-              x2="6"
-              y2="10"
-              stroke="currentColor"
-              stroke-width="1.3"
-              stroke-linecap="round"
-            />
-          </svg>
-        </button>
-      </Show>
-
       {/* Minimize */}
       <Show when={tauriWin() !== null}>
         <button

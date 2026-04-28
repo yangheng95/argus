@@ -29,15 +29,7 @@ export default function GeneralPanel() {
     const raw = Number((e.currentTarget as HTMLInputElement).value);
     const value = sanitizeOpacity(raw / 100);
     setSettingsStore("opacity", value);
-    void applyOpacity(value);
-    saveSettings();
-  }
-
-  function handleToggle(
-    key: "alwaysOnTop" | "showTranscriptDetails",
-    e: Event,
-  ) {
-    setSettingsStore(key, (e.currentTarget as HTMLInputElement).checked);
+    applyOpacity(value);
     saveSettings();
   }
 
@@ -179,24 +171,6 @@ export default function GeneralPanel() {
         <h4 class="config-panel-group-title">{t("settings.section.behaviour")}</h4>
         <div class="config-panel-card">
           <div class="config-toggle-list">
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">{t("settings.always_on_top")}</span>
-              <input
-                type="checkbox"
-                checked={settingsStore.alwaysOnTop}
-                onChange={(e) => handleToggle("alwaysOnTop", e)}
-              />
-            </label>
-
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">{t("settings.show_transcript_details")}</span>
-              <input
-                type="checkbox"
-                checked={settingsStore.showTranscriptDetails}
-                onChange={(e) => handleToggle("showTranscriptDetails", e)}
-              />
-            </label>
-
             <label class="config-toggle-list-item">
               <span class="toggle-label">{t("settings.auto_permission")}</span>
               <input

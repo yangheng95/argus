@@ -212,11 +212,17 @@ export namespace ExecutorDiscovery {
       locate({
         name: "claude-code",
         env: "OPENCORVUS_EXECUTOR_CLAUDE_CODE_BIN",
-        // Windows: prefer the .cmd shim that npm emits — Node's child_process.spawn
-        // can launch .exe and .cmd directly but cannot execute the bare bash shim
-        // npm also drops next to them, which exits with code 1 immediately.
+        // Windows: prefer the real `.exe` over the npm `.cmd` shim. Since
+        // CVE-2024-27980 (Node 18.20.2 / 20.12.2 / 21.7.3) child_process.spawn
+        // refuses to launch `.cmd` / `.bat` files unless `shell: true` is set,
+        // and the Anthropic Claude Agent SDK spawns the executable with
+        // `{ windowsHide: true }` and no shell — so a .cmd path exits 1
+        // immediately. Real .exe shims (e.g. claude.exe in ~/.local/bin or a
+        // shim emitted by yarn/pnpm) are spawnable directly. Fall back to
+        // .cmd only when no .exe is on the search path; users who land on it
+        // will see the documented error and can install the .exe variant.
         names: process.platform === "win32"
-          ? ["claude.cmd", "claude-code.cmd", "claude.exe", "claude-code.exe", "claude"]
+          ? ["claude.exe", "claude-code.exe", "claude.cmd", "claude-code.cmd", "claude"]
           : ["claude", "claude-code"],
       }),
     ])

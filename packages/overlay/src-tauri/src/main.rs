@@ -197,7 +197,6 @@ struct OverlaySettings {
     username: Option<String>,
     executor: Option<String>,
     init_git: Option<bool>,
-    always_on_top: Option<bool>,
     sidebar_width: Option<u32>,
     sections_width: Option<u32>,
     opacity: Option<f64>,
