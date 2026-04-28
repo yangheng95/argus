@@ -45,11 +45,7 @@ const EXECUTOR_STATUS_TIMEOUT_MS = 30_000 // 30s for executor.status()
 
 const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or runID → AbortController
 
-// Stale-interaction thresholds. Per-interaction-type auto-rejection is gated
-// by `experimental.auto_permission` / `experimental.auto_question` — this
-// constant is just the "how long before an unanswered interaction is
-// considered stale" timer. Both auto_* switches can be flipped independently.
-const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
+const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "300000", 10) // auto-reject stale interactions (5min default)
 
 
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
@@ -136,9 +132,6 @@ export namespace EngineRuntime {
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
       const now = Date.now()
-      // Stale-interaction auto-reject is gated per-type: permissions need
-      // experimental.auto_permission, questions need experimental.auto_question.
-      // With the switch off the interaction waits indefinitely for the user.
       const cfg = await Config.get()
       const allowAutoPermission = cfg.experimental?.auto_permission === true
       const allowAutoQuestion = cfg.experimental?.auto_question === true

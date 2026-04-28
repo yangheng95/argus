@@ -535,7 +535,7 @@
   "titlebar.auto_permission": "自动批准权限",
   "titlebar.auto_permission_hint": "出现权限请求时自动选择长期允许。",
   "titlebar.auto_question": "问题超时自动拒绝",
-  "titlebar.auto_question_hint": "提问超过 10 分钟无人回复时自动拒绝；关闭后会一直等待用户响应。",
+  "titlebar.auto_question_hint": "提问超过 5 分钟无人回复时自动拒绝；关闭后会一直等待用户响应。",
   "titlebar.background_notice": "OpenCorvus 仍在后台运行。点击系统托盘图标可重新打开；如需彻底退出，请在托盘菜单中选择“退出”。",
   "titlebar.budget_locked": "已锁定——任务已启动",
   "titlebar.budget_max_executor_groups": "并行目标上限",

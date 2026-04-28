@@ -126,6 +126,44 @@ describe("engine permission interactions", () => {
             .get(),
         )
         expect(resolved?.status).toBe("answered")
+
+        const rejectedPermissionID = Identifier.ascending("permission")
+        const rejectedAsk = PermissionNext.ask({
+          id: rejectedPermissionID,
+          sessionID: build.id,
+          permission: "external_directory",
+          patterns: ["C:\\blocked"],
+          metadata: {},
+          always: ["C:\\blocked"],
+          ruleset: [{ permission: "external_directory", pattern: "*", action: "ask" }],
+        })
+
+        let rejectedInteraction: typeof EngineInteractionRequestTable.$inferSelect | undefined
+        for (let i = 0; i < 50; i += 1) {
+          rejectedInteraction = Database.use((db) =>
+            db
+              .select()
+              .from(EngineInteractionRequestTable)
+              .where(eq(EngineInteractionRequestTable.external_id, rejectedPermissionID))
+              .get(),
+          )
+          if (rejectedInteraction) break
+          await Bun.sleep(20)
+        }
+
+        await EngineService.rejectInteraction(rejectedInteraction!.id, {
+          autoReply: false,
+        })
+        await expect(rejectedAsk).rejects.toBeInstanceOf(PermissionNext.RejectedError)
+
+        const rejected = Database.use((db) =>
+          db
+            .select()
+            .from(EngineInteractionRequestTable)
+            .where(eq(EngineInteractionRequestTable.id, rejectedInteraction!.id))
+            .get(),
+        )
+        expect(rejected?.status).toBe("rejected")
       },
     })
   })

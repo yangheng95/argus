@@ -598,6 +598,28 @@ test("reply - reject throws RejectedError", async () => {
   })
 })
 
+test("ask - timeout rejects pending permission", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = PermissionNext.ask({
+        id: "permission_timeout",
+        sessionID: "session_timeout",
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: [],
+        ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
+        timeoutMs: 5,
+      })
+
+      await expect(askPromise).rejects.toBeInstanceOf(PermissionNext.RejectedError)
+      expect(await PermissionNext.list()).toHaveLength(0)
+    },
+  })
+})
+
 test("reply - always persists approval and resolves", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

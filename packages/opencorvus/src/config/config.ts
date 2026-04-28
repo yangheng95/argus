@@ -139,6 +139,11 @@ export namespace Config {
 
     result.agent = result.agent || {}
     result.plugin = result.plugin || []
+    result.experimental = {
+      auto_permission: true,
+      auto_question: true,
+      ...(result.experimental ?? {}),
+    }
 
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
 
@@ -1306,7 +1311,7 @@ export namespace Config {
             .optional()
             .default(true)
             .describe(
-              "Auto-reject unanswered question interactions after the stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
+              "Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.",
             ),
           mcp_timeout: z
             .number()

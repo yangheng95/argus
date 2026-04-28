@@ -1,6 +1,6 @@
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
-import { Config } from "@/config/config"
+import type { Config } from "@/config/config"
 import { Identifier } from "@/id/id"
 import { Instance, lazyInstanceState } from "@/project/instance"
 import { Database, eq } from "@/storage/db"
@@ -149,6 +149,7 @@ export namespace PermissionNext {
         info: Request
         resolve: () => void
         reject: (e: any) => void
+        timer: ReturnType<typeof setTimeout> | undefined
       }
     > = {}
 
@@ -156,21 +157,27 @@ export namespace PermissionNext {
       pending,
       approved: stored,
     }
+  }, async (s) => {
+    for (const id of Object.keys(s.pending)) {
+      clearTimeout(s.pending[id].timer)
+      delete s.pending[id]
+    }
   })
 
   const PERMISSION_MIN_TIMEOUT_MS = 1000
-  const PERMISSION_AUTO_APPROVE_MS = Math.max(
-    parseInt(process.env.OPENCORVUS_PERMISSION_TIMEOUT_MS || "120000", 10),
+  const PERMISSION_REJECT_TIMEOUT_MS = Math.max(
+    parseInt(process.env.OPENCORVUS_PERMISSION_TIMEOUT_MS || "300000", 10),
     PERMISSION_MIN_TIMEOUT_MS,
   )
 
   export const ask = fn(
     Request.partial({ id: true }).extend({
       ruleset: Ruleset,
+      timeoutMs: z.number().int().positive().optional(),
     }),
     async (input) => {
       const s = await state()
-      const { ruleset, ...request } = input
+      const { ruleset, timeoutMs, ...request } = input
       for (const pattern of request.patterns ?? []) {
         const rule = evaluate(request.permission, pattern, ruleset, s.approved)
         log.info("evaluated", { permission: request.permission, pattern, action: rule })
@@ -178,37 +185,31 @@ export namespace PermissionNext {
           throw new DeniedError(ruleset.filter((r) => Wildcard.match(request.permission, r.permission)))
         if (rule.action === "ask") {
           const id = input.id ?? Identifier.ascending("permission")
-          const cfg = await Config.get()
-          const autoApproveOnTimeout = cfg.experimental?.auto_permission === true
+          const timeout = Math.max(timeoutMs ?? PERMISSION_REJECT_TIMEOUT_MS, PERMISSION_MIN_TIMEOUT_MS)
           return new Promise<void>((resolve, reject) => {
             const info: Request = {
               id,
               ...request,
             }
+            const timer = setTimeout(() => {
+              if (!s.pending[id]) return
+              log.info("permission timeout rejected", { id, permission: request.permission, patterns: request.patterns })
+              delete s.pending[id]
+              Bus.publish(Event.Replied, {
+                sessionID: request.sessionID,
+                requestID: id,
+                reply: "reject",
+                autoReply: true,
+              })
+              reject(new RejectedError())
+            }, timeout)
             s.pending[id] = {
               info,
               resolve,
               reject,
+              timer,
             }
             Bus.publish(Event.Asked, info)
-            // Auto-approve timeout only applies when experimental.auto_permission
-            // is on. With the switch off the request waits indefinitely for a
-            // user reply — no silent fallback.
-            if (autoApproveOnTimeout) {
-              setTimeout(() => {
-                if (s.pending[id]) {
-                  log.info("auto-approve timeout", { id, permission: request.permission, patterns: request.patterns })
-                  delete s.pending[id]
-                  Bus.publish(Event.Replied, {
-                    sessionID: request.sessionID,
-                    requestID: id,
-                    reply: "once",
-                    autoReply: true,
-                  })
-                  resolve()
-                }
-              }, PERMISSION_AUTO_APPROVE_MS)
-            }
           })
         }
         if (rule.action === "allow") continue
@@ -227,6 +228,7 @@ export namespace PermissionNext {
       const s = await state()
       const existing = s.pending[input.requestID]
       if (!existing) return
+      clearTimeout(existing.timer)
       delete s.pending[input.requestID]
       Bus.publish(Event.Replied, {
         sessionID: existing.info.sessionID,
@@ -240,6 +242,7 @@ export namespace PermissionNext {
         const sessionID = existing.info.sessionID
         for (const [id, pending] of entries(s.pending)) {
           if (pending.info.sessionID === sessionID) {
+            clearTimeout(pending.timer)
             delete s.pending[id]
             Bus.publish(Event.Replied, {
               sessionID: pending.info.sessionID,
@@ -274,6 +277,7 @@ export namespace PermissionNext {
             (pattern) => evaluate(pending.info.permission, pattern, s.approved).action === "allow",
           )
           if (!ok) continue
+          clearTimeout(pending.timer)
           delete s.pending[id]
           Bus.publish(Event.Replied, {
             sessionID: pending.info.sessionID,
