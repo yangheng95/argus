@@ -32,6 +32,7 @@ import { Log } from "@/util/log"
 import { runAgentSession } from "@/agent/runner"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
+import { SessionStatus } from "@/session/status"
 import { Worktree } from "@/worktree"
 import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
@@ -970,6 +971,36 @@ function externalEventPartText(event: CodingEventInfo, executor: string): string
  * single contract, multiple implementations).
  */
 async function runWithExternalProvider(args: {
+  executor: Exclude<TaskRow["executor"], "opencode">
+  target: BuildTarget
+  taskID: string
+  parentSessionID?: string
+  worktreeDir: string
+  worktreeBranch: string | undefined
+  ownsWorktree: boolean
+  buildPromptText: () => string
+  taskSignals?: import("@/engine/skill-inject").TaskSignals
+  signal?: AbortSignal
+}): Promise<{ sessionID: string; structured: unknown; mergedHead?: string }> {
+  // External-build dispatch boundary: surface terminal to the overlay when
+  // the inner function returns (every return below structures failure as a
+  // `failed` status rather than throwing) or throws. Mirrors agent/runner.ts
+  // for the opencode executor path; without this the build session card
+  // stays at idle (no checkmark) once the external provider stops streaming.
+  // Idempotent: a later actor close just rewrites the same terminal status.
+  let result: Awaited<ReturnType<typeof runWithExternalProviderImpl>>
+  try {
+    result = await runWithExternalProviderImpl(args)
+  } catch (err) {
+    // Inner threw before producing a sessionID — we don't know which session
+    // to terminate. Actor close paths still cover this.
+    throw err
+  }
+  SessionStatus.set(result.sessionID, { type: "terminal", reason: "completed" })
+  return result
+}
+
+async function runWithExternalProviderImpl(args: {
   executor: Exclude<TaskRow["executor"], "opencode">
   target: BuildTarget
   taskID: string
