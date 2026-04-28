@@ -191,7 +191,10 @@ function buildUserPrompt(input: {
   request: string
   attachments?: Array<{ filename?: string; mime: string; intent?: string; source?: string }>
 }): string {
-  const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+  const sections = [
+    "# Delegation\n\nOrchestrator is asking design-analysis to extract the visual contract for this task.",
+    `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
+  ]
   // URL presence is a *structural* detection (syntactic protocol scheme),
   // not a keyword policy: the agent decides whether to propose a
   // `url_screenshot` capture based on whether a web URL is even
@@ -241,14 +244,6 @@ function buildUserPrompt(input: {
     "For visual webpage URLs, use `url_screenshot` — not `webfetch`. " +
     "`url_screenshot` returns a PNG as a multimodal tool result so you can inspect the pixels directly. " +
     "Do NOT use `webpage_extract`; that mirror pipeline belongs to later build-stage cloning work, not this design-analysis step.",
-  )
-
-  sections.push(
-    "Extract the visual contract as a list of advisory VisualSpec entries. " +
-    "Use the register_*_spec tools per category (color / typography / spacing / " +
-    "layout / component / interaction / responsive). Every exact value you can " +
-    "observe must be a spec. Then call the StructuredOutput tool exactly once " +
-    "with the terminal design_system + tech_stack fields to close the analysis.",
   )
 
   return sections.join("\n\n")

@@ -119,15 +119,10 @@ async function buildToolKit() {
 
 function buildUserPrompt(input: IntentAnalysisAgent.AnalyzeInput): string {
   const sections: string[] = []
+  sections.push("# Delegation\n\nOrchestrator is asking intent-analysis to read this task request and return a grounded intent analysis.")
   if (input.title && input.title.trim()) {
     sections.push(`# Title\n\n${input.title.trim()}`)
   }
   sections.push(`# User Request\n\n${input.request}`)
-  sections.push(
-    "Analyze the request. Emit extract_slot / flag_missing_info / " +
-      "ask_clarification calls as warranted, then call the StructuredOutput " +
-      "tool exactly once at the end with the terminal intent_class, " +
-      "complexity, confidence, and summary fields.",
-  )
   return sections.join("\n\n")
 }

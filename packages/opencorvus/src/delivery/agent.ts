@@ -214,6 +214,8 @@ function buildUserPrompt(
 ): string {
   const sections: string[] = []
 
+  sections.push("# Delegation\n\nOrchestrator is asking delivery to verify the integrated result and return an acceptance verdict.")
+
   sections.push(
     `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`,
   )
@@ -494,25 +496,6 @@ function buildUserPrompt(
       "4. If it crashes, investigate and fix the issue\n" +
       "5. Re-verify after any fix\n" +
       "6. Produce your final verdict",
-  )
-
-  // Step budget is finite — the agent is cut off after `delivery.max_steps`
-  // tool calls. Without an explicit final-emission rule it can spend every
-  // step on rework and never finalize, which makes the whole stage fail.
-  // Reserve the last step for submit_verdict.
-  sections.push(
-    "## Final Output (REQUIRED)\n\n" +
-    "Before you stop, you MUST call the `submit_verdict` tool exactly once. " +
-    "Plain-text / markdown / ```json fenced output is IGNORED — only the tool " +
-    "call is read. The tool's schema is strict (Zod-validated); malformed " +
-    "payloads return an error and let you call again.\n\n" +
-    "**Attribution contract enforced by the schema:**\n" +
-    "- `verdict='rejected'` REQUIRES a non-empty `rejection_details` array (≥1 entry). Each entry's `goal_id` picks a goal ID from the `# Goals` section above — you are the attribution authority, downstream code does not second-guess.\n" +
-    "- The set of distinct `rejection_details[].goal_id` values IS the canonical 'which goals to re-open' list. There is NO separate `affected_goal_ids` field — do not invent one.\n" +
-    "- If a rejection spans multiple goals, emit one `rejection_details` entry per (goal, issue) pair so each blamed goal carries its own per-goal explanation.\n" +
-    "- There is NO separate `issues_found` field either. The orchestrator derives the human-readable issue list from `rejection_details[].error`. Put the user-visible error text there.\n" +
-    "- A delivery that is merely \"bad overall\" with no specific goal attribution is NOT a valid rejection. If you cannot name the responsible goal, investigate more — your retry budget covers it.\n\n" +
-    "If submit_verdict is not called before the step budget runs out, the run is treated as a failed finalize and retried.",
   )
 
   return sections.join("\n\n")
