@@ -402,6 +402,11 @@ export namespace BuildAgent {
       // and just call merge_back on top of the already-written files
       // instead of regenerating ~20 minutes of code from scratch.
       let preserveWorktreeForRetry = false
+      // Reason populated by the inline merge_back fallback below when the
+      // LLM forgot to call merge_back itself. Surfaces to the demote-to-
+      // failed path so the orchestrator's retry/replan logic sees the real
+      // reason (conflict / infrastructure error / never-attempted).
+      let autoMergeError: string | undefined
       // Dispatch fork: executor === "opencode" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
@@ -474,13 +479,73 @@ export namespace BuildAgent {
           })
         }
 
+        // Inline merge_back safety net. The LLM-driven build session is
+        // expected to call merge_back as the LAST git-affecting tool, but
+        // long-context kimi-class models systemically miss it (caught
+        // repeatedly on the 2026-04-28 internal benchmark — 4 separate
+        // goals across 2 retry waves all reported `passed` without ever
+        // invoking merge_back, each miss costing one full build session).
+        // The external executor path at line ~998 already runs merge_back
+        // automatically (claude-code/codex SDKs cannot call our in-process
+        // tool); extend the same guarantee to in-process opencode so both
+        // paths share one contract: "BuildAgent ensures the merge runs".
+        // The merge_back tool stays exposed to the model so it can still
+        // call it manually for inline conflict resolution; this fallback
+        // only fires when the model never invoked it. On conflict /
+        // infrastructure error this block records autoMergeError; the
+        // post-run guard then demotes to failed using that reason and
+        // preserveWorktreeForRetry below preserves the worktree so the
+        // next attempt can read the half-merged state.
+        if (
+          ownsWorktree &&
+          worktreeBranch &&
+          worktreeDir &&
+          parsed?.success &&
+          parsed.data.status === "passed" &&
+          !mergedHead
+        ) {
+          log.info("build agent: passed verdict without explicit merge_back — running merge_back inline", {
+            taskID: input.task.id,
+            sessionID: out.session.id,
+            worktreeBranch,
+          })
+          try {
+            const result = await Worktree.mergeWithRebase({
+              branch: worktreeBranch,
+              worktreeDir,
+            })
+            mergedHead = result.primaryHead
+          } catch (err) {
+            if (err instanceof Worktree.MergeConflictError) {
+              const data = (err as { data: {
+                conflictPaths: string[]
+                primaryBranch: string
+                primaryTip: string
+              } }).data
+              autoMergeError =
+                `auto merge_back hit textual conflicts on [${data.conflictPaths.join(", ")}] ` +
+                `against ${data.primaryBranch}@${data.primaryTip.slice(0, 12)}; ` +
+                `worktree preserved — next attempt should reconcile each path ` +
+                `(read both sides via git show, edit, git add, git commit, then call merge_back).`
+            } else {
+              autoMergeError = `auto merge_back failed: ${err instanceof Error ? err.message : String(err)}`
+            }
+            log.warn("build agent: inline merge_back fallback failed", {
+              taskID: input.task.id,
+              sessionID: out.session.id,
+              worktreeBranch,
+              error: autoMergeError,
+            })
+          }
+        }
+
         // Decide before the finally cleanup whether the next attempt should
-        // be allowed to pick up where this one left off. The "passed verdict
-        // without merge_back" case is the only one the user wants
-        // continuable: the agent wrote real files, just forgot to publish
-        // them. Genuine failures (status=failed, structured-output schema
-        // mismatch, infrastructure faults) all let cleanup proceed so the
-        // next run starts with a clean slate.
+        // be allowed to pick up where this one left off. After the inline
+        // merge_back fallback above, the only continuable case is "merge
+        // attempted but failed" (autoMergeError set, mergedHead still
+        // undefined). A successful inline merge sets mergedHead → cleanup
+        // proceeds; a status=failed verdict from the model also lets
+        // cleanup proceed so the next run starts clean.
         if (
           ownsWorktree &&
           worktreeBranch &&
@@ -513,30 +578,27 @@ export namespace BuildAgent {
         )
       }
 
-      // Post-run guard: agent owns merge_back in the切法-A design. If the
-      // agent reported passed without a successful merge_back call, the goal
-      // never published to primary — demote to failed with a concrete reason
-      // so the orchestrator's retry/replan logic acts on the real state.
-      // Caller-owned worktrees opt out (caller publishes themselves).
+      // Post-run guard. Contract is "merge must happen before the build
+      // returns passed"; how the merge happens (model called merge_back
+      // tool inline OR BuildAgent ran it inline before this block) is an
+      // implementation detail. The demote path keeps the autoMergeError
+      // captured upstream so the orchestrator sees the real reason
+      // (conflict / infra / never-attempted).
       if (
         ownsWorktree &&
         worktreeBranch &&
         parsed.data.status === "passed" &&
         !mergedHead
       ) {
-        log.warn("build agent: passed verdict without successful merge_back — demoting to failed", {
-          taskID: input.task.id,
-          sessionID: out.session.id,
-          worktreeBranch,
-        })
         parsed = {
           success: true as const,
           data: {
             ...parsed.data,
             status: "failed" as const,
-            error:
+            error: autoMergeError ?? (
               "merge_back was not called or did not succeed; goal never published to primary " +
-              "(切法-A: build agent owns merge). Re-run with explicit merge_back invocation.",
+              "(切法-A: build agent owns merge)."
+            ),
           },
         }
       } else if (mergedHead && parsed.data.status === "passed") {
