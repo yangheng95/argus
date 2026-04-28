@@ -438,13 +438,13 @@ async function* request(
   // waiting for a response — which is exactly what happened on the
   // 2026-04-28 codex 0.125 dispatch run when the build agent stalled with
   // "tool_call ended without a matching tool_result". Keep at info level
-  // until codex protocol churn settles.
+  // until codex protocol churn settles. Full params dump so we can see the
+  // exact response shape codex 0.125 expects (e.g. tool-input-elicitation
+  // schema vs free-text question).
   log.info("codex inbound request", {
     method: item.method,
     requestID: item.id,
-    paramKeys: Object.keys(data),
-    callId: typeof data.callId === "string" ? data.callId : undefined,
-    tool: typeof data.tool === "string" ? data.tool : undefined,
+    paramsJSON: JSON.stringify(data).slice(0, 4000),
   })
   if (item.method === "item/tool/requestUserInput" || item.method === "toolRequestUserInput" || item.method === "mcpServer/elicitation/request") {
     yield {
