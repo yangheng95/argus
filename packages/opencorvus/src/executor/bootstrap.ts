@@ -90,20 +90,28 @@ function codexProvider(command: string[]) {
     return CodexAppServerClientProcess.create({
       command: [
         ...command,
+        // Top-level option: `--dangerously-bypass-approvals-and-sandbox`
+        // collapses every confirmation pathway codex 0.125 still emits
+        // even after `approvalPolicy=never`/`--disable tool_call_mcp_elicitation`
+        // — most importantly the `mcp_tool_call_approval_*` elicitation
+        // that comes through `item/tool/requestUserInput` for every tool
+        // call. We caught this on the 2026-04-29 dispatch (codex 0.125
+        // build-agents stalling with `tool_call ... ended without a
+        // matching tool_result`): host received a multiple-choice
+        // {Allow, Allow for this session, Cancel} elicitation, auto-replied
+        // free text, codex treated it as Cancel, the tool never ran.
+        // The bypass flag is the same operating mode claude-code uses for
+        // its sandbox; benchmark runs are externally sandboxed (per-goal
+        // worktrees + ephemeral home), so the safety surface is the host,
+        // not codex's per-call gates.
+        "--dangerously-bypass-approvals-and-sandbox",
         "app-server",
         "--listen",
         "stdio://",
-        // Disable MCP tool first-call elicitation: codex 0.125's stable
-        // `tool_call_mcp_elicitation` feature pops a "Allow MCP server X to
-        // run tool Y?" prompt the first time the model calls each MCP tool,
-        // which blocks unattended benchmark runs (caught on the
-        // 2026-04-28 codex post-fix run — build agent stalled on
-        // approving the `memory` tool). The opencorvus MCP server is
-        // owned by the host process, not a third-party server, so the
-        // elicitation has no security upside here. Pair it with
-        // `--disable guardian_approval` so codex's own command-execution
-        // Guardian also stays out of the loop — `approvalPolicy=never`
-        // already covers that intent at the app-server config layer.
+        // Belt-and-braces: disable the elicitation feature explicitly too.
+        // The bypass flag should already cover this, but keeping the
+        // feature toggle off means even if a future codex release re-routes
+        // an approval pathway around the bypass, we're still clear.
         "--disable",
         "tool_call_mcp_elicitation",
         "--disable",
