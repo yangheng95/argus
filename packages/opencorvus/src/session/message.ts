@@ -62,6 +62,46 @@ export namespace Message {
     "ContextOverflowError",
     z.object({ message: z.string(), responseBody: z.string().optional() }),
   )
+  /**
+   * Predictive-compaction fired but compaction cannot rescue this turn —
+   * either there is no message history to summarise (`assistantMsgCount=0`
+   * and the user message itself fits) or the non-compressible prompt
+   * (system prompt + tool schemas) is already at/over budget. Carries the
+   * full breakdown so the operator can identify whether to drop tools, raise
+   * the budget, or change the agent design (rule 26: surface the actual
+   * cause, do not loop a useless action).
+   * See specs/new-arch/2026-04-28-structured-output-systemic-fix.md §C.
+   */
+  export const PromptBudgetOverflowError = NamedError.create(
+    "PromptBudgetOverflowError",
+    z.object({
+      message: z.string(),
+      systemTokensEst: z.number(),
+      messagePayloadChars: z.number(),
+      toolSchemaChars: z.number(),
+      compressibleMessageChars: z.number(),
+      nonCompressiblePromptChars: z.number(),
+      usableBudget: z.number(),
+      limit: z.number(),
+      toolNames: z.string(),
+    }),
+  )
+  /**
+   * Tool schemas alone overrun a configurable share of the model's input
+   * budget. Compaction never touches tool definitions, so this is a
+   * structural problem with the agent's tool surface (often Zod-rich
+   * register/submit tools); fail-fast and refuse to retry.
+   */
+  export const ToolSchemaBudgetError = NamedError.create(
+    "ToolSchemaBudgetError",
+    z.object({
+      message: z.string(),
+      toolSchemaChars: z.number(),
+      usableBudget: z.number(),
+      ratio: z.number(),
+      toolNames: z.string(),
+    }),
+  )
 
   export const OutputFormatText = z
     .object({

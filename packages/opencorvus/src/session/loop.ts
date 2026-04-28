@@ -192,6 +192,103 @@ export namespace SessionLoop {
   }
 
   /**
+   * Predictive-compaction decision constants (Phase C).
+   *
+   * `PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT` — fraction of the model's
+   * usable input budget at which we attempt compaction proactively. Late
+   * enough that the prompt-cache prefix stays stable for most of a session.
+   * Override via env `OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD`.
+   *
+   * `TOOL_SCHEMA_BUDGET_RATIO_DEFAULT` — fraction of usable budget that
+   * tool schemas alone must NOT exceed. Compaction never touches tool
+   * definitions, so this is a structural guard: when an agent's tool
+   * surface alone overruns the model, we fail fast rather than retry an
+   * impossible turn. Override via env `OPENCORVUS_TOOL_SCHEMA_BUDGET_RATIO`.
+   *
+   * `COMPACTION_MIN_RESIDUE_CHARS` — even after a perfect compaction the
+   * request still carries the active user message + a minimum-viable
+   * summary in the message body. We use ~6 KB as a conservative residue
+   * estimate (≈ 1.5 K tokens) for the post-compaction sizing check.
+   */
+  const PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT = 0.9
+  const TOOL_SCHEMA_BUDGET_RATIO_DEFAULT = 0.5
+  const COMPACTION_MIN_RESIDUE_CHARS = 6_000
+
+  function readEnvRatio(name: string, fallback: number): number {
+    const raw = Number(Env.get(name) ?? "")
+    return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : fallback
+  }
+
+  export type PredictiveCompactionDecision =
+    | { kind: "skip" }
+    | { kind: "compact" }
+    | { kind: "fail-tool-schema" }
+    | { kind: "fail-prompt-budget"; reason: "post-compaction-still-over" | "nothing-to-compress" }
+
+  /**
+   * Pure decision: given the budget metrics for the next turn, should we
+   * predictively compact, fail fast, or just send the request?
+   *
+   * Per specs/new-arch/2026-04-28-structured-output-systemic-fix.md §C the
+   * old behaviour ("totalTokens > limit → always compact") spun forever on
+   * context-cold sessions whose overflow came entirely from the
+   * non-compressible prompt face (system + tool schemas). The new logic:
+   *
+   *   1. tool schemas alone over `toolSchemaBudgetRatio` of budget →
+   *      `fail-tool-schema` (rule 22 — there is no recovery, raise).
+   *   2. estimate the residue after a perfect compaction: system + tool
+   *      schemas + a minimum-viable summary + last user message. If that
+   *      already exceeds the budget, compaction cannot rescue this call;
+   *      fail with `post-compaction-still-over`.
+   *   3. compute overflow vs the compressible message body. If the
+   *      compressible content is smaller than the overflow we need to
+   *      eject, compaction has nothing meaningful to fold up; fail with
+   *      `nothing-to-compress`.
+   *   4. otherwise → `compact`.
+   *
+   * `assistantMsgCount === 0` is NOT a hard fail-fast trigger on its own;
+   * a jumbo first user message can still be compactable. The decision is
+   * driven purely by whether compaction can reach the budget.
+   */
+  export function predictiveCompactionDecision(input: {
+    totalTokensEst: number
+    limit: number
+    usableBudget: number
+    systemChars: number
+    toolSchemaChars: number
+    messagePayloadChars: number
+    imageTokensEst: number
+    toolSchemaBudgetRatio: number
+    minResidueChars?: number
+    lastFinishedSummary: boolean
+  }): PredictiveCompactionDecision {
+    if (input.usableBudget === 0) return { kind: "skip" }
+    if (input.lastFinishedSummary) return { kind: "skip" }
+    if (input.totalTokensEst <= input.limit) return { kind: "skip" }
+
+    if (input.toolSchemaChars > input.usableBudget * input.toolSchemaBudgetRatio) {
+      return { kind: "fail-tool-schema" }
+    }
+
+    const minResidueChars = input.minResidueChars ?? COMPACTION_MIN_RESIDUE_CHARS
+    const nonCompressibleChars = input.systemChars + input.toolSchemaChars
+    const postCompactionMinTokens =
+      Math.round((nonCompressibleChars + minResidueChars) / 4) + input.imageTokensEst
+    if (postCompactionMinTokens > input.limit) {
+      return { kind: "fail-prompt-budget", reason: "post-compaction-still-over" }
+    }
+
+    const overflowTokens = input.totalTokensEst - input.limit
+    const compressibleTokens = Math.round(input.messagePayloadChars / 4)
+    const minResidueTokens = Math.round(minResidueChars / 4)
+    if (compressibleTokens < overflowTokens + minResidueTokens) {
+      return { kind: "fail-prompt-budget", reason: "nothing-to-compress" }
+    }
+
+    return { kind: "compact" }
+  }
+
+  /**
    * Single source of truth for "transform a raw JSON Schema into the
    * provider-bound JSON Schema we ship to streamText". Used by both the
    * registry tool wrapper and the MCP tool wrapper below — there must NOT
@@ -746,11 +843,81 @@ export namespace SessionLoop {
         providerID: input.model.providerID,
         modelID: input.model.id,
       })
-    } else if (input.lastFinished?.summary !== true) {
-      const envThreshold = Number(Env.get("OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD") ?? "")
-      const threshold = Number.isFinite(envThreshold) && envThreshold > 0 && envThreshold <= 1 ? envThreshold : 0.9
+    } else {
+      const threshold = readEnvRatio(
+        "OPENCORVUS_COMPACTION_PREDICTIVE_THRESHOLD",
+        PREDICTIVE_COMPACTION_THRESHOLD_DEFAULT,
+      )
+      const toolSchemaBudgetRatio = readEnvRatio(
+        "OPENCORVUS_TOOL_SCHEMA_BUDGET_RATIO",
+        TOOL_SCHEMA_BUDGET_RATIO_DEFAULT,
+      )
       const limit = Math.floor(usableBudget * threshold)
-      if (totalTokensEst > limit) {
+      const decision = predictiveCompactionDecision({
+        totalTokensEst,
+        limit,
+        usableBudget,
+        systemChars,
+        toolSchemaChars,
+        messagePayloadChars,
+        imageTokensEst,
+        toolSchemaBudgetRatio,
+        lastFinishedSummary: input.lastFinished?.summary === true,
+      })
+      const toolNames = Object.keys(tools).join(",")
+      if (decision.kind === "fail-tool-schema") {
+        log.error("predictive-compaction-fail-tool-schema", {
+          step: input.step,
+          toolSchemaChars,
+          usableBudget,
+          ratio: toolSchemaBudgetRatio,
+          toolNames,
+        })
+        throw new Message.ToolSchemaBudgetError({
+          message:
+            `Tool schema payload (${toolSchemaChars} chars) exceeds ` +
+            `${Math.round(toolSchemaBudgetRatio * 100)}% of model input ` +
+            `budget (${usableBudget}). Compaction does not shrink tool ` +
+            `definitions; reduce the agent's tool surface or pick a model ` +
+            `with a larger context window.`,
+          toolSchemaChars,
+          usableBudget,
+          ratio: toolSchemaBudgetRatio,
+          toolNames,
+        })
+      }
+      if (decision.kind === "fail-prompt-budget") {
+        const nonCompressiblePromptChars = systemChars + toolSchemaChars
+        log.error("predictive-compaction-fail-prompt-budget", {
+          step: input.step,
+          reason: decision.reason,
+          totalTokensEst,
+          limit,
+          usableBudget,
+          systemTokensEst,
+          toolSchemaChars,
+          messagePayloadChars,
+          nonCompressiblePromptChars,
+          toolNames,
+        })
+        throw new Message.PromptBudgetOverflowError({
+          message:
+            `Predictive compaction cannot recover this turn ` +
+            `(reason=${decision.reason}). totalTokensEst=${totalTokensEst} ` +
+            `> limit=${limit}; system+tool schemas alone ` +
+            `=${nonCompressiblePromptChars} chars. Either drop tools or ` +
+            `pick a larger-context model.`,
+          systemTokensEst,
+          messagePayloadChars,
+          toolSchemaChars,
+          compressibleMessageChars: messagePayloadChars,
+          nonCompressiblePromptChars,
+          usableBudget,
+          limit,
+          toolNames,
+        })
+      }
+      if (decision.kind === "compact") {
         log.warn("predictive-compaction-triggered", {
           step: input.step,
           totalTokensEst,
