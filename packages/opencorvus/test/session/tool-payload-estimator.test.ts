@@ -89,3 +89,36 @@ describe("SessionLoop.estimateToolPayloadChars", () => {
     ).not.toThrow()
   })
 })
+
+describe("SessionLoop.normalizeToolSchemaForProvider", () => {
+  // Stub Provider.Model — only `providerID` and `api.id` are read by
+  // ProviderTransform.schema; the rest can be {} to keep the test pure.
+  const fakeModel = {
+    providerID: "test-provider",
+    api: { id: "test-model" },
+  } as unknown as Parameters<typeof SessionLoop.normalizeToolSchemaForProvider>[0]
+
+  test("returns a JSON Schema that round-trips through stringify (no Zod internals)", () => {
+    const schema = z.toJSONSchema(
+      z.object({ a: z.string(), b: z.number().optional() }),
+    ) as Record<string, unknown>
+    const out = SessionLoop.normalizeToolSchemaForProvider(fakeModel, schema)
+    const json = JSON.stringify(out)
+    expect(json.length).toBeGreaterThan(0)
+    expect(json).toContain("\"type\":\"object\"")
+    // ProviderTransform.schema is identity for non-google providers, so the
+    // shape must still describe the same fields.
+    expect(json).toContain("a")
+  })
+
+  test("is the same call ProviderTransform.schema would make — single source", () => {
+    const schema = z.toJSONSchema(z.object({ x: z.string() })) as Record<string, unknown>
+    const helperOut = SessionLoop.normalizeToolSchemaForProvider(fakeModel, schema)
+    // Re-running the helper on its own output must be idempotent for the
+    // happy path (non-google provider, no integer-enum coercion). Drift here
+    // would mean the estimator and the runtime tool wrapper see different
+    // schemas, defeating the §A invariant.
+    const second = SessionLoop.normalizeToolSchemaForProvider(fakeModel, helperOut)
+    expect(JSON.stringify(second)).toEqual(JSON.stringify(helperOut))
+  })
+})

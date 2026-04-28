@@ -192,6 +192,24 @@ export namespace SessionLoop {
   }
 
   /**
+   * Single source of truth for "transform a raw JSON Schema into the
+   * provider-bound JSON Schema we ship to streamText". Used by both the
+   * registry tool wrapper and the MCP tool wrapper below — there must NOT
+   * be two parallel `ProviderTransform.schema(...)` call sites that can
+   * drift, otherwise the estimator (which reads the wrapper after the
+   * fact) silently sees a different shape than what was wired into the
+   * tool. See specs/new-arch/2026-04-28-structured-output-systemic-fix.md
+   * §A — the helper is the only schema-normalisation entry point on the
+   * tool-payload side; the estimator never re-runs the transform.
+   */
+  export function normalizeToolSchemaForProvider<T>(
+    model: Provider.Model,
+    rawJsonSchema: T,
+  ): ReturnType<typeof ProviderTransform.schema> {
+    return ProviderTransform.schema(model, rawJsonSchema as never)
+  }
+
+  /**
    * Provider-normalized estimate of the bytes a tool definition contributes
    * to the streamText request payload. AI SDK serialises each tool as
    * `{name, description, parameters: <jsonSchema>}` where the JSON Schema is
@@ -202,7 +220,10 @@ export namespace SessionLoop {
    * inflated count was triggering predictive compaction on context-cold
    * sessions (see specs/new-arch/2026-04-28-structured-output-systemic-fix.md
    * §A). Counting `name + description + jsonSchema` keeps the estimate tied
-   * to what the provider really receives.
+   * to what the provider really receives. The estimator is read-only:
+   * `normalizeToolSchemaForProvider` is the only path that runs the
+   * provider transform; here we just unwrap the already-normalised schema
+   * via `asSchema(...)`.
    */
   export function estimateToolPayloadChars(tools: Record<string, AITool>): number {
     let total = 0
@@ -1102,7 +1123,7 @@ export namespace SessionLoop {
         const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
         if (rule.action === "deny") continue
       }
-      const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      const schema = normalizeToolSchemaForProvider(input.model, z.toJSONSchema(item.parameters))
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
@@ -1149,7 +1170,10 @@ export namespace SessionLoop {
       const execute = item.execute
       if (!execute) continue
 
-      const transformed = ProviderTransform.schema(input.model, asSchema(item.inputSchema).jsonSchema)
+      const transformed = normalizeToolSchemaForProvider(
+        input.model,
+        asSchema(item.inputSchema).jsonSchema,
+      )
       item.inputSchema = jsonSchema(transformed)
       item.execute = async (args, opts) => {
         const ctx = context(args, opts)
