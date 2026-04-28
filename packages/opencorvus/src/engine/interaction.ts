@@ -5,7 +5,7 @@ import { Database, eq } from "@/storage/db"
 import { EngineInteractionRequestTable, type EngineMetadata, type EngineInteractionStatus } from "./engine.sql"
 import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
-import { activeRunBySession, findInteractionByExternal, type InteractionRow } from "./store"
+import { activeRunBySession, findActiveRunForTask, findInteractionByExternal, type InteractionRow } from "./store"
 import { taskIDForSession } from "@/orchestrator/task-event"
 import { Identifier } from "@/id/id"
 import { EngineRuntime } from "./runtime"
@@ -23,17 +23,18 @@ export namespace EngineInteraction {
 }
 
 async function upsertPermission(request: PermissionNext.Request, hooks: RuntimeHooks) {
-  const run = activeRunBySession(request.sessionID)
-  if (!run) return
+  const owner = resolveOwner(request.sessionID)
+  if (!owner) return
   if (findInteractionByExternal(request.id)) return
   const now = Date.now()
   const interactionID = Identifier.ascending("interaction")
+  const runID = owner.run?.id ?? null
   Database.transaction((db) => {
     db.insert(EngineInteractionRequestTable)
       .values({
         id: interactionID,
-        task_id: run.task_id,
-        run_id: run.id,
+        task_id: owner.taskID,
+        run_id: runID,
         session_id: request.sessionID,
         external_id: request.id,
         request_type: "permission",
@@ -53,15 +54,16 @@ async function upsertPermission(request: PermissionNext.Request, hooks: RuntimeH
       .run()
     Database.effect(() =>
       EngineProtocol.emit(Event.InteractionRequested, {
-        taskID: run.task_id,
-        runID: run.id,
+        taskID: owner.taskID,
+        ...(runID ? { runID } : {}),
         interactionID,
         requestType: "permission",
         summary: `Permission requested: ${request.permission}`,
-      }, { taskID: run.task_id, runID: run.id, interactionID, source: "interaction.permission" }),
+      }, { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.permission" }),
     )
   })
-  await EngineRuntime.syncRun(run.id, hooks)
+  if (runID) await EngineRuntime.syncRun(runID, hooks)
+  else await EngineRuntime.syncTask(owner.taskID, hooks)
 }
 
 async function resolvePermission(
@@ -78,24 +80,19 @@ async function resolvePermission(
 }
 
 async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {
-  // Resolve owning task: prefer the active run's task (executor session path),
-  // fall back to parent-chain / task.session_id lookup so Orchestrator coordinator
-  // sessions (which have no own run) can still surface questions.
-  const run = activeRunBySession(request.sessionID)
-  let taskID: string | undefined = run?.task_id
-  if (!taskID) taskID = taskIDForSession(request.sessionID)
-  if (!taskID) return
+  const owner = resolveOwner(request.sessionID)
+  if (!owner) return
   if (findInteractionByExternal(request.id)) return
   const now = Date.now()
   const interactionID = Identifier.ascending("interaction")
   const title = request.questions.map((item) => item.header).join(" / ") || "Question"
   const body = request.questions.map((item) => item.question).join("\n\n")
-  const runID = run?.id ?? null
+  const runID = owner.run?.id ?? null
   Database.transaction((db) => {
     db.insert(EngineInteractionRequestTable)
       .values({
         id: interactionID,
-        task_id: taskID!,
+        task_id: owner.taskID,
         run_id: runID,
         session_id: request.sessionID,
         external_id: request.id,
@@ -115,16 +112,24 @@ async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {
     // before any run has started still needs to surface in the InteractionPanel.
     Database.effect(() =>
       EngineProtocol.emit(Event.InteractionRequested, {
-        taskID: taskID!,
+        taskID: owner.taskID,
         ...(runID ? { runID } : {}),
         interactionID,
         requestType: "question",
         summary: title,
-      }, { taskID: taskID!, ...(runID ? { runID } : {}), interactionID, source: "interaction.question" }),
+      }, { taskID: owner.taskID, ...(runID ? { runID } : {}), interactionID, source: "interaction.question" }),
     )
   })
   if (runID) await EngineRuntime.syncRun(runID, hooks)
-  else await EngineRuntime.syncTask(taskID!, hooks)
+  else await EngineRuntime.syncTask(owner.taskID, hooks)
+}
+
+function resolveOwner(sessionID: string) {
+  const directRun = activeRunBySession(sessionID)
+  if (directRun) return { taskID: directRun.task_id, run: directRun }
+  const taskID = taskIDForSession(sessionID)
+  if (!taskID) return undefined
+  return { taskID, run: findActiveRunForTask(taskID) }
 }
 
 async function resolveQuestion(
@@ -173,4 +178,3 @@ async function resolveInteraction(
   if (interaction.run_id) await EngineRuntime.syncRun(interaction.run_id, hooks)
   else await EngineRuntime.syncTask(interaction.task_id, hooks)
 }
-
