@@ -182,7 +182,7 @@ async function* stream(client: CodexAppServerClient, threadID: string, turnID: s
       if (terminal(threadID, turnID, item.method, item.params)) return
       continue
     }
-    yield* request(item)
+    yield* request(item, client)
   }
 }
 
@@ -416,9 +416,28 @@ function* notification(threadID: string, turnID: string, method: string, params?
   // Unknown methods — protocol noise, do not yield
 }
 
-function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<CodingEventInfo> {
+async function* request(
+  item: Extract<CodexInbound, { type: "request" }>,
+  client: CodexAppServerClient,
+): AsyncGenerator<CodingEventInfo> {
   const data = item.params ?? {}
+  // codex 0.125 emits a JSON-RPC `request` (not a notification) for every
+  // MCP elicitation, command execution, file-change, and apply-patch
+  // approval round-trip and parks the turn awaiting our reply. The codex
+  // config flags (`approvalPolicy=never`, `--disable
+  // tool_call_mcp_elicitation`, `--disable guardian_approval`) suppress
+  // the *interactive* prompt path inside codex but the protocol still
+  // surfaces the request to the client; without an explicit reply codex
+  // sits forever, which is exactly the silent-stall the build agent
+  // chased on the 2026-04-28 toolpin run. Auto-approve at the protocol
+  // layer so the user-declared intent (`approvalPolicy=never`) actually
+  // reaches every codex code path. Upstream consumers still see a
+  // diagnostic event for trace, but the codex turn is unblocked
+  // synchronously.
   if (item.method === "item/tool/requestUserInput" || item.method === "toolRequestUserInput" || item.method === "mcpServer/elicitation/request") {
+    if (client.respond) {
+      await client.respond({ id: item.id, result: { decision: "approved" } })
+    }
     yield {
       type: "input_request",
       id: String(item.id),
@@ -435,6 +454,7 @@ function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<C
       }],
       meta: {
         request_id: item.id,
+        auto_approved: true,
         ...data,
       },
     }
@@ -468,6 +488,9 @@ function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<C
       }
       return
     }
+    if (client.respond) {
+      await client.respond({ id: item.id, result: { decision: "approved" } })
+    }
     yield {
       type: "approval_request",
       id: String(item.id),
@@ -475,6 +498,7 @@ function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<C
       message: text(data.reason || data.command || data.tool || item.method),
       meta: {
         request_id: item.id,
+        auto_approved: true,
         ...data,
       },
     }
