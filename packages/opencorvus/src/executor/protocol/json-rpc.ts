@@ -160,16 +160,31 @@ export const JsonRpcLineTransport = {
         })
       },
       async *events(signal?: AbortSignal) {
-        while (true) {
-          while (queue.length > 0) {
-            yield queue.shift()!
-          }
-          if (signal?.aborted) return
-          if (closed) return
-          await new Promise<void>((resolve) => {
-            wake = resolve
-          })
+        // Wire the caller's abort signal into the wake primitive so an
+        // upstream idle gate (e.g. build/agent.ts withStreamActivity)
+        // can actually unwind this generator. Without the listener the
+        // signal-aborted branch only fires AFTER the next event arrives —
+        // which is exactly the scenario the idle gate exists to handle.
+        const onAbort = () => {
+          const w = wake
           wake = undefined
+          w?.()
+        }
+        signal?.addEventListener("abort", onAbort, { once: true })
+        try {
+          while (true) {
+            while (queue.length > 0) {
+              yield queue.shift()!
+            }
+            if (signal?.aborted) return
+            if (closed) return
+            await new Promise<void>((resolve) => {
+              wake = resolve
+            })
+            wake = undefined
+          }
+        } finally {
+          signal?.removeEventListener("abort", onAbort)
         }
       },
       async close() {
