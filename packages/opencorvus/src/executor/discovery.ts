@@ -59,8 +59,17 @@ function exists(file: string) {
 }
 
 function findInRoots(names: string[]) {
-  for (const root of searchRoots()) {
-    for (const name of names) {
+  // name-major iteration: scan every root for the highest-priority name
+  // before falling back to the next one. The previous root-major order
+  // returned `claude.cmd` from %APPDATA%\npm before the spawnable
+  // `claude.exe` in ~/.local/bin, defeating the .exe preference set by
+  // callers — see CVE-2024-27980, child_process.spawn refuses .cmd
+  // without shell:true and the Anthropic SDK spawns the executable with
+  // `{ windowsHide: true }` and no shell, so a .cmd path crashes the
+  // build attempt instantly.
+  const roots = searchRoots()
+  for (const name of names) {
+    for (const root of roots) {
       const file = path.join(root, name)
       if (exists(file)) {
         return {
