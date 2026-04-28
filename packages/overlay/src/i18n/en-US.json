@@ -580,5 +580,12 @@
   "workflow.requirements": "Requirements",
   "workflow.requirements_generating": "Analyzing requirements...",
   "workflow.requirements_pending": "Requirements analysis pending...",
-  "workflow.spec_detail": "Spec Detail"
+  "workflow.spec_detail": "Spec Detail",
+  "progress.heading": "Goals",
+  "progress.goal.pending": "{{title}} — pending",
+  "progress.goal.running": "{{title}} — running",
+  "progress.goal.passed": "{{title}} — passed",
+  "progress.goal.failed": "{{title}} — failed",
+  "progress.goal.blocked": "{{title}} — blocked",
+  "progress.summary": "{{passed}}/{{total}} passed · {{failed}} failed · {{running}} running"
 }

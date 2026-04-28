@@ -1688,3 +1688,143 @@ body[data-theme="light"] .card__round {
   border-radius: calc(6px * var(--ui-scale, 1)) !important;
   box-shadow: none !important;
 }
+
+/* ── Task progress bar ───────────────────────────────────────
+ * Sticky one-row overview of every architect-emitted goal,
+ * including pending ones. Lives at the top of the conversation
+ * panel so the operator can see "where are we in the task" at
+ * a glance. Pills jump to the corresponding goal card on click.
+ */
+.task-progress {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 0 var(--card-gap) 0;
+  padding: calc(8px * var(--ui-scale, 1)) calc(10px * var(--ui-scale, 1));
+  background: color-mix(in srgb, var(--card-bg-1) 92%, var(--bg, #0a0a0c));
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--card-meta-size);
+  color: var(--text-soft);
+  backdrop-filter: blur(6px);
+}
+
+.task-progress__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.task-progress__heading {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-size: calc(var(--card-meta-size) - 1px);
+}
+.task-progress__summary {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.task-progress__bar {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  overflow: hidden;
+}
+.task-progress__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--good, #69b578) 80%, transparent),
+    color-mix(in srgb, var(--good, #69b578) 100%, transparent)
+  );
+  transition: width 200ms ease;
+}
+.task-progress__bar-fail {
+  position: absolute;
+  inset: 0 0 0 auto;
+  background: color-mix(in srgb, var(--bad, #d56262) 80%, transparent);
+}
+
+.task-progress__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.task-progress__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg-0);
+  color: var(--text-soft);
+  font-size: calc(var(--card-meta-size) - 0.5px);
+  cursor: pointer;
+  max-width: 18rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.task-progress__pill:hover {
+  background: var(--card-bg-hover);
+  border-color: var(--card-border-strong);
+  color: var(--text-strong);
+}
+.task-progress__pill-id {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-size: calc(var(--card-meta-size) - 1px);
+  color: color-mix(in srgb, var(--text-muted) 92%, var(--text-soft));
+}
+.task-progress__pill-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* state colours echo the badge palette so the progress strip and
+ * the per-card badges stay visually consistent. */
+.task-progress__pill[data-state="passed"] {
+  background: color-mix(in srgb, var(--good, #69b578) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--good, #69b578) 35%, var(--card-border));
+  color: color-mix(in srgb, var(--good, #69b578) 80%, var(--text-strong));
+}
+.task-progress__pill[data-state="failed"] {
+  background: color-mix(in srgb, var(--bad, #d56262) 16%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--bad, #d56262) 32%, var(--card-border));
+  color: color-mix(in srgb, var(--bad, #d56262) 75%, var(--text-strong));
+}
+.task-progress__pill[data-state="running"] {
+  background: color-mix(in srgb, #f2994a 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, #f2994a 36%, var(--card-border));
+  color: color-mix(in srgb, #f2994a 70%, var(--text-strong));
+  animation: task-progress-pulse 1.6s ease-in-out infinite;
+}
+.task-progress__pill[data-state="blocked"] {
+  background: color-mix(in srgb, var(--warn, #c28b55) 18%, var(--card-bg-0));
+  border-color: color-mix(in srgb, var(--warn, #c28b55) 32%, var(--card-border));
+  color: color-mix(in srgb, var(--warn, #c28b55) 75%, var(--text-strong));
+}
+.task-progress__pill[data-state="pending"] {
+  opacity: 0.7;
+}
+
+@keyframes task-progress-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, #f2994a 30%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, #f2994a 5%, transparent); }
+}
