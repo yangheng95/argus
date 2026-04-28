@@ -461,6 +461,15 @@ export const OrchestratorEventNote = {
   retry(task: TaskRow): string {
     return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
   },
+
+  deliveryRework(input: { reason: string; iteration: number; summary?: string }): string {
+    const lines = [
+      `Delivery iteration ${input.iteration} rejected (reason=${input.reason}).`,
+      "Affected goals were reset to pending; dispatch them again or escalate.",
+    ]
+    if (input.summary) lines.push("", `Detail: ${input.summary}`)
+    return lines.join("\n")
+  },
 }
 
 export function orchestratorUserText(task: Pick<TaskRow, "request">, event?: Pick<OrchestratorEvent, "note">): string {

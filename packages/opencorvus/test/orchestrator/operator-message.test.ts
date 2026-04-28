@@ -27,3 +27,16 @@ test("orchestrator wake with caller note preserves the caller-authored note", ()
 
   expect(text).toBe("operator provided this exact follow-up")
 })
+
+test("deliveryRework wake note carries iteration + reason + summary so re-dispatch context is unambiguous", () => {
+  const note = OrchestratorEventNote.deliveryRework({
+    reason: "render_prerequisite_failed:bun_install",
+    iteration: 0,
+    summary: "bun install pre-launch exited code=1 in merged worktree",
+  })
+
+  expect(note).toContain("iteration 0")
+  expect(note).toContain("render_prerequisite_failed:bun_install")
+  expect(note).toContain("Affected goals were reset to pending")
+  expect(note).toContain("bun install pre-launch exited code=1 in merged worktree")
+})
