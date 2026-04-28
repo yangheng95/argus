@@ -72,20 +72,19 @@ describe("classifyAttemptOutcome", () => {
   })
 
   test("isComplete ok=false terminal=true → fail-fast (no retry)", () => {
-    // This is the new behaviour Phase F adds: the integrity reviewer's
-    // in-session reminder + hard-pin already burned its budget; spawning
-    // a fresh session against the same model is the 90-minute storm we
-    // already saw in ainvest-20260428-100538.
+    // This is the Phase F behaviour: once a caller has proven an attempt
+    // ended in a deterministic terminal-contract miss, spawning a fresh
+    // session against the same model repeats the same work.
     const out = classifyAttemptOutcome({
       decision: {
         ok: false,
         terminal: true,
-        reason: "integrity reviewer ended without StructuredOutput after reminders",
+        reason: "agent ended without its explicit terminal collector tool",
       },
     })
     expect(out.action).toBe("fail-fast")
     if (out.action === "fail-fast") {
-      expect(out.reason).toContain("StructuredOutput")
+      expect(out.reason).toContain("terminal collector tool")
     }
   })
 

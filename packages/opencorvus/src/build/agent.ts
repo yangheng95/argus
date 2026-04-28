@@ -13,8 +13,8 @@
  *      marker is written via Ownership.Worktree.record so OS-level restart
  *      cleanup can reclaim it.
  *   3. SessionPrompt.prompt runs the build agent in a child session with
- *      format: json_schema(BuildResultSchema). The terminal StructuredOutput
- *      call is the agent's only way to return; text output is ignored.
+ *      report_build_passed / report_build_failed terminal tools. The tool
+ *      name is the status discriminator; text output is ignored.
  *   4. Finally block runs cleanupGoalWorkspace so the worktree dir, git
  *      branch, fsmonitor, and LSP servers all unwind regardless of outcome.
  *
@@ -138,7 +138,7 @@ export namespace BuildAgent {
   }
 
   export interface RunOutput {
-    /** The terminal structured result the LLM emitted via StructuredOutput. */
+    /** The terminal result the LLM emitted via report_build_passed / report_build_failed. */
     result: BuildResult
     /** The child "build" session created for this invocation. Callers may
      *  inspect its message stream for audit / UI. */
@@ -314,7 +314,71 @@ export namespace BuildAgent {
       // post-run code share state without a side-channel.
       let mergedHead: string | undefined
 
-      const buildToolKit: { tools: ToolSet; getCollector: () => unknown } = ownsWorktree && worktreeBranch && worktreeDir
+      type BuildCollector = {
+        result?: BuildResult
+        blockedBeforeMerge: boolean
+      }
+      const buildCollector: BuildCollector = { blockedBeforeMerge: false }
+      const createBuildReportTools = (): ToolSet => ({
+        report_build_passed: tool({
+          description:
+            "Finalize a successful build after implementation, verification, commit, and merge_back have all succeeded. " +
+            "Do not call this before merge_back reports status='merged'.",
+          inputSchema: z.object({
+            summary: z.string().min(1).describe("One-line plain-prose description of what changed."),
+            patch_summary: z.string().describe("Short bullet list of file-level changes."),
+            tests: z.array(z.object({
+              name: z.string().min(1),
+              passed: z.boolean(),
+              detail: z.string().optional(),
+            })).default([]),
+          }),
+          execute: async ({ summary, patch_summary, tests }) => {
+            if (ownsWorktree && worktreeBranch && !mergedHead) {
+              buildCollector.blockedBeforeMerge = true
+              return (
+                "Error: cannot report_build_passed before merge_back succeeds. " +
+                "Commit the fix, call merge_back, resolve any conflicts, and call report_build_passed only after merge_back returns status='merged'."
+              )
+            }
+            buildCollector.result = {
+              status: "passed",
+              summary,
+              patch_summary,
+              commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
+              tests: tests ?? [],
+            }
+            return "PASS: build result recorded."
+          },
+        }),
+        report_build_failed: tool({
+          description:
+            "Finalize a failed build with the concrete blocker after implementation or verification could not be completed.",
+          inputSchema: z.object({
+            summary: z.string().min(1).describe("One-line plain-prose description of what failed."),
+            error: z.string().min(1).describe("Concrete failure reason."),
+            patch_summary: z.string().optional().describe("Short bullet list of partial file-level changes, if any."),
+            tests: z.array(z.object({
+              name: z.string().min(1),
+              passed: z.boolean(),
+              detail: z.string().optional(),
+            })).default([]),
+          }),
+          execute: async ({ summary, error, patch_summary, tests }) => {
+            buildCollector.result = {
+              status: "failed",
+              summary,
+              patch_summary: patch_summary ?? "",
+              commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
+              tests: tests ?? [],
+              error,
+            }
+            return "PASS: build failure recorded."
+          },
+        }),
+      })
+
+      const buildToolKit: { tools: ToolSet; getCollector: () => BuildCollector } = ownsWorktree && worktreeBranch && worktreeDir
         ? {
             tools: {
               merge_back: tool({
@@ -325,11 +389,11 @@ export namespace BuildAgent {
                   "atomically under a host-side lock so concurrent goals do not " +
                   "race each other.\n\n" +
                   "Call this AFTER you have committed all your changes and your " +
-                  "verification passed, and BEFORE emitting StructuredOutput. It " +
+                  "verification passed, and BEFORE calling report_build_passed. It " +
                   "is the LAST git-affecting action of the session.\n\n" +
                   "Returns one of:\n" +
                   "  • {status:'merged', primary_head, primary_branch} — done; emit " +
-                  "    StructuredOutput status=passed with commit_ref=primary_head.\n" +
+                  "    report_build_passed.\n" +
                   "  • {status:'conflict', primary_branch, primary_tip, " +
                   "    conflict_paths[]} — rebase hit textual conflicts and was " +
                   "    aborted (your branch is back to its pre-rebase tip). Read " +
@@ -337,7 +401,7 @@ export namespace BuildAgent {
                   "    <primary>:<path>` and your worktree, reconcile manually, " +
                   "    `git add` + `git commit`, then call merge_back again.\n" +
                   "  • {status:'error', reason} — infrastructure problem; report it " +
-                  "    via StructuredOutput status=failed.",
+                  "    via report_build_failed.",
                 inputSchema: z.object({}),
                 execute: async () => {
                   try {
@@ -378,27 +442,28 @@ export namespace BuildAgent {
                   }
                 },
               }),
+              ...createBuildReportTools(),
             },
-            getCollector: () => undefined as unknown,
+            getCollector: () => buildCollector,
           }
         : {
             // Caller-owned worktrees (input.workDir set) skip merge_back — the
             // caller manages publishing. The agent prompt is gated on the
             // tool's presence so the LLM does not invent the call.
-            tools: {},
-            getCollector: () => undefined as unknown,
+            tools: createBuildReportTools(),
+            getCollector: () => buildCollector,
           }
 
-      let out: { session: { id: string }; structured?: unknown } | undefined
+      let out: { session: { id: string }; structured?: unknown; collector?: BuildCollector } | undefined
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
       // When the agent tries to close with status=passed before merge_back,
-      // StructuredOutput is rejected in-session. If the model still fails to
+      // report_build_passed is rejected in-session. If the model still fails to
       // repair that by calling merge_back, preserve the worktree so the next
       // attempt can continue from the written files instead of discarding
       // real progress.
       let preserveWorktreeForRetry = false
-      let mergeBackBlockedStructuredOutput = false
+      let mergeBackBlockedReport = false
       // Dispatch fork: executor === "opencode" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
@@ -427,30 +492,11 @@ export namespace BuildAgent {
             buildUserParts: buildUserPartsFn,
             skillsStage: "build",
             skillTaskSignals: taskSignals,
-            format: {
-              schema: z.toJSONSchema(BuildResultSchema) as Record<string, unknown>,
-              retryCount: 2,
-              validate(output) {
-                const candidate = BuildResultSchema.safeParse(output)
-                if (
-                  candidate.success &&
-                  candidate.data.status === "passed" &&
-                  ownsWorktree &&
-                  worktreeBranch &&
-                  !mergedHead
-                ) {
-                  mergeBackBlockedStructuredOutput = true
-                  return (
-                    "You cannot close this build with status=passed before merge_back succeeds. " +
-                    "Call the merge_back tool now. If it reports conflicts, reconcile the listed files, " +
-                    "commit the fix, call merge_back again, and only then call StructuredOutput."
-                  )
-                }
-                return undefined
-              },
-            },
           })
-          parsed = BuildResultSchema.safeParse(out.structured)
+          const report = buildToolKit.getCollector()
+          out = { ...out, collector: report }
+          mergeBackBlockedReport = report.blockedBeforeMerge
+          parsed = BuildResultSchema.safeParse(report.result)
         } else {
           const externalOut = await runWithExternalProvider({
             executor,
@@ -492,21 +538,21 @@ export namespace BuildAgent {
         // Decide before the finally cleanup whether the next attempt should
         // be allowed to pick up where this one left off. The continuable
         // cases are: the model reported passed without merge_back after the
-        // guard rejected that StructuredOutput, or an older path somehow
+        // guard rejected that report_build_passed, or an older path somehow
         // returned a passed payload without a merged head.
         if (
           ownsWorktree &&
           worktreeBranch &&
           !mergedHead &&
           (
-            mergeBackBlockedStructuredOutput ||
+            mergeBackBlockedReport ||
             (parsed?.success && parsed.data.status === "passed")
           )
         ) {
           preserveWorktreeForRetry = true
         }
       } finally {
-        if (ownsWorktree && worktreeBranch && !mergedHead && mergeBackBlockedStructuredOutput) {
+        if (ownsWorktree && worktreeBranch && !mergedHead && mergeBackBlockedReport) {
           preserveWorktreeForRetry = true
         }
         if (ownsWorktree && worktreeDir && !preserveWorktreeForRetry) {
@@ -526,7 +572,7 @@ export namespace BuildAgent {
       }
 
       if (!parsed || !parsed.success) {
-        if (mergeBackBlockedStructuredOutput) {
+        if (mergeBackBlockedReport) {
           parsed = {
             success: true as const,
             data: {
@@ -535,7 +581,7 @@ export namespace BuildAgent {
               patch_summary: "",
               tests: [],
               error:
-                "StructuredOutput status=passed was rejected because merge_back had not succeeded; " +
+                "report_build_passed was rejected because merge_back had not succeeded; " +
                 "the model did not repair the session by calling merge_back before the run ended.",
             },
           }
@@ -544,7 +590,7 @@ export namespace BuildAgent {
 
       if (!parsed || !parsed.success) {
         throw new Error(
-          `build agent: StructuredOutput payload did not match BuildResultSchema: ${parsed?.error?.message ?? "(no parsed output)"}`,
+          `build agent: terminal build report did not match BuildResultSchema: ${parsed?.error?.message ?? "(no parsed output)"}`,
         )
       }
 
@@ -1252,7 +1298,7 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
       lines.push("## Dependencies (should be merged into your worktree base)")
       lines.push("")
       lines.push(
-        "These goals are listed as prerequisites — the orchestrator is supposed to have waited for them to pass and merge before dispatching you, so their files SHOULD already exist in your base branch. Verify by reading them before you consume their exports. If a declared export is missing or the file is absent, do NOT re-implement it: return `status=failed` with a concrete error naming the missing dependency so the orchestrator can fix the dispatch order.",
+        "These goals are listed as prerequisites — the orchestrator is supposed to have waited for them to pass and merge before dispatching you, so their files SHOULD already exist in your base branch. Verify by reading them before you consume their exports. If a declared export is missing or the file is absent, do NOT re-implement it: call `report_build_failed` with a concrete error naming the missing dependency so the orchestrator can fix the dispatch order.",
       )
       lines.push("")
       for (const d of deps) {
@@ -1284,7 +1330,7 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     lines.push(`**Objective**: ${target.objective}`)
     if (target.acceptance_specs.length > 0) {
       lines.push("")
-      lines.push("**Acceptance Specs** (every one MUST be observably satisfied before status=passed):")
+      lines.push("**Acceptance Specs** (every one MUST be observably satisfied before report_build_passed):")
       for (const spec of target.acceptance_specs) lines.push(`- ${spec}`)
     }
     if (target.owned_paths.length > 0) {
@@ -1307,7 +1353,7 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     }
     lines.push("")
     lines.push(
-      "Explore → implement within owned_paths → verify via bash → commit → call StructuredOutput exactly once.",
+      "Explore → implement within owned_paths → verify via bash → commit → call report_build_passed or report_build_failed exactly once.",
     )
     return lines.join("\n")
   }
@@ -1316,6 +1362,6 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     "",
     target.text,
     "",
-    "Explore the repo to understand scope, implement the change, verify via bash (tests / build / run), commit, and call StructuredOutput exactly once with your final report.",
+    "Explore the repo to understand scope, implement the change, verify via bash (tests / build / run), commit, and call report_build_passed or report_build_failed exactly once with your final report.",
   ].join("\n")
 }

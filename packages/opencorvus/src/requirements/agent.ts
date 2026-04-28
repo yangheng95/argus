@@ -15,7 +15,6 @@
  * (with prefetched repo context + clarification transcript + design
  * specs + multimodal attachments) and the output tool kit.
  */
-import z from "zod"
 import { runAgentSession } from "@/agent/runner"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
@@ -33,9 +32,7 @@ import type {
 } from "./types"
 import {
   createRequirementsOutputTools,
-  RequirementsFinalSchema,
   type RequirementsCollector,
-  type RequirementsFinal,
 } from "./output-tools"
 import type { DecisionLog } from "@/decision-log"
 
@@ -112,33 +109,33 @@ export namespace RequirementsAgent {
       },
       buildUserPrompt: () => buildUserPrompt(input, context),
       buildUserParts: () => buildPromptParts(buildUserPrompt(input, context), input.attachments),
-      format: {
-        schema: z.toJSONSchema(RequirementsFinalSchema) as Record<string, unknown>,
-        retryCount: 2,
-      },
       skillsStage: "requirements",
     })
 
-    const structured = out.structured as RequirementsFinal | undefined
     const collector = out.collector as RequirementsCollector
 
-    // Structured tool-call output is the only supported path. If the LLM
+    // Collector tool-call output is the only supported path. If the LLM
     // did not register any requirements via register_requirement, treat
     // this as a hard contract failure — no text-parsing fallback (rule 1).
     if (collector.requirements.length === 0) {
       throw new Error(
         `requirements agent produced no requirements via register_requirement ` +
-          `(structuredMissing=${!structured}). ` +
           `The orchestrator LLM must decide whether to re-invoke requirements, modify the ` +
           `task prompt, or fail the task — no coded retry loop.`,
       )
     }
+    if (!collector.finalized) {
+      throw new Error(
+        `requirements agent did not call submit_requirements after registering ` +
+          `${collector.requirements.length} requirement(s).`,
+      )
+    }
 
-    const parsed = collectorToOutput(collector, structured)
+    const parsed = collectorToOutput(collector)
     log.info("requirements agent output", {
       requirements: parsed.requirements.length,
       decisions: parsed.decisions.length,
-      structuredMissing: !structured,
+      finalized: collector.finalized,
     })
 
     const result: RequirementsResult = {
@@ -164,15 +161,14 @@ export namespace RequirementsAgent {
 }
 
 // ---------------------------------------------------------------------------
-// Structured collector → RequirementsOutput
+// Collector → RequirementsOutput
 // ---------------------------------------------------------------------------
 
 function collectorToOutput(
   collector: RequirementsCollector,
-  final?: RequirementsFinal,
 ): RequirementsOutput {
   return {
-    summary: final?.summary ?? "",
+    summary: summarizeRequirements(collector),
     requirements: collector.requirements.map((r) => ({
       id: r.id,
       type: r.type,
@@ -184,6 +180,12 @@ function collectorToOutput(
       reason: d.reason,
     })),
   }
+}
+
+function summarizeRequirements(collector: RequirementsCollector): string {
+  const explicit = collector.requirements.filter((r) => r.type === "explicit").length
+  const implicit = collector.requirements.length - explicit
+  return `Parsed ${collector.requirements.length} requirement(s): ${explicit} explicit, ${implicit} implicit.`
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +215,19 @@ function buildUserPrompt(
 
   sections.push(`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`)
 
+  if (input.taskID) {
+    const clarifications = clarificationTranscriptSection(input.taskID)
+    if (clarifications) {
+      sections.push([
+        clarifications,
+        "Concrete stack or deliverable answers from clarifications/operator notes outrank existing package.json dependencies.",
+        "If the user explicitly chose a framework-free implementation, record that choice directly instead of inferring a framework from scaffold files.",
+      ].join("\n\n"))
+    }
+    const operatorNotes = operatorNotesSection(input.taskID)
+    if (operatorNotes) sections.push(operatorNotes)
+  }
+
   if (input.designSpecs && input.designSpecs.length > 0) {
     sections.push(renderVisualContractPromptSection({ specs: input.designSpecs }))
   }
@@ -221,20 +236,12 @@ function buildUserPrompt(
     sections.push(prefetched)
   }
 
-  if (input.taskID) {
-    const clarifications = clarificationTranscriptSection(input.taskID)
-    if (clarifications) sections.push(clarifications)
-    const operatorNotes = operatorNotesSection(input.taskID)
-    if (operatorNotes) sections.push(operatorNotes)
-  }
-
   sections.push(buildMirrorToolsPromptSection({ cwd: Instance.directory }))
 
   sections.push(
     "Parse the user request. Call register_requirement per REQ-N entry, " +
       "register_decision per foundational decision (runtime / backend / test framework). " +
-      "Then call the StructuredOutput tool exactly once with the terminal `summary` field " +
-      "to close the analysis.",
+      "Then call submit_requirements with no arguments to close the analysis.",
   )
 
   return sections.join("\n\n")

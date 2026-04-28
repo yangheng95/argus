@@ -3,7 +3,6 @@ import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
-import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Flag } from "../flag/flag"
@@ -35,7 +34,7 @@ export namespace Plugin {
       project: Instance.project,
       worktree: Instance.worktree,
       directory: Instance.directory,
-      serverUrl: Server.url(),
+      serverUrl: new URL(IN_PROCESS_BASE_URL),
       $: Bun.$,
     }
 
