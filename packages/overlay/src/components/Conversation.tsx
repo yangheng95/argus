@@ -1,5 +1,6 @@
 import { For, Show, onMount, onCleanup, createSignal } from "solid-js";
 import { Card } from "./Card";
+import { TaskProgressBar } from "./TaskProgressBar";
 import { cardTreeStore } from "../store/card-tree";
 import { boardStore } from "../store/board";
 import { t } from "../utils/i18n";
@@ -107,6 +108,7 @@ export function Conversation(props: { container: HTMLElement }) {
 
   return (
     <>
+      <TaskProgressBar />
       <Show when={!hasItems() && taskContextID()}>
         <div class="chat-empty chat-empty--task" data-status={selectedTaskStatus()}>
           <div class="chat-empty-marker" aria-hidden="true">

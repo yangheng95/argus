@@ -580,5 +580,12 @@
   "workflow.requirements": "需求分析",
   "workflow.requirements_generating": "正在分析需求…",
   "workflow.requirements_pending": "需求分析进行中…",
-  "workflow.spec_detail": "详细规格"
+  "workflow.spec_detail": "详细规格",
+  "progress.heading": "目标",
+  "progress.goal.pending": "{{title}} — 待开始",
+  "progress.goal.running": "{{title}} — 进行中",
+  "progress.goal.passed": "{{title}} — 已通过",
+  "progress.goal.failed": "{{title}} — 已失败",
+  "progress.goal.blocked": "{{title}} — 阻塞",
+  "progress.summary": "{{passed}}/{{total}} 通过 · {{failed}} 失败 · {{running}} 进行中"
 }

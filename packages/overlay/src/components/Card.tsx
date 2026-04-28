@@ -207,6 +207,7 @@ export function Card(props: { node: CardNode; depth: number }) {
     <article
       ref={articleRef}
       class="card"
+      data-card-id={props.node.id}
       data-kind={props.node.kind}
       data-role={props.node.role || undefined}
       data-stage={props.node.stage || undefined}
