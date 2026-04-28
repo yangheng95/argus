@@ -17,12 +17,12 @@ const log = Log.create({ service: "tool-guard" })
  * After `maxFailures` consecutive thrown errors, the tool short-circuits.
  *
  * @param tools - AI SDK tool map (`Record<string, { execute, ... }>`)
- * @param maxFailures - consecutive error threshold (default 3)
+ * @param maxFailures - consecutive error threshold (default 30)
  * @returns wrapped tool map (same shape, safe to pass to streamText)
  */
 export function withCircuitBreaker<T extends Record<string, any>>(
   tools: T,
-  maxFailures = 3,
+  maxFailures = 30,
 ): T {
   const failures = new Map<string, number>()
   const result = { ...tools } as Record<string, any>
@@ -68,6 +68,6 @@ export function toolGuard<T extends Record<string, any>>(
   },
 ) {
   return {
-    tools: withCircuitBreaker(tools, opts?.maxFailures ?? 3),
+    tools: withCircuitBreaker(tools, opts?.maxFailures ?? 30),
   }
 }
