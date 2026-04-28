@@ -45,9 +45,9 @@ export type EngineRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "disp
 // Rendered into describe output and surfaces to the orchestrator LLM as a
 // semantic hint. Not enumerated: per rule 23 (no state-machine enums), code
 // never branches on the specific value. The only boolean signal code reads
-// is `!!superseded_reason` ("was this tip superseded?"). When the orchestrator
-// loop needs to wake on a delivery rejection it reads the verdict artifact
-// directly (findRecentDeliveryRejection), not this column's string value.
+// is `!!superseded_reason` ("was this tip superseded?"). The orchestrator
+// reads the rendered semantic hint on its next decision turn and decides
+// what to do — there is no loop-side watermark / auto-rewake on this column.
 // Conventional labels callers write (documentation only, not enforced):
 //   manual_retry, delivery_rework, modify_contract, restart_stage
 export type EngineInteractionType = "permission" | "question"

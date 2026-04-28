@@ -558,107 +558,12 @@ export function findGoalRun(goalRunID: string): GoalRunRow | undefined {
 }
 
 /**
- * Most recent delivery-agent verdict artifact for `taskID` whose verdict is
- * "rejected" and `time_created >= sinceMs`. Used by the orchestrator loop to
- * detect "the delivery tool just rejected" and wake the orchestrator with
- * structured feedback. Keyed on the artifact (first-class delivery output)
- * rather than on `goal_run.superseded_reason = "delivery_rework"` string
- * matching — per rule 23 (no state-machine enums / branching on enum labels).
- *
- * Returns undefined when no matching artifact exists in the window.
- */
-export function findRecentDeliveryRejection(taskID: string, sinceMs: number) {
-  const art = Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, taskID),
-        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
-        gte(EngineArtifactTable.time_created, sinceMs),
-      ))
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
-  )
-  if (!art) return undefined
-  const payload = (art.payload ?? {}) as Record<string, unknown>
-  if (payload.verdict !== "rejected") return undefined
-  return art
-}
-
-/**
- * Most recent orchestrator stream-error artifact for `taskID` whose
- * `time_created >= sinceMs`. Used by the orchestrator loop to detect
- * "the orchestrator's own LLM stream aborted (idle / provider onError)"
- * and re-wake itself so the LLM gets a fresh decision turn instead of
- * silently giving up on transient network hangs (e.g. alibaba-coding-plan-cn
- * stream idle > 180s). Per rule 23 stream abort is a fact recorded as an
- * artifact, not a state-machine transition; the LLM decides whether to
- * retry or fail_task on next wake.
- *
- * Returns undefined when no matching artifact exists in the window.
- */
-export function findRecentOrchestratorStreamError(taskID: string, sinceMs: number) {
-  return Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, taskID),
-        eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
-        gte(EngineArtifactTable.time_created, sinceMs),
-      ))
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
-  )
-}
-
-/**
  * Latest verdict artifact written by the deliver tool for `taskID`. The
  * payload is the full DeliveryVerdict (summary, issues_found, rejection_details,
- * startup_verification, frontend_check). The orchestrator loop reads this when
- * a recent rework attempt is detected so it can hand structured feedback to
- * the orchestrator agent without piggy-backing on task.metadata.
+ * startup_verification, frontend_check). Surfaced by `buildSystemParts` into
+ * the orchestrator prompt so the LLM sees the most recent verdict on its
+ * next decision turn — a snapshot read, not a workflow gate.
  */
-/**
- * Most recent `goal_run_attempt` artifact for `taskID` whose `time_created >= sinceMs`.
- * Used by the orchestrator loop to detect "a build batch just settled" so it can
- * fire a `deliverPending` re-wake when the orchestrator's previous decision turn
- * ended without dispatching `deliver`. Watermarking by artifact time prevents
- * the same batch from re-triggering — once we wake, lastReworkSeenAt advances
- * past this artifact and only a NEW build attempt can fire it again. Per rule
- * 23 the LLM decides what to call (deliver / modify_goal / fail_task); this
- * helper only surfaces the fact "build settled, no delivery yet".
- */
-export function findRecentBuildSettlement(taskID: string, sinceMs: number) {
-  return Database.use((db) =>
-    db.select().from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, taskID),
-        eq(EngineArtifactTable.kind, "goal_run_attempt"),
-        gte(EngineArtifactTable.time_created, sinceMs),
-      ))
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .get(),
-  )
-}
-
-/**
- * True when the task has a `delivery-agent-verdict` artifact newer than
- * `sinceMs` (any verdict — accepted / rejected / continue). Used together
- * with `findRecentBuildSettlement` to gate the deliverPending wake: only fire
- * when builds settled but no fresh deliver verdict followed.
- */
-export function hasDeliveryVerdictSince(taskID: string, sinceMs: number): boolean {
-  const row = Database.use((db) =>
-    db.select({ id: EngineArtifactTable.id }).from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, taskID),
-        eq(EngineArtifactTable.label, "delivery-agent-verdict"),
-        gte(EngineArtifactTable.time_created, sinceMs),
-      ))
-      .limit(1)
-      .get(),
-  )
-  return !!row
-}
-
 export function findLatestDeliveryVerdictArtifact(taskID: string) {
   return Database.use((db) =>
     db.select().from(EngineArtifactTable)

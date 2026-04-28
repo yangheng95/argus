@@ -300,11 +300,11 @@ export namespace Agent {
         // (buildSystemParts). No static core prompt — the orchestrator's
         // context depends on live task/goal/run state.
         // Step cap raised to 1000 (effectively unlimited). Per user 2026-04-25
-        // the per-agent step budget should not constrain normal flow — the
-        // auto-rewake gate, MAX_TASK_ITERATIONS, and stream-idle watchdog
-        // already bound a wedged LLM. A tight per-session cap was the
-        // dominant failure mode (3-goal pipeline burned the original 20-step
-        // cap on dispatch alone, never reaching deliver).
+        // the per-agent step budget should not constrain normal flow. A tight
+        // per-session cap was the dominant failure mode (3-goal pipeline
+        // burned the original 20-step cap on dispatch alone, never reaching
+        // deliver). The stream-idle watchdog and signal abort still bound a
+        // genuinely wedged LLM.
         steps: 1000,
         // Whitelist: orchestrator is a SCHEDULER, not an executor. The benchmark
         // caught it bypassing the build agent entirely (calling webpage_extract

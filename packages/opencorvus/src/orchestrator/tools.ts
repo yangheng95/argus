@@ -3921,9 +3921,9 @@ export function createOrchestratorTools(input: {
             } catch (persistErr) {
               // Failing to record the attempt does NOT abort the build —
               // the LLM still gets the tool_result text. Log loudly so
-              // it's visible during benchmarks; the loop guard
-              // (MAX_TASK_ITERATIONS) will catch the runaway if persists
-              // are silently dropped.
+              // it's visible during benchmarks; if persists are silently
+              // dropped the orchestrator will see the goal as still pending
+              // on its next wake and decide what to do.
               log.error("build: finalizeBuildAttempt failed", {
                 taskID, goalID: attachedGoalID,
                 error: persistErr instanceof Error ? persistErr.message : String(persistErr),
