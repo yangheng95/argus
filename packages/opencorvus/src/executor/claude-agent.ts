@@ -31,6 +31,12 @@ export type ClaudeAgentClient = {
     system?: string
     maxTurns?: number
     sessionID?: string
+    /** The Claude-assigned UUID from a prior turn for the same logical
+     *  session. The SDK's `resume:` option requires a real Claude UUID
+     *  (or a session title); passing OpenCorvus's `ses_xxx` ID makes
+     *  Claude exit 1 with "is not a UUID and does not match any session
+     *  title". Undefined means "start a fresh Claude session". */
+    resumeID?: string
     toolMode?: z.infer<typeof CodingRunInput>["toolMode"]
     sandbox?: z.infer<typeof CodingRunInput>["sandbox"]
     mcpServers?: Record<string, { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }>
@@ -136,7 +142,12 @@ export namespace ClaudeAgentExecutor {
             ...(executablePath ? { pathToClaudeCodeExecutable: executablePath } : {}),
             cwd: input.cwd,
             model: input.model,
-            resume: input.sessionID,
+            // Only pass `resume` when we actually have a Claude UUID from a
+            // prior turn for this logical session. Passing OpenCorvus's
+            // logical `ses_xxx` ID here makes the SDK reject the spawn with
+            // "is not a UUID and does not match any session title" — the
+            // logical ID is not a Claude session identifier.
+            ...(input.resumeID ? { resume: input.resumeID } : {}),
             systemPrompt: systemAppend
               ? {
                   type: "preset",
@@ -267,6 +278,12 @@ async function* execute(
     system: input.system,
     maxTurns: input.maxTurns,
     sessionID: "sessionID" in input ? input.sessionID : undefined,
+    // Claude's resume hint is the SDK-assigned UUID we captured from a
+    // previous turn (set by updateSession on the first `session_id` in
+    // the stream). Undefined on a fresh logical session so the SDK
+    // starts a new Claude session instead of trying to resume one that
+    // doesn't exist.
+    resumeID: current.actualID,
     toolMode: input.toolMode,
     sandbox: input.sandbox,
     signal,
