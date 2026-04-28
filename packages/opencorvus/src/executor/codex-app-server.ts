@@ -1,7 +1,10 @@
 import z from "zod"
+import { Log } from "@/util/log"
 import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contract"
 import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
+
+const log = Log.create({ service: "executor.codex-app-server" })
 
 type RequestID = string | number
 
@@ -413,7 +416,14 @@ function* notification(threadID: string, turnID: string, method: string, params?
     return
   }
 
-  // Unknown methods — protocol noise, do not yield
+  // Unknown methods — protocol noise typically, but log at debug so we can
+  // catch any new event types that should map to user-visible signals.
+  log.info("codex inbound notification unmapped", {
+    method,
+    threadID: currentThread,
+    turnID: currentTurn,
+    paramKeys: Object.keys(data),
+  })
 }
 
 async function* request(
@@ -422,6 +432,20 @@ async function* request(
 ): AsyncGenerator<CodingEventInfo> {
   const data = item.params ?? {}
   void client
+  // Trace every JSON-RPC request from codex so we can identify any new
+  // approval/elicitation method names introduced in newer codex CLIs.
+  // Without this, an unknown method silently falls through and codex hangs
+  // waiting for a response — which is exactly what happened on the
+  // 2026-04-28 codex 0.125 dispatch run when the build agent stalled with
+  // "tool_call ended without a matching tool_result". Keep at info level
+  // until codex protocol churn settles.
+  log.info("codex inbound request", {
+    method: item.method,
+    requestID: item.id,
+    paramKeys: Object.keys(data),
+    callId: typeof data.callId === "string" ? data.callId : undefined,
+    tool: typeof data.tool === "string" ? data.tool : undefined,
+  })
   if (item.method === "item/tool/requestUserInput" || item.method === "toolRequestUserInput" || item.method === "mcpServer/elicitation/request") {
     yield {
       type: "input_request",
@@ -484,7 +508,15 @@ async function* request(
     }
     return
   }
-  // Unknown request methods — do not yield
+  // Unknown request methods — codex will hang waiting for a response. Log
+  // loudly so we can identify newly-added methods and route them. Do NOT
+  // attempt to silently auto-accept here — a wrong response shape would be
+  // worse than a stall surfaced by the build-agent watchdog.
+  log.warn("codex inbound request unhandled — codex will hang for a reply", {
+    method: item.method,
+    requestID: item.id,
+    params: data,
+  })
 }
 
 function threadStart(input: z.input<typeof CodingRunInput>) {
