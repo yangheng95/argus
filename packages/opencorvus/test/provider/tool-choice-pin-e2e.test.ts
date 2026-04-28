@@ -14,7 +14,8 @@ import "../../src/session/prompt"
  *
  * When enabled the test registers two tools (`useless_work` and
  * `target`), drives a single LLM stream with `toolChoice = { type: "tool",
- * toolName: "target" }`, and asserts the model only invokes `target`.
+ * toolName: "target" }`, and asserts the model only invokes `target` with a
+ * schema-valid object payload.
  * Failure means the provider does NOT honour the protocol-level pin —
  * which is a structural blocker for any agent that depends on
  * StructuredOutput hard-pinning. Per spec §E禁止项, we do NOT introduce
@@ -47,6 +48,7 @@ describe.skipIf(!ready)("provider hard-pin probe (opt-in)", () => {
 
       let useless = 0
       let target = 0
+      const targetInputs: unknown[] = []
       const tools = {
         useless_work: tool({
           description: "Do nothing useful — never call this.",
@@ -59,8 +61,9 @@ describe.skipIf(!ready)("provider hard-pin probe (opt-in)", () => {
         target: tool({
           description: "The only tool the model is allowed to call.",
           inputSchema: jsonSchema(z.toJSONSchema(z.object({ note: z.string() })) as never),
-          async execute() {
+          async execute(args) {
             target++
+            targetInputs.push(args)
             return { output: "captured", title: "", metadata: {} }
           },
         }),
@@ -86,15 +89,18 @@ describe.skipIf(!ready)("provider hard-pin probe (opt-in)", () => {
         },
       })
 
-      // Drain the stream so the tool calls land. We don't actually
-      // execute() on the test side — ai-sdk's tool-call accounting fires
-      // on `tool-call` events regardless of execution.
+      // Drain the stream so provider tool calls and SDK validation complete.
       for await (const _ of stream.fullStream) {
         // sink
       }
 
       expect(useless).toBe(0)
       expect(target).toBeGreaterThanOrEqual(1)
+      expect(targetInputs.length).toBe(target)
+      for (const input of targetInputs) {
+        expect(input).toEqual({ note: expect.any(String) })
+        expect((input as { note: string }).note.length).toBeGreaterThan(0)
+      }
     },
     60_000,
   )
