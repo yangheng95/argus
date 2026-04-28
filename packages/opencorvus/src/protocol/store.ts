@@ -258,10 +258,12 @@ export namespace ProtocolStore {
 
   /**
    * Push an event through live subscriptions WITHOUT writing to DB.
-   * Used for high-frequency ephemeral events (e.g. message.part.delta)
-   * that should reach SSE clients in real-time but don't need persistence
-   * or sequence numbering. On reconnect these events are NOT replayed —
-   * the client recovers full state from persisted message.part.updated events.
+   * Used for events whose source of truth lives in another table — clients
+   * see them live via SSE; on reconnect they hydrate from the canonical
+   * store (message/part tables for `message.*` events) instead of replaying
+   * an event log. Avoids the 双源 footgun where the same content is held in
+   * two places (rule 23) and prevents `protocol_event.payload` blowing up
+   * by re-snapshotting full message state on every update.
    */
   export function dispatchEphemeral(input: {
     type: string
