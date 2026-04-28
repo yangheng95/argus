@@ -76,7 +76,7 @@ async function resolvePermission(
     reply: input.reply,
     ...(input.autoReply ? { auto_reply: true } : {}),
   }
-  await resolveInteraction(interaction, "answered", response, hooks)
+  await resolveInteraction(interaction, input.reply === "reject" ? "rejected" : "answered", response, hooks)
 }
 
 async function upsertQuestion(request: Question.Request, hooks: RuntimeHooks) {

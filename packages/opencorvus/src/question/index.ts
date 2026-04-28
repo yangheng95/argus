@@ -114,11 +114,8 @@ export namespace Question {
   )
 
   const QUESTION_MIN_TIMEOUT_MS = 1000
-  // 30 minutes — covers human-in-the-loop clarifications raised by Orchestrator
-  // during long-running workflows. Callers that need shorter/longer windows
-  // pass `timeoutMs` explicitly (e.g. auto_question auto-reply paths).
   const QUESTION_AUTO_REJECT_MS = Math.max(
-    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "600000", 10),
+    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "300000", 10),
     QUESTION_MIN_TIMEOUT_MS,
   )
 
@@ -126,16 +123,13 @@ export namespace Question {
     sessionID: string
     questions: Info[]
     tool?: { messageID: string; callID: string }
-    /** Override auto-reject timeout in ms. Defaults to OPENCORVUS_QUESTION_TIMEOUT_MS (10min). */
+    /** Override auto-reject timeout in ms. Defaults to OPENCORVUS_QUESTION_TIMEOUT_MS (5min). */
     timeoutMs?: number
   }): Promise<Answer[]> {
     const s = await state()
     const id = Identifier.ascending("question")
     const timeout = Math.max(input.timeoutMs ?? QUESTION_AUTO_REJECT_MS, QUESTION_MIN_TIMEOUT_MS)
-    const cfg = await Config.get()
-    const autoRejectOnTimeout = cfg.experimental?.auto_question === true
-
-    log.info("asking", { id, questions: input.questions.length, timeoutMs: timeout, autoReject: autoRejectOnTimeout })
+    log.info("asking", { id, questions: input.questions.length, timeoutMs: timeout })
 
     return new Promise<Answer[]>((resolve, reject) => {
       const info: Request = {
@@ -144,11 +138,19 @@ export namespace Question {
         questions: input.questions,
         tool: input.tool,
       }
-      // Auto-reject timeout only applies when experimental.auto_question is on.
-      // With the switch off the request waits indefinitely for a user reply —
-      // no silent fallback.
-      const timer = autoRejectOnTimeout
-        ? setTimeout(() => {
+      s.pending[id] = {
+        info,
+        resolve,
+        reject,
+        timer: undefined,
+      }
+      Bus.publish(Event.Asked, info)
+      void Config.get()
+        .then((cfg) => {
+          const autoRejectOnTimeout = cfg.experimental?.auto_question === true
+          log.info("question timeout configured", { id, autoReject: autoRejectOnTimeout })
+          if (!autoRejectOnTimeout || !s.pending[id]) return
+          s.pending[id].timer = setTimeout(() => {
             if (s.pending[id]) {
               log.info("auto-reject timeout", { id, questions: input.questions.length })
               delete s.pending[id]
@@ -159,15 +161,12 @@ export namespace Question {
               reject(new RejectedError())
             }
           }, timeout)
-        : undefined
-      timer?.unref?.()
-      s.pending[id] = {
-        info,
-        resolve,
-        reject,
-        timer,
-      }
-      Bus.publish(Event.Asked, info)
+        })
+        .catch((error) => {
+          if (!s.pending[id]) return
+          delete s.pending[id]
+          reject(error)
+        })
     })
   }
 

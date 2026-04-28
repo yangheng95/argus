@@ -209,6 +209,32 @@ test("reject - does nothing for unknown requestID", async () => {
   })
 })
 
+test("ask - auto-rejects after timeout when auto_question is enabled by default", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = Question.ask({
+        sessionID: "ses_timeout",
+        questions: [
+          {
+            question: "What would you like to do?",
+            header: "Action",
+            options: [
+              { label: "Option 1", description: "First option" },
+              { label: "Option 2", description: "Second option" },
+            ],
+          },
+        ],
+        timeoutMs: 5,
+      })
+
+      await expect(askPromise).rejects.toBeInstanceOf(Question.RejectedError)
+      expect(await Question.list()).toHaveLength(0)
+    },
+  })
+})
+
 // multiple questions tests
 
 test("ask - handles multiple questions", async () => {

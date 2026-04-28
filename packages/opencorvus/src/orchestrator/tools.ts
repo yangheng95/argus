@@ -3619,7 +3619,7 @@ export function createOrchestratorTools(input: {
         "(4) post-refine suggestions — let the user select which improvements to roll in. " +
         "Each question may provide options for click-selection; omit options for free-text. " +
         "Set multiple=true to allow multi-select. Returns the answers in the same order as questions. " +
-        "Timeout: 30 minutes; rejected questions throw an error you must handle.",
+        "Timeout: 5 minutes; rejected questions throw an error you must handle.",
       inputSchema: z.object({
         questions: z
           .array(
