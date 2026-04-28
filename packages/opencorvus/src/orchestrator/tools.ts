@@ -583,6 +583,7 @@ export function createOrchestratorTools(input: {
             pointer: `read_context scope=decisions (spec ${specSnapshotID})`,
           })
         } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
           // Error-path terminal emission. We use the runner session id
           // captured by onSessionCreated when the agent reached at least
           // session creation; if the failure happened before that (rare —
@@ -595,8 +596,8 @@ export function createOrchestratorTools(input: {
               taskID,
               sessionID: runnerSessionID ?? input.agentSessionID,
               status: "error",
-              error: err instanceof Error ? err.message : String(err),
-              summary: "Requirements failed",
+              error: msg,
+              summary: `Requirements failed: ${msg}`,
             },
             { source: "orchestrator.requirements" },
           )
@@ -1020,7 +1021,7 @@ export function createOrchestratorTools(input: {
               sessionID: runnerSessionID ?? input.agentSessionID,
               status: "error",
               error: msg,
-              summary: "Design analysis failed",
+              summary: `Design analysis failed: ${msg}`,
             },
             { source: "orchestrator.design_analysis" },
           )
@@ -1278,7 +1279,7 @@ export function createOrchestratorTools(input: {
               sessionID: runnerSessionID ?? input.agentSessionID,
               status: "error",
               error: err instanceof Error ? err.message : String(err),
-              summary: "Architect failed",
+              summary: `Architect failed: ${err instanceof Error ? err.message : String(err)}`,
             },
             { source: "orchestrator.architect" },
           )
