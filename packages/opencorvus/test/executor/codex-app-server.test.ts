@@ -476,6 +476,65 @@ describe("codex app server executor", () => {
     expect(toolResult?.meta?.["item_type"]).toBe("commandExecution")
   })
 
+  test("pairs item/started tool_call with item/completed tool_result on commandExecution", async () => {
+    // Codex 0.125 with --dangerously-bypass-approvals-and-sandbox skips the
+    // exec approval JSON-RPC request and goes item/started → item/completed
+    // for commandExecution. Without an item/started handler the host emitted
+    // only tool_result, so build/agent.ts flagged it as
+    // `tool_result ... arrived without a prior tool_call` and refused to
+    // run host merge_back. The pair must share the item id so the tools map
+    // in build/agent.ts correlates them.
+    const provider = CodexAppServerExecutor.create(client([
+      {
+        type: "notification",
+        method: "item/started",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          item: {
+            id: "call_xyz",
+            type: "commandExecution",
+            command: "ls",
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "item/completed",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          item: {
+            id: "call_xyz",
+            type: "commandExecution",
+            command: "ls",
+            output: "README.md",
+            status: "completed",
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/completed",
+        params: {
+          threadId: "thr_1",
+          turn: { id: "turn_1", items: [], status: "completed", error: null },
+        },
+      },
+    ]))
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    const toolCall = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
+    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+
+    expect(toolCall?.id).toBe("call_xyz")
+    expect(toolCall?.name).toBe("Bash")
+    expect(toolCall?.input).toBe("ls")
+    expect(toolResult?.id).toBe("call_xyz")  // same id ⇒ paired
+    expect(toolResult?.name).toBe("Bash")
+    expect(toolResult?.output).toBe("README.md")
+  })
+
   test("stops streaming once the current turn completes", async () => {
     const provider = CodexAppServerExecutor.create({
       async initialize() {
