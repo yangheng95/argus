@@ -64,6 +64,45 @@ export interface StreamActivityOptions {
   label?: string
 }
 
+/**
+ * Race every `next()` of an async iterable against an `AbortSignal` so the
+ * iterator throws as soon as the signal aborts — even when the underlying
+ * source has parked on a network read that doesn't honour signal abort
+ * (Bun fetch + AI SDK readers exhibit this: AbortController.abort() closes
+ * the connection but does not reject an already-pending reader.read()
+ * promise, so the consumer's `for await` hangs forever).
+ *
+ * Pairs with `withStreamActivity` — the gate's combined signal flips, this
+ * wrapper guarantees the consumer's loop actually exits with the
+ * AbortError. Cleans up the upstream iterator via `iter.return?.()` so
+ * provider-side resources (response body, fetch socket) get released.
+ */
+export async function* abortableIterable<T>(
+  source: AsyncIterable<T>,
+  signal: AbortSignal,
+): AsyncGenerator<T> {
+  const iter = source[Symbol.asyncIterator]()
+  try {
+    while (true) {
+      if (signal.aborted) throw signal.reason
+      let onAbort: (() => void) | null = null
+      const abortPromise = new Promise<never>((_, reject) => {
+        onAbort = () => reject(signal.reason)
+        signal.addEventListener("abort", onAbort, { once: true })
+      })
+      try {
+        const result = await Promise.race([iter.next(), abortPromise])
+        if (result.done) return
+        yield result.value
+      } finally {
+        if (onAbort) signal.removeEventListener("abort", onAbort)
+      }
+    }
+  } finally {
+    try { await iter.return?.() } catch { /* upstream already torn down */ }
+  }
+}
+
 export function withStreamActivity(options: StreamActivityOptions): StreamActivityGate {
   if (!Number.isFinite(options.idleMs) || options.idleMs <= 0) {
     throw new Error(`withStreamActivity: idleMs must be a positive finite number (got ${options.idleMs})`)
