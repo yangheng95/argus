@@ -191,6 +191,40 @@ export namespace SessionLoop {
     }
   }
 
+  /**
+   * Provider-normalized estimate of the bytes a tool definition contributes
+   * to the streamText request payload. AI SDK serialises each tool as
+   * `{name, description, parameters: <jsonSchema>}` where the JSON Schema is
+   * obtained via `asSchema(tool.inputSchema).jsonSchema`. Earlier versions
+   * `JSON.stringify`'d the raw `tool.inputSchema` wrapper which, for Zod-
+   * backed tools, walks the Zod object's internal `_def` graph and produces
+   * char counts that bear no relation to the actual outgoing payload — that
+   * inflated count was triggering predictive compaction on context-cold
+   * sessions (see specs/new-arch/2026-04-28-structured-output-systemic-fix.md
+   * §A). Counting `name + description + jsonSchema` keeps the estimate tied
+   * to what the provider really receives.
+   */
+  export function estimateToolPayloadChars(tools: Record<string, AITool>): number {
+    let total = 0
+    for (const [name, item] of Object.entries(tools)) {
+      const description = typeof (item as { description?: unknown }).description === "string"
+        ? ((item as { description: string }).description).length
+        : 0
+      let schemaChars = 0
+      const inputSchema = (item as { inputSchema?: unknown }).inputSchema
+      if (inputSchema !== undefined && inputSchema !== null) {
+        try {
+          const jsonSchemaPayload = asSchema(inputSchema as never).jsonSchema
+          schemaChars = JSON.stringify(jsonSchemaPayload ?? {}).length
+        } catch {
+          schemaChars = 0
+        }
+      }
+      total += name.length + description + schemaChars
+    }
+    return total
+  }
+
   function collectLoopState(msgs: Message.WithParts[]) {
     let lastUser: Message.User | undefined
     let lastAssistant: Message.Assistant | undefined
@@ -633,28 +667,13 @@ export namespace SessionLoop {
     // the provider rejects the request. Keep this estimate aligned with the
     // streamText payload shape: model messages and tool definitions are
     // prompt input; system is estimated separately above.
-    const toolBudgetPayload = Object.fromEntries(
-      Object.entries(tools).map(([name, item]) => [
-        name,
-        {
-          id: (item as any).id,
-          description: (item as any).description,
-          inputSchema: (item as any).inputSchema,
-        },
-      ]),
-    )
     let messagePayloadChars: number
-    let toolSchemaChars: number
     try {
       messagePayloadChars = JSON.stringify(modelMessages).length
     } catch {
       messagePayloadChars = 0
     }
-    try {
-      toolSchemaChars = JSON.stringify(toolBudgetPayload).length
-    } catch {
-      toolSchemaChars = 0
-    }
+    const toolSchemaChars = estimateToolPayloadChars(tools)
     const totalContentChars = messagePayloadChars + toolSchemaChars
     const contentTokensEst = Math.round(totalContentChars / 4)
     const imageTokensEst = imageCount * 1600
