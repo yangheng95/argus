@@ -2,7 +2,7 @@ import z from "zod"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
-import { NoSuchModelError, type Provider as SDK } from "ai"
+import { APICallError, NoSuchModelError, type Provider as SDK } from "ai"
 import { Log } from "../util/log"
 import { Plugin } from "../plugin"
 import { ModelsDev } from "./models"
@@ -729,6 +729,19 @@ export namespace Provider {
         // errors from streaming responses — they silently consume the body
         // and later throw a generic "No output generated" error.  Extract
         // the upstream error here so callers get actionable messages.
+        //
+        // We throw an APICallError (not a plain Error) so:
+        //   1. Message.fromError takes the APICallError branch and produces a
+        //      Message.APIError with statusCode/isRetryable preserved
+        //      (instead of falling through to NamedError.Unknown which loses
+        //      the status and is treated as fatal).
+        //   2. SessionRetry.retryable / llm/api.ts retryable() classify
+        //      transient 408/429/5xx as retryable via the standard AI SDK
+        //      contract, so the session loop backs off and retries instead
+        //      of bubbling the failure up to the orchestrator stream-error
+        //      path. Without this, an alibaba 429 rate-limit blew up the
+        //      orchestrator into an "unknown session error" wake loop —
+        //      see _session-20260428-130617.out incident.
         if (!response.ok) {
           if (inactivityTimer) clearTimeout(inactivityTimer)
           const text = await response.text().catch(() => "")
@@ -739,9 +752,33 @@ export namespace Provider {
           } catch {
             detail = text
           }
-          throw new Error(
-            `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
-          )
+          const responseHeaders: Record<string, string> = {}
+          response.headers.forEach((value, key) => {
+            responseHeaders[key] = value
+          })
+          let requestBodyValues: unknown = undefined
+          if (typeof opts.body === "string") {
+            try {
+              requestBodyValues = JSON.parse(opts.body)
+            } catch {
+              requestBodyValues = opts.body
+            }
+          }
+          // fetch accepts string | URL | Request; URL has .href, Request has .url
+          const url =
+            typeof input === "string"
+              ? input
+              : input instanceof URL
+                ? input.href
+                : input?.url ?? ""
+          throw new APICallError({
+            message: `Provider ${model.providerID} returned HTTP ${response.status}: ${detail || response.statusText}`,
+            url,
+            requestBodyValues,
+            statusCode: response.status,
+            responseHeaders,
+            responseBody: text,
+          })
         }
 
         // For streaming responses, wrap the body so each chunk resets the timer.

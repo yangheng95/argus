@@ -1116,6 +1116,33 @@ describe("session.message.fromError", () => {
     expect(Message.APIError.isInstance(result)).toBe(true)
   })
 
+  test("propagates 429 quota body as retryable APIError", () => {
+    // Regression for the 2026-04-28 incident: alibaba-coding-plan-cn returned
+    // HTTP 429 "usage allocated quota exceeded. please try again later." The
+    // provider-fetch wrapper used to throw a plain Error which fell through
+    // to NamedError.Unknown — bypassing SessionRetry's APIError-aware backoff
+    // and turning a transient rate-limit into an orchestrator wake loop.
+    // After the fix the wrapper throws an APICallError with statusCode=429,
+    // and the AI SDK marks 429 as retryable by default; Message.fromError
+    // must surface that as Message.APIError(isRetryable=true).
+    const result = Message.fromError(
+      new APICallError({
+        message:
+          "Provider alibaba-coding-plan-cn returned HTTP 429: usage allocated quota exceeded. please try again later.",
+        url: "https://coding.dashscope.aliyuncs.com/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: { "content-type": "application/json" },
+        responseBody:
+          '{"error":{"message":"usage allocated quota exceeded. please try again later."}}',
+      }),
+      { providerID: "alibaba-coding-plan-cn" },
+    ) as Message.APIError
+    expect(Message.APIError.isInstance(result)).toBe(true)
+    expect(result.data.statusCode).toBe(429)
+    expect(result.data.isRetryable).toBe(true)
+  })
+
   test("serializes unknown inputs", () => {
     const result = Message.fromError(123, { providerID: "test" })
 

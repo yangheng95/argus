@@ -352,11 +352,21 @@ export async function runAgentSession<C>(
   })
 
   // ── 5. Stream-error capture + abort propagation ──────────────────────
+  // Bus payload is the NamedError shape from Message.fromError().toObject():
+  // `{ name, data: { message, ... } }`. Reading `error.message` directly came
+  // back undefined and lost the actual provider/stream cause (e.g. 429 body,
+  // ECONNRESET, context-overflow detail). Unwrap data.message first so sub-
+  // agent (build/architect/...) failure reasons are honest, matching the
+  // orchestrator/agent.ts unwrap.
   const streamErrors: Array<{ reason: string; name?: string }> = []
   const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
-    const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
+    const props = evt.properties as {
+      sessionID: string
+      error: { name?: string; message?: string; data?: { message?: string } }
+    }
     if (props.sessionID !== session.id) return
-    streamErrors.push({ reason: props.error?.message ?? "unknown error", name: props.error?.name })
+    const reason = props.error?.data?.message ?? props.error?.message ?? "unknown error"
+    streamErrors.push({ reason, name: props.error?.name })
   })
 
   const abortPrompt = () => {

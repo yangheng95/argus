@@ -278,9 +278,19 @@ export namespace Orchestrator {
       // the pre-migration runtime.failures snapshot at a coarser granularity.
       const streamErrors: Array<{ reason: string; errorName?: string }> = []
       const errorUnsub = Bus.subscribe(Session.Event.Error, (evt) => {
-        const props = evt.properties as { sessionID: string; error: { message?: string; name?: string } }
+        // The published payload is a NamedError-shaped object produced by
+        // Message.fromError(...).toObject(): { name, data: { message, ... } }.
+        // Reading `props.error.message` directly comes back undefined and
+        // surfaced as the fallback "unknown session error" — hiding the
+        // actual provider error (e.g. HTTP 429 quota) from the orchestrator
+        // wake context. Unwrap data.message first so the real reason flows
+        // into the artifact and the next decision turn.
+        const props = evt.properties as {
+          sessionID: string
+          error: { name?: string; message?: string; data?: { message?: string } }
+        }
         if (props.sessionID !== agentSession.id) return
-        const msg = props.error?.message ?? "unknown session error"
+        const msg = props.error?.data?.message ?? props.error?.message ?? "unknown session error"
         streamErrors.push({ reason: msg, errorName: props.error?.name })
       })
 
