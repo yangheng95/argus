@@ -1306,15 +1306,40 @@ export namespace EngineService {
    * 向正在运行的 task 注入消息。
    * 如果当前 run 正在执行且 executor 支持 resume，直接注入到 session；
    * 否则退化为 operator note（创建新 run）。
+   *
+   * orchestrator-loop wake 与 executor resume 是两个独立动作:
+   *   - executor.resume = 把消息送进正在跑的 build agent sub-session
+   *     (best effort: 该 session 可能已结束或没有此特定 build agent active)
+   *   - dispatchTaskLoop = 触发 orchestrator-loop 重新运行一轮决策
+   *     (orchestrator agent 通过 describe + new note 看到注入的 message)
+   *
+   * 历史 wedge: orchestrator deferred stop 后 (e.g. delivery_render_rejected),
+   * run.status 仍 "running" 但 orchestrator-loop 已退出. 之前路径只 resume
+   * executor session (build agent 早已 finished, resume 无效) 然后短路返回.
+   * recordOperatorNote 又因 status === "running" 跳过 dispatchTaskLoop. 没人
+   * 唤醒 orchestrator → 被注入的 operator message 永远没被读到.
+   *
+   * 修复: 与 continueTaskMessage (chat 路径) 行为对齐, 必须始终
+   * dispatchTaskLoop, 把消息变成 OrchestratorEventNote.operatorMessage 唤醒
+   * 决策循环. 见 _session-20260429-014338.out 实证 (codex 0.125 benchmark).
    */
   export async function injectMessage(taskID: string, message: string) {
     const task = requireTask(taskID)
     const run = findActiveRunForTask(task.id)
     if (!run) throw new Error(`No active run for task ${taskID}`)
     const resumed = await injectRunningTaskMessage(task, run, message)
-    if (resumed) return { resumed: true, status: "active" as const }
-    await appendTaskSessionMessage(task, message)
-    return recordOperatorNote(taskID, message)
+    if (!resumed) {
+      await appendTaskSessionMessage(task, message)
+    }
+    void dispatchTaskLoop({
+      taskID,
+      event: {
+        note: OrchestratorEventNote.operatorMessage({ text: message }),
+        operatorMessage: { text: message },
+      },
+      interrupt: true,
+    })
+    return { resumed: true, status: "active" as const }
   }
 
   /**
