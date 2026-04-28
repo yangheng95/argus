@@ -64,4 +64,58 @@ describe("tool display helpers", () => {
     expect(result.state.output).toBe("README body");
     expect(result.state.status).toBe("completed");
   });
+
+  test("describes merge_back status from structured tool output", () => {
+    expect(describeToolPart({
+      type: "tool",
+      tool: "merge_back",
+      state: {
+        status: "completed",
+        input: {},
+        output: JSON.stringify({
+          status: "merged",
+          primary_branch: "main",
+          primary_head: "abcdef1234567890",
+        }),
+        title: "merge_back",
+        metadata: {},
+        time: { start: 1, end: 2 },
+      },
+    })?.detail).toBe("merged main@abcdef123456");
+
+    expect(describeToolPart({
+      type: "tool",
+      tool: "merge_back",
+      state: {
+        status: "completed",
+        input: {},
+        output: JSON.stringify({
+          status: "conflict",
+          primary_branch: "main",
+          conflict_paths: ["src/a.ts", "src/b.ts"],
+        }),
+        title: "merge_back",
+        metadata: {},
+        time: { start: 1, end: 2 },
+      },
+    })?.detail).toBe("conflict main (2 files)");
+  });
+
+  test("describes generic status-bearing tool output", () => {
+    expect(describeToolPart({
+      type: "tool",
+      tool: "report_build_failed",
+      state: {
+        status: "completed",
+        input: {},
+        output: JSON.stringify({
+          status: "failed",
+          reason: "verification command exited 1",
+        }),
+        title: "report_build_failed",
+        metadata: {},
+        time: { start: 1, end: 2 },
+      },
+    })?.detail).toBe("failed: verification command exited 1");
+  });
 });
