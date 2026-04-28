@@ -500,6 +500,15 @@ body[data-theme="light"] .card__round {
 }
 .card__badge--done { background: rgba(95, 173, 86, 0.28); color: #7cc373; box-shadow: 0 0 0 1px rgba(95, 173, 86, 0.35) inset; }
 .card__badge--error { background: rgba(247, 84, 100, 0.28); color: #ff8896; box-shadow: 0 0 0 1px rgba(247, 84, 100, 0.35) inset; }
+/* "concerns" — completed but the integrity / fidelity verdict surfaced
+ * non-blocking issues. Distinct from `done` (clean pass) so the operator
+ * sees at a glance which finished cards still need attention. Amber. */
+.card__badge--concerns { background: rgba(242, 178, 79, 0.28); color: #f5c46c; box-shadow: 0 0 0 1px rgba(242, 178, 79, 0.4) inset; }
+/* "cancelled" — finished without producing a result (operator stop, replan
+ * superseded, etc.). Distinct from `error` (real failure) so a red ✗ no
+ * longer collapses three different terminal reasons into one icon.
+ * Outline ⊘ on muted tone. */
+.card__badge--cancelled { background: rgba(255, 255, 255, 0.04); color: var(--text-muted); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset; }
 .card__badge--running { background: rgba(242, 153, 74, 0.28); box-shadow: 0 0 0 1px rgba(242, 153, 74, 0.35) inset; }
 .card__badge--pending { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset; }
 .card__badge--skipped { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
