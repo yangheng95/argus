@@ -140,7 +140,10 @@ export function createArchitectOutputTools(input: {
         "Register a new goal contract, or overwrite a prior registration with " +
         "the same id. Each goal will execute in an isolated worktree — the " +
         "objective MUST be self-contained (executor sees only this goal). All " +
-        "fields are schema-validated.",
+        "fields are schema-validated. On re-runs, use an existing id only for " +
+        "the same logical goal; use a new id only for a genuinely new goal. " +
+        "Persistence preserves existing G numbers and assigns new goals the " +
+        "next unused G number.",
       inputSchema: GoalContractFieldsSchema,
       execute: async (input) => {
         const warnings: string[] = []
@@ -177,7 +180,9 @@ export function createArchitectOutputTools(input: {
       description:
         "Refine fields on an already-registered goal (including those seeded " +
         "from a prior run). Supply only the fields you want to change. Unknown " +
-        "ids are rejected — use register_goal if you intend a brand-new goal.",
+        "ids are rejected — use register_goal if you intend a brand-new goal. " +
+        "A modified goal keeps its stable G number; the next implementation " +
+        "attempt increments V.",
       inputSchema: z.object({
         id: z.string().min(1).describe("Existing goal id to modify"),
         updates: GoalContractUpdateSchema.describe(

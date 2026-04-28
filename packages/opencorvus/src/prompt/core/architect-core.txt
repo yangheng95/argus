@@ -427,6 +427,12 @@ Your job on re-run is **refinement**, not decomposition from scratch:
 - Re-register metrics only for goals whose ids changed; per-goal metrics are automatically keyed by `goal_id`, so metrics for an unchanged id stay valid
 - Re-register `register_traceability` for any REQ-N whose goal mapping changed
 
+Goal identity is versioned at the operator layer:
+
+- Existing goals keep their stable `G` number. Modifying a failed or stale goal means the next implementation becomes `#GxV2`, `#GxV3`, ...; do NOT create a brand-new goal just to retry the same scope.
+- A truly new goal receives the next unused `G` number from persistence. If five goals existed before this re-run, your newly registered goal will display as `#G6V1`.
+- Removed goal numbers are not recycled. This preserves the audit trail across backend state, overlay cards, and conversation messages.
+
 Do NOT wipe the slate clean on re-run — that's what `restart_from_stage('requirements')` is for. The re-run contract says "fix what's broken, keep what works."
 
 ## Tools Reference

@@ -1126,6 +1126,8 @@ export function createOrchestratorTools(input: {
               priority: g.priority as "blocking" | "advisory",
               kind: g.kind,
               requirement_ids: typeof g.requirement_ids === "string" ? JSON.parse(g.requirement_ids) : g.requirement_ids ?? [],
+              order_index: g.order_index,
+              retry_count: g.retry_count,
             })),
             taskRequest: task.request,
             taskTitle: task.title,
@@ -1932,7 +1934,7 @@ export function createOrchestratorTools(input: {
     }),
 
     query_failed_goals: tool({
-      description: "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE retry_goal to understand per-goal failure reasons.",
+      description: "Query all currently failed goals with their latest delivery info. Returns one block per failed goal (acceptance_specs truncated, only latest run). Use BEFORE re-running build on a failed goal to understand per-goal failure reasons.",
       inputSchema: z.object({}),
       execute: async () => {
         const dbGoals = listGoals(taskID)
@@ -1944,7 +1946,8 @@ export function createOrchestratorTools(input: {
         const ACCEPTANCE_SPEC_CAP = 300
         const DELIVERY_FILES_CAP = 10
         for (const goal of failed) {
-          sections.push(`\n### ${goal.id}: ${goal.title}`)
+          const label = `#G${goal.order_index + 1}V${goal.retry_count + 1}`
+          sections.push(`\n### ${label} ${goal.id}: ${goal.title}`)
           sections.push(`- acceptance_specs:\n${renderSpecsAsText((goal.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, ACCEPTANCE_SPEC_CAP)}`)
           if (goal.owned_paths?.length) sections.push(`- owned_paths: ${goal.owned_paths.join(", ")}`)
           // listGoalRunsForTask is desc by time_created; first match is latest.
@@ -1963,6 +1966,7 @@ export function createOrchestratorTools(input: {
               sections.push(`- delivery: none`)
             }
             sections.push(`- goal_run status: ${latestGr.status}`)
+            sections.push(`- current implementation version: ${label}`)
             if (latestGr.error) sections.push(`- goal_run error: ${latestGr.error}`)
           } else {
             sections.push(`- no goal_run found`)
@@ -1995,7 +1999,8 @@ export function createOrchestratorTools(input: {
           const goals = listGoals(taskID)
           sections.push(`## Goals (${goals.length})`)
           for (const g of goals) {
-            sections.push(`- [${goalStatusByID(g.id)}] ${g.id}: ${g.title} [${g.priority}]`)
+            const label = `#G${g.order_index + 1}V${g.retry_count + 1}`
+            sections.push(`- [${goalStatusByID(g.id)}] ${label} ${g.id}: ${g.title} [${g.priority}]`)
             sections.push(`  objective: ${g.objective.slice(0, 200)}`)
             sections.push(`  acceptance_specs:\n${renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]).slice(0, 400)}`)
             if (g.owned_paths?.length) sections.push(`  owned_paths: ${g.owned_paths.join(", ")}`)
@@ -3310,7 +3315,7 @@ export function createOrchestratorTools(input: {
           // A throw carries no per-goal attribution — do NOT open new
           // attempts. Record the failure in the decision log and hand back
           // to the orchestrator LLM: it reads the trajectory on the next
-          // turn and chooses retry_goal / modify_goal / fail_task.
+          // turn and chooses build({ goalID }) / modify_goal / fail_task.
           try {
             const { createDecisionLog } = await import("@/decision-log")
             const decisionLog = createDecisionLog(taskID)
@@ -3330,7 +3335,7 @@ export function createOrchestratorTools(input: {
             `Iteration ${iterationErr}. No goals were reset — the throw is an ` +
             `infrastructure fault and carries no per-goal attribution. Read the ` +
             `decision log entry delivery_verification_threw_${iterationErr} and ` +
-            `decide: retry_goal on a suspect goal, modify_goal if the contract ` +
+            `decide: build({ goalID }) on a suspect goal, modify_goal if the contract ` +
             `looks wrong, or fail_task if the failure is fundamental.`
           )
         }

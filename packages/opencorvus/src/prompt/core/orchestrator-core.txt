@@ -344,11 +344,19 @@ wastes budget and clouds the trace.
 - `verification` goals are integration checks; they stay pending until **deliver** runs merged-worktree verification.
 - Once ALL dispatchable goals are terminal (passed/failed):
   - All blocking goals passed → call **deliver** (delivery agent verifies and accepts or rejects).
-  - Some failed → call **query_failed_goals** first, then call `build({ goalID, request })` again with a concrete root_cause + targeted instruction per failing goal. Reflexive re-call without analysis wastes budget.
+  - Some failed → call **query_failed_goals** first, then call `build({ goalID, request })` again with a concrete root_cause + targeted instruction per failing goal. This opens a new implementation version for that same goal: e.g. the second implementation of the first goal displays as `#G1V2`. Reflexive re-call without analysis wastes budget.
   - Missing dependency discovered → re-run **architect** (it will register the prerequisite goal), then call `build({ goalID })` on the new goal.
-  - Wrong contract for a goal → **modify_goal** then `build({ goalID })` again to run under the corrected contract.
+  - Wrong contract for a goal → **modify_goal** then `build({ goalID })` again to run under the corrected contract. Contract modification also opens a new version for the same goal label (`#G1V2`, `#G1V3`, ...), not a silent in-place rewrite.
   - **fail_task** ONLY when the build agent produced empty / garbled / fundamentally unusable output. Logic bugs, test failures, missing imports = fix and retry, never fail_task.
 - **NEVER call `build({ goalID })` on a passed goal** — passed is terminal. Use modify_goal to change contract, which opens a fresh attempt.
+
+## Goal Numbering And Versions
+
+- The operator-facing label is `#G{stable-order}V{implementation-version}`.
+- A failed goal that is reimplemented keeps the same `G` number and increments only `V`: `#G1V1` → `#G1V2`.
+- A goal whose contract is adjusted by `modify_goal` also keeps the same `G` number and increments `V` on the next implementation.
+- A brand-new goal added by architect refinement gets the next unused `G` number, never a recycled number. If the original decomposition had five goals, the new goal is `#G6V1` even if another goal was removed.
+- The backend owns the numeric facts (`order_index`, `retry_count`); the overlay derives the visible label from those fields. Do not invent a second label in text or metadata.
 
 ## After a delivery rejection (next wake)
 
@@ -368,7 +376,8 @@ clearly confined to one goal's internals.
   2. Specific goal contract gap → **modify_goal** on affected goals (contract-level
      change; does not execute).
   3. Missing functionality → re-run **architect** with the rejection feedback so it
-     refines the goal set (add / modify / split / remove). Re-run **integrity** if the
+     refines the goal set (add / modify / split / remove). Existing goals retain
+     their `G` numbers; any added goal receives the next unused `G` number. Re-run **integrity** if the
      refinement was non-trivial (≥2 goals changed, new contracts, new foundational
      decisions); skip integrity for a one-goal point fix.
   4. **DEFAULT rework path → call `build({ request })` with the rejection feedback as

@@ -152,6 +152,11 @@ export function upsertGoalsFromArchitect(
 } {
   const existing = listGoals(input.taskID)
   const existingByID = new Map(existing.map((g) => [g.id, g]))
+  const maxExistingOrderIndex = existing.reduce(
+    (max, goal) => Math.max(max, goal.order_index),
+    -1,
+  )
+  let nextNewOrderIndex = maxExistingOrderIndex + 1
 
   // First pass: assign DB ids for every goal in the Architect output. Existing
   // ids stay the same; fresh LLM ids get a new DB id. Builds the id map that
@@ -181,6 +186,9 @@ export function upsertGoalsFromArchitect(
   const persisted: Array<{ id: string; title: string; llmID: string }> = []
   for (let index = 0; index < plan.length; index++) {
     const { llmID, dbID, isNew, goal } = plan[index]
+    const orderIndex = isNew
+      ? nextNewOrderIndex++
+      : existingByID.get(dbID)?.order_index ?? index
     const deps = (goal.depends_on ?? []).flatMap((dep) => {
       const mapped = llmToDBID.get(dep)
       if (mapped) return [mapped]
@@ -222,7 +230,7 @@ export function upsertGoalsFromArchitect(
           metadata,
           priority: goal.priority ?? "blocking",
           source: goal.source ?? "spec",
-          order_index: index,
+          order_index: orderIndex,
           time_created: input.now,
           time_updated: input.now,
         })
@@ -242,7 +250,7 @@ export function upsertGoalsFromArchitect(
           requirement_ids: goal.requirement_ids ?? [],
           metadata,
           priority: goal.priority ?? "blocking",
-          order_index: index,
+          order_index: orderIndex,
           time_updated: input.now,
         })
         .where(eq(EngineGoalTable.id, dbID))
@@ -404,7 +412,7 @@ export function createGoalRun(input: {
 // failed / verification outcome" projection that was read by the dispatch
 // gate. Both the cache column and the dispatch gate are gone. Dep-failure
 // handling is the LLM's call (it reads each goal's depends_on + describe
-// layer flags and chooses retry_goal / modify_goal / fail_task).
+// layer flags and chooses build({ goalID }) / modify_goal / fail_task).
 // Verification-goal outcome is recorded on the goal's goal_run chain.
 
 export function updateGoalWorkspace(input: {
@@ -576,7 +584,7 @@ function appendGoalRunArtifact(input: {
 /**
  * Open a new attempt for a goal — single entry-point for "this goal must
  * re-dispatch under a fresh attempt." Replaces the four ad-hoc paths
- * (retry_goal / modify_goal / restart_from_stage / delivery_rework)
+ * (build_retry / modify_goal / restart_from_stage / delivery_rework)
  * that all expanded to the same supersede + sync sequence and drifted apart
  * over time.
  *
@@ -606,20 +614,17 @@ export function startNewAttempt(input: {
    *  the caller genuinely has no actionable analysis — the executor will then
    *  re-run with the original prompt (uninformed retry). */
   feedback?: { value: string; reason: string }
-}): { supersededTipID?: string; resetWorkspace: boolean } {
+}): { supersededTipID?: string; resetWorkspace: boolean; retryCount: number } {
   const now = input.now ?? Date.now()
   const goal = findGoal(input.goalID)
   if (!goal) {
     throw new Error(`startNewAttempt: goal ${input.goalID} not found`)
   }
-  let supersededTipID: string | undefined
-  const tip = findLatestTipGoalRun(input.goalID)
-  if (tip && (tip.status === "failed" || tip.status === "aborted" || tip.status === "completed")) {
-    if (!tip.superseded_reason) {
-      supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now })
-      supersededTipID = tip.id
-    }
-  }
+  const { supersededTipID, retryCount } = openGoalImplementationVersion({
+    goal,
+    reason: input.reason,
+    now,
+  })
   let resetWorkspace = false
   if (input.resetWorkspace && goal.workspace_dir) {
     Database.use((db) =>
@@ -628,6 +633,7 @@ export function startNewAttempt(input: {
           workspace_dir: null,
           workspace_branch: null,
           workspace_base_ref: null,
+          retry_count: retryCount,
           time_updated: now,
         })
         .where(eq(EngineGoalTable.id, input.goalID))
@@ -640,7 +646,7 @@ export function startNewAttempt(input: {
   // its per-goal analysis through this one write — `buildRetryFeedbackSection`
   // reads `phase="retry"` filtered by goalID. Previously the `feedback`
   // parameter existed on the signature but was dropped silently; only the
-  // manual `retry_goal` tool duplicated a parallel decisionLog.append, so
+  // manual retry paths duplicated a parallel decisionLog.append, so
   // executors on delivery_rework/modify_contract rework cycles ran with no
   // rejection context — i.e. blind retries.
   if (input.feedback) {
@@ -657,7 +663,35 @@ export function startNewAttempt(input: {
   // log of "a new attempt opened under reason X at time T." The orchestrator
   // reads it on the next decision turn via describe; no Bus event needed.
   syncGoalStatus(input.goalID, `startNewAttempt:${input.reason}`)
-  return { supersededTipID, resetWorkspace }
+  return { supersededTipID, resetWorkspace, retryCount }
+}
+
+function openGoalImplementationVersion(input: {
+  goal: GoalRow
+  reason: string
+  now: number
+}): { supersededTipID?: string; retryCount: number } {
+  const tip = findLatestTipGoalRun(input.goal.id)
+  if (
+    !tip ||
+    (tip.status !== "failed" && tip.status !== "aborted" && tip.status !== "completed") ||
+    tip.superseded_reason
+  ) {
+    return { retryCount: input.goal.retry_count }
+  }
+
+  supersedeGoalRun({ oldGoalRunID: tip.id, reason: input.reason, now: input.now })
+  const retryCount = input.goal.retry_count + 1
+  Database.use((db) =>
+    db.update(EngineGoalTable)
+      .set({
+        retry_count: retryCount,
+        time_updated: input.now,
+      })
+      .where(eq(EngineGoalTable.id, input.goal.id))
+      .run(),
+  )
+  return { supersededTipID: tip.id, retryCount }
 }
 
 // Phase-6-d-0: `stampGoalRunProgress` deleted with goal-run-watchdog. The
@@ -976,7 +1010,7 @@ export function persistFailedRunEvaluation(input: {
   // drill-down. The pre-phase-6 evaluation insert was invariant-violating
   // anyway (wrote scope='delivery' with delivery_id=null) — we don't resurrect
   // that shape in artifact land. Goal-run-scoped failures remain handled at the
-  // goal-run site (dispatch_goal/retry_goal persist evidence before failing).
+  // goal-run site (the build tool persists evidence before failing).
   const evaluationID = Identifier.ascending("evaluation")
   writeEvaluationSnapshot({
     task: input.task,
@@ -1391,12 +1425,21 @@ export function beginBuildAttempt(input: {
 }): string {
   const id = Identifier.ascending("goal_run")
   const now = input.now ?? Date.now()
+  const goal = findGoal(input.goalID)
+  if (!goal) {
+    throw new Error(`beginBuildAttempt: goal ${input.goalID} not found`)
+  }
+  const version = openGoalImplementationVersion({
+    goal,
+    reason: "build_retry",
+    now,
+  })
   const payload = {
     goal_id: input.goalID,
     plan_node_id: null,
     session_id: input.sessionID ?? null,
     status: "running" as const,
-    retry_count: 0,
+    retry_count: version.retryCount,
     blocking_reason: null,
     error: null,
     workspace_dir: input.workspaceDir ?? null,
