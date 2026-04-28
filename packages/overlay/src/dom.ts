@@ -21,8 +21,6 @@ export interface DomRefs {
   btnTheme: HTMLButtonElement | null;
   btnThemeValue: HTMLElement | null;
   btnSettings: HTMLButtonElement | null;
-  btnPin: HTMLButtonElement | null;
-  btnPinValue: HTMLElement | null;
 
  // Settings checkboxes / controls
   chkAutoPermission: HTMLInputElement | null;
@@ -286,8 +284,6 @@ export function getDomRefs(): DomRefs {
     btnTheme: $<HTMLButtonElement>("#btnTheme"),
     btnThemeValue: $<HTMLElement>("#btnThemeValue"),
     btnSettings: $<HTMLButtonElement>("#btnSettings"),
-    btnPin: $<HTMLButtonElement>("#btnPin"),
-    btnPinValue: $<HTMLElement>("#btnPinValue"),
 
  // Settings checkboxes / controls
     chkAutoPermission: $<HTMLInputElement>("#chkAutoPermission"),

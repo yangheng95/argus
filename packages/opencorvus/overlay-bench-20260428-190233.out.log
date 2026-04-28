@@ -1,0 +1,43 @@
+[overlay-benchmark] config model=alibaba-coding-plan-cn/kimi-k2.5 executor=opencode groups=config-default (no benchmark-side timeouts)
+[STT] Pipeline initialized: (none)
+[ChannelRuntime] OpenCorvus server running at http://127.0.0.1:52713
+[STT] Pipeline initialized: (none)
+[ChannelRuntime] OpenCorvus server running at http://127.0.0.1:52713
+[Slack] Bot user ID: U0AJC6JDA72
+[Slack] Bot user ID: U0AJC6JDA72
+[overlay-benchmark] delivery_verify_cmd=bun run C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\script\benchmark\visual-diff.ts --rendered-dir=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-x6Bt8g --reference=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\script\benchmark\assets\ainvest.png --out=C:\Users\chuan\myhexin-local\argus-opencode\packages\opencorvus\overlay-web-benchmark-report-1777374163387.visual-diff-out
+[overlay-benchmark] directory=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-x6Bt8g saved=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-x6Bt8g
+[overlay-benchmark] RESUME-INFO taskID=tsk_dd3c17c0c001BeYiWsks9r15yB
+[overlay-benchmark] RESUME-INFO home=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-ySNm3S
+[overlay-benchmark] RESUME-INFO project=C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-x6Bt8g
+[overlay-benchmark] RESUME-CMD bun run script/benchmark/overlay-web-benchmark.ts --resume-task-id=tsk_dd3c17c0c001BeYiWsks9r15yB --resume-home-dir="C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-home-ySNm3S" --project-dir="C:\Users\chuan\AppData\Local\Temp\mirrorcode-overlay-benchmark-project-x6Bt8g" --executor=opencode
+[overlay-benchmark] event=task.created status=queued detail=Task queued
+[overlay-benchmark] progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["orchestrator:ses_22c3e83d0ffeY4RuQcsMbxIEvN"]}
+[overlay-benchmark] status=active
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["orchestrator:ses_22c3e83d0ffeY4RuQcsMbxIEvN"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["orchestrator:ses_22c3e83d0ffeY4RuQcsMbxIEvN"]}
+[overlay-benchmark] progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3d44d2ffezBeXlgAE5Akwem","orchestrator:ses_22c3e83d0ffeY4RuQcsMbxIEvN"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3d44d2ffezBeXlgAE5Akwem","orchestrator:ses_22c3e83d0ffeY4RuQcsMbxIEvN"]}
+[overlay-benchmark] progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3d44d2ffezBeXlgAE5Akwem"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3d44d2ffezBeXlgAE5Akwem"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3d44d2ffezBeXlgAE5Akwem"]}
+[overlay-benchmark] build.completed status=error error="build agent: terminal build report did not match BuildResultSchema: [
+  {
+    "expected": "object",
+    "code": "invalid_type",
+    "path": [],
+    "message": "Invalid input: expected object, recei..." summary="Build failed: build agent: terminal build report did not match BuildResultSchema: [
+  {
+    "expected": "object",
+    "code": "invalid_type",
+    "path": [],
+    "message": "Invalid input: expected object, received undefined"
+  }
+]"
+[overlay-benchmark] progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3a18a1ffe1bW1Ykn2cl0k0a","build:ses_22c3d44d2ffezBeXlgAE5Akwem"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3a18a1ffe1bW1Ykn2cl0k0a","build:ses_22c3d44d2ffezBeXlgAE5Akwem"]}
+[overlay-benchmark] progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3a18a1ffe1bW1Ykn2cl0k0a"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3a18a1ffe1bW1Ykn2cl0k0a"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3a18a1ffe1bW1Ykn2cl0k0a"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3a18a1ffe1bW1Ykn2cl0k0a"]}
+[overlay-benchmark] heartbeat status=active retry=0/? last_progress={"task":"active","run":"","phase":"","retry_count":0,"verdict":"","delivery":"","goals":[],"pending":[],"sessions":["build:ses_22c3a18a1ffe1bW1Ykn2cl0k0a"]}

@@ -1,30 +1,8 @@
 // ── TitlebarMenu Component ──
-// Covers:
-// - renderTitlebarMenu() (lines 1697-1728)
-// - setTitlebarMenu() (lines 1686-1691)
-// - closeTitlebarMenu() (lines 1693-1695)
-// - event handlers:
-// btnTitlebarMenu click (line 9943-9947)
-// pointerdown outside (lines 9949-9957)
-// Escape key (lines 9959-9962)
-// btnLocale click (lines 9933-9936)
-// btnTheme click (lines 9926-9931)
-// btnSettings click (lines 9938-9941)
-// btnLog click (lines 11119-11122)
-// btnPin click (lines 10392-10410)
-// (legacy reference deleted — the unattended umbrella flag was removed in
-// favor of fine-grained experimental.auto_permission / auto_question switches)
-// chkAutoPermission change (lines 9964-9970)
-// chkAutoQuestion change (lines 9981-9987)
-// chkShowTranscript change (lines 9989-9995)
-// opacityRange input/change (lines 9997-10007)
-// Import contract:
-// settingsStore — reactive settings (theme, alwaysOnTop, …)
-// applySettings — validate + write partial settings into store
-// saveSettings — persist store to localStorage
-// appStore — runtime UI state (used by callers; exposed via props)
-// setAppStore — update runtime state
-// t — i18n translation helper
+// Dropdown menu attached to the "more" button in the titlebar. Hosts:
+// language toggle, theme picker, server-config / log entry buttons,
+// auto-permission / auto-question toggles, max_runs / max_executor_groups
+// budget sliders, and the window opacity slider.
 
 import {
   createSignal,
@@ -73,20 +51,6 @@ export interface TitlebarMenuProps {
   onLocaleChange?: (locale: string) => void;
 }
 
-// ── Tauri window helper (internal) ──
-
-async function currentTauriWindow(): Promise<any | null> {
-  const getCurrent = (window as any).__TAURI__?.window?.getCurrentWindow;
-  if (typeof getCurrent === "function") {
-    try {
-      return getCurrent() as any;
-    } catch {
- // Not running inside Tauri
-    }
-  }
-  return null;
-}
-
 // ── Component ──
 
 export function TitlebarMenu(props: TitlebarMenuProps) {
@@ -109,11 +73,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     const hit = THEME_OPTIONS.find((opt) => opt.id === theme);
     return hit ? t(hit.labelKey) : t("settings.theme.dark");
   });
-
- // Pin label (mirrors renderTitlebarMenu btnPinValue)
-  const pinLabel = createMemo(() =>
-    settingsStore.alwaysOnTop ? t("common.yes") : t("common.no"),
-  );
 
  // Locale label shown in the menu item (mirrors renderLocale btnLocaleLabel)
   const localeLabel = createMemo(() =>
@@ -234,24 +193,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
- // Pin (always on top) toggle —
-  async function handlePinToggle() {
-    const next = !settingsStore.alwaysOnTop;
-    const win = await currentTauriWindow();
-    if (win && typeof win.setAlwaysOnTop === "function") {
-      await win.setAlwaysOnTop(next).catch(() => undefined);
- // Sync back the actual state from the window (
-      const actual = await win
-        .isAlwaysOnTop?.()
-        .catch(() => next);
-      setSettingsStore("alwaysOnTop", !!actual);
-    } else {
-      setSettingsStore("alwaysOnTop", next);
-    }
-    saveSettings();
-    closeMenu();
-  }
-
  // Auto-permission toggle — PATCH server config
   async function handleAutoPermissionChange(checked: boolean) {
     try {
@@ -268,26 +209,17 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
     closeMenu();
   }
 
- // Show transcript details toggle —
-  async function handleShowTranscriptDetailsChange(checked: boolean) {
-    setSettingsStore("showTranscriptDetails", checked);
-    applySettings({ ...settingsStore, showTranscriptDetails: checked });
-    saveSettings();
-    closeMenu();
-  }
-
- // Opacity range —
+ // Opacity range — live update on input, commit on change
   function handleOpacityInput(rawValue: string) {
     const next = sanitizeOpacity(Number(rawValue) / 100);
     setSettingsStore("opacity", next);
-    void applyOpacity(next);
+    applyOpacity(next);
   }
 
- // Opacity range —
-  async function handleOpacityChange(rawValue: string) {
+  function handleOpacityChange(rawValue: string) {
     const next = sanitizeOpacity(Number(rawValue) / 100);
     setSettingsStore("opacity", next);
-    await applyOpacity(next);
+    applyOpacity(next);
     applySettings({ ...settingsStore, opacity: next });
     saveSettings();
     closeMenu();
@@ -544,48 +476,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
           </span>
         </button>
 
-        {/* ── Always on top (pin) ── */}
-        <button
-          type="button"
-          id="btnPin"
-          class="titlebar-menu-item"
-          title={t("titlebar.pin")}
-          aria-label={t("titlebar.pin")}
-          data-pinned={settingsStore.alwaysOnTop ? "true" : "false"}
-          onClick={() => void handlePinToggle()}
-        >
-          <span class="titlebar-menu-icon" aria-hidden="true">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-            >
-              <path
-                d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M8 11v4"
-                stroke="currentColor"
-                stroke-width="1.2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </span>
-          <span class="titlebar-menu-copy">
-            <span class="titlebar-menu-title">
-              {t("titlebar.pin")}
-            </span>
-            <span class="titlebar-menu-meta" id="btnPinValue">
-              {pinLabel()}
-            </span>
-          </span>
-        </button>
-
         {/* ── Divider ── */}
         <div class="titlebar-menu-divider" aria-hidden="true" />
 
@@ -629,32 +519,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
             checked={appStore.config?.experimental?.auto_question === true}
             onChange={(e) =>
               void handleAutoQuestionChange(
-                (e.target as HTMLInputElement).checked,
-              )
-            }
-          />
-        </label>
-
-        {/* ── Show full transcript details toggle ── */}
-        <label
-          class="titlebar-menu-toggle"
-          for="chkShowTranscriptDetails"
-        >
-          <span class="titlebar-menu-copy">
-            <span class="titlebar-menu-title">
-              {t("titlebar.full_transcript")}
-            </span>
-            <span class="titlebar-menu-meta">
-              {t("titlebar.full_transcript_hint")}
-            </span>
-          </span>
-          <input
-            class="titlebar-menu-check"
-            id="chkShowTranscriptDetails"
-            type="checkbox"
-            checked={settingsStore.showTranscriptDetails}
-            onChange={(e) =>
-              void handleShowTranscriptDetailsChange(
                 (e.target as HTMLInputElement).checked,
               )
             }
@@ -744,9 +608,7 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
                 handleOpacityInput((e.target as HTMLInputElement).value)
               }
               onChange={(e) =>
-                void handleOpacityChange(
-                  (e.target as HTMLInputElement).value,
-                )
+                handleOpacityChange((e.target as HTMLInputElement).value)
               }
             />
             <span class="titlebar-menu-value" id="opacityValue">

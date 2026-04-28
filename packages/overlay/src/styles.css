@@ -277,7 +277,7 @@ body {
   position: relative;
   isolation: isolate;
   background: var(--bg);
-  opacity: 1;
+  opacity: var(--ui-window-opacity, 1);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -1090,10 +1090,6 @@ a { color: inherit; text-decoration: none; }
 .titlebar-close:hover {
   background: rgba(248, 113, 113, 0.15);
   color: var(--bad);
-}
-#btnPin[data-pinned="true"] {
-  color: var(--accent);
-  background: rgba(91, 141, 239, 0.12);
 }
 
 /* ── Panel ── */

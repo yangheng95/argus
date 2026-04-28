@@ -221,8 +221,6 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
               close: async () => undefined,
               minimize: async () => undefined,
               startDragging: async () => undefined,
-              setAlwaysOnTop: async () => undefined,
-              isAlwaysOnTop: async () => false,
               isMaximized: async () => false,
               onResized: async () => ({ unlisten: async () => undefined }),
             }

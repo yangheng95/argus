@@ -25,8 +25,6 @@ export interface OverlaySettings {
   username: string;
   executor: string;
   initGit: boolean;
-  alwaysOnTop: boolean;
-  showTranscriptDetails: boolean;
   sidebarCollapsed: boolean;
   sidebarWidth: number | null;
   sectionsWidth: number | null;
@@ -114,8 +112,6 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   username: "opencorvus",
   executor: "opencode",
   initGit: true,
-  alwaysOnTop: false,
-  showTranscriptDetails: false,
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
@@ -169,8 +165,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
         ? input.executor.trim()
         : DEFAULT_SETTINGS.executor,
     initGit: true,
-    alwaysOnTop: input?.alwaysOnTop === true,
-    showTranscriptDetails: input?.showTranscriptDetails === true,
     sidebarCollapsed: input?.sidebarCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
@@ -204,11 +198,6 @@ export function saveSettings(): void {
   localStorage.setItem("oc_password", s.password);
   localStorage.setItem("oc_username", s.username);
   localStorage.setItem("oc_executor", s.executor || DEFAULT_SETTINGS.executor);
-  localStorage.setItem("oc_always_on_top", String(s.alwaysOnTop));
-  localStorage.setItem(
-    "oc_show_transcript_details",
-    String(s.showTranscriptDetails),
-  );
   localStorage.setItem("oc_sidebar_collapsed", String(s.sidebarCollapsed));
   if (s.sidebarWidth != null) {
     localStorage.setItem("oc_sidebar_width", String(s.sidebarWidth));
@@ -280,9 +269,6 @@ export function loadSettings(): void {
     executor:
       localStorage.getItem("oc_executor") || DEFAULT_SETTINGS.executor,
     initGit: true,
-    alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
-    showTranscriptDetails:
-      localStorage.getItem("oc_show_transcript_details") === "true",
     sidebarCollapsed:
       localStorage.getItem("oc_sidebar_collapsed") === "true",
     sidebarWidth: sanitizePaneWidth(
@@ -357,8 +343,6 @@ export function bootstrapOverlaySettings(
     username: input.username ?? DEFAULT_SETTINGS.username,
     executor: input.executor ?? DEFAULT_SETTINGS.executor,
     initGit: true,
-    alwaysOnTop: input.alwaysOnTop ?? DEFAULT_SETTINGS.alwaysOnTop,
-    showTranscriptDetails: input.showTranscriptDetails ?? DEFAULT_SETTINGS.showTranscriptDetails,
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
