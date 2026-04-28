@@ -411,3 +411,20 @@ processor.message.parts.some(...)
 - delivery agent 自身的工具 schema 重构不在本方案范围；如出现同形态失败，需要先按阶段 A 的 normalized measurement 重测，再单独立项。
 - build surface 不属于 out-of-scope：阶段 A–F 的所有改动都在 session 层共享路径上，build/integrity 均会受益；本方案验收必须同时覆盖两个 surface（见第 6 节）。
 - build agent 自身的工具集重构不在默认范围。只有阶段 G 的 measurement threshold 命中，且证据证明问题来自 build agent 工具集本身，而不是共享 session 层预算/compaction/retry 缺陷，才单独启动 build schema 重构。
+
+## 9. 2026-04-28 实施修订
+
+进一步审查后，`requirements` / `integrity` / `build` 的终结 payload 并不需要走 `SessionLoop.StructuredOutput`。这些 stage 的业务事实已经由 collector tools 写入内存 collector，终结只需要一个明确的工具调用信号。继续让它们包一层 JSON schema 会把自然语言 summary 和分支状态误建模成结构化输出，触发 provider hint-mode miss、reminder retry、hard-pin 等补丁链。
+
+已实施的新单源协议：
+
+- `requirements`: 删除 `RequirementsFinalSchema` 和 `format: json_schema`；新增 `submit_requirements()` 无参终结工具。summary 由 collector 派生，不再要求 LLM 为自然语言 summary 调 StructuredOutput。
+- `integrity`: 删除 `IntegrityFinalSchema`、`format: json_schema` 和外层 `runAgentSessionWithRetry`；新增 `submit_integrity_review()` 无参终结工具。该工具只有在所有 `submit_<dimension_id>_verdict` 都提交后才置 `collector.finalized=true`。
+- `build`: opencode 路径删除 `format: json_schema(BuildResultSchema)`；新增 `report_build_passed` / `report_build_failed` 作为两个 terminal tools，工具名即 status discriminator。`report_build_passed` 在 `merge_back` 成功前拒绝终结，保留原 merge gate，但不再依赖 StructuredOutput。
+- `design-analyst` / `intent-analysis` 等仍被下游按字段遍历消费的 stage 暂保留 StructuredOutput，后续只在 strict schema/provider capability 路径上继续收敛。
+
+同时修复了三处宽回归暴露的旧契约：
+
+- `updatePartDelta` 是 ephemeral Bus delta，不写回 transcript；测试改为断言事件发布和 transcript 不变。
+- plugin 初始化在 in-process 单测中使用 `IN_PROCESS_BASE_URL`，不再要求 `Server.serve()` 先启动真实 HTTP URL。
+- `SessionRetry.retryable` 对未知 JSON envelope default-deny，`no_kv_space` 这类未白名单错误不再默认重试。

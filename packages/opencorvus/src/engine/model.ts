@@ -1131,8 +1131,8 @@ export const Event = {
   ),
   /** Integrity review streaming chunk. Forwarded from the LLM stream while
    *  the tool-use loop is in flight. ONLY `reasoning-delta` is forwarded —
-   *  the per-dimension `submit_<id>_verdict` and terminal StructuredOutput
-   *  tool-input JSON are protocol payload and must never surface as visible
+   *  the per-dimension `submit_<id>_verdict` and terminal
+   *  `submit_integrity_review` tool-input JSON are protocol payload and must never surface as visible
    *  text (that would defeat the point of the tool-call architecture; verdict
    *  is delivered structurally via IntegrityReviewCompleted). Non-reasoning
    *  models emit no reasoning chunks; their sub-15s tool calls need no
@@ -1150,7 +1150,7 @@ export const Event = {
   ),
   /** Integrity review verdict with the full structured result. Emitted once
    *  per reviewIntegrity() call after the LLM submits every dimension verdict
-   *  and closes with StructuredOutput.
+   *  and closes with submit_integrity_review.
    *  Carries the per-dimension breakdown (goal_fidelity / technical_feasibility
    *  / hallucination / solution_quality) plus the cross-dimension union of
    *  issues / corrections / missing goals so the overlay can render a native

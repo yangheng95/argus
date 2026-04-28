@@ -8,6 +8,9 @@ mock.module("@/agent/runner", () => ({
     if (!runnerImpl) throw new Error("runAgentSession mock not configured")
     return runnerImpl(input)
   },
+  runAgentSessionWithRetry: () => {
+    throw new Error("runAgentSessionWithRetry should not be called by IntegrityAgent")
+  },
 }))
 
 const baseGoal: GoalContractFields = {
@@ -28,23 +31,24 @@ afterEach(() => {
   runnerImpl = undefined
 })
 
-test("integrity uses StructuredOutput instead of finalize_integrity_review", async () => {
+test("integrity uses dimension collectors plus submit_integrity_review terminator", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
   runnerImpl = async (input: any) => {
     expect(input.toolKit.tools.finalize_integrity_review).toBeUndefined()
     expect(Object.keys(input.toolKit.tools).sort()).toEqual([
       "submit_goal_fidelity_verdict",
       "submit_hallucination_verdict",
+      "submit_integrity_review",
       "submit_solution_quality_verdict",
       "submit_technical_feasibility_verdict",
     ])
-    expect(input.format?.schema).toBeDefined()
+    expect(input.format).toBeUndefined()
     return {
       session: { id: "ses_integrity_missing" },
       streamErrors: [],
-      structured: { summary: "All dimensions passed." },
+      structured: undefined,
       collector: input.toolKit.getCollector(),
-      finalMessage: { info: { structured: { summary: "All dimensions passed." } } },
+      finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
       requiredTools: [],
     }
@@ -57,21 +61,23 @@ test("integrity uses StructuredOutput instead of finalize_integrity_review", asy
   })).rejects.toThrow("missingDimensions=goal_fidelity,technical_feasibility,hallucination,solution_quality")
 })
 
-test("integrity accepts only complete dimension submissions plus StructuredOutput", async () => {
+test("integrity accepts only complete dimension submissions plus submit_integrity_review", async () => {
   const { reviewIntegrity } = await import("../../src/integrity/agent")
   runnerImpl = async (input: any) => {
     for (const [name, tool] of Object.entries(input.toolKit.tools)) {
+      if (name === "submit_integrity_review") continue
       const payload = name === "submit_hallucination_verdict"
         ? { verdict: "pass", issues: [] }
         : { verdict: "pass", issues: [], corrections: [], missing_goals: [] }
       await (tool as any).execute(payload, {})
     }
+    await input.toolKit.tools.submit_integrity_review.execute({}, {})
     return {
       session: { id: "ses_integrity_complete" },
       streamErrors: [],
-      structured: { summary: "All dimensions passed." },
+      structured: undefined,
       collector: input.toolKit.getCollector(),
-      finalMessage: { info: { structured: { summary: "All dimensions passed." } } },
+      finalMessage: { info: {} },
       model: { providerID: "test", modelID: "mock", id: "test/mock" },
       requiredTools: [],
     }
@@ -85,7 +91,7 @@ test("integrity accepts only complete dimension submissions plus StructuredOutpu
 
   expect(result.sessionID).toBe("ses_integrity_complete")
   expect(result.verdict).toBe("pass")
-  expect(result.summary).toBe("All dimensions passed.")
+  expect(result.summary).toBe("Integrity pass: 0 issue(s), 0 correction action(s).")
   expect(result.dimensions.map((d) => d.id)).toEqual([
     "goal_fidelity",
     "technical_feasibility",

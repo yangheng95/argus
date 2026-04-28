@@ -1,13 +1,22 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { Database } from "../../src/storage/db"
 import { ProjectTable } from "../../src/project/project.sql"
 import { EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine/engine.sql"
-import { RequirementsAgent } from "../../src/requirements"
-import { AgentRuntime } from "../../src/agent/runtime/runtime"
-import * as AgentModel from "../../src/agent/model"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
+
+let runnerImpl: ((input: any) => Promise<any>) | undefined
+
+mock.module("@/agent/runner", () => ({
+  runAgentSession: (input: any) => {
+    if (!runnerImpl) throw new Error("runAgentSession mock not configured")
+    return runnerImpl(input)
+  },
+  runAgentSessionWithRetry: () => {
+    throw new Error("runAgentSessionWithRetry should not be called by RequirementsAgent")
+  },
+}))
 
 describe("RequirementsAgent prompt precedence", () => {
   let tmp: Awaited<ReturnType<typeof tmpdir>>
@@ -18,6 +27,7 @@ describe("RequirementsAgent prompt precedence", () => {
   })
 
   afterEach(async () => {
+    runnerImpl = undefined
     mock.restore()
     await resetDatabase()
     await tmp?.[Symbol.asyncDispose]?.()
@@ -77,22 +87,15 @@ describe("RequirementsAgent prompt precedence", () => {
           }).run()
         })
 
-        spyOn(AgentModel, "resolveAgentModel").mockResolvedValue({
-          id: "test/mock",
-          providerID: "test",
-          modelID: "mock",
-        } as any)
-
-        const runtime = spyOn(AgentRuntime, "run").mockImplementation(async (input: any) => {
-          const content = input.messages[0]?.content
-          const text = typeof content === "string"
-            ? content
-            : Array.isArray(content)
-              ? content
-                .map((part) => (part?.type === "text" ? (part.text ?? "") : ""))
-                .join("\n")
-              : ""
-          const system = Array.isArray(input.system) ? input.system.join("\n") : String(input.system ?? "")
+        let runnerCalls = 0
+        runnerImpl = async (input: any) => {
+          runnerCalls += 1
+          expect(input.format).toBeUndefined()
+          expect(input.toolKit.tools.submit_requirements).toBeDefined()
+          const parts = await input.buildUserParts()
+          const text = parts
+            .map((part: any) => (part?.type === "text" ? (part.text ?? "") : ""))
+            .join("\n")
 
           const clarificationIndex = text.indexOf("## Clarifications Already Answered")
           const visualContractIndex = text.indexOf("# Visual Contract (")
@@ -102,36 +105,36 @@ describe("RequirementsAgent prompt precedence", () => {
           expect(clarificationIndex).toBeLessThan(visualContractIndex)
           expect(text).toContain("Concrete stack or deliverable answers from clarifications/operator notes outrank existing package.json dependencies")
           expect(text).toContain("If the user explicitly chose a framework-free implementation")
-          expect(system).toContain("Repo evidence helps you understand integration constraints")
-          expect(system).toContain("none (vanilla HTML/CSS/JavaScript)")
 
-          await input.tools.register_requirement.execute({
+          await input.toolKit.tools.register_requirement.execute({
             id: "REQ-1",
             type: "explicit",
             description: "使用原生 HTML、CSS 和 JavaScript 复刻百度首页。",
           }, {} as any)
-          await input.tools.register_decision.execute({
+          await input.toolKit.tools.register_decision.execute({
             key: "frontend_framework",
             value: "none (vanilla HTML/CSS/JavaScript)",
             reason: "已回答澄清明确选择原生三件套，这高于现有 scaffold。",
           }, {} as any)
-          await input.tools.register_decision.execute({
+          await input.toolKit.tools.register_decision.execute({
             key: "test_framework",
             value: "vitest",
             reason: "现有项目脚手架使用 Vitest。",
           }, {} as any)
-          await input.tools.finalize_requirements.execute({
-            summary: "复刻一个可直接演示的百度桌面首页交互原型。",
-          }, {} as any)
+          await input.toolKit.tools.submit_requirements.execute({}, {} as any)
 
           return {
-            text: "",
-            steps: [{ toolCalls: [{ toolName: "finalize_requirements" }] }],
-            finishReason: "tool-calls",
-            toolCallCount: 4,
-            failures: { count: 0, items: [] },
+            session: { id: "ses_requirements" },
+            streamErrors: [],
+            structured: undefined,
+            collector: input.toolKit.getCollector(),
+            finalMessage: { info: {} },
+            model: { providerID: "test", modelID: "mock", id: "test/mock" },
+            requiredTools: [],
           }
-        })
+        }
+
+        const { RequirementsAgent } = await import("../../src/requirements")
 
         const result = await RequirementsAgent.run({
           title: "复刻百度主页",
@@ -147,7 +150,7 @@ describe("RequirementsAgent prompt precedence", () => {
           }],
         })
 
-        expect(runtime).toHaveBeenCalledTimes(1)
+        expect(runnerCalls).toBe(1)
         expect(result.decisions.find((decision) => decision.key === "frontend_framework")?.value)
           .toBe("none (vanilla HTML/CSS/JavaScript)")
       },

@@ -512,8 +512,8 @@ export interface RunAgentSessionWithRetryInput<C>
    *  `out.structured` for this attempt — defined when the agent's
    *  `format` is set and the model emitted a schema-valid StructuredOutput
    *  call, undefined otherwise. Agents that gate on a terminal structured
-   *  payload (e.g. integrity's IntegrityFinal summary) check it here so a
-   *  model that submits dimension tools but skips StructuredOutput
+   *  payload check it here so a model that satisfies collector tools but
+   *  skips the agent's explicit terminal collector tool
    *  triggers a retry instead of silently passing. */
   isComplete: (
     collector: C,

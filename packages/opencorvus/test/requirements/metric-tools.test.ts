@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import {
-  createRequirementsOutputTools,
   MANDATORY_GLOBAL_BLOCKING_METRICS,
   MANDATORY_GOAL_BLOCKING_METRICS,
-} from "../../src/requirements/output-tools"
+  createArchitectOutputTools,
+} from "../../src/architect/output-tools"
 
 async function exec<T>(tool: any, input: unknown): Promise<string> {
   const result = await tool.execute(input as T)
@@ -40,28 +40,6 @@ function registerBaselineGoal(tools: any) {
     kind: "feature",
     requirement_ids: ["REQ-1"],
   })
-}
-
-function registerBaselineRequirement(tools: any) {
-  return exec(tools.register_requirement, {
-    id: "REQ-1",
-    type: "explicit",
-    description: "Implement the stocks endpoint",
-  })
-}
-
-function registerBaselineDecision(tools: any, n = 1) {
-  const calls = []
-  for (let i = 0; i < n; i++) {
-    calls.push(
-      exec(tools.register_decision, {
-        key: `key${i}`,
-        value: `value${i}`,
-        reason: `reason${i}`,
-      }),
-    )
-  }
-  return Promise.all(calls)
 }
 
 async function registerMandatoryPerGoalMetrics(tools: any, goalID: string) {
@@ -101,9 +79,9 @@ async function registerMandatoryGlobalMetrics(tools: any) {
   }
 }
 
-describe("requirements output-tools — metric registration", () => {
+describe("architect output-tools — metric registration", () => {
   test("register_goal_metric_spec records a spec on the collector", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
     const msg = await exec(kit.tools.register_goal_metric_spec, {
       goal_id: "goal_api",
@@ -124,7 +102,7 @@ describe("requirements output-tools — metric registration", () => {
   })
 
   test("register_goal_metric_spec rejects reference to unknown goal", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     const msg = await exec(kit.tools.register_goal_metric_spec, {
       goal_id: "goal_missing",
       name: "functional_correctness",
@@ -143,7 +121,7 @@ describe("requirements output-tools — metric registration", () => {
   })
 
   test("register_goal_metric_spec refuses floor==target on higher_better blocking", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
     const msg = await exec(kit.tools.register_goal_metric_spec, {
       goal_id: "goal_api",
@@ -164,7 +142,7 @@ describe("requirements output-tools — metric registration", () => {
   })
 
   test("register_global_metric_spec rejects duplicate names", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await exec(kit.tools.register_global_metric_spec, {
       name: "user_intent_fidelity",
       description: "x",
@@ -195,7 +173,7 @@ describe("requirements output-tools — metric registration", () => {
   })
 
   test("register_challenge_seed stores seed with all fields", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
     const msg = await exec(kit.tools.register_challenge_seed, {
       id: "seed-stock-empty",
@@ -210,11 +188,9 @@ describe("requirements output-tools — metric registration", () => {
   })
 })
 
-describe("finalize_decomposition — mandatory blocking coverage", () => {
+describe("submit_architect — mandatory blocking coverage", () => {
   test("REJECTS when per-goal mandatory blocking metric is missing", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
-    await registerBaselineRequirement(kit.tools)
-    await registerBaselineDecision(kit.tools, 2)
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
     await exec(kit.tools.register_traceability, {
       requirement_id: "REQ-1",
@@ -238,7 +214,7 @@ describe("finalize_decomposition — mandatory blocking coverage", () => {
         source_requirement_ids: ["REQ-1"],
       })
     }
-    const msg = await exec(kit.tools.finalize_decomposition, {
+    const msg = await exec(kit.tools.submit_architect, {
       summary: "Test task decomposition",
     })
     expect(msg).toContain("ISSUES")
@@ -247,9 +223,7 @@ describe("finalize_decomposition — mandatory blocking coverage", () => {
   })
 
   test("REJECTS when any global mandatory blocking metric is missing", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
-    await registerBaselineRequirement(kit.tools)
-    await registerBaselineDecision(kit.tools, 2)
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
     await exec(kit.tools.register_traceability, {
       requirement_id: "REQ-1",
@@ -272,7 +246,7 @@ describe("finalize_decomposition — mandatory blocking coverage", () => {
         source_requirement_ids: [],
       })
     }
-    const msg = await exec(kit.tools.finalize_decomposition, {
+    const msg = await exec(kit.tools.submit_architect, {
       summary: "Test task decomposition",
     })
     expect(msg).toContain("ISSUES")
@@ -280,9 +254,7 @@ describe("finalize_decomposition — mandatory blocking coverage", () => {
   })
 
   test("PASSES when every mandatory blocking metric is present", async () => {
-    const kit = createRequirementsOutputTools(process.cwd())
-    await registerBaselineRequirement(kit.tools)
-    await registerBaselineDecision(kit.tools, 2)
+    const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
     await exec(kit.tools.register_traceability, {
       requirement_id: "REQ-1",
@@ -290,7 +262,7 @@ describe("finalize_decomposition — mandatory blocking coverage", () => {
     })
     await registerMandatoryPerGoalMetrics(kit.tools, "goal_api")
     await registerMandatoryGlobalMetrics(kit.tools)
-    const msg = await exec(kit.tools.finalize_decomposition, {
+    const msg = await exec(kit.tools.submit_architect, {
       summary: "Test task decomposition",
     })
     expect(msg).toContain("PASS")

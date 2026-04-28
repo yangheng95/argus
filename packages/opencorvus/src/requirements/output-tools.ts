@@ -19,19 +19,8 @@ import z from "zod"
 export interface RequirementsCollector {
   requirements: RegisteredRequirement[]
   decisions: RegisteredDecision[]
+  finalized: boolean
 }
-
-/** Terminal schema for SessionLoop's StructuredOutput (phase 3-b migration). */
-export const RequirementsFinalSchema = z.object({
-  summary: z
-    .string()
-    .min(5)
-    .describe(
-      "One-line summary of the parsed requirements — what the user wants, " +
-        "in plain prose, under ~25 words.",
-    ),
-})
-export type RequirementsFinal = z.infer<typeof RequirementsFinalSchema>
 
 export interface RegisteredRequirement {
   id: string
@@ -49,6 +38,7 @@ function emptyCollector(): RequirementsCollector {
   return {
     requirements: [],
     decisions: [],
+    finalized: false,
   }
 }
 
@@ -88,6 +78,20 @@ export function createRequirementsOutputTools() {
       execute: async ({ key, value, reason }) => {
         collector.decisions.push({ key, value, reason })
         return `OK: decision "${key}=${value}" registered`
+      },
+    }),
+
+    submit_requirements: tool({
+      description:
+        "Finalize requirements after all register_requirement and register_decision calls are complete. " +
+        "Call this with no arguments.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        if (collector.requirements.length === 0) {
+          return "Error: no requirements registered. Call register_requirement at least once before submit_requirements."
+        }
+        collector.finalized = true
+        return `PASS: Requirements finalized (${collector.requirements.length} requirement(s), ${collector.decisions.length} decision(s)).`
       },
     }),
 
