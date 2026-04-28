@@ -191,6 +191,37 @@ export namespace SessionLoop {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Ephemeral per-session StructuredOutput guard
+  //
+  // Some agents need semantic invariants that JSON Schema cannot express. The
+  // build agent is the concrete case: `status="passed"` is valid only after
+  // the in-session `merge_back` tool has completed successfully. This hook
+  // rejects the terminal StructuredOutput tool call before it is captured, so
+  // the same session can continue, call the missing work tool, and then close
+  // with StructuredOutput. It is process-local for the same reason as
+  // extraTools: validators can close over live tool state and are not
+  // serializable DB state.
+  // ---------------------------------------------------------------------------
+  export type StructuredOutputGuard = (output: unknown) => string | undefined | Promise<string | undefined>
+
+  const ephemeralStructuredOutputGuards = new Map<string, StructuredOutputGuard>()
+
+  export async function withStructuredOutputGuard<T>(
+    sessionID: string,
+    guard: StructuredOutputGuard,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = ephemeralStructuredOutputGuards.get(sessionID)
+    ephemeralStructuredOutputGuards.set(sessionID, guard)
+    try {
+      return await fn()
+    } finally {
+      if (previous) ephemeralStructuredOutputGuards.set(sessionID, previous)
+      else ephemeralStructuredOutputGuards.delete(sessionID)
+    }
+  }
+
   /**
    * Decide whether the just-finished assistant turn should enter the
    * StructuredOutput recovery channel (stamp `StructuredOutputError` and
@@ -259,9 +290,9 @@ export namespace SessionLoop {
   const TOOL_SCHEMA_BUDGET_RATIO_DEFAULT = 0.5
   const COMPACTION_MIN_RESIDUE_CHARS = 6_000
 
-  function readEnvRatio(name: string, fallback: number): number {
+  function readEnvRatio(name: string, defaultValue: number): number {
     const raw = Number(Env.get(name) ?? "")
-    return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : fallback
+    return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : defaultValue
   }
 
   export type PredictiveCompactionDecision =
@@ -682,6 +713,7 @@ export namespace SessionLoop {
     if (input.lastUser.format?.type === "json_schema") {
       tools["StructuredOutput"] = createStructuredOutputTool({
         schema: input.lastUser.format.schema,
+        validate: ephemeralStructuredOutputGuards.get(input.sessionID),
         onSuccess(output) {
           structured = output
         },
@@ -1565,6 +1597,7 @@ export namespace SessionLoop {
 
   export function createStructuredOutputTool(input: {
     schema: Record<string, any>
+    validate?: StructuredOutputGuard
     onSuccess: (output: unknown) => void
   }): AITool {
     const { $schema, ...toolSchema } = input.schema
@@ -1574,6 +1607,8 @@ export namespace SessionLoop {
       description: STRUCTURED_OUTPUT_DESCRIPTION,
       inputSchema: jsonSchema(toolSchema as any),
       async execute(args) {
+        const rejection = await input.validate?.(args)
+        if (rejection) throw new Error(rejection)
         input.onSuccess(args)
         return {
           output: "Structured output captured successfully.",
