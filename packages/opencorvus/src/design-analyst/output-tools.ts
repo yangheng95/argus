@@ -1,9 +1,9 @@
 /**
  * Structured output tools for the Design Analyst Agent.
  *
- * Every registered spec is advisory — it ends up as a `VisualSpec` row on
- * `engine_task.design_specs`, read by delivery as a checklist. There is no
- * scorer, no automatic verification, no gate. The tools exist to force the
+ * Every registered spec ends up as a `VisualSpec` row on
+ * `engine_task.design_specs`, read by delivery as a visual contract checklist.
+ * There is no scorer or automatic verification at registration time. The tools exist to force the
  * LLM to:
  *
  * ① Name a category up front (pick the right register_*_spec tool)
@@ -78,7 +78,7 @@ const AppliesToField = z
 
 const SeverityField = z
   .enum(["must", "should"])
-  .describe("'must' for hard design contracts (exact hex / precise layout); 'should' for soft preferences")
+  .describe("'must' for exact visual contracts; 'should' for lower-specificity constraints delivery still verifies")
 
 const RationaleField = z
   .string()

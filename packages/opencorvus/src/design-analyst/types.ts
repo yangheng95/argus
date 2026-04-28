@@ -1,12 +1,12 @@
 /**
  * Design Analyst Agent — output type.
  *
- * A VisualSpec is an advisory constraint extracted from visual references.
- * It is NOT an AcceptanceSpec — no scorer, no automatic verification, no
- * hard gate. The delivery agent reads the list as guidance for its own
- * visual review and may cite a spec id in `rejection_details.visual_spec_id`
- * when a rejection traces back to a violated constraint. That's the entire
- * enforcement model: delivery decides.
+ * A VisualSpec is a visual-contract row extracted from visual references.
+ * It is NOT an AcceptanceSpec — no deterministic scorer runs at registration
+ * time. The delivery agent reads the list during its own visual review and may
+ * cite a spec id in `rejection_details.visual_spec_id` when a rejection traces
+ * back to a violated constraint. That's the enforcement model: delivery
+ * verifies the contract from rendered evidence.
  *
  * Kept deliberately flat and free-form on the value side (`requirement`,
  * `applies_to`) so a single type covers colors, typography, spacing,

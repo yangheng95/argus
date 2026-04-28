@@ -220,7 +220,7 @@ function buildUserPrompt(
     `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`,
   )
 
-  // Design Contract — advisory visual specs from design-analyst.
+  // Design Contract — visual specs from design-analyst.
   // Not auto-scored. Delivery treats them as a checklist during its own
   // visual review and cites `visual_spec_id` in rejection_details when a
   // specific spec is violated.
@@ -234,7 +234,7 @@ function buildUserPrompt(
       byCategory.set(s.category, group)
     }
     const lines: string[] = []
-    lines.push("# Design Contract (advisory — verify yourself during visual review)")
+    lines.push("# Design Contract (verify yourself during visual review)")
     lines.push("")
     lines.push(
       "Design-analyst extracted these visual constraints from the reference(s). Every entry " +

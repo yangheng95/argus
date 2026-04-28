@@ -936,8 +936,8 @@ export function createOrchestratorTools(input: {
           })
 
           // Persist the visual contract on task.design_specs (dedicated JSON
-          // column, not metadata). Delivery reads it directly as advisory
-          // guidance. We also write a compact phase summary into the
+          // column, not metadata). Delivery reads it directly as a visual
+          // review contract. We also write a compact phase summary into the
           // Decision Log so architect / planner / build prompts can see the
           // design-system and recommended-stack conclusions without trying to
           // inline the full spec list.

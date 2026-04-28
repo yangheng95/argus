@@ -2,9 +2,9 @@
  * Design Analyst Agent — produces a VisualSpec[] visual contract from
  * screenshots / mockups / live URLs.
  *
- * The specs are advisory. They land on `engine_task.design_specs` and are
- * rendered in the delivery agent's prompt as a checklist. There is no
- * automatic verification — delivery decides whether each spec was honored
+ * The specs land on `engine_task.design_specs` and are rendered in the delivery
+ * agent's prompt as a visual contract checklist. There is no deterministic
+ * scorer at registration time — delivery decides whether each spec was honored
  * when it does its adversarial visual review, and may cite a spec id in
  * `rejection_details.visual_spec_id` when a rejection traces back to one.
  *
@@ -138,17 +138,17 @@ export namespace DesignAnalystAgent {
 
   /**
    * Render a VisualSpec[] into a prompt section suitable for delivery's
-   * user-prompt "Design Contract (advisory)" block.
+   * user-prompt "Design Contract" block.
    */
   export function renderForDelivery(specs: readonly VisualSpec[], designSystem?: string): string {
     if (specs.length === 0) return ""
     const lines: string[] = []
-    lines.push("# Design Contract (advisory — verify yourself during visual review)")
+    lines.push("# Design Contract (verify yourself during visual review)")
     lines.push("")
     lines.push(
       "Design-analyst extracted the following visual constraints from the reference(s). " +
-      "These are CHECKLIST guidance, not automated rules — look at the rendered output and " +
-      "judge each spec. When you reject on a visual issue that traces back to one of these " +
+      "These are not automated scorer results — look at the rendered output and " +
+      "verify each spec. When you reject on a visual issue that traces back to one of these " +
       "specs, cite its id in `rejection_details[].visual_spec_id`.",
     )
     if (designSystem && designSystem.trim()) {
