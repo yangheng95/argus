@@ -6,9 +6,8 @@
  * delivery verdict, operator message) carried as a free-form note. On every
  * wake it reads its full state from the describe layer + the artifact stream
  * and decides what to do next. Callers may pass an optional `event.note`
- * string to hint WHY they just woke the orchestrator; that note is rendered
- * into the user message of this invocation's child session, but every
- * decision derives from the describe snapshot, not from the note's content.
+ * string to hint WHY they just woke the orchestrator; every decision derives
+ * from the describe snapshot, not from the note's content.
  *
  * The orchestrator controls the entire pipeline via tools:
  * requirements → goals → plan → execute → eval → delivery verify → publish
@@ -88,8 +87,8 @@ const log = Log.create({ service: "orchestrator" })
 // ---------------------------------------------------------------------------
 
 export interface OrchestratorEvent {
-  /** Free-form "reason for wake" string rendered as the user message of
-   *  this wake's child session. If absent, the task's original request is
+  /** Free-form "reason for wake" string rendered as this wake's model input.
+   *  If absent, the task's original request is
    *  used when the orchestrator has no prior invocation for this task;
    *  otherwise a generic "re-read context and decide" prompt is used. */
   note?: string
@@ -446,19 +445,10 @@ export const OrchestratorEventNote = {
   },
 
   operatorMessage(input: { text: string; attachmentSummary?: string }): string {
-    const lines: string[] = [
-      "Operator message received.",
-      "",
-      "Latest user message:",
-      input.text,
-    ]
+    const lines: string[] = [input.text]
     if (input.attachmentSummary) {
       lines.push("", input.attachmentSummary)
     }
-    lines.push(
-      "",
-      "Decide whether to inject this guidance into the running executor, retry the task, cancel the task, restart from a stage, or ask a clarification question.",
-    )
     return lines.join("\n")
   },
 
