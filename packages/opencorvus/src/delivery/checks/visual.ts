@@ -18,7 +18,8 @@
  *   - No fallback: missing browser, missing reference, or size-mismatched
  *     images all produce explicit failures.
  */
-import { spawn, type ChildProcess } from "node:child_process"
+import { spawn, spawnSync, type ChildProcess } from "node:child_process"
+import { existsSync } from "node:fs"
 import fs from "node:fs/promises"
 import http from "node:http"
 import path from "node:path"
@@ -185,13 +186,41 @@ async function startProjectServer(
   script: ProjectLaunchScript,
   opts: { timeoutMs?: number } = {},
 ): Promise<{ url: string; close: () => Promise<void> }> {
-  // 90s default: a cold merged worktree often needs `bun install` (20-50s)
-  // and/or `vite build` (5-30s) before `bun run server|start|preview` can
-  // bind a port. The previous 30s budget would consistently false-fail on
-  // the first delivery render, fall back silently to static-serving an
-  // unbuilt index.html, and let puppeteer hang on `networkidle0` for 60s —
-  // the user-facing symptom was "Navigation timeout of 60000 ms exceeded".
   const timeoutMs = opts.timeoutMs ?? 90_000
+
+  // Cold merged worktree: `node_modules/` is gitignored, so even though the
+  // build agent ran `bun install` in its isolated build worktree the merge
+  // back to primary carried only tracked files (package.json, bun.lock,
+  // src/**). Without this prelude the spawned `bun run preview` / `vite
+  // preview` immediately exits code=1 with "Cannot find module 'vite'" and
+  // the LLM-driven fix loop has no way out — fix-build agents run in their
+  // own worktrees so they cannot install into primary. Run `bun install`
+  // synchronously here when the lockfile is present but node_modules is
+  // absent. We deliberately don't auto-install when node_modules already
+  // exists (warm path) so repeat renders during a single benchmark stay
+  // fast.
+  const hasPackageJson = existsSync(`${projectRoot}/package.json`)
+  const hasNodeModules = existsSync(`${projectRoot}/node_modules`)
+  if (hasPackageJson && !hasNodeModules) {
+    const install = spawnSync("bun", ["install"], {
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: process.platform === "win32",
+      timeout: 180_000,
+    })
+    if (install.error) {
+      throw new Error(
+        `bun install pre-launch failed in ${projectRoot}: ${install.error.message}`,
+      )
+    }
+    if (install.status !== 0) {
+      const stderr = install.stderr?.toString().slice(-800) ?? "<no stderr>"
+      throw new Error(
+        `bun install pre-launch exited code=${install.status} in ${projectRoot}: ${stderr}`,
+      )
+    }
+  }
+
   // Run via `bun run`; inherits PATH so npx/vite/tsx on the project lockfile resolve.
   const child: ChildProcess = spawn("bun", ["run", script.script], {
     cwd: projectRoot,
