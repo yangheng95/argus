@@ -5,7 +5,7 @@ import { SessionLoop } from "../../src/session/loop"
 /**
  * Phase D of specs/new-arch/2026-04-28-structured-output-systemic-fix.md:
  * after a turn ends, the loop must enter the StructuredOutput recovery
- * channel (stamp `StructuredOutputError`, inject reminder) ONLY when
+ * channel (stamp `StructuredOutputError`) ONLY when
  *
  *   - the user contract is `format=json_schema`,
  *   - the model did NOT call StructuredOutput,
@@ -16,7 +16,7 @@ import { SessionLoop } from "../../src/session/loop"
  * `finish=tool-calls` without StructuredOutput is the model still working
  * its tool flow (e.g. integrity reviewer between two
  * `submit_<dim>_verdict` calls) — it is NOT a structured miss and must
- * NOT trigger the reminder.
+ * NOT trigger the recovery path.
  */
 describe("SessionLoop.shouldEnterStructuredOutputRecovery", () => {
   const base = {
@@ -70,8 +70,6 @@ describe("SessionLoop.shouldEnterStructuredOutputRecovery", () => {
   })
 
   test("stamps when finish=length without a StructuredOutput call", () => {
-    // Length cap miss — kimi-class models routinely run out of output budget
-    // mid-StructuredOutput. The reminder gives them a fresh budget.
     expect(
       SessionLoop.shouldEnterStructuredOutputRecovery({ ...base, finish: "length" }),
     ).toBe(true)

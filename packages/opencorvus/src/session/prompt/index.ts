@@ -42,6 +42,7 @@ export namespace SessionPrompt {
     setExtraTools,
     getExtraTools,
     withExtraTools,
+    withTerminalToolContract,
     setStepHook,
     withStepHook,
     withStructuredOutputGuard,

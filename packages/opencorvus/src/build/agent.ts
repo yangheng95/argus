@@ -492,6 +492,12 @@ export namespace BuildAgent {
             buildUserParts: buildUserPartsFn,
             skillsStage: "build",
             skillTaskSignals: taskSignals,
+            terminalTool: {
+              toolName: "report_build_passed",
+              toolNames: ["report_build_passed", "report_build_failed"],
+              allowHardPin: false,
+              isSatisfied: (collector) => Boolean(collector.result),
+            },
           })
           const report = buildToolKit.getCollector()
           out = { ...out, collector: report }

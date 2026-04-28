@@ -46,6 +46,14 @@ export namespace Message {
       reason: z.string(),
     }),
   )
+  export const TerminalToolMissingError = NamedError.create(
+    "TerminalToolMissingError",
+    z.object({
+      message: z.string(),
+      toolName: z.string(),
+      retries: z.number(),
+    }),
+  )
   export const AuthError = NamedError.create(
     "ProviderAuthError",
     z.object({
@@ -472,6 +480,7 @@ export namespace Message {
         AbortedError.Schema,
         StructuredOutputError.Schema,
         StructuredOutputPayloadError.Schema,
+        TerminalToolMissingError.Schema,
         ContextOverflowError.Schema,
         APIError.Schema,
       ])

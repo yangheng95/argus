@@ -91,6 +91,7 @@ describe("RequirementsAgent prompt precedence", () => {
         runnerImpl = async (input: any) => {
           runnerCalls += 1
           expect(input.format).toBeUndefined()
+          expect(input.terminalTool?.toolName).toBe("submit_requirements")
           expect(input.toolKit.tools.submit_requirements).toBeDefined()
           const parts = await input.buildUserParts()
           const text = parts

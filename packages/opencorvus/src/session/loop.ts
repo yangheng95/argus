@@ -50,19 +50,10 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
-// Reminder injected as a synthetic user message when the model finishes a
-// turn without calling StructuredOutput. Replaces the "fail-fast → outer
-// retry" path that cost 20-30 min per miss on long build sessions
-// (kimi-k2.5 reliably forgets the terminal call on multi-step turns).
-const STRUCTURED_OUTPUT_REMINDER = `<system-reminder>
-You ended your last turn without calling StructuredOutput. The conversation cannot complete until you do.
-
-Required action: emit a single StructuredOutput tool call whose input strictly matches the JSON schema you were given. No prose, no other tools — just StructuredOutput.
-
-If your previous reasoning needs adjustment to fit the schema, do that adjustment inside the StructuredOutput call payload itself.
-</system-reminder>`
-
-const MAX_STRUCTURED_OUTPUT_REMINDERS = 2
+// No synthetic user messages are used for terminal-call recovery. Agents that
+// require a terminal tool run with provider-level toolChoice where possible;
+// if the provider/model still stops in prose, the current assistant message is
+// stamped with a typed error and the caller sees the contract violation.
 
 export namespace SessionLoop {
   const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
@@ -208,6 +199,40 @@ export namespace SessionLoop {
   export type StructuredOutputGuard = (output: unknown) => string | undefined | Promise<string | undefined>
 
   const ephemeralStructuredOutputGuards = new Map<string, StructuredOutputGuard>()
+  export interface TerminalToolContract {
+    toolName: string
+    toolNames?: string[]
+    allowHardPin?: boolean
+    isSatisfied: () => boolean
+  }
+
+  const ephemeralTerminalToolContracts = new Map<string, TerminalToolContract>()
+
+  export function setTerminalToolContract(
+    sessionID: string,
+    contract: TerminalToolContract | undefined,
+  ): void {
+    if (!contract) {
+      ephemeralTerminalToolContracts.delete(sessionID)
+      return
+    }
+    ephemeralTerminalToolContracts.set(sessionID, contract)
+  }
+
+  export async function withTerminalToolContract<T>(
+    sessionID: string,
+    contract: TerminalToolContract,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = ephemeralTerminalToolContracts.get(sessionID)
+    ephemeralTerminalToolContracts.set(sessionID, contract)
+    try {
+      return await fn()
+    } finally {
+      if (previous) ephemeralTerminalToolContracts.set(sessionID, previous)
+      else ephemeralTerminalToolContracts.delete(sessionID)
+    }
+  }
 
   const structuredOutputAjv = new Ajv2020({ allErrors: true, strict: false })
 
@@ -280,8 +305,8 @@ export namespace SessionLoop {
 
   /**
    * Decide whether the just-finished assistant turn should enter the
-   * StructuredOutput recovery channel (stamp `StructuredOutputError` and
-   * inject the reminder synthetic user message).
+   * StructuredOutput recovery channel (stamp `StructuredOutputError` on the
+   * current assistant message and stop).
    *
    * Rules — see specs/new-arch/2026-04-28-structured-output-systemic-fix.md §D:
    *
@@ -316,6 +341,19 @@ export namespace SessionLoop {
   }): boolean {
     if (input.formatType !== "json_schema") return false
     if (input.structuredCalled) return false
+    if (input.hasExistingError) return false
+    if (!input.finish) return false
+    if (input.finish === "tool-calls") return false
+    if (input.finish === "unknown") return false
+    return true
+  }
+
+  export function shouldEnterTerminalToolRecovery(input: {
+    finish: TurnFinishReason
+    satisfied: boolean
+    hasExistingError: boolean
+  }): boolean {
+    if (input.satisfied) return false
     if (input.hasExistingError) return false
     if (!input.finish) return false
     if (input.finish === "tool-calls") return false
@@ -493,21 +531,6 @@ export namespace SessionLoop {
     }
     if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
     return { lastUser, lastAssistant, lastFinished, tasks }
-  }
-
-  // Count assistant turns since `userID` that ended with the
-  // StructuredOutputError reminder marker. Used to bound the in-session
-  // retry loop in processTurn so a model that keeps refusing to call
-  // StructuredOutput cannot consume the entire `agent.steps` budget.
-  function countPriorStructuredOutputErrors(msgs: Message.WithParts[], userID: string): number {
-    let count = 0
-    for (const msg of msgs) {
-      if (msg.info.role !== "assistant") continue
-      if (msg.info.id <= userID) continue
-      const err = (msg.info as Message.Assistant).error
-      if (err?.name === "StructuredOutputError") count++
-    }
-    return count
   }
 
   function shouldEnterStandby(input: { lastUser: Message.User; lastAssistant: Message.Assistant | undefined }) {
@@ -810,6 +833,7 @@ export namespace SessionLoop {
       ...(await InstructionPrompt.system()),
     ]
     const format = input.lastUser.format ?? { type: "text" }
+    const terminalToolContract = ephemeralTerminalToolContracts.get(input.sessionID)
     if (format.type === "json_schema") {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
     }
@@ -1068,19 +1092,10 @@ export namespace SessionLoop {
       }
     }
 
-    // After the first soft miss (toolChoice='required' lets the model
-    // pick any tool, which kimi-class models exploit by chaining work
-    // tools forever), upgrade the next attempt to a hard pin on
-    // StructuredOutput. This is the only protocol-layer guarantee that
-    // the next assistant turn cannot select a different tool to dodge
-    // finalisation; soft prompts ('IMPORTANT', system reminders) are
-    // routinely ignored on long contexts. See countPriorStructuredOutputErrors
-    // for the bound — once we have at least one prior reminder on this
-    // user turn, every subsequent call is hard-pinned until the model
-    // emits StructuredOutput or the reminder budget runs out.
-    const priorReminderCount = countPriorStructuredOutputErrors(input.msgs, input.lastUser.id)
     const turnToolChoice = structuredOutputToolChoice(format, {
-      forceStructuredOutput: priorReminderCount > 0 && "StructuredOutput" in tools,
+      forceStructuredOutput: false,
+    }) ?? terminalToolChoice(terminalToolContract, tools, {
+      forceTerminalTool: false,
     })
 
     const result = await processor.process({
@@ -1110,50 +1125,26 @@ export namespace SessionLoop {
         hasExistingError: !!processor.message.error,
       })
     ) {
-      // Reuse the count we already computed at the top of this turn so
-      // both `turnToolChoice` and the reminder bound see the same number.
-      const priorReminders = priorReminderCount
-
-      if (priorReminders < MAX_STRUCTURED_OUTPUT_REMINDERS) {
-        // Stamp the error on this turn's assistant message so the trace
-        // records "tried, missed, recovering" rather than silent retry.
-        processor.message.error = new Message.StructuredOutputError({
-          message: `Model did not produce structured output (attempt ${priorReminders + 1}/${MAX_STRUCTURED_OUTPUT_REMINDERS + 1}); injecting in-session reminder`,
-          retries: priorReminders,
-        }).toObject()
-        await Session.updateMessage(processor.message)
-
-        // In-session reminder via synthetic user message. Same primitive
-        // that runSubtask uses (lines ~376) so existing message-stream
-        // consumers (compaction, replay, UI hide via `synthetic: true`)
-        // already understand it. The next loop iteration sees this user
-        // message and re-prompts the model with toolChoice still pinned to
-        // StructuredOutput. Avoids the 20-30 min cost of throwing the whole
-        // session away on a transient miss (observed with kimi-k2.5 build
-        // sessions in the 2026-04-27 ainvest benchmark).
-        const reminderMsg: Message.User = {
-          id: Identifier.ascending("message"),
-          sessionID: input.sessionID,
-          role: "user",
-          time: { created: Date.now() },
-          agent: input.lastUser.agent,
-          model: input.lastUser.model,
-        }
-        await Session.updateMessage(reminderMsg)
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: reminderMsg.id,
-          sessionID: input.sessionID,
-          type: "text",
-          text: STRUCTURED_OUTPUT_REMINDER,
-          synthetic: true,
-        } satisfies Message.TextPart)
-        return "continue" as const
-      }
-
       processor.message.error = new Message.StructuredOutputError({
-        message: `Model did not produce structured output after ${MAX_STRUCTURED_OUTPUT_REMINDERS} reminders`,
-        retries: priorReminders,
+        message: "Model did not produce structured output before the turn ended",
+        retries: 0,
+      }).toObject()
+      await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
+
+    if (
+      terminalToolContract &&
+      shouldEnterTerminalToolRecovery({
+        finish: processor.message.finish,
+        satisfied: terminalToolContract.isSatisfied(),
+        hasExistingError: !!processor.message.error,
+      })
+    ) {
+      processor.message.error = new Message.TerminalToolMissingError({
+        message: `Model did not call terminal tool ${terminalToolContract.toolName} before the turn ended`,
+        toolName: terminalToolContract.toolName,
+        retries: 0,
       }).toObject()
       await Session.updateMessage(processor.message)
       return "stop" as const
@@ -1180,10 +1171,7 @@ export namespace SessionLoop {
    * Resolve the toolChoice to send the provider for a json-schema turn.
    *
    * Default ('required'): any tool — lets the model do work first, then
-   * call StructuredOutput when it decides it is done. The downside is
-   * that long-context models routinely keep selecting work tools and
-   * never finalise, which is the failure mode that motivated
-   * MAX_STRUCTURED_OUTPUT_REMINDERS.
+   * call StructuredOutput when it decides it is done.
    *
    * Forced ({type:'tool', toolName:'StructuredOutput'}): the protocol-
    * level guarantee that the next assistant turn can call only this
@@ -1199,6 +1187,21 @@ export namespace SessionLoop {
   ): "required" | { type: "tool"; toolName: string } | undefined {
     if (format.type !== "json_schema") return undefined
     if (options?.forceStructuredOutput) return { type: "tool", toolName: "StructuredOutput" }
+    return "required"
+  }
+
+  export function terminalToolChoice(
+    contract: TerminalToolContract | undefined,
+    tools: Record<string, AITool>,
+    options?: { forceTerminalTool?: boolean },
+  ): "required" | { type: "tool"; toolName: string } | undefined {
+    if (!contract) return undefined
+    const available = (contract.toolNames ?? [contract.toolName]).filter((name) => name in tools)
+    if (available.length === 0) return undefined
+    if (contract.isSatisfied()) return undefined
+    if (options?.forceTerminalTool && contract.allowHardPin !== false && contract.toolName in tools) {
+      return { type: "tool", toolName: contract.toolName }
+    }
     return "required"
   }
   export const loop = fn(LoopInput, async (input) => {
