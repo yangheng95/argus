@@ -74,7 +74,7 @@ export namespace SessionProcessor {
               gate.signal.throwIfAborted()
               switch (value.type) {
                 case "start":
-                  SessionStatus.set(input.sessionID, { type: "busy" })
+                  SessionStatus.set(input.sessionID, { type: "streaming" })
                   break
 
                 case "reasoning-start":

@@ -82,7 +82,14 @@ export namespace SessionActor {
     settle(actor.waiters, { type: "error", error: actor.closing ?? new Error("Session closed") })
     if (actors()[sessionID] === actor) {
       delete actors()[sessionID]
-      SessionStatus.set(sessionID, { type: "idle" })
+      // Actor's serve() loop ran to natural completion. closing field reflects
+      // whether an external close() injected an error before exit; if so the
+      // session terminated with that error, otherwise it's a clean exit.
+      const closing = actor.closing
+      SessionStatus.set(sessionID, closing
+        ? { type: "terminal", reason: "error", error: closing.message }
+        : { type: "terminal", reason: "completed" },
+      )
     }
   }
 
@@ -93,11 +100,17 @@ export namespace SessionActor {
     actor.inbox.send({ type: "close", error: reason })
     actor.inbox.close()
     delete actors()[sessionID]
-    SessionStatus.set(sessionID, { type: "idle" })
+    // Cancel sets reason to "Session cancelled" (see `cancel` below); other
+    // close paths carry a real error.
+    const aborted = reason.message === "Session cancelled"
+    SessionStatus.set(sessionID, aborted
+      ? { type: "terminal", reason: "aborted" }
+      : { type: "terminal", reason: "error", error: reason.message },
+    )
   }
 
   export function assertNotBusy(sessionID: string) {
-    if (SessionStatus.get(sessionID).type === "busy") throw busy(sessionID)
+    if (SessionStatus.get(sessionID).type === "streaming") throw busy(sessionID)
   }
 
   export function start(sessionID: string) {
@@ -150,7 +163,9 @@ export namespace SessionActor {
     log.info("cancel", { sessionID })
     const actor = actors()[sessionID]
     if (!actor) {
-      SessionStatus.set(sessionID, { type: "idle" })
+      // No live actor — emit terminal aborted so overlay flips the card off
+      // its spinner regardless of whether the actor ever started.
+      SessionStatus.set(sessionID, { type: "terminal", reason: "aborted" })
       return
     }
     close(sessionID, actor, new Error("Session cancelled"))

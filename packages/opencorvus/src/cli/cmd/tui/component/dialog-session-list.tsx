@@ -43,7 +43,7 @@ export function DialogSessionList() {
           category = "Today"
         }
         const status = sync.data.session_status?.[x.id]
-        const isWorking = status?.type === "busy"
+        const isWorking = status?.type === "streaming"
         return {
           title: x.title,
           value: x.id,

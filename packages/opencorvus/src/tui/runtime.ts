@@ -244,7 +244,7 @@ export namespace TuiRuntime {
       sessionID,
       taskID: null,
       waited: true,
-      completed: status.type === "idle" && !!latest,
+      completed: (status.type === "idle" || status.type === "terminal") && !!latest,
       message: latest,
     }
   }

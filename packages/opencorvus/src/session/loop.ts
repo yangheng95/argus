@@ -1262,7 +1262,7 @@ export namespace SessionLoop {
         let step = 0
         const session = await Session.get(sessionID)
         while (true) {
-          SessionStatus.set(sessionID, { type: "busy" })
+          SessionStatus.set(sessionID, { type: "streaming" })
           log.info("loop", { step, sessionID })
           if (abort.aborted) break
           const msgs = await Message.filterCompacted(Message.stream(sessionID))
