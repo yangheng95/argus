@@ -390,7 +390,7 @@ export namespace BuildAgent {
               merge_back: tool({
                 description:
                   "Publish your goal branch's commits onto the project's primary " +
-                  "branch (main/master). Runs `git rebase <primary>` inside this " +
+                  "worktree branch. Runs `git rebase <primary>` inside this " +
                   "worktree, then `git merge --ff-only` on the primary worktree, " +
                   "atomically under a host-side lock so concurrent goals do not " +
                   "race each other.\n\n" +

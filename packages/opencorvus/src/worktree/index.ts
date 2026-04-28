@@ -94,7 +94,7 @@ export namespace Worktree {
    * Bring a goal branch's commits onto the primary branch.
    *
    * Sequence (single canonical path, all under `withGitLock` for atomicity):
-   *   1. Resolve primary branch name (`main` or `master`) by ref probe.
+   *   1. Resolve the currently checked-out branch of the primary worktree.
    *   2. From the goal worktree, run `git rebase <primary-branch>`. Rebase is
    *      idempotent — when the goal branch is already on the latest primary
    *      tip it's a no-op; when it lags it replays the goal's commits onto
@@ -129,22 +129,15 @@ export namespace Worktree {
       if (!Project.isGitRepo(Instance.directory)) {
         throw new NotGitError({ message: "mergeWithRebase: not a git project" })
       }
-      const primaryDir = await primaryWorktreeDir()
+      const primary = await primaryWorktreeInfo().catch((err) => {
+        throw new MergeFailedError({
+          message: `mergeWithRebase(${input.branch}): ${err instanceof Error ? err.message : String(err)}`,
+          branch: input.branch,
+        })
+      })
       return withGitLock(async () => {
-        // Resolve primary branch — same probe `Worktree.reset` uses, scoped
-        // to local refs only since rebase needs a ref name not a remote.
-        const mainCheck = await $`git show-ref --verify --quiet refs/heads/main`
-          .quiet().nothrow().cwd(primaryDir)
-        const masterCheck = await $`git show-ref --verify --quiet refs/heads/master`
-          .quiet().nothrow().cwd(primaryDir)
-        const primaryBranch =
-          mainCheck.exitCode === 0 ? "main" : masterCheck.exitCode === 0 ? "master" : ""
-        if (!primaryBranch) {
-          throw new MergeFailedError({
-            message: `mergeWithRebase(${input.branch}): primary branch not found (no refs/heads/main or refs/heads/master)`,
-            branch: input.branch,
-          })
-        }
+        const primaryDir = primary.directory
+        const primaryBranch = primary.branch
 
         // Step 1 — rebase goal branch onto current primary tip from inside
         // the goal worktree. This is the operation that resolves topology
@@ -444,19 +437,43 @@ export namespace Worktree {
     return insensitive ? normalized.toLowerCase() : normalized
   }
 
+  type PrimaryWorktreeInfo = { directory: string; branch: string }
+
   /**
-   * Resolve the primary (main) worktree directory.
-   * `git worktree list` always returns the main worktree as the first entry.
-   * This avoids creating worktrees inside child worktrees.
+   * Resolve the primary worktree and its currently checked-out branch.
+   * `git worktree list --porcelain` reports the original worktree first;
+   * child worktrees follow. Goal branches are created from this branch and
+   * merge_back publishes back to this same branch, whether it is dev, trunk,
+   * main, master, or another local branch name.
    */
-  async function primaryWorktreeDir(): Promise<string> {
+  async function primaryWorktreeInfo(): Promise<PrimaryWorktreeInfo> {
     const list = await $`git worktree list --porcelain`.quiet().nothrow().cwd(Instance.worktree)
-    if (list.exitCode === 0) {
-      const first = outputText(list.stdout).split("\n").find((l) => l.startsWith("worktree "))
-      if (first) return first.slice("worktree ".length).trim()
+    if (list.exitCode !== 0) {
+      throw new Error(errorText(list) || "Failed to read git worktrees")
     }
-    // Fallback: use Instance.worktree directly
-    return Instance.worktree
+
+    const lines = outputText(list.stdout)
+      .split("\n")
+      .map((line) => line.trim())
+    const first: { directory?: string; branch?: string } = {}
+    for (const line of lines) {
+      if (!line) break
+      if (line.startsWith("worktree ")) {
+        first.directory = line.slice("worktree ".length).trim()
+        continue
+      }
+      if (line.startsWith("branch ")) {
+        first.branch = line.slice("branch ".length).trim().replace(/^refs\/heads\//, "")
+      }
+    }
+
+    if (!first.directory) {
+      throw new Error("Primary worktree not found")
+    }
+    if (!first.branch) {
+      throw new Error(`Primary worktree is detached: ${first.directory}`)
+    }
+    return { directory: first.directory, branch: first.branch }
   }
 
   async function isCaseInsensitiveFilesystem(target: string) {
@@ -634,7 +651,7 @@ export namespace Worktree {
     // Resolve the PRIMARY worktree (main repo root) first so a dispatched
     // goal session (whose Instance.directory IS itself a child worktree)
     // doesn't cause nested `.opencorvus/worktrees/.opencorvus/worktrees/...`
-    // recursion. `primaryWorktreeDir()` always returns the main repo root.
+    // recursion. `primaryWorktreeInfo()` always returns the primary repo root.
     //
     // Worktrees live UNDER `<primary>/.opencorvus/worktrees/` — co-located
     // with other runtime scratch (attachments, visual-diff output). Previous
@@ -642,7 +659,10 @@ export namespace Worktree {
     // scratch dirs into the user's workspace for real projects and piled
     // hundreds of zombie dirs into %TEMP% for benchmarks. One `.gitignore`
     // entry (`/.opencorvus/`) covers the entire tree now.
-    const primaryDir = await primaryWorktreeDir()
+    const primary = await primaryWorktreeInfo().catch((err) => {
+      throw new CreateFailedError({ message: err instanceof Error ? err.message : String(err) })
+    })
+    const primaryDir = primary.directory
     const root = path.join(primaryDir, ".opencorvus", "worktrees")
     await fs.mkdir(root, { recursive: true })
 
@@ -681,17 +701,17 @@ export namespace Worktree {
       // Ensure the main repo has at least one commit — git worktree requires it.
       // Without a commit, `git reset --hard` in the worktree does nothing (orphaned branch),
       // leaving the worktree empty and causing delivery extraction to find 0 files.
-      const hasCommits = (await $`git rev-parse --verify HEAD`.quiet().cwd(Instance.worktree).nothrow()).exitCode === 0
+      const hasCommits = (await $`git rev-parse --verify HEAD`.quiet().cwd(primaryDir).nothrow()).exitCode === 0
       if (!hasCommits) {
-        log.info("creating initial commit for worktree support", { directory: Instance.worktree })
-        await $`git add -A`.quiet().cwd(Instance.worktree).nothrow()
-        await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m "initial scaffold" --allow-empty`.quiet().cwd(Instance.worktree).nothrow()
+        log.info("creating initial commit for worktree support", { directory: primaryDir })
+        await $`git add -A`.quiet().cwd(primaryDir).nothrow()
+        await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m "initial scaffold" --allow-empty`.quiet().cwd(primaryDir).nothrow()
       }
 
-      const created = await $`git worktree add --no-checkout -b ${info.branch} ${info.directory}`
+      const created = await $`git worktree add --no-checkout -b ${info.branch} ${info.directory} ${primary.branch}`
         .quiet()
         .nothrow()
-        .cwd(Instance.worktree)
+        .cwd(primaryDir)
       if (created.exitCode !== 0) {
         throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
       }
@@ -904,8 +924,11 @@ export namespace Worktree {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
 
+    const primaryInfo = await primaryWorktreeInfo().catch((err) => {
+      throw new ResetFailedError({ message: err instanceof Error ? err.message : String(err) })
+    })
     const directory = await canonical(input.directory)
-    const primary = await canonical(Instance.worktree)
+    const primary = await canonical(primaryInfo.directory)
     if (directory === primary) {
       throw new ResetFailedError({ message: "Cannot reset the primary workspace" })
     }
@@ -944,50 +967,7 @@ export namespace Worktree {
         throw new ResetFailedError({ message: "Worktree not found" })
       }
 
-      const remoteList = await $`git remote`.quiet().nothrow().cwd(Instance.worktree)
-      if (remoteList.exitCode !== 0) {
-        throw new ResetFailedError({ message: errorText(remoteList) || "Failed to list git remotes" })
-      }
-
-      const remotes = outputText(remoteList.stdout)
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-
-      const remote = remotes.includes("origin")
-        ? "origin"
-        : remotes.length === 1
-          ? remotes[0]
-          : remotes.includes("upstream")
-            ? "upstream"
-            : ""
-
-      const remoteHead = remote
-        ? await $`git symbolic-ref refs/remotes/${remote}/HEAD`.quiet().nothrow().cwd(Instance.worktree)
-        : { exitCode: 1, stdout: undefined, stderr: undefined }
-
-      const remoteRef = remoteHead.exitCode === 0 ? outputText(remoteHead.stdout) : ""
-      const remoteTarget = remoteRef ? remoteRef.replace(/^refs\/remotes\//, "") : ""
-      const remoteBranch = remote && remoteTarget.startsWith(`${remote}/`) ? remoteTarget.slice(`${remote}/`.length) : ""
-
-      const mainCheck = await $`git show-ref --verify --quiet refs/heads/main`.quiet().nothrow().cwd(Instance.worktree)
-      const masterCheck = await $`git show-ref --verify --quiet refs/heads/master`
-        .quiet()
-        .nothrow()
-        .cwd(Instance.worktree)
-      const localBranch = mainCheck.exitCode === 0 ? "main" : masterCheck.exitCode === 0 ? "master" : ""
-
-      const target = remoteBranch ? `${remote}/${remoteBranch}` : localBranch
-      if (!target) {
-        throw new ResetFailedError({ message: "Default branch not found" })
-      }
-
-      if (remoteBranch) {
-        const fetch = await $`git fetch ${remote} ${remoteBranch}`.quiet().nothrow().cwd(Instance.worktree)
-        if (fetch.exitCode !== 0) {
-          throw new ResetFailedError({ message: errorText(fetch) || `Failed to fetch ${target}` })
-        }
-      }
+      const target = primaryInfo.branch
 
       const worktreePath = entry.path
       const resetToTarget = await $`git reset --hard ${target}`.quiet().nothrow().cwd(worktreePath)
