@@ -27963,12 +27963,6 @@
           "text": {
             "type": "string"
           },
-          "synthetic": {
-            "type": "boolean"
-          },
-          "ignored": {
-            "type": "boolean"
-          },
           "kind": {
             "type": "string",
             "enum": [
@@ -27987,20 +27981,6 @@
               "goal_gate",
               "task_tool"
             ]
-          },
-          "audience": {
-            "type": "object",
-            "properties": {
-              "model": {
-                "type": "boolean"
-              },
-              "ui": {
-                "type": "boolean"
-              },
-              "acp": {
-                "type": "boolean"
-              }
-            }
           },
           "time": {
             "type": "object",
@@ -28030,7 +28010,8 @@
           "messageID",
           "type",
           "text"
-        ]
+        ],
+        "additionalProperties": false
       },
       "SubtaskPart": {
         "type": "object",
@@ -33591,12 +33572,6 @@
           "text": {
             "type": "string"
           },
-          "synthetic": {
-            "type": "boolean"
-          },
-          "ignored": {
-            "type": "boolean"
-          },
           "kind": {
             "type": "string",
             "enum": [
@@ -33615,20 +33590,6 @@
               "goal_gate",
               "task_tool"
             ]
-          },
-          "audience": {
-            "type": "object",
-            "properties": {
-              "model": {
-                "type": "boolean"
-              },
-              "ui": {
-                "type": "boolean"
-              },
-              "acp": {
-                "type": "boolean"
-              }
-            }
           },
           "time": {
             "type": "object",
@@ -33655,7 +33616,8 @@
         "required": [
           "type",
           "text"
-        ]
+        ],
+        "additionalProperties": false
       },
       "FilePartInput": {
         "type": "object",

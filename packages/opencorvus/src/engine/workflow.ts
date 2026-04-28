@@ -3,7 +3,7 @@
  *
  * 系统只内置两条路径：
  *   1. **direct**   — build → deliver（对抗式迭代）
- *      用于单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
+ *      用于显式 kind=build 的单文件改动 / bugfix / 配置调整 / 短篇调试。无需 requirements / architect / goals。
  *   2. **pipeline** — (design_analysis) → requirements → architect → per-goal[build] → deliver
  *      用于多文件功能、UI 复刻、跨模块重构、需要验收标准的任务。
  *
@@ -125,14 +125,14 @@ export interface WorkflowState {
 
 /** direct — 即时调用 build，然后 deliver 对抗式验收。
  *
- *  适合：单文件 / 局部 bugfix / 配置调整 / 短调试。无需 goal 分解。
+ *  适合：显式 kind=build 的单文件 / 局部 bugfix / 配置调整 / 短调试。无需 goal 分解。
  *  流程：build 实现 → deliver 验证；deliver rejection 触发 orchestrator 重新 call
  *  build 修复（最多 max_delivery_iterations 轮）。
  */
 const DIRECT: MiniWorkflow = {
   id: "direct",
   name: "Direct",
-  description: "analyze_intent → build → deliver 对抗式迭代。用于单文件 / bugfix / 配置 / 短调试 — 无需 goal 分解。",
+  description: "analyze_intent → build → deliver 对抗式迭代。用于显式 kind=build 的单文件 / bugfix / 配置 / 短调试 — 无需 goal 分解。",
   steps: [
     {
       id: "analyze_intent",
@@ -147,7 +147,7 @@ const DIRECT: MiniWorkflow = {
       id: "build",
       tool: "build",
       label: "Build",
-      hint: "调用 build agent 直接实现请求（read/write/edit/bash）。Direct shape (无 goalID) 用于单文件 / bug fix / 整体 rework；Pipeline shape (有 goalID) 在 architect 之后用。完成后必须 call deliver。",
+      hint: "调用 build agent 实现请求（read/write/edit/bash）。无 goalID 只用于显式 kind=build 或 delivery 拒绝后的整体 rework；Pipeline shape (有 goalID) 在 architect 之后用。完成后必须 call deliver。",
       scope: "task",
       skippable: false,
       after: ["analyze_intent"],

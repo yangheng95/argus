@@ -122,6 +122,7 @@ export interface DeliveryVerdictDesc {
 export interface TaskDesc {
   id: string
   title: string
+  kind: "workflow" | "build"
   status: string
   request: string
   error?: string
@@ -328,6 +329,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   return {
     id: task.id,
     title: task.title,
+    kind: task.kind,
     status: deriveTaskStatus(task),
     request: task.request,
     error: task.error ?? undefined,
@@ -405,6 +407,7 @@ function truncate(text: string, max: number): string {
 export function renderTaskDescription(desc: TaskDesc): string {
   const lines: string[] = []
   lines.push(`## Task: ${desc.title} (${desc.status})`)
+  lines.push(`Kind: ${desc.kind}`)
   lines.push(`Request: ${truncate(desc.request, 2000)}`)
   if (desc.spec_summary) lines.push(`Spec: ${desc.spec_summary}`)
   if (desc.plan_summary) lines.push(`Plan: ${desc.plan_summary}`)

@@ -153,7 +153,7 @@ export namespace Orchestrator {
       // the serial queue when it picks the task up). Per rule 23 the
       // LLM reads describe output for actual phase identification, not
       // a cached step-FSM cell.
-      const workflowID = await WorkflowRegistry.defaultID()
+      const workflowID = task.kind === "build" ? "direct" : await WorkflowRegistry.defaultID()
       const workflow = await WorkflowRegistry.resolve(workflowID) ?? WorkflowRegistry.resolveSync("pipeline")
       const workflowState: WorkflowState | undefined = workflow ? createWorkflowState(workflow) : undefined
       const isFirstWake = !task.time_started
