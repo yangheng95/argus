@@ -136,6 +136,60 @@ describe("collectLatestActivityText", () => {
     };
     expect(collectLatestActivityText(node)).toBe("hello");
   });
+
+  test("ignores StructuredOutput wrapper tool (internal Zod-call, no signal)", () => {
+    const node: any = {
+      id: "a",
+      kind: "agent",
+      title: "x",
+      time: 1,
+      parts: [
+        { type: "text", text: "actual prose" },
+        {
+          type: "tool",
+          tool: "StructuredOutput",
+          state: { title: "Structured Output", input: {} },
+        },
+      ],
+    };
+    // Without suppression operators see "⚡ StructuredOutput: Structured Output"
+    // — the tool name echoed as its own detail. Suppressed alongside Todo tools.
+    expect(collectLatestActivityText(node)).toBe("actual prose");
+  });
+
+  test("step cards prefer text over tool calls (operator wants goal context, not bash)", () => {
+    const node: any = {
+      id: "g2",
+      kind: "step",
+      title: "Goal 2",
+      time: 1,
+      goalDescription: "Implement /api/data",
+      parts: [
+        { type: "reasoning", text: "planning the api shape" },
+        { type: "tool", tool: "bash", state: { input: { command: "rg --files" } } },
+      ],
+    };
+    // Tool calls inside step subtrees are visible in the expanded body.
+    // The collapsed preview should answer "what is this goal trying to do",
+    // never "Bash: rg --files".
+    const out = collectLatestActivityText(node);
+    expect(out).toBe("planning the api shape");
+    expect(out).not.toContain("rg --files");
+  });
+
+  test("step cards with no text fall back to goalDescription (not tool command)", () => {
+    const node: any = {
+      id: "g2",
+      kind: "step",
+      title: "Goal 2",
+      time: 1,
+      goalDescription: "Implement /api/data",
+      parts: [
+        { type: "tool", tool: "bash", state: { input: { command: "rg --files" } } },
+      ],
+    };
+    expect(collectLatestActivityText(node)).toBe("Implement /api/data");
+  });
 });
 
 describe("collectTodoSummary", () => {
