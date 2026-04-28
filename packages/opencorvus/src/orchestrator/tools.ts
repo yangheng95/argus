@@ -60,6 +60,7 @@ import { createWorkflowState, findStepByTool, WorkflowRegistry, type WorkflowSta
 import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
+import { OrchestratorEventNote } from "./agent"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -2664,6 +2665,22 @@ export function createOrchestratorTools(input: {
           })
 
           requestStopAfterCurrentStep("delivery_render_rejected")
+          // Wake the orchestrator-loop after the deferred stop finalizes —
+          // without this, the loop exits and pending goals never get
+          // re-dispatched (see project_orchestrator_wake_wedge memory).
+          {
+            const { dispatchTaskLoop } = await import("@/engine/queue")
+            void dispatchTaskLoop({
+              taskID,
+              event: {
+                note: OrchestratorEventNote.deliveryRework({
+                  reason: `render_prerequisite_failed:${renderFailure.kind}`,
+                  iteration,
+                  summary,
+                }),
+              },
+            })
+          }
           return SubAgentProtocol.yieldResult({
             headline: `Delivery rejected — render prerequisite failed (${renderFailure.kind})`,
             fields: [
@@ -3190,6 +3207,19 @@ export function createOrchestratorTools(input: {
           })
 
           requestStopAfterCurrentStep("delivery_rework")
+          {
+            const { dispatchTaskLoop } = await import("@/engine/queue")
+            void dispatchTaskLoop({
+              taskID,
+              event: {
+                note: OrchestratorEventNote.deliveryRework({
+                  reason: "agent_verdict_rejected",
+                  iteration,
+                  summary: verdict.summary,
+                }),
+              },
+            })
+          }
           return SubAgentProtocol.yieldResult({
             headline: `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}, assistant must re-plan`,
             fields: [
