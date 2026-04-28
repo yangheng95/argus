@@ -78,7 +78,7 @@ import { SessionPrompt } from "@/session/prompt"
 import { Bus } from "@/bus"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
-import type { Message } from "@/session/message"
+import { Message } from "@/session/message"
 import type { SessionKind } from "@/session/session.sql"
 import type { ToolSet } from "ai"
 import { AgentTrace } from "@/trace"
@@ -470,6 +470,21 @@ export interface RetryDecision {
   /** Human-readable reason captured into lastError when ok=false. Surfaces
    *  in the AgentRunError thrown after attempts are exhausted. */
   reason?: string
+  /**
+   * When true, the attempt's failure is structurally non-recoverable: the
+   * outer retry loop MUST NOT spawn another session. Used by callers whose
+   * in-session recovery (e.g. SessionLoop's StructuredOutput reminder /
+   * hard-pin) has already exhausted its budget within the just-finished
+   * attempt — restarting the session from scratch only burns 20-30 minutes
+   * of LLM time on a guaranteed-equivalent failure (the failure mode behind
+   * the 3-attempt 90-minute integrity-reviewer storms in
+   * ainvest-20260428-100538). See specs/new-arch/2026-04-28-structured-
+   * output-systemic-fix.md §F.
+   *
+   * The retry helper still honours `ok=true` short-circuit — `terminal`
+   * is only consulted on `ok=false`.
+   */
+  terminal?: boolean
 }
 
 export interface RunAgentSessionWithRetryInput<C>
@@ -504,6 +519,91 @@ export interface RunAgentSessionWithRetryOutput<C> extends RunAgentSessionOutput
   attempts: number
 }
 
+export type AttemptClassification =
+  | { action: "ok" }
+  | { action: "retry"; reason: string }
+  | { action: "fail-fast"; reason: string }
+
+/**
+ * NamedError-shaped errors (from `@opencorvus-ai/util/error`) store their
+ * human-readable message inside `data.message` and use the error's own
+ * `.message` slot for the type tag. The retry classifier is interested in
+ * the operator-readable message, so unwrap it when present and fall back
+ * to `Error.message` for plain `Error` instances.
+ */
+function namedErrorReason(err: Error): string {
+  const data = (err as { data?: { message?: unknown } }).data
+  if (data && typeof data.message === "string" && data.message.length > 0) {
+    return data.message
+  }
+  return err.message
+}
+
+/**
+ * Pure classification of a just-finished attempt's outcome — see
+ * specs/new-arch/2026-04-28-structured-output-systemic-fix.md §F.
+ *
+ * Rules:
+ *
+ *   1. Thrown `Message.PromptBudgetOverflowError` /
+ *      `Message.ToolSchemaBudgetError` are deterministic structural
+ *      failures (system prompt + tool schemas exceed budget; compaction
+ *      cannot recover). Re-running the same session against the same
+ *      model is guaranteed to fail the same way — fail-fast.
+ *
+ *   2. A non-budget throw is treated as transient (network / provider
+ *      hiccup / unexpected internal error) and retried until
+ *      `maxRetries`. The thrown error's message is captured so the
+ *      operator sees what went wrong even when retries succeed.
+ *
+ *   3. `streamErrors.length > 0` is a transient session-stream issue
+ *      (provider-side) — retry.
+ *
+ *   4. `isComplete({ok:true})` → ok.
+ *
+ *   5. `isComplete({ok:false, terminal:true})` → fail-fast. This is
+ *      the contract by which a caller (e.g. integrity) signals that
+ *      its in-session recovery has already exhausted its budget; an
+ *      outer retry would be the 90-minute storm Phase D was designed
+ *      to avoid.
+ *
+ *   6. `isComplete({ok:false, terminal:false})` → retry.
+ *
+ * The classifier never inspects retry counts; the caller stops the loop
+ * when `attempt >= maxRetries`.
+ */
+export function classifyAttemptOutcome(input: {
+  thrownError?: Error
+  streamErrors?: Array<{ reason: string; name?: string }>
+  decision?: RetryDecision
+}): AttemptClassification {
+  if (input.thrownError) {
+    if (
+      Message.PromptBudgetOverflowError.isInstance(input.thrownError) ||
+      Message.ToolSchemaBudgetError.isInstance(input.thrownError)
+    ) {
+      return { action: "fail-fast", reason: namedErrorReason(input.thrownError) }
+    }
+    return { action: "retry", reason: input.thrownError.message }
+  }
+  if (input.streamErrors && input.streamErrors.length > 0) {
+    const first = input.streamErrors[0]
+    return {
+      action: "retry",
+      reason: `session stream error: ${first.name ?? "error"}: ${first.reason}`,
+    }
+  }
+  const decision = input.decision
+  if (!decision) {
+    return { action: "fail-fast", reason: "no isComplete decision available" }
+  }
+  if (decision.ok) return { action: "ok" }
+  if (decision.terminal) {
+    return { action: "fail-fast", reason: decision.reason ?? "terminal isComplete=false" }
+  }
+  return { action: "retry", reason: decision.reason ?? "isComplete returned ok=false" }
+}
+
 export async function runAgentSessionWithRetry<C>(
   input: RunAgentSessionWithRetryInput<C>,
 ): Promise<RunAgentSessionWithRetryOutput<C>> {
@@ -529,31 +629,35 @@ export async function runAgentSessionWithRetry<C>(
     }
     const kit = input.toolKitFactory()
     let out: RunAgentSessionOutput<C> | undefined
+    let thrownError: Error | undefined
     try {
       out = await runAgentSession({ ...input, toolKit: kit })
     } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err))
+      thrownError = err instanceof Error ? err : new Error(String(err))
       const aborted =
         input.signal?.aborted || (err instanceof Error && err.name === "AbortError")
-      if (aborted) throw lastError
-      log.warn(`${agentLabel} agent run failed`, { attempt, error: lastError.message })
-      continue
+      if (aborted) throw thrownError
     }
-    lastOutput = out
+    if (out) lastOutput = out
 
-    if (out.streamErrors.length > 0) {
-      lastError = new Error(
-        `${agentLabel}: session stream error: ${out.streamErrors[0].name ?? "error"}: ${out.streamErrors[0].reason}`,
-      )
-      log.warn(`${agentLabel}: stream error, will retry`, {
-        attempt,
-        error: lastError.message,
-      })
-      continue
-    }
+    const decision = out
+      ? input.isComplete(out.collector, out.streamErrors, out.structured)
+      : undefined
+    const classification = classifyAttemptOutcome({
+      thrownError,
+      streamErrors: out?.streamErrors,
+      decision,
+    })
 
-    const decision = input.isComplete(out.collector, out.streamErrors, out.structured)
-    if (decision.ok) {
+    if (classification.action === "ok") {
+      if (!out) {
+        // Defensive: classifier should never return ok without an out, but
+        // type-narrow safely if it ever does.
+        throw new AgentRunError(
+          input.kind,
+          "classifier returned ok without a runAgentSession output",
+        )
+      }
       if (AgentTrace.isEnabled()) {
         AgentTrace.recordAgentReport({
           sessionID: out.session.id,
@@ -569,10 +673,41 @@ export async function runAgentSessionWithRetry<C>(
       }
       return { ...out, attempts: attempt }
     }
-    lastError = new Error(decision.reason ?? "isComplete returned ok=false")
-    log.warn(`${agentLabel}: attempt incomplete, will retry`, {
+
+    if (classification.action === "fail-fast") {
+      lastError = thrownError ?? new Error(classification.reason)
+      // Either the throw was a deterministic budget overflow (re-running
+      // can't fix it — caller needs to see the breakdown), or the caller's
+      // isComplete signalled `terminal:true` (in-session recovery has
+      // already exhausted its budget for this contract — see Phase D).
+      // Either way the retry loop must stop now (rule 1: surface the real
+      // cause, do not loop a useless action). For thrown deterministic
+      // budget overflows we re-throw the original error type so the
+      // operator sees PromptBudgetOverflowError / ToolSchemaBudgetError
+      // (with full breakdown) instead of a generic AgentRunError.
+      if (thrownError && (
+        Message.PromptBudgetOverflowError.isInstance(thrownError) ||
+        Message.ToolSchemaBudgetError.isInstance(thrownError)
+      )) {
+        log.error(`${agentLabel}: deterministic budget overflow, fail-fast`, {
+          attempt,
+          error: thrownError.name,
+          message: thrownError.message,
+        })
+        throw thrownError
+      }
+      log.error(`${agentLabel}: attempt terminal, fail-fast`, {
+        attempt,
+        reason: classification.reason,
+      })
+      break
+    }
+
+    // classification.action === "retry"
+    lastError = thrownError ?? new Error(classification.reason)
+    log.warn(`${agentLabel}: attempt failed, will retry`, {
       attempt,
-      reason: lastError.message,
+      reason: classification.reason,
     })
   }
 

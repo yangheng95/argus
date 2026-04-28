@@ -1,0 +1,136 @@
+import { describe, expect, test } from "bun:test"
+import { classifyAttemptOutcome } from "../../src/agent/runner"
+import { Message } from "../../src/session/message"
+
+/**
+ * Phase F of specs/new-arch/2026-04-28-structured-output-systemic-fix.md:
+ * `runAgentSessionWithRetry` must NOT loop on deterministic structural
+ * failures (prompt-budget / tool-schema-budget overflow), and must NOT
+ * loop after the caller's `isComplete` signals that in-session recovery
+ * has already exhausted its budget (`terminal: true`). Transient
+ * provider/stream errors keep the existing retry behaviour.
+ *
+ * The classifier is a pure function so tests cover the full decision
+ * matrix without standing up SessionPrompt / Provider mocks.
+ */
+describe("classifyAttemptOutcome", () => {
+  test("PromptBudgetOverflowError throw → fail-fast", () => {
+    const err = new Message.PromptBudgetOverflowError({
+      message: "system + tool schemas alone exceed budget",
+      systemTokensEst: 1000,
+      messagePayloadChars: 0,
+      toolSchemaChars: 250_000,
+      compressibleMessageChars: 0,
+      nonCompressiblePromptChars: 250_000,
+      usableBudget: 262_144,
+      limit: 235_929,
+      toolNames: "submit_a,submit_b",
+    })
+    const out = classifyAttemptOutcome({ thrownError: err })
+    expect(out.action).toBe("fail-fast")
+    if (out.action === "fail-fast") {
+      expect(out.reason).toContain("system + tool schemas alone exceed budget")
+    }
+  })
+
+  test("ToolSchemaBudgetError throw → fail-fast", () => {
+    const err = new Message.ToolSchemaBudgetError({
+      message: "Tool schema payload exceeds 50% of model input budget",
+      toolSchemaChars: 200_000,
+      usableBudget: 262_144,
+      ratio: 0.5,
+      toolNames: "submit_a,submit_b",
+    })
+    const out = classifyAttemptOutcome({ thrownError: err })
+    expect(out.action).toBe("fail-fast")
+  })
+
+  test("generic Error throw → retry (transient/unexpected)", () => {
+    // Network blip, JSON-RPC timeout, anything that's not a structural
+    // budget overflow. Spec §F: keep current retry behaviour for these.
+    const out = classifyAttemptOutcome({ thrownError: new Error("ECONNRESET") })
+    expect(out.action).toBe("retry")
+    if (out.action === "retry") {
+      expect(out.reason).toBe("ECONNRESET")
+    }
+  })
+
+  test("session streamErrors → retry", () => {
+    const out = classifyAttemptOutcome({
+      streamErrors: [{ reason: "upstream 503", name: "APIError" }],
+    })
+    expect(out.action).toBe("retry")
+    if (out.action === "retry") {
+      expect(out.reason).toContain("APIError")
+      expect(out.reason).toContain("upstream 503")
+    }
+  })
+
+  test("isComplete ok=true → ok", () => {
+    const out = classifyAttemptOutcome({ decision: { ok: true } })
+    expect(out.action).toBe("ok")
+  })
+
+  test("isComplete ok=false terminal=true → fail-fast (no retry)", () => {
+    // This is the new behaviour Phase F adds: the integrity reviewer's
+    // in-session reminder + hard-pin already burned its budget; spawning
+    // a fresh session against the same model is the 90-minute storm we
+    // already saw in ainvest-20260428-100538.
+    const out = classifyAttemptOutcome({
+      decision: {
+        ok: false,
+        terminal: true,
+        reason: "integrity reviewer ended without StructuredOutput after reminders",
+      },
+    })
+    expect(out.action).toBe("fail-fast")
+    if (out.action === "fail-fast") {
+      expect(out.reason).toContain("StructuredOutput")
+    }
+  })
+
+  test("isComplete ok=false terminal=false → retry (default)", () => {
+    // Existing behaviour preserved: callers that don't opt into terminal
+    // (e.g. delivery, whose retries genuinely give the model another shot
+    // at code generation) get the same retry loop they had before Phase F.
+    const out = classifyAttemptOutcome({
+      decision: { ok: false, reason: "missing dimension verdicts" },
+    })
+    expect(out.action).toBe("retry")
+  })
+
+  test("isComplete ok=false with no terminal flag defaults to retry", () => {
+    const out = classifyAttemptOutcome({ decision: { ok: false } })
+    expect(out.action).toBe("retry")
+  })
+
+  test("no thrown error, no streamErrors, no decision → fail-fast (defensive)", () => {
+    // The retry loop should never reach this state, but the classifier
+    // surfaces it as fail-fast so an internal bug surfaces fast instead
+    // of looping silently.
+    const out = classifyAttemptOutcome({})
+    expect(out.action).toBe("fail-fast")
+  })
+
+  test("thrown error precedence over decision (throw wins)", () => {
+    // If runAgentSession threw, we never produce an isComplete decision —
+    // but if both are passed (defensive), throw must win because the
+    // attempt didn't reach the contract-check stage.
+    const err = new Message.PromptBudgetOverflowError({
+      message: "budget overflow",
+      systemTokensEst: 0,
+      messagePayloadChars: 0,
+      toolSchemaChars: 0,
+      compressibleMessageChars: 0,
+      nonCompressiblePromptChars: 0,
+      usableBudget: 1,
+      limit: 1,
+      toolNames: "",
+    })
+    const out = classifyAttemptOutcome({
+      thrownError: err,
+      decision: { ok: true }, // would say success — must be ignored
+    })
+    expect(out.action).toBe("fail-fast")
+  })
+})
