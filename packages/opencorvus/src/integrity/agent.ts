@@ -40,7 +40,7 @@ import { runAgentSessionWithRetry } from "@/agent/runner"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
 import type { GoalContractFields } from "@/pipeline/types"
-import { AcceptanceSpecSchema, renderSpecsAsText } from "@/acceptance/types"
+import { renderSpecsAsText } from "@/acceptance/types"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import { Instance } from "@/project/instance"
 import type { VisualSpec } from "@/design-analyst/types"
@@ -76,13 +76,19 @@ export interface GoalCorrection {
   action: "modify" | "split" | "remove"
   goalID: string
   reason: string
-  updates?: Partial<Pick<GoalContractFields, "title" | "objective" | "acceptance_specs" | "owned_paths">>
+  /** Corrections may rewrite goal title / objective / owned_paths only.
+   *  acceptance_specs are intentionally NOT mutable here — see the wire-schema
+   *  comment near GoalCorrectionUpdates. */
+  updates?: Partial<Pick<GoalContractFields, "title" | "objective" | "owned_paths">>
 }
 
 export interface MissingGoal {
   title: string
   objective: string
-  acceptance_specs: AcceptanceSpec[]
+  /** Plain-text spec sentences. applyIntegrityCorrections wraps each into an
+   *  LlmJudge placeholder spec on the new goal so the evaluator still has
+   *  something to score against. */
+  acceptance_spec_hints: string[]
   owned_paths: string[]
   kind: string
   priority: "blocking" | "advisory"
@@ -125,10 +131,20 @@ export interface IntegrityResult {
 
 const VerdictEnum = z.enum(["pass", "concerns", "needs_correction"])
 
+// Goal-correction wire schema. NOTE: AcceptanceSpec is intentionally excluded
+// here. The full AcceptanceSpec schema (with its discriminated-union Scorer
+// tree, Gherkin scenario, rubric levels, etc.) is so deep that JSON-Schema
+// inlines it for every dimension tool, pushing toolSchemaChars past 990k —
+// long-context kimi models then reliably miss the terminal StructuredOutput.
+// Corrections may rewrite goal title / objective / owned_paths only; specs
+// must be touched via architect re-run or `modify_goal`. Missing goals
+// arrive with PLAIN-TEXT spec hints (`acceptance_spec_hints`) which
+// applyIntegrityCorrections wraps into LlmJudge placeholders so the
+// downstream evaluator can still score them; architect retry / refine can
+// translate the hints into typed heuristic + rubric specs later.
 const GoalCorrectionUpdates = z.object({
   title: z.string().optional(),
   objective: z.string().optional(),
-  acceptance_specs: z.array(AcceptanceSpecSchema).optional(),
   owned_paths: z.array(z.string()).optional(),
 })
 
@@ -142,7 +158,14 @@ const GoalCorrectionInput = z.object({
 const MissingGoalInput = z.object({
   title: z.string().min(1),
   objective: z.string().min(1),
-  acceptance_specs: z.array(AcceptanceSpecSchema).min(1),
+  acceptance_spec_hints: z
+    .array(z.string().min(1))
+    .min(1)
+    .describe(
+      "One short sentence per acceptance spec. Each becomes an llm_judge " +
+        "placeholder downstream; architect retry can translate them into " +
+        "typed heuristic / rubric specs.",
+    ),
   owned_paths: z.array(z.string()).min(1),
   kind: z.enum(["bootstrap", "feature", "verification", "integration", "system"]),
   priority: z.enum(["blocking", "advisory"]),
@@ -315,7 +338,7 @@ export async function reviewIntegrity(input: {
           missingGoals = (sub.missing_goals ?? []).map((m) => ({
             title: m.title,
             objective: m.objective,
-            acceptance_specs: m.acceptance_specs,
+            acceptance_spec_hints: m.acceptance_spec_hints,
             owned_paths: m.owned_paths,
             kind: m.kind,
             priority: m.priority,
@@ -598,11 +621,31 @@ export function applyIntegrityCorrections(
   for (const missing of result.missingGoals) {
     const normalizedTitle = missing.title.toLowerCase().trim()
     if (corrected.some((g) => g.title.toLowerCase().trim() === normalizedTitle)) continue
+    const newGoalID = `goal_integrity_${corrected.length + 1}`
+    // Wrap each plain-text hint in a minimal LlmJudge placeholder so the
+    // evaluator still has something deterministic to score. Architect retry
+    // can later refine these into heuristic / prebuilt scorers; the
+    // placeholder is stable enough that the goal can be dispatched without
+    // a re-run.
+    const acceptance_specs: AcceptanceSpec[] = missing.acceptance_spec_hints.map((hint, i) => ({
+      id: `acc-${newGoalID}-${i + 1}`,
+      source_requirement_id: "integrity-pending",
+      goal_id: newGoalID,
+      title: hint.length > 80 ? hint.slice(0, 77) + "..." : hint,
+      scorers: [
+        {
+          type: "llm_judge",
+          name: `judge-${i + 1}`,
+          criteria: hint,
+        },
+      ],
+      severity: missing.priority === "blocking" ? "essential" : "important",
+    }))
     corrected.push({
-      id: `goal_integrity_${corrected.length + 1}`,
+      id: newGoalID,
       title: missing.title,
       objective: missing.objective,
-      acceptance_specs: missing.acceptance_specs,
+      acceptance_specs,
       owned_paths: missing.owned_paths,
       depends_on: [],
       exports: [],
