@@ -8,6 +8,20 @@ import type { ExecutorAdapter } from "./contract"
 
 const log = Log.create({ service: "managed-executor" })
 
+/**
+ * Render an Error as `name: message | caused by: name: message | …` so the
+ * inline state.error string preserves the upstream cause instead of
+ * collapsing to the wrapper's message. The full stack still goes to the
+ * file log via Log.formatError; this string is what overlay/status feeds
+ * surface in-line.
+ */
+function formatErrorChain(err: unknown, depth = 0): string {
+  if (!(err instanceof Error)) return String(err)
+  const head = err.message ? `${err.name}: ${err.message}` : err.name
+  if (!(err.cause instanceof Error) || depth >= 5) return head
+  return `${head} | caused by: ${formatErrorChain(err.cause, depth + 1)}`
+}
+
 type Status = Exclude<ExecutorStatusInfo, "blocked">
 type Notify = {
   type: string
@@ -73,7 +87,16 @@ export const ManagedCodingExecutor = {
       consume(stream, state, latest).catch((err) => {
         if (state.status !== "failed" && state.status !== "completed" && !state.abort.signal.aborted) {
           state.status = "failed"
-          state.error = err instanceof Error ? err.message : String(err)
+          state.error = formatErrorChain(err)
+          // Log the raw Error so Log.formatError walks the .cause chain into
+          // the file log. The state.error string only carries message + first
+          // cause, which is what downstream consumers (overlay, status feeds)
+          // can render inline.
+          log.error("managed executor stream errored", {
+            sessionID: state.sessionID,
+            queueTaskID: state.id,
+            error: err,
+          })
           push(state, {
             type: "session.error",
             summary: state.error,

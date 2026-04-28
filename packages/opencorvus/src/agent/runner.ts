@@ -278,12 +278,32 @@ export async function runAgentSession<C>(
 
   // ── 1. Resolve model ─────────────────────────────────────────────────
   let model: Awaited<ReturnType<typeof resolveAgentModel>> | undefined
+  let modelResolutionError: unknown
   if (input.model) {
-    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch(() => undefined)
+    model = await Provider.getModel(input.model.providerID, input.model.modelID).catch((err) => {
+      modelResolutionError = err
+      return undefined
+    })
   } else {
-    model = await resolveAgentModel(agentName, { taskID: input.taskID }).catch(() => undefined)
+    model = await resolveAgentModel(agentName, { taskID: input.taskID }).catch((err) => {
+      modelResolutionError = err
+      return undefined
+    })
   }
-  if (!model) throw new AgentRunError(kind, "no LLM model available")
+  if (!model) {
+    const detail = modelResolutionError instanceof Error
+      ? modelResolutionError.message
+      : modelResolutionError !== undefined
+        ? String(modelResolutionError)
+        : input.model
+          ? `${input.model.providerID}/${input.model.modelID} did not resolve`
+          : `agent ${agentName} did not resolve a default model`
+    throw new AgentRunError(
+      kind,
+      `no LLM model available: ${detail}`,
+      modelResolutionError instanceof Error ? { cause: modelResolutionError } : undefined,
+    )
+  }
 
   if (input.signal?.aborted) {
     throw new AgentRunError(kind, "aborted after model resolution")
