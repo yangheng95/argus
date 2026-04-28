@@ -41,7 +41,7 @@ import {
 import { canComposeChat, stopChatRequest } from "./services/chat";
 import { isTaskInterruptable } from "./store/board";
 import { setLocale } from "./utils/i18n";
-import { apiJson, configure as configureApi } from "./services/api";
+import { apiJson, apiUrl, apiHeaders, configure as configureApi } from "./services/api";
 import { t } from "./utils/i18n";
 import { renderMarkdown, escapeHtml } from "./utils/markdown";
 import { copyChatConversation } from "./utils/transcript";
@@ -529,6 +529,35 @@ if (workspaceMountEl) {
     ),
     workspaceMountEl,
   );
+}
+
+// ── Sidebar title backdoor: double-click resets DB ──
+// Hidden operator escape hatch. Confirms before invoking POST /global/db/reset,
+// then reloads to repopulate from a clean schema.
+const sidebarTitleEl = document.querySelector<HTMLElement>(".sidebar-title");
+if (sidebarTitleEl) {
+  sidebarTitleEl.addEventListener("dblclick", async (ev) => {
+    ev.preventDefault();
+    if (!window.confirm(t("sidebar.reset_db_confirm"))) return;
+    try {
+      const res = await fetch(apiUrl("global/db/reset"), {
+        method: "POST",
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      });
+      if (res.status === 409) {
+        window.alert(t("sidebar.reset_db_blocked"));
+        return;
+      }
+      if (!res.ok) {
+        const text = await res.text().catch(() => `HTTP ${res.status}`);
+        window.alert(t("sidebar.reset_db_failed", { error: text }));
+        return;
+      }
+      window.location.reload();
+    } catch (err) {
+      window.alert(t("sidebar.reset_db_failed", { error: err instanceof Error ? err.message : String(err) }));
+    }
+  });
 }
 
 // ── Mount: TaskList ──

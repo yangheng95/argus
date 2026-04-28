@@ -493,22 +493,10 @@ export function ChatComposer(props: ChatComposerProps) {
         </button>
       </div>
 
-      {/* Compose meta (executor selector + version + tip) */}
+      {/* Compose meta (executor selector + tip) */}
       <div class="chat-compose-meta">
         <div class="chat-compose-meta-left">
           <ExecutorSelector />
-          <span class="chat-version" id="chatVersion" aria-label="Author">
-            <span class="chat-version-copy">Copyright © OpenCorvus</span>
-            <span class="chat-version-sep" aria-hidden="true">·</span>
-            <a
-              class="chat-version-link"
-              href="https://github.com/yangheng95"
-              target="_blank"
-              rel="noopener"
-            >
-              <span class="chat-version-name">杨恒@代码生成组</span>
-            </a>
-          </span>
         </div>
         <div class="chat-compose-meta-right">
           <div class="chat-compose-tip">{t("chat.tip")}</div>
