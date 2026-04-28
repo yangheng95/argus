@@ -4,7 +4,6 @@ import { Provider } from "@/provider/provider"
 import { Session } from "@/session"
 import { Message } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
-import { Skill } from "@/skill"
 import { ToolRegistry } from "@/tool/registry"
 import { Database, eq } from "@/storage/db"
 import { EngineTaskTable } from "@/engine"
@@ -231,7 +230,6 @@ async function resolveModel() {
 }
 
 async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
-  const skill = await Skill.get("panel-control")
   const lines = [
     "You are the core OpenCorvus agent operating in control-plane mode.",
     "Always respond in the same language as the user's message. Default to Chinese (简体中文) when the language is ambiguous.",
@@ -252,9 +250,6 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
     "Available panel actions on this surface:",
     panelCapabilityPrompt(input.surface),
   ]
-  if (skill) {
-    lines.push("", skill.content.trim())
-  }
   return lines.join("\n")
 }
 

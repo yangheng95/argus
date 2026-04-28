@@ -226,7 +226,7 @@ test("returns empty array when no skills exist", async () => {
   })
 })
 
-test("does not expose removed builtin plan or coding skills", async () => {
+test("does not expose removed builtin plan, coding, or panel-control skills", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await Instance.provide({
@@ -234,7 +234,7 @@ test("does not expose removed builtin plan or coding skills", async () => {
     fn: async () => {
       expect(await Skill.get("plan")).toBeUndefined()
       expect(await Skill.get("coding")).toBeUndefined()
-      expect(await Skill.get("panel-control")).toBeDefined()
+      expect(await Skill.get("panel-control")).toBeUndefined()
     },
   })
 })

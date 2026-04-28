@@ -31,7 +31,6 @@ Frontmatter 字段（`src/skill/skill.ts:26-45`）：
 
 | Skill | 阶段 | 说明 |
 |---|---|---|
-| `panel-control` | 通用 | 通过 `panel` 工具操控 OpenCorvus 控制平面 |
 | `spec-research` | spec | web 搜索研究技术选型，priority=10 |
 | `prd-spec` | spec | 完整 PRD+SPEC 文档（含 ADR），priority=50 |
 | `delivery-verify-web` | delivery | 前端验收清单（MIME、SPA、SSE），auto-detect |

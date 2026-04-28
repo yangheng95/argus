@@ -14,7 +14,6 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
-import panelMd from "./builtin/panel.md" with { type: "text" }
 import webpageGenerateMd from "./builtin/webpage-generate.md" with { type: "text" }
 import imageGenerateMd from "./builtin/image-generate.md" with { type: "text" }
 import figmaGenerateMd from "./builtin/figma-generate.md" with { type: "text" }
@@ -90,7 +89,6 @@ export namespace Skill {
   const BUILTIN_PATH = path.join(Global.Path.cache, "builtin-skills")
 
   const builtins = [
-    { skill: panelMd, files: {} },
     { skill: webpageGenerateMd, files: {} },
     { skill: imageGenerateMd, files: {} },
     { skill: figmaGenerateMd, files: {} },
