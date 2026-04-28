@@ -75,6 +75,7 @@ import { resolveStageSkills, type TaskSignals } from "@/engine/skill-inject"
 import { Instance } from "@/project/instance"
 import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionStatus } from "@/session/status"
 import { Bus } from "@/bus"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"
@@ -475,8 +476,22 @@ export async function runAgentSession<C>(
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    // Subagent dispatch boundary: surface terminal to the overlay the moment
+    // the runner finishes (success or failure), independent of when the
+    // session's actor eventually closes. Without this, every orchestrator-
+    // dispatched subagent (requirements / architect / design-analyst /
+    // integrity / build / deliver / refine / ...) stays at `idle` (no
+    // checkmark) once it enters standby, even though its single dispatch
+    // is unambiguously done from the caller's perspective.
+    SessionStatus.set(session.id, {
+      type: "terminal",
+      reason: input.signal?.aborted ? "aborted" : "error",
+      error: err instanceof Error ? err.message : String(err),
+    })
     throw err
   }
+
+  SessionStatus.set(session.id, { type: "terminal", reason: "completed" })
 
   // ── 7. Return collector + structured output ──────────────────────────
   const structured = input.format

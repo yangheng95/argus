@@ -10,6 +10,7 @@ import path from "node:path"
 import { Session } from "@/session"
 import { resolveAgentModel } from "@/agent/model"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionStatus } from "@/session/status"
 import { Database, eq, and, inArray, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
@@ -3476,13 +3477,27 @@ export function createOrchestratorTools(input: {
           decisionSection,
         ].join("\n")
 
-        const finalMessage = await SessionPrompt.prompt({
-          sessionID: refineSession.id,
-          model: { providerID: model.providerID, modelID: model.api.id },
-          agent: "assistant",
-          system: systemPrompt,
-          parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
-        })
+        let finalMessage: Awaited<ReturnType<typeof SessionPrompt.prompt>>
+        try {
+          finalMessage = await SessionPrompt.prompt({
+            sessionID: refineSession.id,
+            model: { providerID: model.providerID, modelID: model.api.id },
+            agent: "assistant",
+            system: systemPrompt,
+            parts: [{ type: "text", text: userPrompt, id: Identifier.ascending("part") }],
+          })
+        } catch (err) {
+          // Refine dispatch boundary — surface terminal to overlay so the
+          // refine card flips out of `running` when this single dispatch
+          // ends, mirroring agent/runner.ts.
+          SessionStatus.set(refineSession.id, {
+            type: "terminal",
+            reason: "error",
+            error: err instanceof Error ? err.message : String(err),
+          })
+          throw err
+        }
+        SessionStatus.set(refineSession.id, { type: "terminal", reason: "completed" })
         const resultText = (finalMessage?.parts ?? [])
           .filter((p) => p.type === "text" && typeof (p as any).text === "string")
           .map((p) => (p as any).text as string)
