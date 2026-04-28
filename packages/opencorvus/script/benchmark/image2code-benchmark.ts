@@ -27,7 +27,6 @@
 //   bun run image2code-benchmark.ts --report=out.json --no-keep  # all overlay-web-benchmark flags pass through
 
 import path from "node:path"
-import os from "node:os"
 import fs from "node:fs"
 import { spawn } from "node:child_process"
 
@@ -92,7 +91,12 @@ if (!requestFile) {
   if (idx !== -1 && idx + 1 < userArgs.length) requestFile = userArgs[idx + 1]
 }
 if (!requestFile) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "image2code-bench-"))
+  // Land the materialized prompt under <repo>/tmp like overlay-web-benchmark
+  // does for its workdirs — keeps everything benchmark-related inside the
+  // gitignored repo tmp instead of the OS tmp.
+  const REPO_TMP = path.resolve(import.meta.dir, "..", "..", "..", "..", "tmp")
+  fs.mkdirSync(REPO_TMP, { recursive: true })
+  const tmpDir = fs.mkdtempSync(path.join(REPO_TMP, "image2code-bench-"))
   requestFile = path.join(tmpDir, "request.txt")
   fs.writeFileSync(requestFile, IMAGE2CODE_PROMPT, "utf8")
 }
