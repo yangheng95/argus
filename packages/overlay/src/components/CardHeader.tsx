@@ -7,19 +7,9 @@ import {
   collectActivityCounts,
   type CardNode,
 } from "../utils/card-tree";
+import { statusBadge } from "../utils/status-badge";
 import { t } from "../utils/i18n";
 import { goalRevisionLabel } from "../utils/goal-label";
-
-function statusBadge(node: CardNode): { tone: string; glyph: string } {
-  const s = node.status;
-  if (s === "running") return { tone: "running", glyph: "" };
-  if (s === "error") return { tone: "error", glyph: "\u2717" };
-  if (s === "skipped") return { tone: "skipped", glyph: "\u2014" };
-  if (s === "pending") return { tone: "pending", glyph: "\u00B7" };
-  if (s === "completed") return { tone: "done", glyph: "\u2713" };
-  if (node.kind === "message") return { tone: "neutral", glyph: "" };
-  return { tone: "done", glyph: "\u2713" };
-}
 
 function leadingGlyph(node: CardNode): string {
   if (node.kind === "tool") return displayToolIcon(node.stage || node.title);
