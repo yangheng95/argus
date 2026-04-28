@@ -281,11 +281,6 @@ function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
       }),
       kind: "control" as const,
       source: "system" as const,
-      audience: {
-        model: true,
-        ui: false,
-        acp: false,
-      },
     },
   ]
   if (input.attachments?.length) {
@@ -425,14 +420,8 @@ async function appendSummary(sessionID: string, message: Message.WithParts, text
     messageID: info.id,
     type: "text",
     text,
-    synthetic: true,
     kind: "control",
     source: "system",
-    audience: {
-      model: false,
-      ui: true,
-      acp: false,
-    },
   })
   await Session.touch(sessionID)
 }

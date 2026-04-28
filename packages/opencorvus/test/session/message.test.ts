@@ -104,6 +104,18 @@ function basePart(messageID: string, id: string) {
 }
 
 describe("session.message.toModelMessage", () => {
+  test("rejects text visibility split flags at the message boundary", () => {
+    const base = {
+      ...basePart("m-user", "p1"),
+      type: "text",
+      text: "hello",
+    }
+
+    expect(Message.Part.safeParse({ ...base, synthetic: true }).success).toBe(false)
+    expect(Message.Part.safeParse({ ...base, ignored: true }).success).toBe(false)
+    expect(Message.Part.safeParse({ ...base, audience: { ui: false } }).success).toBe(false)
+  })
+
   test("filters out messages with no parts", () => {
     const input: Message.WithParts[] = [
       {
@@ -130,7 +142,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("filters out messages with only ignored parts", () => {
+  test("includes every user text part without visibility flags", () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -140,17 +152,21 @@ describe("session.message.toModelMessage", () => {
           {
             ...basePart(messageID, "p1"),
             type: "text",
-            text: "ignored",
-            ignored: true,
+            text: "visible",
           },
         ] as Message.Part[],
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([])
+    expect(Message.toModelMessages(input, model)).toStrictEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "visible" }],
+      },
+    ])
   })
 
-  test("includes synthetic text parts", () => {
+  test("includes every assistant text part without visibility flags", () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -161,7 +177,6 @@ describe("session.message.toModelMessage", () => {
             ...basePart(messageID, "p1"),
             type: "text",
             text: "hello",
-            synthetic: true,
           },
         ] as Message.Part[],
       },
@@ -172,7 +187,6 @@ describe("session.message.toModelMessage", () => {
             ...basePart("m-assistant", "a1"),
             type: "text",
             text: "assistant",
-            synthetic: true,
           },
         ] as Message.Part[],
       },
@@ -205,8 +219,7 @@ describe("session.message.toModelMessage", () => {
           {
             ...basePart(messageID, "p2"),
             type: "text",
-            text: "ignored",
-            ignored: true,
+            text: "second text",
           },
           {
             ...basePart(messageID, "p3"),
@@ -250,6 +263,7 @@ describe("session.message.toModelMessage", () => {
         role: "user",
         content: [
           { type: "text", text: "hello" },
+          { type: "text", text: "second text" },
           {
             type: "file",
             mediaType: "image/png",

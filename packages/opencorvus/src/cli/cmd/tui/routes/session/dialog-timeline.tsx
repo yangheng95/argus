@@ -6,7 +6,6 @@ import { Locale } from "@/util/locale"
 import { DialogMessage } from "./dialog-message"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "../../component/prompt/history"
-import { textForBoth } from "@/session"
 
 export function DialogTimeline(props: {
   sessionID: string
@@ -25,7 +24,7 @@ export function DialogTimeline(props: {
     const result = [] as DialogSelectOption<string>[]
     for (const message of messages) {
       if (message.role !== "user") continue
-      const part = (sync.data.part[message.id] ?? []).find((x) => x.type === "text" && textForBoth(x)) as TextPart
+      const part = (sync.data.part[message.id] ?? []).find((x) => x.type === "text") as TextPart
       if (!part) continue
       result.push({
         title: part.text.replace(/\n/g, " "),

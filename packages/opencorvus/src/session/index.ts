@@ -994,14 +994,6 @@ export namespace Session {
 }
 
 export { Message } from "./message"
-export {
-  textForModel,
-  textForUI,
-  textForACP,
-  textForBoth,
-  textAudience,
-  messageControlOnly,
-} from "./part-visibility"
 export { Todo } from "./todo"
 export { SessionStatus } from "./status"
 export { SessionWake } from "./wake"

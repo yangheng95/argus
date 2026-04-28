@@ -90,7 +90,7 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
     transcript,
   );
 
-  const phaseCardID = "step:goal_1:gr_1:build:phase:build";
+  const phaseCardID = "step:goal_1:build:phase:build";
   expect(cardTreeStore.cards["build:session:ses_build"]).toBeUndefined();
   expect(cardTreeStore.cards[phaseCardID]).toBeDefined();
   expect(

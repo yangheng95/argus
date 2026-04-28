@@ -12,7 +12,6 @@ import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
-import { textForModel } from "./part-visibility"
 import { isDecodableText } from "./text-mime"
 import { STATEFUL_SNAPSHOT_TOOL_NAMES } from "@/orchestrator/stateful-tool-names"
 import { normalizeToolInput } from "./tool-input-norm"
@@ -167,17 +166,8 @@ export namespace Message {
   export const TextPart = PartBase.extend({
     type: z.literal("text"),
     text: z.string(),
-    synthetic: z.boolean().optional(),
-    ignored: z.boolean().optional(),
     kind: z.enum(["user_content", "control", "context"]).optional(),
     source: z.enum(["user", "system", "evaluator", "planner", "goal_gate", "task_tool"]).optional(),
-    audience: z
-      .object({
-        model: z.boolean().optional(),
-        ui: z.boolean().optional(),
-        acp: z.boolean().optional(),
-      })
-      .optional(),
     time: z
       .object({
         start: z.number(),
@@ -185,9 +175,11 @@ export namespace Message {
       })
       .optional(),
     metadata: z.record(z.string(), z.any()).optional(),
-  }).meta({
-    ref: "TextPart",
   })
+    .strict()
+    .meta({
+      ref: "TextPart",
+    })
   export type TextPart = z.infer<typeof TextPart>
 
   export const ReasoningPart = PartBase.extend({
@@ -675,7 +667,7 @@ export namespace Message {
         }
         result.push(userMessage)
         for (const part of msg.parts) {
-          if (part.type === "text" && textForModel(part))
+          if (part.type === "text")
             userMessage.parts.push({
               type: "text",
               text: part.text,

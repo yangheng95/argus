@@ -20,7 +20,7 @@ import { t } from "../utils/i18n";
  *  builds them as `<stage>:session:<sid>` (services/tree-writer.ts::sessionCardID),
  *  so any card whose id matches that pattern can surface its session-scoped
  *  AgentTrace events. Returns undefined when the card isn't a session card
- *  (synthetic message bubbles, tool promotions, etc). */
+ *  (message bubbles, tool promotions, etc). */
 function sessionIDFromCardID(id: string): string | undefined {
   const idx = id.indexOf(":session:");
   if (idx < 0) return undefined;
@@ -58,7 +58,7 @@ export function Card(props: { node: CardNode; depth: number }) {
     (props.node.kind === "tool" && expanded());
 
   const collapsible = () => {
-    // User / synthetic bubbles render as non-foldable bubbles.
+    // User bubbles render as non-foldable bubbles.
     if (props.node.kind === "message" && props.node.role === "user") return false;
     return true;
   };

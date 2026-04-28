@@ -4,7 +4,7 @@
 // backend raised from inside a specific session. The overlay renders it as
 // part of the conversation timeline by producing one or more "card seeds"
 // that tree-writer.upsertInteractionCard turns into CardNodes — direct,
-// no Message wrapper. Per project rule 22 (no synthetic-message
+// no Message wrapper. Per project rule 22 (no duplicate message
 // abstraction); the seed has only the shape upsertInteractionCard reads.
 //
 // Routing: an interaction whose `sessionID` matches a known agent card

@@ -42,8 +42,7 @@ export interface Message {
 const [store, setStore] = createStore({
   /**
    * Chronologically sorted flat list of all messages. Primary source of truth
-   * for message content. Consumers that need all messages (synthetic-message
-   * merging in chat.ts, section phase sync, etc.) read this.
+   * for message content. Consumers that need all messages read this.
    */
   messages: [] as Message[],
   /**
@@ -221,7 +220,6 @@ function partSignature(part: any): string {
     callID: part?.callID || "",
     description: part?.description || "",
     prompt: part?.prompt || "",
-    audience: record(part?.audience) ? part.audience : null,
     state: record(part?.state) ? part.state : part?.state ?? null,
     files: Array.isArray(part?.files) ? part.files : [],
     process: record(part?.process) ? part.process : null,
@@ -680,7 +678,7 @@ function flushEvents() {
  * + `message.part.updated` shapes the SSE bridge would deliver, so the
  * subsequent SSE event for the same id idempotently no-ops via the by-id
  * merge in applyMessageEvent. Single source: one ingestion path for the
- * real backend message, no synthetic placeholder, no double-write.
+ * real backend message, no placeholder, no double-write.
  */
 export function ingestPersistedMessage(input: { info: any; parts: any[] }): void {
   if (!input?.info?.id) return;

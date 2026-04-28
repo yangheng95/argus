@@ -62,32 +62,31 @@ describe("transcript", () => {
       expect(result).toBe("Hello world\n\n")
     })
 
-    test("skips synthetic text parts", () => {
+    test("formats every text part", () => {
       const part: Part = {
         id: "part_1",
         sessionID: "ses_123",
         messageID: "msg_123",
         type: "text",
-        text: "Synthetic content",
-        synthetic: true,
+        text: "Additional content",
       }
       const result = formatPart(part, options)
-      expect(result).toBe("")
+      expect(result).toBe("Additional content\n\n")
     })
 
-    test("skips text parts when ui visibility is disabled", () => {
+    test("does not honor audience visibility annotations", () => {
       const part = {
         id: "part_1",
         sessionID: "ses_123",
         messageID: "msg_123",
         type: "text",
-        text: "Hidden content",
+        text: "Visible content",
         audience: {
           ui: false,
         },
       } as Part
       const result = formatPart(part, options)
-      expect(result).toBe("")
+      expect(result).toBe("Visible content\n\n")
     })
 
     test("formats reasoning when thinking enabled", () => {

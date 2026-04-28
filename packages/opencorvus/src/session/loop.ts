@@ -33,7 +33,6 @@ import { Truncate } from "@/tool/truncation"
 import { MemoryInjection } from "@/memory/injection"
 import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
-import { messageControlOnly, textForBoth } from "./part-visibility"
 import { SessionSummary } from "./summary"
 import { SessionPromptState } from "./prompt/state"
 import { muteAISdkWarnings } from "@/runtime/shims"
@@ -50,9 +49,8 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
-// No synthetic user messages are used for terminal-call recovery. Agents that
-// require a terminal tool run with provider-level toolChoice where possible;
-// if the provider/model still stops in prose, the current assistant message is
+// Terminal-call recovery runs through provider-level toolChoice where possible.
+// If the provider/model still stops in prose, the current assistant message is
 // stamped with a typed error and the caller sees the contract violation.
 
 export namespace SessionLoop {
@@ -577,6 +575,7 @@ export namespace SessionLoop {
   function shouldEnterStandby(input: { lastUser: Message.User; lastAssistant: Message.Assistant | undefined }) {
     return !!(
       input.lastAssistant?.finish &&
+      input.lastAssistant.summary !== true &&
       input.lastAssistant.finish !== "tool-calls" &&
       input.lastUser.id < input.lastAssistant.id
     )
@@ -768,7 +767,6 @@ export namespace SessionLoop {
         sessionID: input.sessionID,
         type: "text",
         text: "Summarize the task tool output above and continue with your task.",
-        synthetic: true,
       } satisfies Message.TextPart)
     }
   }
@@ -851,7 +849,7 @@ export namespace SessionLoop {
       for (const msg of input.msgs) {
         if (msg.info.role !== "user" || msg.info.id <= input.lastFinished.id) continue
         for (const part of msg.parts) {
-          if (part.type !== "text" || !textForBoth(part)) continue
+          if (part.type !== "text") continue
           if (!part.text.trim()) continue
           part.text = [
             "<system-reminder>",
@@ -880,7 +878,7 @@ export namespace SessionLoop {
     }
 
     const memoryQuery = (lastUserMsg?.parts ?? [])
-      .filter((part): part is Message.TextPart => part.type === "text" && textForBoth(part))
+      .filter((part): part is Message.TextPart => part.type === "text")
       .map((part) => part.text)
       .join(" ")
       .trim()
@@ -889,15 +887,9 @@ export namespace SessionLoop {
     // they were pushed onto `system` after the cached entries (env, TUI), but
     // applyCaching only puts cache_control on the first 2 system messages —
     // anything after lives inside the second cache breakpoint, which spans
-    // the rest of system + all messages. Mutating any of these blocks
-    // therefore invalidated the entire prefix every turn, costing fresh
-    // cache_creation tokens for the full system + message history. Keeping
-    // them out of `system` and prepending them as a synthetic preamble to
-    // the latest user message means: (1) `system` stays byte-identical
-    // across turns and gets cached once per hour, (2) only the tail
-    // breakpoint absorbs the per-turn delta — exactly what the 5m TTL is
-    // for. We label the preamble with explicit fences so the model knows
-    // it's session state injected by the runtime, not user content.
+    // the rest of system + all messages. These blocks stay as runtime context
+    // for the current model turn; they are not persisted as conversation
+    // messages.
     const memoryInstruction = await MemoryInjection.systemPromptSection({
       projectID: Instance.project.id,
       sessionID: input.sessionID,
@@ -1749,10 +1741,10 @@ export namespace SessionLoop {
     if (input.session.parentID) return
     if (!Session.isDefaultTitle(input.session.title)) return
 
-    const firstRealUserIdx = input.history.findIndex((m) => m.info.role === "user" && !messageControlOnly(m.parts))
+    const firstRealUserIdx = input.history.findIndex((m) => m.info.role === "user")
     if (firstRealUserIdx === -1) return
 
-    const isFirst = input.history.filter((m) => m.info.role === "user" && !messageControlOnly(m.parts)).length === 1
+    const isFirst = input.history.filter((m) => m.info.role === "user").length === 1
     if (!isFirst) return
 
     const contextMessages = input.history.slice(0, firstRealUserIdx + 1)

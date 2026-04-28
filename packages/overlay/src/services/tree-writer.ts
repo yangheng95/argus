@@ -1742,7 +1742,7 @@ function normalizeStepStatus(raw: any): CardStatus {
 // One rule: every top-level card sorts by its birth `time`. No grouping,
 // no per-kind priority lanes. User-request, session cards (orchestrator,
 // requirements, architect, planner, build, ...), goal-step cards, orphan
-// interactions (question / permission), and synthetic optimistic bubbles
+// interactions (question / permission), and optimistic bubbles
 // all interleave on a single chronological axis. Card identity rules
 // (see specs/new-arch/07-panel-reactivity.md §身份规则) still decide
 // *whether* a card surfaces at the top level — not where.
@@ -1750,7 +1750,7 @@ function normalizeStepStatus(raw: any): CardStatus {
 // Invariants this function relies on, enforced by the writer elsewhere:
 //   • Every surfacing card carries `time` — session cards from
 //     `message.info.time.created`, step/phase from goal_run.time_started,
-//     interactions from their message time, synthetic from the optimistic
+//     interactions from their message time, optimistic from the local
 //     message's time, user-request from `task.time.created - 2` (the -2ms
 //     is what pins it ahead of any message that shares the exact task
 //     timestamp; no special-case needed here).
@@ -1828,8 +1828,8 @@ setBoardProjectionHandler(() => {
 rebuildBoardDerivedCards();
 
 // Synthetic-message projection removed: chat.ts no longer writes
-// `_synthetic: true` placeholders into messageStore.messages (the
+// duplicate placeholders into messageStore.messages (the
 // optimistic user bubble now comes through ingestPersistedMessage with
 // the real server-issued message id). Interactions are projected directly
 // into cardTreeStore via rebuildInteractionCards/upsertInteractionCard.
-// One source per card; no parallel synthetic mirror to keep in sync.
+// One source per card; no parallel mirror to keep in sync.

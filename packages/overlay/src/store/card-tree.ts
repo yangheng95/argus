@@ -18,7 +18,7 @@
 //                                                            scoped to one attempt (goal_run)
 //   step:<goalID>:<goalRunID|"pre">:<stepID>:phase:<phaseID>
 //                                                          — phase row inside an executor step
-//   interaction:<interactionID>                            — synthetic interaction card
+//   interaction:<interactionID>                            — interaction card
 //
 // Note: the legacy `goal-group:*` container layer was removed in the
 // 2026-04-19 flatten. Each goal now surfaces its single goal-scope step
@@ -46,7 +46,7 @@ export type CardKind =
   | "step"      // per-goal executor step card — top-level, carries goal metadata
   | "phase"     // phase row inside a step (plan / build / evaluate inside pipeline.build)
   | "tool"      // promoted tool call (nested card for task/subagent)
-  | "message"   // user / system synthetic bubble
+  | "message"   // user / system message bubble
   | "integrity"; // architecture integrity review verdict
 
 export type CardStatus =
