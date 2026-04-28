@@ -1,4 +1,6 @@
 import z from "zod"
+import Ajv2020 from "ajv/dist/2020"
+import type { AnySchema, ErrorObject } from "ajv"
 import { Identifier } from "../id/id"
 import { Message } from "./message"
 import { Session } from "."
@@ -206,6 +208,60 @@ export namespace SessionLoop {
   export type StructuredOutputGuard = (output: unknown) => string | undefined | Promise<string | undefined>
 
   const ephemeralStructuredOutputGuards = new Map<string, StructuredOutputGuard>()
+
+  const structuredOutputAjv = new Ajv2020({ allErrors: true, strict: false })
+
+  type StructuredOutputPayloadValidator = (
+    value: Record<string, unknown>,
+  ) => { success: true } | { success: false; error: string }
+
+  function isStructuredOutputPayload(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+  }
+
+  function structuredOutputPayloadType(value: unknown): string {
+    if (value === undefined) return "undefined"
+    if (value === null) return "null"
+    if (Array.isArray(value)) return "array"
+    return typeof value
+  }
+
+  function formatJsonSchemaErrors(errors: ErrorObject[] | null | undefined): string {
+    if (!errors?.length) return "schema validator rejected the payload"
+    return errors
+      .map((error) => `${error.instancePath || "<root>"} ${error.message ?? "is invalid"}`)
+      .join("; ")
+  }
+
+  function compileStructuredOutputPayloadValidator(schema: unknown): StructuredOutputPayloadValidator {
+    const validate = structuredOutputAjv.compile(schema as AnySchema)
+    return (value) => {
+      if (validate(value)) return { success: true }
+      return { success: false, error: formatJsonSchemaErrors(validate.errors) }
+    }
+  }
+
+  export function validateStructuredOutputPayload(
+    payload: unknown,
+    validator: StructuredOutputPayloadValidator,
+  ): { ok: true; value: Record<string, unknown> } | { ok: false; reason: string } {
+    if (!isStructuredOutputPayload(payload)) {
+      return {
+        ok: false,
+        reason: `StructuredOutput payload must be a JSON object; received ${structuredOutputPayloadType(payload)}`,
+      }
+    }
+
+    const validation = validator(payload)
+    if (!validation.success) {
+      return {
+        ok: false,
+        reason: `StructuredOutput payload did not match the registered JSON schema: ${validation.error}`,
+      }
+    }
+
+    return { ok: true, value: payload }
+  }
 
   export async function withStructuredOutputGuard<T>(
     sessionID: string,
@@ -1601,15 +1657,24 @@ export namespace SessionLoop {
     onSuccess: (output: unknown) => void
   }): AITool {
     const { $schema, ...toolSchema } = input.schema
+    const inputSchema = jsonSchema(toolSchema as any)
+    const payloadValidator = compileStructuredOutputPayloadValidator(toolSchema)
 
     return tool({
       id: "StructuredOutput" as any,
       description: STRUCTURED_OUTPUT_DESCRIPTION,
-      inputSchema: jsonSchema(toolSchema as any),
+      inputSchema,
       async execute(args) {
-        const rejection = await input.validate?.(args)
+        const payload = validateStructuredOutputPayload(args, payloadValidator)
+        if (!payload.ok) {
+          throw new Message.StructuredOutputPayloadError({
+            message: payload.reason,
+            reason: payload.reason,
+          })
+        }
+        const rejection = await input.validate?.(payload.value)
         if (rejection) throw new Error(rejection)
-        input.onSuccess(args)
+        input.onSuccess(payload.value)
         return {
           output: "Structured output captured successfully.",
           title: "Structured Output",

@@ -19,10 +19,23 @@ import { SessionLoop } from "../../src/session/loop"
  */
 
 type AIToolLike = {
-  inputSchema: { validate?: (value: unknown) => { success: boolean; value?: unknown; error?: unknown } } & Record<string, unknown>
+  inputSchema: Record<string, unknown>
   execute: (args: unknown, opts: { toolCallId?: string; messages?: unknown[]; abortSignal?: AbortSignal }) => Promise<{ output: string; title: string; metadata: Record<string, unknown> }>
   toModelOutput?: (result: { output: string }) => { type: string; value: string }
   description?: string
+}
+
+async function expectStructuredOutputPayloadError(
+  run: Promise<unknown>,
+  expected: string,
+) {
+  try {
+    await run
+    throw new Error("expected StructuredOutputPayloadError")
+  } catch (err) {
+    expect((err as { name?: string }).name).toBe("StructuredOutputPayloadError")
+    expect((err as { data?: { message?: string } }).data?.message).toBe(expected)
+  }
 }
 
 function jsonSchema(shape: z.ZodType): Record<string, any> {
@@ -73,6 +86,66 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     expect(result.metadata).toEqual({ valid: true })
   })
 
+  test("execute rejects undefined payload before onSuccess", async () => {
+    const captured: unknown[] = []
+    const schemaShape = jsonSchema(z.object({ answer: z.string() }))
+    const t = SessionLoop.createStructuredOutputTool({
+      schema: schemaShape,
+      onSuccess: (out) => captured.push(out),
+    }) as unknown as AIToolLike
+
+    await expectStructuredOutputPayloadError(
+      t.execute(undefined, { toolCallId: "call_empty" }),
+      "StructuredOutput payload must be a JSON object; received undefined",
+    )
+    expect(captured).toEqual([])
+  })
+
+  test("execute rejects null payload before onSuccess", async () => {
+    const captured: unknown[] = []
+    const schemaShape = jsonSchema(z.object({ answer: z.string() }))
+    const t = SessionLoop.createStructuredOutputTool({
+      schema: schemaShape,
+      onSuccess: (out) => captured.push(out),
+    }) as unknown as AIToolLike
+
+    await expectStructuredOutputPayloadError(
+      t.execute(null, { toolCallId: "call_null" }),
+      "StructuredOutput payload must be a JSON object; received null",
+    )
+    expect(captured).toEqual([])
+  })
+
+  test("execute rejects array payload before onSuccess", async () => {
+    const captured: unknown[] = []
+    const schemaShape = jsonSchema(z.object({ answer: z.string() }))
+    const t = SessionLoop.createStructuredOutputTool({
+      schema: schemaShape,
+      onSuccess: (out) => captured.push(out),
+    }) as unknown as AIToolLike
+
+    await expectStructuredOutputPayloadError(
+      t.execute([{ answer: "yes" }], { toolCallId: "call_array" }),
+      "StructuredOutput payload must be a JSON object; received array",
+    )
+    expect(captured).toEqual([])
+  })
+
+  test("execute rejects schema-invalid object before onSuccess when provider validation is bypassed", async () => {
+    const captured: unknown[] = []
+    const schemaShape = jsonSchema(z.object({ answer: z.string() }))
+    const t = SessionLoop.createStructuredOutputTool({
+      schema: schemaShape,
+      onSuccess: (out) => captured.push(out),
+    }) as unknown as AIToolLike
+
+    await expectStructuredOutputPayloadError(
+      t.execute({ answer: 42 }, { toolCallId: "call_schema_invalid" }),
+      "StructuredOutput payload did not match the registered JSON schema: /answer must be string",
+    )
+    expect(captured).toEqual([])
+  })
+
   test("execute rejects semantic guard failures before onSuccess", async () => {
     const captured: unknown[] = []
     const schemaShape = jsonSchema(z.object({ status: z.enum(["passed", "failed"]) }))
@@ -107,7 +180,8 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     expect(forModel).toEqual({ type: "text", value: result.output })
   })
 
-  test("inputSchema validator accepts a matching payload", () => {
+  test("execute accepts a nested matching payload", async () => {
+    const captured: unknown[] = []
     const schemaShape = jsonSchema(
       z.object({
         summary: z.string(),
@@ -116,22 +190,17 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     )
     const t = SessionLoop.createStructuredOutputTool({
       schema: schemaShape,
-      onSuccess: () => undefined,
+      onSuccess: (out) => captured.push(out),
     }) as unknown as AIToolLike
 
-    const validator = t.inputSchema.validate
-    if (!validator) {
-      // AI SDK's jsonSchema helper may not expose a synchronous validate hook
-      // on all versions; the test then simply asserts the schema was wired
-      // (object with properties) rather than probing its runtime behavior.
-      expect(typeof t.inputSchema).toBe("object")
-      return
-    }
-    const ok = validator({ summary: "s", items: ["x", "y"] })
-    expect(ok.success).toBe(true)
+    const payload = { summary: "s", items: ["x", "y"] }
+    const result = await t.execute(payload, { toolCallId: "call_nested" })
+    expect(result.metadata).toEqual({ valid: true })
+    expect(captured).toEqual([payload])
   })
 
-  test("inputSchema validator rejects a mismatching payload (wrong types)", () => {
+  test("execute rejects a mismatching payload with wrong types", async () => {
+    const captured: unknown[] = []
     const schemaShape = jsonSchema(
       z.object({
         summary: z.string(),
@@ -140,23 +209,32 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     )
     const t = SessionLoop.createStructuredOutputTool({
       schema: schemaShape,
-      onSuccess: () => undefined,
+      onSuccess: (out) => captured.push(out),
     }) as unknown as AIToolLike
 
-    const validator = t.inputSchema.validate
-    if (!validator) {
-      return // see note in the "accepts" test above
-    }
-    const bad = validator({ summary: 123, items: "not-an-array" })
-    expect(bad.success).toBe(false)
+    await expectStructuredOutputPayloadError(
+      t.execute({ summary: 123, items: "not-an-array" }, { toolCallId: "call_wrong_types" }),
+      "StructuredOutput payload did not match the registered JSON schema: /summary must be string; /items must be array",
+    )
+    expect(captured).toEqual([])
+  })
+
+  test("execute enforces draft 2020-12 tuple schemas", async () => {
+    const captured: unknown[] = []
+    const schemaShape = jsonSchema(z.object({ pair: z.tuple([z.string(), z.number()]) }))
+    const t = SessionLoop.createStructuredOutputTool({
+      schema: schemaShape,
+      onSuccess: (out) => captured.push(out),
+    }) as unknown as AIToolLike
+
+    await expectStructuredOutputPayloadError(
+      t.execute({ pair: ["name", "not-a-number"] }, { toolCallId: "call_tuple" }),
+      "StructuredOutput payload did not match the registered JSON schema: /pair/1 must be number",
+    )
+    expect(captured).toEqual([])
   })
 
   test("a validation failure does NOT invoke onSuccess", async () => {
-    // This captures the "self-correction" contract — if AI SDK rejects the
-    // tool input, our onSuccess callback MUST NOT receive the bad payload.
-    // The AI SDK reports a `tool-input-validation` stream failure which
-    // SessionLoop's outer runtime filters from critical failures so the
-    // model can self-correct on the next step (see loop.ts:277).
     let captured: unknown[] = []
     const schemaShape = jsonSchema(
       z.object({
@@ -168,22 +246,14 @@ describe("SessionLoop.createStructuredOutputTool", () => {
       onSuccess: (out) => captured.push(out),
     }) as unknown as AIToolLike
 
-    const validator = t.inputSchema.validate
-    if (!validator) {
-      return // see note in the "accepts" test above
-    }
-
-    const bad = validator({ answer: 42 })
-    expect(bad.success).toBe(false)
-    // AI SDK's tool runtime skips execute() on validation failure; simulate
-    // the contract by verifying we never reach onSuccess when validation
-    // reports failure. Attempting execute() with a bad payload is a
-    // NOT-REAL-PATH scenario (AI SDK never does it), but our contract is
-    // that the wrapper never "leaks" an invalid payload into the collector.
-    expect(captured.length).toBe(0)
+    await expectStructuredOutputPayloadError(
+      t.execute({}, { toolCallId: "call_missing_required" }),
+      "StructuredOutput payload did not match the registered JSON schema: <root> must have required property 'answer'",
+    )
+    expect(captured).toEqual([])
   })
 
-  test("ignores a $schema field on the input shape", () => {
+  test("ignores a $schema field on the input shape", async () => {
     // The StructuredOutput wrapper strips `$schema` before wiring the tool
     // (some providers reject it). This test verifies that stripping is
     // transparent and the wrapped tool still produces a valid validator.
@@ -193,10 +263,8 @@ describe("SessionLoop.createStructuredOutputTool", () => {
       onSuccess: () => undefined,
     }) as unknown as AIToolLike
 
-    const validator = t.inputSchema.validate
-    if (!validator) return
-    const ok = validator({ ok: true })
-    expect(ok.success).toBe(true)
+    const result = await t.execute({ ok: true }, { toolCallId: "call_schema_meta" })
+    expect(result.metadata).toEqual({ valid: true })
   })
 
   test("multiple tools from repeated factory calls have isolated onSuccess channels", async () => {

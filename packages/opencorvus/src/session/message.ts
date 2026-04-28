@@ -39,6 +39,13 @@ export namespace Message {
       retries: z.number(),
     }),
   )
+  export const StructuredOutputPayloadError = NamedError.create(
+    "StructuredOutputPayloadError",
+    z.object({
+      message: z.string(),
+      reason: z.string(),
+    }),
+  )
   export const AuthError = NamedError.create(
     "ProviderAuthError",
     z.object({
@@ -464,6 +471,7 @@ export namespace Message {
         OutputLengthError.Schema,
         AbortedError.Schema,
         StructuredOutputError.Schema,
+        StructuredOutputPayloadError.Schema,
         ContextOverflowError.Schema,
         APIError.Schema,
       ])
@@ -968,6 +976,8 @@ export namespace Message {
         ).toObject()
       case Message.OutputLengthError.isInstance(e):
         return e
+      case Message.StructuredOutputPayloadError.isInstance(e):
+        return e.toObject()
       case LoadAPIKeyError.isInstance(e):
         return new Message.AuthError(
           {

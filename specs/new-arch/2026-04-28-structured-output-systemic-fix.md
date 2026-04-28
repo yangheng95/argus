@@ -25,7 +25,7 @@
 - DB: Database，数据库。
 - HEAD: Git 当前检出的提交位置。
 - K: Thousand，千；本文在 `992K schema` 中表示约 992,000 字符或字节级别的数量级。
-- P0/P1/P2/P3/P4/P5/P6: Priority 0 到 Priority 6，本文中的问题优先级标记。
+- P0/P1/P2/P3/P4/P5/P6/P7: Priority 0 到 Priority 7，本文中的问题优先级标记。
 
 ## 1. 审查结论
 
@@ -136,6 +136,7 @@ protocol_event aggregate (last 30 min):
 | P4 | `ProviderLLM.stream` 与 `LLM.stream` 类型漂移 | `ProviderLLM.StreamInput.toolChoice` 不含 object form | 架构双源风险，但不是当前 run 的直接根因 |
 | P5 | integrity tool schema 设计可能仍偏大 | 需要 current HEAD 重测 | 只有重测超阈值时才进入 schema 重构 |
 | P6 | build agent surface 同样命中 P0–P3 | live task `tsk_dd200fc58001606QiIAbsibN5r` build session 73 秒 compaction、never-finalize、大量 diff activity 后仍未 merge_back | 修复必须在 build surface 上同时验收，不能仅修 integrity |
+| P7 | 模型可能调用被 hard-pin 的 `StructuredOutput`，但发送 `undefined` / `null` / schema-invalid payload | build agent 抛出 `BuildResultSchema` root-level `expected object, received undefined`；provider probe 原先只验证 tool name 命中 | StructuredOutput 工具边界必须验证 root object 和 JSON Schema，不能让空 payload 被记为成功输出 |
 
 ## 4. 修订后的实施方案
 
@@ -285,6 +286,7 @@ processor.message.parts.some(...)
 - `ProviderLLM.StreamInput.toolChoice` 与 `LLM.StreamInput.toolChoice` 使用同一个 exported type。
 - 如果 `ProviderLLM.stream()` 当前无调用方，要么删除该 stream 入口，要么让 `LLM.stream()` 复用它；不能继续保留两个不一致的 streamText 调用定义。
 - 新增 E2E provider probe：注册 `target` 和 `useless_work`，设置 `toolChoice={type:"tool", toolName:"target"}`，断言只调用 `target`。
+- provider probe 同时断言 `target` 收到 schema-valid object payload；只验证工具名不足以覆盖模型调错参数或空参数的失败。
 - provider probe 必须以环境变量显式开启，例如 `OPENCORVUS_PROVIDER_E2E=1`，且只在对应 provider credentials 存在时运行；普通 unit test 和默认 CI 不依赖真实 provider。
 
 **禁止项**:
@@ -297,7 +299,37 @@ processor.message.parts.some(...)
 
 - 类型层只有一个 tool choice 定义。
 - provider probe 明确记录支持/不支持。
+- 被 hard-pin 的工具收到 `undefined` / `null` / schema-invalid payload 时，probe 必须失败。
 - 不引入黑盒降级路径。
+
+### 阶段 E.1: StructuredOutput payload 边界验证
+
+**目标**: `StructuredOutput` 被调用但 payload 为空或不符合注册 JSON Schema 时，必须在工具执行边界失败，不能写入 `out.structured`，也不能把错误延迟到 build agent 的业务 schema。
+
+**文件**:
+
+- `packages/opencorvus/src/session/loop.ts`
+- `packages/opencorvus/src/session/message.ts`
+
+**改动**:
+
+- `createStructuredOutputTool()` 复用同一份 `jsonSchema(toolSchema)` 作为 provider schema 和本地执行边界 validator。
+- `execute(args)` 先验证 root payload 是 JSON object；`undefined`、`null`、array 直接抛 `StructuredOutputPayloadError`。
+- root object 继续通过注册 JSON Schema validator；不匹配时抛 `StructuredOutputPayloadError`。
+- 只有 payload 通过边界验证后，才进入 semantic guard 和 `onSuccess`。
+- 不对 StructuredOutput payload 使用 no-arg tool normalization；StructuredOutput 是终态 typed payload，不是普通无参工具。
+
+**测试**:
+
+- `undefined` payload 不调用 `onSuccess`。
+- `null` payload 不调用 `onSuccess`。
+- array payload 不调用 `onSuccess`。
+- schema-invalid object 即使绕过 provider validation，也不调用 `onSuccess`。
+
+**验收**:
+
+- `BuildResultSchema.safeParse(out.structured)` 不再接收由 `StructuredOutput` 工具空参数产生的 `undefined` 成功结果。
+- 错误类型明确为 `StructuredOutputPayloadError`，上层可以如实显示根因。
 
 ### 阶段 F: 外层 retry 只处理可恢复失败
 
