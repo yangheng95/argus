@@ -110,6 +110,10 @@ export namespace RequirementsAgent {
       buildUserPrompt: () => buildUserPrompt(input, context),
       buildUserParts: () => buildPromptParts(buildUserPrompt(input, context), input.attachments),
       skillsStage: "requirements",
+      terminalTool: {
+        toolName: "submit_requirements",
+        isSatisfied: (collector) => collector.finalized,
+      },
     })
 
     const collector = out.collector as RequirementsCollector

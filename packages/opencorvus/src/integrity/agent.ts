@@ -410,6 +410,10 @@ export async function reviewIntegrity(input: {
           return [{ type: "text" as const, text: enrichedText }, ...inline]
         }
       : undefined,
+    terminalTool: {
+      toolName: "submit_integrity_review",
+      isSatisfied: (collector) => collector.finalized,
+    },
     onSessionCreated: (session) => {
       input.onSessionCreated?.(session.id)
       emitIntegrityLifecycle("started", input.taskID, session.id, 0, 0)

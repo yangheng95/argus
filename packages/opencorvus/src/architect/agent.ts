@@ -128,6 +128,10 @@ export namespace ArchitectAgent {
       },
       buildUserPrompt: () => buildUserPrompt(input),
       skillsStage: "architect",
+      terminalTool: {
+        toolName: "submit_architect",
+        isSatisfied: (collector) => collector.finalized,
+      },
     })
 
     log.info("architect agent finished", {

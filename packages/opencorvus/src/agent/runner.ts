@@ -198,6 +198,17 @@ export interface RunAgentSessionInput<C> {
    *  resulting `Message.Assistant.structured` value is returned to the
    *  caller alongside the collector. */
   format?: StructuredFormat
+  /** Required terminal collector tool for stages whose structured facts are
+   *  already captured by tool calls and whose final action is an explicit
+   *  validator/submit tool. The session loop uses this contract to recover
+   *  in-session if the model stops in prose before calling that terminal
+   *  tool. */
+  terminalTool?: {
+    toolName: string
+    toolNames?: string[]
+    allowHardPin?: boolean
+    isSatisfied: (collector: C) => boolean
+  }
   /** Pass-through skill stage. When omitted, no skill injection runs.
    *  See `SkillStage` JSDoc. */
   skillsStage?: SkillStage
@@ -341,6 +352,16 @@ export async function runAgentSession<C>(
   const enableMap: Record<string, boolean> = Object.fromEntries(
     Object.keys(input.toolKit.tools).map((name) => [name, true]),
   )
+  if (
+    input.terminalTool &&
+    !(input.terminalTool.toolNames ?? [input.terminalTool.toolName])
+      .some((name) => name in input.toolKit.tools)
+  ) {
+    throw new AgentRunError(
+      kind,
+      `terminal tool ${input.terminalTool.toolName} is not registered in the agent tool kit`,
+    )
+  }
 
   log.info(`${agentName} agent starting`, {
     kind,
@@ -377,11 +398,23 @@ export async function runAgentSession<C>(
         finalMessage = (await SessionPrompt.prompt(promptArgs)) as Message.WithParts
       }
       await SessionPrompt.withExtraTools(session.id, input.toolKit.tools, async () => {
+        const runWithTerminalContract = async () => {
+          if (!input.terminalTool) {
+            await promptOnce()
+            return
+          }
+          await SessionPrompt.withTerminalToolContract(session.id, {
+            toolName: input.terminalTool.toolName,
+            toolNames: input.terminalTool.toolNames,
+            allowHardPin: input.terminalTool.allowHardPin,
+            isSatisfied: () => input.terminalTool!.isSatisfied(input.toolKit.getCollector()),
+          }, promptOnce)
+        }
         if (input.format?.validate) {
-          await SessionPrompt.withStructuredOutputGuard(session.id, input.format.validate, promptOnce)
+          await SessionPrompt.withStructuredOutputGuard(session.id, input.format.validate, runWithTerminalContract)
           return
         }
-        await promptOnce()
+        await runWithTerminalContract()
       })
     } finally {
       errorUnsub()
@@ -481,13 +514,9 @@ export interface RetryDecision {
   /**
    * When true, the attempt's failure is structurally non-recoverable: the
    * outer retry loop MUST NOT spawn another session. Used by callers whose
-   * in-session recovery (e.g. SessionLoop's StructuredOutput reminder /
-   * hard-pin) has already exhausted its budget within the just-finished
-   * attempt — restarting the session from scratch only burns 20-30 minutes
-   * of LLM time on a guaranteed-equivalent failure (the failure mode behind
-   * the 3-attempt 90-minute integrity-reviewer storms in
-   * ainvest-20260428-100538). See specs/new-arch/2026-04-28-structured-
-   * output-systemic-fix.md §F.
+   * in-session protocol checks have already proven the just-finished attempt
+   * violated a deterministic contract — restarting the session from scratch
+   * only burns LLM time on a guaranteed-equivalent failure.
    *
    * The retry helper still honours `ok=true` short-circuit — `terminal`
    * is only consulted on `ok=false`.

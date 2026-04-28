@@ -428,3 +428,15 @@ processor.message.parts.some(...)
 - `updatePartDelta` 是 ephemeral Bus delta，不写回 transcript；测试改为断言事件发布和 transcript 不变。
 - plugin 初始化在 in-process 单测中使用 `IN_PROCESS_BASE_URL`，不再要求 `Server.serve()` 先启动真实 HTTP URL。
 - `SessionRetry.retryable` 对未知 JSON envelope default-deny，`no_kv_space` 这类未白名单错误不再默认重试。
+
+## 10. 2026-04-28 终结工具协议修订
+
+`architect` 暴露了同类遗漏：collector 已收集目标图后，模型仍可能以 prose 停止而不调用 `submit_architect`。真实根因不是 architect 单点，而是 session loop 只有 `StructuredOutput` 专属的 terminal recovery；改为 collector terminal tools 后，requirements / architect / integrity / build 都需要同一个“必需终结工具”协议。
+
+已实施的新约束：
+
+- `runAgentSession` 新增 `terminalTool` contract，由各 stage 声明自己的终结工具和 collector 满足条件。
+- `SessionLoop` 在 terminal contract 未满足时使用 provider-level `toolChoice: "required"`，推动模型继续使用工具；若 provider/model 仍以非 tool-call 结束，则在当前 assistant message 上记录 `TerminalToolMissingError` 并停止。
+- 禁止为 terminal recovery 合成 user message；不再通过 synthetic reminder 追加新 turn。
+- `build` 有 `report_build_passed` / `report_build_failed` 两个 discriminator terminal tools，因此只用 `toolChoice: "required"`，不 hard-pin 到单一分支。
+- `requirements-core` / `integrity-core` 的旧 `StructuredOutput` 文案已替换成 `submit_requirements()` / `submit_integrity_review()`，避免 prompt 与代码协议双源。

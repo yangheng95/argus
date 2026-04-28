@@ -43,6 +43,7 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
       "submit_technical_feasibility_verdict",
     ])
     expect(input.format).toBeUndefined()
+    expect(input.terminalTool?.toolName).toBe("submit_integrity_review")
     return {
       session: { id: "ses_integrity_missing" },
       streamErrors: [],
