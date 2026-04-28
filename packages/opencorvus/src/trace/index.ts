@@ -221,7 +221,8 @@ export namespace AgentTrace {
     system: string[]
     messages: unknown[]
     tools: Array<{ name: string; description?: string }>
-    toolChoice?: string
+    /** Mirrors LLM.StreamInput['toolChoice'] — string forms or specific-tool pin. */
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
     small?: boolean
   }) {
     if (!ENABLED) return

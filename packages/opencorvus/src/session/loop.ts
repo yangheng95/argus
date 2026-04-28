@@ -728,6 +728,21 @@ export namespace SessionLoop {
       }
     }
 
+    // After the first soft miss (toolChoice='required' lets the model
+    // pick any tool, which kimi-class models exploit by chaining work
+    // tools forever), upgrade the next attempt to a hard pin on
+    // StructuredOutput. This is the only protocol-layer guarantee that
+    // the next assistant turn cannot select a different tool to dodge
+    // finalisation; soft prompts ('IMPORTANT', system reminders) are
+    // routinely ignored on long contexts. See countPriorStructuredOutputErrors
+    // for the bound — once we have at least one prior reminder on this
+    // user turn, every subsequent call is hard-pinned until the model
+    // emits StructuredOutput or the reminder budget runs out.
+    const priorReminderCount = countPriorStructuredOutputErrors(input.msgs, input.lastUser.id)
+    const turnToolChoice = structuredOutputToolChoice(format, {
+      forceStructuredOutput: priorReminderCount > 0 && "StructuredOutput" in tools,
+    })
+
     const result = await processor.process({
       user: input.lastUser,
       agent,
@@ -737,7 +752,7 @@ export namespace SessionLoop {
       messages: modelMessages,
       tools,
       model: input.model,
-      toolChoice: structuredOutputToolChoice(format),
+      toolChoice: turnToolChoice,
     })
 
     if (structured !== undefined) {
@@ -749,11 +764,9 @@ export namespace SessionLoop {
 
     const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
     if (modelFinished && !processor.message.error && format.type === "json_schema") {
-      // Count how many prior assistant messages in this conversation have
-      // already failed the same way since the user's prompt that opened
-      // the turn. The reminder loop is bounded so a stubborn model cannot
-      // burn the whole `agent.steps` budget on this one error.
-      const priorReminders = countPriorStructuredOutputErrors(input.msgs, input.lastUser.id)
+      // Reuse the count we already computed at the top of this turn so
+      // both `turnToolChoice` and the reminder bound see the same number.
+      const priorReminders = priorReminderCount
 
       if (priorReminders < MAX_STRUCTURED_OUTPUT_REMINDERS) {
         // Stamp the error on this turn's assistant message so the trace
@@ -817,8 +830,30 @@ export namespace SessionLoop {
     resume_existing: z.boolean().optional(),
   })
 
-  export function structuredOutputToolChoice(format: z.infer<typeof Message.Format>): "required" | undefined {
-    return format.type === "json_schema" ? "required" : undefined
+  /**
+   * Resolve the toolChoice to send the provider for a json-schema turn.
+   *
+   * Default ('required'): any tool — lets the model do work first, then
+   * call StructuredOutput when it decides it is done. The downside is
+   * that long-context models routinely keep selecting work tools and
+   * never finalise, which is the failure mode that motivated
+   * MAX_STRUCTURED_OUTPUT_REMINDERS.
+   *
+   * Forced ({type:'tool', toolName:'StructuredOutput'}): the protocol-
+   * level guarantee that the next assistant turn can call only this
+   * tool. Use after at least one prior soft miss on the same user turn
+   * — at that point the work tools have already produced enough state
+   * to finalise, and pinning the next call structurally cannot select
+   * anything else. The caller must verify that StructuredOutput is in
+   * the tool set before passing forceStructuredOutput=true.
+   */
+  export function structuredOutputToolChoice(
+    format: z.infer<typeof Message.Format>,
+    options?: { forceStructuredOutput?: boolean },
+  ): "required" | { type: "tool"; toolName: string } | undefined {
+    if (format.type !== "json_schema") return undefined
+    if (options?.forceStructuredOutput) return { type: "tool", toolName: "StructuredOutput" }
+    return "required"
   }
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input

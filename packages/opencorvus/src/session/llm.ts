@@ -36,7 +36,18 @@ export namespace LLM {
     small?: boolean
     tools: Record<string, Tool>
     retries?: number
-    toolChoice?: "auto" | "required" | "none"
+    /**
+     * Tool-call enforcement passed straight through to streamText. The
+     * three string forms ('auto' / 'required' / 'none') are the soft
+     * controls; the object form pins the next call to a specific tool
+     * (e.g. {type:'tool', toolName:'StructuredOutput'}) and is the only
+     * structural guarantee the protocol gives us that the model cannot
+     * keep selecting a different work tool to dodge finalisation. Use
+     * the object form sparingly — once it is set, the model can ONLY
+     * call that one tool, so it must already be in a state where the
+     * work tools are no longer needed.
+     */
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, unknown>
