@@ -26,17 +26,6 @@ const TREE_WRITER_NOOP_TYPES = new Set([
   // three events.
 ])
 
-/** Subagent phase-completion events. Each carries `sessionID` + `status`
- *  ("completed" | "error") and flips the owning session card out of its
- *  default `running` state. Added explicitly so the writer's
- *  `unhandled event type` guard doesn't mask them — these event types
- *  don't sit under any of the pass-through prefixes. */
-const SUBAGENT_PHASE_COMPLETED_TYPES = new Set([
-  "requirements.completed",
-  "architect.completed",
-  "design_analysis.completed",
-]);
-
 const TREE_WRITER_PASS_THROUGH_PREFIXES = [
   "run.",
   "plan.",
@@ -82,10 +71,6 @@ export function isTreeWriterNoopEventType(type: string): boolean {
 
 export function isTreeWriterPassThroughEventType(type: string): boolean {
   return hasPrefix(type, TREE_WRITER_PASS_THROUGH_PREFIXES);
-}
-
-export function isSubagentPhaseCompletedEventType(type: string): boolean {
-  return SUBAGENT_PHASE_COMPLETED_TYPES.has(type);
 }
 
 export function isBoardInvalidatingEventType(type: string): boolean {

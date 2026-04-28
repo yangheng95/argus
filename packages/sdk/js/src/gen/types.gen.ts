@@ -300,51 +300,6 @@ export type EventGoalWorkflowProgress = {
   }
 }
 
-export type EventRequirementsCompleted = {
-  type: "requirements.completed"
-  properties: {
-    taskID: string
-    sessionID: string
-    status: "completed" | "error"
-    error?: string
-    requirementCount?: number
-    goalCount?: number
-    decisionCount?: number
-    traceabilityCount?: number
-    integrityScore?: number
-    summary: string
-  }
-}
-
-export type EventArchitectCompleted = {
-  type: "architect.completed"
-  properties: {
-    taskID: string
-    sessionID: string
-    status: "completed" | "error"
-    error?: string
-    contractCount?: number
-    categories?: Array<string>
-    blueprintSummary?: string
-    summary: string
-  }
-}
-
-export type EventDesignAnalysisCompleted = {
-  type: "design_analysis.completed"
-  properties: {
-    taskID: string
-    sessionID: string
-    status: "completed" | "error"
-    error?: string
-    layoutSections?: number
-    styleTokens?: number
-    componentCount?: number
-    interactionCount?: number
-    summary: string
-  }
-}
-
 export type EventIntegrityReviewStarted = {
   type: "integrity.review.started"
   properties: {
@@ -405,19 +360,6 @@ export type EventIntegrityReviewCompleted = {
       reason?: string
     }>
     attempts: number
-  }
-}
-
-export type EventBuildCompleted = {
-  type: "build.completed"
-  properties: {
-    taskID: string
-    sessionID: string
-    goalID?: string
-    status: "passed" | "failed" | "error"
-    error?: string
-    commitRef?: string
-    summary: string
   }
 }
 
@@ -1538,14 +1480,10 @@ export type Event =
   | EventWorkflowSelected
   | EventWorkflowStepUpdated
   | EventGoalWorkflowProgress
-  | EventRequirementsCompleted
-  | EventArchitectCompleted
-  | EventDesignAnalysisCompleted
   | EventIntegrityReviewStarted
   | EventIntegrityReviewProgress
   | EventIntegrityReviewChunk
   | EventIntegrityReviewCompleted
-  | EventBuildCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
   | EventServerConnected

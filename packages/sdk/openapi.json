@@ -26609,177 +26609,6 @@
           "properties"
         ]
       },
-      "Event.requirements.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "requirements.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "completed",
-                  "error"
-                ]
-              },
-              "error": {
-                "type": "string"
-              },
-              "requirementCount": {
-                "type": "number"
-              },
-              "goalCount": {
-                "type": "number"
-              },
-              "decisionCount": {
-                "type": "number"
-              },
-              "traceabilityCount": {
-                "type": "number"
-              },
-              "integrityScore": {
-                "type": "number"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.architect.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "architect.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "completed",
-                  "error"
-                ]
-              },
-              "error": {
-                "type": "string"
-              },
-              "contractCount": {
-                "type": "number"
-              },
-              "categories": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "blueprintSummary": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.design_analysis.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "design_analysis.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "completed",
-                  "error"
-                ]
-              },
-              "error": {
-                "type": "string"
-              },
-              "layoutSections": {
-                "type": "number"
-              },
-              "styleTokens": {
-                "type": "number"
-              },
-              "componentCount": {
-                "type": "number"
-              },
-              "interactionCount": {
-                "type": "number"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.integrity.review.started": {
         "type": "object",
         "properties": {
@@ -27043,57 +26872,6 @@
               "corrections",
               "missingGoals",
               "attempts"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.build.completed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "build.completed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "taskID": {
-                "type": "string",
-                "pattern": "^tsk.*"
-              },
-              "sessionID": {
-                "type": "string"
-              },
-              "goalID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "passed",
-                  "failed",
-                  "error"
-                ]
-              },
-              "error": {
-                "type": "string"
-              },
-              "commitRef": {
-                "type": "string"
-              },
-              "summary": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "taskID",
-              "sessionID",
-              "status",
-              "summary"
             ]
           }
         },
@@ -30737,15 +30515,6 @@
             "$ref": "#/components/schemas/Event.goal.workflow.progress"
           },
           {
-            "$ref": "#/components/schemas/Event.requirements.completed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.architect.completed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.design_analysis.completed"
-          },
-          {
             "$ref": "#/components/schemas/Event.integrity.review.started"
           },
           {
@@ -30756,9 +30525,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.build.completed"
           },
           {
             "$ref": "#/components/schemas/Event.project.updated"

@@ -51,7 +51,8 @@ export type CardKind =
 
 export type CardStatus =
   | "pending"
-  | "running"
+  | "running"   // LLM stream actively in flight (spinner ON)
+  | "idle"      // session alive but between turns, awaiting next user message / wake (no spinner)
   | "completed"
   | "error"
   | "skipped";

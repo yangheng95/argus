@@ -21,7 +21,6 @@ import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
 import {
   isBoardInvalidatingEventType,
   isRouterConsumedNoopEventType,
-  isSubagentPhaseCompletedEventType,
 } from "./event-policy";
 
 // Forward SSE events to the tree-writer. Runs alongside `enqueueEvent` so
@@ -506,7 +505,7 @@ function shouldRefreshSelectedBoard(type: string): boolean {
     type.startsWith("message.") ||
     type.startsWith("run.") ||
     type === "task.message" ||
-    isSubagentPhaseCompletedEventType(type)
+    type === "session.status"
   );
 }
 
