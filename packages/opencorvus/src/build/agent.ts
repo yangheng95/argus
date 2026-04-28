@@ -48,6 +48,7 @@ import { renderVisualContractPromptSection } from "@/design-analyst/prompt-secti
 import type { FileDiff } from "@/snapshot/types"
 import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 import { AttachmentStore } from "@/storage/attachment-store"
+import { withStreamActivity } from "@/util/stream-activity"
 
 import BUILD_CORE from "@/prompt/core/build-core.txt"
 
@@ -832,6 +833,24 @@ async function runWithExternalProvider(args: {
   })
 
   const configuredTools = resolveOption(options.tools)
+  // Per-build idle gate. The external executor's `provider.run` yields events
+  // by streaming over its own subprocess stdio; if the LLM-side connection
+  // stalls (e.g. the 2026-04-27 codex benchmark caught a build subprocess
+  // sitting silent for 47+ minutes with sessions=[]), the for-await loop
+  // would wait forever because `args.signal` only fires on caller cancel,
+  // not on stream inactivity. Compose `args.signal` with a fresh
+  // `withStreamActivity` watchdog (idleMs = activity.executor_events_idle_ms,
+  // the layer reserved for external executor event queues per
+  // engine/config.ts §86) and feed `gate.signal` to the provider so codex /
+  // claude-code subprocesses receive the abort the same way they receive
+  // a caller cancel — no new error surface, the existing catch maps the
+  // AbortError to `errored` and the build returns status=failed.
+  const idleMs = orchCfg.activity.executor_events_idle_ms
+  const gate = withStreamActivity({
+    idleMs,
+    signal: args.signal,
+    label: `build-agent-external:${args.executor}:${session.id}`,
+  })
   const runInput = {
     model: resolveOption(options.model),
     prompt,
@@ -839,7 +858,7 @@ async function runWithExternalProvider(args: {
     system: composedSystem.system,
     maxTurns: resolveOption(options.maxTurns),
     tools: configuredTools,
-    signal: args.signal,
+    signal: gate.signal,
   }
 
   log.info("build agent (external) provider input ready", {
@@ -857,6 +876,7 @@ async function runWithExternalProvider(args: {
 
   try {
     for await (const event of provider.run(runInput)) {
+      gate.observe()
       events.push(event)
       switch (event.type) {
         case "text_delta": {
@@ -949,6 +969,8 @@ async function runWithExternalProvider(args: {
     }
   } catch (err) {
     errored = err instanceof Error ? err.message : String(err)
+  } finally {
+    gate.dispose()
   }
 
   // Finalize any open parts so overlay sees the closing state.
