@@ -6,7 +6,7 @@ import { SECRET_PATTERNS, scan } from "../../../script/secret-scan"
 
 /**
  * Regression for the historical leak that triggered this guard:
- * commit 9d56d9aec removed the embedded `sk-eq7WQu0ylelH6uyedbf6PA`
+ * commit 9d56d9aec removed the embedded `sk-eq7WQu0ylelH6uyedbf6PA` // secret-scan: ignore
  * Hexin key from source. The key was burned (revocable at provider
  * only — git history is public). This scanner exists so a re-leak of
  * the same SHAPE is caught at pre-push time, not after.
@@ -66,11 +66,11 @@ describe("scan", () => {
     write(
       "src/keys-real.ts",
       [
-        `const gh = "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"`,
-        `const aws = "AKIAIOSFODNN7EXAMPLE"`,
-        `const goog = "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7"`,
-        `const slack = "xoxb-1234567890-AAAAAAAAAAAAAAAAAAAA"`,
-        `const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"`,
+        `const gh = "ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"`, // secret-scan: ignore
+        `const aws = "AKIAIOSFODNN7EXAMPLE"`, // secret-scan: ignore
+        `const goog = "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"`, // secret-scan: ignore
+        `const slack = "xoxb-1234567890-AAAAAAAAAAAAAAAAAAAA"`, // secret-scan: ignore
+        `const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"`, // secret-scan: ignore
       ].join("\n"),
     )
     const hits = scan({ repoRoot: root, files: ["src/keys-real.ts"] })
@@ -95,14 +95,14 @@ describe("scan", () => {
     // Binary file with a fake key inside should NOT be flagged
     // (the scanner skips unknown extensions). This avoids tripping
     // on PNG/JPEG containing accidental key-shaped byte sequences.
-    write("media/icon.png", "sk-AAAAAAAAAAAAAAAAAAAAAA fake bytes")
+    write("media/icon.png", "sk-AAAAAAAAAAAAAAAAAAAAAA fake bytes") // secret-scan: ignore
     const hits = scan({ repoRoot: root, files: ["media/icon.png"] })
     expect(hits).toHaveLength(0)
   })
 
   test("skips files larger than 1 MiB", () => {
     const big = "x".repeat(1024 * 1024 + 10)
-    write("src/big.ts", `const k = "sk-AAAAAAAAAAAAAAAAAAAAAA"\n${big}`)
+    write("src/big.ts", `const k = "sk-AAAAAAAAAAAAAAAAAAAAAA"\n${big}`) // secret-scan: ignore
     const hits = scan({ repoRoot: root, files: ["src/big.ts"] })
     expect(hits).toHaveLength(0)
   })

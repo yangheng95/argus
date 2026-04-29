@@ -5,7 +5,7 @@
  * Scans ONLY git-tracked files (so .gitignored .env / .secrets are
  * excluded). Fails the build if any common API-key / credential
  * pattern is found in source. Designed to run in pre-push so a
- * recurrence of the historical `sk-eq7WQu0ylelH6uyedbf6PA` leak
+ * recurrence of the historical `sk-eq7WQu0ylelH6uyedbf6PA` leak  // secret-scan: ignore
  * (commit 9d56d9aec — burned at provider, but cannot be erased
  * from history without rewriting the public branch) is caught
  * BEFORE it lands in a commit, not after.
