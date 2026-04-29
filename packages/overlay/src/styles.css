@@ -2712,6 +2712,35 @@ body[data-theme="light"] .section-badge {
 .provider-card-meta--last {
   margin-bottom: 0;
 }
+.provider-empty {
+  opacity: 0.6;
+  font-size: var(--ui-font-control);
+  padding: var(--ui-gap-lg);
+}
+.provider-card-row {
+  margin-bottom: var(--ui-gap-md);
+}
+.provider-add-card {
+  margin-top: var(--ui-gap-md);
+  border: 1px solid var(--border);
+}
+.provider-add-title {
+  font-size: var(--ui-font-title);
+  margin: 0 0 var(--ui-gap-md) 0;
+}
+.provider-models-textarea {
+  font-family: var(--mono);
+  font-size: var(--ui-font-control);
+  resize: vertical;
+}
+.provider-form-actions {
+  margin-top: var(--ui-gap-md);
+}
+.provider-catalog-hint {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  margin-bottom: var(--ui-gap-sm);
+}
 
 /* AgentModelsPanel loading state — replaces the bare "Loading…" text
    with a spinner + label so the operator can distinguish "still
