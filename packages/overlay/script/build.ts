@@ -120,7 +120,7 @@ await $`bun run build:vite`.cwd(dir)
 await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)
 await cleanBuildResidue()
 
-await $`tauri build --no-bundle ${tauriArgs()}`.cwd(dir).env({
+await $`tauri build ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
   OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
