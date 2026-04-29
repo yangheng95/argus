@@ -28,6 +28,14 @@ describe("task message routes", () => {
         const taskID = Identifier.ascending("task")
         const now = Date.now()
 
+        // audit-2026-04-29 W2-V35 — handleTaskMessage was changed
+        // to REJECT messages on failed/cancelled tasks (see
+        // task-api/index.ts:1239: "audit Q1 finding"). Pre-fix
+        // the test seeded a failed row (time_completed + error
+        // both set) and expected the message to be recorded as a
+        // note that triggers scheduler — that contract no longer
+        // applies. Seed an ACTIVE task instead so the
+        // scheduler-trigger contract under test still fires.
         Database.use((db) =>
           db.insert(EngineTaskTable).values({
             id: taskID,
@@ -36,11 +44,9 @@ describe("task message routes", () => {
             title: "retry through message",
             request: "retry through message",
             priority: "normal",
-            error: "initial failure",
             time_created: now,
             time_updated: now,
             time_started: now,
-            time_completed: now,
           }).run(),
         )
 
@@ -63,26 +69,32 @@ describe("task message routes", () => {
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+        // V35: dispatchTaskLoop trigger schema changed from
+        //   trigger: { kind, message, attachmentSummary }
+        // to
+        //   event: { note, operatorMessage: { text, attachmentSummary } }
+        // Reflect the new shape.
         expect(dispatchTaskLoop.mock.calls[0]?.[0]).toMatchObject({
           taskID,
-          trigger: {
-            kind: "operator_message",
-            message: "把当前任务停下来，重新评估策略后继续。",
-            attachmentSummary: undefined,
+          event: {
+            note: "把当前任务停下来，重新评估策略后继续。",
+            operatorMessage: {
+              text: "把当前任务停下来，重新评估策略后继续。",
+              attachmentSummary: undefined,
+            },
           },
           interrupt: true,
         })
 
-        // Phase-6-f-2: task.status is a derived view, not a column.
-        // The row still carries the "failed" shape: time_completed set + error non-null.
+        // V35: row state is no longer "failed" (we seeded an active
+        // task) — assertion on "row stays failed" is dropped.
         const row = Database.use((db) =>
           db.select({
             time_completed: EngineTaskTable.time_completed,
             error: EngineTaskTable.error,
           }).from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
         )
-        expect(row?.time_completed).not.toBeNull()
-        expect(row?.error).toBe("initial failure")
+        expect(row?.error).toBeNull()
       },
     })
   })
@@ -136,22 +148,20 @@ describe("task message routes", () => {
         expect(body.message).toBe("Operator note recorded. Scheduler notified.")
         expect(body.should_resume).toBe(true)
         expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
-        const trigger = (dispatchTaskLoop.mock.calls[0]?.[0] as {
-          trigger: {
-            kind: string
-            message: string
-            attachmentSummary?: string
+        // V35: trigger schema replaced with `event.operatorMessage`.
+        const event = (dispatchTaskLoop.mock.calls[0]?.[0] as {
+          event: {
+            note?: string
+            operatorMessage: {
+              text: string
+              attachmentSummary?: string
+            }
           }
-        })?.trigger as {
-          kind: string
-          message: string
-          attachmentSummary?: string
-        }
-        expect(trigger.kind).toBe("operator_message")
-        expect(trigger.message).toBe("参考我刚上传的规格，再决定下一步。")
-        expect(trigger.attachmentSummary).toContain("Attachments:")
-        expect(trigger.attachmentSummary).toContain("spec.txt")
-        expect(trigger.attachmentSummary).toContain("text/plain")
+        })?.event
+        expect(event.operatorMessage.text).toBe("参考我刚上传的规格，再决定下一步。")
+        expect(event.operatorMessage.attachmentSummary).toContain("Attachments:")
+        expect(event.operatorMessage.attachmentSummary).toContain("spec.txt")
+        expect(event.operatorMessage.attachmentSummary).toContain("text/plain")
         expect((dispatchTaskLoop.mock.calls[0]?.[0] as { interrupt?: boolean }).interrupt).toBe(true)
       },
     })

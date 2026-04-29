@@ -369,7 +369,16 @@ describe("task conversation routes", () => {
           session_id: build.id,
           cancelled: true,
         })
-        expect(SessionStatus.get(build.id).type).toBe("idle")
+        // audit-2026-04-29 W2-V35 — production session lifecycle now
+        // sets `type: "terminal"` after an abort (see actor.ts:107
+        // `{ type: "terminal", reason: "aborted" }` and
+        // session/prompt/state.ts:56,68). Pre-fix the test expected
+        // "idle" — that was the old post-abort state. The semantic
+        // shift was deliberate: aborted sessions are TERMINAL (no
+        // resume); only naturally-completing sessions move to idle
+        // (loop.ts:587). Update the assertion to match the abort
+        // path's actual state.
+        expect(SessionStatus.get(build.id).type).toBe("terminal")
       },
     })
   })
