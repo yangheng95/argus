@@ -5,7 +5,7 @@ import { InteractionCard } from "./InteractionCard";
 import { Card } from "./Card";
 import { FilePart } from "./FilePart";
 import { type CardNode } from "../utils/card-tree";
-import { stamp } from "../utils/time";
+import { stamp, fullStampWithRelative } from "../utils/time";
 import { toolNameKey, displayToolArguments, shortRelativePath } from "../utils/tool";
 import { selectedTaskDirectory } from "../store/board";
 
@@ -60,7 +60,10 @@ export function CardParts(props: { parts: any[]; depth: number }) {
             <div class="card-boundary">
               <span class="card-boundary-role">{part.roleLabel}</span>
               <Show when={part.time}>
-                <span class="card-boundary-time">{stamp(part.time)}</span>
+                <span
+                  class="card-boundary-time"
+                  title={fullStampWithRelative(part.time)}
+                >{stamp(part.time)}</span>
               </Show>
             </div>
           </Match>
