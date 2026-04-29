@@ -8,6 +8,7 @@ import { t } from "../../utils/i18n";
 import { appStore, setAppStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
 import { apiJson } from "../../services/api";
+import { testProviderConnection, type ProviderTestResult } from "../../services/llm";
 
 interface ProviderModel {
   name: string;
@@ -25,6 +26,46 @@ export default function ProvidersPanel() {
   const [saving, setSaving] = createSignal(false);
   const [editing, setEditing] = createSignal<string | null>(null);
   const [showAdd, setShowAdd] = createSignal(false);
+  // Per-provider connectivity-test state. testing/results are keyed by
+  // provider id so the operator can run several tests in parallel and
+  // see each result tagged to its row. Cleared when the provider is
+  // edited or removed (covered by row remount via the For key).
+  const [testing, setTesting] = createSignal<Set<string>>(new Set());
+  const [testResults, setTestResults] = createSignal<Map<string, ProviderTestResult>>(new Map());
+
+  async function handleTest(providerId: string, models: Record<string, ProviderModel>) {
+    const modelID = Object.keys(models)[0];
+    if (!modelID) {
+      setTestResults((prev) => {
+        const next = new Map(prev);
+        next.set(providerId, { ok: false, message: "No models configured — add at least one model before testing." });
+        return next;
+      });
+      return;
+    }
+    setTesting((prev) => new Set(prev).add(providerId));
+    try {
+      const result = await testProviderConnection(providerId, modelID);
+      setTestResults((prev) => {
+        const next = new Map(prev);
+        next.set(providerId, result);
+        return next;
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTestResults((prev) => {
+        const next = new Map(prev);
+        next.set(providerId, { ok: false, message: msg });
+        return next;
+      });
+    } finally {
+      setTesting((prev) => {
+        const next = new Set(prev);
+        next.delete(providerId);
+        return next;
+      });
+    }
+  }
 
   // Form state for add/edit
   const [formId, setFormId] = createSignal("");
@@ -183,6 +224,15 @@ export default function ProvidersPanel() {
                   <button
                     type="button"
                     class="btn mini"
+                    onClick={() => void handleTest(id, provider.models || {})}
+                    disabled={testing().has(id)}
+                    title="Send a minimal test request to verify the API key + model are reachable."
+                  >
+                    {testing().has(id) ? "Testing…" : "Test"}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn mini"
                     onClick={() => startEdit(id)}
                   >
                     Edit
@@ -197,6 +247,24 @@ export default function ProvidersPanel() {
                   </button>
                 </div>
               </div>
+              <Show when={testResults().get(id)}>
+                {(result) => (
+                  <div
+                    class="provider-test-result"
+                    data-ok={result().ok ? "true" : "false"}
+                    role="status"
+                  >
+                    <span class="provider-test-result-icon" aria-hidden="true">
+                      {result().ok ? "✓" : "✗"}
+                    </span>
+                    <span class="provider-test-result-msg">
+                      {result().ok
+                        ? (result().message || "Connection OK")
+                        : (result().message || "Connection failed")}
+                    </span>
+                  </div>
+                )}
+              </Show>
               <div style="font-size: var(--ui-font-control); opacity: 0.7; margin-bottom: 2px;">
                 API: {provider.api}
               </div>
