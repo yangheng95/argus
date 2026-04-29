@@ -108,7 +108,7 @@ export function Card(props: { node: CardNode; depth: number }) {
    * emits that event so any other subscribers (sidebars, peers) stay in
    * sync. No full-refresh — we walk the store incrementally.
    */
-  const onRewind = async (cursorTime: number, anchorID: string) => {
+  const onRewind = async (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => {
     const taskID = boardStore.selectedTaskID;
     if (!taskID) return;
     // Optimistic local prune — user feels instant feedback. If the HTTP
@@ -127,7 +127,11 @@ export function Card(props: { node: CardNode; depth: number }) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cursorTime, anchorEventID: anchorID, reason: "user ↶ card" }),
+          body: JSON.stringify({
+            anchor: { kind: "cursorTime", cursorTime, anchorEventID: anchorID },
+            resetWorktree: opts.resetWorktree,
+            reason: "user rewind card",
+          }),
           responseKind: "text",
         },
       );

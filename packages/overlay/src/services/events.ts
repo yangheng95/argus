@@ -14,6 +14,7 @@ import {
   scheduleBoard,
   loadTasks,
   setTaskSequence,
+  setSnapshotVersion,
 } from "../store/board";
 import { startSSE } from "./sse";
 import { loadConfigInfo } from "./init";
@@ -406,6 +407,7 @@ export function routeSSEEvent(event: any): boolean {
     const properties = record(event?.properties) ? event.properties : {};
     const evtTaskID: string | undefined = typeof properties.taskID === "string" ? properties.taskID : undefined;
     const cursorTime: number | undefined = typeof properties.cursorTime === "number" ? properties.cursorTime : undefined;
+    const resetWorktree = properties.resetWorktree === true;
     if (!evtTaskID || cursorTime === undefined) return true;
     // Only prune when the event concerns the currently-selected task —
     // other tasks' card trees are not loaded in this overlay instance.
@@ -415,6 +417,7 @@ export function routeSSEEvent(event: any): boolean {
       void (async () => {
         const { pruneCardsAfterCursor, clearPruneCursor } = await import("../store/card-tree");
         pruneCardsAfterCursor(cursorTime);
+        if (resetWorktree) setSnapshotVersion(`${evtTaskID}:${cursorTime}:${Date.now()}`);
         // cursorTime === 0 means "undo the undo"; reload to bring events back.
         void clearPruneCursor;
       })();
