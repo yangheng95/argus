@@ -33,6 +33,7 @@ import { setAppStore } from "../store/app";
 import { boardStore, setBoardStore, loadTasks } from "../store/board";
 import { loadMeta } from "./meta";
 import { loadExtensions } from "./extensions";
+import { primeNotificationPermission } from "./notify";
 import { loadExecutors } from "./executor";
 import { ensureWorkspaceDirectory } from "./workspace";
 import { ensureDefaultDirectory } from "./workspace";
@@ -114,6 +115,12 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
 
  // 1. Load settings from localStorage into the Solid store
   loadSettings();
+
+ // 1a. Prime the desktop-notification permission cache (lazy — request
+ // only happens here when the operator has the feature enabled, avoiding
+ // a stale/denied state surfacing later when the first lifecycle event
+ // fires).
+  primeNotificationPermission();
 
   const invoke = (window as any).__TAURI__?.core?.invoke as
     | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
