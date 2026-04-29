@@ -173,6 +173,53 @@ export async function apiRequest<T = unknown>(
   });
 }
 
+/**
+ * Thrown by `apiJson` whenever the host transport returns a non-2xx
+ * response. Carries the raw status, the request path, and the parsed
+ * response body so callers that need the original failure detail can
+ * pattern-match (`err instanceof ApiError && err.status === 400 → form
+ * field error`). The `message` is pre-rendered for `console.error` /
+ * direct toast use, prefering common server-error fields (message,
+ * error, detail) before falling back to JSON.stringify, so the previous
+ * "API 400: config" stub never re-occurs.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly path: string;
+  readonly body: unknown;
+  constructor(status: number, path: string, body: unknown) {
+    super(formatApiErrorMessage(status, path, body));
+    this.name = "ApiError";
+    this.status = status;
+    this.path = path;
+    this.body = body;
+  }
+}
+
+function formatApiErrorMessage(status: number, path: string, body: unknown): string {
+  const detail = pickServerErrorDetail(body);
+  return detail ? `API ${status} ${path}: ${detail}` : `API ${status} ${path}`;
+}
+
+function pickServerErrorDetail(body: unknown): string {
+  if (body == null) return "";
+  if (typeof body === "string") return body.trim();
+  if (typeof body !== "object") return String(body);
+  const obj = body as Record<string, unknown>;
+  // Hono / OpenAPI helpers tend to use one of these. Order matters: hono's
+  // HTTPException default uses `message`, our errors() helper sometimes
+  // uses `error`, RFC 7807 / generic frameworks use `detail`.
+  for (const key of ["message", "error", "detail"]) {
+    const v = obj[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return "";
+  }
+}
+
 // Return type is intentionally `any` (not `unknown`) so this remains a
 // drop-in replacement for the pre-M3 `fetch().then(r => r.json())` chain.
 // Callers across the overlay rely on field-level access without first
@@ -202,7 +249,7 @@ export async function apiJson(path: string, init?: RequestInit): Promise<any> {
     signal: init?.signal ?? undefined,
     responseKind: "json",
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+  if (!res.ok) throw new ApiError(res.status, path, res.body);
   return res.body;
 }
 
