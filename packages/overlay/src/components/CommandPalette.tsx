@@ -46,11 +46,16 @@ const SETTINGS_TABS: Array<{ tab: string; labelKey: string; group: string }> = [
   { tab: "about", labelKey: "about.title", group: "settings" },
 ];
 
-const THEMES: Array<{ id: string; labelKey: string }> = [
-  { id: "dark", labelKey: "cmdk.theme.dark" },
-  { id: "light", labelKey: "cmdk.theme.light" },
-  { id: "vscode-dark", labelKey: "cmdk.theme.vscode_dark" },
-  { id: "system", labelKey: "cmdk.theme.system" },
+// `id` is the canonical theme value (matches `data-theme` and
+// settings.theme); `slug` is the underscore-safe i18n key suffix so
+// `t(\`cmdk.theme.${slug}\`)` resolves at the call site as a template
+// literal the static check-panel-i18n scanner can see (the head
+// `cmdk.theme.` prefix-covers every descendant key).
+const THEMES: Array<{ id: string; slug: string }> = [
+  { id: "dark", slug: "dark" },
+  { id: "light", slug: "light" },
+  { id: "vscode-dark", slug: "vscode_dark" },
+  { id: "system", slug: "system" },
 ];
 
 const LOCALES: Array<{ id: string; label: string }> = [
@@ -123,7 +128,7 @@ export function CommandPalette() {
     for (const theme of THEMES) {
       cmds.push({
         id: `theme:${theme.id}`,
-        label: `${t("cmdk.theme_prefix")}: ${t(theme.labelKey)}`,
+        label: `${t("cmdk.theme_prefix")}: ${t(`cmdk.theme.${theme.slug}`)}`,
         group: t("cmdk.group.appearance"),
         keywords: `theme ${theme.id}`,
         run: () => {
