@@ -210,8 +210,6 @@ import type {
   SessionPromptAsyncStatusResponses,
   SessionPromptErrors,
   SessionPromptResponses,
-  SessionRevertErrors,
-  SessionRevertResponses,
   SessionShellErrors,
   SessionShellResponses,
   SessionStatusErrors,
@@ -221,8 +219,6 @@ import type {
   SessionTodoErrors,
   SessionTodoResponses,
   SessionTraceResponses,
-  SessionUnrevertErrors,
-  SessionUnrevertResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
   SkillDirectoriesResponses,
@@ -2717,75 +2713,6 @@ export class Session extends HeyApiClient {
   }
 
   /**
-   * Revert message
-   *
-   * Revert a specific message in a session, undoing its effects and restoring the previous state.
-   */
-  public revert<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-      messageID?: string
-      partID?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "messageID" },
-            { in: "body", key: "partID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionRevertResponses, SessionRevertErrors, ThrowOnError>({
-      url: "/session/{sessionID}/revert",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Restore reverted messages
-   *
-   * Restore all previously reverted messages in a session.
-   */
-  public unrevert<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionUnrevertResponses, SessionUnrevertErrors, ThrowOnError>({
-      url: "/session/{sessionID}/unrevert",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
    * Get session AgentTrace events
    */
   public trace<ThrowOnError extends boolean = false>(
@@ -4917,7 +4844,7 @@ export class Session3 extends HeyApiClient {
 
 export class Rewind extends HeyApiClient {
   /**
-   * Clear the rewind cursor (undo the rewind)
+   * Clear the rewind cursor (visibility only; will not unrevert any reset worktree files)
    */
   public clear<ThrowOnError extends boolean = false>(
     parameters: {
@@ -5763,14 +5690,25 @@ export class Task extends HeyApiClient {
   }
 
   /**
-   * Rewind task timeline to a specific event (projection cursor, history stays intact)
+   * Rewind task timeline; optionally also reset worktree files via PatchPart replay
    */
   public rewind<ThrowOnError extends boolean = false>(
     parameters: {
       taskID: string
       directory?: string
-      cursorTime?: number
-      anchorEventID?: string
+      anchor?:
+        | {
+            kind: "cursorTime"
+            cursorTime: number
+            anchorEventID?: string
+          }
+        | {
+            kind: "message"
+            sessionID: string
+            messageID: string
+            partID?: string
+          }
+      resetWorktree?: boolean
       reason?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -5782,8 +5720,8 @@ export class Task extends HeyApiClient {
           args: [
             { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
-            { in: "body", key: "cursorTime" },
-            { in: "body", key: "anchorEventID" },
+            { in: "body", key: "anchor" },
+            { in: "body", key: "resetWorktree" },
             { in: "body", key: "reason" },
           ],
         },

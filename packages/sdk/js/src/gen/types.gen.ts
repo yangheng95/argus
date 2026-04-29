@@ -129,6 +129,8 @@ export type EventTaskRewound = {
     anchorEventID?: string
     reason?: string
     rewindCount: number
+    resetWorktree: boolean
+    anchorKind: "cursorTime" | "message"
   }
 }
 
@@ -939,6 +941,132 @@ export type EventPermissionReplied = {
   }
 }
 
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "streaming"
+    }
+  | {
+      type: "terminal"
+      reason: "completed" | "error" | "aborted"
+      error?: string
+    }
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventTaskQueueCompleted = {
+  type: "task-queue.completed"
+  properties: {
+    queueTaskID: string
+    sessionID: string
+  }
+}
+
+export type QuestionOption = {
+  /**
+   * Display text (1-5 words, concise)
+   */
+  label: string
+  /**
+   * Explanation of choice
+   */
+  description: string
+}
+
+export type QuestionInfo = {
+  /**
+   * Complete question
+   */
+  question: string
+  /**
+   * Very short label (max 30 chars)
+   */
+  header: string
+  /**
+   * Available choices
+   */
+  options: Array<QuestionOption>
+  /**
+   * Allow selecting multiple choices
+   */
+  multiple?: boolean
+  /**
+   * Allow typing a custom answer
+   */
+  custom?: boolean
+}
+
+export type QuestionRequest = {
+  id: string
+  sessionID: string
+  /**
+   * Questions to ask
+   */
+  questions: Array<QuestionInfo>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type EventQuestionAsked = {
+  type: "question.asked"
+  properties: QuestionRequest
+}
+
+export type QuestionAnswer = Array<string>
+
+export type EventQuestionReplied = {
+  type: "question.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    answers: Array<QuestionAnswer>
+  }
+}
+
+export type EventQuestionRejected = {
+  type: "question.rejected"
+  properties: {
+    sessionID: string
+    requestID: string
+  }
+}
+
+export type EventTaskReport = {
+  type: "task.report"
+  properties: {
+    sessionID: string
+    status: "progress" | "need_input" | "done" | "failed"
+    summary: string
+    question?: string
+    next_plan?: string
+    artifacts?: Array<string>
+    error?: string
+  }
+}
+
 export type EventTuiPromptAppend = {
   type: "tui.prompt.append"
   properties: {
@@ -1021,108 +1149,18 @@ export type EventMcpResourcesChanged = {
   }
 }
 
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "streaming"
-    }
-  | {
-      type: "terminal"
-      reason: "completed" | "error" | "aborted"
-      error?: string
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
   properties: {
-    sessionID: string
-    status: SessionStatus
+    file: string
+    event: "add" | "change" | "unlink"
   }
 }
 
-export type EventSessionIdle = {
-  type: "session.idle"
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
   properties: {
-    sessionID: string
-  }
-}
-
-export type QuestionOption = {
-  /**
-   * Display text (1-5 words, concise)
-   */
-  label: string
-  /**
-   * Explanation of choice
-   */
-  description: string
-}
-
-export type QuestionInfo = {
-  /**
-   * Complete question
-   */
-  question: string
-  /**
-   * Very short label (max 30 chars)
-   */
-  header: string
-  /**
-   * Available choices
-   */
-  options: Array<QuestionOption>
-  /**
-   * Allow selecting multiple choices
-   */
-  multiple?: boolean
-  /**
-   * Allow typing a custom answer
-   */
-  custom?: boolean
-}
-
-export type QuestionRequest = {
-  id: string
-  sessionID: string
-  /**
-   * Questions to ask
-   */
-  questions: Array<QuestionInfo>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventQuestionAsked = {
-  type: "question.asked"
-  properties: QuestionRequest
-}
-
-export type QuestionAnswer = Array<string>
-
-export type EventQuestionReplied = {
-  type: "question.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    answers: Array<QuestionAnswer>
-  }
-}
-
-export type EventQuestionRejected = {
-  type: "question.rejected"
-  properties: {
-    sessionID: string
-    requestID: string
+    branch?: string
   }
 }
 
@@ -1137,14 +1175,6 @@ export type EventFileEdited = {
   type: "file.edited"
   properties: {
     file: string
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
   }
 }
 
@@ -1180,34 +1210,6 @@ export type EventTaskPlanUpdated = {
       goal: string
       status: string
     }
-  }
-}
-
-export type EventTaskQueueCompleted = {
-  type: "task-queue.completed"
-  properties: {
-    queueTaskID: string
-    sessionID: string
-  }
-}
-
-export type EventTaskReport = {
-  type: "task.report"
-  properties: {
-    sessionID: string
-    status: "progress" | "need_input" | "done" | "failed"
-    summary: string
-    question?: string
-    next_plan?: string
-    artifacts?: Array<string>
-    error?: string
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
   }
 }
 
@@ -1331,12 +1333,6 @@ export type Session = {
     archived?: number
   }
   permission?: PermissionRuleset
-  revert?: {
-    messageID: string
-    partID?: string
-    snapshot?: string
-    diff?: string
-  }
 }
 
 export type EventSessionCreated = {
@@ -1511,6 +1507,13 @@ export type Event =
   | EventMessagePartRemoved
   | EventPermissionAsked
   | EventPermissionReplied
+  | EventSessionStatus
+  | EventSessionIdle
+  | EventTaskQueueCompleted
+  | EventQuestionAsked
+  | EventQuestionReplied
+  | EventQuestionRejected
+  | EventTaskReport
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -1519,19 +1522,12 @@ export type Event =
   | EventMcpBrowserOpenFailed
   | EventMcpPromptsChanged
   | EventMcpResourcesChanged
-  | EventSessionStatus
-  | EventSessionIdle
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
+  | EventFileWatcherUpdated
+  | EventVcsBranchUpdated
   | EventSessionCompacted
   | EventFileEdited
-  | EventFileWatcherUpdated
   | EventTodoUpdated
   | EventTaskPlanUpdated
-  | EventTaskQueueCompleted
-  | EventTaskReport
-  | EventVcsBranchUpdated
   | EventGoalReport
   | EventCommandExecuted
   | EventSessionCreated
@@ -2865,12 +2861,6 @@ export type GlobalSession = {
     archived?: number
   }
   permission?: PermissionRuleset
-  revert?: {
-    messageID: string
-    partID?: string
-    snapshot?: string
-    diff?: string
-  }
   project: ProjectSummary | null
 }
 
@@ -5409,75 +5399,6 @@ export type SessionShellResponses = {
 }
 
 export type SessionShellResponse = SessionShellResponses[keyof SessionShellResponses]
-
-export type SessionRevertData = {
-  body?: {
-    messageID: string
-    partID?: string
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/revert"
-}
-
-export type SessionRevertErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type SessionRevertError = SessionRevertErrors[keyof SessionRevertErrors]
-
-export type SessionRevertResponses = {
-  /**
-   * Updated session
-   */
-  200: Session
-}
-
-export type SessionRevertResponse = SessionRevertResponses[keyof SessionRevertResponses]
-
-export type SessionUnrevertData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/unrevert"
-}
-
-export type SessionUnrevertErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type SessionUnrevertError = SessionUnrevertErrors[keyof SessionUnrevertErrors]
-
-export type SessionUnrevertResponses = {
-  /**
-   * Updated session
-   */
-  200: Session
-}
-
-export type SessionUnrevertResponse = SessionUnrevertResponses[keyof SessionUnrevertResponses]
 
 export type PermissionReplyData = {
   body?: {
@@ -9736,14 +9657,19 @@ export type TaskCancelResponse = TaskCancelResponses[keyof TaskCancelResponses]
 
 export type TaskRewindData = {
   body?: {
-    /**
-     * Unix ms. Events with time_created > cursorTime are filtered from UI reads.
-     */
-    cursorTime: number
-    /**
-     * The card's event id, for audit / UI highlighting
-     */
-    anchorEventID?: string
+    anchor:
+      | {
+          kind: "cursorTime"
+          cursorTime: number
+          anchorEventID?: string
+        }
+      | {
+          kind: "message"
+          sessionID: string
+          messageID: string
+          partID?: string
+        }
+    resetWorktree: boolean
     reason?: string
   }
   path: {
@@ -9772,6 +9698,8 @@ export type TaskRewindResponses = {
     taskID: string
     cursorTime: number
     rewindCount: number
+    resetWorktree: boolean
+    anchorKind: "cursorTime" | "message"
   }
 }
 
