@@ -9216,6 +9216,10 @@ body[data-resizing="true"] * {
   background:
     linear-gradient(180deg, rgba(122, 167, 245, 0.14), rgba(122, 167, 245, 0.05) 72%, rgba(255, 255, 255, 0.02)),
     color-mix(in srgb, var(--surface) 95%, transparent);
+  /* Left accent stripe so the selected row stands out without
+     dimming the others. Pure inset shadow keeps the row's box-model
+     untouched (no width shift on selection). */
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* Global view toggle button */
