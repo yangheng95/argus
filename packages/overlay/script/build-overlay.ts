@@ -12,9 +12,9 @@
  *   6. Copy binary to dist/<platform>/
  *
  * Usage:
- *   bun run build:overlay              # full pipeline (release profile, smallest binary)
- *   bun run build:overlay --fast       # no LTO, codegen-units=16, separate target/fast/ cache → 3-5x faster compile, larger binary
- *   bun run build:overlay --skip-tauri # UI only (steps 1-2)
+ *   bun run build:overlay                                # full pipeline (host triple)
+ *   bun run build:overlay --target <triple>              # cross-compile to triple (e.g. aarch64-pc-windows-msvc)
+ *   bun run build:overlay --skip-tauri                   # UI only (steps 1-2)
  *
  * Note: the caller is responsible for stopping any running overlay process
  * before invoking this script. On Windows, Cargo's linker will fail with
@@ -33,48 +33,52 @@ const opencorvus = path.resolve(repo, "packages/opencorvus")
 const sdk = path.resolve(repo, "packages/sdk/js")
 const tauri = path.resolve(dir, "src-tauri")
 
-const isWindows = process.platform === "win32"
+// ── Args ──
+const argv = process.argv.slice(2)
+const skipTauri = argv.includes("--skip-tauri")
+const targetTripleArg = (() => {
+  const i = argv.indexOf("--target")
+  return i >= 0 ? argv[i + 1] : undefined
+})()
+
+// Triple resolution: explicit --target wins; otherwise derive from host.
+function hostTriple() {
+  const arch = process.arch === "x64" ? "x86_64" : process.arch === "arm64" ? "aarch64" : process.arch
+  if (process.platform === "win32") return `${arch}-pc-windows-msvc`
+  if (process.platform === "darwin") return `${arch}-apple-darwin`
+  return `${arch}-unknown-linux-gnu`
+}
+const triple = targetTripleArg ?? hostTriple()
+const tripleIsWindows = triple.includes("windows")
+const tripleIsDarwin = triple.includes("apple-darwin")
+const tripleArch = triple.startsWith("x86_64") ? "x64" : triple.startsWith("aarch64") ? "arm64" : "x86"
+const triplePlatform = tripleIsWindows ? "windows" : tripleIsDarwin ? "darwin" : "linux"
+
+// Host capability check: cross-OS Tauri builds don't work in this script.
+const hostPlatform = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "darwin" : "linux"
+if (triplePlatform !== hostPlatform) {
+  throw new Error(
+    `Cross-OS build not supported (host=${hostPlatform}, target=${triplePlatform}). ` +
+      `Use the GitHub Actions matrix in .github/workflows/build-overlays.yml instead.`,
+  )
+}
+
+const isWindows = tripleIsWindows
 const overlayFile = isWindows ? "opencorvus-overlay.exe" : "opencorvus-overlay"
 const serverFile = isWindows ? "opencorvus.exe" : "opencorvus"
 
-const serverDistName = [
-  "opencorvus",
-  isWindows ? "windows" : process.platform,
-  process.arch,
-].join("-")
-
-const packageName = [
-  "opencorvus-overlay",
-  isWindows ? "windows" : process.platform,
-  process.arch,
-].join("-")
+const serverDistName = `opencorvus-${triplePlatform}-${tripleArch}`
+const packageName = `opencorvus-overlay-${triplePlatform}-${tripleArch}`
 
 const distServer = path.join(opencorvus, "dist", serverDistName, serverFile)
 const distRoot = path.join(dir, "dist", packageName)
 const packagedOverlay = path.join(distRoot, overlayFile)
 
-// ── Args ──
-const args = new Set(process.argv.slice(2))
-const skipTauri = args.has("--skip-tauri")
-const fast = args.has("--fast")
-
-// Use a nested target/fast/ dir for --fast so the two profiles don't invalidate
-// each other's cache. Tauri 2's CLI has no native --profile flag, so we override
-// the `release` profile via CARGO_PROFILE_RELEASE_* env vars instead of defining
-// a new profile. The separate target dir keeps each mode's build cache isolated.
-// Nested under target/ so the existing gitignore entry still covers it.
-const target = path.join(tauri, fast ? "target/fast" : "target")
-const release = path.join(target, "release")
-
-const fastProfileEnv: Record<string, string> = fast
-  ? {
-      CARGO_PROFILE_RELEASE_LTO: "false",
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16",
-      CARGO_PROFILE_RELEASE_OPT_LEVEL: "2",
-      CARGO_PROFILE_RELEASE_STRIP: "false",
-      CARGO_PROFILE_RELEASE_INCREMENTAL: "true",
-    }
-  : {}
+const target = path.join(tauri, "target")
+// When --target is passed (or implicitly via rust-toolchain.toml host fallback),
+// cargo nests artifacts under target/<triple>/release. Without --target it stays
+// at target/release. We pass --target unconditionally so paths are predictable.
+const release = path.join(target, triple, "release")
 
 function step(label: string) {
   console.log(`\n── ${label} ──`)
@@ -168,11 +172,10 @@ try {
   }
 }
 
-await $`tauri build --no-bundle ${tauriArgs()}`.cwd(dir).env({
+await $`tauri build --no-bundle --target ${triple} ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
   OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
-  ...fastProfileEnv,
 })
 
 if (!(await exists(builtOverlay))) {
@@ -185,18 +188,19 @@ await fs.mkdir(distRoot, { recursive: true })
 await fs.copyFile(builtOverlay, packagedOverlay)
 console.log(`→ ${packagedOverlay}`)
 
-// WebView2Loader.dll — required sibling of the exe on Windows.
-// With `[profile.release] lto = true` + `opt-level = "s"`, rustc/linker appears to
-// resolve the WebView2 loader via delayload or a path that doesn't need the DLL
-// next to the exe; with `--fast` (lto off), the exe ends up with a hard import
-// on WebView2Loader.dll and won't start without the DLL co-located.
-// Copy it unconditionally — it's tiny and makes the dist dir self-contained.
+// WebView2Loader.dll — only present under the *-pc-windows-gnu target.
+// On MSVC, `webview2-com-sys` static-links `WebView2LoaderStatic.lib` and the
+// exe has no IAT import for the dll. On GNU, the loader is dynamically imported
+// and `tauri-build` copies the dll into target/<triple>/release/. Copy it
+// alongside the exe iff cargo produced one — don't fail if absent.
 if (isWindows) {
   const dllSrc = path.join(release, "WebView2Loader.dll")
   if (await exists(dllSrc)) {
     const dllDst = path.join(distRoot, "WebView2Loader.dll")
     await fs.copyFile(dllSrc, dllDst)
     console.log(`→ ${dllDst}`)
+  } else {
+    console.log("WebView2Loader.dll not present (statically linked) — skip")
   }
 }
 
