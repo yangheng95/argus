@@ -29,16 +29,49 @@ let serverUrl = DEFAULT_SERVER;
 let authCredentials = { username: "opencorvus", password: "" };
 let directoryContext = "";
 
+// audit-2026-04-29 W2-V1 — when the user rotates the sidecar password
+// or switches server, any open SSE EventSource is still authed against
+// the OLD credential. The browser's native EventSource never re-evaluates
+// headers/url after construction, so streams silently 401/leak until
+// the next route change. Listeners notified here let the transports
+// proactively tear down active streams; their business-side reconnect
+// (services/sse.ts onClose path) re-opens with the new headers.
+const authChangeListeners = new Set<() => void>();
+
+export function onAuthChange(listener: () => void): () => void {
+  authChangeListeners.add(listener);
+  return () => { authChangeListeners.delete(listener); };
+}
+
+function fireAuthChange(): void {
+  for (const l of [...authChangeListeners]) {
+    try { l(); } catch (err) {
+      console.error("[api] auth change listener threw", err);
+    }
+  }
+}
+
 export function configure(opts: {
   serverUrl?: string;
   username?: string;
   password?: string;
   directory?: string;
 }) {
-  if (opts.serverUrl) serverUrl = opts.serverUrl;
-  if (opts.username) authCredentials.username = opts.username;
-  if (opts.password !== undefined) authCredentials.password = opts.password;
+  let credentialChanged = false;
+  if (opts.serverUrl && opts.serverUrl !== serverUrl) {
+    serverUrl = opts.serverUrl;
+    credentialChanged = true;
+  }
+  if (opts.username && opts.username !== authCredentials.username) {
+    authCredentials.username = opts.username;
+    credentialChanged = true;
+  }
+  if (opts.password !== undefined && opts.password !== authCredentials.password) {
+    authCredentials.password = opts.password;
+    credentialChanged = true;
+  }
   if (opts.directory !== undefined) directoryContext = String(opts.directory || "").trim();
+  if (credentialChanged) fireAuthChange();
 }
 
 export function getServerUrl(): string {
