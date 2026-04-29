@@ -8,8 +8,19 @@ const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
 
 // Module-level state (
 let messages: Record<string, any> = {};
+// Locale precedence (highest first):
+//   1. window.__OPENCORVUS_LOCALE__ — the host (VS Code extension /
+//      Tauri overlay window) injects vscode.env.language /
+//      sys-locale here so the overlay aligns with the IDE chrome
+//      (plan-vscode-extension.md §19.3.2).
+//   2. <html lang> — set by the host's HTML render step on first
+//      paint; same data as #1 but readable before any JS imports.
+//   3. navigator.language — browser dev preview fallback.
 let currentLocale: string = sanitizeLocale(
-  (typeof document !== "undefined" ? document.documentElement.lang : "") ||
+  (typeof globalThis !== "undefined"
+    ? (globalThis as any).__OPENCORVUS_LOCALE__
+    : "") ||
+    (typeof document !== "undefined" ? document.documentElement.lang : "") ||
     (typeof navigator !== "undefined" ? navigator.language : "") ||
     "en-US",
 );
