@@ -124,12 +124,10 @@
 | PATCH | `/session/{sessionID}/message/{messageID}/part/{partID}` | （无说明） | `part.update` |
 | POST | `/session/{sessionID}/prompt_async` | Send async message | `session.prompt_async` |
 | GET | `/session/{sessionID}/prompt_async/{taskID}` | Get async prompt task status | `session.prompt_async_status` |
-| POST | `/session/{sessionID}/revert` | Revert message | `session.revert` |
 | POST | `/session/{sessionID}/shell` | Run shell command | `session.shell` |
 | POST | `/session/{sessionID}/summarize` | Summarize session | `session.summarize` |
 | GET | `/session/{sessionID}/todo` | Get session todos | `session.todo` |
 | GET | `/session/{sessionID}/trace` | Get session AgentTrace events | `session.trace` |
-| POST | `/session/{sessionID}/unrevert` | Restore reverted messages | `session.unrevert` |
 
 ### Executor
 
