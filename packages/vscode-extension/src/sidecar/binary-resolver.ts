@@ -25,8 +25,6 @@ export interface ResolvedBinary {
   binaryPath: string
 }
 
-const ENV_OVERRIDE = "OPENCORVUS_DEV_BINARY"
-
 export function resolveTarget(platform: NodeJS.Platform = process.platform, arch: string = process.arch): string {
   if (platform === "win32" && arch === "x64") return "win32-x64"
   if (platform === "win32" && arch === "arm64") return "win32-arm64"
@@ -51,14 +49,18 @@ export interface ResolveOptions {
 
 export function resolveBundledBinary(opts: ResolveOptions): ResolvedBinary {
   // Dev-only override: extension developers point at a fresh build of
-  // the sidecar without repacking the VSIX. Esbuild strips the env name
-  // entirely from production bundles (plan §17), so this branch is dead
-  // code at release time.
-  if (!opts.ignoreEnvOverride && process.env[ENV_OVERRIDE]) {
-    const override = process.env[ENV_OVERRIDE]!
+  // the sidecar without repacking the VSIX. The env var is read via
+  // direct property access (NOT process.env[name]) so esbuild's
+  // `define` substitution can rewrite the read site to `undefined` in
+  // production bundles, dead-code-eliminating the entire branch
+  // (plan §17). The literal string never makes it into the release
+  // bundle either, so a release VSIX cannot be tricked into loading
+  // a dev sidecar via env at runtime.
+  if (!opts.ignoreEnvOverride && process.env.OPENCORVUS_DEV_BINARY) {
+    const override = process.env.OPENCORVUS_DEV_BINARY
     if (!fs.existsSync(override)) {
       throw new UnsupportedPlatformError(
-        `dev-override (${ENV_OVERRIDE}) does not exist`,
+        `dev-override (OPENCORVUS_DEV_BINARY) does not exist`,
         opts.extensionRoot,
       )
     }
