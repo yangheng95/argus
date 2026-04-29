@@ -39,6 +39,13 @@ export interface NormalizedNode {
   round?: number;
   phaseID?: string;
   phaseSessionKind?: string;
+  // audit-2026-04-29 W2-V26 — `phaseSessionID` is set by tree-writer
+  // when a goal-scoped session (planner / build / evaluator) is
+  // absorbed into a phase card; the inline AgentSessionReplyBox in
+  // Card.tsx targets this field. Pre-fix the snapshot dropped it,
+  // so tree-writer-hierarchy's "phase cards absorb goal-scoped
+  // session parts" assertion always saw `undefined`.
+  phaseSessionID?: string;
   parts: NormalizedPart[];
   childIDs: string[];
 }
@@ -80,6 +87,7 @@ function normalizeNode(id: string, acc: Record<string, NormalizedNode>): string 
   if (typeof node.round === "number") out.round = node.round;
   if (node.phaseID) out.phaseID = node.phaseID;
   if (node.phaseSessionKind) out.phaseSessionKind = node.phaseSessionKind;
+  if ((node as any).phaseSessionID) out.phaseSessionID = (node as any).phaseSessionID;
   acc[id] = out;
   return id;
 }

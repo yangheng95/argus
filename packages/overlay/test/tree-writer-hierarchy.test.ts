@@ -55,7 +55,7 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   // title / round / description / contracts stamped on it.
   // 2026-04-20: per-goal evaluator removed; build step has plan + build
   // phases only (`evaluate` phase dropped with the deterministic runner).
-  const stepCardID = `step:${GOAL_ID}:${GOAL_RUN_ID}:build`;
+  const stepCardID = `step:${GOAL_ID}:build`; // W2-V26: format reverted 2026-04-26 to attempt-invariant (drop :goalRunID:)
   const planPhaseID = `${stepCardID}:phase:plan`;
   const buildPhaseID = `${stepCardID}:phase:build`;
 
@@ -284,7 +284,7 @@ test("tree-writer preserves step summaries and payloads from board.goalWorkflows
     },
   });
 
-  const stepCardID = `step:${GOAL_ID}:${GOAL_RUN_ID}:build`;
+  const stepCardID = `step:${GOAL_ID}:build`; // W2-V26: format reverted 2026-04-26 to attempt-invariant (drop :goalRunID:)
   // Step headers no longer duplicate the summary into `subtitle`; the
   // summary lives in the structured step payload instead.
   expect(cardTreeStore.cards[stepCardID]?.subtitle).toBeUndefined();
