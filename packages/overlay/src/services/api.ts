@@ -1,8 +1,16 @@
 // ── API Client ──
 // Provides server URL detection, auth headers,
-// and typed fetch helpers for the OpenCorvus overlay.
+// and typed helpers for the OpenCorvus overlay.
+//
+// Internally everything HTTP-shaped routes through `HostTransport.request`
+// so this module stays usable identically under both the Tauri overlay
+// and the VS Code webview (plan-vscode-extension.md §5.1, §11). Public
+// signatures (apiUrl, apiHeaders, apiJson, fetchResourceAsObjectUrl) are
+// unchanged so existing callers keep working without edits.
 
 import serverDefaults from "../../../opencorvus/server-defaults.json";
+import { getHostTransport } from "./host-transport";
+import type { ResponseKind, TransportResponse } from "./host-transport";
 
 const DEFAULT_LOCAL_SERVER_URL = `http://${serverDefaults.host}:${serverDefaults.port}`;
 
@@ -59,13 +67,143 @@ export function apiHeaders(): Record<string, string> {
   return h;
 }
 
-export async function apiJson(path: string, init?: RequestInit) {
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    headers: { ...apiHeaders(), ...init?.headers },
+/**
+ * Build a TransportRequest body from a legacy RequestInit.body. Most
+ * callers pass JSON.stringify(...) bodies + Content-Type header, so we
+ * detect that and forward the parsed value to keep the bridge JSON-aware
+ * (binary base64 payloads on the postMessage hop are a measurable cost).
+ */
+function bodyFromInit(init?: RequestInit) {
+  if (!init?.body) return undefined as undefined
+  if (typeof init.body === "string") {
+    const ct = pickHeader(init.headers, "Content-Type") || pickHeader(init.headers, "content-type") || "";
+    if (ct.toLowerCase().startsWith("application/json")) {
+      try {
+        return { kind: "json" as const, value: JSON.parse(init.body) };
+      } catch {
+        // Fall through to text — non-JSON content typed as JSON is a caller bug,
+        // surface as text rather than swallowing.
+      }
+    }
+    return { kind: "text" as const, value: init.body };
+  }
+  if (init.body instanceof FormData) return { kind: "form" as const, value: init.body };
+  if (init.body instanceof Uint8Array) return { kind: "binary" as const, value: init.body };
+  if (init.body instanceof ArrayBuffer) return { kind: "binary" as const, value: new Uint8Array(init.body) };
+  // Other BodyInit shapes (Blob, ReadableStream) are not used by the
+  // overlay today; throw rather than silently dropping them.
+  throw new Error(`apiJson: unsupported body type ${(init.body as object)?.constructor?.name ?? typeof init.body}`);
+}
+
+function pickHeader(h: HeadersInit | undefined, name: string): string | undefined {
+  if (!h) return undefined;
+  if (h instanceof Headers) return h.get(name) ?? undefined;
+  if (Array.isArray(h)) {
+    const found = h.find(([k]) => k.toLowerCase() === name.toLowerCase());
+    return found?.[1];
+  }
+  const obj = h as Record<string, string>;
+  for (const [k, v] of Object.entries(obj)) {
+    if (k.toLowerCase() === name.toLowerCase()) return v;
+  }
+  return undefined;
+}
+
+function methodFromInit(init?: RequestInit): "GET" | "POST" | "PUT" | "PATCH" | "DELETE" {
+  const m = (init?.method ?? "GET").toUpperCase();
+  if (m === "GET" || m === "POST" || m === "PUT" || m === "PATCH" || m === "DELETE") return m;
+  throw new Error(`apiJson: unsupported HTTP method ${m}`);
+}
+
+function headersFromInit(init?: RequestInit): Record<string, string> | undefined {
+  const h = init?.headers;
+  if (!h) return undefined;
+  if (h instanceof Headers) {
+    const out: Record<string, string> = {};
+    h.forEach((v, k) => { out[k] = v });
+    return out;
+  }
+  if (Array.isArray(h)) return Object.fromEntries(h);
+  return { ...(h as Record<string, string>) };
+}
+
+/**
+ * Strip the absolute server URL prefix (if present) so HostTransport
+ * sees a relative path. Callers historically passed either "task/abc"
+ * or "/task/abc"; both must work.
+ */
+function relativePath(path: string): string {
+  if (/^https?:/i.test(path)) {
+    const u = new URL(path);
+    return u.pathname.replace(/^\/+/, "") + (u.search || "");
+  }
+  return path.replace(/^\/+/, "");
+}
+
+/**
+ * Lower-level companion to `apiJson`: returns the full TransportResponse
+ * (status, headers, parsed body) so callers that need 304 / 409 / ETag /
+ * raw bytes can stay on the HostTransport chokepoint without falling
+ * back to direct `fetch`. Use this only when you need status or headers;
+ * `apiJson` is still the preferred surface for plain JSON.
+ */
+export async function apiRequest<T = unknown>(
+  path: string,
+  init?: RequestInit & { responseKind?: ResponseKind },
+): Promise<TransportResponse<T>> {
+  const transport = getHostTransport();
+  const url = relativePath(path);
+  let pathOnly = url;
+  let query: Record<string, string> | undefined;
+  const qIdx = url.indexOf("?");
+  if (qIdx >= 0) {
+    pathOnly = url.slice(0, qIdx);
+    const params = new URLSearchParams(url.slice(qIdx + 1));
+    query = {};
+    params.forEach((v, k) => { query![k] = v });
+  }
+  return transport.request<T>({
+    path: pathOnly,
+    query,
+    method: methodFromInit(init),
+    body: bodyFromInit(init),
+    headers: headersFromInit(init),
+    signal: init?.signal ?? undefined,
+    responseKind: init?.responseKind ?? "json",
+  });
+}
+
+// Return type is intentionally `any` (not `unknown`) so this remains a
+// drop-in replacement for the pre-M3 `fetch().then(r => r.json())` chain.
+// Callers across the overlay rely on field-level access without first
+// narrowing — preserving that behaviour keeps M3.A a pure plumbing
+// change. Dedicated typed wrappers can land later in the services layer.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function apiJson(path: string, init?: RequestInit): Promise<any> {
+  const transport = getHostTransport();
+  const url = relativePath(path);
+  // Split query out so the transport can serialise it consistently
+  // across Tauri and VSCode hosts.
+  let pathOnly = url;
+  let query: Record<string, string> | undefined;
+  const qIdx = url.indexOf("?");
+  if (qIdx >= 0) {
+    pathOnly = url.slice(0, qIdx);
+    const params = new URLSearchParams(url.slice(qIdx + 1));
+    query = {};
+    params.forEach((v, k) => { query![k] = v });
+  }
+  const res = await transport.request({
+    path: pathOnly,
+    query,
+    method: methodFromInit(init),
+    body: bodyFromInit(init),
+    headers: headersFromInit(init),
+    signal: init?.signal ?? undefined,
+    responseKind: "json",
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
-  return res.json();
+  return res.body;
 }
 
 // ── Resource URL resolution ──
@@ -175,10 +313,40 @@ export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
   if (inFlight) return inFlight;
 
   const pending = (async () => {
-    const url = resolveResourceUrl(raw);
-    const res = await fetch(url, { headers: apiHeaders() });
-    if (!res.ok) throw new Error(`resource ${res.status}: ${url}`);
-    const blob = await res.blob();
+    const transport = getHostTransport();
+    // Resource URLs may already be absolute (server-relative paths
+    // start with "/" — those go through transport; data:/blob:/http(s)/
+    // file: URLs short-circuit to plain fetch since transport can't
+    // proxy arbitrary external schemes).
+    if (/^(?:data|blob|file):/i.test(raw)) {
+      const res = await fetch(raw);
+      if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      blobCache.set(raw, objectUrl);
+      evictIfNeeded();
+      return objectUrl;
+    }
+    if (/^https?:/i.test(raw)) {
+      // External web image — webview CSP already restricts these
+      // sources (plan §19.2.1); plain fetch is the right path.
+      const res = await fetch(raw);
+      if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      blobCache.set(raw, objectUrl);
+      evictIfNeeded();
+      return objectUrl;
+    }
+    const path = raw.replace(/^\/+/, "");
+    const res = await transport.request<Uint8Array>({
+      path,
+      method: "GET",
+      responseKind: "binary",
+    });
+    if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
+    const ct = res.headers["content-type"] || res.headers["Content-Type"] || "application/octet-stream";
+    const blob = new Blob([res.body as Uint8Array], { type: ct });
     const objectUrl = URL.createObjectURL(blob);
     blobCache.set(raw, objectUrl);
     evictIfNeeded();

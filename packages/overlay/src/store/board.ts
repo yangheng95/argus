@@ -4,7 +4,7 @@
 
 import { createStore } from "solid-js/store";
 import { batch } from "solid-js";
-import { apiHeaders, apiJson, apiUrl } from "../services/api";
+import { apiJson, apiRequest } from "../services/api";
 import { t } from "../utils/i18n";
 
 // ── Store ──
@@ -267,12 +267,15 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
   const loading = (async () => {
     let failed = false;
     try {
-      const headers = apiHeaders();
+      const headers: Record<string, string> = {};
       if (boardStore.boardEtag) headers["If-None-Match"] = boardStore.boardEtag;
-      const res = await fetch(apiUrl(`task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`), {
-        headers,
-        signal: AbortSignal.timeout(10000),
-      });
+      const res = await apiRequest<any>(
+        `task/${encodeURIComponent(taskID)}/board?sync=${sync ? "1" : "0"}`,
+        {
+          headers,
+          signal: AbortSignal.timeout(10000),
+        },
+      );
       if (taskID !== boardStore.selectedTaskID) return;
       setBoardSyncPending(false);
       if (res.status === 304) {
@@ -280,10 +283,10 @@ export async function loadBoard(options: LoadBoardOptions = {}): Promise<void> {
         setBoardUpdatedAt(Date.now());
         return;
       }
-      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-      const etag = res.headers.get("etag");
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const etag = res.headers["etag"] || res.headers["ETag"];
       if (etag) setBoardEtag(etag);
-      const data = await res.json();
+      const data = res.body;
       const lastSequence = Number(data?.lastSequence || 0);
       // Monotonic guard: discard stale responses whose sequence is lower
       // than what we already have. This prevents flickering when a slower

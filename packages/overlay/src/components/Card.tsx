@@ -5,6 +5,7 @@ import { defaultExpandedForNode } from "../utils/card-tree";
 import { cardExpanded, toggleCard } from "../store/conversation-ui";
 import { boardStore, rootTaskSessionID } from "../store/board";
 import { cancelAgentSession, replyToAgentSession } from "../services/task";
+import { apiRequest } from "../services/api";
 import { normalizeAgentRole } from "../utils/message";
 import { AgentSessionReplyBox } from "./AgentSessionReplyBox";
 import { CardHeader } from "./CardHeader";
@@ -116,15 +117,22 @@ export function Card(props: { node: CardNode; depth: number }) {
     // because that was the source of the "user message → overlay 卡顿"
     // symptom the operator flagged.
     pruneCardsAfterCursor(cursorTime);
+    // Pre-M3 this called fetch() with a relative URL (`/task/...`) which
+    // worked under "/ui" but not under any other origin (e.g. Tauri).
+    // Routing through apiRequest() also gives us the VS Code webview
+    // path for free in M4.
     try {
-      const resp = await fetch(`/task/${taskID}/rewind`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cursorTime, anchorEventID: anchorID, reason: "user ↶ card" }),
-      });
+      const resp = await apiRequest<unknown>(
+        `task/${encodeURIComponent(taskID)}/rewind`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cursorTime, anchorEventID: anchorID, reason: "user ↶ card" }),
+          responseKind: "text",
+        },
+      );
       if (!resp.ok) {
-        const detail = await resp.text().catch(() => "");
-        console.error("rewind request failed", resp.status, detail);
+        console.error("rewind request failed", resp.status, resp.body);
       }
     } catch (err) {
       console.error("rewind request errored", err);
