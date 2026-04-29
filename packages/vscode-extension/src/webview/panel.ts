@@ -72,15 +72,31 @@ export class OpencorvusPanel {
   }
 
   refresh(sidecar: SidecarHandle): void {
-    // If the sidecar identity changed (e.g. extension restarted it),
-    // recreate the bridge so it talks to the new baseUrl/token.
-    if (this.bridge && (this.sidecar.baseUrl !== sidecar.baseUrl || this.sidecar.token !== sidecar.token)) {
+    // audit-2026-04-29 W2-C11 / W2-P7 — panel.refresh used to
+    // unconditionally reassign `webview.html`, which forces VS Code
+    // to tear down and re-load the entire webview JS context. That
+    // wiped composer state, scroll position, in-flight pending
+    // promises, and the `composer.attach` subscription map every
+    // time the same sidecar handle was passed (e.g. on `reveal`).
+    // Only rebuild bridge + reassign HTML when the sidecar identity
+    // actually changed; on no-op refresh do nothing.
+    const sidecarChanged =
+      this.sidecar.baseUrl !== sidecar.baseUrl || this.sidecar.token !== sidecar.token
+    const needsBridgeInit = !this.bridge
+
+    if (sidecarChanged && this.bridge) {
       this.bridge.dispose()
       this.bridge = new TransportBridge(this.panel.webview, sidecar)
-    } else if (!this.bridge) {
+    } else if (needsBridgeInit) {
       this.bridge = new TransportBridge(this.panel.webview, sidecar)
     }
     this.sidecar = sidecar
+
+    if (!sidecarChanged && !needsBridgeInit) {
+      // Same sidecar, bridge alive — nothing else to do. The webview
+      // keeps its existing JS realm and state.
+      return
+    }
 
     const mediaUiUri = vscode.Uri.joinPath(this.context.extensionUri, "media", "ui")
     const rendered = renderOverlayHtml({

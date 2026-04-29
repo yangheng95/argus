@@ -89,7 +89,18 @@ function installListener(): void {
   installed = true
   const w = (globalThis as any).window as Window
   w.addEventListener("message", (e: MessageEvent) => {
-    handleIncoming(e.data)
+    // audit-2026-04-29 W2-V5 — outer try/catch so any throw escaping
+    // handleIncoming (e.g. a polyfilled signal.removeEventListener,
+    // a corrupt envelope, a third-party listener interfering) does
+    // NOT bubble into the browser/webview event-loop, which would
+    // leave the offending pending Promise unsettled forever. The
+    // F3 fix wrapped only `decodeResponse`; this guard catches any
+    // OTHER throw path inside handleIncoming.
+    try {
+      handleIncoming(e.data)
+    } catch (err) {
+      console.error("[vscode-transport] handleIncoming threw, dropping message", err)
+    }
   })
 }
 
@@ -204,23 +215,48 @@ const RELOAD_COUNTER_KEY = "__opencorvus_pm_reloads"
 const RELOAD_MAX = 3
 const RELOAD_WINDOW_MS = 30_000
 
+// audit-2026-04-29 W2-V2 — memory-backed counter as a primary
+// defence so the circuit breaker still works when sessionStorage is
+// unavailable (sandboxed webview, privacy mode, quota exceeded). On a
+// real reload the in-memory counter resets, but the sessionStorage
+// counter persists, so they reinforce each other; if BOTH are
+// unavailable the breaker cannot survive a reload — that's the
+// best-effort floor, but at least within a single page lifetime
+// repeated mismatches are now bounded.
+const memReloadHistory: number[] = []
+
 function shouldHonourProtocolMismatch(_expected: number, _received: number): boolean {
-  let storage: Storage | undefined
-  try { storage = (globalThis as any).window?.sessionStorage as Storage | undefined } catch {}
-  if (!storage) return true
-  let history: number[] = []
-  try {
-    const raw = storage.getItem(RELOAD_COUNTER_KEY)
-    if (raw) history = JSON.parse(raw) as number[]
-    if (!Array.isArray(history)) history = []
-  } catch {
-    history = []
-  }
   const cutoff = Date.now() - RELOAD_WINDOW_MS
-  history = history.filter((t) => t > cutoff)
-  if (history.length >= RELOAD_MAX) return false
-  history.push(Date.now())
-  try { storage.setItem(RELOAD_COUNTER_KEY, JSON.stringify(history)) } catch {}
+  // 1. In-memory counter — always available, always consulted.
+  while (memReloadHistory.length && memReloadHistory[0]! < cutoff) {
+    memReloadHistory.shift()
+  }
+  if (memReloadHistory.length >= RELOAD_MAX) return false
+  // 2. sessionStorage counter — best-effort, survives reload.
+  let storage: Storage | undefined
+  try {
+    storage = (globalThis as any).window?.sessionStorage as Storage | undefined
+  } catch {}
+  let history: number[] = []
+  if (storage) {
+    try {
+      const raw = storage.getItem(RELOAD_COUNTER_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) history = parsed.filter((t) => typeof t === "number" && t > cutoff)
+      }
+    } catch {
+      history = []
+    }
+    if (history.length >= RELOAD_MAX) return false
+  }
+  // 3. Honour, then bump both counters.
+  const now = Date.now()
+  memReloadHistory.push(now)
+  history.push(now)
+  if (storage) {
+    try { storage.setItem(RELOAD_COUNTER_KEY, JSON.stringify(history)) } catch {}
+  }
   return true
 }
 
