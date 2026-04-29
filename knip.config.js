@@ -62,14 +62,21 @@ export default {
     "packages/overlay": {
       entry: [
         "script/build.ts",
+        "script/build-overlay.ts",
+        "script/build-docker.ts",
         "script/check-panel-i18n.ts",
-        "src/app.js",
+        // src/main.tsx is the Solid entry point — vite.config.ts roots
+        // at `src/` and uses src/index.html as the HTML host that loads
+        // /main.tsx via the standard <script type="module"> tag.
         "src/index.html",
-        "src/interactions.js",
-        "src/workspace.js",
+        "src/main.tsx",
       ],
-      project: ["script/**/*.ts", "src/**/*.js", "src/**/*.html"],
-      ignore: ["src-tauri/**", "test/**"],
+      project: [
+        "script/**/*.ts",
+        "src/**/*.{ts,tsx,js,html}",
+        "vite.config.ts",
+      ],
+      ignore: ["src-tauri/**", "test/**", "node_modules/**", "dist/**", "dist-vite/**"],
     },
     "packages/plugin": {
       entry: ["src/index.ts", "src/tool.ts"],
