@@ -176,7 +176,16 @@ export function setupAutoScroll(
     }
     scrollDown();
   });
-  mutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
+  // childList:true is enough — every text mutation that grows the
+  // scrollHeight (TextPart's appendChild of frozen blocks, Card's
+  // structural updates) shows up as a childList record. The previously
+  // enabled `characterData: true` fired the callback for every SSE
+  // token tick on top of that, producing a callback storm during
+  // streaming (50ms flush × per-character text mutations on the active
+  // tail block). The ResizeObserver above already catches scrollHeight
+  // grows from in-place text edits, so dropping characterData costs
+  // zero correctness and removes the high-frequency redundant work.
+  mutationObserver.observe(el, { childList: true, subtree: true });
 
   requestAnimationFrame(() => {
     el.scrollTop = el.scrollHeight;
