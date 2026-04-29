@@ -5,6 +5,7 @@ const vscode = require("vscode")
 const eventsFile = process.env.OPENCORVUS_E2E_EVENTS_FILE
 const testLogFile = process.env.OPENCORVUS_E2E_TEST_LOG
 const visualHoldMs = parseNonNegativeInteger("OPENCORVUS_E2E_HOLD_MS")
+const visualAckFile = process.env.OPENCORVUS_E2E_VISUAL_ACK_FILE
 
 async function run() {
   assert(eventsFile, "OPENCORVUS_E2E_EVENTS_FILE is required")
@@ -27,6 +28,10 @@ async function run() {
       readEvents().some((event) => event.type === "request" && event.url !== "/shutdown"),
       30_000,
     )
+    record("visual.ready", { labels: currentTabLabels() })
+    if (visualAckFile) {
+      await waitFor("visual screenshot capture", () => fs.existsSync(visualAckFile), 30_000)
+    }
     if (visualHoldMs > 0) {
       record("visual.hold.start", { ms: visualHoldMs })
       void vscode.window.showInformationMessage(`OpenCorvus visual E2E hold: ${Math.round(visualHoldMs / 1000)}s`)

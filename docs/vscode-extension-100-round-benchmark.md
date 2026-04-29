@@ -18,8 +18,12 @@ Input:
   - `VSCODE_BENCH_FULL_SNAPSHOT_EVERY`: default `25`.
   - `VSCODE_BENCH_BUILD_EVERY`: default `25`.
   - `VSCODE_BENCH_E2E_EVERY`: default `25`.
+  - `VSCODE_BENCH_VISUAL_E2E_EVERY`: default `0`; optional visual screenshot cadence for `test:e2e:visual`.
   - `VSCODE_BENCH_REPORT`: default `tmp/vscode-extension-100-round-report.jsonl`.
   - `OPENCORVUS_E2E_HOLD_MS`: default `0`; for visual review only, pauses the VS Code E2E after the webview has opened and sent a sidecar request.
+  - `OPENCORVUS_E2E_VISUAL`: default unset; set to `1` to capture a real desktop screenshot after the VS Code webview is ready.
+  - `OPENCORVUS_E2E_VISUAL_DIR`: default `tmp/vscode-extension-visual-e2e` when visual mode is enabled.
+  - `OPENCORVUS_E2E_VISUAL_SETTLE_MS`: default `1000`; delay after `visual.ready` before screenshot capture.
 
 Output:
 - JSON Lines report at `tmp/vscode-extension-100-round-report.jsonl`.
@@ -51,6 +55,13 @@ Every `VSCODE_BENCH_E2E_EVERY` rounds:
 - The E2E command runs `node esbuild.mjs` first so `media/ui` is freshly synchronized from the overlay UI build output before VS Code launches.
 - This starts a real VS Code Extension Host through `@vscode/test-electron`, opens the `opencorvus.open` command, verifies the OpenCorvus webview tab is visible, verifies the fake sidecar has listened, verifies at least one non-shutdown HTTP request reached the sidecar through the webview bridge, and verifies shutdown/exit events after VS Code closes.
 
+Visual E2E:
+- `bun run --cwd packages/vscode-extension test:e2e:visual`
+- This uses the same real VS Code Extension Host path as `test:e2e:vscode`, waits for a `visual.ready` event after the OpenCorvus tab is visible and a non-shutdown sidecar request has reached the fake sidecar, captures a desktop screenshot, validates screenshot dimensions, file size, and sampled color diversity, then writes `opencorvus-webview.png` and `visual-report.json` into `OPENCORVUS_E2E_VISUAL_DIR`.
+
+Every `VSCODE_BENCH_VISUAL_E2E_EVERY` rounds when configured above zero:
+- `bun run --cwd packages/vscode-extension test:e2e:visual`
+
 ## Acceptance Criteria
 
 The benchmark is accepted only when:
@@ -60,6 +71,7 @@ The benchmark is accepted only when:
 - Snapshot smoke runs in every round.
 - Full snapshot regression runs at the configured cadence.
 - VS Code UI/E2E runs at the configured cadence and produces sidecar event evidence.
+- Visual E2E, when enabled, produces a screenshot and visual report after real VS Code webview readiness.
 - A report file exists and contains one `round-summary` record for each round.
 - The final benchmark result is reviewed after the runner exits.
 

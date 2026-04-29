@@ -20,6 +20,9 @@ import * as vscode from "vscode"
  *   4. Inject a tiny bootstrap script that sets
  *      `window.__OPENCORVUS_LOCALE__` so any code path that prefers a
  *      runtime probe over `document.lang` can find the locale too.
+ *      The bootstrap also exposes `window.__OPENCORVUS_ASSET_BASE__`
+ *      so runtime `fetch("i18n/...")` calls do not depend on <base>
+ *      behavior inside VS Code's webview CSP sandbox.
  */
 
 const HTML_FILENAME = "index.html"
@@ -82,10 +85,12 @@ export function renderOverlayHtml(opts: RenderOptions): RenderedWebviewHtml {
   //    base href makes the overlay's `fetch("i18n/...")` calls resolve
   //    against the media/ui directory rather than the webview origin
   //    root. base-uri 'self' in CSP allows the tag to take effect.
+  //    VS Code's CSP handling can still block <base> in practice, so the
+  //    overlay also consumes the explicit asset-base contract below.
   const headInjection = [
     `<meta http-equiv="Content-Security-Policy" content="${buildCsp(cspSource, nonce)}">`,
     `<base href="${baseHref}">`,
-    `<script nonce="${nonce}">window.__OPENCORVUS_LOCALE__=${JSON.stringify(locale)};</script>`,
+    `<script nonce="${nonce}">window.__OPENCORVUS_LOCALE__=${JSON.stringify(locale)};window.__OPENCORVUS_ASSET_BASE__=${JSON.stringify(baseHref)};</script>`,
   ].join("\n")
   html = html.replace(/<head\b[^>]*>/i, (tag) => `${tag}\n${headInjection}`)
 
