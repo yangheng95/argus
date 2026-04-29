@@ -241,6 +241,35 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
 }
 
 /**
+ * Stamp routing metadata onto lifecycle events without requiring a message
+ * role. `session.status` and `session.idle` are about the session itself;
+ * they do not have an authoring message and therefore must not enter
+ * `infoForEvent()`.
+ */
+function enrichLifecycleProperties(
+  properties: Record<string, unknown>,
+  sessionID: string,
+): Record<string, unknown> {
+  const kind = sessionRole(sessionID)
+  if (!kind) {
+    throw new Error(
+      `bridge: lifecycle event for session ${sessionID} has no kind in the database. ` +
+      `Every lifecycle event must target a persisted Session row.`,
+    )
+  }
+  const goalID = sessionGoalID(sessionID)
+  const parentSessionID = sessionParentID(sessionID)
+  const enriched: Record<string, unknown> = {
+    ...properties,
+    channel: kind === "root" ? "main" : kind,
+  }
+  if (kind !== "root") enriched.resolvedRole = kind
+  if (goalID) enriched.goalID = goalID
+  if (parentSessionID) enriched.parentSessionID = parentSessionID
+  return enriched
+}
+
+/**
  * Push a message event through live SSE subscriptions only.
  *
  * Message events are NEVER persisted to `protocol_event`. Source of truth for
@@ -267,7 +296,7 @@ function bridgeSessionLifecycle(type: string, properties: Record<string, unknown
     if (!sessionID) return
     const taskID = taskIDForSession(sessionID)
     if (!taskID) return
-    const enriched = enrichProperties(properties, sessionID, taskID)
+    const enriched = enrichLifecycleProperties(properties, sessionID)
     const now = Date.now()
     void ProtocolStore.appendEvent({
       kind: "event",

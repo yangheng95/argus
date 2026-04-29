@@ -14,15 +14,17 @@ const protocolStoreSource = readFileSync(
 describe("message-bridge persistence guard", () => {
   // Regression: protocol_event used to grow to 300+ MB because every bus
   // `message.updated` re-snapshotted the full message info into the event log.
-  // The fix routes message.* events through dispatchEphemeral (live SSE only);
-  // canonical message state lives in the message/part tables. These guards
-  // prevent the persistence path from being re-introduced.
+  // Message events stay ephemeral; tiny session lifecycle events are persisted
+  // so reconnect and hydration keep terminal status.
   test("does not import EngineProtocol (which writes to protocol_event)", () => {
     expect(bridgeSource).not.toContain("EngineProtocol")
   })
 
-  test("does not call appendEvent (DB write API)", () => {
-    expect(bridgeSource).not.toContain("appendEvent")
+  test("persists only session lifecycle events", () => {
+    expect(bridgeSource).toContain("function bridgeSessionLifecycle")
+    expect(bridgeSource).toContain("ProtocolStore.appendEvent")
+    expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Status,[\s\S]*bridgeSessionLifecycle/)
+    expect(bridgeSource).toMatch(/Bus\.subscribe\(SessionStatus\.Event\.Idle,[\s\S]*bridgeSessionLifecycle/)
   })
 
   test("uses dispatchEphemeral for every Message.Event subscription", () => {
