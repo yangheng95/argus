@@ -72,6 +72,8 @@
   "chat.attach_title": "Attach files or images",
   "chat.attach_too_large_title": "Attachment too large",
   "chat.attach_too_large": "{{name}} is {{size}} MB — exceeds the {{limit}} MB attachment limit.",
+  "chat.disabled_unavailable": "Composer unavailable — set a working directory and a model first.",
+  "chat.disabled_empty": "Type a message to enable Send.",
   "chat.collapse_title": "Collapse input",
   "chat.copy_all": "Copy All",
   "chat.copy_failed": "Failed to copy conversation",

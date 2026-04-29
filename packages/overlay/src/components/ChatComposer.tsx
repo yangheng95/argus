@@ -301,7 +301,15 @@ export function ChatComposer(props: ChatComposerProps) {
     return !props.enabled || !hasText();
   });
 
-  const sendTitle = () => (props.busy ? t("chat.stop_title") : t("chat.send_title"));
+  // Surface WHY the send button is disabled in its title — operators
+  // were left guessing whether grey meant "task busy", "no text yet", or
+  // "permissions blocked". Order matches sendDisabled's predicate.
+  const sendTitle = () => {
+    if (props.busy) return t("chat.stop_title");
+    if (!props.enabled) return t("chat.disabled_unavailable");
+    if (!hasText()) return t("chat.disabled_empty");
+    return t("chat.send_title");
+  };
   const sendAriaLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"));
   const sendLabel = () => (props.busy ? t("chat.stop_label") : t("chat.send_label"));
 
