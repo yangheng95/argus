@@ -62,9 +62,16 @@ describe("isExtensionMessage", () => {
 })
 
 describe("isWebviewMessage", () => {
-  test("accepts each whitelisted type", () => {
+  test("accepts each whitelisted type with the minimal valid shape", () => {
+    // audit-2026-04-29 W2-V9 — `request` and `stream.open` carry an
+    // HTTP method field that must be in the canonical RequestMethod
+    // enum. Other types (`stream.close`, `request.abort`) only carry
+    // an id, so the bare envelope still passes.
     for (const type of WEBVIEW_MESSAGE_TYPES) {
-      expect(isWebviewMessage({ protocol: PROTOCOL_VERSION, type })).toBe(true)
+      const needsMethod = type === "request" || type === "stream.open"
+      const env: any = { protocol: PROTOCOL_VERSION, type }
+      if (needsMethod) env.method = "GET"
+      expect(isWebviewMessage(env)).toBe(true)
     }
   })
 
@@ -76,6 +83,39 @@ describe("isWebviewMessage", () => {
 
   test("rejects mismatched protocol version", () => {
     expect(isWebviewMessage({ protocol: 99, type: "request" })).toBe(false)
+  })
+
+  // audit-2026-04-29 W2-V9 — method enum is the schema's only
+  // line of defence before fetch(). Pre-fix any string passed
+  // through; lowercase, free-form, and missing methods all
+  // satisfied isWebviewMessage and reached bridge.ts:fetch().
+  test("rejects request/stream.open with a method outside the RequestMethod enum (lowercase, free-form, missing)", () => {
+    const malformed = [
+      { protocol: PROTOCOL_VERSION, type: "request", method: "get" }, // lowercase
+      { protocol: PROTOCOL_VERSION, type: "request", method: "post" }, // lowercase
+      { protocol: PROTOCOL_VERSION, type: "request", method: "GETT" }, // typo
+      { protocol: PROTOCOL_VERSION, type: "request", method: "" }, // empty
+      { protocol: PROTOCOL_VERSION, type: "request", method: "DELETE; DROP" }, // injection
+      { protocol: PROTOCOL_VERSION, type: "request" }, // missing
+      { protocol: PROTOCOL_VERSION, type: "stream.open", method: "post" },
+      { protocol: PROTOCOL_VERSION, type: "stream.open", method: 42 as any }, // non-string
+    ]
+    for (const env of malformed) {
+      expect(isWebviewMessage(env)).toBe(false)
+    }
+  })
+
+  test("accepts every uppercase canonical method", () => {
+    for (const m of ["GET", "POST", "PUT", "PATCH", "DELETE"]) {
+      expect(
+        isWebviewMessage({ protocol: PROTOCOL_VERSION, type: "request", method: m }),
+      ).toBe(true)
+    }
+  })
+
+  test("stream.close and request.abort don't require method (no HTTP verb on those)", () => {
+    expect(isWebviewMessage({ protocol: PROTOCOL_VERSION, type: "stream.close" })).toBe(true)
+    expect(isWebviewMessage({ protocol: PROTOCOL_VERSION, type: "request.abort" })).toBe(true)
   })
 })
 
