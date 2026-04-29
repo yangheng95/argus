@@ -504,11 +504,22 @@ async function evaluateAndApplyLKG(input: {
   }
 }
 
+// Stash the outer-scope function references so the namespace re-exports
+// below don't shadow themselves into an infinite recursion. `export const
+// commitDeliveryRound = (...) => commitDeliveryRound(...)` inside `namespace
+// EngineGit` makes the arrow body's `commitDeliveryRound` resolve to the
+// namespace member itself (TypeScript namespace shadowing), so each call
+// dispatched through `EngineGit.commitDeliveryRound` recursed into itself
+// until the stack overflowed — observed as the post-delivery CPU-spin hang
+// in tools.ts:2851 (verdict recorded → no `ensureGitignore start` log).
+const _commitDeliveryRound = commitDeliveryRound
+const _evaluateAndApplyLKG = evaluateAndApplyLKG
+
 export namespace EngineGit {
-  export const commitDeliveryRound = (input: Parameters<typeof commitDeliveryRound>[0]) =>
-    commitDeliveryRound(input)
-  export const evaluateAndApplyLKG = (input: Parameters<typeof evaluateAndApplyLKG>[0]) =>
-    evaluateAndApplyLKG(input)
+  export const commitDeliveryRound = (input: Parameters<typeof _commitDeliveryRound>[0]) =>
+    _commitDeliveryRound(input)
+  export const evaluateAndApplyLKG = (input: Parameters<typeof _evaluateAndApplyLKG>[0]) =>
+    _evaluateAndApplyLKG(input)
   export const readLKG = (task: TaskRow) => readDeliveryLKG(task)
 
   export async function prepare(task: TaskRow, plan?: PlanRow) {

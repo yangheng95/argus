@@ -752,3 +752,221 @@ M1 spike 后必须二选一落盘：
 | workspace single-owner sidecar | 双开存在竞争；用 lock file + owner metadata，让第二个窗口连接 owner sidecar |
 
 未落决策不得进入 M2。
+
+---
+
+## 19. 第二轮 Adversarial Review（实施前阻断升级）
+
+针对 §18 的"实施前阻断项"再做一轮 challenge。下列问题在 §0–§18 中**漏写、措辞模糊或决策偏轻**，按严重度分级。
+
+### 19.1 阻塞级（Block M1）
+
+#### 19.1.1 与现有 daemon / 全局 server 共存策略缺失
+
+`opencorvus` 当前已有"用户手起 server，多个 channel bot / IM 共用"的 daemon 形态。Extension 强行 per-workspace 起 sidecar，会导致：
+
+- 用户已运行的 `opencorvus serve` 与 extension sidecar 同时操作 `~/.local/share/opencorvus/*.db`，WAL 模式不防多写覆盖业务级状态。
+- Project / Instance / Watcher 重复注册，文件 watcher 双源触发。
+- channel runtime 的事件流被两个进程同时消费。
+
+**现状 plan 表现**：§18.7 把"双开同 workspace"当成 multi-window VSCode，**没考虑 VSCode 之外的 daemon**。
+
+**强制决策（M1 落盘）**:
+- `--managed-sidecar` 启动时检测 `~/.local/share/opencorvus/server.lock`（或等价 owner file）；存在且 PID 活跃 → **直接 fail 并提示用户**：`existing opencorvus instance detected (PID=N), stop it before opening in VS Code`，不连接、不抢占、不静默另起。
+- 这条是 fail-loud，不是 fallback。CLAUDE.md §一-7。
+
+#### 19.1.2 Extension Host 异常退出 → sidecar 孤儿进程
+
+`SidecarManager.stop()` 假设 `deactivate()` 一定被调用。事实：
+
+- Extension Host crash / OOM / forced quit 不触发 `deactivate()`。
+- macOS 强退 VS Code → child sidecar 不会随父退出（Bun spawn 默认 detached）。
+- 用户重启 VSCode → 旧 sidecar 还活着、占着 DB lock → 新 extension 又起一个 → §19.1.1 的死锁。
+
+**强制决策（M1 落盘）**:
+- sidecar `--managed-sidecar` 启动时记下 parent PID（`OPENCORVUS_PARENT_PID` env 注入）。
+- sidecar 内每 5s 检查 `process.kill(parentPid, 0)`；父进程不存在 → 自杀（先 `/shutdown` 内部钩子，再 exit）。
+- 验收：M1 集成测试包含 "kill -9 extension host → sidecar 在 ≤10s 内退出"。
+
+#### 19.1.3 Token env 通过 spawn 链泄漏到所有 sub-agent
+
+opencorvus 自己会 spawn 大量 sub-process（LLM tool runner、sub-agent、bash tool、channel bot）。env 默认继承 → `OPENCORVUS_SERVER_PASSWORD` 出现在每个子进程的 `/proc/<pid>/environ`、ps 输出、core dump 里。
+
+**现状 plan 表现**：§16.3 标记"长期可改 stdin + memzero"。**这条不能延后**，因为子进程数量大、用户可能在子进程里跑 untrusted 工具。
+
+**强制决策（M1 落盘）**:
+- sidecar 主进程读完 `OPENCORVUS_SERVER_PASSWORD` 后立刻 `delete process.env.OPENCORVUS_SERVER_PASSWORD`（Bun / Node 都支持）。
+- 后续所有 spawn 默认不传该 env。
+- Auth 中间件读的是模块内部变量，不是 env。
+- 验收：M1 单测覆盖 "spawn child after token loaded → child env 不含 password"。
+
+#### 19.1.4 dist 体积实测必须前置到 M0
+
+§16.3 把"M7 阶段实测体积"放在最后。如果实测单平台 > 200MB（marketplace 上限），整个分发策略推翻。
+
+**强制决策（M0 落盘，spike 优先于一切代码改动）**:
+- `du -sh packages/opencorvus/dist/<each-target>` 实测当前 5 平台体积（含 `ui/`、二进制、models.dev cache、字体等所有 vsix 必带项）。
+- 落到 `tmp/vscode-extension-binary-size.md`。
+- 单平台 > 150MB → 触发 strip + UPX 子任务；> 200MB → 整个 platform-specific VSIX 路线否决，回到设计。
+
+### 19.2 高优先级（Block M3/M4）
+
+#### 19.2.1 完整 CSP 模板缺失
+
+§6 只说"`connect-src` 允许 `webview.cspSource`"，**其他指令完全没列**。实际 webview 跑 React/Solid + LLM markdown 渲染，`default-src 'none'` + 缺指令 = 反复被 CSP 打脸。
+
+**M5 前必须落盘完整模板**:
+```
+default-src 'none';
+script-src 'nonce-{nonce}' {cspSource};
+style-src 'unsafe-inline' {cspSource};
+img-src {cspSource} data: blob:;
+font-src {cspSource} data:;
+connect-src {cspSource};
+worker-src blob:;
+frame-src 'none';
+object-src 'none';
+base-uri 'none';
+form-action 'none';
+```
+LLM 输出的外部图片：第一期**显式禁止**（仅 `cspSource + data: + blob:`），不开 https:。
+
+#### 19.2.2 Webview 安全配置硬锁
+
+`WebviewOptions` 默认值不可靠。M5 前必须显式：
+- `enableCommandUris: false`（防 prompt injection 让用户点 `command:vscode...` 链接）
+- `enableScripts: true`（必需，但要配合 nonce CSP）
+- `enableForms: false`
+- `localResourceRoots`: 仅 `media/ui`，不带 workspace folder
+- `retainContextWhenHidden: false`（VSCode 自己提示性能问题；除非业务必需，默认关）
+
+**plan §6 缺这一段**，加进 §6.3。
+
+#### 19.2.3 SSE backpressure / batching 策略
+
+LLM token 流：每秒数百 chunk × postMessage 单条 marshal → webview 主线程被 React 渲染拖住时消息堆积。VSCode `webview.postMessage` 无 backpressure 信号。
+
+**M4 必须决策**:
+- TransportBridge 在 extension host 端对 stream events 做 10–50ms batching：
+  ```
+  收到 SSE event → 入 buffer → setTimeout(flush, 16ms) → 一次 postMessage 多个 events
+  ```
+- buffer size 上限（如 256），超限 → drop oldest（**这不是 fallback，是流式语义里 drop tail 的标准做法**，必须明示）。
+- 验收：M4 集成测试包含 "1000 events/s 持续 10s → webview 收到全部 / drop 计数明确"。
+
+#### 19.2.4 Sidecar 重启后 webview state 一致性
+
+§13 M1 说"sidecar 异常退出 → 用户手动重开"。但 webview 已开 → state 是旧端口、旧 token、旧 stream id。
+
+**M4 必须决策（二选一落盘）**:
+- A. SidecarManager 检测 sidecar 退出 → 强制 `panel.dispose()` + 弹消息让用户重开（用户会丢草稿）
+- B. WebView 持久化 unsent 输入到 `vscode.ExtensionContext.workspaceState`，重连后恢复
+- 第一期推 A（明确失败、不藏复杂度）。B 进 backlog。
+
+#### 19.2.5 macOS Gatekeeper / Windows SmartScreen
+
+VSIX 内 bundle 的 Bun compile 二进制：
+- macOS: 未签名 + 未公证 → 第一次运行被 Gatekeeper 拒绝 → extension `spawn EACCES` / `spawn ENOTSUP` → 用户卡住
+- Windows: SmartScreen 警告（首次运行，可放行）
+- Linux: 无问题
+
+**M7 前必须落盘**:
+- macOS：申请 Apple Developer ID + 在 CI 里 codesign + notarytool altool 公证。这条是法律 / 工时阻塞项，**必须早确认**（账号申请要数天）。
+- Windows：SmartScreen 在用户量积累前总会警告，第一期接受；EV 证书延后。
+- 第一期不能用 ad-hoc sign 替代公证 — Gatekeeper 在 macOS 13+ 会硬拒。
+- **plan §8 当前完全没提。M7 的 "CI 分平台构建 sidecar 与 VSIX" 必须包含 codesign/notarize 步骤。**
+
+#### 19.2.6 attachFile 语义校正
+
+§16-C 决策是"创建用户可见附件事件"。**这语义错了**：单纯 attached event 不会触发 agent 工作，等于点了个按钮没下文。
+
+**M6 必须落盘**:
+- `attachFile` 不是发送动作，是"暂存到 composer 草稿"动作。
+- 实现：通过 transport 把当前文件 URI + selection 传给 webview store → webview 把它作为 pending attachment 显示在输入框上方 → 用户看到 → 用户点 send 才真正发出。
+- 这才是 Cursor / Claude Code 的 @file 语义，也才符合 CLAUDE.md §15 "自然角色对话"。
+- 不是 server 路由，是 webview side state 改动 + 一条 `composer.attach` postMessage 类型。
+- §10 / §16-C 必须重写。
+
+### 19.3 中优先级（Block M5/M7）
+
+#### 19.3.1 Serve.ts 改动边界明确化
+
+§4.1 说"不要复用当前 serve.ts 的固定端口治理逻辑"。**措辞歧义**，可能被理解为"重写 serve.ts"，导致破坏现有 daemon 用户。
+
+**M1 明确**:
+- 现有 `opencorvus serve` 命令路径**不动**（端口治理、kill 占用进程的逻辑保留给现有用户）。
+- 新增独立子命令 `opencorvus sidecar`（不是 `serve --managed-sidecar` 这种 flag），明确隔离两套语义。
+- 路由侧 `/shutdown` `/restart` 在 sidecar 子命令模式下注册，serve 模式下不存在（§18.3）。
+- CLAUDE.md §16/17：旧路径不留补丁，但**新功能可以独立分支**，不冲突。
+
+#### 19.3.2 i18n 注入
+
+VSCode `vscode.env.language` 必须传给 webview。当前 plan §6 完全没提。
+
+**M5 落盘**:
+- Extension host 启动 webview 时把 `vscode.env.language` 注入 HTML 的 `<html lang>` 和一个 bootstrap global（如 `window.__OPENCORVUS_LOCALE__ = "zh-CN"`）。
+- overlay i18n 加载器读这个 global，**不是**读浏览器 `navigator.language`（webview 里可能不准）。
+
+#### 19.3.3 Schema versioning
+
+§5.2 协议 `{ type, id, method, path, ... }` 没有版本字段。webview 资源是 vsix 内 build 出来的，extension host 也是同一 vsix → 应该同步演进，但 marketplace 自动更新可能让用户的 VS Code 缓存到一半新一半旧。
+
+**M4 落盘**:
+- 协议加 `protocol: 1` 字段。
+- TransportBridge 收到不匹配版本 → 直接拒绝并 dispose webview，要求用户重载窗口。
+- 不做向下兼容（CLAUDE.md §一-7、§二-7 禁 fallback）。
+
+#### 19.3.4 二次 review checklist 落具体 grep
+
+§12.3 / §18.5 说"复核没有 fallback / 兜底 / 隐藏消息"，**没列 grep**。
+
+**M8 落盘 review-grep.md**：
+```
+rg "\.catch\(\(\)\s*=>" packages/vscode-extension packages/overlay/src       # 静默吞错
+rg "\?\?\s*\[\]" packages/vscode-extension packages/overlay/src              # 默认空数组兜底
+rg "fallback|Fallback|FALLBACK" packages/vscode-extension packages/overlay/src
+rg "兜底|降级|默认值" packages/vscode-extension packages/overlay/src
+rg "fetch\(|new EventSource" packages/overlay/src                            # 必须只在 transport 实现里
+rg "process\.env\.OPENCORVUS_DEV" dist/extension.js                          # release 包内不应出现
+rg "127\.0\.0\.1" packages/vscode-extension/dist                             # bundle 内不该硬编码
+```
+
+#### 19.3.5 Chaos 集成测试
+
+§12.2 全是 happy path。
+
+**M8 集成测试新增**:
+- sidecar 启动后 `kill -9` → extension 显示 disconnected，webview 不卡死
+- DB 文件被 chmod 000 → sidecar 启动失败 → extension 报清晰错
+- workspace 切换中途 → 旧 sidecar 全干净退出
+- 手动占用 `OPENCORVUS_LISTEN` 那行的端口 → managed sidecar 直接 fail，不抢占
+- extension host SIGSTOP 30s → sidecar parent-watchdog 触发自杀（§19.1.2）
+
+### 19.4 待澄清（不阻塞，但记下）
+
+- **VSCode for Cursor**：Cursor 用自己的 marketplace（cursor 不直接用 VS Code marketplace），需要单独发布。第一期接受"用户手装 vsix"。
+- **JetBrains/Zed**：本方案与之无关，但 IDE 钩子代码（`src/ide/index.ts`）已为多 IDE 设计；JetBrains 需要独立 plugin 项目。
+- **Webview Lifecycle 与 panel 多实例**：用户可能同时打开多个 panel（"split panel"），每个 panel 都 acquireVsCodeApi。当前 panel.ts 是否单实例？plan 未明示。M2 落"单 panel 单 sidecar 单 webview"。
+- **i18n 资源同时被 sidecar 和 webview 各自加载**：sidecar 自己有 ui/、webview 用 vsix 内 media/ui，**两份**。第一期接受冗余，第二期看是否能共享。
+
+### 19.5 阻断升级表
+
+下列项不完成不得进入对应里程碑（覆盖 §18）：
+
+| 项 | 阻断阶段 |
+|---|---|
+| 19.1.4 dist 体积实测 | M0（先于一切） |
+| 19.1.1 daemon 共存策略 | M1 |
+| 19.1.2 parent-watchdog | M1 |
+| 19.1.3 token env 清理 | M1 |
+| 19.3.1 serve.ts 边界 | M1 |
+| 19.2.3 SSE batching | M4 |
+| 19.2.4 sidecar 重启 state | M4 |
+| 19.3.3 protocol version | M4 |
+| 19.2.1 完整 CSP | M5 |
+| 19.2.2 Webview 安全配置 | M5 |
+| 19.3.2 i18n 注入 | M5 |
+| 19.2.6 attachFile 语义重写 | M6 |
+| 19.2.5 codesign / notarize | M7 |
+| 19.3.4 review-grep | M8 |
+| 19.3.5 chaos test | M8 |
