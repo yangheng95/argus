@@ -249,6 +249,15 @@ export function CardHeader(props: {
           <Show when={props.node.subtitle}>
             <span class="card__subtitle" title={props.node.subtitle}>{props.node.subtitle}</span>
           </Show>
+          <Show when={props.node.status === "error" && !!props.node.errorReason}>
+            <span
+              class="card__error-reason"
+              title={props.node.errorReason}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {props.node.errorReason}
+            </span>
+          </Show>
           <span class="card__title-spacer" aria-hidden="true" />
           <Show when={hasAnyActivity()}>
             {(_) => {

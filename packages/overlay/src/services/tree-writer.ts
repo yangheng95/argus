@@ -576,6 +576,17 @@ function handleSessionStatus(event: any): void {
     const ts = Number(event?.emittedAt || event?.emitted_at || Date.now());
     setCardTreeStore("cards", info.cardID, "timeCompleted", ts);
   }
+  // On error / aborted terminal, capture the human-readable reason so
+  // CardHeader doesn't strand the operator with just a red badge.
+  if (cardStatus === "error") {
+    const status = props.status as { message?: string; error?: string; reason?: string } | undefined;
+    const reason =
+      (typeof status?.message === "string" && status.message) ||
+      (typeof status?.error === "string" && status.error) ||
+      (typeof status?.reason === "string" && status.reason !== "error" && status.reason !== "aborted" && status.reason) ||
+      "";
+    if (reason) setCardTreeStore("cards", info.cardID, "errorReason", reason);
+  }
 }
 
 // usage.updated — cumulative LLM token / cost totals from the executor for a

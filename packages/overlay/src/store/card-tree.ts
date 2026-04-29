@@ -190,6 +190,11 @@ export interface CardNode {
    *  `handleSessionStatus` on the terminal flip. CardHeader subtracts
    *  `time` to render the running-or-finished duration. */
   timeCompleted?: number;
+  /** Free-text error reason carried on `session.status` terminal events
+   *  (status.message / status.error). Surfaced in CardHeader as a
+   *  read-only chip when present so the operator sees WHY the card flipped
+   *  red instead of just the badge color change. */
+  errorReason?: string;
   /** Structured integrity review payload — only populated for kind="integrity"
    *  nodes. Mirrors `IntegrityReviewCompleted` event shape (see
    *  opencorvus/engine/model.ts). Rendered natively by <IntegrityCard>; the

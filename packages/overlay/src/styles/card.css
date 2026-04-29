@@ -985,6 +985,25 @@ body[data-theme="light"] .card__round {
   opacity: 0.78;
 }
 
+/* card__error-reason — single-line error message chip on cards that flipped
+   to status="error". Lives in the title row so the operator sees WHY a
+   session failed without expanding the card. Truncates with ellipsis;
+   the full reason lives in the title attribute. */
+.card__error-reason {
+  display: inline-block;
+  max-width: clamp(160px, 50%, 420px);
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--bad-dim);
+  color: var(--bad);
+  font-size: var(--card-sub-size);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Interaction Card
    Self-contained system-prompt card for pending permission /
@@ -1105,6 +1124,15 @@ body[data-theme="light"] .card__round {
 .interaction-card__actions .btn {
   padding: 3px 10px;
   font-size: var(--card-sub-size);
+}
+.interaction-card__option:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent) 56%, transparent);
+  outline-offset: 2px;
+  border-radius: calc(var(--radius) * 0.6);
+}
+.interaction-card__actions .btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 2px;
 }
 
 /* Sidebar list wrapper used by Board's "interactions" section. */
