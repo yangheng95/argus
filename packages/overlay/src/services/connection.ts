@@ -12,6 +12,7 @@ import { apiJson, configure as configureApi, DEFAULT_SERVER } from "./api";
 import { appStore, setAppStore, setConnectionStatus } from "../store/app";
 import { settingsStore, applySettings, saveSettings } from "../store/settings";
 import { getHostTransport } from "./host-transport";
+import { makeMonitorTick } from "./monitor-tick";
 
 // ── Helpers ──
 
@@ -179,23 +180,16 @@ export function startConnectionMonitor(
   intervalMs = 10_000,
 ): void {
   stopConnectionMonitor();
-  // Skip the tick when the window is hidden — Tauri/WebView2 still wakes
-  // the JS event loop on setInterval, which on a battery laptop adds up
-  // over hours when the user is not looking at the overlay. We retry on
-  // visibilitychange below.
-  _monitorTimer = setInterval(async () => {
-    if (typeof document !== "undefined" && document.hidden) return;
-    try {
-      if (!appStore.connected) {
-        const ok = await checkConnection();
-        if (ok) {
-          await onReconnect?.();
-        }
-      }
-    } catch (err) {
-      console.warn("[connection] monitor retry failed", err);
-    }
-  }, intervalMs);
+  // audit-2026-04-29 W2-V24 — re-entrance-guarded tick lives in
+  // services/monitor-tick.ts so the no-overlap contract is
+  // testable.
+  const tick = makeMonitorTick({
+    isHidden: () => typeof document !== "undefined" && document.hidden,
+    isConnected: () => appStore.connected,
+    check: () => checkConnection(),
+    onReconnect,
+  });
+  _monitorTimer = setInterval(tick, intervalMs);
 }
 
 /**
