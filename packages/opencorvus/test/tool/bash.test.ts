@@ -7,6 +7,7 @@ import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import type { PermissionNext } from "../../src/permission/next"
 import { Truncate } from "../../src/tool/truncation"
+import { Agent } from "../../src/agent/agent"
 
 const ctx = {
   sessionID: "test",
@@ -128,7 +129,13 @@ describe("tool.bash permissions", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const bash = await BashTool.init()
+        // V31: agent required so Truncate.output can verify recovery
+        // path (build agent has the `task` tool). Pre-fix the
+        // command's `ls` over os.tmpdir() produced ~2 MB of
+        // output and Truncate threw because the test passed no
+        // agent.
+        const agent = await Agent.get("build")
+        const bash = await BashTool.init({ agent })
         const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
         const testCtx = {
           ...ctx,
@@ -383,7 +390,14 @@ describe("tool.bash truncation", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const bash = await BashTool.init()
+        // audit-2026-04-29 W2-V31 — Truncate.output now requires
+        // the calling agent to have either `task` or `read+search_code`
+        // tools so a truncated payload can be re-read (no silent
+        // info loss, CLAUDE.md rule #1). Pre-fix the test called
+        // BashTool.init() without an agent; truncate threw instead
+        // of truncating. Pass the build agent (which has `task`).
+        const agent = await Agent.get("build")
+        const bash = await BashTool.init({ agent })
         const lineCount = Truncate.MAX_LINES + 500
         const result = await bash.execute(
           {
@@ -403,7 +417,8 @@ describe("tool.bash truncation", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const bash = await BashTool.init()
+        const agent = await Agent.get("build")
+        const bash = await BashTool.init({ agent })
         const byteCount = Truncate.MAX_BYTES + 10000
         const result = await bash.execute(
           {
@@ -442,7 +457,8 @@ describe("tool.bash truncation", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const bash = await BashTool.init()
+        const agent = await Agent.get("build")
+        const bash = await BashTool.init({ agent })
         const lineCount = Truncate.MAX_LINES + 100
         const result = await bash.execute(
           {
