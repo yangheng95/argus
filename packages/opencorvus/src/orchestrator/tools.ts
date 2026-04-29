@@ -3714,6 +3714,44 @@ export function createOrchestratorTools(input: {
           await trackStepStart("build")
         }
 
+        // Bootstrap-first gate: when the architect registered any
+        // `kind: "bootstrap"` goal, that goal must reach `passed` (build +
+        // deliver merged into primary) before any non-bootstrap goal may
+        // dispatch. Rationale: bootstrap goals own scaffold files
+        // (package.json / tsconfig / vite.config / src/main.* / src/App.*)
+        // that every other goal would inevitably touch on a fresh worktree.
+        // Running them in parallel produces guaranteed merge_back conflicts
+        // on those scaffold files because each goal's worktree starts from
+        // an un-scaffolded primary. Serialising bootstrap → fan-out is the
+        // only architecture that avoids the conflict class.
+        if (attachedGoalID) {
+          const { findGoal: findGoalNow, listGoals: listGoalsNow } = await import("@/engine/store")
+          const { goalStatusByID } = await import("@/engine/describe")
+          const target = findGoalNow(attachedGoalID)
+          if (target && target.kind !== "bootstrap") {
+            const allGoals = listGoalsNow(taskID)
+            const blocker = allGoals.find((g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed")
+            if (blocker) {
+              log.warn("build: bootstrap-first gate rejected non-bootstrap dispatch", {
+                taskID,
+                requestedGoal: attachedGoalID,
+                requestedKind: target.kind,
+                pendingBootstrap: blocker.id,
+                pendingBootstrapStatus: goalStatusByID(blocker.id),
+              })
+              return (
+                `build: rejected — goal ${attachedGoalID} (kind=${target.kind}) cannot dispatch ` +
+                `while bootstrap goal ${blocker.id} (${blocker.title}) is in status ` +
+                `"${goalStatusByID(blocker.id)}". Bootstrap goals own scaffold-level files ` +
+                `(package.json / tsconfig / vite.config / src/main.* / src/App.*) that every ` +
+                `other goal would re-scaffold on its own worktree. Run the bootstrap goal first ` +
+                `(build → deliver → merged to primary), THEN dispatch feature / system / ` +
+                `verification goals in parallel.`
+              )
+            }
+          }
+        }
+
         // Phase 5-c: delegate to BuildAgent.run. It owns the child session
         // (kind=build), creates an isolated worktree (parallel-safe for
         // multi-goal fan-out), gates concurrency via BuildSemaphore, and
