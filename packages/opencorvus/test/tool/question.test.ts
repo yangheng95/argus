@@ -14,16 +14,26 @@ const ctx = {
 }
 
 describe("tool.question", () => {
-  let askSpy: any
+  // audit-2026-04-29 W2-V32 — pre-fix the test mocked
+  // `Question.ask` but `QuestionTool.execute` calls
+  // `Question.askAndFormat`, and askAndFormat calls a LOCAL `ask`
+  // reference (question/index.ts:239 `const answers = await
+  // ask(input)`). The spy on the namespace export didn't catch
+  // the local-binding call → real ask ran → "No context found
+  // for instance" because no Instance.provide wraps the test.
+  // Mock `askAndFormat` directly so the consumer-side mock
+  // covers the boundary the production caller actually uses.
+  let askAndFormatSpy: any
 
   beforeEach(() => {
-    askSpy = spyOn(QuestionModule.Question, "ask").mockImplementation(async () => {
-      return []
+    askAndFormatSpy = spyOn(QuestionModule.Question, "askAndFormat").mockResolvedValue({
+      output: "stub",
+      answers: [],
     })
   })
 
   afterEach(() => {
-    askSpy.mockRestore()
+    askAndFormatSpy.mockRestore()
   })
 
   test("should successfully execute with valid question parameters", async () => {
@@ -40,10 +50,10 @@ describe("tool.question", () => {
       },
     ]
 
-    askSpy.mockResolvedValueOnce([["Red"]])
+    askAndFormatSpy.mockResolvedValueOnce({ output: "User answered: Red", answers: [["Red"]] })
 
     const result = await tool.execute({ questions }, ctx)
-    expect(askSpy).toHaveBeenCalledTimes(1)
+    expect(askAndFormatSpy).toHaveBeenCalledTimes(1)
     expect(result.title).toBe("Asked 1 question")
   })
 
@@ -57,7 +67,10 @@ describe("tool.question", () => {
       },
     ]
 
-    askSpy.mockResolvedValueOnce([["Dog"]])
+    askAndFormatSpy.mockResolvedValueOnce({
+      output: `User answered:\n"What is your favorite animal?"="Dog"`,
+      answers: [["Dog"]],
+    })
 
     const result = await tool.execute({ questions }, ctx)
     expect(result.output).toContain(`"What is your favorite animal?"="Dog"`)
