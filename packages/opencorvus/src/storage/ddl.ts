@@ -72,7 +72,6 @@ CREATE TABLE IF NOT EXISTS session (
   summary_additions  integer,
   summary_deletions  integer,
   summary_files      integer,
-  revert             text,
   permission         text,
   metadata           text,
   time_created       integer NOT NULL,
@@ -97,6 +96,7 @@ CREATE TABLE IF NOT EXISTS message (
   FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS message_session_idx ON message (session_id);
+CREATE INDEX IF NOT EXISTS message_session_time_idx ON message (session_id, time_created);
 
 -- ===== part =====
 
@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS part (
 );
 CREATE INDEX IF NOT EXISTS part_message_idx ON part (message_id);
 CREATE INDEX IF NOT EXISTS part_session_idx ON part (session_id);
+CREATE INDEX IF NOT EXISTS part_session_time_idx ON part (session_id, time_created);
 
 -- ===== permission =====
 

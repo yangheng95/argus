@@ -92,7 +92,6 @@ export const SessionTable = sqliteTable(
     summary_additions: integer(),
     summary_deletions: integer(),
     summary_files: integer(),
-    revert: text({ mode: "json" }).$type<{ messageID: string; partID?: string; snapshot?: string; diff?: string }>(),
     permission: text({ mode: "json" }).$type<PermissionNext.Ruleset>(),
     /** Free-form per-session metadata. */
     metadata: text({ mode: "json" }).$type<Record<string, unknown>>(),
@@ -118,7 +117,10 @@ export const MessageTable = sqliteTable(
     ...Timestamps,
     data: text({ mode: "json" }).notNull().$type<InfoData>(),
   },
-  (table) => [index("message_session_idx").on(table.session_id)],
+  (table) => [
+    index("message_session_idx").on(table.session_id),
+    index("message_session_time_idx").on(table.session_id, table.time_created),
+  ],
 )
 
 export const PartTable = sqliteTable(
@@ -132,7 +134,11 @@ export const PartTable = sqliteTable(
     ...Timestamps,
     data: text({ mode: "json" }).notNull().$type<PartData>(),
   },
-  (table) => [index("part_message_idx").on(table.message_id), index("part_session_idx").on(table.session_id)],
+  (table) => [
+    index("part_message_idx").on(table.message_id),
+    index("part_session_idx").on(table.session_id),
+    index("part_session_time_idx").on(table.session_id, table.time_created),
+  ],
 )
 
 export const TodoTable = sqliteTable(
