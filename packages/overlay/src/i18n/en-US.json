@@ -97,6 +97,7 @@
   "notify.task_interaction_body_with_detail": "{{title}}: {{detail}}",
   "settings.desktop_notifications_label": "Desktop notifications",
   "settings.desktop_notifications_hint": "Ring the OS shell when a task completes, fails, is cancelled, or is waiting on you.",
+  "channel.public_url_invalid": "Public URL must start with http:// or https://",
   "chat.git.commit": "Commit",
   "chat.git.message": "Message",
   "chat.git.result_created": "Committed the accepted workspace state",

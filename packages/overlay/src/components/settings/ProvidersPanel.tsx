@@ -248,9 +248,19 @@ export default function ProvidersPanel() {
               <input
                 class="field-input"
                 type="url"
+                pattern="https?://.+"
+                required
                 placeholder="e.g. https://my-gateway.com/v1"
                 value={formApi()}
                 onInput={(e) => setFormApi(e.currentTarget.value)}
+                onBlur={(e) => {
+                  const v = e.currentTarget.value.trim();
+                  e.currentTarget.setCustomValidity(
+                    v && !/^https?:\/\/.+/i.test(v)
+                      ? "API base URL must start with http:// or https://"
+                      : "",
+                  );
+                }}
               />
             </label>
 
