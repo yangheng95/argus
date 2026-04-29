@@ -31,7 +31,19 @@ import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
 import { Config } from "../../config/config"
 import { Log } from "../../util/log"
+import { withStreamActivity } from "../../util/stream-activity"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
+
+// Idle window before we abort a hung vision-judge stream. Mirrors the
+// session.processor 180s gate (util/stream-activity.ts callers); kept in
+// sync via the same heuristic — provider stalls past 3 minutes are stuck,
+// not slow. Without this gate, a hung alibaba-coding-plan-cn (kimi-k2.5)
+// upstream call wedges the entire build session: streamObject parks on a
+// reader.read() promise that AbortController alone does not unblock, and
+// the parent agent's stream-idle gate has been pause()d while this tool
+// runs (session.processor's pause-around-tool semantics — see
+// stream-activity.ts pause/resume comment).
+const VISION_JUDGE_IDLE_MS = 180_000
 
 const log = Log.create({ service: "mirror.tool.webpage_vision_judge" })
 
@@ -165,14 +177,22 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
     const judgePath = path.join(outputDir, "vision-judge.json")
 
     let verdict: z.infer<typeof VerdictSchema>
+    const gate = withStreamActivity({
+      idleMs: VISION_JUDGE_IDLE_MS,
+      label: `vision-judge:${parsed.providerID}/${parsed.modelID}`,
+    })
     try {
       // streamObject (rule 27 — every LLM interaction is streaming). The SDK
       // enforces VerdictSchema on the streamed JSON; partial-stream draining
       // surfaces validation failures at the same point a generateObject call
-      // would have thrown.
+      // would have thrown. The activity gate's signal is wired through
+      // abortSignal; observe() each partial chunk so a stalled provider
+      // (alibaba kimi-k2.5 has a documented 20+ min hang pattern) trips the
+      // idle window instead of wedging the parent build session.
       const result = streamObject({
         model: language,
         schema: VerdictSchema,
+        abortSignal: gate.signal,
         messages: [
           {
             role: "user",
@@ -186,7 +206,10 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
           },
         ],
       })
-      for await (const _ of result.partialObjectStream) { void _ }
+      for await (const _ of result.partialObjectStream) {
+        void _
+        gate.observe()
+      }
       verdict = (await result.object) as z.infer<typeof VerdictSchema>
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err)
@@ -218,10 +241,13 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
         `webpage_vision_judge: ${errName} — ${errMessage}` +
           (causeMessage ? ` (cause: ${causeMessage})` : "") +
           `. Common causes: (1) the model returned narrative text instead of JSON matching the schema; ` +
-          `(2) the model timed out streaming; (3) the model rejected the image payload. ` +
+          `(2) the model timed out streaming (idle > ${VISION_JUDGE_IDLE_MS}ms — provider stalled); ` +
+          `(3) the model rejected the image payload. ` +
           `A failure verdict was written to ${judgePath} so downstream gates can proceed.`,
         { cause: err instanceof Error ? err : undefined },
       )
+    } finally {
+      gate.dispose()
     }
 
     const payload = {
