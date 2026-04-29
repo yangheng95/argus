@@ -6,6 +6,7 @@ import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup }
 import { t, tArray } from "../utils/i18n";
 import { ExecutorSelector } from "./ExecutorSelector";
 import { nativeMessage } from "../services/app-dialog";
+import { messageStore, setChatAttachments } from "../store/messages";
 
 // ── Types ──
 
@@ -99,7 +100,23 @@ export function ChatComposer(props: ChatComposerProps) {
   let formRef!: HTMLFormElement;
 
   const [text, setText] = createSignal("");
-  const [attachments, setAttachments] = createSignal<ChatAttachment[]>([]);
+  // audit-2026-04-29 W2-V12 — single source of truth for staged
+  // chat attachments lives in `messageStore.chatAttachments`. The
+  // composer used to keep its own local signal, which meant
+  // host-driven `composer.attach` ui-commands (the "OpenCorvus:
+  // Attach Current File" path from vscode-extension's
+  // attach-file.ts) wrote into the store but the composer rendered
+  // its disjoint local copy — the user never saw the attachment
+  // and submitted without it. CLAUDE.md §二-8 forbids dual sources;
+  // collapse to the store and route every add/remove/clear through
+  // setChatAttachments.
+  const attachments = () => messageStore.chatAttachments as ChatAttachment[];
+  const setAttachments = (next: ChatAttachment[] | ((prev: ChatAttachment[]) => ChatAttachment[])) => {
+    const nextValue = typeof next === "function"
+      ? (next as (prev: ChatAttachment[]) => ChatAttachment[])(attachments())
+      : next;
+    setChatAttachments(nextValue);
+  };
   const [dragover, setDragover] = createSignal(false);
   const [webSearch, setWebSearch] = createSignal(false);
   const [expanded, setExpanded] = createSignal(false);
