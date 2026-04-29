@@ -18,6 +18,7 @@ import {
 import { startSSE } from "./sse";
 import { loadConfigInfo } from "./init";
 import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
+import { notifyTaskLifecycle, notifyInteractionRequested } from "./notify";
 import {
   isBoardInvalidatingEventType,
   isRouterConsumedNoopEventType,
@@ -29,6 +30,20 @@ import {
 // powers the conversation view.
 function writeToTree(event: any): void {
   applyTreeWriterEvent(event);
+  // Permission / question prompts surface as `interaction.created`; ring
+  // the OS so an operator who has tabbed away gets pulled back. Lifecycle
+  // events live in the global task-list stream and are handled by
+  // handleTaskListNotification — this branch only handles the per-task
+  // stream's interaction signal.
+  const type = String(event?.type || "");
+  if (type === "interaction.created") {
+    const props = event?.properties ?? event?.payload ?? {};
+    const taskID = String(props.taskID || "");
+    const summary = typeof props.summary === "string" ? props.summary
+      : typeof props.title === "string" ? props.title
+      : "";
+    if (taskID) notifyInteractionRequested(taskID, summary);
+  }
 }
 
 // ── Helpers ──
@@ -584,6 +599,14 @@ export function handleEventStreamEvent(event: any): void {
  */
 export function handleTaskListNotification(event: any): void {
   const type = normalizedEventType(event);
+  // Desktop notifications fire BEFORE the refresh path so the OS shell
+  // pings even if loadTasks fails to refetch. notifyTaskLifecycle
+  // de-dupes per (taskID, kind), so the orchestrator emitting both
+  // task.updated and task.completed only rings once.
+  if (type === "task.completed" || type === "task.failed" || type === "task.cancelled") {
+    const lifecycleTaskID = String(event?.taskID || "");
+    if (lifecycleTaskID) notifyTaskLifecycle(lifecycleTaskID, type);
+  }
   if (type === "task.replay_expired") {
     if (boardStore.selectedTaskID) void syncTask(boardStore.selectedTaskID);
     scheduleTasksCompat(0);

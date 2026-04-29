@@ -47,6 +47,13 @@ export interface OverlaySettings {
   directoryEpoch: number;
   /** Default tool permission actions; synced from server config */
   toolPermissions: ToolPermissions;
+  /** Surface task lifecycle (success / failure / cancellation / pending
+   *  interaction) as an OS-level desktop notification via the standard
+   *  Web Notification API. The runtime requests permission once on the
+   *  first event the user opts into, then degrades silently to in-app
+   *  toasts if the operator denies. Default ON because the user explicitly
+   *  asked for it; can be turned off in General settings. */
+  desktopNotifications: boolean;
 }
 
 // ── Sanitisers ──
@@ -134,6 +141,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
     task:               "allow",
     schedule:           "allow",
   },
+  desktopNotifications: true,
 };
 
 // ── Store ──
@@ -218,6 +226,7 @@ export function saveSettings(): void {
   localStorage.setItem("oc_zoom", String(s.zoom));
   localStorage.setItem("oc_theme", s.theme || DEFAULT_SETTINGS.theme);
   localStorage.setItem("oc_locale", s.locale || DEFAULT_SETTINGS.locale);
+  localStorage.setItem("oc_desktop_notifications", String(s.desktopNotifications));
   if (s.workspaceTaskID) {
     localStorage.setItem("oc_workspace_task", s.workspaceTaskID);
   } else {
@@ -296,6 +305,7 @@ export function loadSettings(): void {
     savedDirectory: directory,
     workspaceEpoch: DEFAULT_SETTINGS.workspaceEpoch,
     directoryEpoch: DEFAULT_SETTINGS.directoryEpoch,
+    desktopNotifications: localStorage.getItem("oc_desktop_notifications") !== "false",
   });
 }
 
