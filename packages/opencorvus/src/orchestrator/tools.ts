@@ -2848,6 +2848,7 @@ export function createOrchestratorTools(input: {
           // publisher computes changedFiles from git history (P0-C.3), and
           // (c) `git log --grep="delivery round"` reads the round timeline.
           // Allow-empty so a "no edits this round" verdict still anchors.
+          log.info("deliver: round commit START", { taskID, iteration })
           const roundCommit = await EngineGit.commitDeliveryRound({
             task: requireTask(taskID),
             iteration,
