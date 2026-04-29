@@ -4,7 +4,15 @@ import { cardTreeStore } from "../src/store/card-tree";
 import { resetWriter } from "../src/services/tree-writer";
 
 const TASK_ID = "tsk_board_projection";
-const STEP_ID = "step:goal_projection:gr_projection:build";
+// audit-2026-04-29 W2-V25 — test was authored against the per-
+// attempt step card format `step:<goal>:<run>:<stepID>`. That
+// format was reverted on 2026-04-26 (see goalStepCardID in
+// tree-writer.ts: "Removing runID from the card id keeps both
+// observers pointed at the same card and merges retry attempts
+// into one rolling timeline"). The test was never updated, so
+// it looked up an ID the production code never produces and
+// silently failed across the suite.
+const STEP_ID = "step:goal_projection:build";
 const PHASE_ID = `${STEP_ID}:phase:plan`;
 
 function boardWith(status: "running" | "failed") {

@@ -28,10 +28,23 @@ describe("blob URL cache", () => {
     (globalThis.URL as any).revokeObjectURL = (_url: string) => {};
     globalThis.fetch = mock(async (url: string) => {
       fetchCalls.push(String(url));
+      // audit-2026-04-29 W2-V25 — the mock blob must provide
+      // arrayBuffer() because the binary path in
+      // tauri-transport.readResponse calls `blob.arrayBuffer()` to
+      // materialise the bytes (see tauri-transport.ts:115-116).
+      // Pre-fix the mock returned `{}` which crashed with
+      // "blob.arrayBuffer is not a function" — so all 3 cache
+      // tests had been silently failing.
       return {
         ok: true,
         status: 200,
-        blob: async () => ({}),
+        headers: new Map([["content-type", "image/png"]]) as any,
+        blob: async () => ({
+          arrayBuffer: async () => new Uint8Array(0).buffer,
+        }),
+        // Mirror Response.headers iterator shape used by
+        // headersToObject in tauri-transport.ts:246-251.
+        forEach: () => {},
       } as any;
     });
   });
