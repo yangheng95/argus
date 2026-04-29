@@ -239,6 +239,21 @@ test("does not expose removed builtin plan, coding, or panel-control skills", as
   })
 })
 
+test("registers builtin research-report skill with websearch as required tool", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skill = await Skill.get("research-report")
+      expect(skill).toBeDefined()
+      expect(skill!.builtin).toBe(true)
+      expect(skill!.stage).toBe("build")
+      expect(skill!.required_tools).toContain("websearch")
+    },
+  })
+})
+
 test("discovers skills from .agents/skills/ directory", async () => {
   await using tmp = await tmpdir({
     git: true,
