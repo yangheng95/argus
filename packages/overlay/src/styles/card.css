@@ -67,14 +67,25 @@
 body[data-theme="light"] .card[data-depth="0"] {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 6px 14px rgba(0, 0, 0, 0.05);
 }
+/* vscode-dark uses a darker base than the default :root dark; the inset
+   highlight + drop shadow values from the dark default looked fuzzy
+   against the deeper #1e1e1e background. Tighter shadow values here. */
+body[data-theme="vscode-dark"] .card[data-depth="0"] {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 18px rgba(0, 0, 0, 0.35);
+}
 
 .card[data-depth="0"] > .card__head {
   gap: calc(10px * var(--ui-scale, 1));
   padding: calc(var(--card-pad-y) + 1px) calc(var(--card-pad-x) + 1px);
   min-height: calc(42px * var(--ui-scale, 1));
   border-bottom: 1px solid color-mix(in srgb, var(--card-line-dim) 84%, transparent);
+  /* color-mix on --subtle-3 keeps the head shimmer aligned with each
+     theme's base lightness, replacing the prior dark-only rgba gradient
+     that inverted oddly against the light + vscode-dark backgrounds. */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0) 74%),
+    linear-gradient(180deg, var(--subtle-3), transparent 74%),
     color-mix(in srgb, var(--card-bg-1) 88%, transparent);
 }
 
@@ -229,11 +240,15 @@ body[data-theme="light"] .card[data-depth="0"] {
   color: var(--text-soft);
   flex: none;
   padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.05);
+  /* token-based fill so all three themes pick up the right tint without
+     a per-theme override block. --subtle-3 sits at ~6-8% across themes. */
+  background: var(--subtle-3);
   border-radius: 999px;
 }
 body[data-theme="light"] .card__round {
-  background: rgba(0, 0, 0, 0.06);
+  /* light needs more contrast — Round-2 audit caught the prior 6% as
+     2.5:1 against #ffffff which fails WCAG AA for small text. */
+  background: rgba(0, 0, 0, 0.12);
 }
 /* Goal index badge — pushed to the LEFT of the title so #G1V1 reads
  * before the goal name. Slightly stronger contrast than the normal
