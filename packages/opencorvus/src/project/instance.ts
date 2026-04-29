@@ -41,13 +41,29 @@ export const Instance: InstanceApi = {
     if (!existing) {
       Log.Default.info("creating instance", { directory })
       existing = iife(async () => {
-        const { project, sandbox } = await Project.fromDirectory(directory)
+        let { project, sandbox } = await Project.fromDirectory(directory)
+        // Auto-bootstrap a fresh project: if the directory has no `.git`, run
+        // `git init` and seed `.gitignore` so subsequent `Worktree.create` /
+        // commit paths have a repo to work against. Idempotent — initGit is a
+        // no-op when `.git` already exists. Re-reads project info after init
+        // so the cached ctx reflects the new vcs="git" state.
+        if (!Project.isGitRepo(directory)) {
+          await Project.initGit(directory)
+          const refreshed = await Project.fromDirectory(directory)
+          project = refreshed.project
+          sandbox = refreshed.sandbox
+        }
         const ctx = {
           directory,
           worktree: sandbox,
           project,
         }
         await context.provide(ctx, async () => {
+          // .gitignore upkeep runs INSIDE context.provide because
+          // ensureGitignore() reads `Instance.directory` from the active
+          // context. Lazy import breaks the engine/git ↔ instance cycle.
+          const { ensureGitignore } = await import("@/engine/git")
+          await ensureGitignore()
           await input.init?.()
         })
         return ctx
