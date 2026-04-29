@@ -36,8 +36,11 @@ export const MetricWriteError = NamedError.create(
   z.object({ message: z.string(), code: z.string() }),
 )
 
-const MAX_CHALLENGE_PER_ITER = 1
-const MAX_CHALLENGE_PER_TASK = 3
+// audit-2026-04-29 W2-V39 — both constants re-promoted to `export`;
+// same demotion regression as registerBaselineSpec (commit f5d98cbee).
+// The tests import them to verify the budget cap contract.
+export const MAX_CHALLENGE_PER_ITER = 1
+export const MAX_CHALLENGE_PER_TASK = 3
 
 // ---------------------------------------------------------------------------
 // Architect bulk persist — take the RequirementsResult metric specs and
@@ -167,7 +170,13 @@ interface BaselineSpecInput {
  *
  * Baseline rows are immutable after insert; the SQL trigger enforces this.
  */
-function registerBaselineSpec(input: BaselineSpecInput): MetricSpec {
+// audit-2026-04-29 W2-V39 — re-promoted to `export`. Commit f5d98cbee
+// "refactor(metrics): demote unused store.ts exports" missed that
+// test/metrics/store.test.ts (and executor.test.ts) import this
+// function directly to lock the baseline-spec persistence contract.
+// The tests treat this as a public API; the demotion was wrong about
+// "unused" — broke tests at module-load → cascade-polluted other suites.
+export function registerBaselineSpec(input: BaselineSpecInput): MetricSpec {
   validateScopeInvariant(input.scope, input.goal_id)
   return Database.transaction((tx) => {
     const iterExists = tx
