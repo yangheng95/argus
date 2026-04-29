@@ -6,7 +6,8 @@
  *   The multimodal attachment path handles images/PDFs/audio/video — those
  *   are inlined as file parts on the user message. Text-family attachments
  *   (design tokens JSON, style-guide markdown, brand-voice docs) get
- *   surfaced only as a URL reference list by `AttachmentStore.renderReferenceList`.
+ *   surfaced as `[reference — read via tool]` rows inside
+ *   `AttachmentStore.renderAttachmentInventory`'s textual ledger.
  *   Before this tool existed, the agent could see the URL but had no way to
  *   actually open it: `webfetch` requires http(s) and the attachment URLs
  *   are server-relative, and `read_file` only covers paths inside the

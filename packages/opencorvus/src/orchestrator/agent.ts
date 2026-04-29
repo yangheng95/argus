@@ -216,26 +216,37 @@ export namespace Orchestrator {
       // introduced). AttachmentStore.partition routes image/audio/video/pdf
       // to inline file parts and text/* / json to a URL-only reference list;
       // see helper comments for the silent-rejection rationale.
-      const attachments = isFirstWake && Array.isArray(task.attachments)
+      // Inline file parts (image / pdf bytes) only on the first wake — the
+      // bytes live in the conversation history afterwards and don't need to
+      // be re-attached. The TEXTUAL inventory below is appended on EVERY
+      // wake so the orchestrator never loses awareness of what the user
+      // attached when deciding the next dispatch.
+      const firstWakeAttachments = isFirstWake && Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
-      const { referenceOnly } = AttachmentStore.partition(attachments)
-      const inlineFileParts = await AttachmentStore.inlineFileParts(attachments)
-      // Orchestrator is the orchestrator; it does NOT own a `read` tool.
-      // Attachments are forwarded automatically to the sub-agents it dispatches
-      // (requirements / design_analysis / architect via the `requirements` /
-      // `design_analysis` / `architect` tools), which DO have read access. The
-      // inventory below tells the Orchestrator what's available when deciding
-      // which sub-agent to invoke; the trailing instruction is a HARD design
-      // constraint (no read tool here), not a fallback hint.
-      const referenceText = referenceOnly.length
-        ? AttachmentStore.renderReferenceList(referenceOnly).replace(
-            "## Task Attachments (read via the `read` tool when you need their content)",
-            "## Task Attachments (forwarded to sub-agents automatically)",
-          ) +
-          "\n\nDo NOT attempt to read these yourself — invoke the appropriate sub-agent (requirements / design_analysis / architect) which receives the attachments and can read them via its `read` tool."
-        : ""
-      const enrichedUserText = userText + referenceText
+      const inlineFileParts = await AttachmentStore.inlineFileParts(firstWakeAttachments)
+      // Orchestrator does NOT own a `read` tool. Attachments are forwarded
+      // automatically to every sub-agent it dispatches (requirements /
+      // design_analysis / architect / build / refine — see orchestrator/tools.ts
+      // dispatch sites that pass `attachments: task.attachments`). The
+      // inventory below tells the orchestrator what is available when
+      // deciding which sub-agent to invoke; the trailing instruction is a
+      // HARD design constraint (no read tool here) and a hard requirement
+      // that the orchestrator cite the attachments in every dispatch prompt
+      // so the sub-agent treats them as primary context, not silent backdrop.
+      const allAttachments = Array.isArray(task.attachments)
+        ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
+        : undefined
+      const inventoryText = AttachmentStore.renderAttachmentInventory(allAttachments, {
+        header: "## Task Attachments (forwarded to sub-agents automatically)",
+        hint:
+          "The user attached the files below to this task. " +
+          "Multimodal items (image / pdf / audio / video) are inlined as file parts on the first wake — you can see and reason about them directly. " +
+          "Reference-only items (text / json) are not inlined; sub-agents read them via their `read` tool. " +
+          "You do NOT have a `read` tool yourself — do not attempt to fetch reference content. " +
+          "When you call `requirements` / `design_analysis` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by filename and explain their relevance, otherwise the sub-agent will treat the request as text-only and ignore the visual / file context.",
+      })
+      const enrichedUserText = userText + inventoryText
       // Build PromptInput.parts. Text first, then any multimodal attachments
       // as FilePart (data URL) so Session.saveMessage can persist the part
       // without re-resolving a local file path.
