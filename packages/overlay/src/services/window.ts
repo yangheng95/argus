@@ -1,43 +1,29 @@
 // ── Window / UI Service ──
-// on the Tauri window handle or on global DOM state.
 // Exported functions:
-// setTrayAttention — toggle the tray icon attention state via Tauri
+// setTrayAttention — toggle the tray icon attention state via host
 // fitBrandVersion — shrink the brand-version element to fit its container
 
-// ── Helpers ──
-
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
-async function tauriInvoke<T>(
-  command: string,
-  args?: Record<string, unknown>,
-): Promise<T> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args) as Promise<T>;
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
-}
+import { getHostTransport } from "./host-transport";
 
 // ── setTrayAttention ──
 // Activate or deactivate the tray-icon attention animation.
-// Returns true on success, false when Tauri is unavailable.
+// Returns true on success, false when the host has no tray (browser
+// preview, VS Code webview).
 
 let _trayAttentionEnabled = false;
 
 export async function setTrayAttention(active: boolean): Promise<boolean> {
-  if (!hasTauriRuntime()) return false;
   if (_trayAttentionEnabled === !!active) return true;
-  const result = await tauriInvoke<boolean>("overlay_attention_set", {
-    active: !!active,
-  }).catch(() => false);
-  if (result) _trayAttentionEnabled = !!active;
-  return !!result;
+  try {
+    const result = await getHostTransport().native({
+      kind: "tray.attention.set",
+      active: !!active,
+    });
+    if (result) _trayAttentionEnabled = !!active;
+    return !!result;
+  } catch {
+    return false;
+  }
 }
 
 // ── fitBrandVersion ──

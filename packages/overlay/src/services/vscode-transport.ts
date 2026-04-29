@@ -16,11 +16,13 @@
 
 import type {
   HostTransport,
+  NativeCommand,
   StreamHandle,
   StreamHandlers,
   StreamOpenRequest,
   TransportRequest,
 } from "./host-transport"
+import { nativeUnsupported } from "./host-transport"
 
 export function createVsCodeTransport(): HostTransport {
   return {
@@ -45,6 +47,15 @@ export function createVsCodeTransport(): HostTransport {
         try { handlers.onClose?.("vscode-transport-stub") } catch {}
       })
       return { close() {} }
+    },
+    async native(command: NativeCommand): Promise<unknown> {
+      // Plan §5.2: every host-specific command must either be honoured
+      // or rejected loudly. The vscode webview cannot impersonate a
+      // Tauri window, so all commands are rejected here. M5 will
+      // implement the safe subset (open-url via vscode.env.openExternal,
+      // pickDir/pickFiles via vscode.window.showOpenDialog, etc.) by
+      // routing those specific kinds through the postMessage bridge.
+      return nativeUnsupported("vscode", command)
     },
   }
 }

@@ -17,6 +17,7 @@ import { setAppStore } from "../store/app";
 import { AppLog } from "../utils/log";
 import { t } from "../utils/i18n";
 import { apiJson, configure as configureApi } from "./api";
+import { getHostTransport } from "./host-transport";
 import { nativeMessage } from "./app-dialog";
 import { nativeOpen, nativePrompt } from "../utils/native";
 import { checkConnection } from "./connection";
@@ -308,23 +309,6 @@ export function getTasksSeq(): number {
   return tasksSeq;
 }
 
-// ── Tauri helpers (internal) ──
-
-async function tauriInvoke(command: string, args?: Record<string, unknown>): Promise<unknown> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args);
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
-}
-
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
 /** Produce a user-facing error message: translated key + error detail. */
 function errorText(key: string, error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error ?? "");
@@ -349,13 +333,17 @@ function joinPath(base: string, value: string): string {
 
 /** Open a native directory picker. Returns the selected path, or an empty string when cancelled. */
 export async function pickDirectory(start?: string): Promise<string> {
-  const selected = await (tauriInvoke("overlay_pick_dir", { start: start || undefined }) as Promise<unknown>);
+  const selected = await getHostTransport().native({ kind: "workspace.pickDir", start });
   return typeof selected === "string" ? selected : "";
 }
 
 /** Open a native multi-file picker. Returns the array of selected paths. */
 export async function pickFiles(start?: string): Promise<string[]> {
-  const result = await (tauriInvoke("overlay_pick_files", { start: start || undefined }) as Promise<unknown>);
+  const result = await getHostTransport().native({
+    kind: "workspace.pickFiles",
+    start,
+    multiple: true,
+  });
   return Array.isArray(result) ? result : [];
 }
 
@@ -577,9 +565,9 @@ export async function createDirectory(): Promise<void> {
     const value = name?.trim();
     if (!value) return;
     const target = joinPath(parent, value);
-    const created = await tauriInvoke("overlay_create_dir", { path: target }).catch(
-      () => undefined,
-    );
+    const created = await getHostTransport()
+      .native({ kind: "workspace.createDir", path: target })
+      .catch(() => undefined);
     if (!created) throw new Error(t("cwd.create_unavailable"));
     await setDirectory(target);
     if (settingsStore.initGit) {

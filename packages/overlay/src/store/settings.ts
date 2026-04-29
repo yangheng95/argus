@@ -3,6 +3,7 @@
 
 import { createStore } from "solid-js/store";
 import { DEFAULT_SERVER } from "../services/api";
+import { getHostTransport } from "../services/host-transport";
 import { sanitizeLocale } from "../utils/i18n";
 
 // ── Types ──
@@ -243,14 +244,12 @@ export function saveSettings(): void {
     localStorage.removeItem("oc_directory");
   }
 
-  const invoke = (window as any).__TAURI__?.core?.invoke as
-    | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
-    | undefined;
-  if (typeof invoke === "function") {
-    void invoke("overlay_settings_save", {
-      settings: bootstrapOverlaySettings(s),
-    });
-  }
+  // Persist via the host (Tauri stores them on disk). VS Code transport
+  // throws UnsupportedNativeCommandError; we ignore that — localStorage
+  // above is the source of truth for settings.
+  void getHostTransport()
+    .native({ kind: "settings.save", payload: bootstrapOverlaySettings(s) })
+    .catch(() => undefined);
 }
 
 // ── loadSettings ──
