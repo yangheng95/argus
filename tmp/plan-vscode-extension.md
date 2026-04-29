@@ -151,7 +151,7 @@ opencorvus serve --managed-sidecar --port 0 --hostname 127.0.0.1 --project-dir <
 OPENCORVUS_LISTEN=127.0.0.1:<actual-port>
 ```
 
-- 设置 `OPENCORVUS_SERVER_URL=http://127.0.0.1:<actual-port>`，保持现有 channel runtime 读取路径可用。
+- sidecar 内部 listen 成功后，对自身 process 写 `OPENCORVUS_SERVER_URL=http://127.0.0.1:<actual-port>`，供 sidecar 内 channel runtime 等子模块读取；extension host 不依赖此变量，永远以 stdout `OPENCORVUS_LISTEN=` 为唯一握手来源。
 - 如果 `OPENCORVUS_SERVER_PASSWORD` 缺失，`--managed-sidecar` 直接失败。
 
 ### 4.2 启动等待
@@ -167,7 +167,7 @@ Extension 端读取 stdout/stderr：
 
 关闭顺序：
 
-1. Extension 调 sidecar `/shutdown`。
+1. Extension 调 sidecar `/shutdown`；该路由仅在 `--managed-sidecar` 模式注册，且要求 Authorization。普通 `serve` / 开发态 `bun run dev` 不暴露 `/shutdown`。
 2. 等待子进程退出；无活动 5 秒后发送 `SIGTERM`。
 3. 再无活动 5 秒后按 PID 杀本进程树。
 
@@ -239,7 +239,7 @@ Tauri 模式保留现有 HTTP 能力，但需要搬进 `tauri-transport.ts`，�
 | `store/settings.ts` | `overlay_settings_save` |
 | `utils/native.ts` | `overlay_open_url`, `overlay_open_path` |
 
-搬迁后，overlay 代码中禁止散落 `(window as any).__TAURI__` 和裸 `invoke()`。
+搬迁后，仅 `services/host-transport.ts` 的 `createHostTransport()` 工厂允许检测 `window.__TAURI__` 与 `acquireVsCodeApi`；业务代码禁止直接读取这两个全局，禁止裸 `invoke()`。
 
 ### 5.4 现有 `.catch(() => ...)` 清理
 
@@ -251,6 +251,26 @@ Tauri 模式保留现有 HTTP 能力，但需要搬进 `tauri-transport.ts`，�
 - `extensions.ts` 中 `skill/installed` 到 `skill` 的替代请求。
 
 这些路径不是本方案的合格依赖。实施 overlay transport 时，相关吞错必须同步改为显式错误、显式能力缺失或上层可见状态，不能保留静默替代结果。
+
+### 5.5 stream 语义与覆盖范围
+
+VS Code transport 必须覆盖所有 `text/event-stream` 路由，而不是只覆盖任务列表：
+
+| 路由 | 用途 |
+|---|---|
+| `/global/event` | 全局事件流 |
+| `/event` | app 事件流 |
+| `/task/events` | task list change stream |
+| `/task/:taskID/events` | 单任务协议事件流 |
+| `/task/:taskID/conversation/events` | 单任务 conversation event stream |
+| `/panel/message/stream` | panel message streaming |
+| `/coding/message/stream` | coding assistant streaming |
+
+重连归属：
+
+- `HostTransport.openStream()` 只负责打开、转发、关闭一个 stream；底层 SSE 断开后通过 `StreamHandlers.onClose(reason)` 通知上层，不在 transport 内自动重连。
+- UI store 可以根据业务状态显式触发重连，但必须可见地进入 disconnected / reconnecting 状态。
+- sidecar 异常退出由 `SidecarManager` 检测；第一期不自动重启，直接通知用户并要求重新执行 `opencorvus.open`。
 
 ---
 
@@ -268,6 +288,26 @@ VSIX 打包时把 `packages/overlay/dist-vite/` 拷贝到 `packages/vscode-exten
 - 注入一段极小 bootstrap script，设置 VS Code transport；如果 CSP 不能安全允许 inline script，则生成 nonce 并只允许该 nonce。
 
 注意：`packages/opencorvus/src/server/overlay-ui.ts` 的 `rewriteHtmlAssets()` 是 `/ui/` 服务端场景逻辑，VS Code webview 不能直接复用字符串结果；应抽公共规则或在 extension 侧实现等价但输出 `asWebviewUri`。
+
+### 6.1 资源传输与缓存
+
+资源请求不允许绕过 transport：
+
+- `fetchResourceAsObjectUrl()` 走 `HostTransport.request` 拿 binary body。
+- Webview 内用 `Blob` + `URL.createObjectURL()` 渲染图片、附件、缩略图。
+- object URL 由模块级 LRU 缓存统一持有和释放；引用方不能各自随意 revoke，避免重复请求和闪烁。
+- 缓存 key 至少包含 path、Authorization scope、etag / content hash；无 etag 时使用 path + response content-length + last-modified。
+- 批量资源请求需要并发上限，避免 postMessage 大量 base64 payload 卡住 UI thread。
+
+### 6.2 路径校验
+
+`TransportBridge` 收到 webview 消息后必须先校验 path：
+
+- path 必须是相对 API path，不能是绝对 URL。
+- `posix.normalize(path)` 后不得包含 `..` 段。
+- 不允许 `\0`、反斜杠、控制字符。
+- 不允许 webview 自行设置 host、protocol、Authorization。
+- 非法 path 返回 400 给 webview，不转发到 sidecar。
 
 ---
 
@@ -321,6 +361,12 @@ OPENCORVUS_SERVER_PASSWORD=<random 32+ bytes>
 
 如果无法解析当前 extension host 对应的二进制 target，直接抛 `UnsupportedPlatformError`。
 
+README 必须显式说明 Remote/WSL 行为：
+
+- WSL Remote 用户需要把 Linux target VSIX 安装到 WSL extension host，Windows 主机上的 win32 target 不会跨过去。
+- Remote SSH / Dev Container 同理，target 以远端 extension host 的 `process.platform` / `process.arch` 为准。
+- `UnsupportedPlatformError` 必须包含 current target、extension host kind、期望安装位置，例如 `current target=linux-x64; install matching VSIX in the remote WSL extension host`。
+
 ---
 
 ## 10. 命令
@@ -330,9 +376,9 @@ OPENCORVUS_SERVER_PASSWORD=<random 32+ bytes>
 | 命令 | 行为 |
 |---|---|
 | `opencorvus.open` | lazy 启动 sidecar 并打开 webview panel |
-| `opencorvus.attachFile` | 将当前 editor 文件 URI 和 selection 作为真实用户动作发送到当前会话 |
+| `opencorvus.attachFile` | 通过 server 的附件创建 route 生成一条用户可见附件事件 |
 
-`attachFile` 不能伪造隐藏消息。它必须走 UI 可见的会话输入或附件 API，让用户能在消息流中看到文件上下文。
+`attachFile` 不能伪造隐藏消息，也不能降级为往输入框塞 `@file` 文本。当前代码只有 `GET /attachment/:projectID/:name`，没有创建用户附件事件的 route；因此 M6 前必须先补 server attachment create API，并让消息流中可见地出现用户附件事件。若该 route 未完成，第一期不发布 `attachFile`。
 
 ---
 
@@ -361,6 +407,8 @@ OpenAPI 仍是后端 HTTP contract 的单一来源。
 - `html.ts` 把 `/assets/*`、`/i18n/*` 改成 `asWebviewUri`，并设置正确 CSP。
 - overlay `services/api.ts` 在 VS Code transport 下不直接调用 global `fetch`。
 - overlay `services/sse.ts` 在 VS Code transport 下不直接 new `EventSource`。
+- 全量 overlay 网络入口扫描通过：除 i18n 静态资源加载和 host transport 实现外，业务代码不得直接调用 `fetch()`、`EventSource`、`apiUrl()`。
+- release extension bundle 扫描通过：不得包含 `OPENCORVUS_DEV_UI`、`OPENCORVUS_DEV_SIDECAR`、`OPENCORVUS_DEV_BINARY`、`DEV_UI`、`DEV_SIDECAR` 字符串。
 
 ### 12.2 集成测试
 
@@ -386,6 +434,7 @@ OpenAPI 仍是后端 HTTP contract 的单一来源。
 1. **M1: sidecar managed mode**
    - 修改 `serve.ts` / `server.ts`，新增 `--managed-sidecar`、直接随机端口、stdout 握手、强制 token。
    - 增加针对端口、握手、无活动超时、禁止 kill 旧进程的测试。
+   - 前置 spike：同 workspace 双开两个 VS Code 窗口、两个 sidecar、两个 webview，验证 task list / session / executor runtime 不相互覆盖；若失败，M1 内落单 sidecar 所有权方案。
 
 2. **M2: extension skeleton**
    - 新建 `packages/vscode-extension`。
@@ -393,8 +442,9 @@ OpenAPI 仍是后端 HTTP contract 的单一来源。
    - 用 mock sidecar 做 extension 单元测试。
 
 3. **M3: HostTransport 抽象**
+   - 先生成并提交全量清单：`rg -n "fetch\\(|new EventSource|EventSource\\(|apiUrl\\(|__TAURI__|invoke\\(|@tauri-apps/plugin-dialog" packages/overlay/src -S`。
    - 新增 overlay transport interface。
-   - 收敛 `services/api.ts`、`services/sse.ts`、资源 fetch。
+   - 收敛 `services/api.ts`、`services/sse.ts`、`main.tsx`、`store/board.ts`、`store/messages.ts`、`services/task.ts`、`utils/log.ts`、`components/Card.tsx` 等所有业务网络入口。
    - 收敛 Tauri invoke 到 `tauri-transport.ts`。
 
 4. **M4: VS Code transport bridge**
@@ -413,6 +463,7 @@ OpenAPI 仍是后端 HTTP contract 的单一来源。
 7. **M7: platform-specific VSIX**
    - CI 分平台构建 sidecar 与 VSIX。
    - 只发布带 target 的 VSIX。
+   - CI 解包每个 VSIX 检查 `bin/<target>/opencorvus[.exe]` 存在；macOS/Linux 必须有 executable bit；Windows 必须能 `opencorvus.exe --version`。
 
 8. **M8: full acceptance**
    - 跑 extension 集成测试。
@@ -444,3 +495,260 @@ OpenAPI 仍是后端 HTTP contract 的单一来源。
 - VS Code Webview 推荐使用 CSP，并用 `webview.cspSource` 限定脚本、样式、图片来源。见 https://code.visualstudio.com/api/extension-guides/webview#content-security-policy
 - VS Code platform-specific extensions 从 VS Code 1.61 起按平台选择；未带 `--target` 的包会被用于未覆盖平台；`vsce --target` 支持指定 target；官方 target 包括 `win32-x64`、`win32-arm64`、`linux-x64`、`linux-arm64`、`darwin-x64`、`darwin-arm64` 等。见 https://code.visualstudio.com/api/working-with-extensions/publishing-extension#platformspecific-extensions
 - `extensionKind: ["workspace"]` 表示 extension 运行在 workspace 所在 extension host，符合 sidecar 需要访问项目文件的约束。见 https://code.visualstudio.com/api/advanced-topics/extension-host
+
+---
+
+## 16. Codex 复核回应：补充细化
+
+### 16.1 接受（无异议）
+
+| 修订点 | 接受理由 |
+|---|---|
+| `HostTransport` 替代 SDK fetch 注入 | 原方案漏看 `services/api.ts` + `EventSource`，注入 SDK fetch 覆盖不到 UI 主链路 |
+| SSE 进桥协议 | `EventSource` 不能带 Authorization header，原方案纯靠 fetch shim 不可行 |
+| `--managed-sidecar` 专用模式 | 现有 `serve.ts` 杀占端口的旧进程 + `Server.listen({port:0})` 先试默认端口，sidecar 用了会污染用户环境 |
+| token 不进 webview | 多 extension / 第三方 webview 注入风险；token 只在 extension host 内存 |
+| VS Code 官方 target 命名 (`win32-x64` 等) | 必须对齐 marketplace 自动选包逻辑 |
+| `extensionKind: ["workspace"]` | sidecar 要访问 workspace 文件，必须在 workspace host |
+| 禁止通用 VSIX | 通用包会被未覆盖平台抓到 → 等同于"静默 fallback"，违反明确失败原则 |
+| `attachFile` 必须可见会话 | CLAUDE.md §15 禁止隐藏消息分叉；伪造后端注入是双路消息 |
+| CSP `connect-src` 不允许 `http://127.0.0.1:*` | 强制走 postMessage 是更干净的边界 |
+| Tauri invoke 一次性收敛 | CLAUDE.md §8 禁止双源 |
+| 无活动超时计时器 | 比固定 10s 更稳健 |
+
+### 16.2 争议 / 修订
+
+#### A. §4.1 `OPENCORVUS_SERVER_URL` 反向回写问题
+
+> 原文："设置 `OPENCORVUS_SERVER_URL=http://127.0.0.1:<actual-port>`，保持现有 channel runtime 读取路径可用"
+
+子进程 spawn 时 env 是父进程快照，sidecar 内部 `setenv()` 不会反向影响父 extension。这条只对 sidecar **自身进程内部**的 channel runtime 子模块有意义。需澄清写法：sidecar 在 listen 成功后**写自己的 env**，仅供 sidecar 内 channel runtime 读取；extension 端永远以 stdout 握手为准，不读 env。
+
+**修订 §4.1 第 5 条为**：
+- sidecar 内部 listen 成功后，对自身 process 写 `OPENCORVUS_SERVER_URL=http://127.0.0.1:<actual-port>`，供 sidecar 内 channel runtime 等子模块读取；extension host 不依赖此变量，永远以 stdout `OPENCORVUS_LISTEN=` 为唯一握手来源。
+
+#### B. §5.3 "禁止散落 `(window as any).__TAURI__`" 太绝对
+
+业务代码禁用同意，但 transport 工厂启动时**必须**有一处检测 host —— 否则没法选 tauri/vscode transport。
+
+**修订 §5.3 末段为**：
+- 搬迁后，仅 `services/host-transport.ts` 的 `createHostTransport()` 工厂允许检测 `window.__TAURI__` 与 `acquireVsCodeApi`；业务代码禁止直接读这两个全局，禁止裸 `invoke()`。
+
+#### C. §10 `attachFile` 走会话输入还是真实附件 API
+
+codex 写"走 UI 可见的会话输入或附件 API"。两者其实不等价：
+
+- **走输入框**：等价于用户敲了一段 `@file:foo.ts:10-20` 文本，UI 上看得见
+- **走附件 API**：现有后端有专门 attachment 路由（如 `/session/:id/attachment`），是结构化的"用户上传了文件"事件
+
+后者更接近 Cursor / Claude Code 的"@file mention"。**推荐走附件 API + 在会话流中以 system-visible "user attached X" 形式落地**，避免靠"在输入框塞文本"这种半隐式做法。需要先核实 server 是否已有 attachment 路由，没有就先建。
+
+**修订 §10 attachFile 行为为**：
+- 优先调用 server 的 attachment route 创建一条用户附件事件；若 server 暂无该 route，则视为缺失能力，第一期 attachFile 不上线，**禁止**降级为输入框文本注入。
+
+#### D. §6 资源 fetch 性能补丁
+
+`fetchResourceAsObjectUrl()` 走 `HostTransport.request` 后，每个 `<img src>` / 头像 / 缩略图都要往返 postMessage + base64。大图、批量缩略图会卡主线程。
+
+**新增 §6.1**：
+- 资源 fetch 走 `transport.request` 拿到 binary body 后，在 webview 内 `new Blob(...)` + `URL.createObjectURL()` 渲染；引用方 dispose 时必须 `URL.revokeObjectURL()` 防泄漏。
+- 同一资源短期复用走 webview 内 LRU 缓存（key = path + etag），避免重复 postMessage。
+
+#### E. §6 路径校验防御
+
+webview 是部分受信代码（用户内容、第三方扩展可能注入）。`path` 字段除了"必须相对"，还要防 `..` 跳出。
+
+**新增 §6.2**：
+- `TransportBridge` 收到的 `path` 必须 `posix.normalize` 后断言不含 `..`、不以 `/` 开头跳到非 API 路径、不含 `\0`；非法直接返回 400 不转发。
+
+#### F. §4.3 `/shutdown` 路由暴露面
+
+只在 managed 模式注册，否则成为后门。
+
+**修订 §4.3 第 1 步为**：
+- `/shutdown` 仅在 sidecar 以 `--managed-sidecar` 启动时注册到 Hono app，且要求 Authorization。其他模式（包括开发态 `bun run dev`）该路由不存在。
+
+#### G. SSE 重连归属
+
+桥协议下 `EventSource` 自动重连失效。归属需要明确：
+
+**新增 §5.5 stream 重连策略**：
+- VS Code transport 的 `openStream` 在底层 SSE 断开（sidecar 重启 / 网络异常）后，**不自动重连**；通过 `StreamHandlers.onClose(reason)` 通知上层 store 转为 disconnected 状态。
+- UI 层显式按钮触发重连或自动 retry（属于 overlay 业务层，不是 transport 责任）。
+- sidecar 异常退出由 `SidecarManager` 检测；第一期不自动重启，弹错误通知用户手动 `opencorvus.open` 重新激活，符合"明确失败"。
+
+#### H. Multi-window / 同 workspace 双开
+
+每个 VS Code 窗口启动一个 sidecar，但 SQLite (`opencorvus.db`) 用 WAL 模式可以多写，存量代码已经是 WAL（见根目录 `*.db-wal`）。需验证 `Instance` 抽象在两个进程持有同一 DB 时无竞争。
+
+**新增 §13 M1 末尾 spike**：
+- 双开同 workspace → 两个 sidecar 同时跑、各自打开 webview，验证 task list / session 不相互覆盖；若 instance 层有竞争，加文件级 advisory lock，第二个窗口连第一个 sidecar（变成多 webview 共享单 sidecar 模式）。
+- 落决策：第一期不强制 single-sidecar，但要 spike 出"会不会坏"，坏了再切。
+
+#### I. Dev 模式（不算双源）
+
+extension 开发体验需要 hot reload overlay UI，每次重新打 vsix 不可接受。
+
+**新增 §17 dev-only 入口**：
+- `OPENCORVUS_DEV_UI=http://localhost:5173` 时，`webview/html.ts` 改为加载 vite dev server。
+- 仅在 `process.env.NODE_ENV === 'development'` 与该 env 都满足时生效；生产 vsix build 中 esbuild 直接 dead-code-elim 掉这条分支。
+- 这是 dev-only**编译期**分支，不属于运行时 fallback，不违反 §一-7。
+
+#### J. Tauri invoke 清单需 verify
+
+§5.3 列的清单是 codex 静态收集的，需 grep 全仓 verify。
+
+**新增 §13 M3 第一步 spike**：
+- `grep -rn 'invoke(' packages/overlay/src` 全量列出，与 §5.3 表格对齐；任何遗漏的命令在 transport 抽象阶段一并迁移。
+
+#### K. WSL / Remote 流程文档化
+
+`extensionKind: ["workspace"]` 在 WSL Remote 下会让 extension 跑在 WSL 的 Linux extension host，二进制查找走 `linux-x64`，但**用户必须把 linux-x64 vsix 装到 WSL 内**而不是 Windows 主机。
+
+**新增 §9 末尾**：
+- README 必须明确：WSL Remote 用户需在 "Extensions: Install in WSL" 时安装 linux-x64 target；Windows 主机的 win32-x64 target 不会跨过去。
+- 二进制不可用时 `UnsupportedPlatformError` 错误信息要包含 "current target = linux-x64, install matching VSIX in remote host"。
+
+### 16.3 待澄清（不阻塞实施）
+
+- **二进制体积**：6 target × ~80MB ≈ 480MB 总，单个 platform-specific vsix ~80MB，marketplace 上传是否触发审核延迟。M7 阶段实测，必要时 strip + UPX。
+- **Bun runtime 在 WebView2 进程外的兼容性**：sidecar 是 Bun compile 二进制，独立 runtime，与 VS Code 的 Electron / Node 无关，理论无冲突。M1 spike 顺手验证。
+- **token env 泄漏面**：Linux 下 `/proc/<pid>/environ` 同用户可读。属已知风险，与 Claude Code 等同等水位。短期不处理；长期可改 stdin 一次性传 token + memzero。
+
+---
+
+## 17. Dev-only 入口（开发体验）
+
+开发入口必须是**独立 dev build**，不能是 release VSIX 中保留的运行时开关。
+
+| dev build 变量 | 行为 |
+|---|---|
+| `OPENCORVUS_DEV_UI=http://localhost:5173` | webview 加载 Vite dev server，CSP 临时放行该 origin |
+| `OPENCORVUS_DEV_SIDECAR=http://127.0.0.1:NNNN` | 连接开发者手动启动的 managed sidecar |
+| `OPENCORVUS_DEV_BINARY=/abs/path/opencorvus` | 使用指定二进制调试 sidecar |
+
+硬约束：
+
+- 这些变量只能在 `packages/vscode-extension/script/dev.ts` 或 dev 专用 extension entry 中读取。
+- production `esbuild.mjs` 必须通过 define / tree-shaking 删除全部 dev 分支。
+- release VSIX 解包后，`dist/extension.js` 中不得出现 `OPENCORVUS_DEV_UI`、`OPENCORVUS_DEV_SIDECAR`、`OPENCORVUS_DEV_BINARY` 字符串。
+- dev sidecar 也必须以 managed sidecar 语义启动：随机端口、stdout 握手、token、禁止 kill 旧进程。
+- dev UI 可以直连 Vite dev server，但不得绕过 `HostTransport` 访问 sidecar。
+
+---
+
+## 18. 实施前阻断项
+
+以下事项不完成，不进入 M2/M3 的实质实现。
+
+### 18.1 Overlay 网络入口清单
+
+先用命令生成清单并把结果落盘到 `tmp/vscode-extension-overlay-network-inventory.md`：
+
+```
+rg -n "fetch\(|new EventSource|EventSource\(|apiUrl\(|apiJson\(|__TAURI__|invoke\(|@tauri-apps/plugin-dialog" packages/overlay/src -S
+```
+
+当前已知必须处理的入口包括但不限于：
+
+| 文件 | 风险 |
+|---|---|
+| `services/api.ts` | 核心 `fetch(apiUrl(...))` 和 resource fetch |
+| `services/sse.ts` | `new EventSource()` 两处 |
+| `services/task.ts` | `/panel/message/stream` 直接 fetch stream |
+| `store/board.ts` | board sync 直接 fetch |
+| `store/messages.ts` | transcript / timeline 直接 fetch |
+| `main.tsx` | `/global/db/reset` 直接 fetch |
+| `utils/log.ts` | `/log` fire-and-forget fetch |
+| `components/Card.tsx` | `/task/:id/rewind` 裸相对 fetch |
+| `utils/i18n.ts` | 静态 `i18n/*.json` fetch，需归类为 webview asset，不走 sidecar |
+| `TopBar.tsx` / `SkillMarketPanel.tsx` | Tauri dialog plugin 动态 import |
+| `WindowControls.tsx` / `services/dialog.ts` | Tauri window/global API 直接读取 |
+
+清单验收：
+
+- 业务 HTTP / SSE / resource 入口全部收敛到 `HostTransport`。
+- 静态 UI asset 加载单独列白名单。
+- Tauri native 能力全部收敛到 `HostTransport.native()`。
+- 不允许保留第二套“临时直连 sidecar”的业务路径。
+
+### 18.2 SSE 路由清单
+
+先用命令生成清单并把结果落盘到 `tmp/vscode-extension-sse-inventory.md`：
+
+```
+rg -n "text/event-stream|streamSSE" packages/opencorvus/src/server packages/opencorvus/src -S
+```
+
+当前已知 stream 路由：
+
+- `/global/event`
+- `/event`
+- `/task/events`
+- `/task/:taskID/events`
+- `/task/:taskID/conversation/events`
+- `/panel/message/stream`
+- `/coding/message/stream`
+
+验收：任一新增 `text/event-stream` route 都必须有 bridge 测试；不能只测 `/task/events`。
+
+### 18.3 Managed-only 管理路由
+
+`/shutdown`、`/restart` 目前在 `AppRoutes()` 中通用挂载。实施 M1 时必须改成：
+
+- `--managed-sidecar` 模式才注册 `/shutdown`。
+- `/restart` 第一期开禁用或仅 managed 模式注册；禁止普通 server 被 webview 或外部请求重启。
+- 两个路由都必须走 `OPENCORVUS_SERVER_PASSWORD` 鉴权。
+- 测试覆盖普通 `serve` 下 404、managed sidecar 下 200。
+
+### 18.4 Attachment 创建能力
+
+当前 `AttachmentRoutes` 只有读取 content-addressed attachment 的 `GET /attachment/:projectID/:name`。
+
+M6 之前必须新增单一创建路径：
+
+- 接收 VS Code 当前文件 URI、selection、内容摘要。
+- 写入 `AttachmentStore`。
+- 创建用户可见的会话事件或消息 part。
+- 通过 SSE / transcript 回放可见。
+
+没有该 route 时，`opencorvus.attachFile` 不注册命令。
+
+### 18.5 Release 包扫描
+
+每个平台 VSIX 打包后必须解包检查：
+
+- 只包含一个 target 的二进制目录。
+- 不包含 dev-only 字符串。
+- 不包含通用备用二进制。
+- macOS/Linux executable bit 正确。
+- `package.json` 没有 `browser` entry，没有 `web` extension target。
+- `extensionKind` 只有 `workspace`。
+
+### 18.6 远程宿主验收
+
+必须至少覆盖：
+
+- Windows 本地 `win32-x64`。
+- WSL Remote 的 `linux-x64`。
+- SSH Remote 的 Linux target。
+
+每次验收记录：
+
+- extension host kind。
+- resolved target。
+- resolved binary path。
+- sidecar PID。
+- stdout `OPENCORVUS_LISTEN=`。
+- `/global/health` 结果。
+
+### 18.7 并发实例决策
+
+M1 spike 后必须二选一落盘：
+
+| 决策 | 条件 |
+|---|---|
+| 每窗口独立 sidecar | 双开同 workspace 不会破坏 DB、Instance、executor session、watcher |
+| workspace single-owner sidecar | 双开存在竞争；用 lock file + owner metadata，让第二个窗口连接 owner sidecar |
+
+未落决策不得进入 M2。
