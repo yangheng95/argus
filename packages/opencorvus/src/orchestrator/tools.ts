@@ -2849,14 +2849,18 @@ export function createOrchestratorTools(input: {
           // (c) `git log --grep="delivery round"` reads the round timeline.
           // Allow-empty so a "no edits this round" verdict still anchors.
           log.info("deliver: round commit START", { taskID, iteration })
+          const roundCommitTask = requireTask(taskID)
+          log.info("deliver: round commit, requireTask done", { taskID })
+          const roundCommitVerdict = {
+            verdict: verdict.verdict,
+            summary: verdict.summary,
+            rejection_count: verdict.verdict === "rejected" ? verdict.rejection_details.length : 0,
+          }
+          log.info("deliver: round commit, verdict shape built", { taskID, verdict: roundCommitVerdict.verdict, rejection_count: roundCommitVerdict.rejection_count })
           const roundCommit = await EngineGit.commitDeliveryRound({
-            task: requireTask(taskID),
+            task: roundCommitTask,
             iteration,
-            verdict: {
-              verdict: verdict.verdict,
-              summary: verdict.summary,
-              rejection_count: verdict.verdict === "rejected" ? verdict.rejection_details.length : 0,
-            },
+            verdict: roundCommitVerdict,
           })
           log.info("deliver: round commit", {
             taskID, iteration, mode: roundCommit.mode,
