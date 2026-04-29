@@ -269,10 +269,7 @@ export default function PromptCatalog() {
                       <summary class="prompt-diff-summary">
                         {t("prompt.show_default")}
                       </summary>
-                      <div
-                        class="prompt-preview-card"
-                        style="margin-top:0;border-top:none;opacity:0.7"
-                      >
+                      <div class="prompt-preview-card prompt-preview-card--default">
                         <div class="prompt-preview-head">
                           {t("prompt.default_label")}
                         </div>
@@ -288,10 +285,7 @@ export default function PromptCatalog() {
                     <summary class="prompt-diff-summary">
                       {t("prompt.preview")}
                     </summary>
-                    <div
-                      class="prompt-preview-card"
-                      style="border-top:none;border-radius:0 0 var(--radius) var(--radius)"
-                    >
+                    <div class="prompt-preview-card prompt-preview-card--attached">
                       <div
                         class="md-content prompt-preview-body"
                         innerHTML={promptPreviewHtml(currentDraft())}
