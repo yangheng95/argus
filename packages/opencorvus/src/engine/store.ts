@@ -164,6 +164,27 @@ export function findTask(taskID: string) {
   return Database.use((db) => db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get())
 }
 
+// Resolve a task into the set of session IDs that belong to it (root +
+// orchestrator + every nested executor / sub-agent session). Memory rows are
+// keyed by session_id, so to surface "task context" the panel must collect
+// every session under the task tree. Returns an empty array when the task
+// has no root session (deleted task / dangling FK), which collapses any
+// downstream filter to "this task contributed nothing yet".
+export function sessionIDsForTask(taskID: string): string[] {
+  return Database.use((db) =>
+    db
+      .all<{ id: string }>(sql`
+        WITH RECURSIVE session_tree(id) AS (
+          SELECT session_id FROM engine_task WHERE id = ${taskID}
+          UNION ALL
+          SELECT s.id FROM session s JOIN session_tree st ON s.parent_id = st.id
+        )
+        SELECT id FROM session_tree WHERE id IS NOT NULL
+      `)
+      .map((row) => row.id),
+  )
+}
+
 export function findTaskByRequest(projectID: string, requestID: string) {
   return Database.use((db) =>
     db

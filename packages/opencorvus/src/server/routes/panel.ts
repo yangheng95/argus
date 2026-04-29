@@ -7,6 +7,7 @@ import { ControlMessageInput, ControlMessageResult } from "@/control/message-sch
 import { PanelCapabilityQuery, PanelCapabilityResponse, panelCapabilities } from "@/panel/capability"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
+import { sessionIDsForTask } from "@/engine/store"
 
 function projectId() {
   return Instance.project.id
@@ -106,10 +107,21 @@ export function PanelRoutes() {
           },
         },
       }),
-      validator("query", z.object({ sessionID: z.string().optional() })),
+      validator(
+        "query",
+        z.object({
+          sessionID: z.string().optional(),
+          // taskID — frontend MemoryPanel sends this to scope "Task Context"
+          // to the active task. Server resolves the task's session tree and
+          // hands the set to Memory.listFiles so memory written by any agent
+          // under the task (architect / requirements / build / …) shows up.
+          taskID: z.string().optional(),
+        }),
+      ),
       async (c) => {
-        const { sessionID } = c.req.valid("query")
-        const files = Memory.listFiles({ projectId: projectId(), sessionID })
+        const { sessionID, taskID } = c.req.valid("query")
+        const sessionIDs = taskID ? sessionIDsForTask(taskID) : undefined
+        const files = Memory.listFiles({ projectId: projectId(), sessionID, sessionIDs })
         return c.json(files)
       },
     )
@@ -180,12 +192,14 @@ export function PanelRoutes() {
         z.object({
           query: z.string(),
           sessionID: z.string().optional(),
+          taskID: z.string().optional(),
           limit: z.number().int().min(1).max(50).optional(),
         }),
       ),
       async (c) => {
-        const { query, sessionID, limit } = c.req.valid("json")
-        const results = Memory.search({ query, projectId: projectId(), sessionID, limit })
+        const { query, sessionID, taskID, limit } = c.req.valid("json")
+        const sessionIDs = taskID ? sessionIDsForTask(taskID) : undefined
+        const results = Memory.search({ query, projectId: projectId(), sessionID, sessionIDs, limit })
         return c.json(results)
       },
     )
