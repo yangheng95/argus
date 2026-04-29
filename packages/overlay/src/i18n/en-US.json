@@ -70,6 +70,8 @@
   "card.agent_reply_send": "Reply",
   "card.agent_reply_sending": "Sending...",
   "chat.attach_title": "Attach files or images",
+  "chat.attach_too_large_title": "Attachment too large",
+  "chat.attach_too_large": "{{name}} is {{size}} MB — exceeds the {{limit}} MB attachment limit.",
   "chat.collapse_title": "Collapse input",
   "chat.copy_all": "Copy All",
   "chat.copy_failed": "Failed to copy conversation",

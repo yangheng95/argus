@@ -5,6 +5,7 @@
 import { createSignal, createMemo, createEffect, For, Show, onMount, onCleanup } from "solid-js";
 import { t, tArray } from "../utils/i18n";
 import { ExecutorSelector } from "./ExecutorSelector";
+import { nativeMessage } from "../services/app-dialog";
 
 // ── Types ──
 
@@ -207,9 +208,12 @@ export function ChatComposer(props: ChatComposerProps) {
   async function addAttachment(file: File) {
     if (!file) return;
     if (file.size > MAX_ATTACHMENT_SIZE) {
- // Surface a notice; callers may hook into a global notification system.
- // For now we log and bail — the showLlmNotice here.
       console.warn("[ChatComposer] file too large:", file.name, file.size);
+      const limitMb = (MAX_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0);
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
+        title: t("chat.attach_too_large_title"),
+      });
       return;
     }
     const url = await fileToDataUrl(file);

@@ -41,6 +41,7 @@ export namespace MemorySearch {
     query: string
     projectId: string
     sessionID?: string
+    sessionIDs?: string[]
     scope?: Memory.QueryScope
     limit?: number
     minScore?: number
@@ -52,12 +53,13 @@ export namespace MemorySearch {
     const minScore = input.minScore ?? 0.1
     const query = buildFtsQuery(input.query)
     const scope = input.scope ?? "all"
+    const sessionSet = input.sessionIDs && input.sessionIDs.length > 0 ? new Set(input.sessionIDs) : null
 
     if (!query) {
       log.info("empty search query after tokenization")
       return []
     }
-    if (scope === "session" && !input.sessionID) {
+    if (scope === "session" && !input.sessionID && !sessionSet) {
       log.info("session-scoped memory search skipped without sessionID", { query })
       return []
     }
@@ -73,6 +75,7 @@ export namespace MemorySearch {
         query,
         projectId: input.projectId,
         sessionID: input.sessionID,
+        sessionSet,
         scope,
         limit,
         minScore,
@@ -86,6 +89,7 @@ export namespace MemorySearch {
         query: input.query,
         projectId: input.projectId,
         sessionID: input.sessionID,
+        sessionSet,
         scope,
         limit,
         kinds: input.kinds,
@@ -98,6 +102,7 @@ export namespace MemorySearch {
     query: string
     projectId: string
     sessionID?: string
+    sessionSet: Set<string> | null
     scope: Memory.QueryScope
     limit: number
     minScore: number
@@ -149,7 +154,7 @@ export namespace MemorySearch {
 
     const results: Memory.SearchResult[] = []
     for (const row of rows) {
-      if (!matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID)) continue
+      if (!matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet)) continue
       if (!matchesKinds(row.kind, input.kinds)) continue
       if (!matchesSources(row.source, input.sources)) continue
 
@@ -197,6 +202,7 @@ export namespace MemorySearch {
     query: string
     projectId: string
     sessionID?: string
+    sessionSet: Set<string> | null
     scope: Memory.QueryScope
     limit: number
     kinds?: Memory.Kind[]
@@ -241,7 +247,7 @@ export namespace MemorySearch {
     )
 
     return rows
-      .filter((row) => matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID))
+      .filter((row) => matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID, input.sessionSet))
       .filter((row) => matchesKinds(row.kind, input.kinds))
       .filter((row) => matchesSources(row.source, input.sources))
       .map((row, idx) => ({
@@ -299,8 +305,14 @@ export namespace MemorySearch {
     rowSessionID: string | undefined,
     queryScope: Memory.QueryScope,
     sessionID: string | undefined,
+    sessionSet: Set<string> | null,
   ) {
     if (queryScope === "global") return rowScope === "global"
+    if (sessionSet) {
+      if (queryScope === "session") return rowScope === "session" && !!rowSessionID && sessionSet.has(rowSessionID)
+      if (rowScope === "global") return true
+      return !!rowSessionID && sessionSet.has(rowSessionID)
+    }
     if (queryScope === "session") return rowScope === "session" && rowSessionID === sessionID
     if (rowScope === "global") return true
     return rowSessionID === sessionID
