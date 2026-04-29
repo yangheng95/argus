@@ -165,7 +165,42 @@ export class ChannelRuntime {
     })
   }
 
+  /**
+   * audit-2026-04-29 W2-V14 — concurrent-start race. Pre-fix
+   * `start()` had no idempotency guard. Two near-simultaneous
+   * callers both saw `this.running === false` (only set on entry,
+   * not before the await on `createOpencode`), and BOTH proceeded
+   * to spawn an OpenCorvus server, register adapter handlers
+   * twice, and call `subscribeEvents` twice — leaving a duplicate
+   * SSE reconnect loop, double event dispatch, and (in the
+   * non-baseUrl branch) port collision on the second
+   * `createOpencode`.
+   *
+   * Hold an in-flight Promise so concurrent callers share the
+   * single startup; subsequent calls after a successful start are
+   * a no-op. This mirrors the pendingStart pattern in
+   * vscode-extension/extension.ts and the start-once contract in
+   * Server.listen.
+   */
+  private startPromise: Promise<void> | undefined
+
   async start(): Promise<void> {
+    if (this.running) return
+    if (this.startPromise) return this.startPromise
+    this.startPromise = this._doStart().catch((err) => {
+      // Roll back the running flag so a failure (createOpencode
+      // throwing, adapter rejection, etc.) doesn't block a
+      // legitimate retry. The throw still propagates to the
+      // caller so the failure is loud (CLAUDE.md §一-7).
+      this.running = false
+      throw err
+    }).finally(() => {
+      this.startPromise = undefined
+    })
+    return this.startPromise
+  }
+
+  private async _doStart(): Promise<void> {
     this.running = true
     const baseUrl = this.options?.baseUrl?.trim()
     if (baseUrl) {
