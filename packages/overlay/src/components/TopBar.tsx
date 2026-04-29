@@ -9,7 +9,7 @@
 
 import { Show } from "solid-js";
 import { settingsStore } from "../store/settings";
-import { applyDirectory } from "../services/workspace";
+import { applyDirectory, pickDirectory } from "../services/workspace";
 
 export interface TopBarProps {
   /** Slot for the right-side controls (connection badge, window controls). */
@@ -26,19 +26,12 @@ function shortenPath(p: string, max = 64): string {
 }
 
 async function switchCwd(): Promise<void> {
-  // Tauri webview: use the dialog plugin. Vite-only dev: prompt fallback.
-  let next: string | null | undefined;
-  try {
-    const dialog = await import("@tauri-apps/plugin-dialog");
-    const picked = await dialog.open({ directory: true, multiple: false });
-    if (typeof picked === "string") next = picked;
-    else if (Array.isArray(picked) && picked[0]) next = picked[0];
-  } catch {
-    // Outside Tauri (dev mode) — synchronous prompt is the simplest fallback
-    // that doesn't pull in a heavyweight component just for this dev path.
-    const input = window.prompt("New project directory:", settingsStore.directory ?? "");
-    if (input && input.trim()) next = input.trim();
-  }
+  // Routes through HostTransport so the same call works under Tauri,
+  // VS Code (M5 will wire it to vscode.window.showOpenDialog), and
+  // throws UnsupportedNativeCommandError everywhere else (CLAUDE.md
+  // §一-7: no silent prompt fallback — vite-preview users can supply
+  // a directory via settings instead).
+  const next = await pickDirectory(settingsStore.directory ?? undefined);
   if (!next) return;
   await applyDirectory(next, {});
 }

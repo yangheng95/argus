@@ -16,6 +16,7 @@ import {
 import { createStore } from "solid-js/store";
 import { t } from "../../utils/i18n";
 import { apiJson } from "../../services/api";
+import { pickDirectory } from "../../services/workspace";
 import { appStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
 import { nativeOpen } from "../../utils/native";
@@ -245,15 +246,13 @@ export default function SkillMarketPanel() {
 
   async function handleBrowseFolder() {
     try {
-      const tauri = (window as any).__TAURI__;
-      if (!tauri) return;
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({ directory: true, multiple: false });
-      if (typeof selected === "string") {
+      const selected = await pickDirectory();
+      if (selected) {
         setSkillForm("value", selected);
       }
     } catch {
- // Tauri dialog not available in browser mode
+      // Host has no directory picker (vite preview). User can paste
+      // the path manually into the field.
     }
   }
 
