@@ -329,6 +329,19 @@ export type EventIntegrityReviewChunk = {
   }
 }
 
+export type EventDeliveryGateRejected = {
+  type: "delivery.gate.rejected"
+  properties: {
+    taskID: string
+    iteration: number
+    summary: string
+    violations: Array<{
+      kind: string
+      detail: string
+    }>
+  }
+}
+
 export type EventIntegrityReviewCompleted = {
   type: "integrity.review.completed"
   properties: {
@@ -1483,6 +1496,7 @@ export type Event =
   | EventIntegrityReviewStarted
   | EventIntegrityReviewProgress
   | EventIntegrityReviewChunk
+  | EventDeliveryGateRejected
   | EventIntegrityReviewCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed

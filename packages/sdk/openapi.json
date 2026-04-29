@@ -26717,6 +26717,58 @@
           "properties"
         ]
       },
+      "Event.delivery.gate.rejected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.gate.rejected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "iteration": {
+                "type": "number"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "violations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "detail"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "taskID",
+              "iteration",
+              "summary",
+              "violations"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.integrity.review.completed": {
         "type": "object",
         "properties": {
@@ -30522,6 +30574,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.integrity.review.chunk"
+          },
+          {
+            "$ref": "#/components/schemas/Event.delivery.gate.rejected"
           },
           {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
