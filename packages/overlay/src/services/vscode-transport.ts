@@ -25,6 +25,7 @@ import {
   type ResponseBodyEncoding,
   type WebviewMessage,
 } from "@opencorvus-ai/transport-protocol"
+import { onAuthChange } from "./api"
 import type {
   HostTransport,
   NativeCommand,
@@ -77,12 +78,33 @@ interface ActiveStream {
   closed: boolean
   signal?: AbortSignal
   abortListener?: () => void
+  forceClose?: () => void
 }
 
 const pending = new Map<string, Pending>()
 const streams = new Map<string, ActiveStream>()
 const uiCommandHandlers = new Map<string, Set<(payload: unknown) => void>>()
 let installed = false
+
+// audit-2026-04-29 W2-V1 — auth-change drain. See tauri-transport.ts
+// for the architectural rationale; this is the VSCode-side mirror.
+// Streams here are POST-tunnelled to the extension host with
+// Authorization injected at the bridge boundary, so an in-flight
+// stream still won't pick up a new sidecar password until it tears
+// down and reopens.
+const activeStreamForceClose = new Set<() => void>()
+let authChangeUnsubscribe: (() => void) | undefined
+
+function ensureAuthChangeSubscribed(): void {
+  if (authChangeUnsubscribe) return
+  authChangeUnsubscribe = onAuthChange(() => {
+    const snapshot = [...activeStreamForceClose]
+    activeStreamForceClose.clear()
+    for (const fn of snapshot) {
+      try { fn() } catch {}
+    }
+  })
+}
 
 function installListener(): void {
   if (installed) return
@@ -171,6 +193,7 @@ function handleIncoming(raw: unknown): void {
       const s = streams.get(msg.id)
       if (!s) return
       streams.delete(msg.id)
+      if (s.forceClose) activeStreamForceClose.delete(s.forceClose)
       if (s.closed) return
       s.closed = true
       cleanupAbort(s.signal, s.abortListener)
@@ -328,6 +351,7 @@ function newId(): string {
 
 export function createVsCodeTransport(): HostTransport {
   installListener()
+  ensureAuthChangeSubscribed()
   const vscode = acquireOnce()
 
   return {
@@ -405,6 +429,7 @@ export function createVsCodeTransport(): HostTransport {
         if (active.closed) return
         active.closed = true
         streams.delete(id)
+        activeStreamForceClose.delete(forceClose)
         cleanupAbort(active.signal, active.abortListener)
         try {
           vscode.postMessage(<WebviewMessage>{
@@ -415,6 +440,9 @@ export function createVsCodeTransport(): HostTransport {
         } catch {}
         try { handlers.onClose?.(reason) } catch {}
       }
+      const forceClose = () => close("auth-changed")
+      active.forceClose = forceClose
+      activeStreamForceClose.add(forceClose)
 
       if (active.signal) {
         if (active.signal.aborted) {
@@ -477,6 +505,11 @@ export function __resetVsCodeTransportForTest(): void {
   pending.clear()
   streams.clear()
   uiCommandHandlers.clear()
+  activeStreamForceClose.clear()
+  if (authChangeUnsubscribe) {
+    try { authChangeUnsubscribe() } catch {}
+    authChangeUnsubscribe = undefined
+  }
   installed = false
   _vscode = undefined
 }

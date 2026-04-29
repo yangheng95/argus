@@ -13,6 +13,7 @@
 import {
   apiHeaders as apiHeadersFromState,
   apiUrl as apiUrlFromState,
+  onAuthChange,
 } from "./api"
 import type {
   HostTransport,
@@ -140,6 +141,15 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
     ? mergeAbort(input.signal, controller.signal)
     : controller.signal
   let closed = false
+  const closeWithReason = (reason: string): void => {
+    if (closed) return
+    closed = true
+    activeStreamForceClose.delete(forceClose)
+    try { controller.abort() } catch {}
+    try { handlers.onClose?.(reason) } catch {}
+  }
+  const forceClose = () => closeWithReason("auth-changed")
+  activeStreamForceClose.add(forceClose)
   const url = buildUrl(input.path, input.query)
   // audit-2026-04-29 overlay F4 — also serves authed GET-SSE: when
   // input.method is "GET" we still go through fetch (instead of
@@ -167,12 +177,12 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
       if (closed) return
       const error = err instanceof Error ? err : new Error(String(err))
       try { handlers.onError?.(error) } catch {}
-      try { handlers.onClose?.("post-stream-fetch-error") } catch {}
+      closeWithReason("post-stream-fetch-error")
       return
     }
     if (!res.ok || !res.body) {
       try { handlers.onError?.(new Error(`POST stream ${res.status}: ${res.statusText}`)) } catch {}
-      try { handlers.onClose?.("post-stream-bad-response") } catch {}
+      closeWithReason("post-stream-bad-response")
       return
     }
     try { handlers.onOpen?.() } catch {}
@@ -211,19 +221,13 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
         try { handlers.onError?.(error) } catch {}
       }
     } finally {
-      if (!closed) {
-        closed = true
-        try { handlers.onClose?.("post-stream-done") } catch {}
-      }
+      closeWithReason("post-stream-done")
     }
   })()
 
   return {
     close() {
-      if (closed) return
-      closed = true
-      try { controller.abort() } catch {}
-      try { handlers.onClose?.("client-close") } catch {}
+      closeWithReason("client-close")
     },
   }
 }
@@ -247,7 +251,38 @@ function headersToObject(headers: Headers): Record<string, string> {
   return out
 }
 
+/**
+ * audit-2026-04-29 W2-V1 — module-level set of "force close on auth
+ * change" thunks. Every stream opened via this transport registers a
+ * thunk that closes itself with reason "auth-changed". When the user
+ * rotates the sidecar password (configure({password})), api.ts fires
+ * its auth-change event and we drain the set, prompting the business
+ * reconnect timer in services/sse.ts to re-open with fresh headers.
+ *
+ * Without this, the browser's native EventSource keeps its original
+ * URL + (lack of) headers forever; the only way to pick up a new
+ * password was to navigate or reload the webview.
+ */
+const activeStreamForceClose = new Set<() => void>()
+
+let authChangeUnsubscribe: (() => void) | undefined
+
+function ensureAuthChangeSubscribed(): void {
+  if (authChangeUnsubscribe) return
+  authChangeUnsubscribe = onAuthChange(() => {
+    // Drain a snapshot so newly-opened streams (created during the
+    // close cascade by the business reconnect) aren't immediately
+    // re-closed.
+    const snapshot = [...activeStreamForceClose]
+    activeStreamForceClose.clear()
+    for (const fn of snapshot) {
+      try { fn() } catch {}
+    }
+  })
+}
+
 export function createTauriTransport(): HostTransport {
+  ensureAuthChangeSubscribed()
   return {
     kind: "tauri",
     async request<T = unknown>(input: TransportRequest): Promise<TransportResponse<T>> {
@@ -301,12 +336,24 @@ export function createTauriTransport(): HostTransport {
       // synthesise onClose so the business reconnect timer fires.
       const OPEN_TIMEOUT_MS = 10_000
       let opened = false
+      const closeWithReason = (reason: string): void => {
+        if (closed) return
+        closed = true
+        clearTimeout(stuckTimer)
+        activeStreamForceClose.delete(forceClose)
+        try { source.close() } catch {}
+        try { handlers.onClose?.(reason) } catch {}
+      }
+      const forceClose = () => {
+        if (closed) return
+        try { handlers.onError?.(new Error("event-source auth-changed")) } catch {}
+        closeWithReason("auth-changed")
+      }
+      activeStreamForceClose.add(forceClose)
       const stuckTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
         if (opened || closed) return
-        closed = true
-        try { source.close() } catch {}
         try { handlers.onError?.(new Error("event-source open timeout")) } catch {}
-        try { handlers.onClose?.("event-source-stuck") } catch {}
+        closeWithReason("event-source-stuck")
       }, OPEN_TIMEOUT_MS)
       if (typeof (stuckTimer as { unref?: () => void }).unref === "function") {
         ;(stuckTimer as { unref?: () => void }).unref!()
@@ -329,18 +376,12 @@ export function createTauriTransport(): HostTransport {
         //   policy (plan §5.5: transport doesn't own reconnect).
         try { handlers.onError?.(new Error("event-source error")) } catch {}
         if (source.readyState === EventSource.CLOSED && !closed) {
-          closed = true
-          clearTimeout(stuckTimer)
-          try { handlers.onClose?.("event-source-closed") } catch {}
+          closeWithReason("event-source-closed")
         }
       })
       return {
         close() {
-          if (closed) return
-          closed = true
-          clearTimeout(stuckTimer)
-          try { source.close() } catch {}
-          try { handlers.onClose?.("client-close") } catch {}
+          closeWithReason("client-close")
         },
       }
     },
