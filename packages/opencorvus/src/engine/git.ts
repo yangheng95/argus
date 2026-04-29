@@ -283,8 +283,8 @@ export async function ensureGitignore() {
   if (isRepo.exitCode !== 0) return
   const staged = await git(["add", "--", ".gitignore"], { cwd: dir })
   if (staged.exitCode !== 0) {
-    log.warn("ensureGitignore: git add failed", { stderr: staged.stderr.toString() })
-    return
+    const detail = staged.stderr.toString().trim() || staged.stdout.toString().trim() || "git add failed"
+    throw new Error(`ensureGitignore: stage .gitignore failed: ${detail}`)
   }
   // `git diff --cached --quiet` against an empty HEAD reports "differs"
   // (exit 1) because the staged content has no equivalent in HEAD — that
@@ -292,17 +292,24 @@ export async function ensureGitignore() {
   // HEAD with the same bytes it exits 0 → we skip.
   const diff = await git(["diff", "--cached", "--quiet", "--", ".gitignore"], { cwd: dir })
   if (diff.exitCode === 0) return
+  // `-m` and the message MUST come before `--` — anything after `--` is
+  // pathspec, so the prior arg order made git parse `-m` and the subject
+  // as filenames and the seed commit silently failed on every fresh repo.
+  // That left HEAD absent, and `Worktree.create` then died with the opaque
+  // `WorktreeCreateFailedError` on every greenfield project.
   const committed = await git(
     [
       "-c", "user.email=opencorvus@local",
       "-c", "user.name=OpenCorvus",
-      "commit", "--only", "--", ".gitignore",
+      "commit", "--only",
       "-m", "chore(opencorvus): seed baseline .gitignore",
+      "--", ".gitignore",
     ],
     { cwd: dir },
   )
   if (committed.exitCode !== 0) {
-    log.warn("ensureGitignore: gitignore commit failed", { stderr: committed.stderr.toString() })
+    const detail = committed.stderr.toString().trim() || committed.stdout.toString().trim() || "git commit failed"
+    throw new Error(`ensureGitignore: seed commit failed: ${detail}`)
   }
 }
 
