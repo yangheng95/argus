@@ -4,6 +4,7 @@ import { createWriteStream } from "fs"
 import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
+import { safeStringify, sanitizeMessage } from "./log-safety"
 
 export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
@@ -91,6 +92,10 @@ export namespace Log {
       : head
   }
 
+  // safeStringify / sanitizeMessage moved to ./log-safety so the
+  // pure-function contract is unit-testable without spying on
+  // process.stderr (audit-2026-04-29 W2-V17).
+
   export function create(tags?: Record<string, any>) {
     const ownTags: Record<string, any> = { ...(tags ?? {}) }
     let last = Date.now()
@@ -103,15 +108,16 @@ export namespace Log {
         .filter(([_, value]) => value !== undefined && value !== null)
         .map(([key, value]) => {
           const prefix = `${key}=`
-          if (value instanceof Error) return prefix + formatError(value)
-          if (typeof value === "object") return prefix + JSON.stringify(value)
-          return prefix + value
+          if (value instanceof Error) return prefix + sanitizeMessage(formatError(value))
+          if (typeof value === "object") return prefix + sanitizeMessage(safeStringify(value))
+          return prefix + sanitizeMessage(value)
         })
         .join(" ")
       const next = new Date()
       const diff = next.getTime() - last
       last = next.getTime()
-      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, message].filter(Boolean).join(" ") + "\n"
+      const safeMessage = message === undefined || message === null ? message : sanitizeMessage(message)
+      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, safeMessage].filter(Boolean).join(" ") + "\n"
     }
     const result: Logger = {
       debug(message?: any, extra?: Record<string, any>) {
