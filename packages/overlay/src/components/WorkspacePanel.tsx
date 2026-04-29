@@ -95,11 +95,13 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
         </button>
       </header>
       <div class="workspace-body">
-        {/* Diff view — always mounted so resource cache is retained */}
+        {/* Diff view — always mounted so resource cache is retained.
+            data-active drives display via CSS so the inline style toggle
+            doesn't have to reproduce the layout's `display: flex`. */}
         <div
           class="workspace-view"
           data-kind="diff"
-          style={{ display: isDiff() ? "flex" : "none" }}
+          data-active={isDiff() ? "true" : "false"}
         >
           <DiffPreviewPanel target={diffTarget()} />
         </div>
@@ -107,7 +109,7 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
         <div
           class="workspace-view"
           data-kind="file"
-          style={{ display: isFile() ? "flex" : "none" }}
+          data-active={isFile() ? "true" : "false"}
         >
           <FileViewPanel filePath={fileFilePath()} />
         </div>
