@@ -288,6 +288,177 @@ export namespace Worktree {
     },
   )
 
+  /**
+   * Strategy used by orchestrator-arbitrated merge resolution. Build agents
+   * that hit textual conflicts in `mergeWithMerge` abort and surface the
+   * conflict path list back to the orchestrator; the orchestrator (the
+   * single source of truth for "how to integrate this goal's work") picks
+   * one of these and calls `resolveAndMerge` to drive the merge to ff.
+   *
+   *   take_goal     — for every conflict path, keep the goal branch's bytes
+   *                   (`git checkout --ours --` inside the goal worktree
+   *                   where ours = goal). Use when the goal is the source of
+   *                   truth for the file (e.g. `src/App.tsx` rewritten by
+   *                   the feature, primary's stale copy is irrelevant).
+   *   take_primary  — for every conflict path, keep the primary branch's
+   *                   bytes (`git checkout --theirs --`). Use when primary
+   *                   already converged on the right scaffold and this goal
+   *                   redundantly re-scaffolded.
+   *   per_path      — fine-grained: each conflict path picks "goal" or
+   *                   "primary" independently. Used when the goal touched
+   *                   one file legitimately but redundantly re-scaffolded
+   *                   the rest.
+   *
+   * No "manual edits" branch: the orchestrator is a dispatcher, not a code
+   * editor — if neither side is acceptable, it should call build again
+   * with explicit instructions to reconcile, not paste textual edits here.
+   */
+  export const ResolveStrategy = z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("take_goal") }),
+    z.object({ kind: z.literal("take_primary") }),
+    z.object({
+      kind: z.literal("per_path"),
+      paths: z.array(z.object({
+        path: z.string(),
+        take: z.enum(["goal", "primary"]),
+      })),
+    }),
+  ])
+  export type ResolveStrategy = z.infer<typeof ResolveStrategy>
+
+  /**
+   * Resolve a previously-aborted merge conflict by orchestrator decree, then
+   * complete the merge → ff-only path. Idempotent against partial state:
+   * always starts by ensuring the worktree is clean (no MERGE_HEAD residue,
+   * no uncommitted edits) before re-running the merge.
+   *
+   * Why this lives outside `mergeWithMerge`: the conflict-time decision —
+   * which side wins — is an orchestrator-level concern (rule 22 single
+   * source: orchestrator is the only authority on merge integration) and
+   * has no business being baked into the build agent's auto-merge path.
+   * Build hits conflict → returns; orchestrator inspects → calls this.
+   */
+  export const resolveAndMerge = fn(
+    z.object({
+      branch: z.string(),
+      worktreeDir: z.string(),
+      strategy: ResolveStrategy,
+    }),
+    async (input) => {
+      if (!Project.isGitRepo(Instance.directory)) {
+        throw new NotGitError({ message: "resolveAndMerge: not a git project" })
+      }
+      const primary = await primaryWorktreeInfo().catch((err) => {
+        throw new MergeFailedError({
+          message: `resolveAndMerge(${input.branch}): ${err instanceof Error ? err.message : String(err)}`,
+          branch: input.branch,
+        })
+      })
+      return withGitLock(async () => {
+        const primaryDir = primary.directory
+        const primaryBranch = primary.branch
+
+        // Pre-clean: previous merge attempt may have left MERGE_HEAD; the
+        // worktree might also be dirty from agent edits between attempts.
+        // Both states would block a fresh `git merge`. Abort + reset so we
+        // start from a known-clean tip-of-branch.
+        const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
+          .quiet().nothrow().cwd(input.worktreeDir)
+        if (mergeHead.exitCode === 0) {
+          await $`git merge --abort`.quiet().nothrow().cwd(input.worktreeDir)
+        }
+        const status = await $`git status --porcelain`.quiet().nothrow().cwd(input.worktreeDir)
+        if (outputText(status.stdout).trim().length > 0) {
+          await $`git reset --hard HEAD`.quiet().nothrow().cwd(input.worktreeDir)
+        }
+
+        // Re-run merge to materialise the conflict state. We need actual
+        // unmerged entries on disk for `git checkout --ours/--theirs` to
+        // operate on — a recorded conflict path list from a prior attempt
+        // is not enough; the working tree must be in MERGING state right
+        // now.
+        const merged = await $`git merge --no-edit --no-commit ${primaryBranch}`
+          .quiet().nothrow().cwd(input.worktreeDir)
+
+        if (merged.exitCode !== 0) {
+          // Collect conflicts the merge actually produced this time.
+          const unmergedProbe = await $`git diff --name-only --diff-filter=U`
+            .quiet().nothrow().cwd(input.worktreeDir)
+          const unmerged = outputText(unmergedProbe.stdout)
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+
+          // Apply strategy.
+          if (input.strategy.kind === "take_goal") {
+            for (const p of unmerged) {
+              await $`git checkout --ours -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
+              await $`git add -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
+            }
+          } else if (input.strategy.kind === "take_primary") {
+            for (const p of unmerged) {
+              await $`git checkout --theirs -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
+              await $`git add -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
+            }
+          } else {
+            // per_path
+            const decided = new Map(input.strategy.paths.map((p) => [p.path, p.take]))
+            const missing: string[] = []
+            for (const p of unmerged) {
+              const take = decided.get(p)
+              if (!take) {
+                missing.push(p)
+                continue
+              }
+              const side = take === "goal" ? "ours" : "theirs"
+              await $`git checkout --${side} -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
+              await $`git add -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
+            }
+            if (missing.length > 0) {
+              await $`git merge --abort`.quiet().nothrow().cwd(input.worktreeDir)
+              throw new MergeFailedError({
+                message:
+                  `resolveAndMerge(${input.branch}): per_path strategy did not cover all unmerged paths. ` +
+                  `Missing decisions for: ${missing.join(", ")}`,
+                branch: input.branch,
+              })
+            }
+          }
+
+          // Finalize the merge with a single commit.
+          const finalize = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit --no-edit -m ${"merge: arbitrated by orchestrator (strategy=" + input.strategy.kind + ")"}`
+            .quiet().nothrow().cwd(input.worktreeDir)
+          if (finalize.exitCode !== 0) {
+            const stderr = errorText(finalize) || "merge commit failed after conflict resolution"
+            throw new MergeFailedError({
+              message: `resolveAndMerge(${input.branch}): ${stderr}`,
+              branch: input.branch,
+              stderr,
+            })
+          }
+        }
+
+        // Step 2 — ff-merge into primary. With the goal tip now strictly
+        // descending primary tip (either via clean merge or via our
+        // arbitrated commit above), fast-forward must succeed.
+        const ff = await $`git merge --ff-only --no-edit ${input.branch}`
+          .quiet().nothrow().cwd(primaryDir)
+        if (ff.exitCode !== 0) {
+          const stderr = errorText(ff) || "git merge --ff-only failed after resolveAndMerge"
+          throw new MergeFailedError({
+            message: `resolveAndMerge(${input.branch}): post-resolve ff-merge failed: ${stderr}`,
+            branch: input.branch,
+            stderr,
+          })
+        }
+
+        const headProbe = await $`git rev-parse HEAD`.quiet().nothrow().cwd(primaryDir)
+        const primaryHead = outputText(headProbe.stdout)
+        return { primaryBranch, primaryHead, strategy: input.strategy.kind }
+      })
+    },
+  )
+
   export const Info = z
     .object({
       name: z.string(),

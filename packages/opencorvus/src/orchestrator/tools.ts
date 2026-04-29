@@ -2102,6 +2102,123 @@ export function createOrchestratorTools(input: {
       },
     }),
 
+    merge_arbitrate: tool({
+      description:
+        "Final arbiter for goal merge_back conflicts. Call this after `build` returned a " +
+        "merge_back conflict report (status=failed with conflict_paths in the error). YOU are " +
+        "the only authority that decides how to integrate a goal whose worktree edits clashed " +
+        "with primary — the build agent intentionally aborts the conflicting merge so it " +
+        "doesn't pre-empt your decision. Strategies: " +
+        "`take_goal` overwrites primary's bytes with the goal's version on every conflict path " +
+        "(use when the goal is the source of truth — e.g. the feature deliberately rewrote a " +
+        "file primary still has the stale copy of); " +
+        "`take_primary` overwrites the goal's bytes with primary's version on every conflict " +
+        "path (use when the goal redundantly re-scaffolded files primary already converged on " +
+        "— typical bootstrap-collision symptom); " +
+        "`per_path` decides each conflict path independently (use when the goal touched some " +
+        "files legitimately but redundantly re-scaffolded others). " +
+        "After the resolve completes, call `deliver` to verify the integrated tree the same " +
+        "way you would after a clean merge. If neither side is acceptable, do NOT call this " +
+        "with a half-baked strategy — call `build` again with explicit instructions for the " +
+        "agent to reconcile in code, or `modify_goal` to shrink the goal scope so it stops " +
+        "fighting primary, or `fail_task` if the conflict is unresolvable.",
+      inputSchema: z.object({
+        goalID: z
+          .string()
+          .describe(
+            "The goal whose merge_back conflict you are resolving. Must match the goalID " +
+            "from the failed build's conflict report.",
+          ),
+        strategy: z
+          .discriminatedUnion("kind", [
+            z.object({
+              kind: z.literal("take_goal"),
+            }),
+            z.object({
+              kind: z.literal("take_primary"),
+            }),
+            z.object({
+              kind: z.literal("per_path"),
+              paths: z
+                .array(
+                  z.object({
+                    path: z.string().describe("Conflict path verbatim from the build's report."),
+                    take: z
+                      .enum(["goal", "primary"])
+                      .describe("Which side wins for this path."),
+                  }),
+                )
+                .min(1)
+                .describe(
+                  "MUST cover every path in the build's conflict_paths list — partial coverage " +
+                  "is rejected with the missing paths enumerated.",
+                ),
+            }),
+          ])
+          .describe("Resolution strategy. See tool description for when to pick which."),
+        reason: z
+          .string()
+          .describe(
+            "One sentence explaining why this strategy is correct — captured in the merge " +
+            "commit message and the orchestrator decision log.",
+          ),
+      }),
+      execute: async ({ goalID, strategy, reason }) => {
+        const { findGoalRun, listGoalRunsByGoal } = await import("@/engine/store")
+        const { Worktree } = await import("@/worktree")
+
+        const runs = listGoalRunsByGoal(goalID)
+        // Most-recent goal_run wins — that's the one whose merge_back just
+        // failed. Earlier runs are historical attempts whose worktrees
+        // were either reused or cleaned up.
+        const latest = runs.at(-1)
+        if (!latest) {
+          return `merge_arbitrate: no goal_run found for goal ${goalID}; nothing to merge.`
+        }
+        const fresh = findGoalRun(latest.id) ?? latest
+        const worktreeDir = fresh.workspace_dir
+        if (!worktreeDir) {
+          return (
+            `merge_arbitrate: goal_run ${fresh.id} has no workspace_dir on record; the build ` +
+            `agent never reached worktree creation. Call \`build\` first.`
+          )
+        }
+        // Branch name is encoded by Worktree.create as `opencorvus/<slug>`;
+        // the workspace_dir's basename is the slug. We don't store the
+        // branch directly, so reconstruct from the directory.
+        const branch = `opencorvus/${path.basename(worktreeDir)}`
+
+        try {
+          const result = await Worktree.resolveAndMerge({
+            branch,
+            worktreeDir,
+            strategy,
+          })
+          log.info("merge_arbitrate: resolved", {
+            taskID,
+            goalID,
+            goalRunID: fresh.id,
+            strategy: strategy.kind,
+            primaryHead: result.primaryHead,
+            reason,
+          })
+          return (
+            `merge_arbitrate: resolved goal ${goalID} with strategy=${strategy.kind} → ` +
+            `${result.primaryBranch}@${result.primaryHead.slice(0, 12)}. NEXT: call \`deliver\` ` +
+            `to verify the integrated tree.`
+          )
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err)
+          log.error("merge_arbitrate: failed", { taskID, goalID, strategy: strategy.kind, error: detail })
+          return (
+            `merge_arbitrate: strategy=${strategy.kind} failed for goal ${goalID}: ${detail}. ` +
+            `Pick a different strategy, or shrink the goal via \`modify_goal\` to remove the ` +
+            `conflicting paths from owned_paths.`
+          )
+        }
+      },
+    }),
+
     fail_task: tool({
       description: "Mark the task as failed. Use when the task cannot be completed.",
       inputSchema: z.object({
