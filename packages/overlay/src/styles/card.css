@@ -1000,23 +1000,41 @@ body[data-theme="light"] .card__round {
   opacity: 0.78;
 }
 
-/* card__error-reason — single-line error message chip on cards that flipped
+/* card__error-reason — clickable button-styled chip on cards that flipped
    to status="error". Lives in the title row so the operator sees WHY a
    session failed without expanding the card. Truncates with ellipsis;
-   the full reason lives in the title attribute. */
+   the full reason lives in the title tooltip and click copies it to the
+   clipboard for pasting into a bug report. data-copied flips to --good
+   for the 1.2s feedback window. */
 .card__error-reason {
   display: inline-block;
   max-width: clamp(160px, 50%, 420px);
   padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--bad) 32%, transparent);
   border-radius: 4px;
   background: var(--bad-dim);
   color: var(--bad);
+  font: inherit;
   font-size: var(--card-sub-size);
   line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   user-select: text;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.card__error-reason:hover {
+  background: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+.card__error-reason:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bad) 60%, transparent);
+  outline-offset: 1px;
+}
+.card__error-reason--copied {
+  background: var(--good-dim);
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 50%, transparent);
 }
 
 /* ─────────────────────────────────────────────────────────────

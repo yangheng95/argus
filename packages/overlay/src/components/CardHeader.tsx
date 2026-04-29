@@ -250,13 +250,24 @@ export function CardHeader(props: {
             <span class="card__subtitle" title={props.node.subtitle}>{props.node.subtitle}</span>
           </Show>
           <Show when={props.node.status === "error" && !!props.node.errorReason}>
-            <span
+            <button
+              type="button"
               class="card__error-reason"
-              title={props.node.errorReason}
-              onClick={(e) => e.stopPropagation()}
+              classList={{ "card__error-reason--copied": copied() }}
+              title={(props.node.errorReason || "") + " — click to copy"}
+              aria-label={"Error reason: " + (props.node.errorReason || "")}
+              onClick={async (e) => {
+                e.stopPropagation();
+                const reason = props.node.errorReason || "";
+                if (!reason) return;
+                const ok = await writeClipboard(reason);
+                if (!ok) return;
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1200);
+              }}
             >
               {props.node.errorReason}
-            </span>
+            </button>
           </Show>
           <span class="card__title-spacer" aria-hidden="true" />
           <Show when={hasAnyActivity()}>
