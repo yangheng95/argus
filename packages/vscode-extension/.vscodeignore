@@ -11,3 +11,5 @@ esbuild.mjs
 **/tsconfig*.json
 node_modules/**
 script/**
+dist-vsix/**
+bunfig.toml
