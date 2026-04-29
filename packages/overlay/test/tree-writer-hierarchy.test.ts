@@ -18,7 +18,7 @@ import {
   TASK_ID,
 } from "./fixtures/goal-phase-events";
 
-const FIDELITY_SID = "ses_fidelity";
+const INTEGRITY_SID = "ses_integrity";
 
 function stampedInfo(channel: string, info: Record<string, any>) {
   return {
@@ -482,13 +482,25 @@ test("channel-stamped part.updated materializes the correct session card immedia
   );
 });
 
-test("fidelity completed event materializes an independent fidelity session card", () => {
+// ── Integrity review (renamed from "fidelity" 2026-04+) ──
+//
+// `integrity.review.completed` is the single event type the writer
+// projects into a dedicated integrity session card. The card is a
+// regular session card (kind="agent", stage="integrity") materialized
+// via ensureSessionCard; the structured verdict lives on
+// `node.integrity` and the IntegrityBody renderer keys off that field.
+// (The handler also listens to `integrity.review.started` /
+// `integrity.review.progress` for the running placeholder; those are
+// covered indirectly through the snapshot tests above and don't need
+// dedicated assertions here.)
+
+test("integrity completed event materializes an integrity session card with structured verdict", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
       id: TASK_ID,
       status: "active",
-      request: "fidelity ordering",
+      request: "integrity ordering",
       sessionID: ROOT_SID,
       time: { created: 1_776_000_000_000 },
       attachments: [],
@@ -499,33 +511,40 @@ test("fidelity completed event materializes an independent fidelity session card
   setBoardStore("selectedTaskID", TASK_ID);
 
   applyEvent({
-    type: "fidelity.review.completed",
+    type: "integrity.review.completed",
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
-      sessionID: FIDELITY_SID,
+      sessionID: INTEGRITY_SID,
       verdict: "needs_correction",
+      summary: "1 dimension flagged",
+      dimensions: [
+        { id: "goal_fidelity", verdict: "needs_correction", issueCount: 1, correctionCount: 0, missingGoalCount: 1 },
+      ],
       issues: [{ type: "uncovered", description: "missing goal X" }],
       corrections: [],
-      missingGoals: [],
+      missingGoals: [{ title: "Add X", objective: "support X" }],
       attempts: 1,
     },
   });
 
-  const fidelityCardID = `fidelity:session:${FIDELITY_SID}`;
-  expect(cardTreeStore.cards[fidelityCardID]).toBeDefined();
-  expect(cardTreeStore.cards[fidelityCardID]?.kind).toBe("agent");
-  expect(cardTreeStore.cards[fidelityCardID]?.fidelity?.verdict).toBe("needs_correction");
-  expect(cardTreeStore.order).toContain(fidelityCardID);
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
+  expect(cardTreeStore.cards[integrityCardID]).toBeDefined();
+  expect(cardTreeStore.cards[integrityCardID]?.kind).toBe("agent");
+  expect(cardTreeStore.cards[integrityCardID]?.stage).toBe("integrity");
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("needs_correction");
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.dimensions?.[0]?.id).toBe("goal_fidelity");
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.missingGoals?.[0]?.title).toBe("Add X");
+  expect(cardTreeStore.order).toContain(integrityCardID);
 });
 
-test("fidelity completed event can materialize before any message stream arrives", () => {
+test("integrity completed event can materialize before any message stream arrives", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
       id: TASK_ID,
       status: "active",
-      request: "fidelity race",
+      request: "integrity race",
       sessionID: ROOT_SID,
       time: { created: 1_776_000_000_000 },
       attachments: [],
@@ -536,14 +555,16 @@ test("fidelity completed event can materialize before any message stream arrives
   setBoardStore("selectedTaskID", TASK_ID);
 
   // The protocol event itself carries enough identity to create the
-  // fidelity session card even before any message/part stream arrives.
+  // integrity session card even before any message/part stream arrives.
   applyEvent({
-    type: "fidelity.review.completed",
+    type: "integrity.review.completed",
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
-      sessionID: FIDELITY_SID,
-      verdict: "faithful",
+      sessionID: INTEGRITY_SID,
+      verdict: "pass",
+      summary: "all clean",
+      dimensions: [],
       issues: [],
       corrections: [],
       missingGoals: [],
@@ -551,19 +572,20 @@ test("fidelity completed event can materialize before any message stream arrives
     },
   });
 
-  const fidelityCardID = `fidelity:session:${FIDELITY_SID}`;
-  expect(cardTreeStore.cards[fidelityCardID]).toBeDefined();
-  expect(cardTreeStore.cards[fidelityCardID]?.status).toBe("completed");
-  expect(cardTreeStore.order).toContain(fidelityCardID);
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
+  expect(cardTreeStore.cards[integrityCardID]).toBeDefined();
+  expect(cardTreeStore.cards[integrityCardID]?.status).toBe("completed");
+  expect(cardTreeStore.cards[integrityCardID]?.integrity?.verdict).toBe("pass");
+  expect(cardTreeStore.order).toContain(integrityCardID);
 });
 
-test("fidelity event missing sessionID throws (schema became required)", () => {
+test("integrity event missing sessionID throws (schema became required)", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
       id: TASK_ID,
       status: "active",
-      request: "fidelity schema",
+      request: "integrity schema",
       sessionID: ROOT_SID,
       time: { created: 1_776_000_000_000 },
       attachments: [],
@@ -575,11 +597,13 @@ test("fidelity event missing sessionID throws (schema became required)", () => {
 
   expect(() =>
     applyEvent({
-      type: "fidelity.review.completed",
+      type: "integrity.review.completed",
       emittedAt: 1_776_000_002_000,
       properties: {
         taskID: TASK_ID,
-        verdict: "faithful",
+        verdict: "pass",
+        summary: "",
+        dimensions: [],
         issues: [],
         corrections: [],
         missingGoals: [],
@@ -589,13 +613,13 @@ test("fidelity event missing sessionID throws (schema became required)", () => {
   ).toThrow(/missing sessionID/);
 });
 
-test("resetWriter clears fidelity session cards materialized from protocol events", () => {
+test("resetWriter clears integrity session cards materialized from protocol events", () => {
   resetWriter();
   setBoardStore("board", {
     task: {
       id: TASK_ID,
       status: "active",
-      request: "fidelity reset",
+      request: "integrity reset",
       sessionID: ROOT_SID,
       time: { created: 1_776_000_000_000 },
       attachments: [],
@@ -606,12 +630,14 @@ test("resetWriter clears fidelity session cards materialized from protocol event
   setBoardStore("selectedTaskID", TASK_ID);
 
   applyEvent({
-    type: "fidelity.review.completed",
+    type: "integrity.review.completed",
     emittedAt: 1_776_000_002_000,
     properties: {
       taskID: TASK_ID,
-      sessionID: FIDELITY_SID,
-      verdict: "faithful",
+      sessionID: INTEGRITY_SID,
+      verdict: "pass",
+      summary: "",
+      dimensions: [],
       issues: [],
       corrections: [],
       missingGoals: [],
@@ -621,8 +647,8 @@ test("resetWriter clears fidelity session cards materialized from protocol event
 
   resetWriter();
 
-  const fidelityCardID = `fidelity:session:${FIDELITY_SID}`;
-  expect(cardTreeStore.cards[fidelityCardID]).toBeUndefined();
+  const integrityCardID = `integrity:session:${INTEGRITY_SID}`;
+  expect(cardTreeStore.cards[integrityCardID]).toBeUndefined();
 });
 
 test("tree-writer explicitly accepts non-projected protocol events", () => {
