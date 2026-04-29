@@ -134,34 +134,66 @@ export namespace OpencodeExecutor {
 
   export async function* events(input: { goalID?: string; sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
     if (!input.goalID && !input.sessionID) return
-    const cfg = await EngineConfig.get()
-    const queue = createEventQueue<z.infer<typeof EventResult>>({
-      idleMs: cfg.activity.executor_events_idle_ms,
-      signal: input.signal,
-      label: `opencode-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
-    })
 
-    // Subscribe to GlobalBus (cross-Instance): goal executors run in
-    // worktree Instances while the pipeline consumer sits in the MAIN
-    // Instance. Bus.subscribeAll() is Instance-scoped and would miss
-    // the worktree events — GlobalBus is the only common surface.
+    // audit-2026-04-29 W2-V30 — pre-fix the generator awaited
+    // EngineConfig.get() BEFORE registering the GlobalBus handler.
+    // Any event published between events() being called (caller
+    // does `stream = events(...)`) and the await resolving was
+    // dropped — the generator hadn't subscribed yet. Hardest to
+    // see in production (eventual replay or retry covers it) but
+    // fully exposed in tests that publish a single event after
+    // calling stream.next() and time out waiting for it.
+    //
+    // Subscribe SYNCHRONOUSLY in the body's pre-await region.
+    // Buffer events into a pre-await holding array; once the
+    // queue is materialised after EngineConfig.get(), drain into
+    // it. This way no event published from caller-time to
+    // queue-creation-time is lost.
+    const buffered: z.infer<typeof EventResult>[] = []
+    let queue: ReturnType<typeof createEventQueue<z.infer<typeof EventResult>>> | undefined
+
     const handler = (msg: { payload: any }) => {
       const event = msg.payload
       if (!event || typeof event.type !== "string") return
       const next = mapEvent(event, input)
       if (!next) return
-      queue.push(next)
-      if (next.type === "task-queue.completed" && input.queueTaskID) {
-        const payload = next.payload as { queueTaskID?: string } | undefined
-        if (payload?.queueTaskID === input.queueTaskID) queue.complete()
+      const target = queue
+      if (target) {
+        target.push(next)
+        if (next.type === "task-queue.completed" && input.queueTaskID) {
+          const payload = next.payload as { queueTaskID?: string } | undefined
+          if (payload?.queueTaskID === input.queueTaskID) target.complete()
+        }
+      } else {
+        // Pre-queue event — buffer until the queue is ready.
+        buffered.push(next)
       }
     }
+    // Subscribe to GlobalBus (cross-Instance): goal executors run in
+    // worktree Instances while the pipeline consumer sits in the MAIN
+    // Instance. Bus.subscribeAll() is Instance-scoped and would miss
+    // the worktree events — GlobalBus is the only common surface.
     GlobalBus.on("event", handler)
     try {
+      const cfg = await EngineConfig.get()
+      queue = createEventQueue<z.infer<typeof EventResult>>({
+        idleMs: cfg.activity.executor_events_idle_ms,
+        signal: input.signal,
+        label: `opencode-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
+      })
+      // Drain anything we caught during the EngineConfig.get await.
+      for (const ev of buffered) {
+        queue.push(ev)
+        if (ev.type === "task-queue.completed" && input.queueTaskID) {
+          const payload = ev.payload as { queueTaskID?: string } | undefined
+          if (payload?.queueTaskID === input.queueTaskID) queue.complete()
+        }
+      }
+      buffered.length = 0
       yield* queue.iterable
     } finally {
       GlobalBus.off("event", handler)
-      queue.complete()
+      queue?.complete()
     }
   }
 }
