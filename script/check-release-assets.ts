@@ -42,6 +42,36 @@ function requireAny(dir: string, patterns: RegExp[], label: string) {
   }
 }
 
+// Walk dir recursively and return every file path relative to it, in
+// posix-separator form. Used by ui/ asset checks since Vite emits
+// hashed filenames under chunk-specific subpaths and the validator
+// previously hardcoded `app.js` / `styles.css` (a stale assumption from
+// when the panel was a single hand-written bundle).
+function walk(dir: string, base: string = dir): string[] {
+  if (!exists(dir)) return []
+  const out: string[] = []
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      out.push(...walk(full, base))
+    } else if (entry.isFile()) {
+      out.push(path.relative(base, full).replaceAll("\\", "/"))
+    }
+  }
+  return out
+}
+
+function requireUiBundle(uiRoot: string) {
+  requireFile(path.join(uiRoot, "index.html"))
+  const all = walk(uiRoot)
+  if (!all.some((f) => f.endsWith(".js"))) {
+    throw new Error(`Missing UI script (.js) under ${uiRoot}. Found: ${all.join(", ") || "none"}`)
+  }
+  if (!all.some((f) => f.endsWith(".css"))) {
+    throw new Error(`Missing UI stylesheet (.css) under ${uiRoot}. Found: ${all.join(", ") || "none"}`)
+  }
+}
+
 if (mode === "cli") {
   const dir = path.resolve(flag("--dir") || "")
   const rawPlatforms = flag("--platforms")
@@ -56,9 +86,7 @@ if (mode === "cli") {
     const ui = path.join(root, "ui")
     if (!exists(root)) throw new Error(`Missing CLI platform directory: ${root}`)
     requireAny(root, [/^opencorvus(\.exe)?$/], "CLI binary")
-    requireFile(path.join(ui, "index.html"))
-    requireFile(path.join(ui, "app.js"))
-    requireFile(path.join(ui, "styles.css"))
+    requireUiBundle(ui)
     if (requireArchives) {
       const archive =
         platform.startsWith("linux")
