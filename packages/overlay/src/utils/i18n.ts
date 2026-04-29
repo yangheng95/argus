@@ -93,13 +93,34 @@ export function getLocale(): string {
 
 // ── Locale loading ──
 
+function i18nAssetUrl(path: string): string {
+  const assetBase =
+    typeof globalThis !== "undefined"
+      ? (globalThis as any).__OPENCORVUS_ASSET_BASE__
+      : "";
+  if (typeof assetBase === "string" && assetBase.trim()) {
+    return new URL(path, assetBase).toString();
+  }
+  return path;
+}
+
+async function fetchLocaleData(locale: string): Promise<Record<string, any>> {
+  const url = i18nAssetUrl(`i18n/${locale}.json`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to load locale ${locale}: HTTP ${res.status} ${url}`);
+  }
+  const data = await res.json();
+  if (!record(data)) {
+    throw new Error(`Failed to load locale ${locale}: expected JSON object from ${url}`);
+  }
+  return data;
+}
+
 export async function loadLocale(locale: string): Promise<void> {
   const normalized = sanitizeLocale(locale);
   if (messages[normalized]) return; // already loaded
-  const data = await fetch(`i18n/${normalized}.json`)
-    .then((res) => (res.ok ? res.json() : {}))
-    .catch(() => ({}));
-  messages[normalized] = record(data) ? data : {};
+  messages[normalized] = await fetchLocaleData(normalized);
 }
 
 export async function setLocale(locale: string): Promise<void> {
@@ -118,10 +139,8 @@ export async function setLocale(locale: string): Promise<void> {
 export async function loadAllLocales(): Promise<void> {
   const entries = await Promise.all(
     SUPPORTED_LOCALES.map(async (locale) => {
-      const data = await fetch(`i18n/${locale}.json`)
-        .then((res) => (res.ok ? res.json() : {}))
-        .catch(() => ({}));
-      return [locale, record(data) ? data : {}] as [string, any];
+      const data = await fetchLocaleData(locale);
+      return [locale, data] as [string, any];
     }),
   );
   for (const [locale, data] of entries) {

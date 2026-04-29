@@ -37,6 +37,7 @@
     "build": "node esbuild.mjs",
     "package:vsix": "bun run script/package-vsix.ts",
     "test:e2e:vscode": "bun run script/e2e-vscode.ts",
+    "test:e2e:visual": "bun run script/e2e-visual.ts",
     "benchmark:100": "bun run script/benchmark-100-rounds.ts",
     "test": "bun test"
   },

@@ -1,4 +1,5 @@
 import esbuild from "esbuild"
+import { spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -12,8 +13,9 @@ import { fileURLToPath } from "node:url"
  *  - dead-code-eliminate dev-only branches via `define`
  *  - copies the overlay's Vite-built UI (packages/overlay/dist-vite)
  *    into media/ui so the bundled VSIX has self-contained webview
- *    assets (plan §6 / M5). Copies are skipped with --skip-ui for
- *    fast iterative dev cycles.
+ *    assets (plan §6 / M5). The overlay UI is built first so the
+ *    extension never ships stale webview assets. Copies are skipped
+ *    with --skip-ui for fast iterative dev cycles.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -21,7 +23,9 @@ const isProduction = process.argv.includes("--production")
 const skipUi = process.argv.includes("--skip-ui")
 
 if (!skipUi) {
+  buildOverlayUi(here)
   syncOverlayUi(here)
+  assertOverlayUiBundle(here)
 }
 
 await esbuild.build({
@@ -50,16 +54,16 @@ await esbuild.build({
   logLevel: "info",
 })
 
+function buildOverlayUi(extensionRoot) {
+  const overlayRoot = path.resolve(extensionRoot, "..", "overlay")
+  runBun(["run", "check:i18n"], overlayRoot)
+  runBun(["run", "build:vite"], overlayRoot)
+}
+
 function syncOverlayUi(extensionRoot) {
   const distVite = path.resolve(extensionRoot, "..", "overlay", "dist-vite")
   const target = path.resolve(extensionRoot, "media", "ui")
-  if (!fs.existsSync(distVite)) {
-    console.error(
-      `[build] overlay dist-vite not found at ${distVite}\n` +
-        `Run \`bun run --cwd packages/overlay build:vite\` first, or pass --skip-ui to skip.`,
-    )
-    process.exit(2)
-  }
+  if (!fs.existsSync(distVite)) throw new Error(`[build] overlay dist-vite not found at ${distVite}`)
   // Wipe-and-copy is the right semantic — we never want a previous
   // build's stale assets to ship under a fresh hash, and Vite assets
   // are content-hashed so a partial overwrite can leave dangling
@@ -68,6 +72,21 @@ function syncOverlayUi(extensionRoot) {
   fs.mkdirSync(target, { recursive: true })
   copyTree(distVite, target)
   console.log(`[build] overlay UI synced: ${distVite} → ${target}`)
+}
+
+function assertOverlayUiBundle(extensionRoot) {
+  const target = path.resolve(extensionRoot, "media", "ui")
+  const scripts = listFiles(target).filter((file) => file.endsWith(".js"))
+  const combined = scripts.map((file) => fs.readFileSync(file, "utf8")).join("\n")
+  if (!combined.includes("__OPENCORVUS_ASSET_BASE__")) {
+    throw new Error("[build] overlay UI bundle does not consume __OPENCORVUS_ASSET_BASE__")
+  }
+  if (/\.catch\(\s*\(\s*\)\s*=>\s*\(\s*\{\s*\}\s*\)\s*\)/.test(combined)) {
+    throw new Error("[build] overlay UI bundle still contains silent empty-object catch handlers")
+  }
+  if (/fetch\(\s*`i18n\/\$\{/.test(combined)) {
+    throw new Error("[build] overlay UI bundle still contains bare i18n fetch URLs")
+  }
 }
 
 function copyTree(src, dest) {
@@ -80,4 +99,40 @@ function copyTree(src, dest) {
   } else {
     fs.copyFileSync(src, dest)
   }
+}
+
+function listFiles(dir) {
+  const result = []
+  for (const entry of fs.readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    if (fs.statSync(full).isDirectory()) result.push(...listFiles(full))
+    else result.push(full)
+  }
+  return result
+}
+
+function runBun(args, cwd) {
+  const command = resolveBunCommand()
+  console.log(`[build] ${command} ${args.join(" ")} (${cwd})`)
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: "inherit",
+  })
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    throw new Error(`[build] ${command} ${args.join(" ")} failed with exit code ${result.status}`)
+  }
+}
+
+function resolveBunCommand() {
+  if (process.platform !== "win32") return "bun"
+  const found = spawnSync("where.exe", ["bun"], { encoding: "utf8" })
+  if (found.error) throw found.error
+  if (found.status !== 0) throw new Error("[build] bun executable not found on PATH")
+  const exe = found.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.toLowerCase().endsWith(".exe"))
+  if (!exe) throw new Error("[build] bun.exe not found on PATH")
+  return exe
 }

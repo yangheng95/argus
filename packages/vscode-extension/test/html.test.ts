@@ -138,6 +138,11 @@ describe("renderOverlayHtml", () => {
     expect(html).toContain('window.__OPENCORVUS_LOCALE__="zh-CN"')
   })
 
+  test("injects window.__OPENCORVUS_ASSET_BASE__ bootstrap for runtime locale fetches", () => {
+    const { html } = render("en-US")
+    expect(html).toMatch(/window\.__OPENCORVUS_ASSET_BASE__="https:\/\/test-cdn\/[^"]+\/"/)
+  })
+
   test("each render produces a fresh nonce", () => {
     const a = render("en-US")
     const b = render("en-US")
