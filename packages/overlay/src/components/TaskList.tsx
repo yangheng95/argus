@@ -334,6 +334,7 @@ function TaskRow(props: {
         data-task-id={pending() ? undefined : id()}
         disabled={pending()}
         aria-disabled={pending() ? "true" : undefined}
+        aria-current={isActive() ? "page" : undefined}
         title={title()}
         onClick={() => {
           if (!pending() && id()) props.onSelectTask(id());
