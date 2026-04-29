@@ -91,31 +91,49 @@ function loadFromStorage(taskID: string): Record<string, CardEntry> {
   }
 }
 
+// Synchronous flush for the currently-active task. Called both by the
+// debounced timer AND by the task-switch path so the previous task's
+// in-flight changes never get dropped when the operator switches before
+// the 400ms debounce fires. Returns true on a successful write.
+function flushActiveTaskNow(): boolean {
+  if (!activeTaskID || !isStorageAvailable()) return false;
+  try {
+    const entries = Object.entries(store.expandedCards);
+    // Cap entries — if a task touched >200 cards, drop the oldest by
+    // iteration order (Object.entries preserves insertion order).
+    const trimmed = entries.slice(-MAX_ENTRIES_PER_TASK);
+    const payload = Object.fromEntries(trimmed);
+    window.localStorage.setItem(STORAGE_PREFIX + activeTaskID, JSON.stringify(payload));
+    bumpIndex(activeTaskID);
+    return true;
+  } catch {
+    // ignore quota errors
+    return false;
+  }
+}
+
 function scheduleSave(): void {
   if (!activeTaskID || !isStorageAvailable()) return;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    try {
-      const entries = Object.entries(store.expandedCards);
-      // Cap entries — if a task touched >200 cards, drop the oldest by
-      // iteration order (Object.entries preserves insertion order).
-      const trimmed = entries.slice(-MAX_ENTRIES_PER_TASK);
-      const payload = Object.fromEntries(trimmed);
-      window.localStorage.setItem(STORAGE_PREFIX + activeTaskID, JSON.stringify(payload));
-      bumpIndex(activeTaskID);
-    } catch {
-      // ignore quota errors
-    }
+    flushActiveTaskNow();
   }, SAVE_DEBOUNCE_MS);
 }
 
 /** Switch the active task — load that task's persisted collapse state into
- *  the in-memory store. Called from store/messages.ts:setSelectedTaskID. */
+ *  the in-memory store. Called from store/messages.ts:setSelectedTaskID.
+ *  CRITICAL: flushes the previous task's pending debounced save BEFORE
+ *  swapping in the new state, so rapid task switches don't drop the
+ *  prior task's collapse changes. */
 export function loadConversationUiStateForTask(taskID: string): void {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
+    // Drain any debounced edits from the previous task synchronously
+    // before the activeTaskID flip — otherwise the new taskID would
+    // capture the previous task's keys.
+    flushActiveTaskNow();
   }
   activeTaskID = taskID;
   const persisted = loadFromStorage(taskID);
@@ -126,6 +144,9 @@ export function clearConversationUiState(): void {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
+    // Same race as loadConversationUiStateForTask — flush before clear
+    // so explicit "no task selected" doesn't drop the prior task's edits.
+    flushActiveTaskNow();
   }
   activeTaskID = "";
   setStore("expandedCards", reconcile({}, { merge: false }));
