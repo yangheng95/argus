@@ -156,38 +156,51 @@ export namespace TaskQueueService {
     const current = state()
     if (current.polling) return []
     current.polling = true
-    return run(Date.now()).finally(() => {
-      current.polling = false
-    })
+    return run(Date.now())
   }
 
   async function run(now: number): Promise<Promise<void>[]> {
     const current = state()
-    await recover(now)
-    const limit = Math.max(0, concurrency() - current.inFlight.size)
-    if (limit === 0) return []
-    const queued = pending(limit)
-    if (queued.length === 0) return []
-    log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
-    const list: Array<typeof TaskQueueTable.$inferSelect> = []
-    for (const item of queued) {
-      if (list.length >= limit) break
-      const task = claim(item.id, item.session_id)
-      if (!task) continue
-      list.push(task)
+    // audit-2026-04-29 W2-V28 — polling clear MUST happen before
+    // run's async Promise resolves so the next runNow's poll can
+    // proceed in the same microtask flush. Pre-fix the
+    // `return run(...).finally(() => polling=false)` pattern in
+    // poll() set polling=false in a chained .finally microtask
+    // that fired AFTER the test's await firstRunning resume —
+    // which was queued earlier when firstStarted fired inside the
+    // mock during list.map. The test's resume ran first, called
+    // runNow → poll, which saw polling=still=true and SKIPPED.
+    // Bury the clear inside run's try/finally so it lands
+    // synchronously within run's body, before the body returns.
+    try {
+      await recover(now)
+      const limit = Math.max(0, concurrency() - current.inFlight.size)
+      if (limit === 0) return []
+      const queued = pending(limit)
+      if (queued.length === 0) return []
+      log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
+      const list: Array<typeof TaskQueueTable.$inferSelect> = []
+      for (const item of queued) {
+        if (list.length >= limit) break
+        const task = claim(item.id, item.session_id)
+        if (!task) continue
+        list.push(task)
+      }
+      if (list.length === 0) return []
+      const started = list.map((task) => {
+        let running!: Promise<void>
+        running = execute(task)
+          .catch((error) => fail(task, error))
+          .finally(() => {
+            current.inFlight.delete(running)
+          })
+        current.inFlight.add(running)
+        return running
+      })
+      return started
+    } finally {
+      current.polling = false
     }
-    if (list.length === 0) return []
-    const started = list.map((task) => {
-      let running!: Promise<void>
-      running = execute(task)
-        .catch((error) => fail(task, error))
-        .finally(() => {
-          current.inFlight.delete(running)
-        })
-      current.inFlight.add(running)
-      return running
-    })
-    return started
   }
 
   function concurrency() {
