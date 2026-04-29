@@ -46,6 +46,32 @@ describe("ensureGitignore", () => {
     })
   })
 
+  test("seeds the first HEAD commit on a fresh `git init` repo (no prior commits)", async () => {
+    // 2026-04-30 — the seed `git commit --only -- .gitignore -m "..."` had
+    // its `-m`/subject placed AFTER `--`, so git parsed both as pathspecs
+    // and the commit silently failed on every fresh greenfield project.
+    // HEAD stayed unset, and `Worktree.create` then died for every build
+    // goal with `WorktreeCreateFailedError` (observed on the gemini chat
+    // task 2026-04-29). Regression test pins the contract: "ensureGitignore
+    // returning on a fresh repo means HEAD has the .gitignore committed".
+    const dirpath = path.join((await import("os")).tmpdir(), "opencorvus-test-fresh-" + Math.random().toString(36).slice(2))
+    await fs.mkdir(dirpath, { recursive: true })
+    await $`git init`.cwd(dirpath).quiet()
+    // explicitly NOT creating a root commit — this is the greenfield case
+
+    await Instance.provide({
+      directory: dirpath,
+      fn: async () => {
+        await ensureGitignore()
+      },
+    })
+
+    const head = await $`git rev-parse --verify HEAD`.cwd(dirpath).quiet().nothrow()
+    expect(head.exitCode).toBe(0)
+    const headTree = await $`git ls-tree --name-only HEAD`.cwd(dirpath).quiet()
+    expect(headTree.stdout.toString()).toContain(".gitignore")
+  })
+
   test("untracks .opencorvus-meta.json that was committed before the ignore existed", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(path.join(tmp.path, ".opencorvus-meta.json"), `{"goalID":"stale"}`)
