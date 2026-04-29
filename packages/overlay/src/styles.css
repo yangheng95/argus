@@ -12154,3 +12154,117 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .config-subsection {
   border-color: var(--border) !important;
 }
+
+/* ── BoardIntro ──
+   Right-panel empty state shown when no task is selected. Previously
+   shipped with zero CSS, so the operator's first impression of the
+   right pane was browser-default <h2>/<h3>/<ul> styling — black
+   bullets, mismatched font sizes, no visual hierarchy. Token-based
+   layout below so it reads as part of the design system. */
+.board-intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-lg);
+  padding: var(--ui-gap-lg);
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  line-height: 1.55;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.board-intro__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+}
+.board-intro__title {
+  margin: 0;
+  font-size: var(--ui-font-heading);
+  color: var(--text-strong);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.board-intro__tagline {
+  margin: 0;
+  color: var(--text-soft);
+}
+.board-intro__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-gap-lg);
+  border-radius: var(--radius);
+  background: var(--subtle-1);
+  border: 1px solid var(--border);
+}
+.board-intro__section-title {
+  margin: 0;
+  font-size: var(--ui-font-control);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.board-intro__modes,
+.board-intro__agents {
+  display: grid;
+  gap: var(--ui-gap-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.board-intro__modes {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.board-intro__agents {
+  grid-template-columns: 1fr;
+}
+.board-intro__mode,
+.board-intro__agent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--subtle-2);
+  border: 1px solid var(--border);
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.board-intro__mode-label,
+.board-intro__agent-name {
+  font-weight: 600;
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+}
+.board-intro__mode-desc,
+.board-intro__agent-desc {
+  color: var(--text-soft);
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.board-intro__mode[data-mode="workflow"] .board-intro__mode-label::before,
+.board-intro__mode[data-mode="build"] .board-intro__mode-label::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 999px;
+  vertical-align: middle;
+  background: var(--accent);
+}
+.board-intro__mode[data-mode="build"] .board-intro__mode-label::before {
+  background: var(--good);
+}
+.board-intro__foot {
+  text-align: center;
+  padding-top: var(--ui-gap-sm);
+  border-top: 1px dashed var(--border);
+}
+.board-intro__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-meta);
+}
