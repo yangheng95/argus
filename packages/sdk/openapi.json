@@ -7921,6 +7921,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "taskID",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "summary": "List memory files for current project",
@@ -8218,6 +8225,9 @@
                     "type": "string"
                   },
                   "sessionID": {
+                    "type": "string"
+                  },
+                  "taskID": {
                     "type": "string"
                   },
                   "limit": {
