@@ -6246,6 +6246,22 @@ select.field-input option {
 .prompt-preview-body {
   min-height: calc(72px * var(--ui-scale));
 }
+/* Default-prompt preview sits inside the "Show default" <details>; the
+   modifier strips its top margin (the parent card already has padding)
+   and dims the content so the operator's eye lands on the EDITED
+   prompt below, not the unchanged baseline above. */
+.prompt-preview-card--default {
+  margin-top: 0;
+  border-top: none;
+  opacity: 0.7;
+}
+/* Edited-prompt preview attaches to the bottom of the "Preview" details
+   wrapper — square the top corners + drop the duplicate top border so
+   it reads as one continuous card with the summary. */
+.prompt-preview-card--attached {
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
 
 .extension-policy {
   min-width: 88px;
