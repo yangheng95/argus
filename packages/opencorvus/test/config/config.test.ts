@@ -965,20 +965,28 @@ test("permission config preserves key order", async () => {
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      // Zod z.object().catchall() outputs known schema keys first (in definition order),
-      // then catchall keys in input order. "read", "edit", "external_directory",
-      // "todowrite", "todoread", "plan_enter", "plan_exit" are defined in the
-      // Permission schema; "*", "write", and wildcard keys fall through to catchall.
+      // audit-2026-04-29 W2-V25 — `plan_enter`/`plan_exit` were
+      // removed from the Permission schema (see config.ts:625-647);
+      // they now fall through to `.catchall()` in input order with
+      // the other custom rules. The test expectation hadn't been
+      // updated and silently failed across the suite.
+      //
+      // Zod z.object().catchall() outputs known schema keys first
+      // (in definition order), then catchall keys in input order.
+      // Schema-known here: "read", "edit", "external_directory",
+      // "todowrite", "todoread". Catchall in input order: "*",
+      // "write", "plan_enter", "plan_exit", and the wildcard
+      // entries.
       expect(Object.keys(config.permission!)).toEqual([
         "read",
         "edit",
         "external_directory",
         "todowrite",
         "todoread",
-        "plan_enter",
-        "plan_exit",
         "*",
         "write",
+        "plan_enter",
+        "plan_exit",
         "thoughts_*",
         "reasoning_model_*",
         "tools_*",
