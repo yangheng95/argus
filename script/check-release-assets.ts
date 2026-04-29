@@ -102,19 +102,28 @@ if (mode === "cli") {
 const dir = path.resolve(flag("--dir") || "")
 const platform = flag("--platform")
 const current = version("--version")
+const requireBundle = args.includes("--require-bundle")
 if (!dir || !platform || !current) {
   throw new Error("overlay mode requires --dir, --platform and --version")
 }
 
 requireAny(dir, [/^opencorvus-overlay(\.exe)?$/], "overlay binary")
 
-if (platform.startsWith("windows")) {
-  requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*\\.msi$`)], "Windows MSI bundle")
-  requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*-setup\\.exe$`)], "Windows NSIS bundle")
-} else if (platform.startsWith("darwin")) {
-  requireAny(dir, [/\.dmg$/, /\.app\.tar\.gz$/], "macOS bundle")
-} else if (platform.startsWith("linux")) {
-  requireAny(dir, [/\.AppImage$/, /\.deb$/, /\.rpm$/], "Linux bundle")
+// build-overlay.ts / overlay/script/build.ts both run `tauri build
+// --no-bundle`, so per-platform installer bundles (deb/rpm/AppImage on
+// Linux, dmg on macOS, msi/nsis on Windows) are NOT produced for dev
+// snapshot runs. Gate the installer-bundle requirement behind an
+// explicit flag — release builds opt in via `--require-bundle`, dev
+// snapshots stop at the bare overlay binary.
+if (requireBundle) {
+  if (platform.startsWith("windows")) {
+    requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*\\.msi$`)], "Windows MSI bundle")
+    requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*-setup\\.exe$`)], "Windows NSIS bundle")
+  } else if (platform.startsWith("darwin")) {
+    requireAny(dir, [/\.dmg$/, /\.app\.tar\.gz$/], "macOS bundle")
+  } else if (platform.startsWith("linux")) {
+    requireAny(dir, [/\.AppImage$/, /\.deb$/, /\.rpm$/], "Linux bundle")
+  }
 }
 
 console.log(`Overlay assets validated for ${platform}`)

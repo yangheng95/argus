@@ -129,10 +129,16 @@ jobs:
           # The build script reads MODELS_DEV_API_JSON; mount the file into
           # the container so the path the env var points to actually exists.
           # Without this -v line every musl build inside Docker hit ENOENT.
+          # `--user $(id -u):$(id -g)` makes the container write artifacts as
+          # the runner user, otherwise dist/ ends up owned by root and the
+          # next host-side step (Stage overlay web bundle into CLI dist)
+          # hits EACCES on mkdir.
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -v "$GITHUB_WORKSPACE:/workspace" \
             -v /tmp/models-api-clean.json:/tmp/models-api-clean.json:ro \
             -w /workspace/packages/opencorvus \
+            -e HOME=/tmp \
             -e MODELS_DEV_API_JSON=/tmp/models-api-clean.json \
             -e OPENCORVUS_RELEASE="${OPENCORVUS_RELEASE}" \
             -e OPENCORVUS_VERSION="${OPENCORVUS_VERSION}" \
@@ -248,11 +254,16 @@ jobs:
           find packages/overlay/src-tauri/target/release/bundle -type f -exec cp {} "$OUT/" \; 2>/dev/null || true
 
       - name: Validate overlay assets
-        run: >
-          bun ./script/check-release-assets.ts overlay
-          --dir packages/overlay/dist-artifacts/${{ matrix.platform }}
-          --platform "${{ matrix.platform }}"
-          --version "${{ needs.prepare.outputs.version }}"
+        run: |
+          EXTRA=""
+          if [[ "${{ needs.prepare.outputs.release }}" == "1" ]]; then
+            EXTRA="--require-bundle"
+          fi
+          bun ./script/check-release-assets.ts overlay \
+            --dir packages/overlay/dist-artifacts/${{ matrix.platform }} \
+            --platform "${{ matrix.platform }}" \
+            --version "${{ needs.prepare.outputs.version }}" \
+            $EXTRA
 
       - name: Upload overlay artifact
         uses: actions/upload-artifact@v4
