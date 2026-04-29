@@ -5,7 +5,7 @@ import { createStore, produce } from "solid-js/store";
 import { batch, createMemo, createRoot, type Accessor } from "solid-js";
 import { apiJson, apiUrl } from "../services/api";
 import { boardStore } from "../store/board";
-import { clearConversationUiState } from "./conversation-ui";
+import { clearConversationUiState, loadConversationUiStateForTask } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
 import { syncSectionPhases } from "../utils/section";
 import { normalizeToolPartRecord } from "../utils/tool";
@@ -782,7 +782,12 @@ export function setMessages(messages: any[]) {
 
 export function setSelectedTaskID(taskID: string) {
   if (store.selectedTaskID !== taskID) {
-    clearConversationUiState();
+    // Hand the new task to conversation-ui so it can swap the persisted
+    // collapse map — old behavior cleared, new behavior loads from
+    // localStorage so refresh / overlay restart preserves the operator's
+    // review state per task. Empty taskID still clears.
+    if (taskID) loadConversationUiStateForTask(taskID);
+    else clearConversationUiState();
     clearKnownChildSessions();
   }
   setStore("selectedTaskID", taskID);
