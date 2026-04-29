@@ -206,9 +206,18 @@ export default function ChannelsPanel() {
           <input
             class="field-input"
             type="url"
+            pattern="https?://.+"
             placeholder="https://opencorvus.example.com"
             value={localPublicUrl()}
             onInput={(e) => setLocalPublicUrl(e.currentTarget.value)}
+            onBlur={(e) => {
+              const v = e.currentTarget.value.trim();
+              e.currentTarget.setCustomValidity(
+                v && !/^https?:\/\/.+/i.test(v)
+                  ? t("channel.public_url_invalid")
+                  : "",
+              );
+            }}
           />
         </label>
         <div class="dialog-actions compact">

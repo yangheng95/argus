@@ -97,6 +97,7 @@
   "notify.task_interaction_body_with_detail": "{{title}}：{{detail}}",
   "settings.desktop_notifications_label": "桌面通知",
   "settings.desktop_notifications_hint": "任务完成、失败、取消或等待响应时通知系统提醒。",
+  "channel.public_url_invalid": "公共 URL 必须以 http:// 或 https:// 开头",
   "chat.git.commit": "提交",
   "chat.git.message": "提交信息",
   "chat.git.result_created": "已提交验收通过的工作区状态",
