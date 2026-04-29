@@ -13,10 +13,10 @@
 
 | 维度 | 结论 |
 | --- | --- |
-| API | `init / cleanup / track / patch / restore / revert / diff / diffFull` |
+| API | `track / patch / restore / revert / diff / diffFull` |
 | 持久化 | `${Global.Path.data}/snapshot/<project.id>/` bare git repo（无 ref，无 reflog，靠 tree object hash 引用） |
-| GC 触发 | 1) Scheduler 每小时跑 `cleanup()` → `git gc --prune=now`；2) `task-api.deleteTask` fire-and-forget 调 cleanup；3) `ProjectGC.apply` 把过期 project 整目录删 |
-| 已有测试 | `test/snapshot/snapshot.test.ts`（51 例 unit）；**没有 benchmark / 端到端会话级模拟** |
+| GC 触发 | `Snapshot.cleanup/init/gc/prune` 已移除；只允许 `ProjectGC.apply` 对过期 / orphan project 做整目录删除 |
+| 已有测试 | `packages/opencorvus/test/snapshot/snapshot.test.ts`（46 例 unit，1 skip）+ `packages/opencorvus/script/benchmark/snapshot-benchmark.ts` |
 | 观察到的高危设计点 | 所有 `track()` 写出的 tree 立刻 dangling — `--prune=now` 必然清掉它们；如果 cleanup 在活跃 session 中途触发，session 里保存的 hash **将无法再 restore** |
 
 ## 2. 假设清单（benchmark 要逐条验证）
@@ -25,7 +25,7 @@ H1. `track → modify → patch → revert` 的 round-trip 在所有平台等价
 
 H2. `restore(hash)` 之后 worktree 完全等价于 `track()` 那一刻的状态——包括**snapshot 之外的多余文件应被删除**（否则用户回退后会留垃圾）。
 
-H3. **关键**：`Snapshot.cleanup()` 之后，先前 `track()` 返回的 hash 仍可 `restore` / `patch` / `diff`（否则 hourly scheduler 会破坏活跃 session）。
+H3. **关键**：`Snapshot` 公开 API 不得重新出现 `cleanup / init / gc / prune` 这类会清理 dangling tree object 的入口；多轮 `track()` 后旧 hash 仍可 `restore` / `patch` / `diff`。
 
 H4. 多 worktree 并发 `track()` 时，hash 与各自 worktree 一一对应，互不串扰。
 
@@ -47,21 +47,22 @@ H8. 持续 100 轮 track 后磁盘占用受限于实际 blob 大小，cleanup �
 | --- | --- | --- |
 | `core.roundtrip` | track → 增/删/改 → patch.files 集合 = 真实变更集合；revert → 文件树字节级等于 baseline | 集合不等 / 内容不等 |
 | `core.restore-removes-extras` | track baseline → 新增 N 个文件 → restore baseline → worktree 多余文件应消失 | 多余文件残留 ≠ 0（H2） |
-| `gc.cleanup-preserves-active` | track h1 → cleanup → restore(h1) 必须成功 + 内容一致 | restore 失败 / 内容不符（H3） |
-| `gc.task-delete-prune` | track 1 + track 2 → 模拟 task-delete 的 cleanup → 仍应可 restore 最近一次 | restore 失败 |
+| `gc.no-destructive-api` | 断言 `Snapshot.cleanup/init/gc/prune` 不存在 | 任一破坏性 API 重新出现 |
+| `gc.two-snapshots-both-survive` | track 1 + track 2 → 两个 hash 都能独立 restore | 任一 restore 失败 / 内容不符 |
 | `concurrency.parallel-track` | 4 个独立 worktree 同时 `track()`（同一 project.id 共享 bare repo 的话也要测） | 结果 hash 串扰 / write-tree 竞态报错 |
 | `boundary.unicode-and-space` | worktree 含 "测试 dir"，文件名 "ümlaut 文件.txt" | track/restore 任一失败 |
 | `boundary.binary-and-large` | 1 个 5MB 二进制 + 1 个 10MB 文本，verify diffFull 标 binary、track 不爆内存 | 二进制误标 / OOM / 超时 |
 | `boundary.exclude-baseline` | worktree 内 `node_modules/x.js` + `src/x.js`，patch 只看到 src | node_modules 进了 patch（H5） |
-| `perf.thousand-files` | 1000 文件 × 200 字节，记 track / restore / diffFull(100 改) p50/p95 | 越过预算 1.5×（H7） |
-| `disk.cleanup-reclaim` | 100 轮 modify+track 后 du；cleanup 后 du 应明显下降；同时 H3 仍成立 | cleanup 不回收 OR 回收破坏可达 hash |
+| `perf.thousand-files` | 1000 文件 × 200 字节，硬校验 track / restore / diffFull(100 改) | `track > 2250ms` / `restore > 2250ms` / `diffFull > 1500ms` |
+| `disk.long-running-project` | 50 轮 modify+track 后抽查 baseline / middle / latest hash 均可 restore | 任一 live hash 不可恢复 |
 
 ## 4. 输出与产物
 
 - stdout：每个套件单行 `[ok|fail] name dur=__ms metrics=...`
-- 末尾汇总：通过 / 失败 / 总耗时 / 退出码 = 失败数
+- 末尾汇总：通过 / 失败 / 总耗时 / idleMs / 退出码 = 失败数
 - 失败时打印 expected vs actual 的 diff（必要时）。
 - 不写入永久文件；临时目录 disposable。
+- `SNAPSHOT_BENCH_IDLE_TIMEOUT_MS` 控制无活动超时，默认 120000ms；由 `withStreamActivity` 按 suite 真实进展刷新，不按进程启动时间计总时长。
 
 ## 5. 修复流程（每个 bug 一个 commit）
 

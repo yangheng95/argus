@@ -460,10 +460,10 @@ test("file permissions and ownership changes", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      // Change permissions multiple times
-      await $`chmod 600 ${tmp.path}/a.txt`.quiet()
-      await $`chmod 755 ${tmp.path}/a.txt`.quiet()
-      await $`chmod 644 ${tmp.path}/a.txt`.quiet()
+      // Change permissions multiple times without relying on platform shell tools.
+      await fs.chmod(`${tmp.path}/a.txt`, 0o600)
+      await fs.chmod(`${tmp.path}/a.txt`, 0o755)
+      await fs.chmod(`${tmp.path}/a.txt`, 0o644)
 
       const patch = await Snapshot.patch(before!)
       // Note: git doesn't track permission changes on existing files by default

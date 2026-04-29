@@ -122,34 +122,30 @@ export namespace Snapshot {
   }
 
   export async function revert(patches: Patch[]) {
-    const files = new Set<string>()
+    const seen = new Set<string>()
     const git = gitdir()
     for (const item of patches) {
+      const batch: string[] = []
       for (const file of item.files) {
-        if (files.has(file)) continue
-        log.info("reverting", { file, hash: item.hash })
-        const result =
-          await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout ${item.hash} -- ${file}`
-            .quiet()
-            .cwd(Instance.worktree)
-            .nothrow()
-        if (result.exitCode !== 0) {
-          const relativePath = path.relative(Instance.worktree, file)
-          const checkTree =
-            await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} ls-tree ${item.hash} -- ${relativePath}`
-              .quiet()
-              .cwd(Instance.worktree)
-              .nothrow()
-          if (checkTree.exitCode === 0 && checkTree.text().trim()) {
-            log.info("file existed in snapshot but checkout failed, keeping", {
-              file,
-            })
-          } else {
-            log.info("file did not exist in snapshot, deleting", { file })
-            await fs.unlink(file).catch(() => {})
-          }
-        }
-        files.add(file)
+        if (seen.has(file)) continue
+        seen.add(file)
+        batch.push(file)
+      }
+
+      if (batch.length === 0) continue
+      const relative = batch.map(toWorktreeRelative)
+      const present = await snapshotPaths(git, item.hash, relative)
+      const checkout = relative.filter((file) => present.has(file))
+      const remove = relative.filter((file) => !present.has(file))
+
+      if (checkout.length > 0) {
+        log.info("reverting files", { count: checkout.length, hash: item.hash })
+        await checkoutSnapshotPaths(git, item.hash, checkout)
+      }
+      for (const file of remove) {
+        const target = path.join(Instance.worktree, file)
+        log.info("file did not exist in snapshot, deleting", { file: target })
+        await removeSnapshotAbsentFile(target)
       }
     }
   }
@@ -190,12 +186,12 @@ export namespace Snapshot {
     const result: FileDiff[] = []
     const status = new Map<string, "added" | "deleted" | "modified">()
 
-    const statuses =
-      await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
+    const statuses = await gitText(
+      $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --name-status --no-renames ${from} ${to} -- .`
         .quiet()
-        .cwd(Instance.directory)
-        .nothrow()
-        .text()
+        .cwd(Instance.directory),
+      "diffFull name-status",
+    )
 
     for (const line of statuses.trim().split("\n")) {
       if (!line) continue
@@ -205,35 +201,49 @@ export namespace Snapshot {
       status.set(file, kind)
     }
 
-    for await (const line of $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
-      .quiet()
-      .cwd(Instance.directory)
-      .nothrow()
-      .lines()) {
+    const numstat = await gitText(
+      $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} diff --no-ext-diff --no-renames --numstat ${from} ${to} -- .`
+        .quiet()
+        .cwd(Instance.directory),
+      "diffFull numstat",
+    )
+    const textFiles: string[] = []
+    const rows: Array<{ additions: string; deletions: string; file: string; isBinaryFile: boolean }> = []
+    for (const line of numstat.trim().split("\n")) {
       if (!line) continue
       const [additions, deletions, file] = line.split("\t")
+      if (!additions || !deletions || !file) continue
       const isBinaryFile = additions === "-" && deletions === "-"
-      const before = isBinaryFile
-        ? ""
-        : await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} show ${from}:${file}`
-            .quiet()
-            .nothrow()
-            .text()
-      const after = isBinaryFile
-        ? ""
-        : await $`git -c core.autocrlf=${coreAutocrlf} -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} show ${to}:${file}`
-            .quiet()
-            .nothrow()
-            .text()
-      const added = isBinaryFile ? 0 : parseInt(additions)
-      const deleted = isBinaryFile ? 0 : parseInt(deletions)
+      rows.push({ additions, deletions, file, isBinaryFile })
+      if (!isBinaryFile) textFiles.push(file)
+    }
+
+    const [fromObjects, toObjects] = await Promise.all([
+      treeObjects(git, from, textFiles),
+      treeObjects(git, to, textFiles),
+    ])
+    const objectIDs = new Set<string>()
+    for (const row of rows) {
+      if (row.isBinaryFile) continue
+      const beforeObject = fromObjects.get(row.file)
+      const afterObject = toObjects.get(row.file)
+      if (beforeObject) objectIDs.add(beforeObject)
+      if (afterObject) objectIDs.add(afterObject)
+    }
+    const objectText = await catFileBatch(git, [...objectIDs])
+
+    for (const row of rows) {
+      const before = row.isBinaryFile ? "" : objectText.get(fromObjects.get(row.file) ?? "") ?? ""
+      const after = row.isBinaryFile ? "" : objectText.get(toObjects.get(row.file) ?? "") ?? ""
+      const added = row.isBinaryFile ? 0 : parseInt(row.additions)
+      const deleted = row.isBinaryFile ? 0 : parseInt(row.deletions)
       result.push({
-        file,
+        file: row.file,
         before,
         after,
         additions: Number.isFinite(added) ? added : 0,
         deletions: Number.isFinite(deleted) ? deleted : 0,
-        status: status.get(file) ?? "modified",
+        status: status.get(row.file) ?? "modified",
       })
     }
     return result
@@ -242,6 +252,129 @@ export namespace Snapshot {
   function gitdir() {
     const project = Instance.project
     return path.join(Global.Path.data, "snapshot", project.id)
+  }
+
+  type GitCommand = {
+    nothrow(): Promise<{
+      exitCode: number
+      text(): string
+      stderr: Uint8Array
+      stdout: Uint8Array
+    }>
+  }
+
+  async function gitText(command: GitCommand, label: string) {
+    const result = await command.nothrow()
+    if (result.exitCode !== 0) {
+      throw new Error(`${label} failed: ${new TextDecoder().decode(result.stderr).trim()}`)
+    }
+    return result.text()
+  }
+
+  function toWorktreeRelative(file: string) {
+    const absolute = path.isAbsolute(file) ? file : path.join(Instance.worktree, file)
+    const relative = path.relative(Instance.worktree, absolute)
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(`snapshot path outside worktree: ${file}`)
+    }
+    return relative.replaceAll("\\", "/")
+  }
+
+  async function snapshotPaths(git: string, hash: string, files: string[]) {
+    return new Set((await treeObjects(git, hash, files)).keys())
+  }
+
+  async function checkoutSnapshotPaths(git: string, hash: string, files: string[]) {
+    for (const chunk of chunks(files, 200)) {
+      await gitText(
+        $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout ${hash} -- ${chunk}`
+          .quiet()
+          .cwd(Instance.worktree),
+        "snapshot checkout",
+      )
+    }
+  }
+
+  async function removeSnapshotAbsentFile(file: string) {
+    try {
+      await fs.unlink(file)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return
+      throw err
+    }
+  }
+
+  async function treeObjects(git: string, hash: string, files: string[]) {
+    const objects = new Map<string, string>()
+    if (files.length === 0) return objects
+    for (const chunk of chunks(files, 200)) {
+      const text = await gitText(
+        $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} -c core.quotepath=false --git-dir ${git} --work-tree ${Instance.worktree} ls-tree -r -z ${hash} -- ${chunk}`
+          .quiet()
+          .cwd(Instance.worktree),
+        "snapshot ls-tree",
+      )
+      for (const entry of text.split("\0")) {
+        if (!entry) continue
+        const tab = entry.indexOf("\t")
+        if (tab < 0) throw new Error(`unexpected ls-tree entry: ${entry}`)
+        const header = entry.slice(0, tab)
+        const file = entry.slice(tab + 1)
+        const [, type, object] = header.split(" ")
+        if (type !== "blob" || !object) continue
+        objects.set(file, object)
+      }
+    }
+    return objects
+  }
+
+  async function catFileBatch(git: string, objects: string[]) {
+    const out = new Map<string, string>()
+    if (objects.length === 0) return out
+    const proc = Bun.spawn(["git", "--git-dir", git, "cat-file", "--batch"], {
+      cwd: Instance.worktree,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    proc.stdin.write(`${objects.join("\n")}\n`)
+    proc.stdin.end()
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).arrayBuffer(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    if (exitCode !== 0) throw new Error(`snapshot cat-file failed: ${stderr.trim()}`)
+
+    const bytes = new Uint8Array(stdout)
+    const decoder = new TextDecoder()
+    let offset = 0
+    while (offset < bytes.length) {
+      const lineEnd = bytes.indexOf(10, offset)
+      if (lineEnd < 0) throw new Error("snapshot cat-file returned truncated header")
+      const header = decoder.decode(bytes.subarray(offset, lineEnd))
+      offset = lineEnd + 1
+      const [object, type, rawSize] = header.split(" ")
+      const size = Number(rawSize)
+      if (!object || type !== "blob" || !Number.isInteger(size) || size < 0) {
+        throw new Error(`unexpected cat-file header: ${header}`)
+      }
+      const end = offset + size
+      if (end > bytes.length) throw new Error(`snapshot cat-file truncated blob: ${object}`)
+      out.set(object, decoder.decode(bytes.subarray(offset, end)))
+      offset = end
+      if (offset < bytes.length) {
+        if (bytes[offset] !== 10) throw new Error(`snapshot cat-file missing separator after ${object}`)
+        offset++
+      }
+    }
+    return out
+  }
+
+  function chunks<T>(items: T[], size: number) {
+    const out: T[][] = []
+    for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+    return out
   }
 
   async function add(git: string, indexFile?: string) {
