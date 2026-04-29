@@ -237,7 +237,21 @@ const OPENCORVUS_SCRATCH_PATHS = [
   ".opencorvus-meta.json",
 ]
 
-/** Ensure .gitignore exists so heavy directories (node_modules, dist) are never git-tracked. */
+/** Ensure .gitignore exists so heavy directories (node_modules, dist) are
+ *  never git-tracked, AND that it is committed to HEAD before any other
+ *  commit lands. CONTRACT: when this returns on a fresh git repo, the
+ *  FIRST commit on the branch is the baseline .gitignore — nothing else.
+ *
+ *  Why: every subsequent worktree branches off HEAD via `git worktree add`,
+ *  which checks out the branch tip. If HEAD has no .gitignore (or the
+ *  ignore file lives only on disk uncommitted), the worktree starts ignore-
+ *  blind and `git add -A` after `bun install` swallows `node_modules/`
+ *  into the build commit (observed symptom: `node_modules/semver/*` in
+ *  merge_back conflict_paths). The "first commit must be .gitignore"
+ *  invariant collapses that whole class of bugs.
+ *
+ *  This function is idempotent: subsequent calls only commit when the
+ *  file content actually changed (essentials added) or HEAD was empty. */
 export async function ensureGitignore() {
   const dir = Instance.directory
   const file = Bun.file(`${dir}/.gitignore`)
@@ -254,6 +268,42 @@ export async function ensureGitignore() {
   }
 
   await untrackOpencorvusScratch(dir)
+
+  // Commit the .gitignore unconditionally — git's own staging diff is the
+  // only source of truth for "is there actually something to commit". This
+  // fires:
+  //   • on a fresh repo with no HEAD (first commit ever — guarantees it's
+  //     the baseline .gitignore)
+  //   • after we appended a missing essential to a pre-existing .gitignore
+  //     (essentials need to land in HEAD so worktrees see them)
+  //   • on second call after the user edited .gitignore manually before us
+  // and skips when the staged file is byte-identical to what's already in
+  // HEAD. No --allow-empty: a no-op commit would lie about state.
+  const isRepo = await git(["rev-parse", "--git-dir"], { cwd: dir })
+  if (isRepo.exitCode !== 0) return
+  const staged = await git(["add", "--", ".gitignore"], { cwd: dir })
+  if (staged.exitCode !== 0) {
+    log.warn("ensureGitignore: git add failed", { stderr: staged.stderr.toString() })
+    return
+  }
+  // `git diff --cached --quiet` against an empty HEAD reports "differs"
+  // (exit 1) because the staged content has no equivalent in HEAD — that
+  // path is exactly when we want the commit to land. Against a populated
+  // HEAD with the same bytes it exits 0 → we skip.
+  const diff = await git(["diff", "--cached", "--quiet", "--", ".gitignore"], { cwd: dir })
+  if (diff.exitCode === 0) return
+  const committed = await git(
+    [
+      "-c", "user.email=opencorvus@local",
+      "-c", "user.name=OpenCorvus",
+      "commit", "--only", "--", ".gitignore",
+      "-m", "chore(opencorvus): seed baseline .gitignore",
+    ],
+    { cwd: dir },
+  )
+  if (committed.exitCode !== 0) {
+    log.warn("ensureGitignore: gitignore commit failed", { stderr: committed.stderr.toString() })
+  }
 }
 
 /**
