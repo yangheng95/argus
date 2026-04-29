@@ -75,10 +75,14 @@ const distRoot = path.join(dir, "dist", packageName)
 const packagedOverlay = path.join(distRoot, overlayFile)
 
 const target = path.join(tauri, "target")
-// When --target is passed (or implicitly via rust-toolchain.toml host fallback),
-// cargo nests artifacts under target/<triple>/release. Without --target it stays
-// at target/release. We pass --target unconditionally so paths are predictable.
-const release = path.join(target, triple, "release")
+// `--target` is only forwarded to cargo when the operator explicitly passed
+// it (cross-compile / matrix CI). For host builds we let cargo use its
+// default host triple and write to `target/release` — this preserves the
+// pre-existing fingerprint cache the operator's incremental builds rely on
+// (cargo invalidates the cache when artifacts move between target/release
+// and target/<triple>/release because fingerprint paths are absolute).
+const useExplicitTarget = !!targetTripleArg
+const release = useExplicitTarget ? path.join(target, triple, "release") : path.join(target, "release")
 
 function step(label: string) {
   console.log(`\n── ${label} ──`)
@@ -172,7 +176,11 @@ try {
   }
 }
 
-await $`tauri build --no-bundle --target ${triple} ${tauriArgs()}`.cwd(dir).env({
+// Forward --target to cargo only when the operator explicitly requested
+// a cross-compile. Host builds skip the flag so cargo writes to
+// target/release and reuses the existing fingerprint cache.
+const tauriTargetArgs = useExplicitTarget ? ["--target", triple] : []
+await $`tauri build --no-bundle ${tauriTargetArgs} ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
   OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
