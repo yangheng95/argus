@@ -330,7 +330,17 @@ body[data-theme="light"]::after {
 button, input, textarea, select { font: inherit; }
 a { color: inherit; text-decoration: none; }
 
-/* ── Scrollbar ── */
+/* ── Scrollbar ──
+   webkit rules cover Chromium/WebView2 (the primary Tauri target).
+   The Firefox-only `scrollbar-width` + `scrollbar-color` keep parity for
+   `bun run dev:vite` outside the webview, where Chrome devtools may
+   render via the Firefox-style standard scrollbar API. The pair stays
+   tight so a thumbtack-thin scrollbar appears in both engines instead
+   of one engine showing the platform default. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
@@ -547,6 +557,12 @@ a { color: inherit; text-decoration: none; }
 .brand-guide-copy {
   color: var(--text-soft);
   line-height: 1.55;
+  /* zh-CN copy here can stretch ~2x the en-US length; without min-width:0
+     the inner text may push the parent's flex/grid track and clip behind
+     the panel border. overflow-wrap break-word handles long compound
+     terms (URLs, code identifiers) that have no natural break. */
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .brand-guide-steps {
@@ -580,6 +596,8 @@ a { color: inherit; text-decoration: none; }
 .brand-guide-step-copy {
   color: var(--text-soft);
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .brand-version {
@@ -2137,6 +2155,12 @@ body[data-theme="light"] .section-badge {
   gap: calc(14px * var(--ui-scale));
   padding: calc(10px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(14px * var(--ui-scale));
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sections-stack::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* ── Section (details/summary) ── */
