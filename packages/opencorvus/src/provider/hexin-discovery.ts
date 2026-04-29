@@ -136,12 +136,23 @@ export async function discoverHexinModels(
   }
 
   // Operator must supply HEXIN_API_KEY explicitly. The previously-embedded
-  // builtin key was removed (rule 7: no fallback / rule 10: no hardcoded
-  // credentials). Without the env var, discovery fails fast and the
-  // caller's try/catch in provider.ts skips registering the hexin provider.
+  // builtin key was removed (rule 10: no hardcoded credentials).
+  // BUT we still want the hexin provider to appear in the catalog so the
+  // operator can configure it via the UI — so when the env var is unset,
+  // fall back to the stale cache (if any) for the model list and let the
+  // provider register with no key. Empty model list when there's also no
+  // cache: the provider stays in the catalog as "needs configuration".
   const apiKey = process.env.HEXIN_API_KEY?.trim()
   if (!apiKey) {
-    throw new Error("hexin discovery requires HEXIN_API_KEY env var")
+    if (cached) {
+      log.info("HEXIN_API_KEY unset — using cached model list (operator must configure key in UI)", {
+        count: cached.ids.length,
+        age_ms: now - cached.fetched,
+      })
+      return toModelMap(cached.ids)
+    }
+    log.warn("HEXIN_API_KEY unset and no model cache — registering hexin with empty model list")
+    return {}
   }
 
   try {
