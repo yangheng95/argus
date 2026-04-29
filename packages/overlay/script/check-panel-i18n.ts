@@ -179,9 +179,18 @@ function covered(localeKeys: string[], panelKey: string): boolean {
 }
 
 // Revision hash: only panel files (index.html)
+// `path.relative` returns "src\index.html" on Windows and "src/index.html"
+// on Linux/macOS; the previous direct interpolation leaked that
+// difference into the sha256 input, so the same source tree produced
+// two divergent revisions across platforms (CI Linux vs Windows
+// developer pre-push hook). Normalise to forward-slash so the hash is
+// stable on every runner.
+function relPosix(file: string): string {
+  return path.relative(dir, file).replaceAll("\\", "/")
+}
 const panelText = await Promise.all(panel.map((file) => Bun.file(file).text()))
 const revision = createHash("sha256")
-  .update(panel.map((file, index) => `${path.relative(dir, file)}\n${panelText[index]}`).join("\n\n"))
+  .update(panel.map((file, index) => `${relPosix(file)}\n${panelText[index]}`).join("\n\n"))
   .digest("hex")
   .slice(0, 16)
 
