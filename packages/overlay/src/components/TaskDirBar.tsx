@@ -16,7 +16,7 @@
 // via document-level delegation in main.tsx); innerHTML on a Solid element
 // is the right primitive for this trusted static markup.
 
-import { createMemo } from "solid-js";
+import { createMemo, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { pathBreadcrumb } from "../utils/dom-utils";
@@ -57,6 +57,85 @@ export function TaskDirContent() {
   );
 }
 
+// VcsBadge — surfaces the current branch + dirty/ahead/behind count next to
+// the working directory breadcrumb. Pulls from boardStore.vcs (populated by
+// services/meta.ts via GET /vcs). Renders nothing when vcs.initialized is
+// false so non-git projects stay silent. The underlying signals refresh
+// every time meta.ts polls so the badge tracks branch switches without
+// extra wiring.
+function VcsBadge() {
+  const vcs = createMemo(() => boardStore.vcs as null | {
+    initialized?: boolean;
+    branch?: string;
+    commit?: string;
+    clean?: boolean;
+    dirty?: boolean;
+    staged?: number;
+    modified?: number;
+    untracked?: number;
+    conflicts?: number;
+    ahead?: number;
+    behind?: number;
+  });
+  const v = createMemo(() => vcs());
+  const show = createMemo(() => !!v()?.initialized && !!v()?.branch);
+  const tone = createMemo(() => {
+    const x = v();
+    if (!x) return "neutral";
+    if ((x.conflicts ?? 0) > 0) return "bad";
+    if (x.dirty) return "warn";
+    return "good";
+  });
+  const counts = createMemo(() => {
+    const x = v();
+    if (!x) return null;
+    const parts: string[] = [];
+    if ((x.staged ?? 0) > 0) parts.push(`+${x.staged}`);
+    if ((x.modified ?? 0) > 0) parts.push(`~${x.modified}`);
+    if ((x.untracked ?? 0) > 0) parts.push(`?${x.untracked}`);
+    if ((x.conflicts ?? 0) > 0) parts.push(`!${x.conflicts}`);
+    return parts.length > 0 ? parts.join(" ") : "";
+  });
+  const arrows = createMemo(() => {
+    const x = v();
+    if (!x) return "";
+    const ahead = x.ahead ?? 0;
+    const behind = x.behind ?? 0;
+    if (ahead === 0 && behind === 0) return "";
+    return `${ahead > 0 ? `↑${ahead}` : ""}${behind > 0 ? `↓${behind}` : ""}`;
+  });
+  const title = createMemo(() => {
+    const x = v();
+    if (!x) return "";
+    const lines = [
+      `${t("chat.git.branch")}: ${x.branch ?? "—"}`,
+      x.commit ? `${t("chat.git.commit")}: ${x.commit}` : "",
+      x.dirty ? `${t("vcs.dirty")}` : `${t("vcs.clean")}`,
+      counts() ? counts() : "",
+      arrows() ? arrows() : "",
+    ].filter(Boolean);
+    return lines.join("\n");
+  });
+
+  return (
+    <span
+      class="vcs-badge"
+      data-tone={tone()}
+      hidden={!show()}
+      title={title()}
+    >
+      <span class="vcs-badge-icon" aria-hidden="true">⎇</span>
+      <span class="vcs-badge-branch">{v()?.branch ?? ""}</span>
+      <Show when={counts()}>
+        <span class="vcs-badge-counts">{counts()}</span>
+      </Show>
+      <Show when={arrows()}>
+        <span class="vcs-badge-arrows">{arrows()}</span>
+      </Show>
+    </span>
+  );
+}
+
 export function TaskWorkspaceLine() {
   const dir = createMemo(directoryMemo);
   const workspaceText = createMemo(() => currentExecutionDirectory());
@@ -71,13 +150,16 @@ export function TaskWorkspaceLine() {
   });
 
   return (
-    <span
-      class="task-workspace"
-      id="taskWorkspaceDir"
-      hidden={!meta().show}
-      title={meta().title}
-    >
-      {meta().label}
+    <span class="task-workspace-row">
+      <VcsBadge />
+      <span
+        class="task-workspace"
+        id="taskWorkspaceDir"
+        hidden={!meta().show}
+        title={meta().title}
+      >
+        {meta().label}
+      </span>
     </span>
   );
 }
