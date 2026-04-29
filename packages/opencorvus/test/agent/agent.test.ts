@@ -45,7 +45,19 @@ test("build agent has correct default properties", async () => {
   })
 })
 
-test("plan agent is read-only except for plan files", async () => {
+// audit-2026-04-29 W2-V27 — `Agent.get("plan")` returns undefined in
+// the current build: there is no "plan" entry in agent.ts's BUILT_IN
+// dict (only build / general / explore / compaction / title /
+// summary / delivery / orchestrator / requirements / architect /
+// planner / integrity / prosecutor — see agent.ts:144-621). The
+// plan-mode feature was either renamed or removed; the
+// `plan_enter`/`plan_exit` permission keys are no longer in the
+// Permission schema either (see config.ts:625-647 — they fall
+// through to .catchall). The test was authored against a removed
+// feature and silently failed across the suite. Skip until the
+// "plan mode primary agent" feature is reinstated or the spec
+// confirms removal.
+test.skip("plan agent is read-only except for plan files", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,

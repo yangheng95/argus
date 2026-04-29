@@ -14,11 +14,22 @@ Log.init({ print: false })
 //  - The "clarify" tool has been removed from the orchestrator tool set.
 //  - No remaining workflow step references `clarify` via `after: [...]`.
 describe("clarify removal (Phase 4)", () => {
-  test("STANDARD workflow no longer contains a 'clarify' step", () => {
-    const wf = WorkflowRegistry.resolveSync("standard")
-    expect(wf).toBeDefined()
-    const stepIDs = wf!.steps.map((s) => s.id)
-    expect(stepIDs).not.toContain("clarify")
+  test("no built-in workflow contains a step with id 'clarify'", () => {
+    // audit-2026-04-29 W2-V27 — pre-fix this asserted on
+    // resolveSync("standard"), but the "standard" workflow ID was
+    // renamed/replaced at some point (current builtIns are only
+    // "direct" + "pipeline" per workflow.ts:249). The test became
+    // a silent failure: `wf` is undefined, the step-IDs check
+    // never runs. The phase-4 invariant ("no step is NAMED
+    // clarify") is universal across all workflows; iterate every
+    // built-in instead of pinning to a single deprecated name.
+    const ids = Object.keys(WorkflowRegistry.builtIn)
+    expect(ids.length).toBeGreaterThan(0) // sanity — registry must not be empty
+    for (const id of ids) {
+      const wf = WorkflowRegistry.builtIn[id]
+      const stepIDs = wf.steps.map((s) => s.id)
+      expect(stepIDs).not.toContain("clarify")
+    }
   })
 
   test("No workflow step lists 'clarify' in its after[] dependencies", () => {
