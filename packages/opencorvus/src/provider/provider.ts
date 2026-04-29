@@ -469,10 +469,10 @@ export namespace Provider {
       })
     }
 
-    // hexin: requires HEXIN_API_KEY env var (no embedded key fallback —
-    // rule 7). The generic env-based registration loop above already
-    // picks it up via provider.env = ["HEXIN_API_KEY"]; if the env var
-    // is unset the provider stays unregistered and the UI hides it.
+    // hexin: HEXIN_API_KEY env var or saved auth key wires up an actual
+    // credential via the env loop above / Auth.all() loop below. If
+    // neither is present, still register the provider (no key) so the
+    // UI can display it and let the operator paste a key at runtime.
 
     // alibaba-coding-plan-cn: always available with embedded key; env overrides
     if (!disabled.has("alibaba-coding-plan-cn") && !providers["alibaba-coding-plan-cn"]) {
@@ -591,6 +591,7 @@ export namespace Provider {
     return {
       models: languages,
       providers,
+      database,
       sdk,
       modelLoaders,
     }
@@ -610,6 +611,17 @@ export namespace Provider {
 
   export async function list() {
     return state().then((state) => state.providers)
+  }
+
+  /**
+   * Returns the augmented provider database — modelsDev entries plus any
+   * built-in providers we register (e.g. hexin). Use this when you need the
+   * full discoverable provider catalog (e.g. UI selectors that show
+   * "API key required" for unconfigured providers); use list() when you only
+   * want providers with actual credentials.
+   */
+  export async function database() {
+    return state().then((state) => state.database)
   }
 
   async function getSDK(model: Model) {

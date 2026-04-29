@@ -9,12 +9,12 @@ import { tmpdir } from "../fixture/fixture"
 describe("Worktree.commitDirty", () => {
   // Regression: external executors (claude-code, codex) cannot call the
   // OpenCorvus `merge_back` tool, so the host owns finalization. If the
-  // executor wrote files but never committed, `git rebase` exits before
-  // it starts because the working tree is dirty — the original benchmark
-  // failure on the claude-code executor.
-  test("commits uncommitted changes so a subsequent rebase has work to replay", async () => {
+  // executor wrote files but never committed, mergeWithMerge's pre-flight
+  // would refuse to start — the original benchmark failure on the
+  // claude-code executor.
+  test("commits uncommitted changes so a subsequent merge has work to integrate", async () => {
     await using tmp = await tmpdir({ git: true })
-    // Establish an initial commit on master so rebases have a base.
+    // Establish an initial commit on master so merges have a base.
     await fs.writeFile(path.join(tmp.path, "README.md"), "scaffold\n")
     await $`git add README.md`.cwd(tmp.path).quiet()
     await $`git -c user.name=test -c user.email=t@t.local commit -m "scaffold"`.cwd(tmp.path).quiet()

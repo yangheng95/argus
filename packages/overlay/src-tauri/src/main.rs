@@ -636,12 +636,90 @@ fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> Result<bool, Str
     }
 }
 
+/// Resolve the directory where opencorvus stores its log files. Mirrors
+/// `Global.Path.log` on the sidecar side so all logs land together:
+///   - Windows: %LOCALAPPDATA%\opencorvus\log
+///   - macOS:   ~/Library/Application Support/opencorvus/log (xdg fallback below)
+///   - Linux:   $XDG_DATA_HOME/opencorvus/log or ~/.local/share/opencorvus/log
+/// Falls back to the system temp dir if no home is resolvable.
+fn opencorvus_log_dir() -> PathBuf {
+    if let Ok(portable) = std::env::var("OPENCORVUS_HOME") {
+        if !portable.trim().is_empty() {
+            return PathBuf::from(portable).join("data").join("log");
+        }
+    }
+    #[cfg(windows)]
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            if !local.is_empty() {
+                return PathBuf::from(local).join("opencorvus").join("log");
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+            if !xdg.is_empty() {
+                return PathBuf::from(xdg).join("opencorvus").join("log");
+            }
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                return PathBuf::from(home).join(".local").join("share").join("opencorvus").join("log");
+            }
+        }
+    }
+    std::env::temp_dir().join("opencorvus").join("log")
+}
+
+/// Build (stdout, stderr) Stdio targets for the spawned sidecar. Both streams
+/// are written to a single per-launch file so chronological order is preserved.
+/// On any failure we fall back to Stdio::null() — capturing logs is best-effort
+/// diagnostic plumbing, not a hard requirement for the sidecar to run.
+fn sidecar_stdio_targets() -> (Stdio, Stdio) {
+    let dir = opencorvus_log_dir();
+    if let Err(err) = fs::create_dir_all(&dir) {
+        eprintln!("overlay: cannot create sidecar log dir {:?}: {}", dir, err);
+        return (Stdio::null(), Stdio::null());
+    }
+    let pid = std::process::id();
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let path = dir.join(format!("sidecar-{}-{}.log", secs, pid));
+    let file = match fs::OpenOptions::new().create(true).append(true).open(&path) {
+        Ok(f) => f,
+        Err(err) => {
+            eprintln!("overlay: cannot open sidecar log {:?}: {}", path, err);
+            return (Stdio::null(), Stdio::null());
+        }
+    };
+    let dup = match file.try_clone() {
+        Ok(f) => f,
+        Err(err) => {
+            eprintln!("overlay: cannot clone sidecar log handle: {}", err);
+            return (Stdio::null(), Stdio::null());
+        }
+    };
+    (Stdio::from(file), Stdio::from(dup))
+}
+
 fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
     let Some(path) = server_path(app) else {
         eprintln!("overlay: bundled opencorvus binary not found");
         return Err("Bundled opencorvus binary not found".into());
     };
     let port = next_server_port()?;
+
+    // Capture the sidecar's stdio to a per-launch log file. Without this,
+    // any panic the sidecar produces before its internal Log.init() writes
+    // the first record (env/proxy detection, registry probes, missing DLLs,
+    // bun runtime errors) is silently dropped — which is exactly what makes
+    // VM-only failures impossible to diagnose. The Tauri-side stderr is
+    // already eaten by the windows_subsystem = "windows" attribute, so the
+    // log file is the only signal.
+    let (stdout_target, stderr_target) = sidecar_stdio_targets();
 
     let mut cmd = Command::new(path);
     cmd.arg("serve")
@@ -661,8 +739,8 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
         // spawn so the env override only applies where it's set on purpose.
         .env_remove("OPENCORVUS_AGENT_TRACE_DIR")
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(stdout_target)
+        .stderr(stderr_target);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
     // Unix: move child into its own process group so kill(-pgid) reaches all

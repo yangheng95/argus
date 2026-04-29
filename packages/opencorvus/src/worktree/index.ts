@@ -71,11 +71,14 @@ export namespace Worktree {
   }
 
   /**
-   * Surfaced when `git rebase` against the primary branch hit textual conflicts
-   * inside files. The rebase has been aborted before the throw, so the worktree
-   * branch tip is restored to its pre-rebase state — the agent can read both
-   * sides, reconcile manually, commit, and retry. This error carries the
-   * conflicting paths plus the primary tip the agent needs to compare against.
+   * Surfaced when `git merge` against the primary branch hit textual conflicts
+   * inside files. Unlike rebase-style flows, the merge is left IN PROGRESS:
+   * the worktree is in MERGING state with conflict markers (`<<<<<<<`) in the
+   * unmerged paths. The agent reads each path in place, edits the markers
+   * away, `git add`s, and `git commit`s — that final commit completes the
+   * merge and produces a merge commit at the topology join point. The next
+   * `mergeWithMerge` call then sees a clean tree whose tip strictly descends
+   * from primary's tip, so step 2 (ff-only) can always advance.
    *
    * Distinct from MergeFailedError (which signals infrastructure problems).
    */
@@ -91,44 +94,48 @@ export namespace Worktree {
   )
 
   /**
-   * Bring a goal branch's commits onto the primary branch.
+   * Bring a goal branch's commits onto the primary branch via merge.
    *
    * Sequence (single canonical path, all under `withGitLock` for atomicity):
    *   1. Resolve the currently checked-out branch of the primary worktree.
-   *   2. From the goal worktree, run `git rebase <primary-branch>`. Rebase is
-   *      idempotent — when the goal branch is already on the latest primary
-   *      tip it's a no-op; when it lags it replays the goal's commits onto
-   *      the current primary tip.
-   *   3. From the primary worktree, `git merge --ff-only <branch>`. Now ff
-   *      always succeeds because step 2 just placed the goal's commits on
-   *      top of primary's tip.
+   *   2. From the goal worktree, run `git merge --no-edit <primary-branch>`.
+   *      - Already-up-to-date / fast-forward: tree advances; tip strictly
+   *        descends primary tip.
+   *      - 3-way merge succeeds: a merge commit is created; tip strictly
+   *        descends both sides.
+   *      - Conflict: the worktree is left IN MERGING state (MERGE_HEAD set,
+   *        conflict markers in files). We capture the path list and throw
+   *        MergeConflictError WITHOUT aborting. The caller (in-session agent)
+   *        edits the markers away in place, `git add`s, `git commit`s — that
+   *        completes the merge. The host path catches the same error and runs
+   *        `git merge --abort` to clean up before failing the build.
+   *   3. From the primary worktree, `git merge --ff-only <branch>`. ff is
+   *      guaranteed because the goal tip strictly descends primary tip.
    *
-   * Rebase is NOT a fallback (rule 1) — it is the primary operation. The
-   * earlier ff-only-only design assumed serial dispatch and broke on the
-   * per-goal parallel pipeline: late goals branched from a stale primary
-   * HEAD and could never ff. Rebase preserves the goal's commits exactly
-   * (no `-X theirs` magic, no auto-pick winner), surfaces real textual
-   * conflicts via MergeConflictError, and lets the build agent reconcile
-   * via its own read/edit/write tools.
+   * Why merge, not rebase: rebase replays goal's commits one-by-one onto
+   * primary; on conflict, an agent's reconcile commit appended *after* the
+   * conflicting commit never participates in the next replay — the same
+   * conflict re-appears every retry, making the protocol non-convergent.
+   * Merge produces a single three-way reconcile that the agent commits once,
+   * positioning the resolution at the topology join point so subsequent
+   * retries advance instead of re-conflicting.
    *
-   * On rebase conflict the function ABORTs the rebase and throws
-   * MergeConflictError. The worktree is restored to its pre-rebase tip,
-   * so subsequent retries (after the agent reconciles + commits) start
-   * from a clean slate.
+   * The earlier ff-only-only design assumed serial dispatch and broke under
+   * per-goal parallel dispatch (late goals branched from stale primary HEAD
+   * and could never ff). Merge preserves goal commits exactly, surfaces real
+   * textual conflicts via MergeConflictError, and converges in one round of
+   * reconcile per actual divergence.
    */
   /**
    * Stage and commit any uncommitted changes in `worktreeDir` so the next
-   * `git rebase <primary>` has something concrete to replay. External
-   * executors (claude-code, codex) cannot call OpenCorvus's `merge_back`
-   * tool — the host owns finalization for them — so the host is the only
-   * place that knows the branch is about to be rebased. If the executor
-   * wrote files but never ran `git commit` (claude-code does this when
-   * the system prompt does not explicitly require a commit), `git rebase`
-   * exits non-zero before it even starts because the working tree is
-   * dirty, and the parser at `mergeWithRebase` reports `0 conflict paths`.
-   * That's the actual root cause of the "Rebase aborted onto master
-   * (...); conflict paths: " benchmark failure on the claude-code
-   * executor.
+   * `git merge <primary>` runs against a clean tree. External executors
+   * (claude-code, codex) cannot call OpenCorvus's `merge_back` tool — the
+   * host owns finalization for them — so the host is the only place that
+   * knows the branch is about to be merged. If the executor wrote files but
+   * never ran `git commit` (claude-code does this when the system prompt
+   * does not explicitly require a commit), `git merge` would either refuse
+   * to start (dirty tree) or silently swallow the changes into the merge
+   * commit, masking a real protocol violation.
    *
    * Returns `{ committed: false }` if the worktree is already clean,
    * else `{ committed: true, head }` after the new commit. Uses local
@@ -177,22 +184,22 @@ export namespace Worktree {
     },
   )
 
-  export const mergeWithRebase = fn(
+  export const mergeWithMerge = fn(
     z.object({
       branch: z
         .string()
         .describe("Local branch ref to merge (e.g. `opencorvus/build-foo`). Must already contain the goal's build commits."),
       worktreeDir: z
         .string()
-        .describe("Filesystem path of the goal's worktree (where rebase runs)."),
+        .describe("Filesystem path of the goal's worktree (where the merge runs)."),
     }),
     async (input) => {
       if (!Project.isGitRepo(Instance.directory)) {
-        throw new NotGitError({ message: "mergeWithRebase: not a git project" })
+        throw new NotGitError({ message: "mergeWithMerge: not a git project" })
       }
       const primary = await primaryWorktreeInfo().catch((err) => {
         throw new MergeFailedError({
-          message: `mergeWithRebase(${input.branch}): ${err instanceof Error ? err.message : String(err)}`,
+          message: `mergeWithMerge(${input.branch}): ${err instanceof Error ? err.message : String(err)}`,
           branch: input.branch,
         })
       })
@@ -200,14 +207,42 @@ export namespace Worktree {
         const primaryDir = primary.directory
         const primaryBranch = primary.branch
 
-        // Step 1 — rebase goal branch onto current primary tip from inside
-        // the goal worktree. This is the operation that resolves topology
-        // divergence; ff-merge in step 2 then becomes trivial.
-        const rebased = await $`git rebase ${primaryBranch}`
+        // Pre-flight: refuse to start a new merge if the worktree still has
+        // an unfinished one (MERGE_HEAD present) or uncommitted changes.
+        // Either is a contract violation — the caller must complete the
+        // previous merge (`git commit`) or abandon it (`git merge --abort`)
+        // before retrying, otherwise we silently subsume their state into
+        // a new merge commit and lose the signal.
+        const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
           .quiet().nothrow().cwd(input.worktreeDir)
-        if (rebased.exitCode !== 0) {
-          // Capture conflicting paths before aborting so the caller knows
-          // exactly which files need reconciliation.
+        if (mergeHead.exitCode === 0) {
+          throw new MergeFailedError({
+            message:
+              `mergeWithMerge(${input.branch}): worktree is in an unfinished MERGING state ` +
+              `(MERGE_HEAD exists). Resolve conflicts and \`git commit\` to finalize, or ` +
+              `\`git merge --abort\` to discard, then retry.`,
+            branch: input.branch,
+          })
+        }
+        const status = await $`git status --porcelain`.quiet().nothrow().cwd(input.worktreeDir)
+        if (outputText(status.stdout).trim().length > 0) {
+          throw new MergeFailedError({
+            message:
+              `mergeWithMerge(${input.branch}): worktree is dirty. Commit or revert ` +
+              `before retrying merge_back.`,
+            branch: input.branch,
+          })
+        }
+
+        // Step 1 — merge primary into the goal worktree. ff is allowed (when
+        // goal lags primary with no own commits); otherwise a 3-way merge
+        // produces a merge commit. Conflicts leave MERGE_HEAD + markers in
+        // files; we capture and re-throw without aborting so the in-session
+        // agent can reconcile in place. Host-path callers catch this error
+        // and abort externally.
+        const merged = await $`git merge --no-edit ${primaryBranch}`
+          .quiet().nothrow().cwd(input.worktreeDir)
+        if (merged.exitCode !== 0) {
           const conflictList = await $`git diff --name-only --diff-filter=U`
             .quiet().nothrow().cwd(input.worktreeDir)
           const conflictPaths = outputText(conflictList.stdout)
@@ -215,16 +250,16 @@ export namespace Worktree {
             .map((line) => line.trim())
             .filter(Boolean)
 
-          await $`git rebase --abort`.quiet().nothrow().cwd(input.worktreeDir)
-
           const primaryTipProbe = await $`git rev-parse refs/heads/${primaryBranch}`
             .quiet().nothrow().cwd(primaryDir)
           const primaryTip = outputText(primaryTipProbe.stdout)
 
           throw new MergeConflictError({
             message:
-              `mergeWithRebase(${input.branch}): rebase onto ${primaryBranch} hit conflicts in ` +
-              `${conflictPaths.length} file(s); rebase aborted, branch restored. Reconcile and retry.`,
+              `mergeWithMerge(${input.branch}): merge of ${primaryBranch} hit conflicts in ` +
+              `${conflictPaths.length} file(s); worktree left in MERGING state. ` +
+              `Reconcile each path in place, \`git add\`, then \`git commit\` to finalize ` +
+              `the merge and retry.`,
             branch: input.branch,
             primaryBranch,
             primaryTip,
@@ -232,15 +267,15 @@ export namespace Worktree {
           })
         }
 
-        // Step 2 — ff-merge into primary. Must succeed: the goal branch's
-        // tip is now `<primary>` + goal's rebased commits, which is a strict
-        // descendant of `<primary>` HEAD.
-        const merged = await $`git merge --ff-only --no-edit ${input.branch}`
+        // Step 2 — ff-merge into primary. Must succeed: goal branch's tip
+        // now strictly descends primary's tip (either via ff or via merge
+        // commit produced in step 1).
+        const ff = await $`git merge --ff-only --no-edit ${input.branch}`
           .quiet().nothrow().cwd(primaryDir)
-        if (merged.exitCode !== 0) {
-          const stderr = errorText(merged) || "git merge --ff-only failed after successful rebase"
+        if (ff.exitCode !== 0) {
+          const stderr = errorText(ff) || "git merge --ff-only failed after successful merge"
           throw new MergeFailedError({
-            message: `mergeWithRebase(${input.branch}): post-rebase ff-merge failed: ${stderr}`,
+            message: `mergeWithMerge(${input.branch}): post-merge ff-merge failed: ${stderr}`,
             branch: input.branch,
             stderr,
           })
