@@ -1,0 +1,70 @@
+const assert = require("node:assert")
+const fs = require("node:fs")
+const vscode = require("vscode")
+
+const eventsFile = process.env.OPENCORVUS_E2E_EVENTS_FILE
+const testLogFile = process.env.OPENCORVUS_E2E_TEST_LOG
+
+async function run() {
+  assert(eventsFile, "OPENCORVUS_E2E_EVENTS_FILE is required")
+
+  record("suite.start", {
+    extensionIds: vscode.extensions.all.map((extension) => extension.id).filter((id) => /opencorvus/i.test(id)),
+  })
+  try {
+    await vscode.commands.executeCommand("opencorvus.open")
+    record("command.done", { command: "opencorvus.open" })
+    await waitFor("OpenCorvus webview tab", () => {
+      const labels = currentTabLabels()
+      record("tabs", { labels })
+      return labels.includes("OpenCorvus")
+    })
+    await waitFor("fake sidecar listen event", () =>
+      readEvents().some((event) => event.type === "listen" && typeof event.port === "number"),
+    )
+    await waitFor("webview sidecar request", () =>
+      readEvents().some((event) => event.type === "request" && event.url !== "/shutdown"),
+      30_000,
+    )
+
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor")
+    record("suite.done")
+  } catch (error) {
+    record("suite.error", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      tabs: currentTabLabels(),
+      sidecarEvents: readEvents(),
+    })
+    throw error
+  }
+}
+
+function readEvents() {
+  if (!eventsFile || !fs.existsSync(eventsFile)) return []
+  return fs
+    .readFileSync(eventsFile, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+}
+
+function currentTabLabels() {
+  return vscode.window.tabGroups.all.flatMap((group) => group.tabs).map((tab) => tab.label)
+}
+
+function record(type, data = {}) {
+  if (!testLogFile) return
+  fs.appendFileSync(testLogFile, `${JSON.stringify({ type, time: Date.now(), ...data })}\n`)
+}
+
+async function waitFor(label, predicate, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
+
+module.exports = { run }
