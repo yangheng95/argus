@@ -3898,6 +3898,12 @@ body[data-resizing="row"] * {
   flex-direction: column;
   min-height: 0;
 }
+/* data-active drives visibility — both views stay mounted (so the
+   resource cache survives a tab toggle) but only the active one is
+   laid out. Replaces the prior inline `style={{ display }}` toggle. */
+.workspace-view[data-active="false"] {
+  display: none;
+}
 
 /* ── Diff preview panel (inside workspace diff view) ── */
 .diff-preview-panel {
