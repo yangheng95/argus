@@ -266,6 +266,9 @@
   "diff.empty": "选择文件查看差异。",
   "diff.loading": "正在加载差异…",
   "diff.no_preview": "该文件不支持预览。",
+  "diff.empty_deleted": "文件已删除 — 无内容可预览。",
+  "diff.empty_added": "新文件 — 服务端尚未发送内容。",
+  "diff.empty_unchanged": "前后无差异。",
   "diff.select_file": "选择文件查看差异。",
   "diff.title": "文件差异",
   "diff.unchanged_hidden": {
