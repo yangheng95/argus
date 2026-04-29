@@ -48,11 +48,21 @@ interface PendingAuth {
   resolve: (code: string) => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
+  mcpName?: string
 }
 
 export namespace McpOAuthCallback {
   let server: ReturnType<typeof Bun.serve> | undefined
+  // audit-2026-04-29 W2-V21 — pre-fix `pendingAuths` was keyed by
+  // the random oauth `state`, but `cancelPending(mcpName)` looked
+  // up by mcpName — the keys are different values, so cancel was
+  // always a silent no-op. The 5-minute timeout would tick down
+  // anyway, but the user's UI thought the cancel worked while the
+  // pending entry leaked memory + a state slot. Fix by adding a
+  // parallel mcpName → state index so cancelPending can resolve
+  // through it.
   const pendingAuths = new Map<string, PendingAuth>()
+  const mcpNameToState = new Map<string, string>()
 
   const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -97,6 +107,7 @@ export namespace McpOAuthCallback {
             const pending = pendingAuths.get(state)!
             clearTimeout(pending.timeout)
             pendingAuths.delete(state)
+            if (pending.mcpName) mcpNameToState.delete(pending.mcpName)
             pending.reject(new Error(errorMsg))
           }
           return new Response(HTML_ERROR(errorMsg), {
@@ -125,6 +136,7 @@ export namespace McpOAuthCallback {
 
         clearTimeout(pending.timeout)
         pendingAuths.delete(state)
+        if (pending.mcpName) mcpNameToState.delete(pending.mcpName)
         pending.resolve(code)
 
         return new Response(HTML_SUCCESS, {
@@ -136,25 +148,34 @@ export namespace McpOAuthCallback {
     log.info("oauth callback server started", { port: OAUTH_CALLBACK_PORT })
   }
 
-  export function waitForCallback(oauthState: string): Promise<string> {
+  export function waitForCallback(oauthState: string, mcpName?: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         if (pendingAuths.has(oauthState)) {
           pendingAuths.delete(oauthState)
+          if (mcpName) mcpNameToState.delete(mcpName)
           reject(new Error("OAuth callback timeout - authorization took too long"))
         }
       }, CALLBACK_TIMEOUT_MS)
 
-      pendingAuths.set(oauthState, { resolve, reject, timeout })
+      pendingAuths.set(oauthState, { resolve, reject, timeout, mcpName })
+      if (mcpName) mcpNameToState.set(mcpName, oauthState)
     })
   }
 
   export function cancelPending(mcpName: string): void {
-    const pending = pendingAuths.get(mcpName)
+    const oauthState = mcpNameToState.get(mcpName)
+    if (!oauthState) return
+    const pending = pendingAuths.get(oauthState)
     if (pending) {
       clearTimeout(pending.timeout)
-      pendingAuths.delete(mcpName)
+      pendingAuths.delete(oauthState)
+      mcpNameToState.delete(mcpName)
       pending.reject(new Error("Authorization cancelled"))
+    } else {
+      // Index pointed at a state that's no longer pending (already
+      // resolved / timed out). Clean up the orphan index entry.
+      mcpNameToState.delete(mcpName)
     }
   }
 
@@ -192,6 +213,7 @@ export namespace McpOAuthCallback {
       pending.reject(new Error("OAuth callback server stopped"))
     }
     pendingAuths.clear()
+    mcpNameToState.clear()
   }
 
   export function isRunning(): boolean {

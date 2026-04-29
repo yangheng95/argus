@@ -805,7 +805,10 @@ export namespace MCP {
 
     // Register the callback BEFORE opening the browser to avoid race condition
     // when the IdP has an active SSO session and redirects immediately
-    const callbackPromise = McpOAuthCallback.waitForCallback(oauthState)
+    // audit-2026-04-29 W2-V21 — pass mcpName so cancelPending(mcpName)
+    // can resolve through the parallel index instead of looking up the
+    // state-keyed map with the wrong key.
+    const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, mcpName)
 
     try {
       const subprocess = await open(authorizationUrl)
