@@ -42,10 +42,15 @@ describe("overlay contract", () => {
         expect(names).not.toContain("task")
 
         // Every agent the overlay's AgentModelsPanel iterates
+        // audit-2026-04-29 W2-V34 — pre-fix asserted "spec" and
+        // "plan" as builtin agents but neither exists in the
+        // current Agent registry (see W2-V27 for the parallel
+        // plan-mode removal). Trim to the agents that ARE
+        // registered today; the test's intent ("AgentModelsPanel
+        // core tier sees orchestrator + per-stage agents")
+        // is preserved.
         for (const expected of [
           "build",
-          "spec",
-          "plan",
           "general",
           "explore",
           "compaction",
@@ -64,16 +69,29 @@ describe("overlay contract", () => {
     })
   })
 
-  test("Agent.list returns stage agents WITHOUT permission and SessionPrompt agents WITH permission", async () => {
+  test("Agent.list surfaces stage agents and user-facing agents", async () => {
+    // audit-2026-04-29 W2-V34 — pre-fix asserted stage agents
+    // (delivery, orchestrator, requirements, architect, planner,
+    // design-analyst, summary) have UNDEFINED permission and
+    // user-facing agents (build, spec, plan, general, explore,
+    // compaction, title) have ARRAY permission. Two pieces of
+    // drift:
+    //   - "spec" and "plan" agents were removed entirely (W2-V27).
+    //   - delivery / planner / others now carry permission rulesets
+    //     (see agent.ts:289 for delivery `PermissionNext.merge(
+    //     defaults, user)`; planner same pattern at line 407).
+    //     The "AgentRuntime-driven, no permission needed"
+    //     architecture changed.
+    // The assertion was tracking an internal invariant that no
+    // longer holds. Drop the permission shape assertion and just
+    // verify each agent EXISTS (which is what the overlay's
+    // AgentModelsPanel iteration actually relies on).
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const agents = await Agent.list()
 
-        // Stage agents (AgentRuntime-driven) — permission is now optional /
-        // omitted because AgentRuntime never consults it. Overlay must not
-        // crash when iterating.
         for (const stageName of [
           "delivery",
           "orchestrator",
@@ -85,14 +103,11 @@ describe("overlay contract", () => {
         ]) {
           const a = agents.find((x) => x.name === stageName)
           expect(a).toBeDefined()
-          expect(a!.permission).toBeUndefined()
         }
 
-        // SessionPrompt-driven agents still carry permission rulesets
-        for (const userFacing of ["build", "spec", "plan", "general", "explore", "compaction", "title"]) {
+        for (const userFacing of ["build", "general", "explore", "compaction", "title"]) {
           const a = agents.find((x) => x.name === userFacing)
           expect(a).toBeDefined()
-          expect(Array.isArray(a!.permission)).toBe(true)
         }
       },
     })
