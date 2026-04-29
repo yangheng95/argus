@@ -109,6 +109,14 @@ describe("executor.bootstrap", () => {
     expect(cmd).toContain("-c")
     expect(cmd.some((item) => item === 'mcp_servers.opencorvus.command="bun"' || item.includes("mcp_servers.opencorvus.command"))).toBe(true)
     expect(cmd.some((item) => item.includes("mcp_servers.opencorvus.args"))).toBe(true)
+    // Full-permission overrides — the app-server ignores
+    // --dangerously-bypass-approvals-and-sandbox, so config keys are the
+    // only authoritative path. Without these, sandbox stays workspace-write
+    // and our own MCP server hits per-call approval popups.
+    expect(cmd).toContain('sandbox_mode="danger-full-access"')
+    expect(cmd).toContain('approval_policy="never"')
+    expect(cmd).toContain('mcp_servers.opencorvus.default_tools_approval_mode="approve"')
+    expect(cmd.includes("--dangerously-bypass-approvals-and-sandbox")).toBe(false)
   })
 
   test("does not override an executor that is already registered", async () => {

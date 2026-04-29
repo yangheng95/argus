@@ -104,14 +104,26 @@ function codexProvider(command: string[]) {
         // its sandbox; benchmark runs are externally sandboxed (per-goal
         // worktrees + ephemeral home), so the safety surface is the host,
         // not codex's per-call gates.
-        "--dangerously-bypass-approvals-and-sandbox",
         "app-server",
         "--listen",
         "stdio://",
+        // codex 0.125 app-server IGNORES the top-level
+        // `--dangerously-bypass-approvals-and-sandbox` flag (only honored
+        // by interactive CLI). The developer prompt that codex sends to
+        // every model turn proves this — without these `-c` overrides the
+        // session reports `sandbox_mode: workspace-write` even though
+        // global ~/.codex/config.toml is `danger-full-access`. The app-
+        // server resolves config from CLI args first, then falls back to
+        // the file; missing args = whatever the app-server defaults to,
+        // which on 0.125 is the conservative workspace-write.
+        // Caught on bench round-4 _session-20260429-080644.out 00:36:58:
+        // codex backend goal hit `EACCES` binding 127.0.0.1:3001 because
+        // network sandbox was still enforced.
+        "-c",
+        `sandbox_mode="danger-full-access"`,
+        "-c",
+        `approval_policy="never"`,
         // Belt-and-braces: disable the elicitation feature explicitly too.
-        // The bypass flag should already cover this, but keeping the
-        // feature toggle off means even if a future codex release re-routes
-        // an approval pathway around the bypass, we're still clear.
         "--disable",
         "tool_call_mcp_elicitation",
         "--disable",
@@ -120,6 +132,17 @@ function codexProvider(command: string[]) {
         `mcp_servers.${MCPServe.ServerName}.command="${mcp.command}"`,
         "-c",
         `mcp_servers.${MCPServe.ServerName}.args=${JSON.stringify(mcp.args)}`,
+        // The canonical codex-blessed way to silence per-tool approval
+        // prompts on a trusted MCP server. Without this, codex 0.125 emits
+        // `mcp_tool_call_approval_<callID>` elicitations for every memory /
+        // task_report / webpage_* call from our own opencorvus MCP server,
+        // even with --disable tool_call_mcp_elicitation. Documented at
+        // docs/config.md (openai/codex repo): set
+        // `default_tools_approval_mode = "approve"` on the server entry to
+        // auto-approve every tool call. This is OUR mcp server, fully
+        // trusted; per-call user prompts add zero safety surface.
+        "-c",
+        `mcp_servers.${MCPServe.ServerName}.default_tools_approval_mode="approve"`,
       ],
       cwd,
     })
