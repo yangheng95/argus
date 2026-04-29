@@ -4,19 +4,21 @@
 // Unhandled events are forwarded to handleEventStreamEvent for board/task
 // lifecycle processing.
 //
-// Uses the native EventSource API instead of fetch() + ReadableStream.
-// WebView2 (Tauri overlay) may buffer ReadableStream chunks from fetch(),
-// causing SSE events to be delayed until the connection closes or the buffer
-// fills up. EventSource handles SSE natively at the browser engine level
-// and delivers events immediately regardless of runtime.
+// Streams flow through `HostTransport.openStream` (services/host-transport.ts)
+// so the same business logic runs identically under the Tauri overlay
+// window and the VS Code webview. The transport owns transient
+// reconnect behaviour (browser-native EventSource auto-reconnect under
+// Tauri; the postMessage bridge under VS Code in M4); this module owns
+// the *business* reconnect policy — re-hydrate conversation, then
+// resume from the last persisted sequence (plan §5.5).
 
-import { apiUrl } from "./api";
 import { clearEventQueue, setSseConnected } from "../store/messages";
 import { boardStore } from "../store/board";
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events";
 import { hydrateTaskConversation } from "./conversation";
+import { getHostTransport, type StreamHandle } from "./host-transport";
 
-let sseSource: EventSource | null = null;
+let sseHandle: StreamHandle | null = null;
 let sseRetryTimer: any = null;
 
 export function startSSE(taskID: string, after = 0) {
@@ -27,67 +29,60 @@ export function startSSE(taskID: string, after = 0) {
   // through /task/:id/conversation before opening SSE. That means this stream
   // can safely resume from the last persisted protocol_event sequence instead
   // of replaying from zero on every reconnect.
-  const url = apiUrl(
-    `task/${encodeURIComponent(taskID)}/events${after > 0 ? `?after=${encodeURIComponent(String(after))}` : ""}`,
+  const transport = getHostTransport();
+  const handle = transport.openStream(
+    {
+      path: `task/${encodeURIComponent(taskID)}/events`,
+      query: after > 0 ? { after: String(after) } : undefined,
+    },
+    {
+      onOpen: () => setSseConnected(true),
+      onEvent: (data) => {
+        // Per 07-panel-reactivity.md constraint 1 and root CLAUDE.md rule 1:
+        // tree-writer's `let it crash` is meaningless if onEvent silently
+        // swallows the throw. Split: JSON.parse error → benign skip;
+        // dispatch error → console.error so the operator can find why
+        // the conversation panel is empty.
+        let event: any;
+        try {
+          event = JSON.parse(data);
+        } catch {
+          return;
+        }
+        if (event.type === "task.heartbeat" || event.type === "task.connected") return;
+        try {
+          const handled = routeSSEEvent(event);
+          if (!handled) {
+            handleEventStreamEvent(event);
+          }
+        } catch (err) {
+          console.error("[sse] dispatch error for event", event?.type, err, event);
+        }
+      },
+      onError: () => {
+        // Transient disconnect: transport's underlying EventSource is
+        // already trying to reconnect (Tauri host) or the bridge is
+        // negotiating a new SSE upstream (vscode host in M4). Surface
+        // disconnected state immediately; onOpen will restore it.
+        if (handle === sseHandle) setSseConnected(false);
+      },
+      onClose: (_reason) => {
+        // Permanent close: re-hydrate then re-open from the hydrated
+        // sequence so we avoid a full replay after crashes.
+        if (handle !== sseHandle) return;
+        setSseConnected(false);
+        sseHandle = null;
+        if (sseRetryTimer) clearTimeout(sseRetryTimer);
+        sseRetryTimer = setTimeout(async () => {
+          sseRetryTimer = null;
+          if (boardStore.selectedTaskID !== taskID) return;
+          const nextSequence = await hydrateTaskConversation(taskID);
+          startSSE(taskID, nextSequence);
+        }, 3000);
+      },
+    },
   );
-
-  const source = new EventSource(url);
-  sseSource = source;
-
-  source.onopen = () => {
-    setSseConnected(true);
-  };
-
-  source.onmessage = (e) => {
-    // Per 07-panel-reactivity.md constraint 1 and root CLAUDE.md rule 1:
-    // tree-writer's `let it crash` is meaningless if sse.ts's onmessage
-    // silently swallows the throw. Split the try/catch:
-    //   (a) JSON.parse error → benign (malformed chunk), just skip
-    //   (b) router / dispatch error → surface via console.error (crash visibly)
-    //
-    // Without (b), every `throw new Error("tree-writer: unhandled event type …")`
-    // disappeared and the operator had no way to know why the conversation
-    // panel was empty.
-    let event: any;
-    try {
-      event = JSON.parse(e.data);
-    } catch {
-      return;
-    }
-    if (event.type === "task.heartbeat" || event.type === "task.connected") return;
-    try {
-      const handled = routeSSEEvent(event);
-      if (!handled) {
-        handleEventStreamEvent(event);
-      }
-    } catch (err) {
-      console.error("[sse] dispatch error for event", event?.type, err, event);
-    }
-  };
-
-  source.onerror = () => {
-    // EventSource auto-reconnects on transient errors (readyState = CONNECTING).
-    // We only trigger manual recovery when the connection is permanently closed,
-    // or when the EventSource has been replaced (stopSSE was called).
-    if (source !== sseSource) return; // replaced by a newer connection
-    if (source.readyState === EventSource.CLOSED) {
-      setSseConnected(false);
-      sseSource = null;
-      // Reconnect after 3s with a fresh conversation hydrate, then resume SSE
-      // from the hydrated sequence so we avoid a full replay after crashes.
-      if (sseRetryTimer) clearTimeout(sseRetryTimer);
-      sseRetryTimer = setTimeout(async () => {
-        sseRetryTimer = null;
-        if (boardStore.selectedTaskID !== taskID) return;
-        const nextSequence = await hydrateTaskConversation(taskID);
-        startSSE(taskID, nextSequence);
-      }, 3000);
-    } else {
-      // Transient error — EventSource will auto-reconnect.
-      // Mark disconnected temporarily; onopen will restore it.
-      setSseConnected(false);
-    }
-  };
+  sseHandle = handle;
 }
 
 export function stopSSE() {
@@ -95,60 +90,63 @@ export function stopSSE() {
     clearTimeout(sseRetryTimer);
     sseRetryTimer = null;
   }
-  if (sseSource) {
-    sseSource.close();
+  if (sseHandle) {
+    sseHandle.close();
   }
-  sseSource = null;
+  sseHandle = null;
   setSseConnected(false);
   clearEventQueue();
 }
 
 // ── Global task-list change stream ──
-// One long-lived EventSource connected to GET /task/events.
-// On every persisted task aggregate event, the server emits a tiny
-// {type, taskID, sequence} notification; we translate that into a
-// debounced loadTasks(). This closes the gap where status changes on
-// non-selected tasks (or new tasks created by other clients) would
-// otherwise only arrive via manual refresh.
+// One long-lived stream connected to GET /task/events. On every persisted
+// task aggregate event the server emits a tiny {type, taskID, sequence}
+// notification; we translate that into a debounced loadTasks(). This
+// closes the gap where status changes on non-selected tasks (or new
+// tasks created by other clients) would otherwise only arrive via
+// manual refresh.
 
-let taskListSource: EventSource | null = null;
+let taskListHandle: StreamHandle | null = null;
 let taskListRetryTimer: any = null;
 
 export function startTaskListSSE() {
   stopTaskListSSE();
-  const url = apiUrl("task/events");
-  const source = new EventSource(url);
-  taskListSource = source;
-  source.onmessage = (e) => {
-    // Same split as startSSE above: parse errors silent, dispatch errors surfaced.
-    let event: any;
-    try {
-      event = JSON.parse(e.data);
-    } catch {
-      return;
-    }
-    if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return;
-    try {
-      // Task-list stream emits only `{type, taskID, sequence}` — not the
-      // full task-scope event shape. Route to the notification handler,
-      // NOT handleEventStreamEvent (which feeds tree-writer and would
-      // throw on every missing payload).
-      handleTaskListNotification(event);
-    } catch (err) {
-      console.error("[task-list-sse] dispatch error for event", event?.type, err, event);
-    }
-  };
-  source.onerror = () => {
-    if (source !== taskListSource) return;
-    if (source.readyState === EventSource.CLOSED) {
-      taskListSource = null;
-      if (taskListRetryTimer) clearTimeout(taskListRetryTimer);
-      taskListRetryTimer = setTimeout(() => {
-        taskListRetryTimer = null;
-        startTaskListSSE();
-      }, 3000);
-    }
-  };
+  const transport = getHostTransport();
+  const handle = transport.openStream(
+    { path: "task/events" },
+    {
+      onEvent: (data) => {
+        // Same split as startSSE above: parse errors silent, dispatch
+        // errors surfaced.
+        let event: any;
+        try {
+          event = JSON.parse(data);
+        } catch {
+          return;
+        }
+        if (event.type === "task-list.heartbeat" || event.type === "task-list.connected") return;
+        try {
+          // Task-list stream emits only `{type, taskID, sequence}` — not
+          // the full task-scope event shape. Route to the notification
+          // handler, NOT handleEventStreamEvent (which feeds tree-writer
+          // and would throw on every missing payload).
+          handleTaskListNotification(event);
+        } catch (err) {
+          console.error("[task-list-sse] dispatch error for event", event?.type, err, event);
+        }
+      },
+      onClose: (_reason) => {
+        if (handle !== taskListHandle) return;
+        taskListHandle = null;
+        if (taskListRetryTimer) clearTimeout(taskListRetryTimer);
+        taskListRetryTimer = setTimeout(() => {
+          taskListRetryTimer = null;
+          startTaskListSSE();
+        }, 3000);
+      },
+    },
+  );
+  taskListHandle = handle;
 }
 
 export function stopTaskListSSE() {
@@ -156,8 +154,8 @@ export function stopTaskListSSE() {
     clearTimeout(taskListRetryTimer);
     taskListRetryTimer = null;
   }
-  if (taskListSource) {
-    taskListSource.close();
+  if (taskListHandle) {
+    taskListHandle.close();
   }
-  taskListSource = null;
+  taskListHandle = null;
 }

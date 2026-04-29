@@ -8,7 +8,7 @@
 // Render-side effects (DOM badge updates) remain
 // this module updates the Solid appStore.connectionStatus.
 
-import { apiJson, apiUrl, apiHeaders, configure as configureApi, DEFAULT_SERVER } from "./api";
+import { apiJson, configure as configureApi, DEFAULT_SERVER } from "./api";
 import { appStore, setAppStore, setConnectionStatus } from "../store/app";
 import { settingsStore, applySettings, saveSettings } from "../store/settings";
 

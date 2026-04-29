@@ -3,7 +3,7 @@
 // and flushes entries to the server via services/api.ts.
 
 import { appendLog, type LogEntry, type LogLevel } from "../store/app";
-import { apiUrl, apiHeaders } from "../services/api";
+import { apiJson } from "../services/api";
 
 // ── Types ──
 
@@ -57,9 +57,9 @@ function flush(): void {
       entry.extra && typeof entry.extra === "object" ? entry.extra as Record<string, unknown> : undefined;
     const msg =
       entry.extra && !extraObj ? `${entry.message} ${entry.extra}` : entry.message;
-    fetch(apiUrl("log"), {
+    apiJson("log", {
       method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         service: "overlay:" + entry.service,
         level: entry.level,

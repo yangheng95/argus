@@ -3,7 +3,7 @@
 
 import { createStore, produce } from "solid-js/store";
 import { batch, createMemo, createRoot, type Accessor } from "solid-js";
-import { apiJson, apiUrl } from "../services/api";
+import { apiJson } from "../services/api";
 import { boardStore } from "../store/board";
 import { clearConversationUiState, loadConversationUiStateForTask } from "./conversation-ui";
 import { touchReasoningPart as trackReasoningPart } from "./reasoning";
@@ -400,22 +400,15 @@ export async function loadConversation(): Promise<void> {
         setMessages([]);
         return;
       }
-      const transcript = await fetch(
-        apiUrl(`task/${encodeURIComponent(taskID)}/transcript`),
-        {
-          headers: { Accept: "application/json" },
-        },
-      )
-        .then((res) => (res.ok ? res.json() : []))
-        .catch(() => []);
-      const timeline = await fetch(
-        apiUrl(`control/timeline?taskID=${encodeURIComponent(taskID)}`),
-        {
-          headers: { Accept: "application/json" },
-        },
-      )
-        .then((res) => (res.ok ? res.json() : []))
-        .catch(() => []);
+      // Pre-existing `.catch(() => [])` silent fallback is preserved here
+      // — plan §5.4 calls these out as cleanup for a future milestone.
+      // M3.A only re-routes through the HostTransport chokepoint.
+      const transcript = await apiJson(
+        `task/${encodeURIComponent(taskID)}/transcript`,
+      ).catch(() => []);
+      const timeline = await apiJson(
+        `control/timeline?taskID=${encodeURIComponent(taskID)}`,
+      ).catch(() => []);
       if (taskID !== boardStore.selectedTaskID) continue;
       const merged = mergeLoadedConversationMessages(
         Array.isArray(timeline) ? timeline : [],

@@ -41,7 +41,7 @@ import {
 import { canComposeChat, stopChatRequest } from "./services/chat";
 import { isTaskInterruptable } from "./store/board";
 import { setLocale } from "./utils/i18n";
-import { apiJson, apiUrl, apiHeaders, configure as configureApi } from "./services/api";
+import { apiJson, apiRequest, configure as configureApi } from "./services/api";
 import { t } from "./utils/i18n";
 import { renderMarkdown, escapeHtml } from "./utils/markdown";
 import { copyChatConversation } from "./utils/transcript";
@@ -657,16 +657,17 @@ if (sidebarTitleEl) {
     ev.preventDefault();
     if (!window.confirm(t("sidebar.reset_db_confirm"))) return;
     try {
-      const res = await fetch(apiUrl("global/db/reset"), {
+      const res = await apiRequest<unknown>("global/db/reset", {
         method: "POST",
-        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
+        responseKind: "text",
       });
       if (res.status === 409) {
         window.alert(t("sidebar.reset_db_blocked"));
         return;
       }
       if (!res.ok) {
-        const text = await res.text().catch(() => `HTTP ${res.status}`);
+        const text = typeof res.body === "string" && res.body ? res.body : `HTTP ${res.status}`;
         window.alert(t("sidebar.reset_db_failed", { error: text }));
         return;
       }
