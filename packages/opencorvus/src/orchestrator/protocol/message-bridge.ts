@@ -3,6 +3,7 @@ import { GlobalBus } from "@/bus/global"
 import { Instance } from "@/project/instance"
 import { ProtocolStore } from "@/protocol/store"
 import { Message } from "@/session/message"
+import { SessionStatus } from "@/session/status"
 import { Log } from "@/util/log"
 import { Database, eq } from "@/storage/db"
 import { MessageTable, type SessionKind } from "@/session/session.sql"
@@ -248,6 +249,58 @@ function enrichProperties(properties: Record<string, unknown>, sessionID: string
  * (rule 23) and historically blew up `protocol_event.payload` to hundreds of
  * MB by re-snapshotting the full message on every update.
  */
+/**
+ * Push a session-lifecycle event (session.status / session.idle) through SSE
+ * AND persist it in `protocol_event`. Unlike message events, lifecycle events
+ * are tiny (sessionID + status enum + optional reason/error) and benefit from
+ * persistence: an overlay reconnect replays from `protocol_event`, so cards
+ * reload with their last terminal status instead of falling back to the
+ * default `running` and re-spinning forever.
+ *
+ * Single source of truth for session lifecycle, per
+ * `specs/new-arch/07-panel-reactivity.md`. The persisted row also feeds
+ * `engine/store.ts listActiveSessionsForTask`'s NOT EXISTS terminal exclusion.
+ */
+function bridgeSessionLifecycle(type: string, properties: Record<string, unknown>) {
+  try {
+    const sessionID = sessionFromProperties(properties)
+    if (!sessionID) return
+    const taskID = taskIDForSession(sessionID)
+    if (!taskID) return
+    const enriched = enrichProperties(properties, sessionID, taskID)
+    const now = Date.now()
+    void ProtocolStore.appendEvent({
+      kind: "event",
+      type,
+      aggregate: "task",
+      aggregate_id: taskID,
+      task_id: taskID,
+      run_id: null,
+      goal_run_id: null,
+      session_id: sessionID,
+      interaction_id: null,
+      stream_id: null,
+      source: "session.bridge",
+      target: null,
+      correlation_id: null,
+      causation_id: null,
+      reply_to: null,
+      emitted_at: now,
+      payload: enriched,
+    }).catch((err) => {
+      const detail = err instanceof Error ? err.message : String(err)
+      if (!detail.includes("FOREIGN KEY constraint failed")) {
+        log.warn("bridge: session lifecycle persist failed", { type, error: detail })
+      }
+    })
+  } catch (err) {
+    log.warn("bridge: dropping session lifecycle event after error", {
+      type,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
 function bridgeEvent(type: string, properties: Record<string, unknown>) {
   // Top-level guard: subscribers run synchronously inside Bus.dispatch's for-loop;
   // a sync throw here would abort dispatch for sibling subscribers. Old code hid
@@ -294,6 +347,12 @@ const CROSS_INSTANCE_HANDLERS: Record<string, (props: Record<string, unknown>) =
   [Message.Event.PartDelta.type]: (props) => {
     bridgeEvent(Message.Event.PartDelta.type, props)
   },
+  [SessionStatus.Event.Status.type]: (props) => {
+    bridgeSessionLifecycle(SessionStatus.Event.Status.type, props)
+  },
+  [SessionStatus.Event.Idle.type]: (props) => {
+    bridgeSessionLifecycle(SessionStatus.Event.Idle.type, props)
+  },
 }
 
 const MESSAGE_TYPES = new Set(Object.keys(CROSS_INSTANCE_HANDLERS))
@@ -318,6 +377,12 @@ export function ensureTaskMessageProtocolBridge() {
   })
   Bus.subscribe(Message.Event.PartDelta, (event) => {
     bridgeEvent(Message.Event.PartDelta.type, event.properties)
+  })
+  Bus.subscribe(SessionStatus.Event.Status, (event) => {
+    bridgeSessionLifecycle(SessionStatus.Event.Status.type, event.properties)
+  })
+  Bus.subscribe(SessionStatus.Event.Idle, (event) => {
+    bridgeSessionLifecycle(SessionStatus.Event.Idle.type, event.properties)
   })
 
   // Cross-Instance bridge: executor sessions run in worktree Instances whose
