@@ -12,6 +12,7 @@ import { lazy } from "../util/lazy"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Flag } from "../flag/flag"
 import { Auth } from "../auth"
+import { parseEnvJson } from "./parse-env-json"
 import {
   type ParseError as JsoncParseError,
   applyEdits,
@@ -212,9 +213,14 @@ export namespace Config {
     }
 
     if (Flag.OPENCORVUS_PERMISSION) {
+      // audit-2026-04-29 W2-V22 — descriptive parse error helper
+      // (see parseEnvJson) replaces the bare `JSON.parse` so a typo
+      // in OPENCORVUS_PERMISSION surfaces as an actionable line
+      // instead of "Unexpected token in JSON at position N".
+      const parsed = parseEnvJson("OPENCORVUS_PERMISSION", Flag.OPENCORVUS_PERMISSION)
       result.permission = mergeDeep(
         (result.permission ?? {}) as object,
-        JSON.parse(Flag.OPENCORVUS_PERMISSION),
+        parsed as object,
       ) as Config.Permission
     }
 
