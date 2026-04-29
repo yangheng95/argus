@@ -11,6 +11,7 @@ import { Board } from "./Board";
 import { Conversation } from "./Conversation";
 import { selectTask } from "../services/task";
 import { messageStore } from "../store/messages";
+import { t } from "../utils/i18n";
 
 export interface TaskDetailOverlayProps {
   /** Task ID extracted from the route hash. Empty / undefined → hidden. */
@@ -61,23 +62,23 @@ export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
           type="button"
           class="task-overlay-back"
           onClick={props.onClose}
-          title="Back to Gateway (Esc)"
+          title={t("task_overlay.back_title")}
         >
-          ← Gateway
+          ← {t("task_overlay.back")}
         </button>
-        <div class="task-overlay-title">Task <code>{props.taskID}</code></div>
+        <div class="task-overlay-title">{t("task_overlay.task_label")} <code>{props.taskID}</code></div>
         <Show when={loading()}>
-          <span class="task-overlay-loading">loading…</span>
+          <span class="task-overlay-loading">{t("common.loading")}</span>
         </Show>
         <Show when={error() && !loading()}>
           <span class="task-overlay-error" role="alert">
-            <span class="task-overlay-error-msg">Failed to load: {error()}</span>
+            <span class="task-overlay-error-msg">{t("task_overlay.load_failed", { error: error() })}</span>
             <button
               type="button"
               class="task-overlay-error-retry"
               onClick={() => loadActiveTask(props.taskID)}
             >
-              Retry
+              {t("common.retry")}
             </button>
           </span>
         </Show>
