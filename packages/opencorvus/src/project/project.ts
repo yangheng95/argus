@@ -340,11 +340,14 @@ export namespace Project {
       throw new Error("git init completed without creating .git")
     }
     const next = await fromDirectory(directory)
-    // Refresh the Instance cache so Vcs.info() (and any other Instance.project
-    // consumers) observe the new .vcs="git" state immediately. Dynamic import
-    // to avoid a circular dependency between project.ts and instance.ts.
-    const { Instance } = await import("./instance")
-    await Instance.refresh(directory).catch(() => undefined)
+    // Cache refresh is the caller's responsibility. Doing it here would
+    // dual-source with task-api/prepareProject and server/routes/project,
+    // and — critically — when this path runs INSIDE Instance.provide's
+    // bootstrap iife (instance.ts:51), Instance.refresh() awaits the very
+    // same in-flight iife it was called from → self-deadlock. The
+    // bootstrap path re-reads via Project.fromDirectory at instance.ts:52
+    // immediately after this returns; both other callers already invoke
+    // Instance.refresh() right after this returns. Rule 8: single source.
     return InitGitResult.parse({
       created: true,
       project: next.project,
