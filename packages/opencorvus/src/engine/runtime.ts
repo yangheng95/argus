@@ -48,6 +48,43 @@ const eventBridgeAborts = new Map<string, AbortController>() // goalRunID or run
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "300000", 10) // auto-reject stale interactions (5min default)
 
 
+/**
+ * Revive zombie tasks — those with status=active but no orchestrator-loop
+ * in flight. The orchestrator-loop is fire-and-forget per wake event:
+ * `Orchestrator.processTask` returns and the loop exits. Normally each
+ * orchestrator decision (`task_report`, `dispatch`, `inject_*`, …)
+ * schedules its own follow-up wake, so the loop re-enters until the task
+ * reaches terminal. But when `processTask` returns WITHOUT making a
+ * decision — e.g. the orchestrator's LLM stream got aborted by the
+ * `stream-activity` watchdog (`stream idle > 180000ms` from
+ * `alibaba-coding-plan-cn` blips, which MEMORY documents as transient) —
+ * no decision means no follow-up wake means the task sits "active"
+ * forever with nobody driving it. The `resumeActiveTaskLoop` API was
+ * defined for exactly this safety net but was never wired up; this poll
+ * is the missing wiring. Rule 7: no fallback. The retry IS the design,
+ * not a fallback.
+ */
+async function reviveZombieTasks(): Promise<void> {
+  // Lazy imports avoid the runtime ↔ queue ↔ task-status circular deps
+  // the rest of this file already navigates via dynamic `await import`.
+  const { listProjectTasks } = await import("./store")
+  const { isTaskActive } = await import("./task-status")
+  const { resumeActiveTaskLoop, isLoopInFlight } = await import("./queue")
+
+  const tasks = listProjectTasks(Instance.project.id, 50)
+  for (const task of tasks) {
+    if (!isTaskActive(task)) continue
+    if (isLoopInFlight(task.id)) continue
+    log.info("reviveZombieTasks: task is active with no loop in flight, resuming", { taskID: task.id })
+    await resumeActiveTaskLoop(task.id).catch((err) => {
+      log.warn("reviveZombieTasks: resume failed", {
+        taskID: task.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+  }
+}
+
 /** Check if any executor session is active for the current project. Used as a guard before Instance.dispose(). */
 export function hasActiveSessions(): boolean {
   try {
@@ -87,6 +124,7 @@ export namespace EngineRuntime {
           }),
         ),
       )
+      await reviveZombieTasks()
     } finally {
       current.syncing = false
     }
