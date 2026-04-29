@@ -79,7 +79,14 @@ export namespace OverlayUI {
     return resolved
   }
 
-  export function routes() {
+  /**
+   * `dirOverride` is a test-only seam — production callers pass no
+   * argument and resolveOverlayDir's exec-path probing kicks in.
+   * Tests can supply a fixture dir without monkey-patching
+   * `process.execPath` (CLAUDE.md §五-23: prefer fixing tools over
+   * fragile mocks).
+   */
+  export function routes(dirOverride?: string) {
     const app = new Hono()
 
     // vite builds HTML with absolute asset paths (e.g. `/assets/...`).
@@ -90,7 +97,7 @@ export namespace OverlayUI {
         .replace(/(src|href)="\/(assets|i18n)\//g, '$1="/ui/$2/')
 
     const handle = async (c: Context) => {
-      const dir = resolveOverlayDir()
+      const dir = dirOverride ?? resolveOverlayDir()
       if (!dir) {
         return c.text("Overlay UI not found. Run `bun run --cwd packages/overlay build:vite` or package with bundled UI assets.", 404)
       }
