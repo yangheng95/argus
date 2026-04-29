@@ -229,7 +229,14 @@ jobs:
             libssl-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            xdg-utils
+          # `xdg-utils` provides /usr/bin/xdg-open which Tauri's AppImage
+          # bundler shells out to during `--bundles appimage`. Without it
+          # the bundle step fails with "xdg-open binary not found
+          # /usr/bin/xdg-open" after .deb and .rpm have already been
+          # produced. ubuntu-latest happens to ship it preinstalled but
+          # ubuntu-24.04-arm doesn't, so the linux-arm64 runner failed.
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
