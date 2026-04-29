@@ -189,9 +189,9 @@ struct OverlayServerInfo {
     /// PID of the spawned sidecar `bun` process. Surfaced in the title-bar
     /// connection badge next to the port so an operator can `kill <pid>` /
     /// `lsof -p <pid>` without hunting through netstat or Activity Monitor.
-    /// Optional only because `server_info(port)` is also called from paths
-    /// (port-only probe / restart preview) that don't yet hold the child
-    /// handle — those callers populate it via `server_info_with_pid`.
+    /// Optional because some callers populate it lazily — every live
+    /// callsite goes through `server_info_with_pid` (the legacy
+    /// pid-less `server_info` constructor was deleted as dead code).
     #[serde(skip_serializing_if = "Option::is_none")]
     pid: Option<u32>,
 }
@@ -501,14 +501,6 @@ fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
     candidate_server_paths(app)
         .into_iter()
         .find(|path| path.exists())
-}
-
-fn server_info(port: u16) -> OverlayServerInfo {
-    OverlayServerInfo {
-        port,
-        url: format!("http://{LOCAL_SERVER_HOST}:{port}"),
-        pid: None,
-    }
 }
 
 fn server_info_with_pid(port: u16, pid: u32) -> OverlayServerInfo {
