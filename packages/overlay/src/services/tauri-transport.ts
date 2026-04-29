@@ -16,6 +16,7 @@ import {
 } from "./api"
 import type {
   HostTransport,
+  NativeCommand,
   RequestBody,
   ResponseKind,
   StreamHandle,
@@ -24,6 +25,23 @@ import type {
   TransportRequest,
   TransportResponse,
 } from "./host-transport"
+import { nativeUnsupported } from "./host-transport"
+
+/**
+ * Wrapper for `window.__TAURI__.core.invoke`. This is now the SOLE
+ * place in the entire overlay codebase that calls a Tauri invoke —
+ * all business code goes through `host.native(...)` (CLAUDE.md §二-7,
+ * §二-8). Throws if the runtime is missing so the caller surface
+ * matches the vscode-transport's UnsupportedNativeCommandError.
+ */
+function invokeTauri(command: string, args?: Record<string, unknown>): Promise<unknown> {
+  const w = (typeof globalThis !== "undefined" ? (globalThis as any).window : undefined) as any
+  const fn = w?.__TAURI__?.core?.invoke
+  if (typeof fn !== "function") {
+    throw new Error(`Tauri runtime unavailable for ${command}`)
+  }
+  return fn(command, args)
+}
 
 function buildUrl(path: string, query?: TransportRequest["query"]): URL {
   // apiUrl already handles serverUrl + ?directory= injection.
@@ -158,6 +176,45 @@ export function createTauriTransport(): HostTransport {
           try { source.close() } catch {}
           try { handlers.onClose?.("client-close") } catch {}
         },
+      }
+    },
+    async native(command: NativeCommand): Promise<unknown> {
+      switch (command.kind) {
+        case "open-url":
+          return invokeTauri("overlay_open_url", { url: command.url })
+        case "open-path":
+          return invokeTauri("overlay_open_path", { path: command.path })
+        case "settings.load":
+          return invokeTauri("overlay_settings_load")
+        case "settings.save":
+          return invokeTauri("overlay_settings_save", { settings: command.payload })
+        case "config.write-file":
+          return invokeTauri("overlay_write_file", { path: command.path, content: command.content })
+        case "server.info":
+          return invokeTauri("overlay_server_info")
+        case "server.restart":
+          return invokeTauri("overlay_server_restart")
+        case "devtools.toggle":
+          return invokeTauri("overlay_toggle_devtools")
+        case "tray.attention.set":
+          return invokeTauri("overlay_attention_set", { active: command.active })
+        case "workspace.pickDir":
+          return invokeTauri("overlay_pick_dir", { start: command.start || undefined })
+        case "workspace.pickFiles":
+          return invokeTauri("overlay_pick_files", {
+            start: command.start || undefined,
+            multiple: command.multiple ?? true,
+          })
+        case "workspace.createDir":
+          return invokeTauri("overlay_create_dir", { path: command.path })
+        default: {
+          // Exhaustiveness — TypeScript narrows `command` to `never` here.
+          // If a new NativeCommand kind is added without a case above, the
+          // type-checker rejects this default.
+          const _exhaustive: never = command
+          void _exhaustive
+          return nativeUnsupported("tauri", command)
+        }
       }
     },
   }

@@ -9,6 +9,7 @@
 // - Set up a periodic reconnect loop
 
 import { configure as configureApi, apiJson } from "./api";
+import { getHostTransport } from "./host-transport";
 import {
   checkConnection as checkServerConnection,
   startConnectionMonitor,
@@ -122,15 +123,19 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
  // fires).
   primeNotificationPermission();
 
-  const invoke = (window as any).__TAURI__?.core?.invoke as
-    | ((command: string, args?: Record<string, unknown>) => Promise<unknown>)
-    | undefined;
-  if (typeof invoke === "function") {
-    const nativeSettings = await invoke("overlay_settings_load").catch(() => null);
+  // Try to load host-persisted settings (Tauri stores them on disk;
+  // VS Code transport will throw UnsupportedNativeCommandError, in
+  // which case we just keep the localStorage-loaded values from
+  // step 1).
+  try {
+    const nativeSettings = await getHostTransport().native({ kind: "settings.load" });
     if (nativeSettings && typeof nativeSettings === "object" && !Array.isArray(nativeSettings)) {
       applySettings(nativeSettings as any);
       setSavedDirectory(savedDirectoryValue((nativeSettings as any).directory));
     }
+  } catch {
+    // Host doesn't support disk-backed settings — settings.load is a
+    // best-effort enhancement. localStorage is the source of truth.
   }
 
  // 2. Push settings into the API client (server URL + auth)

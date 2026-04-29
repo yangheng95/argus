@@ -12,23 +12,7 @@ import { loadMeta } from "./meta";
 import { loadExecutors } from "./executor";
 import { restoreWorkspaceDirectory } from "./workspace";
 import { loadTasks } from "../store/board";
-
-// ── Helpers ──
-
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args) as Promise<T>;
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
-}
+import { getHostTransport } from "./host-transport";
 
 // ── Check Config Accessors ──
 
@@ -203,7 +187,11 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
     username,
   };
   try {
-    await tauriInvoke("overlay_write_file", { path: configFile, content: JSON.stringify(config, null, 2) });
+    await getHostTransport().native({
+      kind: "config.write-file",
+      path: configFile,
+      content: JSON.stringify(config, null, 2),
+    });
   } catch (e) {
     console.warn("[scaffold] Failed to scaffold project config", e);
   }

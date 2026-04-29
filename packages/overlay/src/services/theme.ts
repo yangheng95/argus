@@ -13,6 +13,7 @@ import {
   sanitizeOpacity,
   settingsStore,
 } from "../store/settings";
+import { getHostTransport } from "./host-transport";
 
 export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings";
 
@@ -155,9 +156,11 @@ export function stepZoom(delta: number): void {
 
 export function handleZoomHotkey(event: KeyboardEvent): void {
   if (typeof window === "undefined") return;
-  const hasTauri =
-    typeof (window as any).__TAURI__?.core?.invoke === "function";
-  if (!hasTauri || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  // Only intercept Ctrl/Cmd +/−/0 inside the Tauri overlay window —
+  // browser preview and the VS Code webview rely on the host's native
+  // zoom, so we must not steal the keystroke there.
+  const isTauri = getHostTransport().kind === "tauri";
+  if (!isTauri || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
 
   const plus =
     event.code === "Equal" ||
@@ -202,8 +205,9 @@ export function installSystemThemeListener(onchange: () => void): () => void {
 
 /** Toggle Tauri devtools (F12 handler). No-op outside Tauri. */
 export async function toggleDevtools(): Promise<void> {
-  const invoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof invoke === "function") {
-    await invoke("overlay_toggle_devtools").catch(() => {});
+  try {
+    await getHostTransport().native({ kind: "devtools.toggle" });
+  } catch {
+    // No-op for hosts without devtools (vscode webview).
   }
 }

@@ -84,12 +84,55 @@ export interface StreamHandle {
   close(): void
 }
 
-// ── The interface ──
+// ── Native (host-specific) commands ──
 //
-// `native()` (host-specific commands like `open-url`, `pick-dir`,
-// `settings.save`) lands in M3.B as a separate commit so this M3.A
-// commit is a tight, testable HTTP+SSE chokepoint. Until then,
-// existing Tauri invoke callers remain untouched.
+// Discriminated union of every host-specific command the overlay
+// expects. New commands MUST extend this union (CLAUDE.md §二-9, §11):
+// adding an ad-hoc Tauri invoke without listing it here is a violation
+// of the single-chokepoint contract. The vscode transport (M4 onward)
+// implements only the subset that maps to VS Code APIs and throws
+// UnsupportedNativeCommandError for anything that doesn't (plan §5.2).
+
+export interface ServerInfo {
+  url: string
+  pid?: number
+  port?: number
+}
+
+export interface PickFilesOptions {
+  start?: string
+  multiple?: boolean
+}
+
+export type NativeCommand =
+  // utils/native.ts
+  | { kind: "open-url"; url: string }
+  | { kind: "open-path"; path: string }
+  // services/init.ts + store/settings.ts
+  | { kind: "settings.load" }
+  | { kind: "settings.save"; payload: unknown }
+  // services/config.ts
+  | { kind: "config.write-file"; path: string; content: string }
+  // services/connection.ts
+  | { kind: "server.info" }
+  | { kind: "server.restart" }
+  // services/theme.ts
+  | { kind: "devtools.toggle" }
+  // services/window.ts
+  | { kind: "tray.attention.set"; active: boolean }
+  // services/workspace.ts
+  | { kind: "workspace.pickDir"; start?: string }
+  | { kind: "workspace.pickFiles"; start?: string; multiple?: boolean }
+  | { kind: "workspace.createDir"; path: string }
+
+export class UnsupportedNativeCommandError extends Error {
+  override readonly name: string = "UnsupportedNativeCommandError"
+  constructor(public readonly host: HostKind, public readonly command: NativeCommand) {
+    super(`Native command "${command.kind}" is not available in host "${host}".`)
+  }
+}
+
+// ── The interface ──
 
 export interface HostTransport {
   readonly kind: HostKind
@@ -105,6 +148,22 @@ export interface HostTransport {
    * reconnect policy and presents a visible disconnected state.
    */
   openStream(input: StreamOpenRequest, handlers: StreamHandlers): StreamHandle
+  /**
+   * Run a host-specific native command. Tauri transport maps each
+   * command to its underlying Tauri invoke. VS Code transport throws
+   * UnsupportedNativeCommandError for any command that cannot be
+   * expressed via the VS Code API (plan §5.2: no silent no-op).
+   */
+  native(command: NativeCommand): Promise<unknown>
+}
+
+/**
+ * Type-narrowing helper: `nativeUnsupported(this.kind, cmd)` is the
+ * canonical way for a transport to reject a command. Keeping it as a
+ * helper keeps the throw site visibly intentional in code review.
+ */
+export function nativeUnsupported(host: HostKind, command: NativeCommand): never {
+  throw new UnsupportedNativeCommandError(host, command)
 }
 
 // ── Factory ──

@@ -11,6 +11,7 @@
 import { apiJson, configure as configureApi, DEFAULT_SERVER } from "./api";
 import { appStore, setAppStore, setConnectionStatus } from "../store/app";
 import { settingsStore, applySettings, saveSettings } from "../store/settings";
+import { getHostTransport } from "./host-transport";
 
 // ── Helpers ──
 
@@ -18,19 +19,11 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function hasTauriRuntime(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof (window as any).__TAURI__?.core?.invoke === "function"
-  );
-}
-
-async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const globalInvoke = (window as any).__TAURI__?.core?.invoke;
-  if (typeof globalInvoke === "function") {
-    return globalInvoke(command, args) as Promise<T>;
-  }
-  throw new Error(`Tauri runtime unavailable for ${command}`);
+/** Tauri host owns its sidecar; vscode host does not run a managed
+ *  local server (the extension owns the sidecar there, not the
+ *  webview). Use this whenever a code path is Tauri-specific. */
+function hostOwnsLocalServer(): boolean {
+  return getHostTransport().kind === "tauri";
 }
 
 function normalizeUrl(value: string | undefined, fallback: string): string {
@@ -74,11 +67,15 @@ export interface LocalServerInfo {
  * from the stored value, persists the new URL.
  */
 export async function localServerInfo(): Promise<LocalServerInfo | null> {
-  if (!hasTauriRuntime()) return null;
-  const info = await tauriInvoke<LocalServerInfo>("overlay_server_info").catch(
-    () => undefined,
-  );
-  return info && typeof info.url === "string" ? info : null;
+  if (!hostOwnsLocalServer()) return null;
+  try {
+    const info = (await getHostTransport().native({ kind: "server.info" })) as
+      | LocalServerInfo
+      | undefined;
+    return info && typeof info.url === "string" ? info : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface SyncLocalServerUrlOptions {
@@ -92,7 +89,7 @@ export interface SyncLocalServerUrlOptions {
 export async function syncLocalServerUrl(
   options: SyncLocalServerUrlOptions = {},
 ): Promise<LocalServerInfo | null> {
-  if (!hasTauriRuntime()) return null;
+  if (!hostOwnsLocalServer()) return null;
   if (!options.force && !usesManagedLocalServer()) return null;
   const info = await localServerInfo();
   if (!info) return null;
@@ -116,10 +113,10 @@ export async function syncLocalServerUrl(
  * Returns the new server info on success, null if not applicable.
  */
 export async function restartLocalServer(): Promise<LocalServerInfo | null> {
-  if (!hasTauriRuntime() || !usesManagedLocalServer()) return null;
-  const info = await tauriInvoke<LocalServerInfo>(
-    "overlay_server_restart",
-  ).catch(() => undefined);
+  if (!hostOwnsLocalServer() || !usesManagedLocalServer()) return null;
+  const info = (await getHostTransport()
+    .native({ kind: "server.restart" })
+    .catch(() => undefined)) as LocalServerInfo | undefined;
   if (!info || typeof info.url !== "string") return null;
   setAppStore("serverPid", typeof info.pid === "number" ? info.pid : undefined);
   const next = normalizeUrl(info.url, settingsStore.serverUrl);

@@ -98,24 +98,20 @@ export async function nativeSelect(
 }
 
 // ── nativeOpen ──
-// Open a URL or filesystem path via the Tauri opener plugin.
-// Throws when the Tauri runtime is unavailable (e.g. vite dev preview).
+// Open a URL or filesystem path via the host. Routes through
+// HostTransport.native so the same call works under Tauri (invokes
+// overlay_open_url / overlay_open_path) and, in the future, under VS
+// Code (vscode.env.openExternal). Throws UnsupportedNativeCommandError
+// in hosts that don't implement the command — no silent fallback to
+// `window.open` (CLAUDE.md §一-7 / plan §5.4).
+
+import { getHostTransport } from "../services/host-transport";
 
 export async function nativeOpen(target: string): Promise<boolean> {
   if (!target) return false;
   const isUrl = /^https?:\/\//i.test(target);
-  const invoke = (window as any).__TAURI__?.core?.invoke as
-    | ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>)
-    | undefined;
-  if (typeof invoke !== "function") {
-    if (isUrl) {
-      window.open(target, "_blank", "noopener");
-      return true;
-    }
-    throw new Error("Tauri runtime unavailable — cannot open " + target);
-  }
-  const opened = isUrl
-    ? await invoke("overlay_open_url", { url: target })
-    : await invoke("overlay_open_path", { path: target });
+  const opened = await getHostTransport().native(
+    isUrl ? { kind: "open-url", url: target } : { kind: "open-path", path: target },
+  );
   return opened === true;
 }
