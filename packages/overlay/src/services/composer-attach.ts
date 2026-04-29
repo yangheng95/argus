@@ -10,30 +10,7 @@
 
 import { messageStore, setChatAttachments } from "../store/messages";
 import { getHostTransport } from "./host-transport";
-
-interface ComposerAttachPayload {
-  filename: string;
-  mime: string;
-  dataUrl: string;
-  sourcePath: string;
-  selection?: {
-    startLine: number;
-    startColumn: number;
-    endLine: number;
-    endColumn: number;
-  };
-}
-
-function isPayload(x: unknown): x is ComposerAttachPayload {
-  if (!x || typeof x !== "object") return false;
-  const o = x as Record<string, unknown>;
-  return (
-    typeof o.filename === "string" &&
-    typeof o.mime === "string" &&
-    typeof o.dataUrl === "string" &&
-    typeof o.sourcePath === "string"
-  );
-}
+import { isComposerAttachPayload } from "./composer-attach-validate";
 
 let installed = false;
 
@@ -41,7 +18,7 @@ export function installComposerAttachSubscription(): void {
   if (installed) return;
   installed = true;
   getHostTransport().subscribeUiCommand("composer.attach", (raw) => {
-    if (!isPayload(raw)) {
+    if (!isComposerAttachPayload(raw)) {
       console.warn("[composer.attach] invalid payload, ignoring", raw);
       return;
     }
