@@ -69,11 +69,34 @@ export const ConfigRoutes = lazy(() =>
       // Accept arbitrary object shape — RFC 7396 merge patches legitimately
       // contain null sentinels at any depth to signal deletion, which the
       // strict Config.Info.partial() validator would reject. Semantic
-      // correctness is enforced downstream when the merged file is re-parsed
-      // by writeConfigFile → parseConfig.
+      // correctness for sub-shapes that callers actually fail to format
+      // (most often `provider[id]` from the overlay form) is enforced
+      // explicitly below so users see the validation error on the PATCH
+      // round-trip rather than silently shipping a broken config that
+      // breaks the next parseConfig pass.
       validator("json", z.record(z.string(), z.unknown())),
       async (c) => {
         const partial = c.req.valid("json") as Record<string, unknown>
+        // Provider sub-shape: each non-null entry must satisfy Config.Provider
+        // schema. RFC 7396 still allows `null` to signal deletion.
+        if (partial.provider != null) {
+          if (typeof partial.provider !== "object" || Array.isArray(partial.provider)) {
+            return c.json(
+              { error: "config.provider must be a record of providerID -> ProviderConfig" },
+              400,
+            )
+          }
+          for (const [pid, value] of Object.entries(partial.provider as Record<string, unknown>)) {
+            if (value === null) continue
+            const parsed = Config.Provider.safeParse(value)
+            if (!parsed.success) {
+              const issues = parsed.error.issues
+                .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+                .join("; ")
+              return c.json({ error: `config.provider.${pid}: ${issues}` }, 400)
+            }
+          }
+        }
         // Config.update() internally reads current config and deep-merges
         await Config.update(partial as Config.Info)
         const updated = await Config.get()
