@@ -14,7 +14,12 @@ const HEXIN_URL =
   process.env.HEXIN_OPENAI_URL?.trim()
     ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
     : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1"
-const API_KEY = process.env.HEXIN_API_KEY?.trim() || "sk-eq7WQu0ylelH6uyedbf6PA"
+// Embedded fallback removed — operator must export HEXIN_API_KEY (rule 7).
+const API_KEY = process.env.HEXIN_API_KEY?.trim()
+if (!API_KEY) {
+  console.error("HEXIN_API_KEY is not set — export it before running this script.")
+  process.exit(1)
+}
 
 const originalFetch = globalThis.fetch
 let captured: { url: string; body: any; headers: Record<string, string>; resp?: any } | undefined

@@ -39,8 +39,14 @@ import { performance } from "perf_hooks"
 const HEXIN_URL = process.env.HEXIN_OPENAI_URL?.trim()
   ? `${process.env.HEXIN_OPENAI_URL.replace(/\/+$/, "")}/v1`
   : "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1"
-const HEXIN_BUILTIN_KEY = "sk-eq7WQu0ylelH6uyedbf6PA"
-const API_KEY = process.env.HEXIN_API_KEY?.trim() || HEXIN_BUILTIN_KEY
+// Embedded fallback removed — operator must export HEXIN_API_KEY before
+// running the cache probe (rule 7: no fallback / rule 10: no hardcoded
+// credentials).
+const API_KEY = process.env.HEXIN_API_KEY?.trim()
+if (!API_KEY) {
+  console.error("HEXIN_API_KEY is not set — export it before running this script.")
+  process.exit(1)
+}
 
 type Vendor = "openai" | "anthropic"
 
@@ -485,7 +491,7 @@ function writeReports(args: Args) {
 async function main() {
   const args = parseArgs()
   CURRENT_VENDOR = args.vendor
-  console.error(`probe model=${args.model} vendor=${args.vendor} endpoint=${HEXIN_URL} key=${API_KEY === HEXIN_BUILTIN_KEY ? "<builtin>" : "<env>"}`)
+  console.error(`probe model=${args.model} vendor=${args.vendor} endpoint=${HEXIN_URL} key=<env>`)
 
   const probes: Array<{ id: string; fn: () => Promise<void> }> = [
     { id: "0-response-cache", fn: () => probe0_response_cache(args.model) },

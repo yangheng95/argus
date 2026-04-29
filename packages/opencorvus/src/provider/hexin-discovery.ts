@@ -21,7 +21,6 @@ import { profileFor } from "./hexin-profiles"
 const log = Log.create({ service: "hexin-discovery" })
 
 export const HEXIN_GATEWAY_URL = "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1"
-export const HEXIN_BUILTIN_KEY = "sk-eq7WQu0ylelH6uyedbf6PA"
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const CACHE_FILE = "hexin-models.json"
 
@@ -136,7 +135,14 @@ export async function discoverHexinModels(
     return toModelMap(cached!.ids)
   }
 
-  const apiKey = process.env.HEXIN_API_KEY?.trim() || HEXIN_BUILTIN_KEY
+  // Operator must supply HEXIN_API_KEY explicitly. The previously-embedded
+  // builtin key was removed (rule 7: no fallback / rule 10: no hardcoded
+  // credentials). Without the env var, discovery fails fast and the
+  // caller's try/catch in provider.ts skips registering the hexin provider.
+  const apiKey = process.env.HEXIN_API_KEY?.trim()
+  if (!apiKey) {
+    throw new Error("hexin discovery requires HEXIN_API_KEY env var")
+  }
 
   try {
     const ids = await fetchModelIDs(apiKey)

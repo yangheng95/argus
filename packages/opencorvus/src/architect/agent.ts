@@ -46,6 +46,7 @@ import type {
   RequirementsDecision,
 } from "./types"
 import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
+import { AttachmentStore } from "@/storage/attachment-store"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 
@@ -83,6 +84,11 @@ export namespace ArchitectAgent {
     designSpecs?: VisualSpec[]
     /** Delivery feedback that triggered this re-run. Absent on first pass. */
     retryContext?: ArchitectRetryContext
+    /** Multimodal attachments the user uploaded with the task (images, PDFs,
+     *  reference files). Surfaced into both the user-message text section
+     *  and — for image / pdf / audio / video MIMEs — as inline file parts so
+     *  the model can actually look at them while decomposing goals. */
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     /** Parent session — a child "architect" session is created under it. */
     parentSessionID?: string
     model?: { providerID: string; modelID: string }
@@ -132,6 +138,13 @@ export namespace ArchitectAgent {
         getCollector: () => outputToolKit.getCollector(),
       },
       buildUserPrompt: () => buildUserPrompt(input),
+      buildUserParts: async () => {
+        const text = buildUserPrompt(input)
+        const { referenceOnly } = AttachmentStore.partition(input.attachments)
+        const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+        const inlineParts = await AttachmentStore.inlineFileParts(input.attachments)
+        return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
+      },
       skillsStage: "architect",
       terminalTool: {
         toolName: "submit_architect",
