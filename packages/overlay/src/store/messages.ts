@@ -391,8 +391,21 @@ export async function loadConversation(): Promise<void> {
     await _convLoading;
     return;
   }
-  const requestTaskID = String(boardStore.selectedTaskID || "");
   const loading = (async () => {
+    // audit-2026-04-29 W2-V16 — pre-fix the loop condition was
+    // `_convQueued && requestTaskID === boardStore.selectedTaskID`,
+    // where `requestTaskID` was the task at the FIRST call's entry.
+    // Concurrent scenario: user on task A → loadConversation runs;
+    // user switches to B mid-fetch and a second loadConversation
+    // bumps `_convQueued = true`. The first loop's iteration finds
+    // taskID !== selectedTaskID and `continue`s — but the outer
+    // condition's stale `requestTaskID === "A"` check is now false
+    // against selectedTaskID="B", so the loop exits and B's queued
+    // load is silently dropped. The conversation panel then shows
+    // whatever was set last (empty / stale A messages). The inner
+    // `taskID` re-read on every iteration plus the post-await
+    // identity check already handle the within-iteration race; the
+    // loop just needs `while (_convQueued)`.
     do {
       _convQueued = false;
       const taskID = String(boardStore.selectedTaskID || "");
@@ -421,7 +434,7 @@ export async function loadConversation(): Promise<void> {
       }));
       setMessages(merged);
       syncSectionPhases(boardStore.board, boardStore.changes.length);
-    } while (_convQueued && requestTaskID === boardStore.selectedTaskID);
+    } while (_convQueued);
   })();
   _convLoading = loading;
   try {
