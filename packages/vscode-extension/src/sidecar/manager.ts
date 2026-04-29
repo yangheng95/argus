@@ -47,7 +47,12 @@ export interface SidecarStartOptions {
   log?: (line: string) => void
 }
 
-const STDERR_TAIL_BYTES = 4096
+// audit-2026-04-29 W2-P5 — 32 KiB tail. Rust panic backtraces routinely
+// run 30-100 KiB; the previous 4 KiB ceiling discarded the leading
+// `panicked at ...` frame. UTF-8 byte concerns do NOT apply because
+// `child.stderr?.setEncoding("utf8")` decodes upstream; the slice
+// operates on UTF-16 code units, not raw bytes.
+const STDERR_TAIL_BYTES = 32 * 1024
 
 export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHandle> {
   const log = opts.log ?? (() => {})
@@ -86,6 +91,14 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
   )
 
   const exitListeners: Array<(code: number | null, signal: NodeJS.Signals | null) => void> = []
+  // audit-2026-04-29 W2-C5 — buffer the exit observation so a sidecar
+  // that dies before the caller registers `onExit` (e.g. crashes
+  // immediately after writing the stdout handshake) is still
+  // reported. Without this, the awaiting microtask in extension.ts
+  // resolves AFTER `child.on("exit")` already iterated an empty
+  // listener list, and the user sees opaque transport errors with
+  // no warning popup.
+  let observedExit: { code: number | null; signal: NodeJS.Signals | null } | undefined
   let stderrTail = ""
   const appendStderrTail = (chunk: string) => {
     stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_BYTES)
@@ -115,6 +128,13 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
     child.stderr?.setEncoding("utf8")
 
     child.stdout?.on("data", (chunk: string) => {
+      // audit-2026-04-29 W2-P6 — early-return once the handshake has
+      // already produced a result. Pre-fix: every stdout chunk after
+      // handshake completion still ran watchdog.touch() (no-op after
+      // cancel), handshake.push() (re-scanning a buffer that already
+      // resolved), and a log() — wasteful in long sessions where the
+      // sidecar prints periodic activity to stdout.
+      if (settled) return
       watchdog.touch()
       const found = handshake.push(chunk)
       if (found) {
@@ -127,8 +147,11 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
     })
 
     child.stderr?.on("data", (chunk: string) => {
-      watchdog.touch()
+      // Stderr drain CONTINUES after settled — long-running stderr is
+      // routed to the OutputChannel for diagnostics, but no longer
+      // touches the handshake watchdog (already cancelled).
       appendStderrTail(chunk)
+      if (!settled) watchdog.touch()
       log(`[sidecar.stderr] ${chunk.trimEnd()}`)
     })
 
@@ -141,6 +164,7 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
 
     child.on("exit", (code, signal) => {
       watchdog.cancel()
+      observedExit = { code, signal }
       for (const fn of exitListeners) {
         try { fn(code, signal) } catch (e) { log(`[sidecar.onExit listener threw] ${String(e)}`) }
       }
@@ -218,7 +242,20 @@ export async function startSidecar(opts: SidecarStartOptions): Promise<SidecarHa
           username,
           pid: child.pid!,
           workspace: opts.workspace,
-          onExit: (listener) => exitListeners.push(listener),
+          onExit: (listener) => {
+            exitListeners.push(listener)
+            // audit-2026-04-29 W2-C5 — replay any exit that happened
+            // in the gap between `finishStartup`'s settle() and the
+            // caller's `onExit` registration. Without this, a sidecar
+            // that crashes immediately after handshake leaves
+            // `activeSidecar` set to a dead handle.
+            if (observedExit) {
+              const { code, signal } = observedExit
+              try { listener(code, signal) } catch (e) {
+                log(`[sidecar.onExit replay listener threw] ${String(e)}`)
+              }
+            }
+          },
           stop,
         })
       })

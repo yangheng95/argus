@@ -44,10 +44,18 @@ import type { SidecarHandle } from "../sidecar/manager"
 
 const STREAM_BATCH_MS = 16
 const STREAM_BATCH_MAX = 256
+// audit-2026-04-29 W2-P3 — byte ceiling on a single batch. Without
+// this, a heavy reasoning-tool payload (single 30 KiB JSON event ×
+// 256 events) could push 7.5 MiB through one postMessage call,
+// blocking the webview main thread for 100-200 ms while it
+// deserialises. 64 KiB is a balance between flush-frequency overhead
+// and per-batch deserialisation cost.
+const STREAM_BATCH_MAX_BYTES = 64 * 1024
 
 interface ActiveStream {
   controller: AbortController
   buffer: string[]
+  bufferBytes: number
   flushTimer: NodeJS.Timeout | null
 }
 
@@ -79,10 +87,15 @@ export class TransportBridge {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    // audit-2026-04-29 W2-C8 — capture the current entries into local
+    // arrays so a late-arriving `handleRequest` (which now re-checks
+    // `disposed` after `requests.set`, but for safety in case future
+    // code mutates the maps mid-dispose) doesn't slip through. The
+    // re-check pass below runs once more after the main loop in case
+    // a microtask between iteration and dispatch enqueued anything.
     // audit-2026-04-29 vscode-ext F10 — notify the webview that each
     // active stream is being closed so its store doesn't sit waiting
-    // for events that never come. Send BEFORE marking disposed so
-    // `send` actually delivers.
+    // for events that never come.
     for (const [id, stream] of this.streams) {
       try { stream.controller.abort() } catch {}
       if (stream.flushTimer) clearTimeout(stream.flushTimer)
@@ -163,6 +176,22 @@ export class TransportBridge {
   }
 
   private async handleRequest(msg: WebviewRequestMessage): Promise<void> {
+    // audit-2026-04-29 W2-V4 — mirror the F5 stream-id duplicate guard
+    // for request ids. Without it, a concurrent `request` envelope
+    // with the same id silently overwrites the prior AbortController
+    // and the original fetch leaks until completion.
+    if (this.requests.has(msg.id)) {
+      this.send({
+        protocol: PROTOCOL_VERSION,
+        type: "response",
+        id: msg.id,
+        ok: false,
+        status: 409,
+        headers: {},
+        body: { kind: "error", message: `request id ${msg.id} is already in flight` },
+      })
+      return
+    }
     const validation = validatePath(msg.path)
     if (!validation.ok) {
       this.send({
@@ -183,6 +212,26 @@ export class TransportBridge {
     // `request.abort` envelope can cancel the upstream fetch.
     const controller = new AbortController()
     this.requests.set(msg.id, controller)
+    // audit-2026-04-29 W2-C8 — re-check `disposed` AFTER the set.
+    // dispose() may have iterated `requests` and bailed before this
+    // entry existed; without this re-check the upstream fetch runs
+    // forever and the webview's pending Promise hangs (the
+    // dispose-time error envelope was already broadcast for whatever
+    // ids existed at the iteration moment).
+    if (this.disposed) {
+      controller.abort()
+      this.requests.delete(msg.id)
+      this.send({
+        protocol: PROTOCOL_VERSION,
+        type: "response",
+        id: msg.id,
+        ok: false,
+        status: 0,
+        headers: {},
+        body: { kind: "error", message: "bridge disposed" },
+      })
+      return
+    }
     init.signal = controller.signal
 
     let res: Response
@@ -252,6 +301,7 @@ export class TransportBridge {
     const stream: ActiveStream = {
       controller,
       buffer: [],
+      bufferBytes: 0,
       flushTimer: null,
     }
     this.streams.set(msg.id, stream)
@@ -339,7 +389,16 @@ export class TransportBridge {
     const stream = this.streams.get(id)
     if (!stream) return
     stream.buffer.push(data)
-    if (stream.buffer.length >= STREAM_BATCH_MAX) {
+    stream.bufferBytes += data.length
+    // audit-2026-04-29 W2-P3 — flush on EITHER event-count OR byte
+    // ceiling, whichever comes first. A single 30 KiB reasoning blob
+    // would otherwise sit in the buffer until the 16 ms timer fires
+    // alongside up to 255 other events; that batch can balloon to
+    // multi-MiB and stall the webview deserialiser.
+    if (
+      stream.buffer.length >= STREAM_BATCH_MAX ||
+      stream.bufferBytes >= STREAM_BATCH_MAX_BYTES
+    ) {
       this.flushStream(id)
       return
     }
@@ -359,6 +418,7 @@ export class TransportBridge {
     }
     if (stream.buffer.length === 0) return
     const events = stream.buffer.splice(0)
+    stream.bufferBytes = 0
     this.send({
       protocol: PROTOCOL_VERSION,
       type: "stream.event",

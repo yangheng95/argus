@@ -255,22 +255,46 @@ export function resolveResourceUrl(raw: string): string {
 // of the first key gives LRU behaviour without an extra data structure.
 
 const BLOB_CACHE_MAX = 256;
+// audit-2026-04-29 W2-P4 — limit concurrent in-flight fetches so a
+// component mounting 1000 thumbnails doesn't queue 1000 promises
+// each holding ~MB closure state (image binary on the postMessage
+// hop). 64 is twice typical viewport thumbnail count, plenty.
+const BLOB_INFLIGHT_MAX = 64;
 const blobCache = new Map<string, string>();
 const blobInFlight = new Map<string, Promise<string>>();
+const blobInFlightWaiters: Array<() => void> = [];
 
 function touchCache(raw: string, url: string): void {
   blobCache.delete(raw);
   blobCache.set(raw, url);
 }
 
-function evictIfNeeded(): void {
-  while (blobCache.size > BLOB_CACHE_MAX) {
+/**
+ * audit-2026-04-29 W2-P4 — evict BEFORE inserting, never after. The
+ * pre-fix `set; evictIfNeeded()` pattern allowed the cache to reach
+ * size 257 between the two statements. Concurrent resolve-and-set
+ * across many promises could push it transiently much higher.
+ */
+function evictToFitOne(): void {
+  while (blobCache.size >= BLOB_CACHE_MAX) {
     const oldest = blobCache.keys().next().value;
     if (oldest === undefined) return;
     const url = blobCache.get(oldest);
     blobCache.delete(oldest);
     if (url) URL.revokeObjectURL(url);
   }
+}
+
+async function reserveInFlightSlot(): Promise<void> {
+  if (blobInFlight.size < BLOB_INFLIGHT_MAX) return;
+  return new Promise<void>((resolve) => {
+    blobInFlightWaiters.push(resolve);
+  });
+}
+
+function releaseInFlightSlot(): void {
+  const next = blobInFlightWaiters.shift();
+  if (next) next();
 }
 
 /**
@@ -313,44 +337,52 @@ export async function fetchResourceAsObjectUrl(raw: string): Promise<string> {
   if (inFlight) return inFlight;
 
   const pending = (async () => {
+    // audit-2026-04-29 W2-P4 — bound concurrent fetches so a render
+    // burst of 1000 thumbnails doesn't queue 1000 in-flight promises
+    // each holding a closure over the transport request.
+    await reserveInFlightSlot();
     const transport = getHostTransport();
-    // Resource URLs may already be absolute (server-relative paths
-    // start with "/" — those go through transport; data:/blob:/http(s)/
-    // file: URLs short-circuit to plain fetch since transport can't
-    // proxy arbitrary external schemes).
-    if (/^(?:data|blob|file):/i.test(raw)) {
-      const res = await fetch(raw);
+    try {
+      // Resource URLs may already be absolute (server-relative paths
+      // start with "/" — those go through transport; data:/blob:/http(s)/
+      // file: URLs short-circuit to plain fetch since transport can't
+      // proxy arbitrary external schemes).
+      if (/^(?:data|blob|file):/i.test(raw)) {
+        const res = await fetch(raw);
+        if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        evictToFitOne();
+        blobCache.set(raw, objectUrl);
+        return objectUrl;
+      }
+      if (/^https?:/i.test(raw)) {
+        // External web image — webview CSP already restricts these
+        // sources (plan §19.2.1); plain fetch is the right path.
+        const res = await fetch(raw);
+        if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        evictToFitOne();
+        blobCache.set(raw, objectUrl);
+        return objectUrl;
+      }
+      const path = raw.replace(/^\/+/, "");
+      const res = await transport.request<Uint8Array>({
+        path,
+        method: "GET",
+        responseKind: "binary",
+      });
       if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
-      const blob = await res.blob();
+      const ct = res.headers["content-type"] || res.headers["Content-Type"] || "application/octet-stream";
+      const blob = new Blob([res.body as Uint8Array], { type: ct });
       const objectUrl = URL.createObjectURL(blob);
+      evictToFitOne();
       blobCache.set(raw, objectUrl);
-      evictIfNeeded();
       return objectUrl;
+    } finally {
+      releaseInFlightSlot();
     }
-    if (/^https?:/i.test(raw)) {
-      // External web image — webview CSP already restricts these
-      // sources (plan §19.2.1); plain fetch is the right path.
-      const res = await fetch(raw);
-      if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      blobCache.set(raw, objectUrl);
-      evictIfNeeded();
-      return objectUrl;
-    }
-    const path = raw.replace(/^\/+/, "");
-    const res = await transport.request<Uint8Array>({
-      path,
-      method: "GET",
-      responseKind: "binary",
-    });
-    if (!res.ok) throw new Error(`resource ${res.status}: ${raw}`);
-    const ct = res.headers["content-type"] || res.headers["Content-Type"] || "application/octet-stream";
-    const blob = new Blob([res.body as Uint8Array], { type: ct });
-    const objectUrl = URL.createObjectURL(blob);
-    blobCache.set(raw, objectUrl);
-    evictIfNeeded();
-    return objectUrl;
   })();
 
   blobInFlight.set(raw, pending);

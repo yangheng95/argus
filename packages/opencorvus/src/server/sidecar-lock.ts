@@ -116,14 +116,34 @@ export namespace SidecarLock {
     return {
       file,
       release: () => {
-        try {
-          const current = JSON.parse(fs.readFileSync(file, "utf8")) as LockInfo
-          if (current.pid !== info.pid) return // not ours anymore
-          fs.unlinkSync(file)
-          log.info("released", { file })
-        } catch (err) {
-          log.warn("release failed", { file, error: String(err) })
+        // audit-2026-04-29 W2-V3 — retry release a few times on
+        // EBUSY / EPERM / transient IO. Without retry, a Windows AV
+        // that briefly opens the lock file forces the release to
+        // fail; the sidecar then exits and leaves the lock orphaned
+        // until `detectExisting` auto-prunes via the dead-PID path.
+        // During that window, a new sidecar boot sees the stale
+        // lock and exits 3 with a confusing "another instance" hint.
+        const MAX_ATTEMPTS = 3
+        let lastErr: unknown
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+          try {
+            const current = JSON.parse(fs.readFileSync(file, "utf8")) as LockInfo
+            if (current.pid !== info.pid) return // not ours anymore
+            fs.unlinkSync(file)
+            log.info("released", { file })
+            return
+          } catch (err: any) {
+            lastErr = err
+            if (err?.code === "ENOENT") return // already gone — fine
+            if (attempt < MAX_ATTEMPTS) {
+              // Synchronous tiny back-off; the sidecar is in
+              // shutdown so we want to finish quickly.
+              const until = Date.now() + 50
+              while (Date.now() < until) { /* spin */ }
+            }
+          }
         }
+        log.warn("release failed after retries", { file, attempts: MAX_ATTEMPTS, error: String(lastErr) })
       },
     }
   }
