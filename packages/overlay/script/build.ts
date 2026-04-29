@@ -120,7 +120,17 @@ await $`bun run build:vite`.cwd(dir)
 await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)
 await cleanBuildResidue()
 
-await $`tauri build ${tauriArgs()}`.cwd(dir).env({
+// `tauri build` alone leaves Tauri 2.x without an explicit bundle list and
+// the build silently produces only the bare executable — no .app/.dmg on
+// macOS, no .msi/-setup.exe on Windows, no .deb/.rpm/.AppImage on Linux.
+// Even with bundle.active=true and targets="all" in tauri.conf.json, the
+// CLI's --config deep-merge (we pass {bundle:{resources:[]}}) interacts
+// poorly enough that the resulting bundle pipeline gets skipped.
+// `--bundles all` opts in unconditionally; Tauri internally narrows to
+// the per-platform default set (.app+.dmg on macOS, .msi+.exe on Windows,
+// .deb+.rpm+.AppImage on Linux), so a single flag is correct on every
+// runner instead of a host-specific switch.
+await $`tauri build --bundles all ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
   OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
