@@ -71,6 +71,7 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
   const [detail, setDetail] = createSignal<MemoryDetail | null>(null);
   const [errorMsg, setErrorMsg] = createSignal("");
   const [loading, setLoading] = createSignal(true);
+  const [deleting, setDeleting] = createSignal(false);
 
   const load = async () => {
     setLoading(true);
@@ -97,6 +98,8 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
   };
 
   const handleDelete = async () => {
+    if (deleting()) return;
+    setDeleting(true);
     try {
       await apiJson(
         `panel/knowledge/memory/${encodeURIComponent(props.fileId)}`,
@@ -110,6 +113,8 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
       void nativeMessage(t("memory.delete_failed", { error: msg }), {
         title: t("memory.delete_failed_title"),
       });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -181,13 +186,16 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
             type="button"
             class="btn btn-ghost mini danger"
             onClick={() => void handleDelete()}
+            disabled={loading() || deleting() || !!errorMsg()}
           >
-            {t("common.delete")}
+            {deleting() ? t("common.loading") : t("common.delete")}
           </button>
           <button
             type="button"
             class="btn btn-ghost"
+            disabled={deleting()}
             onClick={() => {
+              if (deleting()) return;
               dialogRef?.close();
               props.onClose();
             }}
