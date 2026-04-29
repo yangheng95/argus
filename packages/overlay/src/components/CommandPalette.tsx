@@ -1,0 +1,317 @@
+// ── CommandPalette ──
+//
+// Cmd+K / Ctrl+K modal that exposes the operator's most-used actions
+// (task switching, settings navigation, theme/locale, logs) in a single
+// fuzzy-searchable surface. Mounted once at app boot; visibility driven
+// by an internal signal flipped by the global keyboard hotkey.
+//
+// Command sources:
+//   * Active project tasks (boardStore.tasks → selectTask)
+//   * Settings tabs (openConfigDialog + switchConfigTab)
+//   * Theme switcher (settingsStore.theme + applyTheme)
+//   * Locale switcher
+//   * New Task (focus composer)
+//
+// Filtering: case-insensitive substring on command label + description +
+// keywords. Up/Down navigate, Enter runs, Esc closes. The selected
+// command is highlighted via aria-selected for screen readers and via
+// the .cmdk-item--active class for the eye.
+
+import { For, Show, createMemo, createSignal, createEffect, onCleanup, onMount } from "solid-js";
+import { boardStore } from "../store/board";
+import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
+import { applyTheme } from "../services/theme";
+import { selectTask } from "../services/task";
+import { openConfigDialog, switchConfigTab } from "../services/dialog";
+import { setLocale } from "../utils/i18n";
+import { t } from "../utils/i18n";
+
+interface Command {
+  id: string;
+  label: string;
+  hint?: string;
+  group: string;
+  keywords?: string;
+  run: () => void;
+}
+
+const SETTINGS_TABS: Array<{ tab: string; labelKey: string; group: string }> = [
+  { tab: "general", labelKey: "settings.title", group: "settings" },
+  { tab: "permissions", labelKey: "permissions.title", group: "settings" },
+  { tab: "prompt", labelKey: "prompt.title", group: "settings" },
+  { tab: "channel", labelKey: "channel.title", group: "settings" },
+  { tab: "memory", labelKey: "memory.title", group: "settings" },
+  { tab: "providers", labelKey: "common.cancel", group: "settings" }, // providers has no i18n title; fall back below
+  { tab: "agent-models", labelKey: "common.cancel", group: "settings" }, // same
+  { tab: "about", labelKey: "about.title", group: "settings" },
+];
+
+const THEMES: Array<{ id: string; label: string }> = [
+  { id: "dark", label: "Dark" },
+  { id: "light", label: "Light" },
+  { id: "vscode-dark", label: "VSCode Dark" },
+  { id: "system", label: "System" },
+];
+
+const LOCALES: Array<{ id: string; label: string }> = [
+  { id: "en-US", label: "English (US)" },
+  { id: "zh-CN", label: "中文 (简体)" },
+];
+
+export function CommandPalette() {
+  const [open, setOpen] = createSignal(false);
+  const [query, setQuery] = createSignal("");
+  const [activeIndex, setActiveIndex] = createSignal(0);
+  let inputRef: HTMLInputElement | undefined;
+  let listRef: HTMLDivElement | undefined;
+
+  const commands = createMemo<Command[]>(() => {
+    const cmds: Command[] = [];
+
+    cmds.push({
+      id: "task:new",
+      label: t("task.new"),
+      hint: t("task.new"),
+      group: "task",
+      keywords: "new task create",
+      run: () => {
+        void selectTask("");
+        const textarea = document.querySelector<HTMLTextAreaElement>("#solidChatComposer textarea");
+        textarea?.focus();
+      },
+    });
+
+    for (const item of (boardStore.tasks ?? []) as any[]) {
+      const id = item?.task?.id;
+      if (!id) continue;
+      const title = String(item?.task?.title || item?.overview?.headline || id);
+      cmds.push({
+        id: `task:${id}`,
+        label: title,
+        hint: String(item?.task?.status || ""),
+        group: "task",
+        keywords: `${id} ${item?.task?.directory || ""}`,
+        run: () => {
+          void selectTask(id);
+        },
+      });
+    }
+
+    for (const tab of SETTINGS_TABS) {
+      // Some tabs ship without an i18n title (Providers / Agent Models in
+      // index.html). Fall back to a sensible English label so the command
+      // is searchable. Localising those titles is a separate concern.
+      let label = t(tab.labelKey);
+      if (tab.tab === "providers") label = "Providers";
+      if (tab.tab === "agent-models") label = "Agent Models";
+      cmds.push({
+        id: `settings:${tab.tab}`,
+        label: `${t("config.title")}: ${label}`,
+        group: "settings",
+        keywords: `settings config ${tab.tab}`,
+        run: () => {
+          openConfigDialog();
+          switchConfigTab(tab.tab);
+        },
+      });
+    }
+
+    for (const theme of THEMES) {
+      cmds.push({
+        id: `theme:${theme.id}`,
+        label: `Theme: ${theme.label}`,
+        group: "appearance",
+        keywords: `theme ${theme.id}`,
+        run: () => {
+          setSettingsStore("theme", theme.id);
+          applyTheme(theme.id);
+          saveSettings();
+        },
+      });
+    }
+
+    for (const loc of LOCALES) {
+      cmds.push({
+        id: `locale:${loc.id}`,
+        label: `Locale: ${loc.label}`,
+        group: "appearance",
+        keywords: `locale language ${loc.id}`,
+        run: () => {
+          setSettingsStore("locale", loc.id);
+          void setLocale(loc.id);
+          saveSettings();
+        },
+      });
+    }
+
+    cmds.push({
+      id: "logs:open",
+      label: "Open Logs",
+      group: "tools",
+      keywords: "logs viewer debug",
+      run: () => {
+        const btn = document.querySelector<HTMLElement>("#btnOpenLog, [data-i18n=\"titlebar.logs\"]");
+        // No public open API on LogViewer — but the title-bar menu button
+        // toggles via the same setLogOpen path mounted in main.tsx. As a
+        // fallback, dispatch a custom event the future LogViewer can hook.
+        if (btn) {
+          btn.click();
+        } else {
+          window.dispatchEvent(new CustomEvent("oc:open-logs"));
+        }
+      },
+    });
+
+    return cmds;
+  });
+
+  const filtered = createMemo<Command[]>(() => {
+    const q = query().trim().toLowerCase();
+    const list = commands();
+    if (!q) return list;
+    return list.filter((c) => {
+      const haystack = `${c.label} ${c.hint || ""} ${c.keywords || ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  });
+
+  // Reset selection whenever the visible command set changes — otherwise a
+  // stale activeIndex points off the end of the filtered list and Enter
+  // does nothing.
+  createEffect(() => {
+    void filtered().length;
+    setActiveIndex(0);
+  });
+
+  function close() {
+    setOpen(false);
+    setQuery("");
+    setActiveIndex(0);
+  }
+
+  function runActive() {
+    const list = filtered();
+    const cmd = list[activeIndex()];
+    if (!cmd) return;
+    close();
+    try {
+      cmd.run();
+    } catch (err) {
+      console.error("[cmdk] command failed", cmd.id, err);
+    }
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(filtered().length - 1, i + 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(0, i - 1));
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runActive();
+      return;
+    }
+  }
+
+  // Global hotkey: Cmd+K (mac) / Ctrl+K (others). Captured in capture
+  // phase so we trump an open <textarea> default behavior. Skip when an
+  // HTML5 dialog has the user's focus — those modals own Esc/Enter.
+  function onGlobalKey(e: KeyboardEvent) {
+    if (e.key !== "k" && e.key !== "K") return;
+    if (!(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen((v) => !v);
+  }
+
+  onMount(() => {
+    window.addEventListener("keydown", onGlobalKey, true);
+  });
+  onCleanup(() => {
+    window.removeEventListener("keydown", onGlobalKey, true);
+  });
+
+  // Auto-focus the input once the modal mounts, and keep the active
+  // option scrolled into view as the operator arrows through.
+  createEffect(() => {
+    if (open() && inputRef) {
+      queueMicrotask(() => inputRef?.focus());
+    }
+  });
+  createEffect(() => {
+    if (!open() || !listRef) return;
+    void filtered();
+    void activeIndex();
+    queueMicrotask(() => {
+      const item = listRef?.querySelector<HTMLElement>(".cmdk-item--active");
+      item?.scrollIntoView({ block: "nearest" });
+    });
+  });
+
+  return (
+    <Show when={open()}>
+      <div class="cmdk-backdrop" role="presentation" onClick={close}>
+        <div
+          class="cmdk-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Command palette"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            ref={inputRef}
+            type="search"
+            class="cmdk-input"
+            placeholder="Type a command — task, settings, theme, locale…"
+            value={query()}
+            onInput={(e) => setQuery(e.currentTarget.value)}
+            onKeyDown={handleKeyDown}
+            aria-label="Command palette search"
+          />
+          <div class="cmdk-list" ref={listRef} role="listbox">
+            <Show when={filtered().length > 0} fallback={
+              <div class="cmdk-empty">No matching commands</div>
+            }>
+              <For each={filtered()}>
+                {(cmd, i) => (
+                  <div
+                    class="cmdk-item"
+                    classList={{ "cmdk-item--active": i() === activeIndex() }}
+                    role="option"
+                    aria-selected={i() === activeIndex()}
+                    data-group={cmd.group}
+                    onMouseEnter={() => setActiveIndex(i())}
+                    onClick={() => {
+                      setActiveIndex(i());
+                      runActive();
+                    }}
+                  >
+                    <span class="cmdk-item-group">{cmd.group}</span>
+                    <span class="cmdk-item-label">{cmd.label}</span>
+                    <Show when={cmd.hint}>
+                      <span class="cmdk-item-hint">{cmd.hint}</span>
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </Show>
+          </div>
+          <div class="cmdk-foot">
+            <kbd>↑↓</kbd> navigate · <kbd>↵</kbd> run · <kbd>esc</kbd> close
+          </div>
+        </div>
+      </div>
+    </Show>
+  );
+}

@@ -68,6 +68,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { PermissionAutoResolver } from "./components/PermissionAutoResolver";
 import { WelcomeToast } from "./components/WelcomeToast";
 import { ConnectionBanner } from "./components/ConnectionBanner";
+import { CommandPalette } from "./components/CommandPalette";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
@@ -1478,6 +1479,10 @@ void (async () => {
     connBannerHost.id = "connectionBannerHost";
     document.body.appendChild(connBannerHost);
     render(() => <ConnectionBanner />, connBannerHost);
+    const cmdkHost = document.createElement("div");
+    cmdkHost.id = "commandPaletteHost";
+    document.body.appendChild(cmdkHost);
+    render(() => <CommandPalette />, cmdkHost);
   } catch (error) {
     console.error(error);
   } finally {
