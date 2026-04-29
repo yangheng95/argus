@@ -2490,6 +2490,42 @@ body[data-theme="light"] .section-badge {
   cursor: progress;
 }
 
+/* ProvidersPanel test-connection result chip. data-ok flips between
+   --good (success) and --bad (failure) tints. The chip sits inside the
+   provider card so it's visually attached to the row that ran the test.
+   Long error messages wrap rather than truncate — the operator wants to
+   read the actual upstream message (rate limit / 401 / DNS) in full. */
+.provider-test-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-sm);
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  border-radius: calc(var(--radius) * 0.7);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+  border: 1px solid transparent;
+  background: var(--subtle-2);
+}
+.provider-test-result[data-ok="true"] {
+  background: var(--good-dim);
+  border-color: color-mix(in srgb, var(--good) 36%, transparent);
+  color: var(--good);
+}
+.provider-test-result[data-ok="false"] {
+  background: var(--bad-dim);
+  border-color: color-mix(in srgb, var(--bad) 36%, transparent);
+  color: var(--bad);
+}
+.provider-test-result-icon {
+  flex: none;
+  font-weight: 700;
+}
+.provider-test-result-msg {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
 /* AgentModelsPanel error banner — same vocabulary as task-list-error so
    the operator's eye recognizes "load failed, click to retry" instantly,
    instead of the prior inline-styled red sentence with no action. */
