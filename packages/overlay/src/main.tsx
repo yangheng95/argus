@@ -1443,6 +1443,21 @@ document.addEventListener("click", (e) => {
   closeRecentDirPanel();
 }, listenerOpts);
 
+// Global Esc: close any non-HTML5-dialog popovers the operator might
+// have opened. HTML5 <dialog>.showModal() already handles Esc natively
+// via the platform's `cancel` event; we only patch the in-DOM
+// custom popovers (recent-directory dropdown today; future panels can
+// hook the same channel by listening for the bubbling key event and
+// preventDefault'ing if they handle it).
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape") return;
+  const dirPanel = document.getElementById("recentDirPanel");
+  if (dirPanel && !dirPanel.hidden) {
+    ev.preventDefault();
+    closeRecentDirPanel();
+  }
+}, listenerOpts);
+
 // ── Init ──
 
 (window as any).__overlayInitSettled = false;
