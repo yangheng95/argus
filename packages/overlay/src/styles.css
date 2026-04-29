@@ -3846,6 +3846,62 @@ code .file-link:hover {
 .tool-status[data-status="error"] { color: var(--bad); background: var(--bad-dim); }
 .tool-status[data-status="pending"] { color: var(--text-muted); background: var(--subtle-2); }
 
+/* msg-tool-output-details — collapsible wrapper for shell/stdout output
+   past the audit-driven thresholds (12 lines / 1500 chars). Short output
+   skips the wrapper entirely so noise stays minimal. The summary chip
+   reads "<lines> line(s) · <chars> chars — preview…" so the operator
+   knows what they're choosing to expand without clicking through. */
+.msg-tool-output-details {
+  margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
+}
+.msg-tool-output-details > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-xs);
+  padding: calc(2px * var(--ui-scale)) var(--ui-gap-md);
+  border-radius: 999px;
+  background: var(--subtle-2);
+  border: 1px solid var(--subtle-4);
+  color: var(--text-soft);
+  font-size: var(--ui-font-meta);
+  font-family: var(--mono);
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+}
+.msg-tool-output-details > summary::-webkit-details-marker { display: none; }
+.msg-tool-output-details > summary::before {
+  content: "\25B6";
+  font-size: 8px;
+  margin-right: 4px;
+  transform-origin: center;
+  transition: transform 0.12s ease;
+}
+.msg-tool-output-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.msg-tool-output-details > summary:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+}
+.msg-tool-output-details > summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+}
+.msg-tool-output-details[open] > summary {
+  margin-bottom: var(--ui-gap-xs);
+}
+.msg-tool-output-details > .msg-tool-output {
+  margin-left: 0;
+}
+.msg-tool-output-summary-text {
+  white-space: nowrap;
+  max-width: clamp(240px, 60vw, 720px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Tool output */
 .msg-tool-output {
   margin: calc(3px * var(--ui-scale)) 0 var(--ui-gap-md) calc(26px * var(--ui-scale));
