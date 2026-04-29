@@ -2,118 +2,136 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import fs from "fs"
 import os from "os"
 import path from "path"
-import { Hono } from "hono"
 import { OverlayUI } from "../../src/server/overlay-ui"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
 /**
- * Path-traversal regression for `/ui/*` (audit-2026-04-29 opencorvus F7).
+ * Path-traversal regression for `/ui/*`.
  *
- * Pre-fix the route used `path.join(dir, reqPath).startsWith(dir)`,
- * which had two holes:
- *   1. No path-separator boundary on the prefix — `dir = "/foo/ui"`
- *      and `reqPath = "/../ui-private/secret"` resolved to
- *      `/foo/ui-private/secret` which still satisfies
- *      `startsWith("/foo/ui")`.
- *   2. URL-encoded `..` (`%2e%2e`) reached `path.join` as literal `..`
- *      after Hono's URL decode, escaping the dir.
+ *  - audit-2026-04-29 opencorvus F7: `path.join(dir, reqPath)` with a
+ *    naive `startsWith(dir)` had two holes (no separator boundary;
+ *    URL-decoded `..` segments). Replaced with path.resolve +
+ *    `${dir}${sep}` prefix compare.
+ *  - audit-2026-04-29 opencorvus V6.a: NUL byte poisoning — Bun.file
+ *    and Node fs disagree on whether `\0` truncates a path. Reject
+ *    rather than letting libc choose.
+ *  - audit-2026-04-29 opencorvus V6.b: symlink escape — once the
+ *    resolved path is inside dir, a malicious symlink at that path
+ *    pointing outside still leaked the target's bytes via Bun.file's
+ *    transparent follow. realpath compare closes the gap.
  *
- * The fix uses `path.resolve(dir, "." + reqPath)` and compares against
- * `dir + path.sep` (or exact equality with `dir`).
+ * Tests drive `OverlayUI.validatePath` directly; the route handler
+ * delegates to it so this is the single point of validation.
  */
 
-describe("OverlayUI path traversal (audit opencorvus F7)", () => {
+describe("OverlayUI path traversal (audit opencorvus F7 / V6)", () => {
   let tempRoot: string
   let secretFile: string
-  let prevHome: string | undefined
 
   beforeEach(() => {
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "overlay-ui-traversal-"))
-    // Lay out:
-    //   <tempRoot>/ui/index.html      ← served
-    //   <tempRoot>/ui-private/secret  ← MUST NOT be reachable via /ui
-    //   <tempRoot>/secret-outside     ← MUST NOT be reachable
     fs.mkdirSync(path.join(tempRoot, "ui"), { recursive: true })
     fs.writeFileSync(path.join(tempRoot, "ui", "index.html"), "<html>ok</html>")
     fs.mkdirSync(path.join(tempRoot, "ui-private"), { recursive: true })
     secretFile = path.join(tempRoot, "ui-private", "secret")
     fs.writeFileSync(secretFile, "TOPSECRET")
     fs.writeFileSync(path.join(tempRoot, "secret-outside"), "OUTSIDE")
-
-    // Point overlay-ui's resolveOverlayDir at our fixture by making
-    // the binary "live" next to it and adding a `ui/` sibling.
-    prevHome = process.env.OPENCORVUS_OVERLAY_UI_DIR
-    process.env.OPENCORVUS_OVERLAY_UI_DIR = path.join(tempRoot, "ui")
   })
 
   afterEach(() => {
-    if (prevHome === undefined) delete process.env.OPENCORVUS_OVERLAY_UI_DIR
-    else process.env.OPENCORVUS_OVERLAY_UI_DIR = prevHome
     try { fs.rmSync(tempRoot, { recursive: true, force: true }) } catch {}
   })
 
-  /**
-   * Build a Hono app mounted with the OverlayUI routes, with a custom
-   * resolveOverlayDir override via env (the production resolver checks
-   * fs paths near process.execPath; for the test we need a stable
-   * directory). overlay-ui.ts doesn't currently take a dir arg, so we
-   * monkey-patch via a temp symlink/setup: the safest unit shape is
-   * to test the helper directly. Since the path-validation logic is
-   * inside `handle`, we exercise the route through Hono.
-   */
-  function makeApp(uiDir: string): Hono {
-    // Inline a minimal copy of resolveOverlayDir's behaviour by
-    // sym-linking uiDir to a known place near execPath; instead we
-    // skip-link and rely on the second resolver branch (workspace
-    // bundle path). That requires the test to write into a sibling
-    // of `packages/opencorvus/src/server`. Easier: spy on
-    // resolveOverlayDir via a module-private export — overlay-ui.ts
-    // doesn't expose one, so we instead directly verify the handler
-    // by constructing requests that exercise the path-resolution
-    // branch. The fix lives entirely in the comparison; we can
-    // test it via the Hono app without needing to coerce the dir
-    // resolver — set OPENCORVUS_OVERLAY_DIR to our temp.
-    void uiDir
-    return new Hono().route("/", OverlayUI.routes() as unknown as Hono)
-  }
-
-  // Skip if we cannot drive the resolver from outside (no env hook).
-  // The fix is verifiable via the helper test below without needing
-  // the resolver to point at our temp; we only need the handler's
-  // path-comparison logic. We wrote the handler to use
-  // `path.resolve(dir, "." + reqPath)` and compare against
-  // `dir + path.sep` — that is testable as a pure function. Inline
-  // the test of that pure logic here so we lock the fix even if the
-  // resolver wiring evolves.
-
-  test("path.resolve + sep-boundary comparison rejects sibling-dir traversal", () => {
+  test("validatePath rejects sibling-dir traversal (audit F7)", async () => {
     const dir = path.join(tempRoot, "ui")
-    const dirWithSep = dir + path.sep
     const probes = [
       "/../ui-private/secret",
       "/../secret-outside",
       "/../../etc/passwd",
-      "/%2e%2e/ui-private/secret".replace(/%2e/g, "."),
       "/index.html/../../secret-outside",
     ]
     for (const reqPath of probes) {
-      const resolved = path.resolve(dir, "." + reqPath)
-      const safe = resolved === dir || resolved.startsWith(dirWithSep)
-      expect(safe).toBe(false)
+      const result = await OverlayUI.validatePath(dir, reqPath)
+      expect(result).toBe(null)
     }
   })
 
-  test("path.resolve + sep-boundary comparison accepts legitimate subpaths", () => {
+  test("validatePath accepts legitimate subpaths (audit F7)", async () => {
     const dir = path.join(tempRoot, "ui")
-    const dirWithSep = dir + path.sep
-    const probes = ["/index.html", "/assets/x.js", "/i18n/zh-CN.json", "/"]
+    // Pre-create the files so the realpath check has something to
+    // resolve — non-existent files take the ENOENT pass-through path,
+    // which is fine but we want to lock the existing-file branch too.
+    fs.writeFileSync(path.join(tempRoot, "ui", "ok.js"), "// ok")
+    const probes = ["/index.html", "/ok.js", "/"]
     for (const reqPath of probes) {
-      const resolved = path.resolve(dir, "." + reqPath)
-      const safe = resolved === dir || resolved.startsWith(dirWithSep)
-      expect(safe).toBe(true)
+      const expected = reqPath === "/"
+        ? path.resolve(dir, "./") // routes handler maps "/" → "/index.html" before calling validatePath
+        : path.resolve(dir, "." + reqPath)
+      const result = await OverlayUI.validatePath(dir, reqPath)
+      expect(result).toBe(expected)
     }
+  })
+
+  test("validatePath rejects NUL byte poisoning (audit V6.a)", async () => {
+    // Hono URL-decodes %00 to a literal NUL. Bun.file / Node fs treat
+    // the NUL terminator inconsistently across platforms; libc-backed
+    // paths truncate, ts-backed paths do not. Reject up-front so an
+    // attacker can't pick the truncation behaviour they prefer.
+    const dir = path.join(tempRoot, "ui")
+    const probes = [
+      "/index.html\0/../secret-outside",
+      "/\0/index.html",
+      "/index.html\0",
+    ]
+    for (const reqPath of probes) {
+      const result = await OverlayUI.validatePath(dir, reqPath)
+      expect(result).toBe(null)
+    }
+  })
+
+  test("validatePath rejects symlink that escapes the overlay dir (audit V6.b)", async () => {
+    // Plant a symlink inside ui/ pointing OUTSIDE. Pre-fix the path
+    // check ran on the symlink path itself (which is inside ui/), but
+    // Bun.file follows the link and would serve the target's bytes —
+    // a real exfil vector if a tampered VSIX or a misconfigured dev
+    // tree contains such a link. realpath compare closes it.
+    const dir = path.join(tempRoot, "ui")
+    const linkPath = path.join(dir, "leaky.txt")
+    try {
+      fs.symlinkSync(secretFile, linkPath)
+    } catch (err) {
+      // Windows without symlink privilege returns EPERM; skip — the
+      // realpath compare is still exercised on POSIX runners (which
+      // is where the VSIX symlink-preservation attack actually
+      // manifests, since Windows VSIX strips symlinks).
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === "EPERM" || code === "EACCES" || code === "ENOSYS") return
+      throw err
+    }
+    const result = await OverlayUI.validatePath(dir, "/leaky.txt")
+    expect(result).toBe(null)
+  })
+
+  test("validatePath accepts symlink that stays inside the overlay dir", async () => {
+    // Negative control: an in-dir symlink (e.g. a vite chunk renamed
+    // post-build) MUST still resolve. Otherwise the V6 fix would
+    // break legitimate link-bearing bundles.
+    const dir = path.join(tempRoot, "ui")
+    const realTarget = path.join(dir, "real.txt")
+    fs.writeFileSync(realTarget, "hello")
+    const linkPath = path.join(dir, "alias.txt")
+    try {
+      fs.symlinkSync(realTarget, linkPath)
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === "EPERM" || code === "EACCES" || code === "ENOSYS") return
+      throw err
+    }
+    const result = await OverlayUI.validatePath(dir, "/alias.txt")
+    // The pre-realpath resolved path (still inside dir).
+    expect(result).toBe(linkPath)
   })
 
   // The Hono integration test was removed — Hono normalises `..`
