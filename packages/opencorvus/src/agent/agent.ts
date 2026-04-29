@@ -73,7 +73,21 @@ export namespace Agent {
     const { DELIVERY_AGENT_SYSTEM } = await import("@/delivery/agent")
 
     const skillDirs = await Skill.dirs()
-    const whitelistedDirs = [Truncate.GLOB, ...skillDirs.map((dir) => path.join(dir, "*"))]
+    // Build agents run inside per-goal worktrees under
+    // `<Instance.directory>/.opencorvus/worktrees/<branch>/`. The worktree IS
+    // a checkout of the same project — reading sibling/parent files in
+    // Instance.directory is the same VCS data at a different commit, not
+    // genuinely "external". Without this entry every `external_directory`
+    // probe matches the `*=ask` rule and (in unattended bench runs) sits
+    // 5min on a permission prompt nobody can answer → goal_run.status=failed.
+    // Allowlisting Instance.directory keeps the safety surface (system
+    // paths like `~/.ssh`, `/etc/...`, etc. still hit `*=ask`) while letting
+    // the agent freely walk its own project tree.
+    const whitelistedDirs = [
+      Truncate.GLOB,
+      path.join(Instance.directory, "**"),
+      ...skillDirs.map((dir) => path.join(dir, "*")),
+    ]
     const defaults = PermissionNext.fromConfig({
       "*": "ask",
       invalid: "allow",
