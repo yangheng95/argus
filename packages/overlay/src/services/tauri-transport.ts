@@ -28,6 +28,27 @@ import type {
 import { nativeUnsupported } from "./host-transport"
 
 /**
+ * Tauri window-handle accessor — the ONE place in the overlay that
+ * touches `window.__TAURI__.window`. WindowControls.tsx calls this so
+ * its Tauri-only window controls do not need their own `__TAURI__`
+ * sniff (CLAUDE.md §二-8: single chokepoint). Returns null when the
+ * Tauri runtime is not present, which the caller treats as "no
+ * window controls available" — vscode webview is one such caller.
+ */
+export function getTauriWindowHandle(): any | null {
+  if (typeof globalThis === "undefined") return null
+  const w = (globalThis as any).window
+  if (!w) return null
+  const getCurrent = w.__TAURI__?.window?.getCurrentWindow
+  if (typeof getCurrent !== "function") return null
+  try {
+    return getCurrent() ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Wrapper for `window.__TAURI__.core.invoke`. This is now the SOLE
  * place in the entire overlay codebase that calls a Tauri invoke —
  * all business code goes through `host.native(...)` (CLAUDE.md §二-7,

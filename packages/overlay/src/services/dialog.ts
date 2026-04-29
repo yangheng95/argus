@@ -10,6 +10,7 @@ import { loadConfigInfo } from "./init";
 import { checkConnection } from "./connection";
 import { reloadProjectScope } from "./config";
 import { apiJson, configure as configureApi } from "./api";
+import { getHostTransport } from "./host-transport";
 import { selectedTaskDirectory } from "../store/board";
 import { t } from "../utils/i18n";
 import { renderMarkdown, escapeHtml } from "../utils/markdown";
@@ -132,8 +133,10 @@ export function renderAboutVersion(): void {
   if ((config as any)?.platform) rows.push([t("about.platform"), (config as any).platform]);
   if ((config as any)?.goVersion) rows.push([t("about.go_version"), (config as any).goVersion]);
 
-  const tauri = (window as any).__TAURI__;
-  rows.push([t("about.runtime_type"), tauri ? "Tauri Desktop" : "Browser"]);
+  const hostKind = getHostTransport().kind;
+  const runtimeLabel =
+    hostKind === "tauri" ? "Tauri Desktop" : hostKind === "vscode" ? "VS Code Webview" : "Browser";
+  rows.push([t("about.runtime_type"), runtimeLabel]);
 
   grid.innerHTML = rows
     .map(

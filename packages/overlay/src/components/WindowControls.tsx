@@ -11,19 +11,17 @@ import { nativeMessage } from "../services/app-dialog";
 
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 
+import { getTauriWindowHandle } from "../services/tauri-transport";
+
 // ── Tauri window helpers ──
 
-/** Retrieve the Tauri current-window handle, or null in non-Tauri environments. */
+/** Retrieve the Tauri current-window handle, or null in non-Tauri environments.
+ *  Routes through services/tauri-transport.ts so this component does not
+ *  reach for `window.__TAURI__` directly (CLAUDE.md §二-8). The function is
+ *  async to preserve the pre-M3 call-site shape; the handle is resolved
+ *  synchronously inside tauri-transport. */
 async function currentTauriWindow(): Promise<any | null> {
-  const getCurrent = (window as any).__TAURI__?.window?.getCurrentWindow;
-  if (typeof getCurrent === "function") {
-    try {
-      return getCurrent() as any;
-    } catch {
- // Not running inside Tauri
-    }
-  }
-  return null;
+  return getTauriWindowHandle();
 }
 
 
