@@ -2490,6 +2490,35 @@ body[data-theme="light"] .section-badge {
   cursor: progress;
 }
 
+/* TaskList loading skeleton — three pulse-animated bars stand in for
+   actual task rows during the first fetch, so the operator sees motion
+   instead of an empty pane. Hidden once boardStore.tasksLoaded flips
+   true (regardless of whether the project actually has tasks). */
+.task-list-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-md) var(--ui-gap-md) 0;
+}
+.task-list-skeleton-row {
+  height: calc(48px * var(--ui-scale));
+  border-radius: var(--radius);
+  background: linear-gradient(
+    90deg,
+    var(--subtle-1) 0%,
+    var(--subtle-3) 50%,
+    var(--subtle-1) 100%
+  );
+  background-size: 220% 100%;
+  animation: task-list-skeleton-shimmer 1.6s linear infinite;
+}
+.task-list-skeleton-row:nth-child(2) { animation-delay: 0.2s; opacity: 0.85; }
+.task-list-skeleton-row:nth-child(3) { animation-delay: 0.4s; opacity: 0.7; }
+@keyframes task-list-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
 /* ── Plan Body ── */
 .plan-summary {
   font-size: var(--ui-font-control);

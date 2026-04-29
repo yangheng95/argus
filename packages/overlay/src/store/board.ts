@@ -59,6 +59,13 @@ export const [boardStore, setBoardStore] = createStore({
    *  must surface the error instead of rendering an empty list. Cleared on
    *  the next successful reload. */
   tasksError: "" as string,
+  /** Flips true after the first successful loadTasks() round-trip
+   *  completes, regardless of whether the list ended up empty. The
+   *  TaskList component reads this to distinguish "still fetching"
+   *  (skeleton rows) from "fetched but project really has zero tasks"
+   *  (empty-hint copy). Stays true for the lifetime of the overlay
+   *  unless tasksError is set. */
+  tasksLoaded: false as boolean,
 });
 
 // ── Loaders ──
@@ -370,6 +377,7 @@ export async function loadTasks(): Promise<void> {
     );
     applyTasks(tasks, nextPending);
     setBoardStore("tasksError", "");
+    setBoardStore("tasksLoaded", true);
   } catch (e) {
     setBoardStore("tasksError", e instanceof Error ? e.message : String(e));
     throw e;
