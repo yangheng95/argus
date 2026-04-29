@@ -266,15 +266,15 @@ export default function ProvidersPanel() {
                   </div>
                 )}
               </Show>
-              <div style="font-size: var(--ui-font-control); opacity: 0.7; margin-bottom: 2px;">
+              <div class="provider-card-meta">
                 {t("provider.label.api")}: {provider.api}
               </div>
               <Show when={provider.env?.length}>
-                <div style="font-size: var(--ui-font-control); opacity: 0.7; margin-bottom: 2px;">
+                <div class="provider-card-meta">
                   {t("provider.label.env")}: {provider.env.join(", ")}
                 </div>
               </Show>
-              <div style="font-size: var(--ui-font-control); opacity: 0.7;">
+              <div class="provider-card-meta provider-card-meta--last">
                 {t("provider.label.models")}: {Object.keys(provider.models || {}).join(", ") || t("provider.label.no_models")}
               </div>
             </div>
