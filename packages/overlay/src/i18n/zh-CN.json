@@ -72,6 +72,8 @@
   "chat.attach_title": "附加文件或图片",
   "chat.attach_too_large_title": "附件过大",
   "chat.attach_too_large": "{{name}} 大小 {{size}} MB，超过 {{limit}} MB 附件上限。",
+  "chat.disabled_unavailable": "输入区不可用 — 请先设置工作目录与模型。",
+  "chat.disabled_empty": "输入消息后即可发送。",
   "chat.collapse_title": "收起输入框",
   "chat.copy_all": "全部复制",
   "chat.copy_failed": "对话复制失败",
