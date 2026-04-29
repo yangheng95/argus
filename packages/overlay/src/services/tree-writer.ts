@@ -233,6 +233,26 @@ export function applyEvent(event: any): void {
   // here.
   if (type === "session.idle") return;
 
+  // ── Cumulative LLM usage for a session (token + cost). ──
+  if (type === "usage.updated") {
+    return handleUsageUpdated(event);
+  }
+
+  // ── Interactive prompts that need operator response. ──
+  // approval.request / input.request payloads carry { id, approval / questions }
+  // — they DO need a UI surface (Round-4 work), but until that lands we
+  // accept them silently rather than spamming console.error from the SSE
+  // try/catch. Backend (executor/managed.ts) emits these for permission
+  // gates and structured questions.
+  if (type === "approval.request" || type === "input.request") return;
+  // permission.* events fire alongside approval.request when an executor
+  // gates on a tool call (executor/opencode.ts:260,267). Handled inline by
+  // InteractionCard — tree-writer just acknowledges.
+  if (type === "permission.asked" || type === "permission.replied") return;
+  // diff.delta is a streaming preview from the executor — boardStore
+  // already tracks the diff, the writer doesn't need to project it as a card.
+  if (type === "diff.delta") return;
+
   // ── No-op events (control plane / telemetry). Listed explicitly so the
   //    final `throw` catches truly unknown types. ──
   if (isTreeWriterNoopEventType(type)) return;
@@ -548,6 +568,34 @@ function handleSessionStatus(event: any): void {
     return;
   }
   setCardTreeStore("cards", info.cardID, "status", cardStatus);
+  // Stamp timeCompleted on the terminal flip so CardHeader can render the
+  // running-or-finished duration. We don't overwrite a prior value — once
+  // a session reaches terminal state, the duration is fixed.
+  if ((cardStatus === "completed" || cardStatus === "error") &&
+      !cardTreeStore.cards[info.cardID]?.timeCompleted) {
+    const ts = Number(event?.emittedAt || event?.emitted_at || Date.now());
+    setCardTreeStore("cards", info.cardID, "timeCompleted", ts);
+  }
+}
+
+// usage.updated — cumulative LLM token / cost totals from the executor for a
+// session. Backend payload shape (executor/managed.ts:525-538):
+//   { sessionID, queueTaskID, inputTokens?, outputTokens?, totalTokens?, costUSD? }
+// Maps onto the session card's `usage` field; CardHeader renders a compact
+// `↑in/↓out · $cost` strip next to the existing context-token hint.
+function handleUsageUpdated(event: any): void {
+  const props = propsOf(event);
+  const sessionID = String(props.sessionID || "");
+  if (!sessionID) return;
+  const info = sessions.get(sessionID);
+  if (!info || !cardTreeStore.cards[info.cardID]) return;
+  const usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number; costUSD?: number } = {};
+  if (Number.isFinite(props.inputTokens)) usage.inputTokens = Number(props.inputTokens);
+  if (Number.isFinite(props.outputTokens)) usage.outputTokens = Number(props.outputTokens);
+  if (Number.isFinite(props.totalTokens)) usage.totalTokens = Number(props.totalTokens);
+  if (Number.isFinite(props.costUSD)) usage.costUSD = Number(props.costUSD);
+  if (Object.keys(usage).length === 0) return;
+  setCardTreeStore("cards", info.cardID, "usage", usage);
 }
 
 /** Drain any session.status buffered for this session. Called from
