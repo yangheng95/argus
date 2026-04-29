@@ -33,6 +33,12 @@ export interface NdjsonEvent {
 export interface AppState {
   connectionStatus: ConnectionStatus;
   connected: boolean;
+  /** PID of the managed sidecar `bun` server process when overlay launched
+   *  it (Tauri overlay_server_info `pid` field). Surfaced in the title-bar
+   *  connection badge alongside the port so the operator can `kill <pid>` /
+   *  `lsof -p <pid>` without scanning netstat. Undefined when the overlay
+   *  is talking to an external server it didn't spawn. */
+  serverPid?: number;
   /** Resolved effective theme: "dark" | "light" | "vscode-dark" */
   theme: "dark" | "light" | "vscode-dark";
   locale: string;

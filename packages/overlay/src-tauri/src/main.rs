@@ -186,6 +186,14 @@ struct TrayAttention {
 struct OverlayServerInfo {
     port: u16,
     url: String,
+    /// PID of the spawned sidecar `bun` process. Surfaced in the title-bar
+    /// connection badge next to the port so an operator can `kill <pid>` /
+    /// `lsof -p <pid>` without hunting through netstat or Activity Monitor.
+    /// Optional only because `server_info(port)` is also called from paths
+    /// (port-only probe / restart preview) that don't yet hold the child
+    /// handle — those callers populate it via `server_info_with_pid`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pid: Option<u32>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -499,6 +507,15 @@ fn server_info(port: u16) -> OverlayServerInfo {
     OverlayServerInfo {
         port,
         url: format!("http://{LOCAL_SERVER_HOST}:{port}"),
+        pid: None,
+    }
+}
+
+fn server_info_with_pid(port: u16, pid: u32) -> OverlayServerInfo {
+    OverlayServerInfo {
+        port,
+        url: format!("http://{LOCAL_SERVER_HOST}:{port}"),
+        pid: Some(pid),
     }
 }
 
@@ -682,7 +699,8 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     #[cfg(unix)]
     let pgid = child.id();
 
-    let info = server_info(port);
+    let pid = child.id();
+    let info = server_info_with_pid(port, pid);
     let state = app.state::<Server>();
     let mut lock = state.0.lock().unwrap();
     lock.child = Some(child);
@@ -707,7 +725,8 @@ fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, St
             match child.try_wait() {
                 Ok(None) => {
                     if let Some(port) = lock.port {
-                        return Ok(server_info(port));
+                        let pid = child.id();
+                        return Ok(server_info_with_pid(port, pid));
                     }
                 }
                 Ok(Some(_)) | Err(_) => {

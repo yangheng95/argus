@@ -62,13 +62,14 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
 
   const label = createMemo(() => statusLabel(status()));
 
-  // ── Port display ──
+  // ── Port + PID display ──
   // The sidecar's port is dynamic (default 4096, falls back up to +32 and
   // then ephemeral — see overlay/src-tauri/build.rs + main.rs::next_server_port).
-  // Surface the active port next to "online" so the operator can query the
-  // server directly (curl / sqlite / etc) without hunting through netstat.
-  // Parsed from settingsStore.serverUrl which connection.ts keeps synced with
-  // the Tauri overlay_server_info command.
+  // Port comes from settingsStore.serverUrl; PID comes from appStore.serverPid
+  // (populated by connection.ts:syncLocalServerUrl from the Tauri
+  // overlay_server_info command). Surface both next to "online" so the
+  // operator can `kill <pid>` / `lsof -p <pid>` / `curl :<port>` directly,
+  // without hunting through netstat.
   const port = createMemo<string>(() => {
     const raw = settingsStore.serverUrl;
     if (!raw) return "";
@@ -76,9 +77,19 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
     return parsed?.port ?? "";
   });
 
+  const pid = createMemo<string>(() => {
+    const value = appStore.serverPid;
+    return typeof value === "number" && value > 0 ? String(value) : "";
+  });
+
   const title = createMemo(() => {
+    if (status() !== "online") return label();
     const p = port();
-    return status() === "online" && p ? `${label()} · :${p}` : label();
+    const pidValue = pid();
+    const parts = [label()];
+    if (p) parts.push(`:${p}`);
+    if (pidValue) parts.push(`pid ${pidValue}`);
+    return parts.join(" · ");
   });
 
   return (
@@ -96,6 +107,9 @@ export function ConnectionBadge(props: ConnectionBadgeProps) {
       <span class="conn-badge__label">{label()}</span>
       <Show when={status() === "online" && port()}>
         <span class="conn-badge__port">:{port()}</span>
+      </Show>
+      <Show when={status() === "online" && pid()}>
+        <span class="conn-badge__pid">pid {pid()}</span>
       </Show>
     </span>
   );

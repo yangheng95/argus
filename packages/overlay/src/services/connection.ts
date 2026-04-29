@@ -9,7 +9,7 @@
 // this module updates the Solid appStore.connectionStatus.
 
 import { apiJson, apiUrl, apiHeaders, configure as configureApi, DEFAULT_SERVER } from "./api";
-import { appStore, setConnectionStatus } from "../store/app";
+import { appStore, setAppStore, setConnectionStatus } from "../store/app";
 import { settingsStore, applySettings, saveSettings } from "../store/settings";
 
 // ── Helpers ──
@@ -63,6 +63,9 @@ function usesManagedLocalServer(): boolean {
 
 export interface LocalServerInfo {
   url: string;
+  /** PID of the spawned sidecar `bun` server process (Tauri-side child).
+   *  Absent when the overlay is talking to an external server. */
+  pid?: number;
   [key: string]: unknown;
 }
 
@@ -93,6 +96,10 @@ export async function syncLocalServerUrl(
   if (!options.force && !usesManagedLocalServer()) return null;
   const info = await localServerInfo();
   if (!info) return null;
+  // Stash the sidecar PID even when the URL hasn't changed — overlay restart
+  // / hot reload can land in a fresh process whose PID is the only thing
+  // that's different from the in-memory app store.
+  setAppStore("serverPid", typeof info.pid === "number" ? info.pid : undefined);
   const next = normalizeUrl(info.url, settingsStore.serverUrl);
   if (normalizeUrl(settingsStore.serverUrl, settingsStore.serverUrl) === next) {
     return info;
@@ -114,6 +121,7 @@ export async function restartLocalServer(): Promise<LocalServerInfo | null> {
     "overlay_server_restart",
   ).catch(() => undefined);
   if (!info || typeof info.url !== "string") return null;
+  setAppStore("serverPid", typeof info.pid === "number" ? info.pid : undefined);
   const next = normalizeUrl(info.url, settingsStore.serverUrl);
   applySettings({ ...settingsStore, serverUrl: next });
   saveSettings();
