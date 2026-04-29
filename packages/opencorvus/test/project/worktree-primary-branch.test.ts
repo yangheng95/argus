@@ -26,7 +26,7 @@ describe("Worktree primary branch", () => {
 
     const result = await Instance.provide({
       directory: tmp.path,
-      fn: () => Worktree.mergeWithRebase({ branch: info.branch, worktreeDir: info.directory }),
+      fn: () => Worktree.mergeWithMerge({ branch: info.branch, worktreeDir: info.directory }),
     })
 
     expect(result.primaryBranch).toBe("dev")

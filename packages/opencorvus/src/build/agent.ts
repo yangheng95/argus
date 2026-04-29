@@ -393,7 +393,7 @@ export namespace BuildAgent {
               merge_back: tool({
                 description:
                   "Publish your goal branch's commits onto the project's primary " +
-                  "worktree branch. Runs `git rebase <primary>` inside this " +
+                  "worktree branch. Runs `git merge <primary>` inside this " +
                   "worktree, then `git merge --ff-only` on the primary worktree, " +
                   "atomically under a host-side lock so concurrent goals do not " +
                   "race each other.\n\n" +
@@ -404,17 +404,19 @@ export namespace BuildAgent {
                   "  • {status:'merged', primary_head, primary_branch} — done; emit " +
                   "    report_build_passed.\n" +
                   "  • {status:'conflict', primary_branch, primary_tip, " +
-                  "    conflict_paths[]} — rebase hit textual conflicts and was " +
-                  "    aborted (your branch is back to its pre-rebase tip). Read " +
-                  "    each conflict path on both sides via `git show " +
-                  "    <primary>:<path>` and your worktree, reconcile manually, " +
-                  "    `git add` + `git commit`, then call merge_back again.\n" +
+                  "    conflict_paths[]} — the merge hit textual conflicts. Your " +
+                  "    worktree is now IN MERGING state: each path in conflict_paths " +
+                  "    has `<<<<<<<`/`=======`/`>>>>>>>` markers in place. Edit each " +
+                  "    path to remove the markers (keep both intentions where " +
+                  "    possible; respect owned_paths), `git add <path>`, then once " +
+                  "    all paths are resolved `git commit` — that finalizes the " +
+                  "    merge. Call merge_back again to ff-publish into primary.\n" +
                   "  • {status:'error', reason} — infrastructure problem; report it " +
                   "    via report_build_failed.",
                 inputSchema: z.object({}),
                 execute: async () => {
                   try {
-                    const result = await Worktree.mergeWithRebase({
+                    const result = await Worktree.mergeWithMerge({
                       branch: worktreeBranch!,
                       worktreeDir: worktreeDir!,
                     })
@@ -436,10 +438,11 @@ export namespace BuildAgent {
                         primary_tip: primaryTip,
                         conflict_paths: conflictPaths,
                         hint:
-                          "Rebase aborted; branch restored. Read each path on " +
-                          "both sides (git show " + primaryBranch + ":<path> vs your " +
-                          "worktree), reconcile, git add + git commit, then call " +
-                          "merge_back again.",
+                          "Worktree is in MERGING state with conflict markers in " +
+                          "the listed paths. Edit each path to resolve the markers, " +
+                          "git add <path>, then `git commit` to finalize the merge. " +
+                          "Then call merge_back again to ff-publish into " +
+                          primaryBranch + ".",
                       }
                     }
                     const mergeFailure = Worktree.mergeFailureDetail(err)
@@ -648,7 +651,8 @@ export namespace BuildAgent {
       } else if (mergedHead && parsed.data.status === "passed") {
         // Rewrite commit_ref to the merged primary HEAD so downstream readers
         // (delivery overlay, evaluator) point at the published commit, not
-        // the agent's pre-rebase tip (which may differ after rebase replay).
+        // the agent's pre-merge tip (which may differ once a merge commit
+        // joins primary's lineage).
         parsed = {
           success: true as const,
           data: { ...parsed.data, commit_ref: mergedHead.slice(0, 12) },
@@ -1437,15 +1441,13 @@ async function runWithExternalProviderImpl(args: {
     // External executors (claude-code, codex) don't have access to the
     // OpenCorvus `merge_back` tool, so the host is the only place that
     // knows the branch is about to be merged. Stage + commit anything
-    // the executor wrote but didn't commit before rebasing — otherwise
-    // a dirty worktree makes `git rebase` exit before it starts and the
-    // conflict-paths parser surfaces "0 conflicts" with no useful detail
-    // (the original symptom on the claude-code benchmark).
+    // the executor wrote but didn't commit before merging — otherwise
+    // mergeWithMerge's pre-flight rejects the dirty tree.
     await Worktree.commitDirty({
       worktreeDir: args.worktreeDir,
       label: `${args.executor}/${args.worktreeBranch}`,
     })
-    const result = await Worktree.mergeWithRebase({
+    const result = await Worktree.mergeWithMerge({
       branch: args.worktreeBranch,
       worktreeDir: args.worktreeDir,
     })
@@ -1476,12 +1478,16 @@ async function runWithExternalProviderImpl(args: {
     if (Worktree.MergeConflictError.isInstance(err)) {
       const { primaryBranch, primaryTip, conflictPaths } = err.data
       const pathList = conflictPaths.join(", ")
+      // Host-path callers (external executors) can't reconcile multi-step;
+      // abort the in-progress merge so the worktree is reusable for the
+      // next attempt instead of staying stuck in MERGING state.
+      await $`git merge --abort`.quiet().nothrow().cwd(args.worktreeDir)
       const output = {
         status: "conflict" as const,
         primary_branch: primaryBranch,
         primary_tip: primaryTip,
         conflict_paths: conflictPaths,
-        hint: "Rebase aborted; branch restored. Reconcile the listed paths, commit, then retry merge_back.",
+        hint: "Merge aborted; worktree restored. Reconcile the listed paths in a fresh attempt and retry merge_back.",
       }
       await Session.updatePart({
         id: mergePartID,
@@ -1506,12 +1512,12 @@ async function runWithExternalProviderImpl(args: {
           status: "failed" as const,
           commit_ref: "",
           summary:
-            `merge_back rebase aborted on ${args.worktreeBranch} → ${primaryBranch} ` +
+            `merge_back hit conflicts on ${args.worktreeBranch} → ${primaryBranch} ` +
             `(${conflictPaths.length} conflict${conflictPaths.length === 1 ? "" : "s"}): ${pathList}`,
           patch_summary: "",
           tests: [],
           error:
-            `Rebase aborted onto ${primaryBranch} (tip ${primaryTip.slice(0, 12)}); ` +
+            `Merge aborted into ${primaryBranch} (tip ${primaryTip.slice(0, 12)}); ` +
             `conflict paths: ${pathList}`,
         },
       }

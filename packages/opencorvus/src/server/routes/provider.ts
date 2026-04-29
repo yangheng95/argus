@@ -8,7 +8,6 @@ import { Agent } from "../../agent/agent"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
 import { Auth } from "../../auth"
-import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -42,7 +41,10 @@ export const ProviderRoutes = lazy(() =>
         const disabled = new Set(config.disabled_providers ?? [])
         const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
-        const allProviders = await ModelsDev.get()
+        // Sourced from the augmented provider database so built-ins
+        // registered outside models.dev (hexin) are visible in the
+        // catalog even when the operator has not configured a key.
+        const allProviders = await Provider.database()
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
         for (const [key, value] of Object.entries(allProviders)) {
           if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) {
@@ -51,10 +53,7 @@ export const ProviderRoutes = lazy(() =>
         }
 
         const connected = await Provider.list()
-        const providers = Object.assign(
-          mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
-          connected,
-        )
+        const providers = Object.assign(filteredProviders, connected)
         return c.json({
           all: Object.values(providers),
           default: Object.fromEntries(

@@ -20,7 +20,7 @@ You receive ONE of two input kinds via the user message:
 2. Make the change. Use `write` for new files, `edit` for targeted patches, `apply_patch` for multi-file unified diffs. Respect `owned_paths` — do NOT write outside them on the goal path.
 3. Verify via `bash`. Run the checks the acceptance_specs imply (or, for the request path, the checks the request wording implies). Failed verifications are fine — you report them honestly, you don't pretend otherwise.
 4. Commit your work to the worktree branch. Use `bash` with `git add -A && git commit -m "<message>"`. Every commit lives on your branch only — primary HEAD does not move until you call `merge_back` in step 5.
-5. **Publish via `merge_back`** (only when the tool is in your toolset; absent on caller-owned worktrees). This is the LAST git-affecting action of the session. It atomically rebases your branch onto the primary worktree's currently checked-out branch and ff-merges into that branch under a host-side lock. See "merge_back contract" below.
+5. **Publish via `merge_back`** (only when the tool is in your toolset; absent on caller-owned worktrees). This is the LAST git-affecting action of the session. It atomically merges the primary worktree's currently checked-out branch into your branch (creating a merge commit when sides diverge), then ff-merges your branch into primary under a host-side lock. See "merge_back contract" below.
 6. Close with exactly ONE terminal report tool call. See the contract below.
 
 ## Never
@@ -37,16 +37,16 @@ You receive ONE of two input kinds via the user message:
 
 Call `merge_back` once after step 4, before step 6. No arguments. Outcomes:
 
-- `{status:"merged", primary_head, primary_branch}` — your work is on primary HEAD. Proceed to `report_build_passed`. The host records `commit_ref` from the merged primary HEAD; you do not need to compute the post-rebase SHA yourself.
-- `{status:"conflict", primary_branch, primary_tip, conflict_paths, hint}` — the rebase hit textual conflicts and was aborted. Your branch is restored to its pre-rebase tip (your commits intact). To reconcile:
-    1. For each path in `conflict_paths`, read both sides — `bash`: `git show <primary_branch>:<path>` for primary's version; `read` the path in your worktree for yours.
-    2. Decide the correct merged content (preserve both intentions where possible; respect `owned_paths`).
-    3. `write` the reconciled content, `bash`: `git add <path>`.
-    4. After all paths are reconciled: `bash`: `git commit -m "reconcile with <primary_branch>"`.
-    5. Call `merge_back` again. Repeat if a fresh conflict appears.
-- `{status:"error", reason}` — infrastructure problem (no primary branch, lock failure, etc.). Call `report_build_failed` with `reason` in `error`; do not retry.
+- `{status:"merged", primary_head, primary_branch}` — your work is on primary HEAD. Proceed to `report_build_passed`. The host records `commit_ref` from the merged primary HEAD; you do not need to compute the post-merge SHA yourself.
+- `{status:"conflict", primary_branch, primary_tip, conflict_paths, hint}` — the merge hit textual conflicts. Your worktree is now IN MERGING state: `MERGE_HEAD` is set, the listed files contain `<<<<<<<` / `=======` / `>>>>>>>` conflict markers, and your prior commits are intact. To reconcile:
+    1. For each path in `conflict_paths`, `read` the file in your worktree — both sides are visible inline between the markers (top is your branch, bottom is `<primary_branch>`).
+    2. Decide the correct merged content (preserve both intentions where possible; respect `owned_paths`). Use `bash`: `git show <primary_branch>:<path>` if you need to see the unmarked primary version separately.
+    3. `write` (or `edit`) the reconciled content with all markers removed, then `bash`: `git add <path>`.
+    4. After every path in `conflict_paths` has been reconciled and added: `bash`: `git commit -m "reconcile with <primary_branch>"`. This commit FINALIZES the merge — it is the merge commit at the topology join point.
+    5. Call `merge_back` again. The host now sees a clean tree whose tip strictly descends `<primary_branch>` and ff-publishes. If new commits arrived on primary in the meantime a fresh conflict may appear; repeat the loop.
+- `{status:"error", reason}` — infrastructure problem (no primary branch, lock failure, dirty/unfinished MERGING state from a prior aborted attempt, etc.). Call `report_build_failed` with `reason` in `error`; do not retry. If the reason names an unfinished MERGING state you can recover with `bash`: `git merge --abort` and start over, but only if you have not yet committed reconciled work.
 
-merge_back is idempotent: if your branch is already on the latest primary tip, the rebase is a no-op and ff-merge advances primary cleanly.
+merge_back is idempotent: if your branch already strictly descends primary, the merge is a fast-forward / no-op and ff-merge advances primary cleanly.
 
 ## Terminal Report Tools
 
