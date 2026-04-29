@@ -67,6 +67,7 @@ import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { PermissionAutoResolver } from "./components/PermissionAutoResolver";
 import { WelcomeToast } from "./components/WelcomeToast";
+import { ConnectionBanner } from "./components/ConnectionBanner";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
@@ -1458,6 +1459,10 @@ void (async () => {
     welcomeHost.id = "welcomeHost";
     document.body.appendChild(welcomeHost);
     render(() => <WelcomeToast />, welcomeHost);
+    const connBannerHost = document.createElement("div");
+    connBannerHost.id = "connectionBannerHost";
+    document.body.appendChild(connBannerHost);
+    render(() => <ConnectionBanner />, connBannerHost);
   } catch (error) {
     console.error(error);
   } finally {
