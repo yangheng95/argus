@@ -21,6 +21,45 @@ import { getHostTransport, type StreamHandle } from "./host-transport";
 let sseHandle: StreamHandle | null = null;
 let sseRetryTimer: any = null;
 
+// audit-2026-04-29 W2-V10 — reconnect tick extracted so the regression
+// test can exercise the (a) hydrate-throw path and (b) post-await
+// task-switch race directly, without standing up the real
+// HostTransport + 3 s timers. Production path: onClose sets a
+// 3 s timer that calls this with the live deps below.
+export interface SseReconnectDeps {
+  taskID: string;
+  after: number;
+  currentTaskID: () => string;
+  hydrate: (taskID: string) => Promise<number>;
+  restart: (taskID: string, after: number) => void;
+  scheduleRetry: (fn: () => void, ms: number) => void;
+  retryDelayMs: number;
+}
+
+export async function performSseReconnect(deps: SseReconnectDeps): Promise<void> {
+  if (deps.currentTaskID() !== deps.taskID) return;
+  let nextSequence: number;
+  try {
+    nextSequence = await deps.hydrate(deps.taskID);
+  } catch (err) {
+    console.error("[sse] reconnect hydrate failed for task", deps.taskID, err);
+    if (deps.currentTaskID() !== deps.taskID) return;
+    deps.scheduleRetry(() => {
+      if (deps.currentTaskID() !== deps.taskID) return;
+      deps.restart(deps.taskID, deps.after);
+    }, deps.retryDelayMs);
+    return;
+  }
+  // Post-await re-check: user may have task-switched while hydrate
+  // was in flight. Restarting the OLD task's SSE would stomp the
+  // NEW task's handle (startSSE calls stopSSE first), silently
+  // killing the user-visible stream.
+  if (deps.currentTaskID() !== deps.taskID) return;
+  deps.restart(deps.taskID, nextSequence);
+}
+
+const RECONNECT_DELAY_MS = 3000;
+
 export function startSSE(taskID: string, after = 0) {
   stopSSE();
   setSseConnected(false);
@@ -68,17 +107,30 @@ export function startSSE(taskID: string, after = 0) {
       },
       onClose: (_reason) => {
         // Permanent close: re-hydrate then re-open from the hydrated
-        // sequence so we avoid a full replay after crashes.
+        // sequence so we avoid a full replay after crashes. See
+        // performSseReconnect (audit W2-V10) for the full retry +
+        // task-switch race contract.
         if (handle !== sseHandle) return;
         setSseConnected(false);
         sseHandle = null;
         if (sseRetryTimer) clearTimeout(sseRetryTimer);
-        sseRetryTimer = setTimeout(async () => {
+        sseRetryTimer = setTimeout(() => {
           sseRetryTimer = null;
-          if (boardStore.selectedTaskID !== taskID) return;
-          const nextSequence = await hydrateTaskConversation(taskID);
-          startSSE(taskID, nextSequence);
-        }, 3000);
+          void performSseReconnect({
+            taskID,
+            after,
+            currentTaskID: () => boardStore.selectedTaskID,
+            hydrate: hydrateTaskConversation,
+            restart: startSSE,
+            scheduleRetry: (fn, ms) => {
+              sseRetryTimer = setTimeout(() => {
+                sseRetryTimer = null;
+                fn();
+              }, ms);
+            },
+            retryDelayMs: RECONNECT_DELAY_MS,
+          });
+        }, RECONNECT_DELAY_MS);
       },
     },
   );
