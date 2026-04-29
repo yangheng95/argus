@@ -13,8 +13,9 @@
 // `intro.agent.*` as live keyspaces — the linter recognizes the static head
 // before the first `${` interpolation as a dotted prefix.
 
-import { For } from "solid-js";
+import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
+import { settingsStore } from "../store/settings";
 
 const MODES = ["workflow", "build"] as const;
 
@@ -42,6 +43,24 @@ export function BoardIntro() {
         <h2 class="board-intro__title">{t("intro.headline")}</h2>
         <p class="board-intro__tagline">{t("intro.tagline")}</p>
       </header>
+
+      {/* Cold-start blocker: when no working directory is set, the
+          composer is silently disabled and there's no other signal
+          telling the operator what to do. Surface a high-contrast
+          callout here pointing at the cwd dropdown in the title bar. */}
+      <Show when={!settingsStore.directory}>
+        <div
+          class="board-intro__cta board-intro__cta--directory"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="board-intro__cta-icon" aria-hidden="true">📁</span>
+          <span class="board-intro__cta-body">
+            <strong class="board-intro__cta-title">{t("intro.directory_required_title")}</strong>
+            <span class="board-intro__cta-text">{t("intro.directory_required_body")}</span>
+          </span>
+        </div>
+      </Show>
 
       <section class="board-intro__section" aria-labelledby="board-intro-modes-h">
         <h3 id="board-intro-modes-h" class="board-intro__section-title">

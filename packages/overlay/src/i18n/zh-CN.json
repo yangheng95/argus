@@ -103,6 +103,8 @@
   "settings.desktop_notifications_unsupported": "此浏览器不支持通知 API，桌面通知不可用。",
   "settings.desktop_notifications_blocked": "通知权限已被拒绝。请在浏览器或系统设置中重新允许，然后再次开启此开关。",
   "channel.public_url_invalid": "公共 URL 必须以 http:// 或 https:// 开头",
+  "intro.directory_required_title": "请先选择工作目录",
+  "intro.directory_required_body": "点击上方标题栏的文件夹图标，选择一个项目目录 — OpenCorvus 将在该目录中读写文件。设置工作目录后输入区会自动激活。",
   "task.search_placeholder": "搜索任务…",
   "task.search_empty": "未找到匹配 \"{{query}}\" 的任务",
   "cmdk.placeholder": "输入命令 — 任务、设置、主题、语言…",
