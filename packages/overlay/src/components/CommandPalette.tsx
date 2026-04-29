@@ -71,8 +71,8 @@ export function CommandPalette() {
     cmds.push({
       id: "task:new",
       label: t("task.new"),
-      hint: t("task.new"),
-      group: "task",
+      hint: t("cmdk.group.task"),
+      group: t("cmdk.group.task"),
       keywords: "new task create",
       run: () => {
         void selectTask("");
@@ -89,7 +89,7 @@ export function CommandPalette() {
         id: `task:${id}`,
         label: title,
         hint: String(item?.task?.status || ""),
-        group: "task",
+        group: t("cmdk.group.task"),
         keywords: `${id} ${item?.task?.directory || ""}`,
         run: () => {
           void selectTask(id);
@@ -107,7 +107,7 @@ export function CommandPalette() {
       cmds.push({
         id: `settings:${tab.tab}`,
         label: `${t("config.title")}: ${label}`,
-        group: "settings",
+        group: t("cmdk.group.settings"),
         keywords: `settings config ${tab.tab}`,
         run: () => {
           openConfigDialog();
@@ -119,8 +119,8 @@ export function CommandPalette() {
     for (const theme of THEMES) {
       cmds.push({
         id: `theme:${theme.id}`,
-        label: `Theme: ${theme.label}`,
-        group: "appearance",
+        label: `${t("cmdk.theme_prefix")}: ${theme.label}`,
+        group: t("cmdk.group.appearance"),
         keywords: `theme ${theme.id}`,
         run: () => {
           setSettingsStore("theme", theme.id);
@@ -133,8 +133,8 @@ export function CommandPalette() {
     for (const loc of LOCALES) {
       cmds.push({
         id: `locale:${loc.id}`,
-        label: `Locale: ${loc.label}`,
-        group: "appearance",
+        label: `${t("cmdk.locale_prefix")}: ${loc.label}`,
+        group: t("cmdk.group.appearance"),
         keywords: `locale language ${loc.id}`,
         run: () => {
           setSettingsStore("locale", loc.id);
@@ -146,8 +146,8 @@ export function CommandPalette() {
 
     cmds.push({
       id: "logs:open",
-      label: "Open Logs",
-      group: "tools",
+      label: t("cmdk.open_logs"),
+      group: t("cmdk.group.tools"),
       keywords: "logs viewer debug",
       run: () => {
         const btn = document.querySelector<HTMLElement>("#btnOpenLog, [data-i18n=\"titlebar.logs\"]");
@@ -273,15 +273,15 @@ export function CommandPalette() {
             ref={inputRef}
             type="search"
             class="cmdk-input"
-            placeholder="Type a command — task, settings, theme, locale…"
+            placeholder={t("cmdk.placeholder")}
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={handleKeyDown}
-            aria-label="Command palette search"
+            aria-label={t("cmdk.placeholder")}
           />
           <div class="cmdk-list" ref={listRef} role="listbox">
             <Show when={filtered().length > 0} fallback={
-              <div class="cmdk-empty">No matching commands</div>
+              <div class="cmdk-empty">{t("cmdk.empty")}</div>
             }>
               <For each={filtered()}>
                 {(cmd, i) => (
@@ -308,7 +308,7 @@ export function CommandPalette() {
             </Show>
           </div>
           <div class="cmdk-foot">
-            <kbd>↑↓</kbd> navigate · <kbd>↵</kbd> run · <kbd>esc</kbd> close
+            <kbd>↑↓</kbd> {t("cmdk.foot.navigate")} · <kbd>↵</kbd> {t("cmdk.foot.run")} · <kbd>esc</kbd> {t("cmdk.foot.close")}
           </div>
         </div>
       </div>
