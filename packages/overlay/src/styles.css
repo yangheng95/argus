@@ -6028,6 +6028,78 @@ select.field-input option {
   color: var(--text-strong);
 }
 
+/* GFM tables emitted by marked. Without dedicated styling, tables
+   inherited the default browser look — mismatched padding, no border on
+   the header row, body rows with the platform-default thin gray lines
+   that fight the dark theme. Now they read as a card-internal data table:
+   subtle separators, sticky-friendly thead, monospace-numeric cells. */
+.md-content table {
+  border-collapse: collapse;
+  margin: var(--ui-gap-sm) 0;
+  font-size: var(--ui-font-control);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.6);
+  overflow: hidden;
+  width: max-content;
+  max-width: 100%;
+}
+.md-content th,
+.md-content td {
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+}
+.md-content thead th {
+  background: var(--subtle-2);
+  color: var(--text-strong);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-strong);
+}
+.md-content tbody tr:last-child td {
+  border-bottom: none;
+}
+.md-content tbody tr:hover td {
+  background: var(--subtle-1);
+}
+
+/* GFM task-lists ([ ] / [x]). marked emits `<input type="checkbox">`
+   inside the <li>; the default checkbox doesn't visually align with the
+   text baseline and looks like a stray form control inside the message
+   body. Re-style as a tight glyph that integrates with the bullet flow. */
+.md-content ul li input[type="checkbox"] {
+  margin: 0 6px 0 -16px;
+  vertical-align: -2px;
+  accent-color: var(--accent);
+  cursor: default;
+}
+.md-content ul li:has(input[type="checkbox"]) {
+  list-style: none;
+}
+
+/* Blockquotes — used by docs-style assistant replies. Default browser
+   style is a flush black left margin; recolor to the accent so it reads
+   as a callout, not a missing-CSS artifact. */
+.md-content blockquote {
+  margin: var(--ui-gap-sm) 0;
+  padding: var(--ui-gap-xs) var(--ui-gap-md);
+  border-left: 3px solid var(--accent-dim);
+  background: var(--subtle-1);
+  color: var(--text-soft);
+  border-radius: 0 calc(var(--radius) * 0.5) calc(var(--radius) * 0.5) 0;
+}
+.md-content blockquote > :first-child { margin-top: 0; }
+.md-content blockquote > :last-child { margin-bottom: 0; }
+
+/* Horizontal rule — same treatment, otherwise renders as a stark white
+   line that doesn't match any other divider in the UI. */
+.md-content hr {
+  border: 0;
+  height: 1px;
+  margin: var(--ui-gap-md) 0;
+  background: var(--border-strong);
+}
+
 .session-content .md-h1,
 .session-content .md-h2,
 .session-content .md-h3 {
