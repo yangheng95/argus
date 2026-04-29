@@ -209,6 +209,14 @@ export function applyEvent(event: any): void {
     return handleIntegrityCompleted(event);
   }
 
+  // ── Delivery deterministic gate rejection ──
+  // Surfaces runtime-evidence pre-gate rejections (empty_root_shell etc.) that
+  // never invoke the LLM agent — without this card the operator sees
+  // verdict=rejected with no visible explanation. Stable id per (task,iteration).
+  if (type === "delivery.gate.rejected") {
+    return handleDeliveryGateRejected(event);
+  }
+
   // ── Session lifecycle (single source) ──
   // session.status from packages/opencorvus/src/session/status.ts is the
   // only signal that flips a session card out of `running`. Carries
@@ -558,6 +566,52 @@ function handleInteraction(event: any): void {
   // Interactions are sourced from boardStore.board.interactions, not the event
   // payload — the board routes handle the write, we reproject.
   rebuildBoardDerivedCards();
+}
+
+// ── Delivery deterministic gate rejection ──
+
+function deliveryGateCardID(taskID: string, iteration: number): string {
+  return `delivery-gate:${taskID}:${iteration}`;
+}
+
+function handleDeliveryGateRejected(event: any): void {
+  const props = propsOf(event);
+  const taskID = String(props.taskID || "");
+  if (!taskID) throw new Error("delivery.gate.rejected missing taskID");
+  const iteration = Number(props.iteration ?? 0);
+  const summary = String(props.summary || "");
+  const violations = Array.isArray(props.violations) ? props.violations : [];
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  if (!(emittedAt > 0)) {
+    throw new Error(`delivery.gate.rejected missing emittedAt (taskID=${taskID})`);
+  }
+
+  const cardID = deliveryGateCardID(taskID, iteration);
+  const violationLines = violations.map(
+    (v: any) => `[${String(v?.kind || "unknown")}] ${String(v?.detail || "")}`,
+  );
+  const text = [summary, "", ...violationLines].filter(Boolean).join("\n");
+
+  const existing = cardTreeStore.cards[cardID];
+  setCardTreeStore("cards", cardID, {
+    ...(existing ?? {}),
+    id: cardID,
+    kind: "agent",
+    stage: "delivery",
+    accent: stageAccent("delivery"),
+    status: "error",
+    title: roleTitleKey("delivery"),
+    subtitle: summary,
+    parts: [
+      { type: "text", partID: `${cardID}:body`, text },
+    ],
+    childIDs: [],
+    time: emittedAt,
+  } as any);
+  // The card has no goalID and is not session-routed, so it lives at the top
+  // level. Re-derive `order` so the new card surfaces immediately (parallel
+  // to how integrity cards rely on rebuildTopLevelOrder via board ticks).
+  rebuildTopLevelOrder();
 }
 
 // ── Integrity review ──

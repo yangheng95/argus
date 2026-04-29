@@ -1105,6 +1105,24 @@ export const Event = {
    *  issues / corrections / missing goals so the overlay can render a native
    *  verdict card. The runtime aggregates `verdict` from per-dimension worst-
    *  case; the LLM does NOT supply a top-level verdict. */
+  /** Delivery deterministic pre-gate rejection. Fires when DeliveryService.verify
+   *  short-circuits via runtime-evidence (e.g. empty_root_shell, no build artifact)
+   *  and never invokes the LLM agent — so no agent session is created and no
+   *  agent message card surfaces in the overlay. Without this event the operator
+   *  sees verdict=rejected with no visible explanation card.
+   *  Stable identity: one card per (taskID, iteration). */
+  DeliveryGateRejected: BusEvent.define(
+    "delivery.gate.rejected",
+    z.object({
+      taskID: Identifier.schema("task"),
+      iteration: z.number(),
+      summary: z.string(),
+      violations: z.array(z.object({
+        kind: z.string(),
+        detail: z.string(),
+      })),
+    }),
+  ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",
     z.object({
