@@ -16,6 +16,17 @@ import { renderOverlayHtml } from "./html"
  * inline scripts gated by a per-render nonce.
  */
 
+/**
+ * audit-2026-04-29 W2-P8 — hard ceiling on a single ui-command
+ * payload (post-JSON length, in bytes). 6 MiB sits above the
+ * attach-file 4 MiB cap so a base64-encoded 4 MiB attachment fits
+ * (4 × 4/3 ≈ 5.33 MiB encoded, plus envelope overhead) but a
+ * runaway accidental payload (e.g. dump an open editor's full
+ * AST through composer.attach) is rejected before postMessage
+ * stalls the webview main thread.
+ */
+const UI_COMMAND_MAX_BYTES = 6 * 1024 * 1024
+
 export class OpencorvusPanel {
   /** The currently open panel, or undefined when none is shown. The
    *  attach-file command reads this to decide whether to push the
@@ -67,7 +78,6 @@ export class OpencorvusPanel {
   ) {
     this.panel = panel
     this.sidecar = sidecar
-    this.bridge = new TransportBridge(panel.webview, sidecar)
     this.refresh(sidecar)
   }
 
@@ -117,6 +127,17 @@ export class OpencorvusPanel {
    * HostTransport.subscribeUiCommand — sending a kind nobody
    * subscribes to is loud-warned at the webview console rather than
    * silently dropped (plan §一-7).
+   *
+   * audit-2026-04-29 W2-P8 — size guard. Pre-fix any caller (today
+   * just attach-file with its own MAX_ATTACH_BYTES check; tomorrow
+   * any new ui-command source) could shove an arbitrarily large
+   * payload through postMessage. VS Code's webview channel uses
+   * structured clone, which a multi-MiB payload makes synchronously
+   * stall on the extension main thread, then again on the webview
+   * main thread. The cap below is post-JSON to also catch deeply
+   * nested objects whose size doesn't show up on a shallow byte
+   * estimate. Drop with a loud `console.error` and skip postMessage
+   * — never silently truncate payloads (CLAUDE.md §一-7).
    */
   sendUiCommand(kind: string, payload: unknown): void {
     const msg: ExtensionUiCommandMessage = {
@@ -124,6 +145,22 @@ export class OpencorvusPanel {
       type: "ui-command",
       kind,
       payload,
+    }
+    let serialized: string
+    try {
+      serialized = JSON.stringify(msg)
+    } catch (err) {
+      console.error(
+        `[opencorvus] sendUiCommand(${kind}): payload not JSON-serialisable, dropping.`,
+        err,
+      )
+      return
+    }
+    if (serialized.length > UI_COMMAND_MAX_BYTES) {
+      console.error(
+        `[opencorvus] sendUiCommand(${kind}): payload ${serialized.length} bytes exceeds ${UI_COMMAND_MAX_BYTES}-byte cap, dropping.`,
+      )
+      return
     }
     void this.panel.webview.postMessage(msg)
   }
