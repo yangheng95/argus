@@ -7,8 +7,14 @@ import { createSignal, For, Show } from "solid-js";
 import { t } from "../../utils/i18n";
 import { appStore, setAppStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
-import { apiJson } from "../../services/api";
+import { apiJson, ApiError } from "../../services/api";
 import { testProviderConnection, type ProviderTestResult } from "../../services/llm";
+
+function describeFailure(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
 
 interface ProviderModel {
   name: string;
@@ -32,6 +38,13 @@ export default function ProvidersPanel() {
   // edited or removed (covered by row remount via the For key).
   const [testing, setTesting] = createSignal<Set<string>>(new Set());
   const [testResults, setTestResults] = createSignal<Map<string, ProviderTestResult>>(new Map());
+  // Surface every save / delete / form-validation failure into the UI.
+  // Before this signal existed, handleSave/handleDelete only `console.error`d
+  // (Tauri WebView users have no devtools), and a silent `return` on missing
+  // id / api in handleSave produced a button that did nothing. Anything
+  // user-visible writes here; clearForm / startAdd / startEdit / cancel
+  // resets it so a new attempt starts clean.
+  const [formError, setFormError] = createSignal<string | null>(null);
 
   async function handleTest(providerId: string, models: Record<string, ProviderModel>) {
     const modelID = Object.keys(models)[0];
@@ -81,8 +94,9 @@ export default function ProvidersPanel() {
     return p as Record<string, CustomProvider>;
   }
 
-  function catalogProviders(): Record<string, any> {
-    return appStore.providerCatalog || {};
+  function catalogProviders(): any[] {
+    const cat = appStore.providerCatalog as any;
+    return Array.isArray(cat?.all) ? cat.all : [];
   }
 
   function resetForm() {
@@ -91,6 +105,7 @@ export default function ProvidersPanel() {
     setFormApi("");
     setFormEnvKey("");
     setFormModels("");
+    setFormError(null);
   }
 
   function startAdd() {
@@ -112,6 +127,7 @@ export default function ProvidersPanel() {
     setFormModels(modelStr);
     setEditing(id);
     setShowAdd(true);
+    setFormError(null);
   }
 
   function parseModels(text: string): Record<string, ProviderModel> {
@@ -130,8 +146,16 @@ export default function ProvidersPanel() {
   }
 
   async function handleSave() {
+    setFormError(null);
     const id = editing() || formId().trim().toLowerCase().replace(/[^a-z0-9-_]/g, "-");
-    if (!id || !formApi().trim()) return;
+    if (!id) {
+      setFormError(t("provider.form.error.id_required"));
+      return;
+    }
+    if (!formApi().trim()) {
+      setFormError(t("provider.form.error.api_required"));
+      return;
+    }
 
     setSaving(true);
     try {
@@ -156,12 +180,14 @@ export default function ProvidersPanel() {
       setEditing(null);
     } catch (e) {
       console.error("[providers] save failed", e);
+      setFormError(t("provider.form.error.save_failed", { reason: describeFailure(e) }));
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(id: string) {
+    setFormError(null);
     setSaving(true);
     try {
       await updateConfig((cfg) => {
@@ -175,6 +201,7 @@ export default function ProvidersPanel() {
       setAppStore("config", newCfg);
     } catch (e) {
       console.error("[providers] delete failed", e);
+      setFormError(t("provider.form.error.delete_failed", { id, reason: describeFailure(e) }));
     } finally {
       setSaving(false);
     }
@@ -189,9 +216,14 @@ export default function ProvidersPanel() {
   const providerEntries = () => Object.entries(configProviders());
   const catalogEntries = () => {
     const custom = new Set(Object.keys(configProviders()));
-    return Object.entries(catalogProviders())
-      .filter(([id]) => !custom.has(id))
-      .map(([id, p]) => ({ id, name: p.name || id, source: p.source || "auto", modelCount: Object.keys(p.models || {}).length }));
+    return catalogProviders()
+      .filter((p: any) => p && typeof p.id === "string" && !custom.has(p.id))
+      .map((p: any) => ({
+        id: p.id,
+        name: p.name || p.id,
+        source: p.source || "auto",
+        modelCount: Object.keys(p.models || {}).length,
+      }));
   };
 
   return (
@@ -354,6 +386,14 @@ export default function ProvidersPanel() {
                 onInput={(e) => setFormModels(e.currentTarget.value)}
               />
             </label>
+
+            <Show when={formError()}>
+              {(msg) => (
+                <div class="provider-form-error" role="alert" aria-live="polite">
+                  {msg()}
+                </div>
+              )}
+            </Show>
 
             <div class="dialog-actions compact provider-form-actions">
               <button type="button" class="btn mini" onClick={cancel}>
