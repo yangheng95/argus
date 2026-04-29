@@ -20,6 +20,7 @@ import { createSignal, createMemo, createResource, For, Show } from "solid-js";
 import { apiJson } from "../../services/api";
 import { patchConfig, updateConfig } from "../../services/config";
 import { appStore } from "../../store/app";
+import { t } from "../../utils/i18n";
 
 interface AgentInfo {
   name: string;
@@ -248,13 +249,16 @@ export default function AgentModelsPanel() {
         </Show>
 
         <Show when={data.loading}>
-          <div class="empty-hint">Loading agents…</div>
+          <div class="agent-models-loading" role="status" aria-live="polite">
+            <span class="agent-models-loading-spinner" aria-hidden="true" />
+            <span>{t("agent_models.loading")}</span>
+          </div>
         </Show>
 
         <Show when={data.error}>
           <div class="agent-models-error" role="alert">
             <div class="agent-models-error-msg">
-              Failed to load agent models: {String((data.error as any)?.message ?? data.error)}
+              {t("agent_models.load_failed", { error: String((data.error as any)?.message ?? data.error) })}
             </div>
             <button
               type="button"
@@ -262,7 +266,7 @@ export default function AgentModelsPanel() {
               onClick={() => setRefreshToken((x) => x + 1)}
               disabled={data.loading}
             >
-              {data.loading ? "Retrying…" : "Retry"}
+              {data.loading ? t("common.retrying") : t("common.retry")}
             </button>
           </div>
         </Show>

@@ -2682,6 +2682,33 @@ body[data-theme="light"] .section-badge {
   outline-offset: 1px;
 }
 
+/* AgentModelsPanel loading state — replaces the bare "Loading…" text
+   with a spinner + label so the operator can distinguish "still
+   fetching" from "fetched but empty" at a glance. */
+.agent-models-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  margin: var(--ui-gap-md) 0;
+  border-radius: var(--radius);
+  background: var(--subtle-1);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+  font-size: var(--ui-font-control);
+}
+.agent-models-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: agent-models-spin 0.7s linear infinite;
+}
+@keyframes agent-models-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* AgentModelsPanel error banner — same vocabulary as task-list-error so
    the operator's eye recognizes "load failed, click to retry" instantly,
    instead of the prior inline-styled red sentence with no action. */
