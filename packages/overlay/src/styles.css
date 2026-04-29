@@ -12525,6 +12525,47 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .board-intro__mode[data-mode="build"] .board-intro__mode-label::before {
   background: var(--good);
 }
+/* Cold-start CTA — high-contrast callout that appears when
+   settingsStore.directory is empty. Stronger fill than the regular
+   board-intro__section so the eye lands on it before the explanatory
+   text below. Pulses subtly to draw attention without being
+   obnoxious. */
+.board-intro__cta {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-gap-md) var(--ui-gap-lg);
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--text-strong);
+  animation: board-intro-cta-pulse 2.4s ease-in-out infinite;
+}
+@keyframes board-intro-cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+}
+.board-intro__cta-icon {
+  font-size: calc(20px * var(--ui-scale));
+  line-height: 1;
+}
+.board-intro__cta-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.board-intro__cta-title {
+  font-weight: 600;
+  font-size: var(--ui-font-body);
+  color: var(--text-strong);
+}
+.board-intro__cta-text {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
 .board-intro__foot {
   text-align: center;
   padding-top: var(--ui-gap-sm);
