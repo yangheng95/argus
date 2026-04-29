@@ -29,6 +29,31 @@ function formatTokenCount(n: number): string {
   return Math.round(n / 1000) + "k";
 }
 
+/** Format a cost in USD as a tight badge value: under $0.01 → "<$0.01",
+ *  under $1 → 3-decimal cents-wise, otherwise 2 decimals. The composer is
+ *  scanning hundreds of these so we stay under 7 chars. */
+function formatCostUSD(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n === 0) return "$0";
+  if (n < 0.01) return "<$0.01";
+  if (n < 1) return "$" + n.toFixed(3);
+  return "$" + n.toFixed(2);
+}
+
+/** Human-friendly duration in ms → "12s" / "3m 14s" / "1h 02m". Used by the
+ *  CardHeader running-or-finished duration chip. */
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "";
+  const total = Math.round(ms / 1000);
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes < 60) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  const mm = minutes % 60;
+  return mm === 0 ? `${hours}h` : `${hours}h ${String(mm).padStart(2, "0")}m`;
+}
+
 function previewPlainText(text: string): string {
   return String(text || "")
     .replace(/```[\s\S]*?```/g, (block) =>
@@ -311,6 +336,62 @@ export function CardHeader(props: {
             onClick={(e) => e.stopPropagation()}
           >
             ~{formatTokenCount(props.node.contextTokens as number)} tok{props.node.contextTokensEstimated ? " · est." : ""}
+          </span>
+        </Show>
+        <Show when={(() => {
+          const u = props.node.usage;
+          if (!u) return false;
+          return (u.totalTokens ?? 0) > 0 || (u.costUSD ?? 0) > 0;
+        })()}>
+          {(_) => {
+            const u = () => props.node.usage!;
+            const totalLabel = () => {
+              const t = u().totalTokens ?? 0;
+              const inT = u().inputTokens ?? 0;
+              const outT = u().outputTokens ?? 0;
+              if (t > 0) return formatTokenCount(t);
+              if (inT > 0 || outT > 0) return formatTokenCount(inT + outT);
+              return "";
+            };
+            const costLabel = () => {
+              const c = u().costUSD ?? 0;
+              return c > 0 ? formatCostUSD(c) : "";
+            };
+            const tip = () => {
+              const u_ = u();
+              const parts: string[] = [];
+              if ((u_.inputTokens ?? 0) > 0) parts.push(`↑ ${u_.inputTokens} in`);
+              if ((u_.outputTokens ?? 0) > 0) parts.push(`↓ ${u_.outputTokens} out`);
+              if ((u_.totalTokens ?? 0) > 0) parts.push(`Σ ${u_.totalTokens} total`);
+              if ((u_.costUSD ?? 0) > 0) parts.push(formatCostUSD(u_.costUSD!));
+              return parts.join(" · ");
+            };
+            return (
+              <span class="card__usage-hint" title={tip()} onClick={(e) => e.stopPropagation()}>
+                <Show when={totalLabel()}>
+                  <span class="card__usage-tokens">{totalLabel()} tok</span>
+                </Show>
+                <Show when={costLabel()}>
+                  <span class="card__usage-cost">{costLabel()}</span>
+                </Show>
+              </span>
+            );
+          }}
+        </Show>
+        <Show when={(() => {
+          const start = props.node.time;
+          const end = props.node.timeCompleted;
+          if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+          return (end as number) > (start as number);
+        })()}>
+          <span
+            class="card__duration"
+            title={t("card.duration_tooltip", {
+              value: formatDuration((props.node.timeCompleted as number) - props.node.time),
+            })}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {formatDuration((props.node.timeCompleted as number) - props.node.time)}
           </span>
         </Show>
         <Show when={canCopy()}>

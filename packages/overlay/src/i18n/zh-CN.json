@@ -561,6 +561,7 @@
   "titlebar.server_config": "服务端设置",
   "transcript.compaction": "[上下文压缩]",
   "card.context_tokens_tooltip": "本轮约 {value} 个提示词 token（服务商上报，实际计费可能略有偏差）",
+  "card.duration_tooltip": "会话耗时 {{value}}（从首条消息到终态）",
   "card.context_tokens_tooltip_estimated": "本轮约 {value} 个提示词 token（本地按字符数估算，服务商尚未返回精确值）",
   "card.rewind": "撤回时间线到这张卡片之前（仅过滤事件，不改动代码）",
   "card.rewind_confirm": "撤回时间线到这张卡片之前？后续事件会被隐藏，项目代码不会被修改。",

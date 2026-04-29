@@ -938,6 +938,53 @@ body[data-theme="light"] .card__round {
   opacity: 0.72;
 }
 
+/* card__usage-hint — sibling of card__token-hint that surfaces actual LLM
+   usage (input/output/total tokens + USD cost) emitted by the executor via
+   `usage.updated`. Sits to the right of the context-token estimate so the
+   operator gets both "what fits in the prompt window" and "what we
+   actually spent". Same low-contrast treatment so it doesn't fight the
+   title row. */
+.card__usage-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-soft);
+  opacity: 0.55;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.card__head:hover .card__usage-hint {
+  opacity: 0.85;
+}
+.card__usage-cost {
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+/* card__duration — running-or-finished elapsed time chip, only rendered
+   once the session reaches a terminal state and timeCompleted is stamped.
+   Matches the token hint cadence so the operator scans the same column
+   for "how long did this take?" alongside "how much did it cost?". */
+.card__duration {
+  padding: 0 6px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--text-soft);
+  opacity: 0.5;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.card__head:hover .card__duration {
+  opacity: 0.78;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Interaction Card
    Self-contained system-prompt card for pending permission /

@@ -172,6 +172,24 @@ export interface CardNode {
   toolPart?: any;
   contextTokens?: number;
   contextTokensEstimated?: boolean;
+  /** Aggregate LLM usage observed for this card's session — populated from
+   *  `usage.updated` events emitted by the executor / managed runtime
+   *  (packages/opencorvus/src/executor/managed.ts). Renderer (CardHeader)
+   *  prints `↑in / ↓out · $cost` next to the card's existing context
+   *  hint. Optional fields stay undefined until the first event arrives;
+   *  once populated, later events overwrite (executor sends cumulative
+   *  totals, not deltas). */
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    costUSD?: number;
+  };
+  /** Timestamp (ms) when the session this card represents transitioned to
+   *  a terminal state (idle / error / done). Stamped by tree-writer's
+   *  `handleSessionStatus` on the terminal flip. CardHeader subtracts
+   *  `time` to render the running-or-finished duration. */
+  timeCompleted?: number;
   /** Structured integrity review payload — only populated for kind="integrity"
    *  nodes. Mirrors `IntegrityReviewCompleted` event shape (see
    *  opencorvus/engine/model.ts). Rendered natively by <IntegrityCard>; the
