@@ -1275,6 +1275,42 @@ body[data-theme="light"] .card__round {
   opacity: 0.58;
 }
 
+/* Reply send-failure chip — sits above the action row so the operator's
+   eye lands on it before they retry. Dismissable so a stale error
+   message doesn't follow the next attempt. */
+.card__agent-reply-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bad-dim);
+  border: 1px solid color-mix(in srgb, var(--bad) 36%, transparent);
+  color: var(--bad);
+  font-size: var(--card-sub-size);
+  line-height: 1.4;
+}
+.card__agent-reply-error-msg {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.card__agent-reply-error-dismiss {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--bad);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.card__agent-reply-error-dismiss:hover {
+  background: color-mix(in srgb, var(--bad) 18%, transparent);
+}
+
 .trace-panel {
   margin: 8px 0 12px;
   border: 1px solid var(--border, rgba(255, 255, 255, 0.08));

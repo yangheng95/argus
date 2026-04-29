@@ -25,6 +25,7 @@ export interface AgentSessionReplyBoxProps {
 export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
   const [text, setText] = createSignal("");
   const [sending, setSending] = createSignal(false);
+  const [error, setError] = createSignal<string>("");
 
   const canSend = () => !sending() && text().trim().length > 0;
 
@@ -33,9 +34,15 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
     if (!canSend()) return;
     const message = text().trim();
     setSending(true);
+    setError("");
     try {
       await props.onSend(message);
+      // Only clear the textarea on success — failed sends should keep
+      // the operator's text so they don't have to retype after a retry.
       setText("");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg || t("card.agent_reply_failed"));
     } finally {
       setSending(false);
     }
@@ -62,6 +69,18 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
           }
         }}
       />
+      <Show when={error()}>
+        <div class="card__agent-reply-error" role="alert">
+          <span class="card__agent-reply-error-msg">{error()}</span>
+          <button
+            type="button"
+            class="card__agent-reply-error-dismiss"
+            onClick={() => setError("")}
+            aria-label={t("common.clear")}
+            title={t("common.clear")}
+          >×</button>
+        </div>
+      </Show>
       <div class="card__agent-reply-actions">
         <button
           type="submit"
