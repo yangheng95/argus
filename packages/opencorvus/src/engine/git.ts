@@ -339,8 +339,11 @@ async function commitDeliveryRound(input: {
   verdict: { verdict: string; summary?: string; rejection_count?: number }
 }): Promise<{ commit?: string; mode: "created_commit" | "skipped"; error?: string }> {
   const cwd = Instance.directory
+  log.info("commitDeliveryRound: ensureGitignore start", { cwd, iteration: input.iteration })
   await ensureGitignore()
+  log.info("commitDeliveryRound: ensureGitignore done; git add -A start", { cwd })
   const added = await git(["add", "-A"], { cwd })
+  log.info("commitDeliveryRound: git add -A done", { exitCode: added.exitCode })
   if (added.exitCode !== 0) {
     const err = added.stderr.toString().trim() || added.stdout.toString().trim() || "git add -A failed"
     return { mode: "skipped", error: err }
@@ -350,12 +353,17 @@ async function commitDeliveryRound(input: {
   const body = (input.verdict.summary ?? "").trim()
   const args = ["commit", "--no-gpg-sign", "--allow-empty", "-m", subject]
   if (body) args.push("-m", body)
+  log.info("commitDeliveryRound: git commit start")
   const result = await git(args, { cwd, env: env() })
+  log.info("commitDeliveryRound: git commit done", { exitCode: result.exitCode })
   if (result.exitCode !== 0) {
     const err = result.stderr.toString().trim() || result.stdout.toString().trim() || "git commit failed"
     return { mode: "skipped", error: err }
   }
-  return { mode: "created_commit", commit: await head() }
+  log.info("commitDeliveryRound: head() start")
+  const sha = await head()
+  log.info("commitDeliveryRound: head() done", { sha })
+  return { mode: "created_commit", commit: sha }
 }
 
 /**
