@@ -378,6 +378,47 @@ document.addEventListener("click", (ev) => {
   });
 }, listenerOpts);
 
+// Code-block copy buttons rendered by utils/markdown.ts wrapCodeBlock.
+// markdown HTML lives inside innerHTML on streamed text — wiring per-button
+// click handlers in Solid would require re-binding on every stream tick,
+// so a single document-level listener keeps the renderer pure.
+document.addEventListener("click", (ev) => {
+  const target = ev.target as HTMLElement | null;
+  if (!target) return;
+  const btn = target.closest<HTMLButtonElement>("button[data-md-copy]");
+  if (!btn) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const source = btn.getAttribute("data-md-copy") || "";
+  if (!source) return;
+  const flash = (text: string) => {
+    btn.dataset.copied = "true";
+    const prev = btn.getAttribute("aria-label") || "";
+    btn.setAttribute("aria-label", text);
+    btn.title = text;
+    setTimeout(() => {
+      delete btn.dataset.copied;
+      btn.setAttribute("aria-label", prev || "Copy code");
+      btn.title = prev || "Copy code";
+    }, 1400);
+  };
+  const decoded = source
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  void (async () => {
+    try {
+      await navigator.clipboard.writeText(decoded);
+      flash("Copied");
+    } catch (err) {
+      console.error("[md-copy] clipboard write failed", err);
+      flash("Copy failed");
+    }
+  })();
+}, listenerOpts);
+
 function installGlobalBridges(): void {
   installAppDialogBridge();
   (window as any).renderMarkdown = renderMarkdown;
