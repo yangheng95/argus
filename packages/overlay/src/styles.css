@@ -2385,21 +2385,17 @@ body[data-theme="light"] .section-badge {
 .section-body > .empty-hint,
 #solidChangesPanel > .empty-hint,
 .diff-preview-empty .empty-hint,
-.file-view-empty .empty-hint {
+.file-view-empty .empty-hint,
+.sidebar-list-cluster > .empty-hint {
   position: relative;
   display: grid;
   gap: calc(8px * var(--ui-scale));
   width: min(100%, calc(340px * var(--ui-scale)));
   margin: 0;
-  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: calc(14px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(84, 138, 247, 0.012) 72%, transparent),
-    color-mix(in srgb, var(--surface-strong) 74%, transparent);
-  box-shadow:
-    0 8px 14px rgba(6, 10, 16, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text-soft);
 }
 
@@ -2409,11 +2405,10 @@ body[data-theme="light"] .section-badge {
 .diff-preview-empty .empty-hint::before,
 .file-view-empty .empty-hint::before {
   content: "";
-  width: calc(10px * var(--ui-scale));
-  height: calc(10px * var(--ui-scale));
+  width: calc(7px * var(--ui-scale));
+  height: calc(7px * var(--ui-scale));
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(91, 141, 239, 0.92), rgba(146, 164, 203, 0.76));
-  box-shadow: 0 0 0 4px rgba(91, 141, 239, 0.08);
+  background: var(--accent);
 }
 
 .section-body > .empty-hint,
@@ -12132,27 +12127,12 @@ body[data-theme="light"] .btn-primary {
   color: var(--text-soft);
 }
 
-.sidebar-list-cluster > .empty-hint,
-.section-body > .empty-hint,
-#solidChangesPanel > .empty-hint,
-.diff-preview-empty .empty-hint,
-.file-view-empty .empty-hint {
-  padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  border-radius: var(--radius) !important;
-  background: var(--surface) !important;
-  box-shadow: none !important;
-}
-
-.sidebar-list-cluster > .empty-hint::before,
-.section-body > .empty-hint::before,
-#solidChangesPanel > .empty-hint::before,
-.diff-preview-empty .empty-hint::before,
-.file-view-empty .empty-hint::before {
-  width: calc(7px * var(--ui-scale));
-  height: calc(7px * var(--ui-scale));
-  background: var(--accent);
-  box-shadow: none;
-}
+/* (rule 8: single source) — the empty-hint vocabulary used to be defined
+   twice: once at the top of the file with a gradient + drop shadow, then
+   overridden at the file's tail with !important to flatten back to a
+   plain --surface fill + a smaller --accent dot. The two definitions
+   were merged into the original block above so there's one source of
+   truth and no !important hacks. */
 
 .chat-compose-row {
   grid-template-columns: minmax(0, 1fr) auto auto;
