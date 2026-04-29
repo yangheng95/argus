@@ -1035,6 +1035,8 @@ export const Event = {
     anchorEventID: z.string().optional(),
     reason: z.string().optional(),
     rewindCount: z.number().int().nonnegative(),
+    resetWorktree: z.boolean(),
+    anchorKind: z.enum(["cursorTime", "message"]),
   })),
   MilestoneActivated: BusEvent.define("milestone.activated", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
   MilestonePassed: BusEvent.define("milestone.passed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),

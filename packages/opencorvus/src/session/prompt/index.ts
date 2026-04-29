@@ -6,7 +6,7 @@ import { Filesystem } from "../../util/filesystem"
 import { Identifier } from "../../id/id"
 import { Message } from "../message"
 import { Log } from "../../util/log"
-import { SessionRevert } from "../revert"
+import { clearRewindCursorForSession } from "@/engine/rewind"
 import { Session } from ".."
 import { Agent } from "../../agent/agent"
 import { Provider } from "../../provider/provider"
@@ -117,7 +117,7 @@ export namespace SessionPrompt {
 
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
-    await SessionRevert.cleanup(session)
+    await clearRewindCursorForSession(session.id)
 
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)

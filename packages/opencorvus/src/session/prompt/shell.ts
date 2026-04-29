@@ -4,7 +4,7 @@ import { Identifier } from "../../id/id"
 import { Message } from "../message"
 import { Log } from "../../util/log"
 import { Session } from ".."
-import { SessionRevert } from "../revert"
+import { clearRewindCursorForSession } from "@/engine/rewind"
 import { Agent } from "../../agent/agent"
 import { Instance } from "../../project/instance"
 import { Plugin } from "../../plugin"
@@ -58,10 +58,7 @@ export async function shell(
     }
   })
 
-  const session = await Session.get(input.sessionID)
-  if (session.revert) {
-    await SessionRevert.cleanup(session)
-  }
+  await clearRewindCursorForSession(input.sessionID)
   const agent = await Agent.get(input.agent)
   const model = input.model ?? agent.model ?? (await Provider.defaultModel())
   const userMsg: Message.User = {
