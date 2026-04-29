@@ -10,6 +10,7 @@
 
 import { configure as configureApi, apiJson } from "./api";
 import { getHostTransport } from "./host-transport";
+import { installComposerAttachSubscription } from "./composer-attach";
 import {
   checkConnection as checkServerConnection,
   startConnectionMonitor,
@@ -113,6 +114,12 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
     onReconnect,
     reconnectInterval = 10_000,
   } = options;
+
+ // 0. Install host → webview ui-command subscriptions (composer.attach
+ //    from VS Code "Attach Current File"; no-op in Tauri). Done first so
+ //    early host messages — e.g. an attach fired before the user even
+ //    saw the panel — still land on the chat composer (plan §19.2.6).
+  installComposerAttachSubscription();
 
  // 1. Load settings from localStorage into the Solid store
   loadSettings();

@@ -81,6 +81,7 @@ interface ActiveStream {
 
 const pending = new Map<string, Pending>()
 const streams = new Map<string, ActiveStream>()
+const uiCommandHandlers = new Map<string, Set<(payload: unknown) => void>>()
 let installed = false
 
 function installListener(): void {
@@ -136,6 +137,22 @@ function handleIncoming(raw: unknown): void {
       s.closed = true
       cleanupAbort(s.signal, s.abortListener)
       try { s.handlers.onClose?.(msg.reason) } catch {}
+      return
+    }
+    case "ui-command": {
+      const handlers = uiCommandHandlers.get(msg.kind)
+      if (!handlers || handlers.size === 0) {
+        // Plan §一-7: never silently swallow. The extension sent a
+        // ui-command we didn't subscribe to — log loudly so the
+        // operator can see the contract drift.
+        console.warn(`[vscode-transport] no subscriber for ui-command kind=${msg.kind}`)
+        return
+      }
+      for (const handler of handlers) {
+        try { handler(msg.payload) } catch (err) {
+          console.error(`[vscode-transport] ui-command handler threw kind=${msg.kind}`, err)
+        }
+      }
       return
     }
   }
@@ -336,6 +353,22 @@ export function createVsCodeTransport(): HostTransport {
       // (open-url, pickDir, pickFiles) through the extension host.
       return nativeUnsupported("vscode", command)
     },
+    subscribeUiCommand(kind, handler) {
+      let bucket = uiCommandHandlers.get(kind)
+      if (!bucket) {
+        bucket = new Set()
+        uiCommandHandlers.set(kind, bucket)
+      }
+      bucket.add(handler)
+      return {
+        unsubscribe() {
+          const set = uiCommandHandlers.get(kind)
+          if (!set) return
+          set.delete(handler)
+          if (set.size === 0) uiCommandHandlers.delete(kind)
+        },
+      }
+    },
   }
 }
 
@@ -343,6 +376,7 @@ export function createVsCodeTransport(): HostTransport {
 export function __resetVsCodeTransportForTest(): void {
   pending.clear()
   streams.clear()
+  uiCommandHandlers.clear()
   installed = false
   _vscode = undefined
 }

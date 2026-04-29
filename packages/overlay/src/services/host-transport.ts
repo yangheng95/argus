@@ -143,6 +143,24 @@ export class UnsupportedNativeCommandError extends Error {
   }
 }
 
+// ── Host-driven UI commands ──
+
+/**
+ * Host → webview UI command. The host (extension / Tauri) pushes a
+ * payload that should mutate visible UI state; e.g. "stage this file
+ * as a composer attachment" (plan §19.2.6). Subscribers are the
+ * overlay's UI stores; the transport routes by `kind`.
+ *
+ * Payloads are typed at the call site (the overlay subscriber casts
+ * to its expected shape based on `kind`) — adding a new kind is a
+ * coordinated change between the host and the subscriber, not a
+ * transport-level breaking change.
+ */
+export type UiCommandHandler = (payload: unknown) => void
+export interface UiCommandSubscription {
+  unsubscribe(): void
+}
+
 // ── The interface ──
 
 export interface HostTransport {
@@ -166,6 +184,13 @@ export interface HostTransport {
    * expressed via the VS Code API (plan §5.2: no silent no-op).
    */
   native(command: NativeCommand): Promise<unknown>
+  /**
+   * Subscribe to a host-driven UI command (e.g. "composer.attach").
+   * Tauri transport currently has no UI command source — it returns a
+   * no-op subscription. VS Code transport routes `ui-command` envelopes
+   * by `kind` to the registered handler.
+   */
+  subscribeUiCommand(kind: string, handler: UiCommandHandler): UiCommandSubscription
 }
 
 /**
