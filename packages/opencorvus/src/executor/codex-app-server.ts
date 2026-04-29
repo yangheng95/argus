@@ -672,7 +672,16 @@ function approvalPolicy() {
 function sandboxMode() {
   const raw = process.env.OPENCORVUS_EXECUTOR_CODEX_SANDBOX?.trim()
   if (raw === "read-only" || raw === "workspace-write" || raw === "danger-full-access") return raw
-  return "workspace-write"
+  // Default to full access. The codex app-server uses whatever `sandbox`
+  // value we send in `threadStart` and IGNORES config-file overrides at
+  // the thread level — so a conservative client-side default (the previous
+  // "workspace-write") silently re-imposed the sandbox even when bootstrap
+  // passed `-c sandbox_mode="danger-full-access"`. Caught on bench
+  // _session-20260429-084449.out (round-5): developer prompt still
+  // reported workspace-write, blocking 127.0.0.1 ports with EACCES.
+  // Benchmark runs are externally sandboxed (per-goal worktrees + ephemeral
+  // home), so the safety surface is the host, not codex's per-call gates.
+  return "danger-full-access"
 }
 
 function sandboxPolicy(cwd?: string, sandbox?: z.infer<typeof CodingRunInput>["sandbox"]) {

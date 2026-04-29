@@ -104,7 +104,7 @@ describe("codex app server executor", () => {
     }
   })
 
-  test("uses writable sandbox defaults for coding tasks", async () => {
+  test("uses full-access sandbox defaults for coding tasks", async () => {
     let started: Record<string, unknown> | null = null
     const provider = CodexAppServerExecutor.create({
       async initialize() {
@@ -154,7 +154,11 @@ describe("codex app server executor", () => {
 
     await collect(provider.run({ prompt: "test", cwd: "/repo" }))
     expect(started?.["approvalPolicy"] as string | undefined).toBe("never")
-    expect(started?.["sandbox"] as string | undefined).toBe("workspace-write")
+    // The thread-level sandbox sent via threadStart is authoritative — the
+    // app-server ignores config-toml sandbox_mode at the thread layer, so a
+    // conservative client default silently re-imposes the FS+net sandbox.
+    // Default to danger-full-access; bench is externally sandboxed.
+    expect(started?.["sandbox"] as string | undefined).toBe("danger-full-access")
   })
 
   test("honors read-only sandbox overrides for planning runs", async () => {
