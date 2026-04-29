@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono"
 import path from "path"
 import fs from "fs"
+import fsp from "fs/promises"
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -29,6 +30,55 @@ function resolveOverlayDir(): string | undefined {
 }
 
 export namespace OverlayUI {
+  /**
+   * Validate that a `/ui/...` request path stays inside the overlay
+   * dir. Returns the absolute filesystem path on success, or null
+   * when the request must be rejected with 403.
+   *
+   * Defends against:
+   *  - audit-2026-04-29 opencorvus F7 — `..` traversal (literal or
+   *    URL-encoded `%2e%2e/`). path.resolve normalises both, then a
+   *    `${dir}${sep}` prefix compare blocks sibling-dir leakage
+   *    (e.g. `/foo/ui-private/secret` no longer satisfies a naive
+   *    `startsWith("/foo/ui")`).
+   *  - audit-2026-04-29 opencorvus V6.a — NUL byte poisoning.
+   *    Bun.file / Node fs treat the NUL terminator inconsistently;
+   *    `path.resolve(dir, "./index.html\0/etc/passwd")` may serve
+   *    either depending on libc. Reject up-front rather than picking
+   *    a side.
+   *  - audit-2026-04-29 opencorvus V6.b — symlink escape. Once the
+   *    resolved path is inside dir, a malicious symlink at that path
+   *    pointing outside (e.g. planted by a tampered VSIX or a
+   *    misconfigured dev tree) would still leak the target's bytes
+   *    via Bun.file's transparent follow. realpath comparison closes
+   *    the gap; for non-existent paths we let the handler fall
+   *    through to its SPA index.html fallback (no escape there
+   *    because we re-validate inside the resolved dir).
+   *
+   * Note: input `reqPath` is already URL-decoded by Hono's parser
+   * (so `%2e%2e/` arrives as `../`, `%00` arrives as `\0`).
+   */
+  export async function validatePath(dir: string, reqPath: string): Promise<string | null> {
+    if (reqPath.includes("\0")) return null
+    const resolved = path.resolve(dir, "." + reqPath)
+    const dirWithSep = dir.endsWith(path.sep) ? dir : dir + path.sep
+    if (resolved !== dir && !resolved.startsWith(dirWithSep)) return null
+    // realpath throws ENOENT on non-existent paths; the SPA fallback
+    // handler handles that case downstream by serving index.html.
+    // For any OTHER error (EACCES on a hostile symlink target,
+    // ELOOP on a cycle), fail closed — refuse the request.
+    try {
+      const realFile = await fsp.realpath(resolved)
+      const realDir = await fsp.realpath(dir)
+      const realDirWithSep = realDir.endsWith(path.sep) ? realDir : realDir + path.sep
+      if (realFile !== realDir && !realFile.startsWith(realDirWithSep)) return null
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code !== "ENOENT" && code !== "ENOTDIR") return null
+    }
+    return resolved
+  }
+
   export function routes() {
     const app = new Hono()
 
@@ -48,23 +98,10 @@ export namespace OverlayUI {
       let reqPath = c.req.path.replace(/^\/ui/, "") || "/"
       if (reqPath === "/") reqPath = "/index.html"
 
-      // audit-2026-04-29 opencorvus F7 — `path.join(dir, reqPath)` plus
-      // `startsWith(dir)` was vulnerable on two axes:
-      //  1. No path-separator boundary on the prefix — a sibling dir
-      //     `/foo/ui-private/secret` would satisfy startsWith(`/foo/ui`)
-      //     because both share the `/foo/ui` prefix.
-      //  2. URL-encoded `..` segments (`%2e%2e`) reach `path.join` after
-      //     Hono's URL decode, where they are interpreted as literal
-      //     `..` and traverse out of dir.
-      // path.resolve normalises `..`; comparing with a `${dir}${sep}`
-      // prefix or an exact-equality check fixes both. Reject anything
-      // that escapes.
-      const resolved = path.resolve(dir, "." + reqPath)
-      const dirWithSep = dir.endsWith(path.sep) ? dir : dir + path.sep
-      if (resolved !== dir && !resolved.startsWith(dirWithSep)) {
+      const filePath = await validatePath(dir, reqPath)
+      if (filePath === null) {
         return c.text("Forbidden", 403)
       }
-      const filePath = resolved
 
       try {
         const file = Bun.file(filePath)
