@@ -133,4 +133,3 @@ if (!(await exists(builtOverlay))) {
 
 await fs.mkdir(distRoot, { recursive: true })
 await copyFile(builtOverlay, packagedOverlay, { required: true })
-await cleanBuildResidue()
