@@ -12,8 +12,16 @@ describe("PermissionNext.evaluate for permission.task", () => {
       action,
     }))
 
-  test("returns ask when no match (default)", () => {
-    expect(PermissionNext.evaluate("task", "code-reviewer", []).action).toBe("ask")
+  test("returns allow when no match (default — rule 23 + 25)", () => {
+    // audit-2026-04-29 W2-V29 — pre-fix this asserted "ask" but
+    // commit e8fa94dd1 ("fix(permission): hierarchical model,
+    // default allow (rule 23 + 25)") changed the no-match default
+    // to "allow". The test wasn't updated. CLAUDE.md §一-13
+    // forbids hidden state machines; the production default of
+    // "allow" matches the rule that LLM agents either run the
+    // tool or get a clear `deny` — no third "ask" wait state by
+    // default. See next.ts:316-323 for the contract.
+    expect(PermissionNext.evaluate("task", "code-reviewer", []).action).toBe("allow")
   })
 
   test("returns deny for explicit deny", () => {
@@ -35,7 +43,8 @@ describe("PermissionNext.evaluate for permission.task", () => {
     const ruleset = createRuleset({ "engine-*": "deny" })
     expect(PermissionNext.evaluate("task", "engine-fast", ruleset).action).toBe("deny")
     expect(PermissionNext.evaluate("task", "engine-slow", ruleset).action).toBe("deny")
-    expect(PermissionNext.evaluate("task", "general", ruleset).action).toBe("ask")
+    // V29: unmatched agent falls through to default "allow", not "ask".
+    expect(PermissionNext.evaluate("task", "general", ruleset).action).toBe("allow")
   })
 
   test("matches wildcard patterns with allow", () => {
@@ -208,8 +217,10 @@ describe("permission.task with real config files", () => {
         const ruleset = PermissionNext.fromConfig(config.permission ?? {})
         expect(PermissionNext.evaluate("task", "general", ruleset).action).toBe("allow")
         expect(PermissionNext.evaluate("task", "code-reviewer", ruleset).action).toBe("deny")
-        // Unspecified agents default to "ask"
-        expect(PermissionNext.evaluate("task", "unknown-agent", ruleset).action).toBe("ask")
+        // V29: unspecified agents default to "allow" (rule 23 + 25),
+        // not "ask" — the comment on line 220 was stale relative to
+        // the post-e8fa94dd1 default.
+        expect(PermissionNext.evaluate("task", "unknown-agent", ruleset).action).toBe("allow")
       },
     })
   })
