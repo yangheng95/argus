@@ -7,6 +7,7 @@ import {
   UnsupportedPlatformError,
 } from "./sidecar/errors"
 import { OpencorvusPanel } from "./webview/panel"
+import { runAttachFileCommand } from "./commands/attach-file"
 
 let outputChannel: vscode.OutputChannel | undefined
 let activeSidecar: SidecarHandle | undefined
@@ -22,11 +23,13 @@ export function activate(context: vscode.ExtensionContext): void {
       withErrorReporting(() => openCommand(context)),
     ),
     vscode.commands.registerCommand("opencorvus.attachFile", () =>
-      // M6 lands the real composer-draft semantics. For M2 the command
-      // is registered but explicitly inert so the contributes.commands
-      // entry in package.json doesn't 404.
-      vscode.window.showInformationMessage(
-        "OpenCorvus: attachFile is implemented in M6 — see plan §19.2.6.",
+      withErrorReporting(() =>
+        runAttachFileCommand({
+          ensureSidecar: async () => {
+            const sidecar = await ensureSidecar(context)
+            OpencorvusPanel.show(context, sidecar)
+          },
+        }),
       ),
     ),
   )

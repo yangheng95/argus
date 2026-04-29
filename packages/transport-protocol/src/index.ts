@@ -108,6 +108,51 @@ export interface ExtensionStreamCloseMessage {
   reason: string
 }
 
+/**
+ * Extension → Webview command. Used for host-driven UI mutations that
+ * are not request/response and not stream-shaped — e.g. "attach the
+ * current editor file as a draft attachment in the composer"
+ * (plan-vscode-extension.md §19.2.6).
+ *
+ * The webview MUST treat ui-commands as visible UI hints, never as a
+ * substitute for a user message (CLAUDE.md §一-15: no synthetic /
+ * hidden / audience-split messages).
+ *
+ * `kind` is an open-ended discriminator so adding a new command does
+ * not require bumping PROTOCOL_VERSION; receivers ignore unknown
+ * kinds. Adding a new `kind` IS still a contract change between the
+ * extension and the overlay; do it in one PR with both subscribers
+ * updated.
+ */
+export interface ExtensionUiCommandMessage {
+  protocol: typeof PROTOCOL_VERSION
+  type: "ui-command"
+  kind: string
+  payload: unknown
+}
+
+/**
+ * Concrete payload for `kind: "composer.attach"`. The webview pushes
+ * this onto its existing chat-attachments store so the file becomes a
+ * pending attachment in the composer; the user must still hit "send"
+ * to actually submit (plan §19.2.6, CLAUDE.md §一-15).
+ */
+export interface ComposerAttachPayload {
+  filename: string
+  mime: string
+  /** Inline data URL, e.g. `data:text/plain;base64,...`. */
+  dataUrl: string
+  /** Absolute filesystem path inside the workspace (informational). */
+  sourcePath: string
+  /** Active editor selection at the time of attach, 0-indexed lines. */
+  selection?: {
+    startLine: number
+    startColumn: number
+    endLine: number
+    endColumn: number
+  }
+}
+
 export interface ExtensionProtocolMismatchMessage {
   /**
    * Sentinel for "you and I disagree on the schema — reload". Sent
@@ -123,6 +168,7 @@ export type ExtensionMessage =
   | ExtensionStreamEventMessage
   | ExtensionStreamErrorMessage
   | ExtensionStreamCloseMessage
+  | ExtensionUiCommandMessage
   | ExtensionProtocolMismatchMessage
 
 // ── Helpers ──

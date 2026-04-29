@@ -311,6 +311,13 @@ export function createTauriTransport(): HostTransport {
         },
       }
     },
+    subscribeUiCommand(_kind, _handler) {
+      // Tauri overlay has no host-driven ui-command source today —
+      // attach-from-editor is a VS Code feature. Returning a no-op
+      // keeps the interface honest without faking a never-firing
+      // event channel (CLAUDE.md §一-7).
+      return { unsubscribe: () => {} }
+    },
     async native(command: NativeCommand): Promise<unknown> {
       switch (command.kind) {
         case "open-url":

@@ -1,4 +1,8 @@
 import * as vscode from "vscode"
+import {
+  PROTOCOL_VERSION,
+  type ExtensionUiCommandMessage,
+} from "@opencorvus-ai/transport-protocol"
 import type { SidecarHandle } from "../sidecar/manager"
 import { TransportBridge } from "../transport/bridge"
 import { renderOverlayHtml } from "./html"
@@ -13,7 +17,11 @@ import { renderOverlayHtml } from "./html"
  */
 
 export class OpencorvusPanel {
-  private static current: OpencorvusPanel | undefined
+  /** The currently open panel, or undefined when none is shown. The
+   *  attach-file command reads this to decide whether to push the
+   *  composer.attach ui-command directly or prompt the user to open
+   *  the panel first. */
+  static current: OpencorvusPanel | undefined
   private readonly panel: vscode.WebviewPanel
   private readonly disposables: vscode.Disposable[] = []
   private bridge: TransportBridge | undefined
@@ -82,6 +90,32 @@ export class OpencorvusPanel {
       hostLocale: vscode.env.language,
     })
     this.panel.webview.html = rendered.html
+  }
+
+  /**
+   * Push a `ui-command` envelope to the webview. Used for
+   * extension-driven UI mutations such as the composer.attach
+   * payload from `opencorvus.attachFile` (plan §19.2.6).
+   *
+   * `kind` MUST match a subscriber registered on the webview side via
+   * HostTransport.subscribeUiCommand — sending a kind nobody
+   * subscribes to is loud-warned at the webview console rather than
+   * silently dropped (plan §一-7).
+   */
+  sendUiCommand(kind: string, payload: unknown): void {
+    const msg: ExtensionUiCommandMessage = {
+      protocol: PROTOCOL_VERSION,
+      type: "ui-command",
+      kind,
+      payload,
+    }
+    void this.panel.webview.postMessage(msg)
+  }
+
+  /** Bring the panel to the foreground (used after attachFile so the
+   *  user sees the new pending attachment in the composer). */
+  reveal(): void {
+    this.panel.reveal(vscode.ViewColumn.Beside, /* preserveFocus */ true)
   }
 
   dispose(): void {
