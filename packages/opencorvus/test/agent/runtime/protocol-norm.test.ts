@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { normalizeToolInput, normalizeToolOutput } from "@/agent/runtime"
+// audit-2026-04-29 W2-V38 — `@/agent/runtime` namespace was removed;
+// normalize helpers moved to `@/session/tool-input-norm`. Pre-fix
+// the import broke at module load → "Cannot find module" →
+// "Unhandled error between tests" cascaded into other suites.
+import { normalizeToolInput, normalizeToolOutput } from "@/session/tool-input-norm"
 
 describe("normalizeToolInput", () => {
   test("undefined → ok empty object", () => {
