@@ -8,7 +8,8 @@
 // This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
-import { apiJson, apiUrl, apiHeaders } from "./api";
+import { apiJson } from "./api";
+import { getHostTransport } from "./host-transport";
 import { startSSE, stopSSE } from "./sse";
 import {
   clearMessages,
@@ -126,34 +127,6 @@ function relayAbort(
   }
   source.addEventListener("abort", abort, { once: true });
   return () => source.removeEventListener("abort", abort);
-}
-
-async function readWithAbort(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  signal: AbortSignal,
-): Promise<ReadableStreamReadResult<Uint8Array>> {
-  if (signal.aborted) {
-    await reader.cancel(signal.reason).catch(() => undefined);
-    throw signal.reason ?? new DOMException("Aborted", "AbortError");
-  }
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      signal.removeEventListener("abort", abort);
-      void reader.cancel(signal.reason).catch(() => undefined);
-      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener("abort", abort, { once: true });
-    reader.read().then(
-      (value) => {
-        signal.removeEventListener("abort", abort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", abort);
-        reject(error);
-      },
-    );
-  });
 }
 
 // ── Panel message request body builder ──
@@ -357,85 +330,80 @@ export async function submitMessage(
     }, timeoutMs);
   };
 
-  const body = JSON.stringify(
-    panelRequestBody(
-      text,
-      options.metadata ?? {},
-      requestID,
-      attachments,
-      executor,
-    ),
+  const requestPayload = panelRequestBody(
+    text,
+    options.metadata ?? {},
+    requestID,
+    attachments,
+    executor,
   );
 
   markActivity();
 
-  try {
-    const res = await fetch(apiUrl("panel/message/stream"), {
-      method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
-      body,
-      signal: controller.signal,
-    });
-
-    markActivity();
-
-    if (!res.ok || !res.body) {
-      throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
-    }
-    await options.onOpen?.();
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
+  // Route through HostTransport.openStream so this POST-stream pattern
+  // works identically under Tauri (fetch + ReadableStream + manual
+  // SSE block parsing in tauri-transport) and under VS Code (M4
+  // postMessage bridge with sidecar-side SSE forwarding). Per-event
+  // activity tracking replaces the historical per-chunk tracking;
+  // events arrive frequently enough that the granularity loss is
+  // imperceptible while removing reader-level abort plumbing.
+  return new Promise<unknown>((resolve, reject) => {
     let result: unknown = null;
+    let settled = false;
 
-    const consume = async (chunk: string, flush = false) => {
-      buf += chunk;
-      const blocks = buf.split(/\r?\n\r?\n/);
-      if (!flush) {
-        buf = blocks.pop() || "";
-      } else {
-        buf = "";
-      }
-      for (const block of blocks) {
-        const data = block
-          .split(/\r?\n/)
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trim())
-          .join("\n");
-        if (!data) continue;
-        try {
-          const ev = JSON.parse(data);
+    const handle = getHostTransport().openStream(
+      {
+        path: "panel/message/stream",
+        method: "POST",
+        body: { kind: "json", value: requestPayload },
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      },
+      {
+        onOpen: () => {
           markActivity();
-          await options.onEvent?.(ev);
-          if (ev.type === "done") {
-            result = ev.result;
+          void options.onOpen?.();
+        },
+        onEvent: (data) => {
+          let ev: any;
+          try {
+            ev = JSON.parse(data);
+          } catch {
+            return; // malformed SSE event — skip
           }
-        } catch {
- // malformed SSE event — skip
-        }
-      }
-    };
+          markActivity();
+          void options.onEvent?.(ev);
+          if (ev?.type === "done") result = ev.result;
+        },
+        onError: (err) => {
+          if (settled) return;
+          settled = true;
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          cleanupRelay();
+          reject(err);
+        },
+        onClose: (_reason) => {
+          if (settled) return;
+          settled = true;
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          cleanupRelay();
+          if (result !== null && result !== undefined) {
+            resolve(result);
+          } else {
+            reject(new Error("Panel stream ended without a final result"));
+          }
+        },
+      },
+    );
 
-    while (true) {
-      const { done, value } = await readWithAbort(reader, controller.signal);
-      if (done) {
-        await consume(decoder.decode(), true);
-        break;
-      }
-      markActivity();
-      await consume(decoder.decode(value, { stream: true }));
+    // Mirror prior abort behaviour: caller-side abort closes the stream.
+    const abortListener = () => handle.close();
+    if (controller.signal.aborted) {
+      handle.close();
+    } else {
+      controller.signal.addEventListener("abort", abortListener, { once: true });
     }
-
-    if (!result) {
-      throw new Error("Panel stream ended without a final result");
-    }
-
-    return result;
-  } finally {
-    if (inactivityTimer) clearTimeout(inactivityTimer);
-    cleanupRelay();
-  }
+  });
 }
 
 // ── Public: createTask ──

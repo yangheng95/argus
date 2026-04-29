@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@opencorvus-ai/plugin": "workspace:*",
+    "@opencorvus-ai/transport-protocol": "workspace:*",
     "highlight.js": "^11.11.1",
     "marked": "^17.0.1",
     "solid-js": "^1"

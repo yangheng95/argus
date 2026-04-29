@@ -66,8 +66,19 @@ export interface TransportResponse<T = unknown> {
 export interface StreamOpenRequest {
   /** Same path semantics as TransportRequest.path. */
   path: string
+  /**
+   * Defaults to "GET" for classic SSE endpoints. Use "POST" with a
+   * body for streaming-RPC routes like /panel/message/stream where
+   * the request payload is sent as JSON and the response is an SSE
+   * stream (text/event-stream over POST).
+   */
+  method?: "GET" | "POST"
   query?: Record<string, string | number | boolean | undefined | null>
   headers?: Record<string, string>
+  /** Optional request body — only meaningful when method is "POST". */
+  body?: RequestBody
+  /** Optional abort signal for upstream cancellation. */
+  signal?: AbortSignal
 }
 
 export interface StreamHandlers {

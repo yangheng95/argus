@@ -126,6 +126,114 @@ async function readResponse<T>(res: Response, kind: ResponseKind | undefined): P
   }
 }
 
+/**
+ * POST-stream support: routes like /panel/message/stream send a JSON
+ * body and stream the response as text/event-stream. EventSource cannot
+ * do POST, so this path uses fetch + ReadableStream + manual SSE block
+ * parsing. The Tauri WebView2 buffering issue does NOT apply here
+ * because POST body upload triggers HTTP/1.1 (not HTTP/2), and our
+ * server emits double-newline boundaries that flush per-block.
+ */
+function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): StreamHandle {
+  const controller = new AbortController()
+  const signal = input.signal
+    ? mergeAbort(input.signal, controller.signal)
+    : controller.signal
+  let closed = false
+  const url = buildUrl(input.path, input.query)
+  const init: RequestInit = applyBody(
+    {
+      method: "POST",
+      headers: {
+        ...apiHeadersFromState(),
+        ...(input.headers ?? {}),
+      },
+      signal,
+    },
+    input.body,
+  )
+
+  // Fire-and-forget: the close handle returns synchronously.
+  void (async () => {
+    let res: Response
+    try {
+      res = await fetch(url.toString(), init)
+    } catch (err) {
+      if (closed) return
+      const error = err instanceof Error ? err : new Error(String(err))
+      try { handlers.onError?.(error) } catch {}
+      try { handlers.onClose?.("post-stream-fetch-error") } catch {}
+      return
+    }
+    if (!res.ok || !res.body) {
+      try { handlers.onError?.(new Error(`POST stream ${res.status}: ${res.statusText}`)) } catch {}
+      try { handlers.onClose?.("post-stream-bad-response") } catch {}
+      return
+    }
+    try { handlers.onOpen?.() } catch {}
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ""
+    const consume = (chunk: string, flush = false) => {
+      buf += chunk
+      const blocks = buf.split(/\r?\n\r?\n/)
+      buf = flush ? "" : (blocks.pop() || "")
+      for (const block of blocks) {
+        const data = block
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("\n")
+        if (!data) continue
+        try { handlers.onEvent(data) } catch {}
+      }
+    }
+
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          consume(decoder.decode(), true)
+          break
+        }
+        consume(decoder.decode(value, { stream: true }))
+      }
+    } catch (err) {
+      if (!closed) {
+        const error = err instanceof Error ? err : new Error(String(err))
+        try { handlers.onError?.(error) } catch {}
+      }
+    } finally {
+      if (!closed) {
+        closed = true
+        try { handlers.onClose?.("post-stream-done") } catch {}
+      }
+    }
+  })()
+
+  return {
+    close() {
+      if (closed) return
+      closed = true
+      try { controller.abort() } catch {}
+      try { handlers.onClose?.("client-close") } catch {}
+    },
+  }
+}
+
+function mergeAbort(a: AbortSignal, b: AbortSignal): AbortSignal {
+  if (a.aborted) return a
+  if (b.aborted) return b
+  const c = new AbortController()
+  const onA = () => c.abort()
+  const onB = () => c.abort()
+  a.addEventListener("abort", onA, { once: true })
+  b.addEventListener("abort", onB, { once: true })
+  return c.signal
+}
+
 function headersToObject(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {}
   headers.forEach((value, key) => {
@@ -159,6 +267,10 @@ export function createTauriTransport(): HostTransport {
       }
     },
     openStream(input: StreamOpenRequest, handlers: StreamHandlers): StreamHandle {
+      const method = input.method ?? "GET"
+      if (method === "POST") {
+        return openPostStream(input, handlers)
+      }
       // Native EventSource: WebView2 (Tauri's webview backend) is known
       // to buffer ReadableStream chunks from fetch(), so SSE must NOT
       // be polyfilled on top of fetch in this transport. The note in
