@@ -19,6 +19,7 @@ Input:
   - `VSCODE_BENCH_BUILD_EVERY`: default `25`.
   - `VSCODE_BENCH_E2E_EVERY`: default `25`.
   - `VSCODE_BENCH_REPORT`: default `tmp/vscode-extension-100-round-report.jsonl`.
+  - `OPENCORVUS_E2E_HOLD_MS`: default `0`; for visual review only, pauses the VS Code E2E after the webview has opened and sent a sidecar request.
 
 Output:
 - JSON Lines report at `tmp/vscode-extension-100-round-report.jsonl`.
