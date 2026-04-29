@@ -56,13 +56,37 @@ export function extToLang(filePath: string): string {
 
 marked.setOptions({ async: false, gfm: true, breaks: false });
 
+// Wrap a fenced code block with the language tag + copy affordance the
+// overlay shows on hover. Raw source goes into a data-attribute so the
+// global click listener (installed in main.tsx) can write it to the
+// clipboard without needing to re-decode the highlighted HTML.
+function wrapCodeBlock(rawText: string, language: string, highlightedHtml: string): string {
+  const langAttr = language ? `language-${language}` : "";
+  const langLabel = language || "code";
+  const dataSource = escapeAttr(rawText);
+  return [
+    `<div class="md-code" data-lang="${escapeAttr(language)}">`,
+    `<div class="md-code-toolbar">`,
+    `<span class="md-code-lang">${escapeHtml(langLabel)}</span>`,
+    `<button type="button" class="md-code-copy" data-md-copy="${dataSource}" title="Copy code" aria-label="Copy code">`,
+    `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">`,
+    `<rect x="5" y="3" width="8" height="10" rx="1.3" stroke="currentColor" stroke-width="1.3"/>`,
+    `<path d="M3.5 5.5V12a1.5 1.5 0 0 0 1.5 1.5h5.5" stroke="currentColor" stroke-width="1.3" fill="none"/>`,
+    `</svg>`,
+    `</button>`,
+    `</div>`,
+    `<pre><code class="${language ? `hljs ${langAttr}` : ""}">${highlightedHtml}</code></pre>`,
+    `</div>`,
+  ].join("");
+}
+
 marked.use({
   renderer: {
     code({ text, lang }: { text: string; lang?: string }) {
       const language = lang && hljs.getLanguage(lang) ? lang : "";
-      if (!language) return `<pre><code>${escapeHtml(text)}</code></pre>`;
+      if (!language) return wrapCodeBlock(text, "", escapeHtml(text));
       const highlighted = hljs.highlight(text, { language }).value;
-      return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+      return wrapCodeBlock(text, language, highlighted);
     },
     codespan({ text }: { text: string }) {
       // `text` is the raw codespan content (before HTML escaping). Always

@@ -6195,6 +6195,68 @@ select.field-input option {
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: bold; }
 
+/* ── Markdown code-block wrapper ──
+   wrapCodeBlock() in utils/markdown.ts emits a <div.md-code> shell with a
+   toolbar (language label + copy button) and a <pre><code> body. The
+   toolbar is hover-revealed so it doesn't crowd the body when reading;
+   data-copied flips the icon-color to var(--good) for the 1.4s feedback
+   window the global click listener manages. */
+.md-code {
+  position: relative;
+  margin: var(--ui-gap-sm) 0;
+}
+.md-code-toolbar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+.md-code:hover .md-code-toolbar,
+.md-code:focus-within .md-code-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+.md-code-lang {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+.md-code-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: calc(var(--radius) * 0.5);
+  border: 1px solid var(--border);
+  background: var(--subtle-2);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.md-code-copy:hover {
+  background: var(--subtle-3);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+.md-code-copy:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 1px;
+}
+.md-code-copy[data-copied="true"] {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 50%, transparent);
+  background: var(--good-dim);
+}
+
 /* ── Tool code block ──
  * No max-height: file content (write/edit/read) renders in full when the
  * card is expanded. The previous 600px nested scroll forced the operator
