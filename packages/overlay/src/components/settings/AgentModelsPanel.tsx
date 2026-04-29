@@ -252,8 +252,18 @@ export default function AgentModelsPanel() {
         </Show>
 
         <Show when={data.error}>
-          <div class="empty-hint" style="color: var(--color-danger, #e55);">
-            Failed to load: {String(data.error)}
+          <div class="agent-models-error" role="alert">
+            <div class="agent-models-error-msg">
+              Failed to load agent models: {String((data.error as any)?.message ?? data.error)}
+            </div>
+            <button
+              type="button"
+              class="btn btn-ghost mini"
+              onClick={() => setRefreshToken((x) => x + 1)}
+              disabled={data.loading}
+            >
+              {data.loading ? "Retrying…" : "Retry"}
+            </button>
           </div>
         </Show>
 
