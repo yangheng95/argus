@@ -20,18 +20,32 @@ export interface TaskDetailOverlayProps {
 
 export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
   const [loading, setLoading] = createSignal(false);
+  const [error, setError] = createSignal<string>("");
 
   // Keep the overlay's state in sync with the underlying messageStore: when
   // the route ID changes (or on first mount), drive selectTask so the rest
   // of the app (board, conversation, agent stream) follows.
+  function loadActiveTask(id: string) {
+    if (!id) return;
+    setLoading(true);
+    setError("");
+    selectTask(id)
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn("[task-overlay] selectTask failed", e);
+        setError(msg);
+      })
+      .finally(() => setLoading(false));
+  }
+
   createEffect(() => {
     const id = props.taskID;
     if (!id) return;
-    if (messageStore.selectedTaskID === id) return;
-    setLoading(true);
-    selectTask(id)
-      .catch((e) => console.warn("[task-overlay] selectTask failed", e))
-      .finally(() => setLoading(false));
+    if (messageStore.selectedTaskID === id) {
+      setError("");
+      return;
+    }
+    loadActiveTask(id);
   });
 
   function onKey(e: KeyboardEvent) {
@@ -54,6 +68,18 @@ export function TaskDetailOverlay(props: TaskDetailOverlayProps) {
         <div class="task-overlay-title">Task <code>{props.taskID}</code></div>
         <Show when={loading()}>
           <span class="task-overlay-loading">loading…</span>
+        </Show>
+        <Show when={error() && !loading()}>
+          <span class="task-overlay-error" role="alert">
+            <span class="task-overlay-error-msg">Failed to load: {error()}</span>
+            <button
+              type="button"
+              class="task-overlay-error-retry"
+              onClick={() => loadActiveTask(props.taskID)}
+            >
+              Retry
+            </button>
+          </span>
         </Show>
       </div>
       <div class="task-overlay-body task-overlay-body-split">

@@ -2643,6 +2643,45 @@ body[data-theme="light"] .section-badge {
   overflow-wrap: break-word;
 }
 
+/* TaskDetailOverlay header error chip — same color vocabulary as the
+   task-list error banner. Sits inline next to the loading hint so the
+   operator sees both states without the chrome moving. */
+.task-overlay-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+  padding: 2px var(--ui-gap-md);
+  border-radius: 999px;
+  background: var(--bad-dim);
+  border: 1px solid color-mix(in srgb, var(--bad) 36%, transparent);
+  color: var(--bad);
+  font-size: var(--ui-font-meta);
+  max-width: 60vw;
+}
+.task-overlay-error-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-overlay-error-retry {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--bad) 50%, transparent);
+  background: transparent;
+  color: var(--bad);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: var(--ui-font-meta);
+  cursor: pointer;
+}
+.task-overlay-error-retry:hover {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+}
+.task-overlay-error-retry:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--bad) 60%, transparent);
+  outline-offset: 1px;
+}
+
 /* AgentModelsPanel error banner — same vocabulary as task-list-error so
    the operator's eye recognizes "load failed, click to retry" instantly,
    instead of the prior inline-styled red sentence with no action. */
