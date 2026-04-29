@@ -15,7 +15,13 @@ describe("plan mode read-only enforcement", () => {
     await resetDatabase()
   })
 
-  test("task sub-sessions inherit read-only restrictions in plan mode", async () => {
+  // audit-2026-04-29 W2-V33 — plan-mode feature removed (see
+  // W2-V27 for agent + Permission-schema cleanup, W2-V33
+  // memory.test.ts for the same pattern). The "plan" agent and
+  // plan_enter/plan_exit permission keys are gone; this test
+  // depends on `mode: "plan"` propagation that production no
+  // longer respects. Skip with spec preserved.
+  test.skip("task sub-sessions inherit read-only restrictions in plan mode", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({

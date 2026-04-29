@@ -7,13 +7,20 @@ import { ToolRegistry } from "../../src/tool/registry"
 
 describe("tool.registry", () => {
   test("includes core coding tools", async () => {
+    // audit-2026-04-29 W2-V33 — pre-fix asserted on `tui`,
+    // `plan_enter`, `plan_exit` which are no longer in
+    // ToolRegistry.ids(). The TUI tool was removed; plan_enter/
+    // plan_exit are no longer separate tools (see W2-V25(b) for
+    // the parallel Permission-schema cleanup). Trim the list to
+    // tools that ARE still in the registry; the test's intent
+    // ("core coding tools must be registered") is preserved.
     await using tmp = await tmpdir()
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const ids = await ToolRegistry.ids()
-        ;["bash", "read", "glob", "search_code", "edit", "write", "skill", "task", "tui", "todoread", "plan_enter", "plan_exit"].forEach((id) => {
+        ;["bash", "read", "glob", "search_code", "edit", "write", "skill", "task", "todoread", "todowrite"].forEach((id) => {
           expect(ids).toContain(id)
         })
       },
