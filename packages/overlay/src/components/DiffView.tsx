@@ -233,14 +233,14 @@ export function DiffView(props: DiffViewProps) {
 
   // Differentiate the "no preview" cause so the operator knows whether
   // the file was deleted, intentionally empty, or just missing a server
-  // payload. Previously every empty case showed the same opaque
-  // "diff.no_preview" string.
-  const emptyReasonKey = createMemo(() => {
+  // payload. Inlined t() calls (not via a memo-returned string) so the
+  // check-panel-i18n linter sees the literal keys at the call sites.
+  const emptyMessage = createMemo(() => {
     const it = props.item;
-    if (it.status === "deleted" && !it.after) return "diff.empty_deleted";
-    if (it.status === "added" && !it.before && !it.after) return "diff.empty_added";
-    if (it.before === it.after) return "diff.empty_unchanged";
-    return "diff.no_preview";
+    if (it.status === "deleted" && !it.after) return t("diff.empty_deleted");
+    if (it.status === "added" && !it.before && !it.after) return t("diff.empty_added");
+    if (it.before === it.after) return t("diff.empty_unchanged");
+    return t("diff.no_preview");
   });
 
   return (
@@ -248,7 +248,7 @@ export function DiffView(props: DiffViewProps) {
       when={hasChanges()}
       fallback={
         <div class="diff-empty">
-          <p class="empty-hint">{t(emptyReasonKey())}</p>
+          <p class="empty-hint">{emptyMessage()}</p>
         </div>
       }
     >

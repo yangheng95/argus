@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "f9b9577249df8737"
+    "panel_revision": "5abbd343c2967479"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -120,6 +120,8 @@
   "agent_models.warning_no_default_prefix": "未设置项目默认模型，每个 Agent 调度时都会抛出",
   "agent_models.warning_no_default_suffix": "—— 必须在此处选择默认模型，或在下方为每个 Agent 单独覆盖。",
   "common.retrying": "重试中…",
+  "settings.server_url_placeholder": "http://127.0.0.1:7878",
+  "settings.username_placeholder": "opencorvus",
   "intro.directory_required_title": "请先选择工作目录",
   "intro.directory_required_body": "点击上方标题栏的文件夹图标，选择一个项目目录 — OpenCorvus 将在该目录中读写文件。设置工作目录后输入区会自动激活。",
   "task.search_placeholder": "搜索任务…",
