@@ -23,11 +23,11 @@ describe("guessMime", () => {
     expect(guessMime("config.json", "")).toBe("application/json")
   })
 
-  test("falls back to languageId for json without extension", () => {
+  test("uses languageId for json without extension", () => {
     expect(guessMime("settings", "json")).toBe("application/json")
   })
 
-  test("everything else falls back to text/plain — never application/octet-stream", () => {
+  test("unlisted VS Code text documents resolve to text/plain", () => {
     expect(guessMime("script.ts", "typescript")).toBe("text/plain")
     expect(guessMime("module.rs", "rust")).toBe("text/plain")
     expect(guessMime("noext", "")).toBe("text/plain")

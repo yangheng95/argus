@@ -36,6 +36,7 @@
     "typecheck": "tsc --noEmit",
     "build": "node esbuild.mjs",
     "package:vsix": "bun run script/package-vsix.ts",
+    "benchmark:100": "bun run script/benchmark-100-rounds.ts",
     "test": "bun test"
   },
   "dependencies": {
