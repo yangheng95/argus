@@ -7,6 +7,11 @@ import { t, tArray } from "../utils/i18n";
 import { ExecutorSelector } from "./ExecutorSelector";
 import { nativeMessage } from "../services/app-dialog";
 import { messageStore, setChatAttachments } from "../store/messages";
+import {
+  MAX_ATTACHMENT_SIZE,
+  MAX_TOTAL_ATTACHMENT_SIZE,
+  wouldExceedAggregateLimit,
+} from "../services/chat-attach-limits";
 
 // ── Types ──
 
@@ -49,7 +54,9 @@ export interface ChatComposerProps {
 
 // ── Constants ──
 
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10 MiB
+// MAX_ATTACHMENT_SIZE / MAX_TOTAL_ATTACHMENT_SIZE imported from
+// services/chat-attach-limits (audit W2-V15) so the cap can be
+// unit-tested without rendering the component.
 
 const FILE_ACCEPT = [
   "image/*",
@@ -234,6 +241,19 @@ export function ChatComposer(props: ChatComposerProps) {
       return;
     }
     const url = await fileToDataUrl(file);
+    if (wouldExceedAggregateLimit(attachments(), url.length)) {
+      console.warn("[ChatComposer] aggregate attachment size exceeded:", url.length);
+      const limitMb = (MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0);
+      const sizeMb = (url.length / (1024 * 1024)).toFixed(1);
+      // Reuse the per-file too-large i18n string so we don't churn
+      // the locale catalogues for a single new copy line; the user
+      // sees the same actionable message ("attachment too big") with
+      // the aggregate numbers.
+      void nativeMessage(t("chat.attach_too_large", { name: file.name, size: sizeMb, limit: limitMb }), {
+        title: t("chat.attach_too_large_title"),
+      });
+      return;
+    }
     setAttachments((prev) => [
       ...prev,
       { mime: file.type || "application/octet-stream", url, filename: file.name },
