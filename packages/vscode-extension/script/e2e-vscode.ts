@@ -13,10 +13,14 @@ const suitePath = path.join(extensionRoot, "e2e", "suite", "index.cjs")
 const fakeSidecar = path.join(extensionRoot, "test", "fixtures", "fake-sidecar.mjs")
 const vscodeVersion = process.env.VSCODE_E2E_VERSION ?? "1.85.0"
 const vscodeIdleMs = Number(process.env.VSCODE_E2E_IDLE_MS ?? 120_000)
+const visualHoldMs = Number(process.env.OPENCORVUS_E2E_HOLD_MS ?? 0)
 
 async function main() {
   if (!Number.isInteger(vscodeIdleMs) || vscodeIdleMs <= 0) {
     throw new Error(`VSCODE_E2E_IDLE_MS must be a positive integer, got ${process.env.VSCODE_E2E_IDLE_MS}`)
+  }
+  if (!Number.isInteger(visualHoldMs) || visualHoldMs < 0) {
+    throw new Error(`OPENCORVUS_E2E_HOLD_MS must be a non-negative integer, got ${process.env.OPENCORVUS_E2E_HOLD_MS}`)
   }
   runBuild()
   assertBuiltOverlayUi()
@@ -32,6 +36,7 @@ async function main() {
   console.log(`[e2e] temp=${tempRoot}`)
   console.log(`[e2e] vscode=${vscodeVersion}`)
   console.log(`[e2e] idle-timeout-ms=${vscodeIdleMs}`)
+  console.log(`[e2e] visual-hold-ms=${visualHoldMs}`)
   console.log(`[e2e] sidecar-wrapper=${wrapper}`)
 
   try {

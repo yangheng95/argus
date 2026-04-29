@@ -4,6 +4,7 @@ const vscode = require("vscode")
 
 const eventsFile = process.env.OPENCORVUS_E2E_EVENTS_FILE
 const testLogFile = process.env.OPENCORVUS_E2E_TEST_LOG
+const visualHoldMs = parseNonNegativeInteger("OPENCORVUS_E2E_HOLD_MS")
 
 async function run() {
   assert(eventsFile, "OPENCORVUS_E2E_EVENTS_FILE is required")
@@ -26,6 +27,12 @@ async function run() {
       readEvents().some((event) => event.type === "request" && event.url !== "/shutdown"),
       30_000,
     )
+    if (visualHoldMs > 0) {
+      record("visual.hold.start", { ms: visualHoldMs })
+      void vscode.window.showInformationMessage(`OpenCorvus visual E2E hold: ${Math.round(visualHoldMs / 1000)}s`)
+      await delay(visualHoldMs)
+      record("visual.hold.end", { ms: visualHoldMs })
+    }
 
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor")
     record("suite.done")
@@ -62,9 +69,23 @@ async function waitFor(label, predicate, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (predicate()) return
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await delay(100)
   }
   throw new Error(`timed out waiting for ${label}`)
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function parseNonNegativeInteger(name) {
+  const value = process.env[name]
+  if (value === undefined || value === "") return 0
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer, got ${value}`)
+  }
+  return parsed
 }
 
 module.exports = { run }
