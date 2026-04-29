@@ -10,6 +10,7 @@ import {
 import { statusBadge } from "../utils/status-badge";
 import { t } from "../utils/i18n";
 import { goalRevisionLabel } from "../utils/goal-label";
+import { showAppDialog } from "../services/app-dialog";
 
 function leadingGlyph(node: CardNode): string {
   if (node.kind === "tool") return displayToolIcon(node.stage || node.title);
@@ -110,7 +111,7 @@ export function CardHeader(props: {
   /** Invoked when the user clicks the rewind (↶) button. Receives the
    *  card's `time` (ms — becomes cursorTime on the backend) and id
    *  (anchorEventID for audit). Parent routes it to POST /task/:id/rewind. */
-  onRewind?: (cursorTime: number, anchorID: string) => void | Promise<void>;
+  onRewind?: (cursorTime: number, anchorID: string, opts: { resetWorktree: boolean }) => void | Promise<void>;
   /** Set on cards that map 1:1 to an opencorvus session (kind="agent"
    *  cards whose id follows `<stage>:session:<sid>`). When present the
    *  header renders a 🔍 button that calls `onTrace` to toggle the
@@ -179,16 +180,23 @@ export function CardHeader(props: {
     e.stopPropagation();
     if (!props.onRewind || !canRewind()) return;
     if (rewinding()) return;
-    const confirmed = typeof window !== "undefined" && typeof window.confirm === "function"
-      ? window.confirm(
-          t("card.rewind_confirm") ||
-            "撤回到这张卡片之前？此操作只过滤数据库视图，不改动项目代码。",
-        )
-      : true;
-    if (!confirmed) return;
+    const choice = await showAppDialog({
+      title: t("card.rewind_confirm.title") || "Rewind",
+      message: t("card.rewind_confirm.message") || "Choose how to rewind this step.",
+      select: true,
+      selectValue: "view",
+      selectOptions: [
+        { value: "view", label: t("card.rewind_confirm.audit_only") || "Rewind view only" },
+        { value: "worktree", label: t("card.rewind_confirm.with_worktree") || "Rewind view and files" },
+      ],
+      okLabel: t("card.rewind_confirm.apply") || "Rewind",
+      cancel: true,
+      cancelLabel: t("common.cancel") || "Cancel",
+    });
+    if (!choice.confirmed || !choice.value) return;
     setRewinding(true);
     try {
-      await props.onRewind(props.node.time, props.node.id);
+      await props.onRewind(props.node.time, props.node.id, { resetWorktree: choice.value === "worktree" });
     } finally {
       setTimeout(() => setRewinding(false), 800);
     }
@@ -496,8 +504,8 @@ export function CardHeader(props: {
             type="button"
             class="card__rewind"
             classList={{ "card__rewind--pending": rewinding() }}
-            title={t("card.rewind") || "撤回到这张卡片之前（仅过滤时间线，不改动代码）"}
-            aria-label={t("card.rewind") || "rewind to before this card"}
+            title={t("card.rewind") || "回到这一步"}
+            aria-label={t("card.rewind") || "rewind to this step"}
             disabled={rewinding()}
             onClick={onRewind}
             onKeyDown={(e) => {
