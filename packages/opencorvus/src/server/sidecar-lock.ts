@@ -67,11 +67,51 @@ export namespace SidecarLock {
   /**
    * Write the lock file for this managed sidecar. Caller MUST call
    * release() before exiting; sidecar lifecycle hooks handle this.
+   *
+   * audit-2026-04-29 opencorvus F2 — uses O_EXCL (`flag: "wx"`) so the
+   * lock acquisition is atomic: two sidecars racing to write the same
+   * file get exactly one winner; the loser sees EEXIST. The caller
+   * (sidecar.ts) detects existing locks via `detectExisting` first;
+   * but between the check and the write, another sidecar could have
+   * just written its own lock — without exclusive create the loser
+   * silently overwrites the winner, breaking §19.1.1.
+   *
+   * Throws SidecarLockContendedError on EEXIST so the caller can map
+   * to exit code 3 with the same message path as the regular
+   * "existing instance" rejection.
    */
+  export class SidecarLockContendedError extends Error {
+    override readonly name = "SidecarLockContendedError"
+    constructor(public readonly file: string, public readonly existing: LockInfo | null) {
+      super(
+        existing
+          ? `existing managed sidecar holds the workspace lock (PID=${existing.pid}, port=${existing.port})`
+          : `another sidecar is racing to acquire the workspace lock (file=${file})`,
+      )
+    }
+  }
+
   export function acquire(info: LockInfo): { file: string; release: () => void } {
     const file = lockFilePath(info.workspace)
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    fs.writeFileSync(file, JSON.stringify(info, null, 2), { encoding: "utf8" })
+    try {
+      fs.writeFileSync(file, JSON.stringify(info, null, 2), {
+        encoding: "utf8",
+        flag: "wx",
+      })
+    } catch (err: any) {
+      if (err?.code === "EEXIST") {
+        // The pre-check (detectExisting) already auto-pruned dead
+        // PIDs, so a live lock here is genuine contention. Read it
+        // back so the caller has the live PID for the error message.
+        let existing: LockInfo | null = null
+        try {
+          existing = JSON.parse(fs.readFileSync(file, "utf8")) as LockInfo
+        } catch {}
+        throw new SidecarLockContendedError(file, existing)
+      }
+      throw err
+    }
     log.info("acquired", { file, pid: info.pid, port: info.port })
     return {
       file,

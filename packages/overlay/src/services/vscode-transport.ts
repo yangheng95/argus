@@ -94,16 +94,34 @@ function installListener(): void {
 }
 
 function handleIncoming(raw: unknown): void {
-  if (!isExtensionMessage(raw)) return
+  if (!isExtensionMessage(raw)) {
+    // audit-2026-04-29 overlay F10 — surface contract drift instead
+    // of dropping silently, so a bad upstream bundle is visible in
+    // the webview console rather than producing mysterious hangs.
+    if (raw && typeof raw === "object") {
+      console.warn(
+        "[vscode-transport] dropping non-protocol message",
+        (raw as { type?: unknown }).type,
+      )
+    }
+    return
+  }
   const msg = raw as ExtensionMessage
   if (msg.type === "protocol-mismatch") {
-    // The extension host runs a different schema version. Reload the
-    // webview to pick up the matching bundle. No compatibility shim
-    // (plan §19.3.3).
-    console.error(
-      `[vscode-transport] protocol mismatch: expected ${msg.expected}, got ${msg.received}. Reloading webview.`,
-    )
-    try { (globalThis as any).window.location.reload() } catch {}
+    // audit-2026-04-29 transport F2 — bound the reload count so a bug
+    // that always returns mismatch (e.g. webview bundle vs extension
+    // bundle truly diverged and reload doesn't fetch a new copy)
+    // doesn't loop forever burning CPU.
+    if (shouldHonourProtocolMismatch(msg.expected, msg.received)) {
+      console.error(
+        `[vscode-transport] protocol mismatch: expected ${msg.expected}, got ${msg.received}. Reloading webview.`,
+      )
+      try { (globalThis as any).window.location.reload() } catch {}
+    } else {
+      console.error(
+        `[vscode-transport] protocol mismatch reload budget exhausted (expected=${msg.expected}, received=${msg.received}). Halting; user must restart the webview.`,
+      )
+    }
     return
   }
   switch (msg.type) {
@@ -112,7 +130,16 @@ function handleIncoming(raw: unknown): void {
       if (!p) return
       pending.delete(msg.id)
       cleanupAbort(p.signal, p.abortListener)
-      p.resolve(decodeResponse(msg))
+      // audit-2026-04-29 transport F3 / overlay F1 — `decodeResponse`
+      // throws on `body.kind === "error"`. If the throw escapes here,
+      // the `window.message` listener swallows it and the pending
+      // Promise never settles, hanging the caller's `await` forever.
+      // Route the throw through `p.reject` so the contract holds.
+      try {
+        p.resolve(decodeResponse(msg))
+      } catch (err) {
+        p.reject(err instanceof Error ? err : new Error(String(err)))
+      }
       return
     }
     case "stream.event": {
@@ -162,6 +189,39 @@ function cleanupAbort(signal: AbortSignal | undefined, listener: (() => void) | 
   if (signal && listener) {
     signal.removeEventListener("abort", listener)
   }
+}
+
+// ── protocol-mismatch reload circuit breaker ──
+//
+// audit-2026-04-29 transport F2: a malicious or buggy upstream that
+// always replies protocol-mismatch could spin the webview into a
+// reload loop. Track recent mismatch reloads in sessionStorage so the
+// counter survives `location.reload()` itself. Beyond MAX reloads
+// inside WINDOW_MS we stop honouring the message and halt — the user
+// has to dispose the panel.
+
+const RELOAD_COUNTER_KEY = "__opencorvus_pm_reloads"
+const RELOAD_MAX = 3
+const RELOAD_WINDOW_MS = 30_000
+
+function shouldHonourProtocolMismatch(_expected: number, _received: number): boolean {
+  let storage: Storage | undefined
+  try { storage = (globalThis as any).window?.sessionStorage as Storage | undefined } catch {}
+  if (!storage) return true
+  let history: number[] = []
+  try {
+    const raw = storage.getItem(RELOAD_COUNTER_KEY)
+    if (raw) history = JSON.parse(raw) as number[]
+    if (!Array.isArray(history)) history = []
+  } catch {
+    history = []
+  }
+  const cutoff = Date.now() - RELOAD_WINDOW_MS
+  history = history.filter((t) => t > cutoff)
+  if (history.length >= RELOAD_MAX) return false
+  history.push(Date.now())
+  try { storage.setItem(RELOAD_COUNTER_KEY, JSON.stringify(history)) } catch {}
+  return true
 }
 
 // ── Encoding ──
@@ -253,11 +313,15 @@ export function createVsCodeTransport(): HostTransport {
             if (!p) return
             pending.delete(id)
             reject(new DOMException("Aborted", "AbortError"))
-            // Tell extension to abort (best-effort).
+            // audit-2026-04-29 overlay F2 — request abort previously
+            // sent `stream.close`, but request ids never appear in
+            // the bridge's streams Map, so the upstream fetch kept
+            // running (auth-bearing! resource leak). Use the
+            // dedicated `request.abort` envelope.
             try {
               vscode.postMessage(<WebviewMessage>{
                 protocol: PROTOCOL_VERSION,
-                type: "stream.close",
+                type: "request.abort",
                 id,
               })
             } catch {}

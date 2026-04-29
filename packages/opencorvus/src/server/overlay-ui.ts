@@ -48,9 +48,23 @@ export namespace OverlayUI {
       let reqPath = c.req.path.replace(/^\/ui/, "") || "/"
       if (reqPath === "/") reqPath = "/index.html"
 
-      const filePath = path.join(dir, reqPath)
-      // Prevent directory traversal
-      if (!filePath.startsWith(dir)) return c.text("Forbidden", 403)
+      // audit-2026-04-29 opencorvus F7 — `path.join(dir, reqPath)` plus
+      // `startsWith(dir)` was vulnerable on two axes:
+      //  1. No path-separator boundary on the prefix — a sibling dir
+      //     `/foo/ui-private/secret` would satisfy startsWith(`/foo/ui`)
+      //     because both share the `/foo/ui` prefix.
+      //  2. URL-encoded `..` segments (`%2e%2e`) reach `path.join` after
+      //     Hono's URL decode, where they are interpreted as literal
+      //     `..` and traverse out of dir.
+      // path.resolve normalises `..`; comparing with a `${dir}${sep}`
+      // prefix or an exact-equality check fixes both. Reject anything
+      // that escapes.
+      const resolved = path.resolve(dir, "." + reqPath)
+      const dirWithSep = dir.endsWith(path.sep) ? dir : dir + path.sep
+      if (resolved !== dir && !resolved.startsWith(dirWithSep)) {
+        return c.text("Forbidden", 403)
+      }
+      const filePath = resolved
 
       try {
         const file = Bun.file(filePath)

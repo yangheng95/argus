@@ -60,10 +60,25 @@ export interface WebviewStreamCloseMessage {
   id: string
 }
 
+/**
+ * Webview-initiated abort of a non-stream `request` envelope. Distinct
+ * from `stream.close` because the extension host's request/response
+ * handler does NOT live in the streams Map — sending stream.close for
+ * a request id is a protocol violation that leaks the upstream fetch
+ * (audit-2026-04-29 overlay F2). Bridge maps this to AbortController
+ * on the in-flight fetch.
+ */
+export interface WebviewRequestAbortMessage {
+  protocol: typeof PROTOCOL_VERSION
+  type: "request.abort"
+  id: string
+}
+
 export type WebviewMessage =
   | WebviewRequestMessage
   | WebviewStreamOpenMessage
   | WebviewStreamCloseMessage
+  | WebviewRequestAbortMessage
 
 // ── Extension → Webview ──
 
@@ -173,14 +188,46 @@ export type ExtensionMessage =
 
 // ── Helpers ──
 
-/** Type-narrowing predicate: does `m` look like a typed extension message? */
+/** Whitelisted ExtensionMessage `type` values. Keep in sync with the
+ *  `ExtensionMessage` discriminated union — adding a new variant means
+ *  appending here too (audit-2026-04-29 transport F1). */
+export const EXTENSION_MESSAGE_TYPES = [
+  "response",
+  "stream.event",
+  "stream.error",
+  "stream.close",
+  "ui-command",
+] as const
+
+/** Whitelisted WebviewMessage `type` values. */
+export const WEBVIEW_MESSAGE_TYPES = [
+  "request",
+  "stream.open",
+  "stream.close",
+  "request.abort",
+] as const
+
+/**
+ * Type-narrowing predicate: does `m` look like a typed extension message?
+ *
+ * Asymmetric defence:
+ *  - `protocol-mismatch` is the schema-evolution sentinel. It MUST carry
+ *    `expected` + `received` as numbers (validated here) so injected
+ *    `{type:"protocol-mismatch"}` can't trigger an open-loop reload
+ *    (audit-2026-04-29 transport F2).
+ *  - All other types must declare `protocol === PROTOCOL_VERSION` and
+ *    have `type` in the whitelist (audit-2026-04-29 transport F1: a
+ *    bare `{type:"__proto__"}` previously satisfied the predicate).
+ */
 export function isExtensionMessage(m: unknown): m is ExtensionMessage {
   if (!m || typeof m !== "object") return false
   const obj = m as Record<string, unknown>
-  if (obj["type"] === "protocol-mismatch") return true
+  if (obj["type"] === "protocol-mismatch") {
+    return typeof obj["expected"] === "number" && typeof obj["received"] === "number"
+  }
   if (typeof obj["type"] !== "string") return false
   if (obj["protocol"] !== PROTOCOL_VERSION) return false
-  return true
+  return (EXTENSION_MESSAGE_TYPES as readonly string[]).includes(obj["type"])
 }
 
 export function isWebviewMessage(m: unknown): m is WebviewMessage {
@@ -188,7 +235,7 @@ export function isWebviewMessage(m: unknown): m is WebviewMessage {
   const obj = m as Record<string, unknown>
   if (obj["protocol"] !== PROTOCOL_VERSION) return false
   if (typeof obj["type"] !== "string") return false
-  return ["request", "stream.open", "stream.close"].includes(obj["type"] as string)
+  return (WEBVIEW_MESSAGE_TYPES as readonly string[]).includes(obj["type"])
 }
 
 // ── Body encoding helpers (Buffer-free; works in both webview + node) ──
@@ -200,8 +247,12 @@ export function isWebviewMessage(m: unknown): m is WebviewMessage {
  * both runtimes — no node-specific shim.
  */
 export function uint8ToBase64(bytes: Uint8Array): string {
+  // 8 KiB chunks: V8/Safari/Bun all accept this without "too many
+  // arguments to function" (which fired around 65 535 in older
+  // engines, 32 768 in some Safari builds — audit-2026-04-29
+  // transport F4).
   let bin = ""
-  const CHUNK = 0x8000
+  const CHUNK = 0x2000
   for (let i = 0; i < bytes.length; i += CHUNK) {
     const sub = bytes.subarray(i, i + CHUNK)
     bin += String.fromCharCode(...sub)
@@ -210,8 +261,19 @@ export function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(bin)
 }
 
+/**
+ * Decode a base64 string. Wraps the engine's `atob` so a
+ * malformed payload surfaces a typed `Error` instead of a
+ * platform-specific `InvalidCharacterError` that the consumer's
+ * try/catch may not recognise (audit-2026-04-29 transport F4).
+ */
 export function base64ToUint8(b64: string): Uint8Array {
-  const bin = atob(b64)
+  let bin: string
+  try {
+    bin = atob(b64)
+  } catch (err) {
+    throw new Error(`base64ToUint8: invalid base64 payload (${err instanceof Error ? err.message : String(err)})`)
+  }
   const out = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
   return out

@@ -92,15 +92,32 @@ export const SidecarCommand = cmd({
     const port = server.port!
     const url = `http://127.0.0.1:${port}`
 
-    // 5. Acquire lock with concrete port.
-    const lock = SidecarLock.acquire({
-      pid: process.pid,
-      port,
-      hostname: "127.0.0.1",
-      parentPid,
-      workspace,
-      startedAt: Date.now(),
-    })
+    // 5. Acquire lock with concrete port. audit-2026-04-29 opencorvus F2 —
+    //    even after the pre-check, two sidecars may race the write.
+    //    `acquire` uses O_EXCL so the loser throws SidecarLockContendedError;
+    //    we map it to exit-3 with the same stderr shape so the
+    //    extension's TransportBridge -> SidecarExistingInstanceError
+    //    flow handles both detect-time and race-time contention identically.
+    let lock: ReturnType<typeof SidecarLock.acquire>
+    try {
+      lock = SidecarLock.acquire({
+        pid: process.pid,
+        port,
+        hostname: "127.0.0.1",
+        parentPid,
+        workspace,
+        startedAt: Date.now(),
+      })
+    } catch (err) {
+      try { await server.stop(true) } catch {}
+      if (err instanceof SidecarLock.SidecarLockContendedError) {
+        console.error(
+          `[sidecar] ${err.message}. Stop it before opening this workspace in VS Code.`,
+        )
+        process.exit(3)
+      }
+      throw err
+    }
 
     // 6. Publish actual server URL for in-process channel runtime
     //    consumers (e.g. ChannelSupervisor); does NOT affect parent.
@@ -122,14 +139,32 @@ export const SidecarCommand = cmd({
         try {
           watchdog?.stop()
         } catch {}
+        // audit-2026-04-29 opencorvus F3 — release the lock AFTER
+        // server.stop. If we release first and stop hangs (SSE long
+        // poll, buggy handler), the workspace lock is gone but the
+        // port is still bound; a parallel sidecar boot would pass
+        // detectExisting and end up with two live processes serving
+        // the same DB, which is exactly the §19.1.1 failure.
+        // Cap stop with a hard timeout so a hung server can't
+        // indefinitely hold the lock either.
+        const STOP_TIMEOUT_MS = 5000
+        await Promise.race([
+          server.stop(true).catch((error) => {
+            log.error("server.stop failed", { error: String(error) })
+          }),
+          new Promise<void>((resolve) => {
+            const t = setTimeout(() => {
+              log.error("server.stop timeout, escalating", { ms: STOP_TIMEOUT_MS })
+              resolve()
+            }, STOP_TIMEOUT_MS)
+            if (typeof (t as { unref?: () => void }).unref === "function") {
+              ;(t as { unref?: () => void }).unref!()
+            }
+          }),
+        ])
         try {
           lock.release()
         } catch {}
-        try {
-          await server.stop(true)
-        } catch (error) {
-          log.error("server.stop failed", { error: String(error) })
-        }
       })().finally(() => {
         clearServerShutdownHandler(requestShutdown)
         setTimeout(() => process.exit(0), 0)

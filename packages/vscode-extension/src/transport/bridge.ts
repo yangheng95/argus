@@ -51,9 +51,17 @@ interface ActiveStream {
   flushTimer: NodeJS.Timeout | null
 }
 
+/**
+ * Per-id AbortController for in-flight `request` envelopes. The webview
+ * sends `request.abort` when the caller's AbortSignal fires; without
+ * this Map the upstream fetch keeps running (audit-2026-04-29 overlay F2).
+ */
+type ActiveRequest = AbortController
+
 export class TransportBridge {
   private readonly disposables: vscode.Disposable[] = []
   private readonly streams = new Map<string, ActiveStream>()
+  private readonly requests = new Map<string, ActiveRequest>()
   private disposed = false
 
   constructor(
@@ -71,12 +79,43 @@ export class TransportBridge {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    // audit-2026-04-29 vscode-ext F10 — notify the webview that each
+    // active stream is being closed so its store doesn't sit waiting
+    // for events that never come. Send BEFORE marking disposed so
+    // `send` actually delivers.
     for (const [id, stream] of this.streams) {
       try { stream.controller.abort() } catch {}
       if (stream.flushTimer) clearTimeout(stream.flushTimer)
-      void id
+      try {
+        // postMessage directly: bypassing `this.send` which now bails
+        // when disposed (we just set disposed=true above).
+        void this.webview.postMessage({
+          protocol: PROTOCOL_VERSION,
+          type: "stream.close",
+          id,
+          reason: "bridge-dispose",
+        })
+      } catch {}
     }
     this.streams.clear()
+    // Same for in-flight requests: abort the fetch and reply once with
+    // an error envelope so the webview's pending Promise rejects (the
+    // transport-protocol F3 / overlay F1 lessons).
+    for (const [id, controller] of this.requests) {
+      try { controller.abort() } catch {}
+      try {
+        void this.webview.postMessage({
+          protocol: PROTOCOL_VERSION,
+          type: "response",
+          id,
+          ok: false,
+          status: 0,
+          headers: {},
+          body: { kind: "error", message: "bridge disposed" },
+        })
+      } catch {}
+    }
+    this.requests.clear()
     while (this.disposables.length) {
       const d = this.disposables.pop()
       try { d?.dispose() } catch {}
@@ -112,6 +151,14 @@ export class TransportBridge {
       case "stream.close":
         this.handleStreamClose(raw.id, "client-close")
         return
+      case "request.abort": {
+        const controller = this.requests.get(raw.id)
+        if (controller) {
+          try { controller.abort() } catch {}
+          this.requests.delete(raw.id)
+        }
+        return
+      }
     }
   }
 
@@ -132,10 +179,17 @@ export class TransportBridge {
     const url = buildUrl(this.sidecar.baseUrl, validation.path, msg.query)
     const init = this.buildRequestInit(msg.method, msg.headers, msg.body)
 
+    // audit-2026-04-29 overlay F2 — track AbortController so
+    // `request.abort` envelope can cancel the upstream fetch.
+    const controller = new AbortController()
+    this.requests.set(msg.id, controller)
+    init.signal = controller.signal
+
     let res: Response
     try {
       res = await fetch(url, init)
     } catch (err) {
+      this.requests.delete(msg.id)
       this.send({
         protocol: PROTOCOL_VERSION,
         type: "response",
@@ -147,33 +201,49 @@ export class TransportBridge {
       })
       return
     }
-    const body = await readResponseBody(res, msg.responseKind)
-    const headers = headersToObject(res.headers)
-    this.send({
-      protocol: PROTOCOL_VERSION,
-      type: "response",
-      id: msg.id,
-      ok: res.ok,
-      status: res.status,
-      headers,
-      body,
-    })
+    try {
+      const body = await readResponseBody(res, msg.responseKind)
+      const headers = headersToObject(res.headers)
+      this.send({
+        protocol: PROTOCOL_VERSION,
+        type: "response",
+        id: msg.id,
+        ok: res.ok,
+        status: res.status,
+        headers,
+        body,
+      })
+    } finally {
+      this.requests.delete(msg.id)
+    }
   }
 
   private async handleStreamOpen(msg: WebviewStreamOpenMessage): Promise<void> {
+    // audit-2026-04-29 transport F5 — reject duplicate open: stream id
+    // is supposed to be webview-unique, a collision means a contract
+    // bug that would otherwise silently leak the prior controller's
+    // upstream fetch by overwriting the Map entry.
+    if (this.streams.has(msg.id)) {
+      this.send({
+        protocol: PROTOCOL_VERSION,
+        type: "stream.error",
+        id: msg.id,
+        message: `stream id ${msg.id} is already open`,
+      })
+      return
+    }
     const validation = validatePath(msg.path)
     if (!validation.ok) {
+      // audit-2026-04-29 vscode-ext F1 — single envelope on validation
+      // failure. Sending stream.close after stream.error for a stream
+      // we never opened is a protocol violation: the webview's streams
+      // Map has no entry for this id, so the close is a no-op there
+      // but might confuse a future entry that reuses the id.
       this.send({
         protocol: PROTOCOL_VERSION,
         type: "stream.error",
         id: msg.id,
         message: validation.reason,
-      })
-      this.send({
-        protocol: PROTOCOL_VERSION,
-        type: "stream.close",
-        id: msg.id,
-        reason: "invalid-path",
       })
       return
     }
