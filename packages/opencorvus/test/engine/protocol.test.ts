@@ -7,12 +7,14 @@ import { EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { EngineService } from "@/task-api"
+import { ProtocolStore } from "../../src/protocol/store"
 import { findTask } from "../../src/engine/store"
 import { updateTask } from "../../src/engine/state"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Message } from "../../src/session/message"
-import { ensureTaskMessageProtocolBridge } from "../../src/server/routes/task-message-protocol-bridge"
+import { ensureTaskMessageProtocolBridge } from "../../src/orchestrator/protocol/message-bridge"
+import { SessionStatus } from "../../src/session/status"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -152,6 +154,19 @@ describe("orchestrator protocol", () => {
             .run(),
         )
 
+        const liveEvents: Array<{
+          type: string
+          sessionID?: string
+          payload?: Record<string, unknown>
+        }> = []
+        const stop = ProtocolStore.subscribeEvents((event) => {
+          liveEvents.push({
+            type: event.type,
+            sessionID: event.sessionID,
+            payload: event.payload,
+          })
+        }, { aggregate: "task", taskID })
+
         const rootMessageID = Identifier.ascending("message")
         await Session.updateMessage({
           id: rootMessageID,
@@ -186,23 +201,72 @@ describe("orchestrator protocol", () => {
           delta: "judge delta",
         })
 
-        let events = await EngineService.listProtocolEvents(taskID)
         for (const _ of Array.from({ length: 25 })) {
           if (
-            events.some((item) => item.type === "message.updated" && item.sessionID === root.id) &&
-            events.some((item) => item.type === "message.part.updated" && item.sessionID === root.id)
+            liveEvents.some((item) => item.type === "message.updated" && item.sessionID === root.id) &&
+            liveEvents.some((item) => item.type === "message.part.updated" && item.sessionID === root.id)
           ) break
+          await Bun.sleep(20)
+        }
+        stop()
+
+        const rootMessage = liveEvents.find((item) => item.type === "message.updated" && item.sessionID === root.id)
+        const rootPart = liveEvents.find((item) => item.type === "message.part.updated" && item.sessionID === root.id)
+        // message.* events are live-only; reconnect hydrates from message/part tables.
+        expect(rootMessage).toBeTruthy()
+        expect(rootPart).toBeTruthy()
+        expect(rootMessage?.payload).toMatchObject({ channel: "main", resolvedRole: "user" })
+        expect(rootPart?.payload).toMatchObject({ channel: "main", resolvedRole: "user" })
+        const persisted = await EngineService.listProtocolEvents(taskID)
+        expect(persisted.filter((item) => item.type.startsWith("message."))).toEqual([])
+      },
+    })
+  })
+
+  test("bridges session terminal status without message role metadata", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ensureTaskMessageProtocolBridge()
+
+        const now = Date.now()
+        const root = await Session.create({ kind: "root", title: "Task root" })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "Requirements",
+        })
+        Database.use((db) =>
+          db.update(EngineTaskTable)
+            .set({
+              session_id: root.id,
+              time_updated: now,
+            })
+            .where(eq(EngineTaskTable.id, taskID))
+            .run(),
+        )
+
+        SessionStatus.set(requirements.id, { type: "terminal", reason: "completed" })
+
+        let events = await EngineService.listProtocolEvents(taskID)
+        for (const _ of Array.from({ length: 25 })) {
+          if (events.some((item) => item.type === "session.status" && item.sessionID === requirements.id)) break
           await Bun.sleep(20)
           events = await EngineService.listProtocolEvents(taskID)
         }
 
-        const rootMessage = events.find((item) => item.type === "message.updated" && item.sessionID === root.id)
-        const rootPart = events.find((item) => item.type === "message.part.updated" && item.sessionID === root.id)
-        // message.part.delta is ephemeral (not persisted) — only verify persisted events
-        expect(rootMessage).toBeTruthy()
-        expect(rootPart).toBeTruthy()
-        expect(rootMessage?.taskID).toBe(taskID)
-        expect(rootPart?.taskID).toBe(taskID)
+        const statusEvent = events.find((item) => item.type === "session.status" && item.sessionID === requirements.id)
+        expect(statusEvent).toBeTruthy()
+        expect(statusEvent?.payload).toMatchObject({
+          sessionID: requirements.id,
+          channel: "requirements",
+          resolvedRole: "requirements",
+          parentSessionID: root.id,
+          status: {
+            type: "terminal",
+            reason: "completed",
+          },
+        })
       },
     })
   })
@@ -236,6 +300,19 @@ describe("orchestrator protocol", () => {
           model: { providerID: "test", modelID: "test" },
         } satisfies Message.User
 
+        const liveEvents: Array<{
+          type: string
+          sessionID?: string
+          payload?: Record<string, any>
+        }> = []
+        const stop = ProtocolStore.subscribeEvents((event) => {
+          liveEvents.push({
+            type: event.type,
+            sessionID: event.sessionID,
+            payload: event.payload as Record<string, any> | undefined,
+          })
+        }, { aggregate: "task", taskID })
+
         await Session.saveMessage(rootMessage)
         await Session.updatePart({
           id: rootPartID,
@@ -246,17 +323,16 @@ describe("orchestrator protocol", () => {
         } satisfies Message.TextPart)
         await Session.updateMessage(rootMessage)
 
-        let events = await EngineService.listProtocolEvents(taskID)
         for (const _ of Array.from({ length: 25 })) {
           if (
-            events.some((item) => item.type === "message.part.updated" && item.sessionID === root.id) &&
-            events.some((item) => item.type === "message.updated" && item.sessionID === root.id)
+            liveEvents.some((item) => item.type === "message.part.updated" && item.sessionID === root.id) &&
+            liveEvents.some((item) => item.type === "message.updated" && item.sessionID === root.id)
           ) break
           await Bun.sleep(20)
-          events = await EngineService.listProtocolEvents(taskID)
         }
+        stop()
 
-        const rootEvents = events.filter((item) => item.sessionID === root.id)
+        const rootEvents = liveEvents.filter((item) => item.sessionID === root.id)
         expect(rootEvents.map((item) => item.type)).toEqual([
           "message.part.updated",
           "message.updated",
