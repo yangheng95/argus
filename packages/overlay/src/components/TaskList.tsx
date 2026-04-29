@@ -434,7 +434,31 @@ export interface TaskListProps {
 }
 
 export function TaskList(props: TaskListProps) {
-  const sortedItems = createMemo<any[]>(() => visibleTasks());
+  const allItems = createMemo<any[]>(() => visibleTasks());
+  // searchQuery survives only as long as the component is mounted — that's
+  // the right scope: a stale filter on cold start would hide tasks the
+  // operator forgot they typed about.
+  const [searchQuery, setSearchQuery] = createSignal("");
+  const matchesQuery = (item: any, q: string): boolean => {
+    if (!q) return true;
+    const haystack = [
+      item?.task?.title,
+      item?.task?.id,
+      item?.overview?.headline,
+      item?.task?.directory,
+      item?.task?.status,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
+  };
+  const sortedItems = createMemo<any[]>(() => {
+    const q = searchQuery().trim().toLowerCase();
+    const items = allItems();
+    if (!q) return items;
+    return items.filter((item) => matchesQuery(item, q));
+  });
   const [draggingID, setDraggingID] = createSignal("");
   const [dragOverID, setDragOverID] = createSignal("");
 
@@ -541,6 +565,31 @@ export function TaskList(props: TaskListProps) {
 
   return (
     <div class="task-list-panel">
+      <Show when={allItems().length > 4 || searchQuery()}>
+        <div class="task-list-search">
+          <svg class="task-list-search-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M10.5 10.5L13 13" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <input
+            type="search"
+            class="task-list-search-input"
+            placeholder={t("task.search_placeholder")}
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            aria-label={t("task.search_placeholder")}
+          />
+          <Show when={searchQuery()}>
+            <button
+              type="button"
+              class="task-list-search-clear"
+              onClick={() => setSearchQuery("")}
+              title={t("common.clear")}
+              aria-label={t("common.clear")}
+            >×</button>
+          </Show>
+        </div>
+      </Show>
       <Show when={boardStore.tasksError}>
         <div class="task-list-error" role="alert">
           <div class="task-list-error-msg">
@@ -570,7 +619,9 @@ export function TaskList(props: TaskListProps) {
                 </div>
               }
             >
-              <div class="empty-hint">{t("task.none")}</div>
+              <div class="empty-hint">
+                {searchQuery() ? t("task.search_empty", { query: searchQuery() }) : t("task.none")}
+              </div>
             </Show>
           </Show>
         }
