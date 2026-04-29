@@ -101,6 +101,41 @@ describe("SidecarLock", () => {
     expect(fs.existsSync(handle.file)).toBe(true)
   })
 
+  test("acquire is atomic — second concurrent caller throws SidecarLockContendedError (audit opencorvus F2)", () => {
+    // First sidecar wins.
+    const winner: SidecarLock.LockInfo = {
+      pid: process.pid,
+      port: 1,
+      hostname: "127.0.0.1",
+      parentPid: process.pid,
+      workspace: "/tmp/ws-toctou",
+      startedAt: Date.now(),
+    }
+    const winnerHandle = SidecarLock.acquire(winner)
+
+    // Second sidecar (different PID — must use a value the OS still
+    // considers "alive" so detectExisting doesn't auto-prune; but we
+    // never call detectExisting here, we exercise raw acquire which
+    // must EEXIST against the existing lock atomically).
+    const loser: SidecarLock.LockInfo = {
+      ...winner,
+      pid: process.pid + 1,
+      port: 2,
+    }
+    let caught: unknown
+    try {
+      SidecarLock.acquire(loser)
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(SidecarLock.SidecarLockContendedError)
+    if (caught instanceof SidecarLock.SidecarLockContendedError) {
+      expect(caught.existing?.pid).toBe(winner.pid)
+      expect(caught.existing?.port).toBe(winner.port)
+    }
+    winnerHandle.release()
+  })
+
   test("two distinct workspaces use distinct lock files", () => {
     const info1: SidecarLock.LockInfo = {
       pid: process.pid,

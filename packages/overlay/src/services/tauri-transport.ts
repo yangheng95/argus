@@ -141,9 +141,14 @@ function openPostStream(input: StreamOpenRequest, handlers: StreamHandlers): Str
     : controller.signal
   let closed = false
   const url = buildUrl(input.path, input.query)
+  // audit-2026-04-29 overlay F4 — also serves authed GET-SSE: when
+  // input.method is "GET" we still go through fetch (instead of
+  // EventSource) because the only reason to be here under GET is that
+  // the caller needs Authorization headers, which EventSource refuses.
+  const method = input.method ?? "POST"
   const init: RequestInit = applyBody(
     {
-      method: "POST",
+      method,
       headers: {
         ...apiHeadersFromState(),
         ...(input.headers ?? {}),
@@ -271,18 +276,44 @@ export function createTauriTransport(): HostTransport {
       if (method === "POST") {
         return openPostStream(input, handlers)
       }
+      // audit-2026-04-29 overlay F4 — when an Authorization header is
+      // configured, the native EventSource cannot carry it (no API for
+      // custom headers in the browser/WebView2). Falling through to
+      // EventSource produces silent 401s. Switch to fetch-based SSE
+      // parsing in that case so Basic Auth rides along; tradeoff is
+      // we lose EventSource's auto-reconnect, but the business layer
+      // (services/sse.ts) owns reconnect anyway (plan §5.5).
+      const headers: Record<string, string> = { ...apiHeadersFromState(), ...(input.headers ?? {}) }
+      if (headers.Authorization || headers.authorization) {
+        return openPostStream({ ...input, method: "GET" } as StreamOpenRequest, handlers)
+      }
       // Native EventSource: WebView2 (Tauri's webview backend) is known
       // to buffer ReadableStream chunks from fetch(), so SSE must NOT
-      // be polyfilled on top of fetch in this transport. The note in
-      // services/sse.ts documents the original incident.
+      // be polyfilled on top of fetch in this transport for unauthed
+      // streams. The note in services/sse.ts documents the original
+      // incident.
       const url = buildUrl(input.path, input.query)
-      // EventSource cannot carry custom Authorization headers in the
-      // browser — we rely on the same-origin cookie-less Basic Auth
-      // path provided by the Tauri webview. The vscode transport will
-      // re-introduce auth via the postMessage bridge in M4.
       const source = new EventSource(url.toString())
       let closed = false
+      // audit-2026-04-29 overlay F3 — EventSource can stay in
+      // CONNECTING forever on a hard-down server, never firing
+      // CLOSED. After OPEN_TIMEOUT_MS without an `open` event we
+      // synthesise onClose so the business reconnect timer fires.
+      const OPEN_TIMEOUT_MS = 10_000
+      let opened = false
+      const stuckTimer: ReturnType<typeof setTimeout> = setTimeout(() => {
+        if (opened || closed) return
+        closed = true
+        try { source.close() } catch {}
+        try { handlers.onError?.(new Error("event-source open timeout")) } catch {}
+        try { handlers.onClose?.("event-source-stuck") } catch {}
+      }, OPEN_TIMEOUT_MS)
+      if (typeof (stuckTimer as { unref?: () => void }).unref === "function") {
+        ;(stuckTimer as { unref?: () => void }).unref!()
+      }
       source.addEventListener("open", () => {
+        opened = true
+        clearTimeout(stuckTimer)
         try { handlers.onOpen?.() } catch {}
       })
       source.addEventListener("message", (e) => {
@@ -292,13 +323,14 @@ export function createTauriTransport(): HostTransport {
         // EventSource fires error on every transient disconnect.
         // - readyState CONNECTING: browser is auto-reconnecting; surface
         //   the error so UI can show disconnected state but DON'T fire
-        //   onClose (the stream may recover).
+        //   onClose (the stream may recover within OPEN_TIMEOUT_MS).
         // - readyState CLOSED: connection is permanently dead; fire
         //   onClose so the consumer can decide on its own reconnect
         //   policy (plan §5.5: transport doesn't own reconnect).
         try { handlers.onError?.(new Error("event-source error")) } catch {}
         if (source.readyState === EventSource.CLOSED && !closed) {
           closed = true
+          clearTimeout(stuckTimer)
           try { handlers.onClose?.("event-source-closed") } catch {}
         }
       })
@@ -306,6 +338,7 @@ export function createTauriTransport(): HostTransport {
         close() {
           if (closed) return
           closed = true
+          clearTimeout(stuckTimer)
           try { source.close() } catch {}
           try { handlers.onClose?.("client-close") } catch {}
         },
