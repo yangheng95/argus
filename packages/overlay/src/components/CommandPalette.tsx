@@ -234,6 +234,20 @@ export function CommandPalette() {
       runActive();
       return;
     }
+    // Tab focus trap: arrow keys are the canonical navigation, but
+    // Tab/Shift+Tab from the input would otherwise leave the palette
+    // open with focus stranded outside it. Treat them as down/up so
+    // keyboard-only operators stay inside the palette until Esc/Enter.
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const len = filtered().length;
+      if (len === 0) return;
+      setActiveIndex((i) => {
+        const next = e.shiftKey ? i - 1 : i + 1;
+        return ((next % len) + len) % len;
+      });
+      return;
+    }
   }
 
   // Global hotkey: Cmd+K (mac) / Ctrl+K (others). Captured in capture
