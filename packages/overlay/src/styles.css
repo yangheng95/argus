@@ -2682,6 +2682,42 @@ body[data-theme="light"] .section-badge {
   outline-offset: 1px;
 }
 
+/* AgentModelsPanel inline-style refugees (rule 10: no hardcoded
+   font-size / spacing / colors in TSX). Each replaced inline `style="…"`
+   with one of these classes so the design tokens own the spacing &
+   typography, not the component template. */
+.agent-models-info {
+  margin: var(--ui-gap-xs) 0 var(--ui-gap-lg) 0;
+  font-size: var(--ui-font-meta);
+  color: var(--text-muted);
+}
+.agent-models-refresh-msg {
+  margin-bottom: var(--ui-gap-md);
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  font-size: var(--ui-font-meta);
+  color: var(--text-soft);
+}
+.agent-models-warning {
+  margin-top: var(--ui-gap-md);
+  padding: var(--ui-gap-sm) var(--ui-gap-md);
+  font-size: var(--ui-font-meta);
+  border-left: 3px solid var(--bad);
+  color: var(--bad);
+}
+
+/* ProvidersPanel inline-style refugees — same rule 10 cleanup. The
+   three `<div style="font-size … opacity … margin-bottom …">` rows
+   collapse into one class; `--last` strips the trailing margin so the
+   list has no orphan space at the bottom. */
+.provider-card-meta {
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  margin-bottom: 2px;
+}
+.provider-card-meta--last {
+  margin-bottom: 0;
+}
+
 /* AgentModelsPanel loading state — replaces the bare "Loading…" text
    with a spinner + label so the operator can distinguish "still
    fetching" from "fetched but empty" at a glance. */

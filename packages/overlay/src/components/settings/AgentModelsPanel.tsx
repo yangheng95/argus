@@ -235,15 +235,12 @@ export default function AgentModelsPanel() {
             {refreshing() ? "Refreshing…" : "Refresh Hexin Models"}
           </button>
         </div>
-        <p style="margin: 4px 0 12px 0; font-size: var(--ui-font-meta); opacity: 0.75;">
+        <p class="agent-models-info">
           Choose which LLM each agent uses. Leave unset to inherit the
           project default (top-level `model` in opencorvus.jsonc).
         </p>
         <Show when={refreshMsg()}>
-          <div
-            class="config-panel-card"
-            style="margin-bottom: 10px; padding: 6px 10px; font-size: var(--ui-font-meta); opacity: 0.85;"
-          >
+          <div class="config-panel-card agent-models-refresh-msg">
             {refreshMsg()}
           </div>
         </Show>
@@ -319,10 +316,7 @@ export default function AgentModelsPanel() {
                     </span>
                   </div>
                   <Show when={projectModelMissing}>
-                    <div
-                      class="config-panel-card"
-                      style="margin-top: 8px; padding: 6px 10px; font-size: var(--ui-font-meta); border-left: 3px solid var(--color-danger, #e55); color: var(--color-danger, #e55);"
-                    >
+                    <div class="config-panel-card agent-models-warning">
                       No project default model set. Every agent will fail with
                       <code> MissingModelConfigError </code>
                       on dispatch until a model is chosen here (or each agent is
