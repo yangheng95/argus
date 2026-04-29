@@ -4881,6 +4881,15 @@ code .file-link:hover {
   padding: 0;
   transition: color 120ms, background 120ms, transform 120ms;
 }
+/* When the textarea is disabled, the entire icon column (attach / web
+   search / expand) should follow — otherwise the buttons look clickable
+   but click does nothing or worse: they intercept focus and the operator
+   thinks the composer is broken. data-disabled on the column flips
+   pointer-events + opacity so the visual matches the textarea. */
+.chat-icon-col[data-disabled="true"] {
+  opacity: 0.4;
+  pointer-events: none;
+}
 .chat-toolbar-btn:hover {
   color: var(--text-strong);
   background: color-mix(in srgb, var(--surface-strong) 90%, transparent);

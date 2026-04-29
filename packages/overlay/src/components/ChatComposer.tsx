@@ -391,7 +391,7 @@ export function ChatComposer(props: ChatComposerProps) {
         </div>
 
         {/* Icon column: attach / web search / expand */}
-        <div class="chat-icon-col">
+        <div class="chat-icon-col" data-disabled={!props.enabled ? "true" : undefined}>
           <button
             type="button"
             id="btnChatAttach"
