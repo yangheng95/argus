@@ -581,21 +581,27 @@ export namespace BuildAgent {
           preserveWorktreeForRetry = true
         }
       } finally {
+        // Worktree lifecycle is owned by the orchestrator (rule 22 single
+        // source: orchestrator decides merge_arbitrate / fail_task /
+        // modify_goal, so it also decides when the worktree is no longer
+        // needed). Build agent only cleans up in the narrow case where it
+        // could not even produce a usable worktree state — i.e. ownership
+        // is set but the worktree dir disappeared mid-flight (rare; FS
+        // failures, OS-level rm). In every other case — pass + merged,
+        // pass without merged (continuation), merge conflict, hard failure
+        // — the worktree stays so merge_arbitrate / retry_build can use it.
+        // engine/writer.ts cleanupGoalWorkspaces is the safety-net at
+        // task terminal that catches any orchestrator-skipped cleanup.
         if (ownsWorktree && worktreeBranch && !mergedHead && mergeBackBlockedReport) {
           preserveWorktreeForRetry = true
         }
-        if (ownsWorktree && worktreeDir && !preserveWorktreeForRetry) {
-          await cleanupGoalWorkspace(worktreeDir).catch((err) => {
-            log.warn("build agent: cleanupGoalWorkspace failed", {
-              worktreeDir,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          })
-        } else if (preserveWorktreeForRetry && worktreeDir) {
-          log.warn("build agent: preserving worktree for retry — merge_back contract incomplete", {
+        if (ownsWorktree && worktreeDir) {
+          log.info("build agent: preserving worktree — orchestrator owns cleanup", {
             taskID: input.task.id,
             worktreeDir,
             worktreeBranch,
+            mergedHead: mergedHead ? mergedHead.slice(0, 12) : null,
+            preserveForRetry: preserveWorktreeForRetry,
           })
         }
       }

@@ -1855,7 +1855,20 @@ export function createOrchestratorTools(input: {
         const resetSuffix = statusReset ? ` (status reset: ${goalStatusByID(goal.id)} → pending via goal_run chain)` : ""
         const abortSuffix = abortedRuns > 0 ? `, ${abortedRuns} prior goal_run(s) marked aborted` : ""
         const supersedeSuffix = supersededTipID ? `, tip ${supersededTipID} superseded` : ""
-        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}${supersedeSuffix}`
+
+        // When a contract change triggered status reset, the prior attempt's
+        // worktree is stale (built against the old contract). Cleanup so the
+        // next build starts from a fresh primary checkout and doesn't carry
+        // forward the old tree's state. Best-effort; safety net at task
+        // terminal still applies.
+        let cleanupSuffix = ""
+        if (statusReset) {
+          const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
+          const cleaned = await cleanupGoalWorkspaceForGoal(goalID).catch(() => false)
+          if (cleaned) cleanupSuffix = ", stale worktree cleaned"
+        }
+
+        return `Goal ${goalID} modified: ${changed.join(", ") || "(no changes)"}${resetSuffix}${abortSuffix}${supersedeSuffix}${cleanupSuffix}`
       },
     }),
 
@@ -2202,10 +2215,23 @@ export function createOrchestratorTools(input: {
             primaryHead: result.primaryHead,
             reason,
           })
+          // Worktree's job is done — merge integrated, primary advanced.
+          // Cleanup is the orchestrator's responsibility (rule 22 single
+          // source: same authority that decided the merge owns the
+          // worktree's lifecycle). Best-effort; engine/writer's
+          // cleanupGoalWorkspaces at task terminal is the safety net.
+          const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
+          await cleanupGoalWorkspaceForGoal(goalID).catch((err) => {
+            log.warn("merge_arbitrate: post-resolve cleanup failed", {
+              taskID,
+              goalID,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          })
           return (
             `merge_arbitrate: resolved goal ${goalID} with strategy=${strategy.kind} → ` +
-            `${result.primaryBranch}@${result.primaryHead.slice(0, 12)}. NEXT: call \`deliver\` ` +
-            `to verify the integrated tree.`
+            `${result.primaryBranch}@${result.primaryHead.slice(0, 12)}. Worktree cleaned. ` +
+            `NEXT: call \`deliver\` to verify the integrated tree.`
           )
         } catch (err) {
           const detail = err instanceof Error ? err.message : String(err)
@@ -2227,7 +2253,17 @@ export function createOrchestratorTools(input: {
       execute: async ({ error }) => {
         const task = requireTask(taskID)
         await updateTask(task, { status: "failed", error, time_completed: Date.now() }, `Failed: ${error}`)
-        return `Task ${taskID} failed: ${error}`
+
+        // Task is dead — every goal's worktree is now garbage. Clean
+        // proactively here rather than waiting for the engine/writer
+        // task-terminal sweep so disk usage drops at the moment of
+        // decision (rule 22: orchestrator owns worktree lifecycle).
+        const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
+        let cleaned = 0
+        for (const goal of listGoals(taskID)) {
+          if (await cleanupGoalWorkspaceForGoal(goal.id).catch(() => false)) cleaned += 1
+        }
+        return `Task ${taskID} failed: ${error}${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
       },
     }),
 
