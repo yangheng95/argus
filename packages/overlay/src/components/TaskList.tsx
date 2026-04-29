@@ -559,7 +559,18 @@ export function TaskList(props: TaskListProps) {
         when={sortedItems().length > 0}
         fallback={
           <Show when={!boardStore.tasksError}>
-            <div class="empty-hint">{t("task.none")}</div>
+            <Show
+              when={boardStore.tasksLoaded}
+              fallback={
+                <div class="task-list-skeleton" aria-hidden="true">
+                  <div class="task-list-skeleton-row" />
+                  <div class="task-list-skeleton-row" />
+                  <div class="task-list-skeleton-row" />
+                </div>
+              }
+            >
+              <div class="empty-hint">{t("task.none")}</div>
+            </Show>
           </Show>
         }
       >
