@@ -18,9 +18,15 @@ import os from "os"
 import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { Global } from "../../src/global"
+import { withStreamActivity } from "../../src/util/stream-activity"
 
 const fwd = (...parts: string[]) => path.join(...parts).replaceAll("\\", "/")
 const SHA1_RE = /^[0-9a-f]{40}$/
+const PERF_LIMIT = {
+  trackMs: 2_250,
+  diffMs: 1_500,
+  restoreMs: 2_250,
+}
 
 type SuiteResult = void | Record<string, unknown>
 type Suite = { name: string; run: () => Promise<SuiteResult> }
@@ -70,6 +76,18 @@ async function dirSize(dir: string): Promise<number> {
 function assertHash(hash: unknown, label: string): asserts hash is string {
   if (typeof hash !== "string" || !SHA1_RE.test(hash))
     throw new Error(`${label}: not a sha1 hash: ${JSON.stringify(hash)}`)
+}
+
+function benchmarkIdleMs() {
+  const raw = process.env.SNAPSHOT_BENCH_IDLE_TIMEOUT_MS
+  if (!raw) return 120_000
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`invalid SNAPSHOT_BENCH_IDLE_TIMEOUT_MS=${raw}`)
+  return value
+}
+
+function assertUnder(name: string, actual: number, limit: number) {
+  if (actual > limit) throw new Error(`${name} exceeded budget: actual=${actual}ms limit=${limit}ms`)
 }
 
 // ---------------------------------------------------------------------------
@@ -290,6 +308,9 @@ async function suite_perf_thousand_files(): Promise<SuiteResult> {
     await Snapshot.restore(h1)
     const restoreMs = Date.now() - t3
 
+    assertUnder("track", trackMs, PERF_LIMIT.trackMs)
+    assertUnder("diffFull(100)", diffMs, PERF_LIMIT.diffMs)
+    assertUnder("restore(100)", restoreMs, PERF_LIMIT.restoreMs)
     return { trackMs, diffMs, restoreMs, diffCount: fd.length }
   })
 }
@@ -352,28 +373,51 @@ const suites: Suite[] = [
 
 async function main() {
   const filter = process.env.SNAPSHOT_BENCH_ONLY
+  const idleMs = benchmarkIdleMs()
+  const activity = withStreamActivity({ idleMs, label: "snapshot-benchmark" })
   let pass = 0
   let fail = 0
   const t0 = Date.now()
-  for (const s of suites) {
-    if (filter && !s.name.includes(filter)) continue
-    const start = Date.now()
-    try {
-      const metrics = await s.run()
-      const dur = Date.now() - start
-      const tail = metrics ? ` ${JSON.stringify(metrics)}` : ""
-      console.log(`[ok]   ${s.name} dur=${dur}ms${tail}`)
-      pass++
-    } catch (err) {
-      const dur = Date.now() - start
-      const msg = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err)
-      console.log(`[fail] ${s.name} dur=${dur}ms\n        ${msg.replace(/\n/g, "\n        ")}`)
-      fail++
+  try {
+    for (const s of suites) {
+      if (filter && !s.name.includes(filter)) continue
+      activity.observe()
+      const start = Date.now()
+      try {
+        const metrics = await runWithIdleSignal(s.run(), activity.signal)
+        activity.observe()
+        const dur = Date.now() - start
+        const tail = metrics ? ` ${JSON.stringify(metrics)}` : ""
+        console.log(`[ok]   ${s.name} dur=${dur}ms${tail}`)
+        pass++
+      } catch (err) {
+        const dur = Date.now() - start
+        const msg = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err)
+        console.log(`[fail] ${s.name} dur=${dur}ms\n        ${msg.replace(/\n/g, "\n        ")}`)
+        fail++
+        if (activity.timedOut()) break
+      }
     }
+  } finally {
+    activity.dispose()
   }
-  console.log(`\nresult: pass=${pass} fail=${fail} total=${pass + fail} elapsed=${Date.now() - t0}ms`)
+  console.log(`\nresult: pass=${pass} fail=${fail} total=${pass + fail} elapsed=${Date.now() - t0}ms idleMs=${idleMs}`)
   await Instance.disposeAll().catch(() => {})
   process.exit(fail)
+}
+
+async function runWithIdleSignal<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw signal.reason
+  let onAbort: (() => void) | undefined
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason)
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
+  try {
+    return await Promise.race([work, aborted])
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort)
+  }
 }
 
 await main()
