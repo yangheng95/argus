@@ -19,7 +19,6 @@ import { Project } from "@/project/project"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
-import { Snapshot } from "@/snapshot"
 import { Message } from "@/session/message"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
@@ -965,20 +964,14 @@ export namespace EngineService {
       await Session.remove(task.session_id)
     }
     // Delete the task row itself (CASCADE handles plans, goals, runs, artifacts, etc.)
+    // Snapshot disk reclaim is intentionally NOT triggered here: every tree
+    // object emitted by this task's `Snapshot.track()` is dangling (no ref),
+    // so `git gc --prune=now` would also collect snapshots that other live
+    // tasks/sessions in the same project still reference. Whole-project
+    // reclaim is owned by ProjectGC (rm of `snapshot/<id>`).
     Database.use((db) => {
       db.delete(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).run()
       Database.effect(() => Database.incrementalVacuum())
-    })
-    // Fire-and-forget snapshot prune: every tree object written by this task's
-    // `Snapshot.track()` calls is dangling (no ref) so `git gc --prune=now`
-    // reclaims its disk footprint. Running detached keeps the caller's
-    // response path unblocked — this is a cleanup hint, not a correctness-
-    // critical step, so a failure here only shows up in the log.
-    void Snapshot.cleanup().catch((error) => {
-      log.warn("snapshot cleanup after deleteTask failed", {
-        taskID,
-        error: error instanceof Error ? error.message : String(error),
-      })
     })
     return true
   }

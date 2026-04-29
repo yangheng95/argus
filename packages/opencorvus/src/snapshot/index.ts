@@ -8,55 +8,24 @@ import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { Project } from "../project/project"
-import { Scheduler } from "../scheduler"
 import { FileDiff as _FileDiff, Patch as _Patch } from "./types"
 import type { FileDiff as _FileDiffType, Patch as _PatchType } from "./types"
 
+// Disk reclamation belongs to ProjectGC alone: every tree object emitted by
+// `track()` is dangling immediately (no ref, no reflog), so any local
+// `git gc --prune=now` would shred snapshot hashes that live message parts
+// and task baselines still point to. The previous hourly Scheduler job and
+// the per-deleteTask cleanup had exactly that effect — confirmed by
+// snapshot-benchmark.ts. Whole-project rm via ProjectGC is the only safe
+// reclaim path; per-snapshot pruning would need ref-anchored snapshots,
+// which we deliberately do not maintain.
+
 export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
-  const hour = 60 * 60 * 1000
-  // Snapshots are an agent-only cache: every tree object written by `track()`
-  // is dangling (no ref) from the moment it is written, so the classic 7-day
-  // grace period has no value here. `--prune=now` reclaims disk immediately.
-  const prune = "now"
   const coreAutocrlf =
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSymlinks =
     process.env.OPENCORVUS_SNAPSHOT_CORE_SYMLINKS || (process.platform === "win32" ? "false" : "true")
-
-  export function init() {
-    Scheduler.register({
-      id: "snapshot.cleanup",
-      interval: hour,
-      run: cleanup,
-      scope: "instance",
-    })
-  }
-
-  export async function cleanup() {
-    if (!Project.isGitRepo(Instance.directory) || Flag.OPENCORVUS_CLIENT === "acp") return
-    const cfg = await Config.get()
-    if (cfg.snapshot === false) return
-    const git = gitdir()
-    const exists = await fs
-      .stat(git)
-      .then(() => true)
-      .catch(() => false)
-    if (!exists) return
-    const result = await $`git --git-dir ${git} --work-tree ${Instance.worktree} gc --prune=${prune}`
-      .quiet()
-      .cwd(Instance.directory)
-      .nothrow()
-    if (result.exitCode !== 0) {
-      log.warn("cleanup failed", {
-        exitCode: result.exitCode,
-        stderr: result.stderr.toString(),
-        stdout: result.stdout.toString(),
-      })
-      return
-    }
-    log.info("cleanup", { prune })
-  }
 
   export async function track() {
     if (!Project.isGitRepo(Instance.directory) || Flag.OPENCORVUS_CLIENT === "acp") return
@@ -138,29 +107,18 @@ export namespace Snapshot {
     }
   }
 
+  // Restore = "make the worktree match this snapshot exactly". Implemented
+  // by going through the same primitive `revert()` already uses: collect the
+  // worktree-vs-snapshot delta via `patch()`, then let `revert()` re-checkout
+  // each modified path and unlink the ones absent from the snapshot tree.
+  // The previous `read-tree + checkout-index -a -f` form left untracked
+  // worktree files behind because checkout-index only writes — it never
+  // removes — so restoring after `track() → write extras → restore()` would
+  // silently leave the extras on disk.
   export async function restore(snapshot: string) {
     log.info("restore", { commit: snapshot })
-    const git = gitdir()
-    const indexFile = path.join(git, `index-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
-    try {
-      const result =
-        await $`git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} read-tree ${snapshot} && git -c core.longpaths=true -c core.symlinks=${coreSymlinks} --git-dir ${git} --work-tree ${Instance.worktree} checkout-index -a -f`
-          .env({ ...process.env, GIT_INDEX_FILE: indexFile })
-          .quiet()
-          .cwd(Instance.worktree)
-          .nothrow()
-
-      if (result.exitCode !== 0) {
-        log.error("failed to restore snapshot", {
-          snapshot,
-          exitCode: result.exitCode,
-          stderr: result.stderr.toString(),
-          stdout: result.stdout.toString(),
-        })
-      }
-    } finally {
-      await fs.unlink(indexFile).catch(() => {})
-    }
+    const p = await patch(snapshot)
+    await revert([p])
   }
 
   export async function revert(patches: Patch[]) {

@@ -9,7 +9,6 @@ import { Command } from "../command"
 import { Instance } from "./instance"
 import { Vcs } from "./vcs"
 import { Log } from "@/util/log"
-import { Snapshot } from "../snapshot"
 import { ProjectGC } from "./gc"
 import { Truncate } from "../tool/truncation"
 import { CronService } from "../scheduler/cron-service"
@@ -28,7 +27,8 @@ export async function InstanceBootstrap() {
   FileWatcher.init()
   File.init()
   Vcs.init()
-  Snapshot.init()
+  // Snapshot has no init/cleanup of its own — disk reclaim is ProjectGC's
+  // sole responsibility (whole-project rm). See snapshot/index.ts.
   ProjectGC.init()
   Truncate.init()
   CronService.init()
