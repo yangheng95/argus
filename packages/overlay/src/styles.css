@@ -10996,6 +10996,23 @@ body[data-resizing="true"] * {
     transform: translate(-50%, 0);
   }
   .welcome-toast[data-state="leaving"] { transform: translate(-50%, 0); }
+  /* WCAG 2.3.3: when the operator opts out of motion at the OS level,
+     all our decorative animations stop. Keep the spinner (functional —
+     conveys "still loading") but freeze the pulses, shimmers, and
+     fade-ins. The corresponding --copied / --active states still flip
+     instantly, just without the animated transition. */
+  .conn-banner__dot,
+  .board-intro__cta,
+  .task-list-skeleton-row {
+    animation: none !important;
+  }
+  .cmdk-backdrop {
+    animation: none !important;
+  }
+  .agent-models-loading-spinner {
+    /* Spinner is functional, not decorative — slow it but don't stop. */
+    animation-duration: 2s;
+  }
 }
 
 /* Keep the executor chooser centered against the full titlebar, not just the flex remainder. */
