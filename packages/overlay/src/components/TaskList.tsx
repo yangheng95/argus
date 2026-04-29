@@ -7,7 +7,7 @@ import { boardStore, visibleTasks, loadTasks } from "../store/board";
 import { settingsStore } from "../store/settings";
 import { reorderTaskQueue } from "../services/task-queue";
 import { t } from "../utils/i18n";
-import { stamp } from "../utils/time";
+import { stamp, fullStampWithRelative } from "../utils/time";
 
 // ── Task status constants ──
 
@@ -353,7 +353,10 @@ function TaskRow(props: {
           >
             <span class="task-row-badge-text">{badgeLabel()}</span>
           </span>
-          <small class="task-row-stamp">{taskListMeta(props.item)}</small>
+          <small
+            class="task-row-stamp"
+            title={fullStampWithRelative(taskUpdated(props.item))}
+          >{taskListMeta(props.item)}</small>
         </div>
       </button>
       <Show when={hasActions()}>
