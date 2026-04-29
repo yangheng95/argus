@@ -187,20 +187,59 @@ export namespace AttachmentStore {
     return { multimodal, referenceOnly }
   }
 
+  // Note: the previous helper `renderReferenceList(referenceOnly)` listed only
+  // the non-multimodal subset. It conflated "I don't have a `read` tool"
+  // (orchestrator) with "I do have one" (sub-agents) into a single string and
+  // — worse — left multimodal attachments completely absent from the prompt
+  // text, so models silently ignored uploaded screenshots. Replaced by
+  // `renderAttachmentInventory` below which surfaces every attachment with an
+  // explicit per-item kind tag.
+
   /**
-   * Render the URL-only attachment list as a markdown section appended to
-   * the agent's user message. Returns "" when nothing to surface so the
-   * caller can `text + section` unconditionally.
+   * Render an explicit textual inventory of EVERY task attachment — both the
+   * multimodal ones already inlined as file parts in the user message AND the
+   * reference-only ones the agent must fetch via the `read` tool.
+   *
+   * Why list multimodals in text too: image / pdf bytes ARE in the LLM's
+   * context window once `inlineFileParts` splices them as file parts, but
+   * without an accompanying textual mention the model frequently fails to
+   * acknowledge their existence (observed in benchmark: orchestrator
+   * dispatched architect / requirements without ever citing the user-uploaded
+   * screenshot, sub-agents then hallucinated layouts from the request prose
+   * alone). The text inventory anchors the file parts in the prompt's
+   * narrative so the model knows it has them and reasons about them
+   * explicitly.
+   *
+   * Returns "" when nothing to surface so the caller can `text + section`
+   * unconditionally. Section header / hint string is configurable so the
+   * orchestrator can swap the default "you can read these" wording for its
+   * own "forwarded to sub-agents — cite by filename in your dispatch".
    */
-  export function renderReferenceList(referenceOnly: readonly AttachmentLike[]): string {
-    if (referenceOnly.length === 0) return ""
-    const lines = referenceOnly.map((a) => {
+  export function renderAttachmentInventory(
+    attachments: readonly AttachmentLike[] | undefined,
+    opts: {
+      header?: string
+      hint?: string
+    } = {},
+  ): string {
+    if (!attachments?.length) return ""
+    const { multimodal, referenceOnly } = partition(attachments)
+    const header = opts.header ?? "## Task Attachments"
+    const hint = opts.hint
+      ?? "Multimodal attachments (image / pdf / audio / video) are already in your context as file parts. " +
+         "Reference-only attachments (text / json) are not inlined — fetch them via the `read` tool using the listed url."
+    const formatRow = (a: AttachmentLike, kind: "inline" | "reference") => {
       const sizeKb = typeof a.size === "number" ? `${Math.max(1, Math.round(a.size / 1024))} KB, ` : ""
       const name = a.filename ?? a.sha ?? "(unnamed)"
       const mime = a.mime ?? "application/octet-stream"
-      return `- ${name} — ${mime} — ${sizeKb}url: ${a.url}`
-    }).join("\n")
-    return `\n\n## Task Attachments (read via the \`read\` tool when you need their content)\n${lines}`
+      const tag = kind === "inline" ? "[inlined as file part]" : "[reference — read via tool]"
+      return `- ${name} — ${mime} — ${sizeKb}${tag} url: ${a.url}`
+    }
+    const lines = [
+      ...multimodal.map((a) => formatRow(a, "inline")),
+      ...referenceOnly.map((a) => formatRow(a, "reference")),
+    ].join("\n")
+    return `\n\n${header}\n${hint}\n\n${lines}`
   }
 
   /**
@@ -216,7 +255,8 @@ export namespace AttachmentStore {
    * — the LLM was hallucinating from prompt text alone. This helper is the
    * single conversion path; callers must not re-wrap its output.
    *
-   * Skips non-multimodal MIMEs (those go through `renderReferenceList`).
+   * Skips non-multimodal MIMEs (those surface as `[reference]` rows in
+   * `renderAttachmentInventory`).
    * Throws if any URL is unresolvable — partial attachment delivery would
    * mislead the agent (it would believe it saw all references).
    */

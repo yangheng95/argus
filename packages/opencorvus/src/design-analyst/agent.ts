@@ -180,8 +180,7 @@ async function buildPromptParts(
   text: string,
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
-  const { referenceOnly } = AttachmentStore.partition(attachments)
-  const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+  const enrichedText = text + AttachmentStore.renderAttachmentInventory(attachments)
   const inlineParts = await AttachmentStore.inlineFileParts(attachments)
   return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
 }

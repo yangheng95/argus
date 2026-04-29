@@ -84,8 +84,7 @@ export namespace IntentAnalysisAgent {
       buildUserPrompt: () => buildUserPrompt(input),
       buildUserParts: async () => {
         const text = buildUserPrompt(input)
-        const { referenceOnly } = AttachmentStore.partition(input.attachments)
-        const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+        const enrichedText = text + AttachmentStore.renderAttachmentInventory(input.attachments)
         const inlineParts = await AttachmentStore.inlineFileParts(input.attachments)
         return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
       },

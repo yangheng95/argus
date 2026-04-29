@@ -196,10 +196,11 @@ async function buildPromptParts(
   attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>,
 ) {
   const inlineParts = await AttachmentStore.inlineFileParts(attachments)
+  const enrichedText = text + AttachmentStore.renderAttachmentInventory(attachments)
   const parts: Array<
     | { type: "text"; text: string }
     | { type: "file"; url: string; mime: string; filename?: string }
-  > = [{ type: "text", text }, ...inlineParts]
+  > = [{ type: "text", text: enrichedText }, ...inlineParts]
   return parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 }
 

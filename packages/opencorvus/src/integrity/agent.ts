@@ -404,9 +404,8 @@ export async function reviewIntegrity(input: {
     buildUserParts: (input.attachments && input.attachments.length > 0)
       ? async () => {
           const text = buildIntegrityPrompt(input)
-          const { referenceOnly } = AttachmentStore.partition(input.attachments!)
           const inline = await AttachmentStore.inlineFileParts(input.attachments!)
-          const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+          const enrichedText = text + AttachmentStore.renderAttachmentInventory(input.attachments)
           return [{ type: "text" as const, text: enrichedText }, ...inline]
         }
       : undefined,

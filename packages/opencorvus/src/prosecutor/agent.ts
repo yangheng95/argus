@@ -345,8 +345,7 @@ export async function runProsecutor(
         const attachments = Array.isArray(taskAttachments)
           ? (taskAttachments as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
           : undefined
-        const { referenceOnly } = AttachmentStore.partition(attachments)
-        const enrichedText = brief + AttachmentStore.renderReferenceList(referenceOnly)
+        const enrichedText = brief + AttachmentStore.renderAttachmentInventory(attachments)
         const inlineParts = await AttachmentStore.inlineFileParts(attachments)
         return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
       },

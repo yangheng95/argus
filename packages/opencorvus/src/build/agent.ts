@@ -291,7 +291,6 @@ export namespace BuildAgent {
       const buildUserPartsFn = allMultimodal.length > 0
         ? async () => {
             const text = buildPromptText()
-            const { referenceOnly } = AttachmentStore.partition(allMultimodal)
             const inline = await AttachmentStore.inlineFileParts(allMultimodal)
             // Three layers of context for attachments, each with a different
             // role and required to coexist (rule 22 — staging doesn't
@@ -299,12 +298,13 @@ export namespace BuildAgent {
             //   1. inline file parts → the LLM physically sees the pixels
             //   2. renderStagedList → tells the LLM the worktree-local path
             //      so it can pass them to sandbox-checked tools
-            //   3. renderReferenceList → URL list for non-multimodal refs
-            //      that can't be inlined and aren't staged
+            //   3. renderAttachmentInventory → textual ledger of EVERY
+            //      attachment (multimodal + reference-only) so the LLM
+            //      anchors its reasoning to "I have these files"
             const enrichedText =
               text +
               AttachmentStore.renderStagedList(stagedAttachments) +
-              AttachmentStore.renderReferenceList(referenceOnly)
+              AttachmentStore.renderAttachmentInventory(allMultimodal)
             return [{ type: "text" as const, text: enrichedText }, ...inline]
           }
         : undefined
