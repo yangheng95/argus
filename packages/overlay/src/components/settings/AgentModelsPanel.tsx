@@ -232,12 +232,11 @@ export default function AgentModelsPanel() {
             onClick={handleRefreshHexin}
             disabled={refreshing()}
           >
-            {refreshing() ? "Refreshing…" : "Refresh Hexin Models"}
+            {refreshing() ? t("agent_models.refreshing") : t("agent_models.refresh_hexin")}
           </button>
         </div>
         <p class="agent-models-info">
-          Choose which LLM each agent uses. Leave unset to inherit the
-          project default (top-level `model` in opencorvus.jsonc).
+          {t("agent_models.intro")}
         </p>
         <Show when={refreshMsg()}>
           <div class="config-panel-card agent-models-refresh-msg">
@@ -283,8 +282,8 @@ export default function AgentModelsPanel() {
             return (
               <>
                 <div class="agent-model-project-default">
-                  <div class="agent-model-row" title="Top-level `model` in opencorvus.jsonc">
-                    <span class="agent-model-name">Project default</span>
+                  <div class="agent-model-row" title={t("agent_models.project_default_title")}>
+                    <span class="agent-model-name">{t("agent_models.project_default")}</span>
                     <select
                       class="field-input agent-model-select"
                       value={currentModel}
@@ -295,9 +294,9 @@ export default function AgentModelsPanel() {
                         )
                       }
                     >
-                      <option value="">— not set —</option>
+                      <option value="">{t("agent_models.option_not_set")}</option>
                       <Show when={projectModelUnavailable}>
-                        <option value={currentModel}>{currentModel} (unavailable)</option>
+                        <option value={currentModel}>{t("agent_models.option_unavailable", { model: currentModel })}</option>
                       </Show>
                       <For each={groups}>
                         {(g) => (
@@ -312,15 +311,14 @@ export default function AgentModelsPanel() {
                       </For>
                     </select>
                     <span class="agent-model-status">
-                      <Show when={savingDefault()}>saving…</Show>
+                      <Show when={savingDefault()}>{t("agent_models.saving")}</Show>
                     </span>
                   </div>
                   <Show when={projectModelMissing}>
                     <div class="config-panel-card agent-models-warning">
-                      No project default model set. Every agent will fail with
+                      {t("agent_models.warning_no_default_prefix")}
                       <code> MissingModelConfigError </code>
-                      on dispatch until a model is chosen here (or each agent is
-                      individually overridden below).
+                      {t("agent_models.warning_no_default_suffix")}
                     </div>
                   </Show>
                 </div>
