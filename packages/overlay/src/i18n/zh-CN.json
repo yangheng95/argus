@@ -97,6 +97,8 @@
   "notify.task.interaction.body_with_detail": "{{title}}：{{detail}}",
   "settings.desktop_notifications_label": "桌面通知",
   "settings.desktop_notifications_hint": "任务完成、失败、取消或等待响应时通知系统提醒。",
+  "settings.desktop_notifications_unsupported": "此浏览器不支持通知 API，桌面通知不可用。",
+  "settings.desktop_notifications_blocked": "通知权限已被拒绝。请在浏览器或系统设置中重新允许，然后再次开启此开关。",
   "channel.public_url_invalid": "公共 URL 必须以 http:// 或 https:// 开头",
   "task.search_placeholder": "搜索任务…",
   "task.search_empty": "未找到匹配 \"{{query}}\" 的任务",

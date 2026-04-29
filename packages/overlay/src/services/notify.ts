@@ -34,9 +34,10 @@ function notificationApiAvailable(): boolean {
 
 async function ensurePermission(): Promise<NotificationPermission> {
   if (!notificationApiAvailable()) return "denied";
-  if (permissionState === "uninitialized") {
-    permissionState = Notification.permission;
-  }
+  // Always re-read the platform state — the user may have toggled it via
+  // OS / browser settings since the last check, in which case our cached
+  // "denied" would lock them out forever even after they re-grant.
+  permissionState = Notification.permission;
   if (permissionState === "granted" || permissionState === "denied") {
     return permissionState;
   }
@@ -48,6 +49,37 @@ async function ensurePermission(): Promise<NotificationPermission> {
     if (result === "denied") {
       console.warn("[notify] Notification permission denied; degrading to in-app feedback only.");
     }
+    return result;
+  } finally {
+    permissionRequestPending = false;
+  }
+}
+
+/** Surface the live platform permission state to settings UI so the
+ *  General toggle can warn when permission is denied at the OS level
+ *  and the toggle alone won't help. Re-reads each call so OS-side
+ *  changes propagate immediately. */
+export function notificationPermissionState(): NotificationPermission | "unsupported" {
+  if (!notificationApiAvailable()) return "unsupported";
+  return Notification.permission;
+}
+
+/** Force a fresh permission prompt. Some browsers respect a re-prompt
+ *  after a prior denial when triggered from a fresh user gesture
+ *  (Chrome/Edge on Windows do; Firefox treats denial as sticky). The
+ *  caller is responsible for invoking this from a click / change event
+ *  handler — calling it speculatively will be ignored by the platform.
+ *  Returns the resolved permission. */
+export async function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (!notificationApiAvailable()) return "denied";
+  // Reset our cache so a previously-denied state doesn't short-circuit
+  // ensurePermission's check.
+  permissionState = "uninitialized" as NotificationPermission | "uninitialized";
+  if (permissionRequestPending) return Notification.permission;
+  permissionRequestPending = true;
+  try {
+    const result = await Notification.requestPermission();
+    permissionState = result;
     return result;
   } finally {
     permissionRequestPending = false;
