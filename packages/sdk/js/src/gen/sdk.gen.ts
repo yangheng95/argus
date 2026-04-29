@@ -3674,6 +3674,7 @@ export class Memory extends HeyApiClient {
     parameters?: {
       directory?: string
       sessionID?: string
+      taskID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3684,6 +3685,7 @@ export class Memory extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "sessionID" },
+            { in: "query", key: "taskID" },
           ],
         },
       ],
@@ -3759,6 +3761,7 @@ export class Memory extends HeyApiClient {
       directory?: string
       query?: string
       sessionID?: string
+      taskID?: string
       limit?: number
     },
     options?: Options<never, ThrowOnError>,
@@ -3771,6 +3774,7 @@ export class Memory extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "query" },
             { in: "body", key: "sessionID" },
+            { in: "body", key: "taskID" },
             { in: "body", key: "limit" },
           ],
         },

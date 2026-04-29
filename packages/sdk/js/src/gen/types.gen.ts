@@ -6445,6 +6445,7 @@ export type PanelKnowledgeMemoryListData = {
   query?: {
     directory?: string
     sessionID?: string
+    taskID?: string
   }
   url: "/panel/knowledge/memory"
 }
@@ -6531,6 +6532,7 @@ export type PanelKnowledgeMemorySearchData = {
   body?: {
     query: string
     sessionID?: string
+    taskID?: string
     limit?: number
   }
   path?: never
