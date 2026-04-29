@@ -38,7 +38,7 @@ export default function ProvidersPanel() {
     if (!modelID) {
       setTestResults((prev) => {
         const next = new Map(prev);
-        next.set(providerId, { ok: false, message: "No models configured — add at least one model before testing." });
+        next.set(providerId, { ok: false, message: t("provider.test.no_models") });
         return next;
       });
       return;
@@ -211,7 +211,7 @@ export default function ProvidersPanel() {
 
         <Show when={providerEntries().length === 0 && !showAdd()}>
           <div class="config-panel-card" style="opacity: 0.6; font-size: var(--ui-font-control); padding: 12px;">
-            No custom providers configured. Click "+ Add" to add an OpenAI-compatible provider.
+            {t("provider.empty_message")}
           </div>
         </Show>
 
@@ -226,16 +226,16 @@ export default function ProvidersPanel() {
                     class="btn mini"
                     onClick={() => void handleTest(id, provider.models || {})}
                     disabled={testing().has(id)}
-                    title="Send a minimal test request to verify the API key + model are reachable."
+                    title={t("provider.test.button_title")}
                   >
-                    {testing().has(id) ? "Testing…" : "Test"}
+                    {testing().has(id) ? t("provider.test.testing") : t("provider.test.button")}
                   </button>
                   <button
                     type="button"
                     class="btn mini"
                     onClick={() => startEdit(id)}
                   >
-                    Edit
+                    {t("common.edit")}
                   </button>
                   <button
                     type="button"
@@ -243,7 +243,7 @@ export default function ProvidersPanel() {
                     onClick={() => handleDelete(id)}
                     disabled={saving()}
                   >
-                    Delete
+                    {t("common.delete")}
                   </button>
                 </div>
               </div>
@@ -253,28 +253,29 @@ export default function ProvidersPanel() {
                     class="provider-test-result"
                     data-ok={result().ok ? "true" : "false"}
                     role="status"
+                    aria-live="polite"
                   >
                     <span class="provider-test-result-icon" aria-hidden="true">
                       {result().ok ? "✓" : "✗"}
                     </span>
                     <span class="provider-test-result-msg">
                       {result().ok
-                        ? (result().message || "Connection OK")
-                        : (result().message || "Connection failed")}
+                        ? (result().message || t("provider.test.success"))
+                        : (result().message || t("provider.test.failed"))}
                     </span>
                   </div>
                 )}
               </Show>
               <div style="font-size: var(--ui-font-control); opacity: 0.7; margin-bottom: 2px;">
-                API: {provider.api}
+                {t("provider.label.api")}: {provider.api}
               </div>
               <Show when={provider.env?.length}>
                 <div style="font-size: var(--ui-font-control); opacity: 0.7; margin-bottom: 2px;">
-                  Env: {provider.env.join(", ")}
+                  {t("provider.label.env")}: {provider.env.join(", ")}
                 </div>
               </Show>
               <div style="font-size: var(--ui-font-control); opacity: 0.7;">
-                Models: {Object.keys(provider.models || {}).join(", ") || "none"}
+                {t("provider.label.models")}: {Object.keys(provider.models || {}).join(", ") || t("provider.label.no_models")}
               </div>
             </div>
           )}
