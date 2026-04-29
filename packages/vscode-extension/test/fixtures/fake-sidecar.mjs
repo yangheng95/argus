@@ -8,6 +8,13 @@
 //   FAKE_SIDECAR_NEVER_HANDSHAKE — exit 0 after 30s without writing handshake
 
 import { createServer } from "node:http"
+import { appendFileSync } from "node:fs"
+
+const eventsFile = process.env.FAKE_SIDECAR_EVENTS_FILE
+function record(type, data = {}) {
+  if (!eventsFile) return
+  appendFileSync(eventsFile, `${JSON.stringify({ type, time: Date.now(), ...data })}\n`)
+}
 
 const failMode = process.env.FAKE_SIDECAR_FAIL
 if (failMode === "missing-token") {
@@ -25,12 +32,14 @@ const delayMs = Number(process.env.FAKE_SIDECAR_DELAY_MS || 0)
 const neverHandshake = process.env.FAKE_SIDECAR_NEVER_HANDSHAKE === "1"
 
 const server = createServer((req, res) => {
+  record("request", { method: req.method, url: req.url })
   if (req.url === "/global/health") {
     res.writeHead(200, { "Content-Type": "application/json" })
     res.end(JSON.stringify({ healthy: true, version: "fake" }))
     return
   }
   if (req.url === "/shutdown" && req.method === "POST") {
+    record("shutdown")
     res.writeHead(200, { "Content-Type": "application/json" })
     res.end(JSON.stringify({ ok: true }))
     setTimeout(() => process.exit(0), 25)
@@ -43,6 +52,7 @@ const server = createServer((req, res) => {
 server.listen(0, "127.0.0.1", () => {
   const addr = server.address()
   const port = typeof addr === "object" && addr ? addr.port : 0
+  record("listen", { port })
   const emit = () => {
     if (neverHandshake) return
     process.stdout.write(`OPENCORVUS_LISTEN=127.0.0.1:${port}\n`)
@@ -51,5 +61,12 @@ server.listen(0, "127.0.0.1", () => {
   else emit()
 })
 
-process.on("SIGTERM", () => process.exit(0))
-process.on("SIGINT", () => process.exit(0))
+process.on("exit", (code) => record("exit", { code }))
+process.on("SIGTERM", () => {
+  record("signal", { signal: "SIGTERM" })
+  process.exit(0)
+})
+process.on("SIGINT", () => {
+  record("signal", { signal: "SIGINT" })
+  process.exit(0)
+})

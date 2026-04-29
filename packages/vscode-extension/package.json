@@ -36,6 +36,7 @@
     "typecheck": "tsc --noEmit",
     "build": "node esbuild.mjs",
     "package:vsix": "bun run script/package-vsix.ts",
+    "test:e2e:vscode": "bun run script/e2e-vscode.ts",
     "benchmark:100": "bun run script/benchmark-100-rounds.ts",
     "test": "bun test"
   },
@@ -45,6 +46,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/vscode": "1.85.0",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "3.2.1",
     "esbuild": "0.25.0",
     "typescript": "catalog:"

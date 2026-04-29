@@ -30,6 +30,7 @@ const rounds = envInt("VSCODE_BENCH_ROUNDS", 100)
 const idleMs = envInt("VSCODE_BENCH_IDLE_MS", 120_000)
 const fullSnapshotEvery = envInt("VSCODE_BENCH_FULL_SNAPSHOT_EVERY", 25)
 const buildEvery = envInt("VSCODE_BENCH_BUILD_EVERY", 25)
+const e2eEvery = envInt("VSCODE_BENCH_E2E_EVERY", 25)
 const reportPath = path.resolve(repoRoot, process.env.VSCODE_BENCH_REPORT ?? "tmp/vscode-extension-100-round-report.jsonl")
 
 const sourceGuards: Array<{
@@ -72,7 +73,7 @@ async function main() {
   fs.mkdirSync(path.dirname(reportPath), { recursive: true })
   fs.writeFileSync(reportPath, "")
   console.log(
-    `[bench] rounds=${rounds} idleMs=${idleMs} fullSnapshotEvery=${fullSnapshotEvery} buildEvery=${buildEvery}`,
+    `[bench] rounds=${rounds} idleMs=${idleMs} fullSnapshotEvery=${fullSnapshotEvery} buildEvery=${buildEvery} e2eEvery=${e2eEvery}`,
   )
   console.log(`[bench] report=${path.relative(repoRoot, reportPath)}`)
 
@@ -100,6 +101,10 @@ async function main() {
     if (buildEvery > 0 && round % buildEvery === 0) {
       checks.push(await commandCheck("vscode.build.production.skip-ui", extensionRoot, ["node", "esbuild.mjs", "--production", "--skip-ui"]))
       checks.push(await commandCheck("vscode.bundle.audit", extensionRoot, [bunBin, "run", "script/audit-bundle.ts"]))
+    }
+
+    if (e2eEvery > 0 && round % e2eEvery === 0) {
+      checks.push(await commandCheck("vscode.e2e.ui", repoRoot, [bunBin, "run", "--cwd", "packages/vscode-extension", "test:e2e:vscode"]))
     }
 
     if (fullSnapshotEvery > 0 && round % fullSnapshotEvery === 0) {
@@ -138,6 +143,7 @@ function validateConfig() {
     ["VSCODE_BENCH_IDLE_MS", idleMs],
     ["VSCODE_BENCH_FULL_SNAPSHOT_EVERY", fullSnapshotEvery],
     ["VSCODE_BENCH_BUILD_EVERY", buildEvery],
+    ["VSCODE_BENCH_E2E_EVERY", e2eEvery],
   ] as const) {
     if (!Number.isInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`)
   }
