@@ -46,11 +46,11 @@ const SETTINGS_TABS: Array<{ tab: string; labelKey: string; group: string }> = [
   { tab: "about", labelKey: "about.title", group: "settings" },
 ];
 
-const THEMES: Array<{ id: string; label: string }> = [
-  { id: "dark", label: "Dark" },
-  { id: "light", label: "Light" },
-  { id: "vscode-dark", label: "VSCode Dark" },
-  { id: "system", label: "System" },
+const THEMES: Array<{ id: string; labelKey: string }> = [
+  { id: "dark", labelKey: "cmdk.theme.dark" },
+  { id: "light", labelKey: "cmdk.theme.light" },
+  { id: "vscode-dark", labelKey: "cmdk.theme.vscode_dark" },
+  { id: "system", labelKey: "cmdk.theme.system" },
 ];
 
 const LOCALES: Array<{ id: string; label: string }> = [
@@ -64,6 +64,10 @@ export function CommandPalette() {
   const [activeIndex, setActiveIndex] = createSignal(0);
   let inputRef: HTMLInputElement | undefined;
   let listRef: HTMLDivElement | undefined;
+  // Element that had focus right before the palette opened — restored on
+  // close so keyboard users land back where they triggered Cmd+K from
+  // (textarea, button, etc.) instead of leaking to <body>.
+  let priorFocus: HTMLElement | null = null;
 
   const commands = createMemo<Command[]>(() => {
     const cmds: Command[] = [];
@@ -102,8 +106,8 @@ export function CommandPalette() {
       // index.html). Fall back to a sensible English label so the command
       // is searchable. Localising those titles is a separate concern.
       let label = t(tab.labelKey);
-      if (tab.tab === "providers") label = "Providers";
-      if (tab.tab === "agent-models") label = "Agent Models";
+      if (tab.tab === "providers") label = t("cmdk.settings.providers");
+      if (tab.tab === "agent-models") label = t("cmdk.settings.agent_models");
       cmds.push({
         id: `settings:${tab.tab}`,
         label: `${t("config.title")}: ${label}`,
@@ -119,7 +123,7 @@ export function CommandPalette() {
     for (const theme of THEMES) {
       cmds.push({
         id: `theme:${theme.id}`,
-        label: `${t("cmdk.theme_prefix")}: ${theme.label}`,
+        label: `${t("cmdk.theme_prefix")}: ${t(theme.labelKey)}`,
         group: t("cmdk.group.appearance"),
         keywords: `theme ${theme.id}`,
         run: () => {
@@ -187,6 +191,14 @@ export function CommandPalette() {
     setOpen(false);
     setQuery("");
     setActiveIndex(0);
+    // Return focus to whatever the operator was on before the palette
+    // grabbed it. Wrap in try because the prior element may have been
+    // removed from the DOM during the palette's lifetime (e.g. the
+    // operator ran a command that re-rendered the conversation).
+    if (priorFocus && document.contains(priorFocus)) {
+      try { priorFocus.focus(); } catch { /* ignore — best-effort */ }
+    }
+    priorFocus = null;
   }
 
   function runActive() {
@@ -230,9 +242,19 @@ export function CommandPalette() {
   function onGlobalKey(e: KeyboardEvent) {
     if (e.key !== "k" && e.key !== "K") return;
     if (!(e.metaKey || e.ctrlKey)) return;
+    // Skip when an HTML5 dialog has the operator's focus — those modals
+    // own keyboard navigation and stealing it leaves the dialog's
+    // focus-trap broken when the palette closes.
+    const openDialog = document.querySelector<HTMLDialogElement>("dialog[open]");
+    if (openDialog) return;
     e.preventDefault();
     e.stopPropagation();
-    setOpen((v) => !v);
+    if (open()) {
+      close();
+      return;
+    }
+    priorFocus = (document.activeElement as HTMLElement | null) ?? null;
+    setOpen(true);
   }
 
   onMount(() => {

@@ -2535,6 +2535,14 @@ body[data-theme="light"] .section-badge {
 }
 .cmdk-input::-webkit-search-cancel-button { display: none; }
 .cmdk-input::placeholder { color: var(--text-muted); }
+.cmdk-input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.cmdk-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: -2px;
+}
 .cmdk-list {
   overflow-y: auto;
   padding: var(--ui-gap-xs) 0;
