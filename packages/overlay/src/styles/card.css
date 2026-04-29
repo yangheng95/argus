@@ -11,13 +11,16 @@
   --card-pad-x: calc(11px * var(--ui-scale, 1));
   --card-pad-y: calc(8px * var(--ui-scale, 1));
   --card-indent: calc(12px * var(--ui-scale, 1));
-  --card-bg-0: var(--surface-inset, rgba(255, 255, 255, 0.04));
-  --card-bg-1: var(--surface, rgba(255, 255, 255, 0.06));
-  --card-bg-hover: var(--surface-hover, rgba(255, 255, 255, 0.08));
-  --card-border: var(--border, rgba(255, 255, 255, 0.1));
-  --card-border-strong: var(--border-strong, rgba(255, 255, 255, 0.16));
+  /* Card surface aliases. Declared on `*` so the var() substitution
+   * resolves at the consuming element instead of being baked in at :root,
+   * where styles.css's body[data-theme="light"] / [vscode-dark] overrides
+   * of --surface-inset never reach the alias chain. Without `*` the light
+   * theme inherited the dark :root resolution and every conversation card
+   * rendered black on white. Single source: --surface-inset / --surface /
+   * --surface-hover are the only theme tokens; the aliases are pure
+   * indirection so card.css selectors stay compact.
+   */
   --card-line: color-mix(in srgb, var(--accent, #64b9a6) 44%, transparent);
-  --card-line-dim: var(--border, rgba(255, 255, 255, 0.08));
   --card-title-size: var(--ui-font-body, 12px);
   --card-sub-size: var(--ui-font-control, 11px);
   --card-meta-size: var(--ui-font-meta, 11px);
@@ -40,6 +43,23 @@
   --card-system-rail: var(--warn, #c28b55);
   --card-system-bg: var(--warn-dim, rgba(194, 139, 85, 0.14));
   --card-system-border: color-mix(in srgb, var(--warn, #c28b55) 28%, transparent);
+}
+
+/* Card surface aliases — declared on every element so the var()
+ * substitution for the underlying --surface-* token happens at the
+ * consuming element's context, where styles.css body[data-theme="light"]
+ * / [vscode-dark] overrides have already taken effect. Putting these on
+ * :root resolved them once against :root's dark surface tokens and the
+ * resolved value then inherited unchanged into the light theme — that
+ * is exactly the bug that made every conversation card render with a
+ * dark surface on the white theme. */
+* {
+  --card-bg-0: var(--surface-inset, rgba(255, 255, 255, 0.04));
+  --card-bg-1: var(--surface, rgba(255, 255, 255, 0.06));
+  --card-bg-hover: var(--surface-hover, rgba(255, 255, 255, 0.08));
+  --card-border: var(--border, rgba(255, 255, 255, 0.1));
+  --card-border-strong: var(--border-strong, rgba(255, 255, 255, 0.16));
+  --card-line-dim: var(--border, rgba(255, 255, 255, 0.08));
 }
 
 /* ── Container ────────────────────────────────────────────── */
