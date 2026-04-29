@@ -9,7 +9,6 @@ import { TaskTool } from "./task"
 import { TodoReadTool, TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
-import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
@@ -126,7 +125,6 @@ export namespace ToolRegistry {
     const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
 
     return [
-      InvalidTool,
       ...(question ? [QuestionTool] : []),
       BashTool,
       ReadTool,

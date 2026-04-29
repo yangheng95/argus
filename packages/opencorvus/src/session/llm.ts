@@ -206,6 +206,14 @@ export namespace LLM {
         })
       },
       async experimental_repairToolCall(failed) {
+        // Sole legitimate repair: case-normalize a model-emitted tool name
+        // (e.g. "Register_Traceability" → "register_traceability"). Anything
+        // else — unknown tool, malformed input, schema violation — must
+        // surface to the model as a real tool-error so it can retry with
+        // the corrected call. Rewriting to a sentinel "invalid" tool was a
+        // fallback (CLAUDE.md rule 1) that hid the real error and trapped
+        // the model in a "tool 'invalid' unavailable" dead end with no
+        // feedback path.
         const lower = failed.toolCall.toolName.toLowerCase()
         if (lower !== failed.toolCall.toolName && tools[lower]) {
           l.info("repairing tool call", {
@@ -217,20 +225,15 @@ export namespace LLM {
             toolName: lower,
           }
         }
-        return {
-          ...failed.toolCall,
-          input: JSON.stringify({
-            tool: failed.toolCall.toolName,
-            error: failed.error?.message ?? "unknown error",
-          }),
-          toolName: "invalid",
-        }
+        // Returning null tells AI SDK "I couldn't fix it" — the SDK then
+        // emits a tool-error part the model can read and retry against.
+        return null
       },
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,
       providerOptions,
-      activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
+      activeTools: Object.keys(tools),
       tools,
       toolChoice: input.toolChoice,
       maxOutputTokens,
