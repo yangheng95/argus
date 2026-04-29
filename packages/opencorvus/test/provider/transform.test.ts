@@ -390,6 +390,71 @@ describe("ProviderTransform.providerOptions", () => {
   })
 })
 
+describe("ProviderTransform.optionsForToolChoice", () => {
+  const createModel = (overrides: Partial<any> = {}) =>
+    ({
+      id: "kimi-k2.5",
+      providerID: "alibaba-coding-plan-cn",
+      api: {
+        id: "kimi-k2.5",
+        url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      name: "Kimi K2.5",
+      capabilities: {
+        temperature: true,
+        reasoning: true,
+        attachment: false,
+        toolcall: true,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: { field: "reasoning_content" },
+      },
+      cost: { input: 0, output: 0 },
+      limit: { context: 262_144, output: 32_768 },
+      status: "active",
+      options: {},
+      headers: {},
+      ...overrides,
+    }) as any
+
+  test("disables Kimi 2.5 DashScope thinking when toolChoice is required", () => {
+    expect(
+      ProviderTransform.optionsForToolChoice(createModel(), { enable_thinking: true, topP: 0.95 }, "required"),
+    ).toEqual({ enable_thinking: false, topP: 0.95 })
+  })
+
+  test("disables Kimi 2.5 DashScope thinking when toolChoice pins a tool", () => {
+    expect(
+      ProviderTransform.optionsForToolChoice(
+        createModel(),
+        { enable_thinking: true },
+        { type: "tool", toolName: "StructuredOutput" },
+      ),
+    ).toEqual({ enable_thinking: false })
+  })
+
+  test("keeps Kimi 2.5 thinking for non-forced toolChoice", () => {
+    const options = { enable_thinking: true }
+    expect(ProviderTransform.optionsForToolChoice(createModel(), options, "auto")).toBe(options)
+    expect(ProviderTransform.optionsForToolChoice(createModel(), options, undefined)).toBe(options)
+  })
+
+  test("does not change GLM-5 DashScope toolChoice requests", () => {
+    const glm5 = createModel({
+      id: "glm-5",
+      api: {
+        id: "glm-5",
+        url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      name: "GLM-5",
+    })
+    const options = { enable_thinking: true }
+    expect(ProviderTransform.optionsForToolChoice(glm5, options, "required")).toBe(options)
+  })
+})
+
 describe("ProviderTransform.schema - gemini array items", () => {
   test("adds missing items for array properties", () => {
     const geminiModel = {

@@ -20,6 +20,7 @@ function mimeToModality(mime: string): Modality | undefined {
 
 export namespace ProviderTransform {
   export const OUTPUT_TOKEN_MAX = Flag.OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  export type ToolChoice = "auto" | "required" | "none" | { type: "tool"; toolName: string }
 
   // Maps npm package to the key the AI SDK expects for providerOptions
   function sdkKey(npm: string): string | undefined {
@@ -579,10 +580,7 @@ export namespace ProviderTransform {
     const result: Record<string, any> = {}
 
     // openai and providers using openai package should set store to false by default.
-    if (
-      input.model.providerID === "openai" ||
-      input.model.api.npm === "@ai-sdk/openai"
-    ) {
+    if (input.model.providerID === "openai" || input.model.api.npm === "@ai-sdk/openai") {
       result["store"] = false
     }
 
@@ -698,10 +696,7 @@ export namespace ProviderTransform {
   }
 
   export function smallOptions(model: Provider.Model) {
-    if (
-      model.providerID === "openai" ||
-      model.api.npm === "@ai-sdk/openai"
-    ) {
+    if (model.providerID === "openai" || model.api.npm === "@ai-sdk/openai") {
       if (model.api.id.includes("gpt-5")) {
         if (model.api.id.includes("5.")) {
           return { store: false, reasoningEffort: "low" }
@@ -770,6 +765,30 @@ export namespace ProviderTransform {
 
     const key = sdkKey(model.api.npm) ?? model.providerID
     return { [key]: options }
+  }
+
+  export function optionsForToolChoice(
+    model: Provider.Model,
+    options: { [x: string]: any },
+    toolChoice: ToolChoice | undefined,
+  ) {
+    if (!toolChoiceForcesToolCall(toolChoice)) return options
+    if (!hasKimiDashScopeThinkingToolChoiceConflict(model)) return options
+    if (options.enable_thinking !== true) return options
+    return { ...options, enable_thinking: false }
+  }
+
+  function toolChoiceForcesToolCall(toolChoice: ToolChoice | undefined) {
+    return toolChoice === "required" || (typeof toolChoice === "object" && toolChoice.type === "tool")
+  }
+
+  function hasKimiDashScopeThinkingToolChoiceConflict(model: Provider.Model) {
+    const modelID = `${model.id} ${model.api.id}`.toLowerCase()
+    return (
+      model.api.npm === "@ai-sdk/openai-compatible" &&
+      model.api.url?.includes("dashscope") === true &&
+      (modelID.includes("kimi-k2.5") || modelID.includes("kimi-k2p5") || modelID.includes("k2p5"))
+    )
   }
 
   export function maxOutputTokens(model: Provider.Model): number {
@@ -862,13 +881,22 @@ export namespace ProviderTransform {
                   merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
                 } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
                   const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-                  merged[k] = { type: merged[k].type ?? v.type ?? "string", enum: [...new Set([...existing, ...v.enum].map(String))] }
+                  merged[k] = {
+                    type: merged[k].type ?? v.type ?? "string",
+                    enum: [...new Set([...existing, ...v.enum].map(String))],
+                  }
                 }
                 // else: keep first definition (properties with same name across variants)
               }
               const req = new Set<string>(variant.required ?? [])
-              if (first) { for (const r of req) allRequired.add(r); first = false }
-              else { for (const r of allRequired) { if (!req.has(r)) allRequired.delete(r) } }
+              if (first) {
+                for (const r of req) allRequired.add(r)
+                first = false
+              } else {
+                for (const r of allRequired) {
+                  if (!req.has(r)) allRequired.delete(r)
+                }
+              }
             }
             return { type: "object", properties: merged, required: [...allRequired] }
           }
@@ -898,12 +926,21 @@ export namespace ProviderTransform {
               merged[k] = { type: "string", enum: [...new Set([...existing, v.const].map(String))] }
             } else if (v?.enum && (merged[k]?.enum || merged[k]?.const !== undefined)) {
               const existing: any[] = merged[k].enum ?? (merged[k].const !== undefined ? [merged[k].const] : [])
-              merged[k] = { type: merged[k].type ?? v.type ?? "string", enum: [...new Set([...existing, ...v.enum].map(String))] }
+              merged[k] = {
+                type: merged[k].type ?? v.type ?? "string",
+                enum: [...new Set([...existing, ...v.enum].map(String))],
+              }
             }
           }
           const req = new Set<string>(variant.required ?? [])
-          if (first) { for (const r of req) allRequired.add(r); first = false }
-          else { for (const r of allRequired) { if (!req.has(r)) allRequired.delete(r) } }
+          if (first) {
+            for (const r of req) allRequired.add(r)
+            first = false
+          } else {
+            for (const r of allRequired) {
+              if (!req.has(r)) allRequired.delete(r)
+            }
+          }
         }
         return { type: "object", properties: merged, required: [...allRequired] } as JSONSchema7
       }
