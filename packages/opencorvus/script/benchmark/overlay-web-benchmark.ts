@@ -1184,6 +1184,15 @@ async function writeBenchmarkModelConfig(dir: string, model: string) {
       model,
       experimental: {
         unattended: false,
+        // Bench runs unattended — every permission ask must be auto-approved
+        // upstream of the interaction queue, otherwise the build agent stalls
+        // 5 min on `external_directory:*=ask` (the agent default) when it
+        // tries to read the parent project root from inside its worktree.
+        // PermissionNext.ask publishes Bus.Asked → AutoPermission.subscribe
+        // gates on this flag and short-circuits with `reply:"once"`. Bench's
+        // settle() poll cannot help here because EngineInteraction.upsertPermission
+        // can race with the auto-reply (the interaction row may never exist).
+        auto_permission: true,
       },
       lsp: {
         biome: {
