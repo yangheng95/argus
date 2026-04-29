@@ -14,7 +14,8 @@ export const PROTOCOL_VERSION = 1 as const
 
 // ── Webview → Extension ──
 
-export type RequestMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
+export const REQUEST_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
+export type RequestMethod = (typeof REQUEST_METHODS)[number]
 
 export type RequestBodyEncoding =
   | { kind: "none" }
@@ -235,7 +236,19 @@ export function isWebviewMessage(m: unknown): m is WebviewMessage {
   const obj = m as Record<string, unknown>
   if (obj["protocol"] !== PROTOCOL_VERSION) return false
   if (typeof obj["type"] !== "string") return false
-  return (WEBVIEW_MESSAGE_TYPES as readonly string[]).includes(obj["type"])
+  if (!(WEBVIEW_MESSAGE_TYPES as readonly string[]).includes(obj["type"])) return false
+  // audit-2026-04-29 W2-V9 — for `request` and `stream.open` envelopes,
+  // verify the HTTP method is in the canonical RequestMethod enum
+  // (uppercase). Without this gate, a forged `{method: "post"}`
+  // (lowercase) or `{method: "DELETE WITH SQL INJECTION"}` slips
+  // through to the bridge's fetch() call. fetch() normalises common
+  // verbs but is documented to be case-sensitive for non-standard
+  // methods, and any string value at all is a contract violation
+  // here — the schema is the only line of defence.
+  if (obj["type"] === "request" || obj["type"] === "stream.open") {
+    if (!(REQUEST_METHODS as readonly string[]).includes(obj["method"] as string)) return false
+  }
+  return true
 }
 
 // ── Body encoding helpers (Buffer-free; works in both webview + node) ──
