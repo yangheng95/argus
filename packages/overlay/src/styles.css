@@ -6257,6 +6257,75 @@ select.field-input option {
   background: var(--good-dim);
 }
 
+/* ── ConnectionBanner ──
+   Persistent floating notice when SSE has been offline for >2.5s, so the
+   operator notices the live stream has dropped without staring at the small
+   ConnectionBadge in the title bar. Sits above all panels (z-index above
+   the workspace mount) but below modals. The pulsing red dot adds motion
+   so the eye catches it on glance. */
+.conn-banner {
+  position: fixed;
+  bottom: calc(20px * var(--ui-scale));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9000;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-md);
+  padding: var(--ui-gap-sm) var(--ui-gap-lg);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bad) 18%, var(--surface-strong));
+  color: var(--text-strong);
+  border: 1px solid color-mix(in srgb, var(--bad) 56%, transparent);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+  font-size: var(--ui-font-control);
+}
+.conn-banner[data-status="connecting"] {
+  background: color-mix(in srgb, var(--warn) 18%, var(--surface-strong));
+  border-color: color-mix(in srgb, var(--warn) 56%, transparent);
+}
+.conn-banner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 40%, transparent);
+  animation: conn-banner-pulse 1.4s ease-in-out infinite;
+}
+.conn-banner[data-status="connecting"] .conn-banner__dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 40%, transparent);
+}
+@keyframes conn-banner-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 40%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent); }
+}
+.conn-banner__text {
+  white-space: nowrap;
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.conn-banner__action {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--subtle-3);
+  color: var(--text-strong);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--ui-font-control);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.conn-banner__action:hover {
+  background: var(--subtle-4);
+  border-color: var(--border-hover);
+}
+.conn-banner__action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+}
+
 /* ── Tool code block ──
  * No max-height: file content (write/edit/read) renders in full when the
  * card is expanded. The previous 600px nested scroll forced the operator
