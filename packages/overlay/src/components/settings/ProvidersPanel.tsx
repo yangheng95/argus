@@ -210,14 +210,14 @@ export default function ProvidersPanel() {
         </div>
 
         <Show when={providerEntries().length === 0 && !showAdd()}>
-          <div class="config-panel-card" style="opacity: 0.6; font-size: var(--ui-font-control); padding: 12px;">
+          <div class="config-panel-card provider-empty">
             {t("provider.empty_message")}
           </div>
         </Show>
 
         <For each={providerEntries()}>
           {([id, provider]) => (
-            <div class="config-panel-card" style="margin-bottom: 8px;">
+            <div class="config-panel-card provider-card-row">
               <div class="config-panel-card-head">
                 <strong class="config-panel-card-title">{provider.name || id}</strong>
                 <div class="config-panel-card-actions">
@@ -283,8 +283,8 @@ export default function ProvidersPanel() {
 
         {/* ── Add / Edit Form ── */}
         <Show when={showAdd()}>
-          <div class="config-panel-card" style="margin-top: 8px; border: 1px solid var(--color-border, #444);">
-            <h4 style="font-size: var(--ui-font-title); margin: 0 0 8px 0;">
+          <div class="config-panel-card provider-add-card">
+            <h4 class="provider-add-title">
               {editing() ? `Edit: ${editing()}` : "Add Custom Provider"}
             </h4>
 
@@ -347,16 +347,15 @@ export default function ProvidersPanel() {
             <label class="field">
               <span class="field-label">Models (one per line: id:display_name)</span>
               <textarea
-                class="field-input"
+                class="field-input provider-models-textarea"
                 rows={4}
                 placeholder={"gpt-5.4-mini:GPT-5.4 Mini\ngpt-5.4:GPT-5.4"}
                 value={formModels()}
                 onInput={(e) => setFormModels(e.currentTarget.value)}
-                style="font-family: var(--mono); font-size: var(--ui-font-control); resize: vertical;"
               />
             </label>
 
-            <div class="dialog-actions compact" style="margin-top: 8px;">
+            <div class="dialog-actions compact provider-form-actions">
               <button type="button" class="btn mini" onClick={cancel}>
                 Cancel
               </button>
@@ -378,7 +377,7 @@ export default function ProvidersPanel() {
         <div class="config-panel-group">
           <h4 class="config-panel-group-title">Connected Providers</h4>
           <div class="config-panel-card">
-            <div style="font-size: var(--ui-font-control); opacity: 0.6; margin-bottom: 6px;">
+            <div class="provider-catalog-hint">
               Auto-detected providers from models.dev, env vars, and auth.
             </div>
             <div class="config-panel-list">
