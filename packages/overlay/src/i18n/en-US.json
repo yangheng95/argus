@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "f9b9577249df8737"
+    "panel_revision": "5abbd343c2967479"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -120,6 +120,8 @@
   "agent_models.warning_no_default_prefix": "No project default model set. Every agent will fail with",
   "agent_models.warning_no_default_suffix": "on dispatch until a model is chosen here (or each agent is individually overridden below).",
   "common.retrying": "Retrying…",
+  "settings.server_url_placeholder": "http://127.0.0.1:7878",
+  "settings.username_placeholder": "opencorvus",
   "intro.directory_required_title": "Choose a working directory to begin",
   "intro.directory_required_body": "Click the folder icon in the title bar above to pick a project — that's where OpenCorvus will read and write files. The composer activates once a directory is set.",
   "task.search_placeholder": "Search tasks…",
