@@ -179,6 +179,25 @@ export default function GeneralPanel() {
                 onChange={(e) => handleExperimentalToggle("auto_permission", e)}
               />
             </label>
+            <label class="config-toggle-list-item">
+              <span class="toggle-label">
+                {t("settings.desktop_notifications_label")}
+                <span class="toggle-hint">{t("settings.desktop_notifications_hint")}</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={settingsStore.desktopNotifications}
+                onChange={(e) => {
+                  setSettingsStore("desktopNotifications", (e.currentTarget as HTMLInputElement).checked);
+                  saveSettings();
+                  // Eagerly request permission when the operator opts in so
+                  // the first task event doesn't pay the prompt latency.
+                  if (settingsStore.desktopNotifications && typeof Notification !== "undefined" && Notification.permission === "default") {
+                    void Notification.requestPermission();
+                  }
+                }}
+              />
+            </label>
 
           </div>
         </div>
