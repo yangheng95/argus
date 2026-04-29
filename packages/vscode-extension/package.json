@@ -37,6 +37,9 @@
     "build": "node esbuild.mjs",
     "test": "bun test"
   },
+  "dependencies": {
+    "@opencorvus-ai/transport-protocol": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/vscode": "1.85.0",
