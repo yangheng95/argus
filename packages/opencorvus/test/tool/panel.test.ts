@@ -66,11 +66,18 @@ describe("panel tool", () => {
         )
         const output = JSON.parse(result.output)
 
+        // audit-2026-04-29 W2-V33 — `status` was removed from
+        // EngineTaskTable in Phase-6-f-2 (see engine.sql.ts:240-242:
+        // "Derive via engine/task-status.ts::deriveTaskStatus from
+        // time_started + time_completed + error + cancelled"). The
+        // pre-fix select referenced EngineTaskTable.status which is
+        // now undefined → drizzle's orderSelectedFields threw on
+        // the undefined column. Drop it; the test only filters by
+        // title prefix below, no need to project status.
         const tasks = Database.use((db) =>
           db
             .select({
               title: EngineTaskTable.title,
-              status: EngineTaskTable.status,
               session_id: EngineTaskTable.session_id,
             })
             .from(EngineTaskTable)
