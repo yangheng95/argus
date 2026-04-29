@@ -43,16 +43,36 @@ process.on("exit", (code) => {
     } catch {}
   }
 })
-process.on("SIGTERM", () => {
-  diagWrite(`SIGTERM received PID=${process.pid}`)
-  diagWrite(`stack:\n${new Error("sigterm-trace").stack}`)
-})
-process.on("SIGINT", () => {
-  diagWrite(`SIGINT received PID=${process.pid}`)
-})
-process.on("SIGHUP", () => {
-  diagWrite(`SIGHUP received PID=${process.pid}`)
-})
+// Signal-driven cleanup. Without this, SIGTERM / SIGINT only logged a
+// stack trace before bun went through default abrupt-exit handling — the
+// main `finally { cleanup ... }` block never ran, so orphan processes
+// (puppeteer chrome, claude-code SDK, vite preview, ripgrep) survived
+// every interrupted bench. A flag prevents double cleanup when the OS
+// signals us during natural shutdown.
+let _shuttingDown = false
+const shutdown = (signal: string) => {
+  if (_shuttingDown) return
+  _shuttingDown = true
+  diagWrite(`${signal} received PID=${process.pid}`)
+  diagWrite(`stack:\n${new Error(signal.toLowerCase() + "-trace").stack}`)
+  // Surface as an unhandled rejection so the main try/catch/finally block
+  // unwinds through its cleanup() chain. Default Node behavior on SIGTERM
+  // is exit-without-finally; we override here. Exit code follows
+  // shell convention (130 for SIGINT, 143 for SIGTERM, 129 for SIGHUP).
+  const code = signal === "SIGINT" ? 130 : signal === "SIGHUP" ? 129 : 143
+  process.exitCode = code
+  // Give the running async chain ~3s to settle through finally; if it
+  // still hasn't exited (stuck git subprocess, hung LLM stream), force-
+  // exit so we don't dangle indefinitely.
+  setTimeout(() => process.exit(code), 3_000).unref()
+  // Trigger an AbortError up the chain by throwing an unhandled rejection.
+  // Many awaited paths catch and absorb; the main try/catch will catch
+  // the throw and run finally with cleanup.
+  Promise.reject(new Error(`shutdown: ${signal}`))
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"))
+process.on("SIGINT", () => shutdown("SIGINT"))
+process.on("SIGHUP", () => shutdown("SIGHUP"))
 process.on("uncaughtException", (err) => {
   diagWrite(`uncaughtException: ${err.message}\n${err.stack}`)
 })
