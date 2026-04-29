@@ -248,10 +248,32 @@ jobs:
       - name: Stage overlay artifacts
         shell: bash
         run: |
+          set -euo pipefail
           OUT="packages/overlay/dist-artifacts/${{ matrix.platform }}"
           mkdir -p "$OUT"
-          cp -f packages/overlay/src-tauri/target/release/opencorvus-overlay* "$OUT/" 2>/dev/null || true
-          find packages/overlay/src-tauri/target/release/bundle -type f -exec cp {} "$OUT/" \; 2>/dev/null || true
+          REL="packages/overlay/src-tauri/target/release"
+          BIN="opencorvus-overlay"
+          if [[ "${{ matrix.platform }}" == windows-* ]]; then BIN="$BIN.exe"; fi
+          cp "$REL/$BIN" "$OUT/$BIN"
+
+          # Tauri emits installer bundles under target/release/bundle/<type>/.
+          # macOS .app is a directory; tar it so Finder still sees a bundle
+          # after the artifact zip round-trips through GitHub Actions.
+          # Other types (dmg, deb, rpm, AppImage, msi, NSIS *-setup.exe) are
+          # single files copied verbatim.
+          BUNDLE="$REL/bundle"
+          if [[ -d "$BUNDLE" ]]; then
+            if [[ "${{ matrix.platform }}" == darwin-* && -d "$BUNDLE/macos" ]]; then
+              for app in "$BUNDLE/macos"/*.app; do
+                [[ -d "$app" ]] || continue
+                tar -czf "$OUT/$(basename "$app").tar.gz" -C "$BUNDLE/macos" "$(basename "$app")"
+              done
+            fi
+            find "$BUNDLE" -type f \
+              \( -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' \
+                 -o -name '*.AppImage' -o -name '*.msi' -o -name '*-setup.exe' \) \
+              -exec cp {} "$OUT/" \;
+          fi
 
       - name: Validate overlay assets
         run: |

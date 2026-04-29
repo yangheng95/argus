@@ -180,7 +180,7 @@ try {
 // a cross-compile. Host builds skip the flag so cargo writes to
 // target/release and reuses the existing fingerprint cache.
 const tauriTargetArgs = useExplicitTarget ? ["--target", triple] : []
-await $`tauri build --no-bundle ${tauriTargetArgs} ${tauriArgs()}`.cwd(dir).env({
+await $`tauri build ${tauriTargetArgs} ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
   OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
