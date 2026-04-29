@@ -14,6 +14,7 @@ import {
 } from "solid-js";
 import { t } from "../utils/i18n";
 import { apiJson } from "../services/api";
+import { nativeMessage } from "../services/app-dialog";
 
 // ── Types ──
 
@@ -103,8 +104,12 @@ function MemoryDetailDialog(props: MemoryDetailDialogProps) {
       );
       dialogRef?.close();
       props.onDeleted();
-    } catch {
- // Silently ignore; the list will refresh on close.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[MemoryPanel] delete failed", err);
+      void nativeMessage(t("memory.delete_failed", { error: msg }), {
+        title: t("memory.delete_failed_title"),
+      });
     }
   };
 
@@ -237,6 +242,8 @@ export function MemoryPanel(props: MemoryPanelProps) {
     }
     setLoading(true);
     try {
+      // Body-only branch — no implicit fallback to old results, every search
+      // call either succeeds or surfaces the error to the operator below.
       const results = await apiJson("panel/knowledge/memory/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -259,8 +266,12 @@ export function MemoryPanel(props: MemoryPanelProps) {
       }));
       setFiles(mapped);
       setSearchMode(true);
-    } catch {
- // Leave current results in place on search error
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[MemoryPanel] search failed", err);
+      void nativeMessage(t("memory.search_failed", { error: msg }), {
+        title: t("memory.search_failed_title"),
+      });
     } finally {
       setLoading(false);
     }
@@ -283,8 +294,12 @@ export function MemoryPanel(props: MemoryPanelProps) {
         { method: "DELETE" },
       );
       await loadMemory();
-    } catch {
- // Silently ignore
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[MemoryPanel] inline delete failed", err);
+      void nativeMessage(t("memory.delete_failed", { error: msg }), {
+        title: t("memory.delete_failed_title"),
+      });
     }
   };
 
