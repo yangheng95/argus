@@ -943,12 +943,10 @@ function externalEventPartText(event: CodingEventInfo, executor: string): string
     return [`**${executor} input request**`, "", ...questions].join("\n")
   }
   if (event.type === "usage") {
-    const lines = [`**${executor} usage**`]
-    if (event.inputTokens !== undefined) lines.push(`Input tokens: ${event.inputTokens}`)
-    if (event.outputTokens !== undefined) lines.push(`Output tokens: ${event.outputTokens}`)
-    if (event.totalTokens !== undefined) lines.push(`Total tokens: ${event.totalTokens}`)
-    if (event.costUSD !== undefined) lines.push(`Cost USD: ${event.costUSD}`)
-    return lines.length > 1 ? lines.join("\n") : undefined
+    // Token-meter pings flood the chat card with no operator-actionable
+    // information (cost surfaces in run-level metrics already). Keep them in
+    // events[] for diagnostics but do NOT materialise as a chat part.
+    return undefined
   }
   if (event.type === "error") {
     return `**${executor} error**\n\n${event.message}`

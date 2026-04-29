@@ -535,6 +535,45 @@ describe("codex app server executor", () => {
     expect(toolResult?.output).toBe("README.md")
   })
 
+  test("suppresses empty turn/diff/updated notifications (no Diff updated placeholder)", async () => {
+    const provider = CodexAppServerExecutor.create(client([
+      {
+        type: "notification",
+        method: "turn/diff/updated",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          // No delta and no summary — codex emits this on every diff write.
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/diff/updated",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          summary: "Success. Updated the following files: M package.json",
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/completed",
+        params: {
+          threadId: "thr_1",
+          turn: { id: "turn_1", items: [], status: "completed", error: null },
+        },
+      },
+    ]))
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    const diffEvents = result.filter(
+      (item): item is Extract<CodingEventInfo, { type: "diff_delta" }> => item.type === "diff_delta",
+    )
+    expect(diffEvents).toHaveLength(1)
+    expect(diffEvents[0].summary).toContain("package.json")
+    expect(result.find((item) => item.type === "diff_delta" && item.summary === "Diff updated")).toBeUndefined()
+  })
+
   test("stops streaming once the current turn completes", async () => {
     const provider = CodexAppServerExecutor.create({
       async initialize() {

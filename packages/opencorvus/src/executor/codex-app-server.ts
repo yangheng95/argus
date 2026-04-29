@@ -246,9 +246,15 @@ function* notification(threadID: string, turnID: string, method: string, params?
   }
 
   if (method === "turn/diff/updated" || method === "item/fileChange/outputDelta") {
+    // Codex emits this notification on every diff write; the payload is
+    // frequently empty (no delta, no summary). Suppressing the synthetic
+    // "Diff updated" placeholder removes the noisy chat card spam — the real
+    // file changes still surface via item/fileChange tool_call/tool_result.
+    const summary = text(data.delta || data.summary || "")
+    if (!summary) return
     yield {
       type: "diff_delta",
-      summary: text(data.delta || data.summary || "Diff updated"),
+      summary,
       meta: {
         thread_id: currentThread,
         turn_id: currentTurn,
