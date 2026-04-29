@@ -59,7 +59,15 @@ export namespace Server {
             return c.json(err.toObject(), { status })
           }
           if (err instanceof HTTPException) return err.getResponse()
-          const message = err instanceof Error && err.stack ? err.stack : err.toString()
+          // audit-2026-04-29 W2-V13 — pre-fix the response body
+          // returned `err.stack`, which on a managed sidecar leaks
+          // the user's local repo path layout (`C:\Users\<user>\
+          // ...\packages\opencorvus\src\server\...`) and node_modules
+          // structure to any caller who can hit the port. The full
+          // stack already lands in `log.error` above, which is the
+          // right surface for the operator (who is the server admin
+          // in managed mode). Send `err.message` only over the wire.
+          const message = err instanceof Error ? err.message : String(err)
           return c.json(new NamedError.Unknown({ message }).toObject(), {
             status: 500,
           })
