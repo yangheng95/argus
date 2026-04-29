@@ -266,6 +266,9 @@
   "diff.empty": "Select a file to view its diff.",
   "diff.loading": "Loading diff…",
   "diff.no_preview": "No preview available for this file.",
+  "diff.empty_deleted": "This file was deleted — nothing to preview.",
+  "diff.empty_added": "New file — server hasn't sent its contents yet.",
+  "diff.empty_unchanged": "No changes between before and after.",
   "diff.select_file": "Select a file to view its diff.",
   "diff.title": "File Diff",
   "diff.unchanged_hidden": {
