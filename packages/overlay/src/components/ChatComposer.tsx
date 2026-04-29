@@ -12,6 +12,7 @@ import {
   MAX_TOTAL_ATTACHMENT_SIZE,
   wouldExceedAggregateLimit,
 } from "../services/chat-attach-limits";
+import { fileToDataUrl } from "../services/file-to-data-url";
 
 // ── Types ──
 
@@ -89,15 +90,10 @@ const FILE_ACCEPT = [
 ].join(",");
 
 // ── Helpers ──
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+//
+// fileToDataUrl moved to services/file-to-data-url so the V18 catch
+// pattern in addAttachment is unit-testable via a FileReader factory
+// override (Bun test runner has no jsdom).
 
 // ── Component ──
 
@@ -240,7 +236,26 @@ export function ChatComposer(props: ChatComposerProps) {
       });
       return;
     }
-    const url = await fileToDataUrl(file);
+    // audit-2026-04-29 W2-V18 — pre-fix the FileReader reject
+    // (file deleted mid-read, EACCES on the OS handle, browser-
+    // imposed quota error) propagated as a throw out of
+    // `fileToDataUrl`. The drop/paste/file-input loop callers all
+    // run `for (file of files) await addAttachment(file)`, so a
+    // single failing file ABORTED the loop; subsequent files in
+    // the same drag never got processed and the user saw no
+    // error. Catch here so the loop continues with the next
+    // file, and surface an actionable toast naming the file that
+    // failed.
+    let url: string
+    try {
+      url = await fileToDataUrl(file);
+    } catch (err) {
+      console.warn("[ChatComposer] FileReader failed for", file.name, err);
+      void nativeMessage(t("chat.attach_read_failed", { name: file.name }), {
+        title: t("chat.attach_too_large_title"),
+      });
+      return;
+    }
     if (wouldExceedAggregateLimit(attachments(), url.length)) {
       console.warn("[ChatComposer] aggregate attachment size exceeded:", url.length);
       const limitMb = (MAX_TOTAL_ATTACHMENT_SIZE / (1024 * 1024)).toFixed(0);
