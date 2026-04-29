@@ -12,11 +12,9 @@ export const MAX_ATTACH_BYTES = 4 * 1024 * 1024
 
 export function guessMime(filename: string, languageId: string): string {
   const ext = path.extname(filename).toLowerCase()
-  // The set covered here is intentionally narrow — files outside it
-  // fall back to `text/plain` because the server-side renderer treats
-  // `text/*` as raw text and gives back a sensible diff. We pick mimes
-  // the overlay's existing chat-attachments rendering already knows
-  // about.
+  // The command reads VS Code text documents, so unlisted source files
+  // are represented as text/plain. Binary attachments must be added
+  // through an explicit binary-capable path, not inferred here.
   if (ext === ".png") return "image/png"
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg"
   if (ext === ".gif") return "image/gif"
