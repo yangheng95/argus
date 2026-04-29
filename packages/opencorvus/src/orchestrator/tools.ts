@@ -2710,6 +2710,15 @@ export function createOrchestratorTools(input: {
             ...(Array.isArray(taskForDelivery.system_artifacts) ? (taskForDelivery.system_artifacts as AttachmentRef[]) : []),
           ].filter((a) => typeof a?.mime === "string" && a.mime.startsWith("image/") && typeof a?.url === "string")
 
+          // Compute current iteration up-front so DeliveryService.verify can
+          // namespace its deterministic-gate rejection card by iteration. The
+          // metrics block below recomputes the same thing for its own use; both
+          // read from the same readIterationHistory source so the value is
+          // identical (no double-source — metrics still owns the snapshot
+          // write, this just shares the read).
+          const { readIterationHistory: readIterHistForVerify } = await import("@/metrics/store")
+          const deliverIteration = readIterHistForVerify(taskID).length
+
           // Short-circuit: if the per-goal evaluator already flagged strict
           // checks as failed, the delivery LLM cannot rescue the outcome —
           // the post-hoc hard gate below would force-reject anyway. Skipping
@@ -2732,6 +2741,7 @@ export function createOrchestratorTools(input: {
               delivery: deliveryInfo,
               attachments: deliveryAttachments,
               signal: input.signal,
+              iteration: deliverIteration,
               parentSessionID: input.agentSessionID,
             })
 

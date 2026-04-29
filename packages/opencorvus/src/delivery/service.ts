@@ -29,6 +29,8 @@ import {
   summarizeRuntimeViolations,
   type RuntimeEvidenceReport,
 } from "./checks/runtime-evidence"
+import { EngineProtocol } from "@/engine/protocol"
+import { Event as EngineEvent } from "@/engine/model"
 
 const log = Log.create({ service: "delivery-service" })
 
@@ -56,6 +58,9 @@ export namespace DeliveryService {
     delivery: DeliveryInfo
     attachments?: AttachmentLike[]
     signal?: AbortSignal
+    /** Iteration index used to namespace gate-rejection cards in the overlay
+     *  so a rework cycle replaces (not stacks on) the prior gate card. */
+    iteration?: number
     /** Parent session for the delivery child session. Post-phase-3-b the
      *  delivery agent creates its own child session; this is only an
      *  optional parent pointer. */
@@ -94,7 +99,27 @@ export namespace DeliveryService {
           title: input.task.title,
           violations: summarizeRuntimeViolations(runtimeReport.violations),
         })
-        return synthesizeRuntimeRejection(runtimeReport, goalIds)
+        const synth = synthesizeRuntimeRejection(runtimeReport, goalIds)
+        // Surface the deterministic rejection as a card in the overlay. The
+        // pre-gate path never starts an LLM agent session, so without this
+        // event the operator sees verdict=rejected with no visible reason
+        // (rule 27 — root-cause visibility, not a synthetic chat message).
+        if (input.task.id) {
+          void EngineProtocol.emit(
+            EngineEvent.DeliveryGateRejected,
+            {
+              taskID: input.task.id,
+              iteration: input.iteration ?? 0,
+              summary: synth.summary,
+              violations: runtimeReport.violations.map((v) => ({
+                kind: v.kind,
+                detail: v.detail,
+              })),
+            },
+            { source: "delivery-service" },
+          )
+        }
+        return synth
       }
       log.info("runtime-evidence gate passed", {
         title: input.task.title,
