@@ -20,3 +20,4 @@ if (process.versions.bun !== expectedBunVersion) {
 bun typecheck
 bun run api:routes-check
 bun run docs:check
+bun run overlay:i18n-check
