@@ -11095,6 +11095,16 @@ body[data-resizing="true"] * {
     /* Spinner is functional, not decorative — slow it but don't stop. */
     animation-duration: 2s;
   }
+  /* task-switch-progress slide is decorative (the same active flag also
+     drives the inline `aria-busy="true"` state which screen readers
+     announce). Stop the slide animation but keep the bar visible so the
+     operator still gets the visual "task is loading" cue. */
+  .task-switch-progress[data-active="true"]::before {
+    animation: none;
+    transform: translateX(0);
+    background: var(--accent);
+    opacity: 0.4;
+  }
 }
 
 /* Keep the executor chooser centered against the full titlebar, not just the flex remainder. */
