@@ -61,7 +61,6 @@ export namespace Session {
           }
         : undefined
     const share = row.share_url ? { url: row.share_url } : undefined
-    const revert = row.revert ?? undefined
     return {
       id: row.id,
       slug: row.slug,
@@ -75,7 +74,6 @@ export namespace Session {
       metadata: row.metadata ?? undefined,
       summary,
       share,
-      revert,
       permission: row.permission ?? undefined,
       time: {
         created: row.time_created,
@@ -102,7 +100,6 @@ export namespace Session {
       summary_additions: info.summary?.additions,
       summary_deletions: info.summary?.deletions,
       summary_files: info.summary?.files,
-      revert: info.revert ?? null,
       permission: info.permission,
       time_created: info.time.created,
       time_updated: info.time.updated,
@@ -176,14 +173,6 @@ export namespace Session {
         archived: z.number().optional(),
       }),
       permission: PermissionNext.Ruleset.optional(),
-      revert: z
-        .object({
-          messageID: z.string(),
-          partID: z.string().optional(),
-          snapshot: z.string().optional(),
-          diff: z.string().optional(),
-        })
-        .optional(),
     })
     .meta({
       ref: "Session",
@@ -470,52 +459,6 @@ export namespace Session {
       })
     },
   )
-
-  export const setRevert = fn(
-    z.object({
-      sessionID: Identifier.schema("session"),
-      revert: Info.shape.revert,
-      summary: Info.shape.summary,
-    }),
-    async (input) => {
-      return Database.use((db) => {
-        const row = db
-          .update(SessionTable)
-          .set({
-            revert: input.revert ?? null,
-            summary_additions: input.summary?.additions,
-            summary_deletions: input.summary?.deletions,
-            summary_files: input.summary?.files,
-            time_updated: Date.now(),
-          })
-          .where(eq(SessionTable.id, input.sessionID))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Session not found: ${input.sessionID}` })
-        const info = fromRow(row)
-        Database.effect(() => Bus.publish(Event.Updated, { info }))
-        return info
-      })
-    },
-  )
-
-  export const clearRevert = fn(Identifier.schema("session"), async (sessionID) => {
-    return Database.use((db) => {
-      const row = db
-        .update(SessionTable)
-        .set({
-          revert: null,
-          time_updated: Date.now(),
-        })
-        .where(eq(SessionTable.id, sessionID))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
-      const info = fromRow(row)
-      Database.effect(() => Bus.publish(Event.Updated, { info }))
-      return info
-    })
-  })
 
   export const setSummary = fn(
     z.object({

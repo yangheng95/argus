@@ -87,6 +87,34 @@ export function interruptTaskLoop(taskID: string, reason = "task loop interrupte
   taskLoopChain.delete(taskID)
 }
 
+export async function awaitTaskLoopIdle(taskID: string, idleTimeoutMs: number) {
+  if (!Number.isInteger(idleTimeoutMs) || idleTimeoutMs <= 0) {
+    throw new Error(`awaitTaskLoopIdle: invalid idleTimeoutMs ${idleTimeoutMs}`)
+  }
+
+  let lastSignature = ""
+  let idleDeadline = Date.now() + idleTimeoutMs
+  while (true) {
+    const signature = [
+      taskLoopAbort.has(taskID) ? "loop" : "",
+      Orchestrator.isRunning(taskID) ? "orchestrator" : "",
+    ].filter(Boolean).join("+")
+
+    if (!signature) return
+
+    if (signature !== lastSignature) {
+      lastSignature = signature
+      idleDeadline = Date.now() + idleTimeoutMs
+    }
+
+    if (Date.now() > idleDeadline) {
+      throw new Error(`awaitTaskLoopIdle: task ${taskID} did not become idle after ${idleTimeoutMs}ms without state changes`)
+    }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50))
+  }
+}
+
 export async function runTaskLoop(input: {
   taskID: string
   event?: OrchestratorEvent

@@ -35,7 +35,7 @@ import {
   TraceEventList,
   UpdateGoalInput,
 } from "@/engine/model"
-import { taskRewindCursor } from "@/engine/rewind"
+import { RewindTaskInput, taskRewindCursor } from "@/engine/rewind"
 import { TaskQueueReorderError } from "@/engine/queue"
 import { ExecutorNotConfiguredError, EngineService, PlannerFailureError } from "@/task-api"
 import { ProtocolStore } from "@/protocol/store"
@@ -850,7 +850,7 @@ export const EngineRoutes = lazy(() =>
     .post(
       "/task/:taskID/rewind",
       describeRoute({
-        summary: "Rewind task timeline to a specific event (projection cursor, history stays intact)",
+        summary: "Rewind task timeline; optionally also reset worktree files via PatchPart replay",
         operationId: "task.rewind",
         responses: {
           200: {
@@ -861,6 +861,8 @@ export const EngineRoutes = lazy(() =>
                   taskID: z.string(),
                   cursorTime: z.number(),
                   rewindCount: z.number(),
+                  resetWorktree: z.boolean(),
+                  anchorKind: z.enum(["cursorTime", "message"]),
                 })),
               },
             },
@@ -869,22 +871,14 @@ export const EngineRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
-      validator("json", z.object({
-        cursorTime: z.number().int().nonnegative().describe(
-          "Unix ms. Events with time_created > cursorTime are filtered from UI reads.",
-        ),
-        anchorEventID: z.string().optional().describe("The card's event id, for audit / UI highlighting"),
-        reason: z.string().optional(),
-      })),
+      validator("json", RewindTaskInput.omit({ taskID: true })),
       async (c) => {
         const { rewindTask } = await import("@/engine/rewind")
         const { taskID } = c.req.valid("param")
         const body = c.req.valid("json")
         const result = await rewindTask({
           taskID,
-          cursorTime: body.cursorTime,
-          anchorEventID: body.anchorEventID,
-          reason: body.reason,
+          ...body,
         })
         return c.json(result)
       },
@@ -892,7 +886,7 @@ export const EngineRoutes = lazy(() =>
     .post(
       "/task/:taskID/rewind/clear",
       describeRoute({
-        summary: "Clear the rewind cursor (undo the rewind)",
+        summary: "Clear the rewind cursor (visibility only; will not unrevert any reset worktree files)",
         operationId: "task.rewind.clear",
         responses: {
           200: {
@@ -1471,4 +1465,3 @@ function protocolTaskEvent(event: ReturnType<typeof ProtocolStore.listTaskEvents
     payload: event.payload || {},
   }
 }
-

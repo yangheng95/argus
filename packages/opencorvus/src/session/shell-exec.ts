@@ -8,7 +8,7 @@ import { Instance } from "../project/instance"
 import { Plugin } from "../plugin"
 import { defer } from "../util/defer"
 import { ulid } from "ulid"
-import { SessionRevert } from "./revert"
+import { clearRewindCursorForSession } from "@/engine/rewind"
 import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
@@ -47,10 +47,7 @@ export namespace SessionShell {
       }
     })
 
-    const session = await Session.get(input.sessionID)
-    if (session.revert) {
-      await SessionRevert.cleanup(session)
-    }
+    await clearRewindCursorForSession(input.sessionID)
     const agent = await Agent.get(input.agent)
     const { Provider } = await import("../provider/provider")
     const model = input.model ?? agent.model ?? (await Provider.defaultModel())

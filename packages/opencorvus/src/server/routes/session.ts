@@ -4,7 +4,7 @@ import z from "zod"
 import { Session } from "../../session"
 import { SessionStatus } from "@/session"
 import { SessionPrompt } from "../../session/prompt"
-import { SessionRevert } from "../../session/revert"
+import { clearRewindCursorForSession } from "@/engine/rewind"
 import { SessionCompaction } from "../../session/compaction"
 import { SessionSummary } from "@/session/summary"
 import { Message } from "../../session/message"
@@ -459,8 +459,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
-        const session = await Session.get(sessionID)
-        await SessionRevert.cleanup(session)
+        await clearRewindCursorForSession(sessionID)
         const msgs = await Session.messages({ sessionID })
         let currentAgent = await Agent.defaultAgent()
         for (let i = msgs.length - 1; i >= 0; i--) {
@@ -837,64 +836,6 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         const msg = await SessionPrompt.shell({ ...body, sessionID })
         return c.json(msg)
-      },
-    )
-    // === revert ===
-    .post(
-      "/:sessionID/revert",
-      describeRoute({
-        summary: "Revert message",
-        description: "Revert a specific message in a session, undoing its effects and restoring the previous state.",
-        operationId: "session.revert",
-        responses: {
-          200: {
-            description: "Updated session",
-            content: { "application/json": { schema: resolver(Session.Info) } },
-          },
-          ...errors(400, 404),
-        },
-      }),
-      validator(
-        "param",
-        z.object({
-          sessionID: z.string(),
-        }),
-      ),
-      validator("json", SessionRevert.RevertInput.omit({ sessionID: true })),
-      async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        log.info("revert", c.req.valid("json"))
-        const session = await SessionRevert.revert({
-          sessionID,
-          ...c.req.valid("json"),
-        })
-        return c.json(session)
-      },
-    )
-    .post(
-      "/:sessionID/unrevert",
-      describeRoute({
-        summary: "Restore reverted messages",
-        description: "Restore all previously reverted messages in a session.",
-        operationId: "session.unrevert",
-        responses: {
-          200: {
-            description: "Updated session",
-            content: { "application/json": { schema: resolver(Session.Info) } },
-          },
-          ...errors(400, 404),
-        },
-      }),
-      validator(
-        "param",
-        z.object({
-          sessionID: z.string(),
-        }),
-      ),
-      async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const session = await SessionRevert.unrevert({ sessionID })
-        return c.json(session)
       },
     ),
 )
