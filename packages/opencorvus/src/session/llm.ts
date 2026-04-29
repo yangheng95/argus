@@ -1,13 +1,7 @@
 import { Provider } from "@/provider/provider"
 import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
-import {
-  streamText,
-  type ModelMessage,
-  type StreamTextResult,
-  type Tool,
-  type ToolSet,
-} from "ai"
+import { streamText, type ModelMessage, type StreamTextResult, type Tool, type ToolSet } from "ai"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
@@ -158,7 +152,11 @@ export namespace LLM {
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input)
-    const providerOptions = ProviderTransform.providerOptions(input.model, params.options)
+    const toolChoice = input.toolChoice
+    const providerOptions = ProviderTransform.providerOptions(
+      input.model,
+      ProviderTransform.optionsForToolChoice(input.model, params.options, toolChoice),
+    )
     const requestHeaders = {
       ...(input.model.providerID.startsWith("opencorvus")
         ? {
@@ -187,14 +185,15 @@ export namespace LLM {
         agentMode: input.agent.mode,
         model: { providerID: input.model.providerID, modelID: input.model.id },
         small: input.small,
-        toolChoice: input.toolChoice,
+        toolChoice,
         system,
         messages: requestMessages,
         tools: Object.entries(tools).map(([name, t]) => ({
           name,
-          description: typeof (t as { description?: unknown }).description === "string"
-            ? ((t as { description: string }).description)
-            : undefined,
+          description:
+            typeof (t as { description?: unknown }).description === "string"
+              ? (t as { description: string }).description
+              : undefined,
         })),
       })
     }
@@ -235,7 +234,7 @@ export namespace LLM {
       providerOptions,
       activeTools: Object.keys(tools),
       tools,
-      toolChoice: input.toolChoice,
+      toolChoice,
       maxOutputTokens,
       abortSignal: input.abort,
       headers: requestHeaders,
@@ -262,5 +261,4 @@ export namespace LLM {
     }
     return input.tools
   }
-
 }
