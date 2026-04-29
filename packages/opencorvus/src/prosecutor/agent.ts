@@ -25,6 +25,7 @@ import { createHash } from "node:crypto"
 import z from "zod"
 import PROSECUTOR_CORE from "@/prompt/core/prosecutor-core.txt"
 import { runAgentSession } from "@/agent/runner"
+import { AttachmentStore } from "@/storage/attachment-store"
 import { toolGuard } from "@/util/tool-guard"
 import type { TextHooks } from "@/llm/api"
 import { Log } from "@/util/log"
@@ -339,6 +340,16 @@ export async function runProsecutor(
         getCollector: () => kit.getCollector(),
       },
       buildUserPrompt: () => brief,
+      buildUserParts: async () => {
+        const taskAttachments = (input.task as { attachments?: unknown }).attachments
+        const attachments = Array.isArray(taskAttachments)
+          ? (taskAttachments as Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>)
+          : undefined
+        const { referenceOnly } = AttachmentStore.partition(attachments)
+        const enrichedText = brief + AttachmentStore.renderReferenceList(referenceOnly)
+        const inlineParts = await AttachmentStore.inlineFileParts(attachments)
+        return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
+      },
     })
     rationale = extractRationaleFromMessage(out.finalMessage)
     log.info("prosecutor finished", {

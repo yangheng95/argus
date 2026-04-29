@@ -41,7 +41,7 @@ import { ProviderTransform } from "./transform"
 import { applyProviderPolicy } from "./policy"
 import { CUSTOM_LOADERS, smallModelPriority, type CustomModelLoader } from "./vendor"
 import { installProvider, loadProviderModule } from "./install"
-import { discoverHexinModels, HEXIN_BUILTIN_KEY } from "./hexin-discovery"
+import { discoverHexinModels } from "./hexin-discovery"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -469,13 +469,10 @@ export namespace Provider {
       })
     }
 
-    // hexin: always available with embedded key; env HEXIN_API_KEY overrides
-    if (!disabled.has("hexin") && !providers["hexin"]) {
-      mergeProvider("hexin", {
-        source: "custom",
-        key: HEXIN_BUILTIN_KEY,
-      })
-    }
+    // hexin: requires HEXIN_API_KEY env var (no embedded key fallback —
+    // rule 7). The generic env-based registration loop above already
+    // picks it up via provider.env = ["HEXIN_API_KEY"]; if the env var
+    // is unset the provider stays unregistered and the UI hides it.
 
     // alibaba-coding-plan-cn: always available with embedded key; env overrides
     if (!disabled.has("alibaba-coding-plan-cn") && !providers["alibaba-coding-plan-cn"]) {

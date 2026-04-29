@@ -21,6 +21,7 @@
  */
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
+import { AttachmentStore } from "@/storage/attachment-store"
 import { createPlannerTools } from "@/planner/tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
@@ -49,6 +50,11 @@ export namespace IntentAnalysisAgent {
     taskID?: string
     /** Parent session — a child "intent-analysis" session is created under it. */
     parentSessionID?: string
+    /** Multimodal attachments the user uploaded with the task (images, PDFs,
+     *  etc.). Surfaced into the user-message text section AND inlined as
+     *  multimodal file parts so the model can actually look at them while
+     *  classifying intent. */
+    attachments?: Array<{ sha: string; url: string; mime: string; size: number; filename?: string }>
     model?: { providerID: string; modelID: string }
     signal?: AbortSignal
     onStatus?: (summary: string) => void | Promise<void>
@@ -76,6 +82,13 @@ export namespace IntentAnalysisAgent {
         getCollector: toolKit.getCollector,
       },
       buildUserPrompt: () => buildUserPrompt(input),
+      buildUserParts: async () => {
+        const text = buildUserPrompt(input)
+        const { referenceOnly } = AttachmentStore.partition(input.attachments)
+        const enrichedText = text + AttachmentStore.renderReferenceList(referenceOnly)
+        const inlineParts = await AttachmentStore.inlineFileParts(input.attachments)
+        return [{ type: "text" as const, text: enrichedText }, ...inlineParts]
+      },
       format: {
         schema: z.toJSONSchema(IntentFinalSchema) as Record<string, unknown>,
         retryCount: 2,
