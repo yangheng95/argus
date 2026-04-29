@@ -144,6 +144,13 @@ export namespace Server {
     mdns?: boolean
     mdnsDomain?: string
     cors?: string[]
+    /**
+     * When true, port=0 maps directly to OS-assigned random port without
+     * first attempting DEFAULT_SERVER_PORT. Required by managed sidecar
+     * mode (vscode-extension) so multiple workspaces never collide on the
+     * default port.
+     */
+    randomPort?: boolean
   }) {
     _corsWhitelist = opts.cors ?? []
 
@@ -162,7 +169,17 @@ export namespace Server {
         return undefined
       }
     }
-    const server = opts.port === 0 ? (tryServe(DEFAULT_SERVER_PORT) ?? tryServe(0)) : tryServe(opts.port)
+    let server: ReturnType<typeof Bun.serve> | undefined
+    if (opts.randomPort) {
+      if (opts.port !== 0) {
+        throw new Error(`randomPort=true requires port=0, got ${opts.port}`)
+      }
+      server = tryServe(0)
+    } else if (opts.port === 0) {
+      server = tryServe(DEFAULT_SERVER_PORT) ?? tryServe(0)
+    } else {
+      server = tryServe(opts.port)
+    }
     if (!server) {
       const detail = failure instanceof Error ? failure.message : failure ? String(failure) : "unknown"
       throw new Error(`Failed to start server on port ${opts.port}: ${detail}`)
