@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "78f0491e292f2d19"
+    "panel_revision": "f9b9577249df8737"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -86,15 +86,15 @@
   "connection.banner_text": "Live event stream is {{status}} — overlay may show stale data.",
   "connection.banner_reload": "Reload",
   "connection.banner_reload_title": "Reload the overlay to re-establish the connection.",
-  "notify.task_completed_title": "Task completed",
-  "notify.task_completed_body": "{{title}} finished successfully.",
-  "notify.task_failed_title": "Task failed",
-  "notify.task_failed_body": "{{title}} stopped with an error.",
-  "notify.task_cancelled_title": "Task cancelled",
-  "notify.task_cancelled_body": "{{title}} was cancelled.",
-  "notify.task_interaction_title": "Task needs your attention",
-  "notify.task_interaction_body": "{{title}} is waiting for a permission or question response.",
-  "notify.task_interaction_body_with_detail": "{{title}}: {{detail}}",
+  "notify.task.completed.title": "Task completed",
+  "notify.task.completed.body": "{{title}} finished successfully.",
+  "notify.task.failed.title": "Task failed",
+  "notify.task.failed.body": "{{title}} stopped with an error.",
+  "notify.task.cancelled.title": "Task cancelled",
+  "notify.task.cancelled.body": "{{title}} was cancelled.",
+  "notify.task.interaction.title": "Task needs your attention",
+  "notify.task.interaction.body": "{{title}} is waiting for a permission or question response.",
+  "notify.task.interaction.body_with_detail": "{{title}}: {{detail}}",
   "settings.desktop_notifications_label": "Desktop notifications",
   "settings.desktop_notifications_hint": "Ring the OS shell when a task completes, fails, is cancelled, or is waiting on you.",
   "channel.public_url_invalid": "Public URL must start with http:// or https://",

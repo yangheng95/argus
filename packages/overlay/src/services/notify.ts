@@ -77,23 +77,11 @@ function shouldSuppress(taskID: string): boolean {
   return focused && boardStore.selectedTaskID === taskID;
 }
 
-function kindToTitleKey(kind: NotificationKind): string {
-  switch (kind) {
-    case "completed": return "notify.task_completed_title";
-    case "failed": return "notify.task_failed_title";
-    case "cancelled": return "notify.task_cancelled_title";
-    case "interaction": return "notify.task_interaction_title";
-  }
-}
-
-function kindToBodyKey(kind: NotificationKind): string {
-  switch (kind) {
-    case "completed": return "notify.task_completed_body";
-    case "failed": return "notify.task_failed_body";
-    case "cancelled": return "notify.task_cancelled_body";
-    case "interaction": return "notify.task_interaction_body";
-  }
-}
+// (Title / body keys are resolved inline at the t() call site below using
+// template literals — `notify.task.${kind}.title`. The check-panel-i18n
+// linter only sees template literals when they appear directly in t()'s
+// first argument, so we cannot route through a helper that returns a
+// string. Same constraint that BoardIntro hits with intro.mode.${mode}.)
 
 async function dispatch(taskID: string, kind: NotificationKind, override?: { body?: string }): Promise<void> {
   if (!taskID) return;
@@ -101,9 +89,9 @@ async function dispatch(taskID: string, kind: NotificationKind, override?: { bod
   const permission = await ensurePermission();
   if (permission !== "granted") return;
   try {
-    const title = t(kindToTitleKey(kind));
+    const title = t(`notify.task.${kind}.title`);
     const taskTitle = lookupTaskTitle(taskID);
-    const body = override?.body ?? t(kindToBodyKey(kind), { title: taskTitle });
+    const body = override?.body ?? t(`notify.task.${kind}.body`, { title: taskTitle });
     // tag = taskID coalesces successive notifications for the same task
     // into a single notification slot in the OS shell.
     new Notification(title, {
@@ -139,7 +127,7 @@ export function notifyTaskLifecycle(taskID: string, type: string): void {
 export function notifyInteractionRequested(taskID: string, summary?: string): void {
   if (!taskID) return;
   const body = summary
-    ? t("notify.task_interaction_body_with_detail", { title: lookupTaskTitle(taskID), detail: summary })
+    ? t("notify.task.interaction.body_with_detail", { title: lookupTaskTitle(taskID), detail: summary })
     : undefined;
   void dispatch(taskID, "interaction", body ? { body } : undefined);
 }

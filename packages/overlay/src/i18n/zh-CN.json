@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "78f0491e292f2d19"
+    "panel_revision": "f9b9577249df8737"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -86,15 +86,15 @@
   "connection.banner_text": "事件流 {{status}}，界面可能显示陈旧数据。",
   "connection.banner_reload": "重新加载",
   "connection.banner_reload_title": "重新加载界面以恢复连接。",
-  "notify.task_completed_title": "任务已完成",
-  "notify.task_completed_body": "{{title}} 已成功完成。",
-  "notify.task_failed_title": "任务失败",
-  "notify.task_failed_body": "{{title}} 出错停止。",
-  "notify.task_cancelled_title": "任务已取消",
-  "notify.task_cancelled_body": "{{title}} 已被取消。",
-  "notify.task_interaction_title": "任务等待响应",
-  "notify.task_interaction_body": "{{title}} 正在等待权限或问题回复。",
-  "notify.task_interaction_body_with_detail": "{{title}}：{{detail}}",
+  "notify.task.completed.title": "任务已完成",
+  "notify.task.completed.body": "{{title}} 已成功完成。",
+  "notify.task.failed.title": "任务失败",
+  "notify.task.failed.body": "{{title}} 出错停止。",
+  "notify.task.cancelled.title": "任务已取消",
+  "notify.task.cancelled.body": "{{title}} 已被取消。",
+  "notify.task.interaction.title": "任务等待响应",
+  "notify.task.interaction.body": "{{title}} 正在等待权限或问题回复。",
+  "notify.task.interaction.body_with_detail": "{{title}}：{{detail}}",
   "settings.desktop_notifications_label": "桌面通知",
   "settings.desktop_notifications_hint": "任务完成、失败、取消或等待响应时通知系统提醒。",
   "channel.public_url_invalid": "公共 URL 必须以 http:// 或 https:// 开头",

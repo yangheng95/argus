@@ -721,10 +721,14 @@ fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, St
     {
         let state = app.state::<Server>();
         let mut lock = state.0.lock().unwrap();
+        // Capture `port` BEFORE borrowing `lock.child` mutably — otherwise
+        // the immutable read inside the `Ok(None)` arm overlaps the mutable
+        // borrow held by `child` and the borrow checker rejects (E0502).
+        let port_snapshot = lock.port;
         if let Some(child) = lock.child.as_mut() {
             match child.try_wait() {
                 Ok(None) => {
-                    if let Some(port) = lock.port {
+                    if let Some(port) = port_snapshot {
                         let pid = child.id();
                         return Ok(server_info_with_pid(port, pid));
                     }
