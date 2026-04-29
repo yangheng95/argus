@@ -211,20 +211,28 @@ export namespace Orchestrator {
       //    invented re-read instruction.
       const system = await buildSystemParts(task, event, workflow, workflowState)
       const userText = orchestratorUserText(task, event)
-      // Build multimodal content when task has file attachments (only for the
-      // first wake, because that is when the user's original attachments are
-      // introduced). AttachmentStore.partition routes image/audio/video/pdf
-      // to inline file parts and text/* / json to a URL-only reference list;
-      // see helper comments for the silent-rejection rationale.
-      // Inline file parts (image / pdf bytes) only on the first wake — the
-      // bytes live in the conversation history afterwards and don't need to
-      // be re-attached. The TEXTUAL inventory below is appended on EVERY
-      // wake so the orchestrator never loses awareness of what the user
-      // attached when deciding the next dispatch.
-      const firstWakeAttachments = isFirstWake && Array.isArray(task.attachments)
+      // Build multimodal content when task has file attachments. We re-inline
+      // image/pdf bytes on EVERY wake, not just the first. Each
+      // processTask invocation creates a fresh child session via
+      // Session.createNext (see line above), so the assumption that "bytes
+      // live in the conversation history afterwards" was wrong — the
+      // history of prior wakes is not in this wake's prompt. A first-wake-
+      // only gate left every subsequent wake with only the textual
+      // inventory, encouraging the model to either silently ignore visual
+      // context or confabulate references to images it could not see.
+      // AttachmentStore.partition routes image/audio/video/pdf to inline
+      // file parts and text/* / json to a URL-only reference list; see
+      // helper comments for the silent-rejection rationale. Inline parts
+      // are additionally gated by the resolved model's input modality
+      // capabilities so non-vision coding models don't receive bytes the
+      // upstream API would silently drop.
+      const wakeAttachments = Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
-      const inlineFileParts = await AttachmentStore.inlineFileParts(firstWakeAttachments)
+      const inlineFileParts = await AttachmentStore.inlineFileParts(wakeAttachments, {
+        capabilities: model.capabilities,
+        agent: "orchestrator",
+      })
       // Orchestrator does NOT own a `read` tool. Attachments are forwarded
       // automatically to every sub-agent it dispatches (requirements /
       // design_analysis / architect / build / refine — see orchestrator/tools.ts
@@ -237,14 +245,24 @@ export namespace Orchestrator {
       const allAttachments = Array.isArray(task.attachments)
         ? (task.attachments as Array<{ sha?: string; url?: string; mime?: string; size?: number; filename?: string }>)
         : undefined
+      const visionCapable =
+        model.capabilities.input.image ||
+        model.capabilities.input.pdf ||
+        model.capabilities.input.audio ||
+        model.capabilities.input.video
+      const inlinedNote = inlineFileParts.length > 0
+        ? "Multimodal items (image / pdf / audio / video) below are inlined as file parts in this wake's user message — you can see and reason about them directly."
+        : visionCapable
+          ? "No multimodal items are inlined in this wake (the task carries no image / pdf / audio / video attachments, or none was inlinable)."
+          : "Your current model does NOT accept image / pdf / audio / video input — multimodal items below are listed by filename ONLY; you cannot see their pixels. Do NOT pretend you saw them; describe them only via the textual context the user provided in prose, and rely on `design_analysis` / sub-agents whose models DO support vision for visual reasoning."
       const inventoryText = AttachmentStore.renderAttachmentInventory(allAttachments, {
         header: "## Task Attachments (forwarded to sub-agents automatically)",
         hint:
           "The user attached the files below to this task. " +
-          "Multimodal items (image / pdf / audio / video) are inlined as file parts on the first wake — you can see and reason about them directly. " +
+          inlinedNote + " " +
           "Reference-only items (text / json) are not inlined; sub-agents read them via their `read` tool. " +
           "You do NOT have a `read` tool yourself — do not attempt to fetch reference content. " +
-          "When you call `requirements` / `design_analysis` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by filename and explain their relevance, otherwise the sub-agent will treat the request as text-only and ignore the visual / file context.",
+          "When you call `requirements` / `design_analysis` / `architect` / `build` / `refine`, the engine forwards every attachment to the sub-agent automatically — but the sub-agent's prompt only cites them when YOU mention them by filename in your dispatch instructions. ALWAYS cite the relevant attachments by EXACT filename and explain their relevance. NEVER reference an attachment that is not listed below — if this section is empty, the user attached nothing in this wake and any phrase implying you saw a file is a hallucination.",
       })
       const enrichedUserText = userText + inventoryText
       // Build PromptInput.parts. Text first, then any multimodal attachments

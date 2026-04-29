@@ -340,6 +340,61 @@ export async function runAgentSession<C>(
   } else {
     parts = [{ type: "text", text: userText }]
   }
+  // Capability gate — drop multimodal file parts the resolved model cannot
+  // accept on input. Without this, every agent that calls
+  // AttachmentStore.inlineFileParts (build / delivery / architect /
+  // intent-analysis / integrity / requirements / prosecutor /
+  // design-analyst) would forward image / pdf / audio / video bytes to a
+  // text-only coding endpoint (e.g. dashscope coding) where the provider
+  // wrapper either silently strips them OR replaces them with an inline
+  // "ERROR: Cannot read …" text part (see provider/transform.ts
+  // unsupportedParts). Both outcomes leave the agent reasoning about
+  // visual context it never received. We strip upstream so the prompt
+  // accurately reflects what the agent will actually see; the
+  // provider-layer replacement remains as a safety net for direct
+  // SessionPrompt.prompt callers that bypass the runner.
+  const fileParts = parts.filter((p): p is typeof p & { type: "file" } => p.type === "file")
+  if (fileParts.length > 0) {
+    const before = fileParts.length
+    parts = parts.filter((p) => {
+      if (p.type !== "file") return true
+      const mime = (p.mime || "").toLowerCase()
+      let modality: "image" | "audio" | "video" | "pdf" | undefined
+      if (mime.startsWith("image/")) modality = "image"
+      else if (mime === "application/pdf") modality = "pdf"
+      else if (mime.startsWith("audio/")) modality = "audio"
+      else if (mime.startsWith("video/")) modality = "video"
+      if (!modality) return true
+      const accepted = model.capabilities.input[modality]
+      if (!accepted) {
+        log.warn("dropping multimodal part — model lacks input capability", {
+          agent: agentName,
+          kind,
+          mime,
+          filename: p.filename,
+          modality,
+          providerID: model.providerID,
+          modelID: model.id,
+        })
+      }
+      return accepted
+    })
+    const dropped = before - parts.filter((p) => p.type === "file").length
+    if (dropped > 0) {
+      // Append an explicit text marker so the model is aware it was sent
+      // attachments it can't see. Prevents silent confabulation: the
+      // prompt's textual inventory may still list filenames, and without
+      // this marker the model would not know those files weren't actually
+      // delivered as bytes.
+      parts.push({
+        type: "text",
+        text:
+          `\n\n[runner] ${dropped} multimodal attachment(s) were filtered out because this model ` +
+          `(${model.providerID}/${model.id}) does not accept the corresponding input modality. ` +
+          `You can see filenames in the textual inventory above but NOT the file contents — do not pretend you have.`,
+      })
+    }
+  }
   parts = parts.map((p) => ({ ...p, id: Identifier.ascending("part") }))
 
   // ── 4. Create child session ──────────────────────────────────────────

@@ -2,6 +2,7 @@ import crypto from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Project } from "@/project/project"
+import { Log } from "@/util/log"
 
 // Map MIME types to the canonical file extension used when we lay attachments
 // down inside a project's .opencorvus/attachments directory. The list only
@@ -42,6 +43,8 @@ function extensionFor(mime: string, filename?: string): string {
 function storageDir(projectDir: string): string {
   return path.join(projectDir, ".opencorvus", "attachments")
 }
+
+const log = Log.create({ service: "attachment-store" })
 
 export namespace AttachmentStore {
   export const ROUTE_PREFIX = "/attachment"
@@ -242,6 +245,29 @@ export namespace AttachmentStore {
     return `\n\n${header}\n${hint}\n\n${lines}`
   }
 
+  /** Subset of `Provider.Model.capabilities` needed for vision gating.
+   *  Kept structural (not a hard import) so this storage module doesn't
+   *  cycle through the provider layer. The fields match the Provider.Model
+   *  zod schema 1:1; if the schema grows new input modalities, extend here. */
+  export interface InputCapabilities {
+    input: {
+      text?: boolean
+      audio: boolean
+      image: boolean
+      video: boolean
+      pdf: boolean
+    }
+  }
+
+  function mimeAcceptedByCapabilities(mime: string, caps: InputCapabilities): boolean {
+    const m = (mime || "").toLowerCase()
+    if (m.startsWith("image/")) return caps.input.image
+    if (m === "application/pdf") return caps.input.pdf
+    if (m.startsWith("audio/")) return caps.input.audio
+    if (m.startsWith("video/")) return caps.input.video
+    return false
+  }
+
   /**
    * Read the bytes for each multimodal-supported attachment and return user-message
    * `type:"file"` parts (data-URL form) ready to splice directly into a
@@ -257,15 +283,39 @@ export namespace AttachmentStore {
    *
    * Skips non-multimodal MIMEs (those surface as `[reference]` rows in
    * `renderAttachmentInventory`).
+   * When `opts.capabilities` is supplied, additionally filters out
+   * multimodal MIMEs that the resolved model cannot accept on input
+   * (e.g. text-only coding endpoints like dashscope coding). Without this
+   * gate, the openai-compatible provider wrapper would forward the file
+   * part to the upstream API which silently strips it, leaving the
+   * orchestrator to confabulate visual context it never saw. The skip is
+   * logged with `agent` + `mime` + `filename` so operators can see when an
+   * attachment is being dropped due to model incapability.
    * Throws if any URL is unresolvable — partial attachment delivery would
    * mislead the agent (it would believe it saw all references).
    */
   export async function inlineFileParts(
     attachments: readonly AttachmentLike[] | undefined,
+    opts?: { capabilities?: InputCapabilities; agent?: string },
   ): Promise<InlineFilePart[]> {
     const { multimodal } = partition(attachments)
     if (multimodal.length === 0) return []
-    return Promise.all(multimodal.map(async (a) => {
+    const caps = opts?.capabilities
+    const accepted = caps
+      ? multimodal.filter((a) => {
+          const ok = mimeAcceptedByCapabilities(String(a.mime ?? ""), caps)
+          if (!ok) {
+            log.warn("skipping multimodal attachment — model lacks input capability", {
+              agent: opts?.agent,
+              mime: a.mime,
+              filename: a.filename,
+              sha: a.sha,
+            })
+          }
+          return ok
+        })
+      : multimodal
+    return Promise.all(accepted.map(async (a) => {
       const located = nameFromUrl(String(a.url ?? ""))
       if (!located) throw new Error(`attachment has no resolvable url: ${a.filename ?? a.sha}`)
       const bytes = await read(located.projectID, located.name)
