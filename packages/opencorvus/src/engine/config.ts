@@ -209,7 +209,14 @@ const DEFAULTS: EngineConfigType = {
     // Mirror toolchain SOP is force-loaded into every build session so the
     // LLM never hand-writes a clone from the visual contract alone (rule 22:
     // single source of truth for cloning is the skill body, not the prompt).
-    skills: ["webpage-generate", "image-generate", "figma-generate"],
+    // research-report is force-loaded for the same reason on the research
+    // path: a markdown-report task otherwise drifts onto external_code_search
+    // (which advertises "third-party libraries / SDKs / APIs") because
+    // nothing else tells the build LLM that multi-source synthesis lives on
+    // websearch. The skill body is the single source of truth for that
+    // workflow; the LLM activates it by description match, the prompt is
+    // never duplicated elsewhere.
+    skills: ["webpage-generate", "image-generate", "figma-generate", "research-report"],
   },
   activity: {
     // Reasoning models can stream reasoning deltas every few seconds;
