@@ -794,14 +794,21 @@ export namespace Worktree {
 
     // All git operations serialized to prevent concurrent corruption
     await withGitLock(async () => {
-      // Ensure the main repo has at least one commit — git worktree requires it.
-      // Without a commit, `git reset --hard` in the worktree does nothing (orphaned branch),
-      // leaving the worktree empty and causing delivery extraction to find 0 files.
+      // CONTRACT: project opening always commits the baseline .gitignore
+      // first (see engine/git.ts ensureGitignore), so HEAD is non-empty by
+      // the time any worktree is requested. If we still see no HEAD here,
+      // bootstrap broke earlier — fail loud rather than paper over with a
+      // `git add -A` "initial scaffold" empty commit that historically
+      // swallowed `node_modules/` into HEAD before .gitignore landed.
       const hasCommits = (await $`git rev-parse --verify HEAD`.quiet().cwd(primaryDir).nothrow()).exitCode === 0
       if (!hasCommits) {
-        log.info("creating initial commit for worktree support", { directory: primaryDir })
-        await $`git add -A`.quiet().cwd(primaryDir).nothrow()
-        await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit -m "initial scaffold" --allow-empty`.quiet().cwd(primaryDir).nothrow()
+        throw new CreateFailedError({
+          message:
+            `Worktree create requires HEAD to exist on the primary repo (${primaryDir}). ` +
+            `The project bootstrap path (Instance.provide → Project.initGit → ensureGitignore) ` +
+            `must seed the baseline .gitignore commit before any worktree dispatch — investigate ` +
+            `why ensureGitignore did not land a first commit instead of patching here.`,
+        })
       }
 
       const created = await $`git worktree add --no-checkout -b ${info.branch} ${info.directory} ${primary.branch}`
