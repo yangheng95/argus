@@ -3039,8 +3039,10 @@ export function createOrchestratorTools(input: {
                 await updateTask(readyTask, { status: "completed", error: null, time_completed: completed }, "Task completed")
                 const { Plugin } = await import("@/plugin")
                 await Plugin.trigger("delivery.ready", { taskID, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(err => log.warn("plugin 'delivery.ready' trigger failed (non-fatal)", { error: String(err) }))
-                EngineMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan })
-                  .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
+                Promise.race([
+                  EngineMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan }),
+                  new Promise<void>((_, reject) => setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000)),
+                ]).catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
                 return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
               }
               await updateTask(currentTask, { status: "failed", error: publishResult.summary, time_completed: completed }, publishResult.summary)
@@ -3400,10 +3402,17 @@ export function createOrchestratorTools(input: {
           await updateTask(finalized.task, { status: "completed", error: null, time_completed: completed }, "Task completed")
           const { Plugin } = await import("@/plugin")
           await Plugin.trigger("delivery.ready", { taskID: task.id, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(() => undefined)
-          // Flush task learnings to memory (fire-and-forget)
+          // Flush task learnings to memory (fire-and-forget). Bound by a
+          // 30s timeout so a stuck Memory.write or LLM-backed digestor
+          // can't keep the bun event loop busy after the task itself
+          // finished publishing — observed leak when the parent process
+          // was killed force-style and these orphan promises kept
+          // running.
           const evaluation = findEvaluationByRun(run.id)
-          EngineMemoryBridge.flushTaskLearnings({ task, run, delivery, evaluation, plan: currentPlan })
-            .catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
+          Promise.race([
+            EngineMemoryBridge.flushTaskLearnings({ task, run, delivery, evaluation, plan: currentPlan }),
+            new Promise<void>((_, reject) => setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000)),
+          ]).catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
 
           // Auto-launch the deliverable if the delivery agent recorded a
           // launch command. `launch_command` exists only on AcceptedVerdict
