@@ -349,7 +349,37 @@ The orchestrator's reasoning at line 7223 was: `reason=第一波并行构建：�
 
 ### 11.5 Bench liveness summary (~T+30min)
 
-Bench `tsk_dde13a67c001sbz6y2Qe0at8Fc` is still alive after the bootstrap failure: orchestrator session re-entered `step=7` at T+~30min, presumably to call `build` again on `gol_*0001`. Goal status flipped `failed → pending` and a new build session `ses_221d4c84dffd...` opened. This confirms the audit's §2.7 re-entry path (`startNewAttempt(goalID, ...)` with `dispatchTaskLoop` wake) is working end-to-end on this code path.
+Bench `tsk_dde13a67c001sbz6y2Qe0at8Fc` is still alive after the bootstrap failure: orchestrator session re-entered `step=7` at T+~30min, presumably to call `build` again on `gol_*0001`. Goal status flipped `failed → pending` and a new build session `ses_221d4c84dffd...` opened. The dispatch path (`build` tool invoked → `supersedeGoalRun:build_retry` → new session → agent_runner streaming) confirms audit §2.7 re-entry is structurally wired.
+
+### 11.6 New finding: status visibility broken on retry — running-while-pending invariant
+
+Initially the bench's progress reports for `gol_*0001` after retry suggested everything worked. Closer reading of the goal-status logs shows otherwise:
+
+```
+line 7228:  goalID=gol_*0001 from=(initial) to=running reason=beginBuildAttempt   (attempt 1)
+line 19179: goalID=gol_*0001 from=running to=failed reason=updateGoalRun           (attempt 1 fail)
+line 19356: goalID=gol_*0001 from=failed to=pending reason=supersedeGoalRun:build_retry  (retry begins)
+line 19357: build-semaphore acquire
+line 19358: session ses_221d4c84... created
+line 19360-20359: build agent reading package.json/vite.config.ts/tsconfig.json/tailwind.config.ts, LLM streaming
+```
+
+**The retry attempt has no `from=pending to=running reason=beginBuildAttempt` transition log.** Yet the build agent is genuinely running — `service=session.prompt step=0..3`, multiple `service=file.time` reads, multiple `service=llm ... stream` events. Meanwhile the bench's progress snapshots over T+~25..30min show `gol_*0001:pending` with `sessions=["build:ses_221d4c84..."]` — the **goal status is `pending` while the build session is actively running**.
+
+Two possibilities:
+1. **`beginBuildAttempt` was not called on the retry path** — a code-path divergence between first attempt (`build_tool → beginBuildAttempt`) and retry (`build_tool → supersedeGoalRun → ??? bypass beginBuildAttempt`). If so, no `goal_run_attempt` artifact was written for attempt 2, which means audit §2.5 worktree/goal_run linking risk is real (no DB row for the running attempt).
+2. **`beginBuildAttempt` was called but the derive path saw no transition** — e.g. it inserted a goal_run with status=`pending` instead of `running`, so the derived goal status had no change to log. This would mean the goal_run row exists but is in the wrong status; `engine.poll`/describe would not see this attempt as active.
+
+Either way, the **invariant "goal status reflects what is actually running" is broken on the retry path**. Severity:
+- Overlay UI / external observers cannot tell that retry is in progress.
+- Audit §5 information-loss list: this is a **new L8 entry**.
+- If the same path is taken for non-bootstrap goal retries (likely — `supersedeGoalRun:build_retry` is reason-agnostic), every retry hides its progress.
+
+This is the most concrete bug-class finding produced by this audit. Out of scope to fix here, but flagged for the next pass.
+
+### 11.7 Resolution of audit §5 D3 (workspace_dir double source)
+
+Reverse implication of §11.6: if the retry attempt does not create a new `goal_run_attempt` artifact, then `engine_goal.workspace_dir` (single, persistent across attempts) is the only source — `engine_goal_run.workspace_dir` for attempt 2 may not exist. Audit §6 D3 ("stale-read risk if reader hits goal_run path") is therefore **mostly theoretical** today: in practice, on retry, the `goal_run` row may not exist at all, so the reader has only one source to read from. The double-source becomes a no-source.
 
 ---
 
