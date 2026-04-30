@@ -16,7 +16,14 @@ import { EngineConfig } from "@/engine/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
-import { withStreamActivity } from "@/util/stream-activity"
+import {
+  withLLMActivity,
+  chunkHeartbeatKind,
+  DefaultLLMActivityPolicy,
+  LLMActivityError,
+  type LLMActivityEvent,
+  type LLMActivityPolicy,
+} from "@/llm/activity"
 import { normalizeToolInput } from "./tool-input-norm"
 
 export namespace SessionProcessor {
@@ -53,25 +60,35 @@ export namespace SessionProcessor {
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
         const idleMs = (await EngineConfig.get()).activity.session_llm_idle_ms
+        // Activity policy for per-attempt LLM streams in this session.
+        // Step 2 transitional state: maxRetries=0 so the activity runner
+        // emits exactly one terminal per attempt and rethrows; the outer
+        // while-true + SessionRetry.retryable path owns retries until
+        // step 5 collapses both layers. Once that happens, this policy
+        // gains real maxRetries and the outer retry loop is deleted.
+        const activityPolicy: LLMActivityPolicy = {
+          ...DefaultLLMActivityPolicy,
+          idleMs,
+          maxRetries: { default: 0 },
+        }
         while (true) {
-          // Per-attempt activity gate: a fresh idle timer for every LLM.stream
-          // call so retries are not poisoned by the previous attempt's state.
-          // gate.signal composes input.abort with its own inactivity
-          // controller; passing it in as `abort` is the single place this
-          // session surface learns about either kind of cancellation.
-          const gate = withStreamActivity({
-            idleMs,
-            signal: input.abort,
-            label: `session-llm:${input.sessionID}`,
-          })
           try {
             let currentText: Message.TextPart | undefined
             let reasoningMap: Record<string, Message.ReasoningPart> = {}
-            const stream = await LLM.stream({ ...streamInput, abort: gate.signal })
+            await withLLMActivity(
+              {
+                sessionID: input.sessionID,
+                provider: input.model.providerID,
+                model: input.model.id,
+              },
+              activityPolicy,
+              input.abort,
+              async (run) => {
+            const stream = await LLM.stream({ ...streamInput, abort: run.signal })
 
             for await (const value of stream.fullStream) {
-              gate.observe()
-              gate.signal.throwIfAborted()
+              run.bump(chunkHeartbeatKind(value))
+              run.signal.throwIfAborted()
               switch (value.type) {
                 case "start":
                   SessionStatus.set(input.sessionID, { type: "streaming" })
@@ -207,7 +224,7 @@ export namespace SessionProcessor {
                   // trip otherwise. Resume on tool-result. Per rule 23 the
                   // pause is scoped to known stream-pause semantics (tool-call
                   // boundary), not a generic disable switch.
-                  gate.pause()
+                  run.pause("tool-call")
                   // AI SDK contract: tool-call.input is `unknown` — providers
                   // may stream JSON-stringified args. Normalize at this single
                   // boundary so the schema record invariant holds. Symmetric
@@ -270,11 +287,11 @@ export namespace SessionProcessor {
                   break
                 }
                 case "tool-result": {
-                  // Pair with `gate.pause()` from tool-call. resume() is a
+                  // Pair with `run.pause("tool-call")` from tool-call. resume() is a
                   // no-op if the gate isn't paused (e.g. tool-result without
                   // matching tool-call after a recovery), so this is safe to
                   // run unconditionally before the match check.
-                  gate.resume()
+                  run.resume("tool-call")
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     // tool-result echoes the original input; normalize against
@@ -304,9 +321,9 @@ export namespace SessionProcessor {
                 }
 
                 case "tool-error": {
-                  // Pair with `gate.pause()` from tool-call (errors close the
+                  // Pair with `run.pause("tool-call")` from tool-call (errors close the
                   // tool-call window just like results).
-                  gate.resume()
+                  run.resume("tool-call")
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const echo = normalizeToolInput(value.input)
@@ -455,12 +472,35 @@ export namespace SessionProcessor {
               }
               if (needsCompaction) break
             }
+              },
+              (event: LLMActivityEvent) => {
+                // Step 2 transitional sink: trace terminals only. Step 3
+                // wires this through to session.bridge / overlay protocol
+                // as the canonical translator between LLMActivityEvent and
+                // the existing SessionStatus events; once that lands, this
+                // sink becomes a Bus.publish call and the bridge subscribes.
+                if (event.type === "terminal") {
+                  log.debug("activity terminal", {
+                    activityID: event.id,
+                    outcome: event.outcome,
+                    cls: event.cls,
+                  })
+                }
+              },
+            )
           } catch (e: any) {
+            // withLLMActivity wraps the original throw as LLMActivityError
+            // (or LLMActivityAbortedError for external_abort). Unwrap so the
+            // existing Message.fromError / SessionRetry path keeps seeing
+            // the same shapes it always saw — taxonomy upgrade is a step-5
+            // responsibility, not part of this migration.
+            const original =
+              e instanceof LLMActivityError ? (e.cause ?? e) : e
             log.error("process", {
-              error: e,
-              stack: JSON.stringify(e.stack),
+              error: original,
+              stack: JSON.stringify((original as { stack?: unknown })?.stack),
             })
-            const error = Message.fromError(e, { providerID: input.model.providerID })
+            const error = Message.fromError(original, { providerID: input.model.providerID })
             if (Message.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
               break
@@ -486,8 +526,6 @@ export namespace SessionProcessor {
               error: input.assistantMessage.error,
             })
             SessionStatus.set(input.sessionID, { type: "idle" })
-          } finally {
-            gate.dispose()
           }
           if (snapshot) {
             const patch = await Snapshot.patch(snapshot)
