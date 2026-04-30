@@ -2638,6 +2638,40 @@ body[data-theme="light"] .section-badge {
   overflow-wrap: break-word;
 }
 
+/* ProvidersPanel header action cluster. The catalog `Refresh` button
+   sits to the left of `+ Add` and shows a spinning ↻ glyph + relative
+   "Updated 3 min ago" hint while keeping the panel header compact. */
+.provider-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-gap-sm);
+}
+.provider-refresh-meta {
+  font-size: var(--ui-font-control);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.provider-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.provider-refresh-icon {
+  display: inline-block;
+  line-height: 1;
+  font-size: 1.05em;
+  transform-origin: center;
+  transition: transform 200ms ease;
+}
+.provider-refresh-btn[data-spinning="true"] .provider-refresh-icon {
+  animation: provider-refresh-spin 1s linear infinite;
+}
+@keyframes provider-refresh-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ProvidersPanel save / delete / form-validation failure surface.
    Same --bad vocabulary as the test-result error chip so the user
    reads UI failures with one consistent visual rule. Wrapping is

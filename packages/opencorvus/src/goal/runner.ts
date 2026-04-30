@@ -23,7 +23,9 @@ export async function cleanupGoalWorkspace(directory?: string) {
   const isWorktree =
     directory.includes(path.join(".opencorvus", "worktrees")) ||
     directory.includes(".opencorvus-worktrees")
-  if (!isGoalWorkspace && !isWorktree) return
+  if (!isGoalWorkspace && !isWorktree) {
+    throw new Error(`cleanupGoalWorkspace refused path outside goal workspace roots: ${directory}`)
+  }
 
   // [observability/phase-0] Per-step timing + outcome breakdown. Until we have
   // this, a "retry reused new worktree path" incident gives no signal about
@@ -34,7 +36,7 @@ export async function cleanupGoalWorkspace(directory?: string) {
   const started = Date.now()
   type StepOutcome = { step: string; ok: boolean; ms: number; error?: string }
   const steps: StepOutcome[] = []
-  const timed = async <T>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
+  const timed = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
     const t0 = Date.now()
     try {
       const result = await fn()
@@ -52,66 +54,68 @@ export async function cleanupGoalWorkspace(directory?: string) {
         error: code ? `${code}: ${String(err)}` : String(err),
       })
       log.warn(`cleanupGoalWorkspace.${name} failed`, { directory, error: String(err), code })
-      return undefined
+      throw err
     }
   }
 
   const projectID = Instance.project.id
-  const exists = await Filesystem.exists(directory)
-  if (!exists) {
-    await timed("removeSandbox", () => Project.removeSandbox(projectID, directory))
-    log.info("cleanupGoalWorkspace done (missing directory)", {
+  const finish = () => {
+    const allOk = steps.every((s) => s.ok)
+    const summary = {
       directory,
-      existed: false,
       totalMs: Date.now() - started,
       steps,
-    })
-    return
+    }
+    if (allOk) {
+      log.info("cleanupGoalWorkspace done", summary)
+      return
+    }
+    log.warn("cleanupGoalWorkspace failed", summary)
+    throw new Error(`cleanupGoalWorkspace failed for ${directory}`)
   }
 
-  const drop = () =>
-    timed("fs.rm", () =>
-      fs.rm(directory, {
-        recursive: true,
-        force: true,
-        maxRetries: 50,
-        retryDelay: 100,
+  try {
+    const exists = await Filesystem.exists(directory)
+    if (!exists) {
+      await timed("removeSandbox", () => Project.removeSandbox(projectID, directory))
+      finish()
+      return
+    }
+
+    await timed("Instance.dispose", () =>
+      Instance.provide({
+        directory,
+        fn: () => Instance.dispose(),
       }),
     )
 
-  await timed("Instance.dispose", () =>
-    Instance.provide({
-      directory,
-      fn: () => Instance.dispose(),
-    }),
-  )
-
-  if (!Project.isGitRepo(Instance.directory)) {
-    await drop()
-  } else {
-    const removed = await timed("Worktree.remove", () => Worktree.remove({ directory }))
-    if (removed === undefined) {
-      // Worktree.remove threw → fall through to the brute-force fs.rm. `timed`
-      // already recorded the remove failure; we still want the drop attempt's
-      // own ok/fail to land in the summary.
-      await drop()
+    if (isWorktree) {
+      await timed("Worktree.remove", () => Worktree.remove({ directory }))
+    } else {
+      await timed("fs.rm", () =>
+        fs.rm(directory, {
+          recursive: true,
+          force: true,
+          maxRetries: 50,
+          retryDelay: 100,
+        }),
+      )
     }
+    await timed("removeSandbox", () => Project.removeSandbox(projectID, directory))
+    await timed("ownership.clear", () =>
+      Ownership.Worktree.clear({
+        primaryWorktreeDir: Instance.worktree,
+        worktreeDir: directory,
+      }),
+    )
+    finish()
+  } catch (error) {
+    log.warn("cleanupGoalWorkspace aborted", {
+      directory,
+      totalMs: Date.now() - started,
+      steps,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw error
   }
-  await timed("removeSandbox", () => Project.removeSandbox(projectID, directory))
-  await timed("ownership.clear", () =>
-    Ownership.Worktree.clear({
-      primaryWorktreeDir: Instance.worktree,
-      worktreeDir: directory,
-    }),
-  )
-
-  const allOk = steps.every((s) => s.ok)
-  const summary = {
-    directory,
-    existed: true,
-    totalMs: Date.now() - started,
-    steps,
-  }
-  if (allOk) log.info("cleanupGoalWorkspace done", summary)
-  else log.warn("cleanupGoalWorkspace completed with failures", summary)
 }

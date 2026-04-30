@@ -31,6 +31,7 @@ import {
 import {
   markDeliveryPublishing,
   finalizeDeliveryResult,
+  updateGoalWorkspace,
   updateGoalRun,
   updateEvaluationFromDeliveryVerdict,
 } from "@/engine/persist"
@@ -184,6 +185,26 @@ export function createOrchestratorTools(input: {
       stopAfterDispatch.abort(reason)
     }
     return reason
+  }
+
+  async function cleanupTerminalGoalWorkspaces(reason: string): Promise<number> {
+    const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
+    let cleaned = 0
+    const errors: string[] = []
+    for (const goal of listGoals(taskID)) {
+      try {
+        if (await cleanupGoalWorkspaceForGoal(goal.id)) cleaned += 1
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        errors.push(`${goal.id}: ${message}`)
+      }
+    }
+    if (errors.length > 0) {
+      const message = `${reason}: failed to clean ${errors.length} goal worktree(s): ${errors.join("; ")}`
+      log.error("goal workspace terminal cleanup failed", { taskID, reason, errors })
+      throw new Error(message)
+    }
+    return cleaned
   }
 
   function taskLevelBuildEligibility(task: TaskRow): { allowed: true } | { allowed: false; reason: string } {
@@ -1859,12 +1880,12 @@ export function createOrchestratorTools(input: {
         // When a contract change triggered status reset, the prior attempt's
         // worktree is stale (built against the old contract). Cleanup so the
         // next build starts from a fresh primary checkout and doesn't carry
-        // forward the old tree's state. Best-effort; safety net at task
-        // terminal still applies.
+        // forward the old tree's state. Cleanup failure is surfaced so the
+        // DB pointer remains available for diagnosis.
         let cleanupSuffix = ""
         if (statusReset) {
           const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
-          const cleaned = await cleanupGoalWorkspaceForGoal(goalID).catch(() => false)
+          const cleaned = await cleanupGoalWorkspaceForGoal(goalID)
           if (cleaned) cleanupSuffix = ", stale worktree cleaned"
         }
 
@@ -2115,136 +2136,6 @@ export function createOrchestratorTools(input: {
       },
     }),
 
-    merge_arbitrate: tool({
-      description:
-        "Final arbiter for goal merge_back conflicts. Call this after `build` returned a " +
-        "merge_back conflict report (status=failed with conflict_paths in the error). YOU are " +
-        "the only authority that decides how to integrate a goal whose worktree edits clashed " +
-        "with primary — the build agent intentionally aborts the conflicting merge so it " +
-        "doesn't pre-empt your decision. Strategies: " +
-        "`take_goal` overwrites primary's bytes with the goal's version on every conflict path " +
-        "(use when the goal is the source of truth — e.g. the feature deliberately rewrote a " +
-        "file primary still has the stale copy of); " +
-        "`take_primary` overwrites the goal's bytes with primary's version on every conflict " +
-        "path (use when the goal redundantly re-scaffolded files primary already converged on " +
-        "— typical bootstrap-collision symptom); " +
-        "`per_path` decides each conflict path independently (use when the goal touched some " +
-        "files legitimately but redundantly re-scaffolded others). " +
-        "After the resolve completes, call `deliver` to verify the integrated tree the same " +
-        "way you would after a clean merge. If neither side is acceptable, do NOT call this " +
-        "with a half-baked strategy — call `build` again with explicit instructions for the " +
-        "agent to reconcile in code, or `modify_goal` to shrink the goal scope so it stops " +
-        "fighting primary, or `fail_task` if the conflict is unresolvable.",
-      inputSchema: z.object({
-        goalID: z
-          .string()
-          .describe(
-            "The goal whose merge_back conflict you are resolving. Must match the goalID " +
-            "from the failed build's conflict report.",
-          ),
-        strategy: z
-          .discriminatedUnion("kind", [
-            z.object({
-              kind: z.literal("take_goal"),
-            }),
-            z.object({
-              kind: z.literal("take_primary"),
-            }),
-            z.object({
-              kind: z.literal("per_path"),
-              paths: z
-                .array(
-                  z.object({
-                    path: z.string().describe("Conflict path verbatim from the build's report."),
-                    take: z
-                      .enum(["goal", "primary"])
-                      .describe("Which side wins for this path."),
-                  }),
-                )
-                .min(1)
-                .describe(
-                  "MUST cover every path in the build's conflict_paths list — partial coverage " +
-                  "is rejected with the missing paths enumerated.",
-                ),
-            }),
-          ])
-          .describe("Resolution strategy. See tool description for when to pick which."),
-        reason: z
-          .string()
-          .describe(
-            "One sentence explaining why this strategy is correct — captured in the merge " +
-            "commit message and the orchestrator decision log.",
-          ),
-      }),
-      execute: async ({ goalID, strategy, reason }) => {
-        const { findGoalRun, listGoalRunsByGoal } = await import("@/engine/store")
-        const { Worktree } = await import("@/worktree")
-
-        const runs = listGoalRunsByGoal(goalID)
-        // Most-recent goal_run wins — that's the one whose merge_back just
-        // failed. Earlier runs are historical attempts whose worktrees
-        // were either reused or cleaned up.
-        const latest = runs.at(-1)
-        if (!latest) {
-          return `merge_arbitrate: no goal_run found for goal ${goalID}; nothing to merge.`
-        }
-        const fresh = findGoalRun(latest.id) ?? latest
-        const worktreeDir = fresh.workspace_dir
-        if (!worktreeDir) {
-          return (
-            `merge_arbitrate: goal_run ${fresh.id} has no workspace_dir on record; the build ` +
-            `agent never reached worktree creation. Call \`build\` first.`
-          )
-        }
-        // Branch name is encoded by Worktree.create as `opencorvus/<slug>`;
-        // the workspace_dir's basename is the slug. We don't store the
-        // branch directly, so reconstruct from the directory.
-        const branch = `opencorvus/${path.basename(worktreeDir)}`
-
-        try {
-          const result = await Worktree.resolveAndMerge({
-            branch,
-            worktreeDir,
-            strategy,
-          })
-          log.info("merge_arbitrate: resolved", {
-            taskID,
-            goalID,
-            goalRunID: fresh.id,
-            strategy: strategy.kind,
-            primaryHead: result.primaryHead,
-            reason,
-          })
-          // Worktree's job is done — merge integrated, primary advanced.
-          // Cleanup is the orchestrator's responsibility (rule 22 single
-          // source: same authority that decided the merge owns the
-          // worktree's lifecycle). Best-effort; engine/writer's
-          // cleanupGoalWorkspaces at task terminal is the safety net.
-          const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
-          await cleanupGoalWorkspaceForGoal(goalID).catch((err) => {
-            log.warn("merge_arbitrate: post-resolve cleanup failed", {
-              taskID,
-              goalID,
-              error: err instanceof Error ? err.message : String(err),
-            })
-          })
-          return (
-            `merge_arbitrate: resolved goal ${goalID} with strategy=${strategy.kind} → ` +
-            `${result.primaryBranch}@${result.primaryHead.slice(0, 12)}. Worktree cleaned. ` +
-            `NEXT: call \`deliver\` to verify the integrated tree.`
-          )
-        } catch (err) {
-          const detail = err instanceof Error ? err.message : String(err)
-          log.error("merge_arbitrate: failed", { taskID, goalID, strategy: strategy.kind, error: detail })
-          return (
-            `merge_arbitrate: strategy=${strategy.kind} failed for goal ${goalID}: ${detail}. ` +
-            `Pick a different strategy, or shrink the goal via \`modify_goal\` to remove the ` +
-            `conflicting paths from owned_paths.`
-          )
-        }
-      },
-    }),
-
     fail_task: tool({
       description: "Mark the task as failed. Use when the task cannot be completed.",
       inputSchema: z.object({
@@ -2258,11 +2149,7 @@ export function createOrchestratorTools(input: {
         // proactively here rather than waiting for the engine/writer
         // task-terminal sweep so disk usage drops at the moment of
         // decision (rule 22: orchestrator owns worktree lifecycle).
-        const { cleanupGoalWorkspaceForGoal } = await import("@/engine/writer")
-        let cleaned = 0
-        for (const goal of listGoals(taskID)) {
-          if (await cleanupGoalWorkspaceForGoal(goal.id).catch(() => false)) cleaned += 1
-        }
+        const cleaned = await cleanupTerminalGoalWorkspaces("fail_task")
         return `Task ${taskID} failed: ${error}${cleaned > 0 ? ` (${cleaned} goal worktree(s) cleaned)` : ""}`
       },
     }),
@@ -3183,6 +3070,7 @@ export function createOrchestratorTools(input: {
                   await updateTask(current, { status: "failed", error: finalized.error, time_completed: completed }, finalized.error)
                   return `Git finalization failed: ${finalized.error}`
                 }
+                const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("deliver auto-publish")
                 // Ensure task is in "active" before completing (recovery may have reset to "queued")
                 const preComplete = requireTask(taskID)
                 if (isTaskQueued(preComplete)) {
@@ -3196,7 +3084,8 @@ export function createOrchestratorTools(input: {
                   EngineMemoryBridge.flushTaskLearnings({ task: currentTask, run, delivery, evaluation: findEvaluationByRun(run.id), plan: currentPlan }),
                   new Promise<void>((_, reject) => setTimeout(() => reject(new Error("flushTaskLearnings timeout (30s)")), 30_000)),
                 ]).catch(err => log.warn("failed to flush task learnings", { error: String(err) }))
-                return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
+                const cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
+                return `Delivery published and task completed successfully.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
               }
               await updateTask(currentTask, { status: "failed", error: publishResult.summary, time_completed: completed }, publishResult.summary)
               return `Publish returned non-delivered status: ${publishResult.summary}`
@@ -3552,6 +3441,8 @@ export function createOrchestratorTools(input: {
             await updateTask(current, { status: "failed", error: finalized.error, time_completed: completed }, finalized.error)
             return `Git finalization failed: ${finalized.error}`
           }
+          const cleanedGoalWorkspaces = await cleanupTerminalGoalWorkspaces("publish_delivery")
+          const cleanupNote = cleanedGoalWorkspaces > 0 ? ` ${cleanedGoalWorkspaces} goal worktree(s) cleaned.` : ""
           await updateTask(finalized.task, { status: "completed", error: null, time_completed: completed }, "Task completed")
           const { Plugin } = await import("@/plugin")
           await Plugin.trigger("delivery.ready", { taskID: task.id, runID: run.id, deliveryID: delivery.id }, { actions: [] }).catch(() => undefined)
@@ -3583,15 +3474,15 @@ export function createOrchestratorTools(input: {
               const launched = await Shell.launch(launchCmd, { cwd: projectDir })
               const addrNote = launched.address ? ` — running at ${launched.address}` : ` (PID ${launched.pid})`
               log.info("deliverable launched", { pid: launched.pid, address: launched.address, command: launchCmd })
-              return `Delivery published and task completed successfully. Deliverable launched${addrNote}.`
+              return `Delivery published and task completed successfully.${cleanupNote} Deliverable launched${addrNote}.`
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err)
               log.warn("auto-launch failed after publish", { error: msg, command: launchCmd })
-              return `Delivery published and task completed successfully. Auto-launch failed: ${msg}. Launch manually with: ${launchCmd}`
+              return `Delivery published and task completed successfully.${cleanupNote} Auto-launch failed: ${msg}. Launch manually with: ${launchCmd}`
             }
           }
 
-          return `Delivery published and task completed successfully. You can call refine to analyze the project and suggest improvements for the next iteration.`
+          return `Delivery published and task completed successfully.${cleanupNote} You can call refine to analyze the project and suggest improvements for the next iteration.`
         }
 
         await updateTask(task, { status: "failed", error: result.summary, time_completed: completed }, result.summary)
@@ -3939,14 +3830,55 @@ export function createOrchestratorTools(input: {
 
         try {
           const { BuildAgent } = await import("@/build/agent")
+          const { Worktree } = await import("@/worktree")
           let target: import("@/build/types").BuildTarget
           let context: import("@/build/agent").BuildAgent.BuildContext | undefined
+          let managedWorktree: import("@/build/agent").BuildAgent.RunInput["managedWorktree"] | undefined
           if (attachedGoalID) {
             const { findGoal, findRequirements, listGoals } = await import("@/engine/store")
             const goal = findGoal(attachedGoalID)
             if (!goal) {
               if (isTaskLevelBuild) await trackStepComplete("build", undefined, true)
               return `build: goal ${attachedGoalID} not found; register via architect first.`
+            }
+            const recordedWorkspaceDir = goal.workspace_dir?.trim()
+            const recordedWorkspaceBranch = goal.workspace_branch?.trim()
+            if (recordedWorkspaceDir || recordedWorkspaceBranch) {
+              if (!recordedWorkspaceDir || !recordedWorkspaceBranch) {
+                return (
+                  `build: goal ${attachedGoalID} has inconsistent workspace metadata ` +
+                  `(workspace_dir=${recordedWorkspaceDir || "null"}, ` +
+                  `workspace_branch=${recordedWorkspaceBranch || "null"}). ` +
+                  `This is a structural error; clean or reset the goal workspace explicitly.`
+                )
+              }
+              const valid = await Worktree.isValid(recordedWorkspaceDir)
+              if (!valid.valid) {
+                return (
+                  `build: recorded workspace for goal ${attachedGoalID} is invalid: ` +
+                  `${recordedWorkspaceDir} (${valid.reason ?? "unknown reason"}). ` +
+                  `No replacement worktree was created; reset the goal workspace explicitly.`
+                )
+              }
+              managedWorktree = {
+                directory: recordedWorkspaceDir,
+                branch: recordedWorkspaceBranch,
+                baseRef: goal.workspace_base_ref,
+              }
+            } else {
+              const info = await Worktree.create({
+                name: `goal-${goal.id.slice(-8)}`,
+              })
+              managedWorktree = {
+                directory: info.directory,
+                branch: info.branch,
+                baseRef: null,
+              }
+              updateGoalWorkspace({
+                goalID: goal.id,
+                workspaceDir: info.directory,
+                workspaceBranch: info.branch,
+              })
             }
             const dependsOn = Array.isArray(goal.depends_on) ? (goal.depends_on as string[]) : []
             target = {
@@ -4085,6 +4017,7 @@ export function createOrchestratorTools(input: {
                 taskID,
                 goalID: attachedGoalID,
                 runID: coordinatorRunID,
+                workspaceDir: managedWorktree?.directory,
               })
             } catch (beginErr) {
               // A failure here is structural — overlay won't get the
@@ -4099,13 +4032,23 @@ export function createOrchestratorTools(input: {
             }
           }
 
-          const { result, sessionID, worktreeDir, diffs } = await BuildAgent.run({
+          const { result, sessionID, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = await BuildAgent.run({
             target,
             task,
             context,
             parentSessionID: input.agentSessionID,
             signal: input.signal,
+            managedWorktree,
           })
+
+          if (attachedGoalID && worktreeDir && worktreeBranch) {
+            updateGoalWorkspace({
+              goalID: attachedGoalID,
+              workspaceDir: worktreeDir,
+              workspaceBranch: worktreeBranch,
+              workspaceBaseRef: worktreeBaseRef,
+            })
+          }
 
           // Finalize the goal_run opened above. updateGoalRun writes a new
           // append-only artifact with the terminal status + time_completed,
