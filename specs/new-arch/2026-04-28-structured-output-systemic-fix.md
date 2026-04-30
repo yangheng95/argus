@@ -440,3 +440,8 @@ processor.message.parts.some(...)
 - 禁止为 terminal recovery 合成 user message；不再通过 synthetic reminder 追加新 turn。
 - `build` 有 `report_build_passed` / `report_build_failed` 两个 discriminator terminal tools，因此只用 `toolChoice: "required"`，不 hard-pin 到单一分支。
 - `requirements-core` / `integrity-core` 的旧 `StructuredOutput` 文案已替换成 `submit_requirements()` / `submit_integrity_review()`，避免 prompt 与代码协议双源。
+
+2026-04-30 amendment: build no longer uses two terminal discriminator tools.
+`report_build_passed` / `report_build_failed` were replaced by the single
+`report_build_result` terminal tool with `status` as the payload discriminator.
+See `specs/new-arch/2026-04-30-terminal-contract-hard-pin.md`.

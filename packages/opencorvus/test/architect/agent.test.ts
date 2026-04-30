@@ -30,9 +30,9 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
         expect(input.format).toBeUndefined()
         expect(input.terminalTool?.toolName).toBe("submit_architect")
         expect(input.terminalTool?.isSatisfied(input.toolKit.getCollector())).toBe(false)
+        expect(input.terminalTool?.isReadyToFinalize(input.toolKit.getCollector())).toBe(false)
 
         const collector = input.toolKit.getCollector()
-        collector.finalized = true
         collector.summary = "Single goal decomposition"
         collector.goals.push({
           id: "goal_main",
@@ -47,7 +47,50 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           kind: "feature",
           requirement_ids: ["REQ-1"],
         })
+        for (const name of [
+          "functional_correctness",
+          "scenario_coverage",
+          "contract_compliance",
+          "regression_count",
+        ]) {
+          collector.goal_metric_specs.push({
+            goal_id: "goal_main",
+            name,
+            description: `${name} must pass`,
+            unit: "ratio",
+            direction: "higher_better",
+            target: 1,
+            floor: 0.8,
+            weight: 1,
+            gate_class: "blocking",
+            evaluator_kind: "judge",
+            evaluator_config: {},
+            source_requirement_ids: ["REQ-1"],
+          })
+        }
+        for (const name of [
+          "cross_goal_contract_consistency",
+          "non_regression_surface",
+          "architecture_integrity",
+          "user_intent_fidelity",
+        ]) {
+          collector.global_metric_specs.push({
+            name,
+            description: `${name} must pass`,
+            unit: "ratio",
+            direction: "higher_better",
+            target: 1,
+            floor: 0.8,
+            weight: 1,
+            gate_class: "blocking",
+            evaluator_kind: "judge",
+            evaluator_config: {},
+            source_requirement_ids: ["REQ-1"],
+          })
+        }
 
+        expect(input.terminalTool.isReadyToFinalize(input.toolKit.getCollector())).toBe(true)
+        collector.finalized = true
         expect(input.terminalTool.isSatisfied(input.toolKit.getCollector())).toBe(true)
         return {
           session: { id: "ses_architect" },

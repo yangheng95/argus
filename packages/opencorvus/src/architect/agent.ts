@@ -45,7 +45,7 @@ import type {
   ParsedRequirement,
   RequirementsDecision,
 } from "./types"
-import { createArchitectOutputTools, type RegisteredGoal } from "./output-tools"
+import { createArchitectOutputTools, isArchitectReadyToFinalize, type RegisteredGoal } from "./output-tools"
 import { AttachmentStore } from "@/storage/attachment-store"
 
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
@@ -148,6 +148,7 @@ export namespace ArchitectAgent {
       terminalTool: {
         toolName: "submit_architect",
         isSatisfied: (collector) => collector.finalized,
+        isReadyToFinalize: isArchitectReadyToFinalize,
       },
     })
 

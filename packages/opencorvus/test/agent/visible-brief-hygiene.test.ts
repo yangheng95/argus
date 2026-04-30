@@ -18,7 +18,7 @@ const forbiddenVisibleBriefSnippets = [
   "StructuredOutput tool exactly once",
   "Call register_requirement per REQ-N entry",
   "Then call submit_requirements",
-  "call report_build_passed or report_build_failed exactly once",
+  "call report_build_result exactly once",
   "Final Output (REQUIRED)",
   "submit_verdict tool exactly once",
   "For EACH dimension call its own",

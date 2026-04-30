@@ -201,14 +201,12 @@ export interface RunAgentSessionInput<C> {
   format?: StructuredFormat
   /** Required terminal collector tool for stages whose structured facts are
    *  already captured by tool calls and whose final action is an explicit
-   *  validator/submit tool. The session loop uses this contract to recover
-   *  in-session if the model stops in prose before calling that terminal
-   *  tool. */
+   *  validator/submit tool. The session loop keeps work tools available until
+   *  `isReadyToFinalize`, then pins the provider to this terminal tool. */
   terminalTool?: {
     toolName: string
-    toolNames?: string[]
-    allowHardPin?: boolean
     isSatisfied: (collector: C) => boolean
+    isReadyToFinalize: (collector: C) => boolean
   }
   /** Pass-through skill stage. When omitted, no skill injection runs.
    *  See `SkillStage` JSDoc. */
@@ -440,8 +438,7 @@ export async function runAgentSession<C>(
   )
   if (
     input.terminalTool &&
-    !(input.terminalTool.toolNames ?? [input.terminalTool.toolName])
-      .some((name) => name in input.toolKit.tools)
+    !(input.terminalTool.toolName in input.toolKit.tools)
   ) {
     throw new AgentRunError(
       kind,
@@ -491,9 +488,8 @@ export async function runAgentSession<C>(
           }
           await SessionPrompt.withTerminalToolContract(session.id, {
             toolName: input.terminalTool.toolName,
-            toolNames: input.terminalTool.toolNames,
-            allowHardPin: input.terminalTool.allowHardPin,
             isSatisfied: () => input.terminalTool!.isSatisfied(input.toolKit.getCollector()),
+            isReadyToFinalize: () => input.terminalTool!.isReadyToFinalize(input.toolKit.getCollector()),
           }, promptOnce)
         }
         if (input.format?.validate) {

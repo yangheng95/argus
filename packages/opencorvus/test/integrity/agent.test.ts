@@ -44,6 +44,7 @@ test("integrity uses dimension collectors plus submit_integrity_review terminato
     ])
     expect(input.format).toBeUndefined()
     expect(input.terminalTool?.toolName).toBe("submit_integrity_review")
+    expect(input.terminalTool?.isReadyToFinalize(input.toolKit.getCollector())).toBe(false)
     return {
       session: { id: "ses_integrity_missing" },
       streamErrors: [],
@@ -72,6 +73,7 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
         : { verdict: "pass", issues: [], corrections: [], missing_goals: [] }
       await (tool as any).execute(payload, {})
     }
+    expect(input.terminalTool.isReadyToFinalize(input.toolKit.getCollector())).toBe(true)
     await input.toolKit.tools.submit_integrity_review.execute({}, {})
     return {
       session: { id: "ses_integrity_complete" },
