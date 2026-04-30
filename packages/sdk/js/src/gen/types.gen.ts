@@ -2780,7 +2780,7 @@ export type WorktreeCreateInput = {
    */
   checkout?: "sync" | "async"
   /**
-   * When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Falls back to the standard reclaim path when the existing tree is invalid (zombie linkage, missing branch, etc.) so corrupt state never silently survives a retry.
+   * When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.
    */
   reuseIfValid?: boolean
 }
@@ -3175,7 +3175,12 @@ export type GlobalDisposeResponses = {
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
 
 export type GlobalDbResetData = {
-  body?: never
+  body?: {
+    /**
+     * Absolute filesystem path of the project whose DB should be wiped (the directory containing .opencorvus/).
+     */
+    projectDir: string
+  }
   path?: never
   query?: never
   url: "/global/db/reset"
@@ -5648,6 +5653,28 @@ export type ProviderAuthResponses = {
 }
 
 export type ProviderAuthResponse = ProviderAuthResponses[keyof ProviderAuthResponses]
+
+export type ProviderRefreshData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/refresh"
+}
+
+export type ProviderRefreshResponses = {
+  /**
+   * Refresh outcome
+   */
+  200: {
+    ok: boolean
+    fetchedAt?: number
+    error?: string
+  }
+}
+
+export type ProviderRefreshResponse = ProviderRefreshResponses[keyof ProviderRefreshResponses]
 
 export type ProviderHexinRefreshData = {
   body?: never

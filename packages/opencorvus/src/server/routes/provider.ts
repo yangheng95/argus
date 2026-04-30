@@ -88,6 +88,41 @@ export const ProviderRoutes = lazy(() =>
       },
     )
     .post(
+      "/refresh",
+      describeRoute({
+        summary: "Refresh the models.dev registry snapshot",
+        description:
+          "Pulls api.json from the configured registry URL and persists it to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.",
+        operationId: "provider.refresh",
+        responses: {
+          200: {
+            description: "Refresh outcome",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    fetchedAt: z.number().optional(),
+                    error: z.string().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const result = await ModelsDev.refresh()
+        if (result.ok) {
+          // Provider/Agent caches captured the old catalog; reset so the
+          // refreshed list is visible to downstream callers immediately.
+          Provider.reset()
+          Agent.reset()
+        }
+        return c.json(result)
+      },
+    )
+    .post(
       "/hexin/refresh",
       describeRoute({
         summary: "Refresh hexin gateway model list",
