@@ -290,6 +290,69 @@ This is not a bug list. It's the shape:
 
 ---
 
+## 11. Live bench addendum — bootstrap goal failure (2026-04-30 ~T+25min)
+
+After the first commit of this audit, the bench produced concrete data that confirms two of its findings and adds one new observation. Logged here rather than in §8 to keep the section's "informational only" framing intact.
+
+### 11.1 Confirmed: information loss at BuildResult (audit §2.5 / §5 L1)
+
+The bootstrap goal `gol_dde1c63b70017JXpz89XlhuNQs` (Project Bootstrap — Vite React Hono Scaffold) failed at `_session-r1-opencode.out:19180`:
+
+```
+ERROR service=task-tools error=build agent: terminal build report did not
+match BuildResultSchema: [{"code":"invalid_type","expected":"object","path":
+[],"message":"Invalid input: expected object, received undefined"}] build
+tool failed
+```
+
+The build agent never called `report_build_result`, so the orchestrator received `undefined` instead of a `BuildResult` and the Zod schema rejected it. The agent's actual progress (read `package.json`, `vite.config.ts`, etc. — visible in earlier `service=file.time` lines for the same session) is **completely invisible** at the orchestrator level. The orchestrator only saw "the schema rejected the report." This is exactly the L1 loss class described in the audit: `BuildResult { status, summary, worktree }` is the only window into the build agent.
+
+### 11.2 Confirmed: permission system can starve the build (memory `feedback_goal_permission_hang.md`)
+
+At `_session-r1-opencode.out:19171`, immediately before the cancel:
+
+```
+INFO service=permission id=per_dde267938001E4OId9SwbdVVBt
+permission=external_directory
+patterns=["C:/Users/hengu/AppData/Local/Temp/mirrorcode-overlay-benchmark-project-UkylGI/*"]
+permission timeout rejected
+```
+
+The permission was for the **bench project root itself** — the directory the build is supposed to write into. The 5-minute (300_011 ms) timeout fired, the prompt was cancelled (line 19175 `session.prompt sessionID=... cancel`), and the agent-runner finalised with `streamErrors=0 hasStructured=false` (line 19176). This is the exact shape memory `feedback_goal_permission_hang.md` describes: goal session inherits `ask` permission → tool blocks → cancel → empty terminal report.
+
+The audit did not previously enumerate "permission seam" as a separate channel. Should be added in a future revision: permission asks are a **bidirectional channel between build-session tool and orchestrator's `engine/auto-permission.ts`** (see audit §3 multi-subscriber drift on `permission.asked`). When the orchestrator's auto-permission policy doesn't auto-approve a project-root path, the build agent stalls until timeout.
+
+### 11.3 New finding: same session emits two contradictory terminal events
+
+Lines 19182-19183 in the bench log:
+
+```
+[overlay-benchmark] session.terminal session=ses_221e2a0daffd... reason=aborted
+[overlay-benchmark] session.terminal session=ses_221e2a0daffd... reason=completed
+```
+
+Same session ID, two terminal reasons in succession. The overlay-benchmark observer sees `aborted` (from the cancel path) and then `completed` (from the agent-runner's natural finally block). For a downstream consumer (overlay UI card render, or any subscriber that treats `reason=completed` as "successful terminal"), this is genuinely contradictory.
+
+This is **not** a synthesised-message rule 15 violation — both events are real bus emissions from the session lifecycle. It is a **lifecycle-event under-specification**: the session has two natural terminal hooks (cancel vs natural finish) and both fire in cancel-during-finish race conditions. Suggested fix scope (out of audit): collapse to one terminal event with a discriminated `reason` union, or define a strict ordering invariant that the overlay observer can enforce.
+
+### 11.4 Confirmed: bootstrap-first gate is **late rejection**
+
+Open Question §10/2 asked whether the bootstrap-first gate is enforced upfront or as late rejection. The bench data confirms **late rejection**:
+
+- T+~720s: orchestrator dispatched `gol_*0001` (bootstrap, kind=system) — accepted (line 7228).
+- T+~723s: orchestrator dispatched `gol_*0002` (kind=system) — `bootstrap-first gate rejected non-bootstrap dispatch` (line 7456).
+- T+~733s: orchestrator dispatched `gol_*0004` (kind=feature) — same rejection (line 7860).
+
+The orchestrator's reasoning at line 7223 was: `reason=第一波并行构建：项目脚手架、镜像提取和后端实现` — i.e. it intended to fan out the first wave in parallel. The gate then rejected the non-bootstrap goals individually. This is rule 13 ambiguous: the gate is not a state machine in the traditional sense, but it does encode an ordering constraint that the LLM did not anticipate. Whether this is "LLM intelligence + invariant enforcement" (acceptable) or "hidden state machine" (rule 13 violation) depends on whether the constraint was visible in the LLM's prompt.
+
+**Resolves Open Question #2** as: late rejection. **Updates §2.4** suspicion to confirmed observation.
+
+### 11.5 Bench liveness summary (~T+30min)
+
+Bench `tsk_dde13a67c001sbz6y2Qe0at8Fc` is still alive after the bootstrap failure: orchestrator session re-entered `step=7` at T+~30min, presumably to call `build` again on `gol_*0001`. Goal status flipped `failed → pending` and a new build session `ses_221d4c84dffd...` opened. This confirms the audit's §2.7 re-entry path (`startNewAttempt(goalID, ...)` with `dispatchTaskLoop` wake) is working end-to-end on this code path.
+
+---
+
 ## Appendix A — files this audit reads
 
 - `packages/opencorvus/src/orchestrator/tools.ts`
