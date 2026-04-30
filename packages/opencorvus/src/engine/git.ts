@@ -279,7 +279,18 @@ export async function ensureGitignore() {
   // HEAD. No --allow-empty: a no-op commit would lie about state.
   const isRepo = await git(["rev-parse", "--git-dir"], { cwd: dir })
   if (isRepo.exitCode !== 0) return
-  const staged = await git(["add", "--", ".gitignore"], { cwd: dir })
+  // `--force` is mandatory for goal worktrees: their cwd lives at
+  // `<project>/.opencorvus/worktrees/goal-<id>/` and the project root
+  // `.gitignore` (which the worktree shares via the parent repo) lists
+  // `.opencorvus`. Without `-f`, `git add .gitignore` from inside the
+  // worktree fails with "The following paths are ignored by one of your
+  // .gitignore files: .opencorvus" and publish_delivery aborts at goal
+  // workspace terminal cleanup (r11 bench evidence
+  // `_session-r11-glm5cn.out` line 91025, 2026-04-30T19:34:37). The
+  // semantic match: we explicitly want to seed/refresh `.gitignore`
+  // regardless of any parent-scope ignore rule that captures the worktree
+  // dir — that's exactly what `--force` is for.
+  const staged = await git(["add", "--force", "--", ".gitignore"], { cwd: dir })
   if (staged.exitCode !== 0) {
     const detail = staged.stderr.toString().trim() || staged.stdout.toString().trim() || "git add failed"
     throw new Error(`ensureGitignore: stage .gitignore failed: ${detail}`)
