@@ -394,6 +394,53 @@ Reverse implication of §11.6: if the retry attempt does not create a new `goal_
 
 ---
 
+## 12. Stream-abort signal lost between LLMActivity gate and processor for-await (2026-04-30)
+
+**Symptom**. Three consecutive overlay benchmark runs against `alibaba-coding-plan-cn/glm-5` (`_session-r5-glm5cn-postwedgefix.out`, `_session-r6-glm5cn.out`, `_session-r7-glm5cn-cleanbench.out`) silently parked on a sub-agent stream for 14–25+ min with no further log output and no abort. Concrete evidence from `_session-r6-glm5cn.out`:
+
+- Architect `step=5` issued an LLM stream call at `2026-04-30T15:32:06`.
+- The architect emitted no further `service=session.processor process` lines, no `service=llm` lines, no abort.
+- `service=engine-runtime` / `reviveZombieTasks: task is active...` never fired (orchestrator-loop is mid-`await ArchitectAgent.coordinate(...)`, so `isLoopInFlight=true` blocks revive).
+- The `withLLMActivity` idle gate is configured for **180 000 ms** (`engine/config.ts:225` `session_llm_idle_ms`); 25+ min ≫ 180 s, so something is suppressing the gate's abort.
+
+**Root cause** — channel mismatch between the LLM-activity gate and the consumer loop:
+
+- `util/stream-activity.ts:80-104` defines `abortableIterable<T>(source, signal)` that races every `iter.next()` against an abort listener. The docstring states explicitly: *"Bun fetch + AI SDK readers exhibit this: AbortController.abort() closes the connection but does not reject an already-pending reader.read() promise, so the consumer's `for await` hangs forever."*
+- `llm/api.ts:78-85` exports a wrapped `streamText` whose result is a `Proxy` that intercepts `fullStream` access and returns `abortableIterable(target.fullStream, composed)`. This is the **single source** for an abort-honouring stream.
+- **`session/llm.ts:4` imports `streamText` from the raw `"ai"` package, not from `@/llm/api`.** Line 201 calls the raw streamText. The result is a plain `StreamTextResult` whose `.fullStream` is the upstream Bun-fetch-backed iterable that ignores signal.abort during a pending `reader.read()`.
+- `session/processor.ts:78-91` runs `for await (const value of stream.fullStream) { run.bump(...) }` inside `withLLMActivity`. When `withStreamActivity` flips the abort signal at `idleMs`, the consumer never sees it because `fullStream` is the unwrapped variant.
+
+**Rule 8 violation framing.** Two implementations of "streaming text from the LLM":
+
+1. `@/llm/api.streamText` — wrapped, abort-honouring (Proxy + `abortableIterable`).
+2. raw `"ai"`.`streamText` — bypassed, abort-blind.
+
+Both are imported by name `streamText`. The wrapper exists *because* the raw form has the parking bug. `session/llm.ts` is the only consumer that imports the raw form. The wrapper either has to be the only path or the bypass must go.
+
+**Information loss framing (audit §5).** This is L8: the abort signal is the channel from `withLLMActivity` to the for-await consumer. The signal fires correctly; the consumer's iterator has no listener for it because `abortableIterable` was never composed in. End result: a 25 min "alive" window during which no agent makes progress, no error surfaces, and `reviveZombieTasks` cannot help (the orchestrator-loop is still in-flight from its perspective).
+
+**Coordination framing (audit §6).** `engine-runtime` / `reviveZombieTasks` was supposed to be the safety net for stalls (specs comment: *"the missing wiring"*). The wedge fix landed in commit `83a619c0c` widened revive to fire even with stream-error artifacts. But revive is gated on `!isLoopInFlight(task.id)` — a parked sub-agent stream keeps the orchestrator-loop in flight, so revive is muted. Two layers of safety net both bypassed by the same root cause: the abort signal not propagating into the for-await.
+
+**Fix.**
+
+1. `session/llm.ts` imports `streamText` from `@/llm/api` instead of raw `"ai"`. Pass `timeoutMs: false` to disable the wrapper's 5 s default soft timeout (the existing `input.abort` is the only timeout we want — the `withLLMActivity` idle gate computes it).
+2. Drop `streamText` from the `"ai"` import line — keep type imports only.
+3. Regression test asserts `session/llm.ts` does not import `streamText` from `"ai"` (source-level guard, like the existing zombie-revive test).
+
+**Why the regression test is source-level**, not a runtime test: reproducing a stuck Bun `reader.read()` in unit tests requires a mocked SSE source that emits keepalive comments without ever yielding a parsed value. The unit test would test the mock more than the protection. The source-level grep is enough to ensure the wrapper stays the only path.
+
+**Other for-await `fullStream` sites in the repo** (full grep `for await.*\.fullStream` over `packages/opencorvus/src`):
+
+- `agent/agent.ts:536` — uses `result` from a different streamText wrapper (call site needs cross-check; sub-agent path).
+- `task-api/index.ts:1398` — task-api streaming endpoint, separate path.
+- `session/processor.ts:89` — covered by this fix once `session/llm.ts` switches.
+- `server/routes/provider.ts:264` — provider auth probe.
+- `mirror/tools/webpage-vision-judge.ts:235`, `mirror/image/extract.ts:166` — mirror tools.
+
+The sub-agent path through `agent/agent.ts:536` is the next audit item — `ArchitectAgent.coordinate` likely surfaces through that file. Out of scope for this finding's fix; flagged as §12-followup.
+
+---
+
 ## Appendix A — files this audit reads
 
 - `packages/opencorvus/src/orchestrator/tools.ts`

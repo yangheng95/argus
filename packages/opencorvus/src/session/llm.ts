@@ -1,7 +1,15 @@
 import { Provider } from "@/provider/provider"
 import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
-import { streamText, type ModelMessage, type StreamTextResult, type Tool, type ToolSet } from "ai"
+import type { ModelMessage, StreamTextResult, Tool, ToolSet } from "ai"
+// Use the wrapped streamText from @/llm/api — its Proxy returns
+// `abortableIterable(fullStream, composed)`, which is the only thing that
+// rescues a Bun-fetch-backed reader.read() from parking forever when the
+// LLM-activity gate fires its abort signal. Importing the raw "ai" form
+// bypassed the Proxy and silently parked sub-agents (architect, requirements,
+// build) for 14–25 min during alibaba-coding-plan-cn streams (audit §12,
+// 2026-04-30 r5/r6/r7 bench evidence). Rule 8 — single source.
+import { streamText } from "@/llm/api"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { Config } from "@/config/config"
@@ -237,6 +245,11 @@ export namespace LLM {
       toolChoice,
       maxOutputTokens,
       abortSignal: input.abort,
+      // Disable the wrapper's 5 s default soft timeout — the LLM-activity
+      // gate (`withLLMActivity` in session/processor.ts) is the canonical
+      // idle/timeout authority and composes its own abort signal into
+      // `input.abort`. A second timeout here would race it.
+      timeoutMs: false,
       headers: requestHeaders,
       maxRetries: input.retries ?? 0,
       messages: requestMessages,
