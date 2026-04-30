@@ -77,6 +77,41 @@ export type HeartbeatKind =
   | "executor-diff"
   | "manual"
 
+/**
+ * Map AI SDK fullStream chunk types to the canonical HeartbeatKind. Returns
+ * null for chunks that should NOT count as upstream liveness — currently
+ * none, since `start` already arrives after first byte and downstream
+ * heartbeats follow. The `default` branch returns "manual" so unknown chunk
+ * types still refresh idle without misclassification.
+ *
+ * Provider adapters MUST call run.bump() exactly once per real upstream
+ * event with the kind returned here. Missing kinds is the most common
+ * cause of false-positive idle trips.
+ */
+export function chunkHeartbeatKind(chunk: { type?: string }): HeartbeatKind {
+  switch (chunk?.type) {
+    case "start": return "manual"
+    case "start-step": return "step-start"
+    case "finish-step": return "step-finish"
+    case "finish": return "manual"
+    case "text-start":
+    case "text-delta":
+    case "text-end":
+      return "text-delta"
+    case "reasoning-start":
+    case "reasoning-delta":
+    case "reasoning-end":
+      return "reasoning-delta"
+    case "tool-input-start": return "tool-input-start"
+    case "tool-input-delta": return "tool-input-delta"
+    case "tool-input-end": return "tool-input-end"
+    case "tool-call": return "tool-call"
+    case "tool-result": return "tool-result"
+    case "tool-error": return "tool-error"
+    default: return "manual"
+  }
+}
+
 /** Any of these counts as "first byte received" for gate handoff purposes. */
 const HEARTBEAT_FIRST_BYTE: ReadonlySet<HeartbeatKind> = new Set([
   "first-byte",
