@@ -1198,7 +1198,7 @@ export namespace SessionLoop {
       }
     }
 
-    const turnToolChoice = structuredOutputToolChoice(format) ?? terminalToolChoice(terminalToolContract, tools)
+    const turnToolChoice = structuredOutputToolChoice(format) ?? terminalToolChoice(terminalToolContract, tools, input.model)
 
     const result = await processor.process({
       user: input.lastUser,
@@ -1291,10 +1291,20 @@ export namespace SessionLoop {
   export function terminalToolChoice(
     contract: TerminalToolContract | undefined,
     tools: Record<string, AITool>,
+    model?: { capabilities?: { reasoning?: boolean } },
   ): "required" | { type: "tool"; toolName: string } | undefined {
     if (!contract) return undefined
     if (!(contract.toolName in tools)) return undefined
     if (contract.isSatisfied()) return undefined
+    // Reasoning ("thinking") models reject both "required" and the
+    // {type:"tool",toolName} object form (e.g. alibaba-coding-plan-cn/glm-5
+    // returns HTTP 400 "tool_choice parameter does not support being set to
+    // required or object in thinking mode" — captured in r8 bench evidence
+    // 2026-04-30T16:00:13). The terminal-tool *scoping* (terminalToolScopedTools)
+    // still narrows the tool set to just the terminal tool, so "auto" picks
+    // it deterministically. Soft-pin via prompt + scoped tool set is the
+    // single path that works on both reasoning and non-reasoning models.
+    if (model?.capabilities?.reasoning) return undefined
     if (contract.shouldExposeOnlyTerminalTool()) return { type: "tool", toolName: contract.toolName }
     return "required"
   }
