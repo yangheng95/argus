@@ -121,6 +121,21 @@ export function architectValidationIssues(collector: ArchitectCollector): string
   const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
   const requiredTraceability = new Map<string, Set<string>>()
   for (const g of collector.goals) {
+    if (
+      g.kind !== "verification" &&
+      g.kind !== "system" &&
+      g.exports.length === 0
+    ) {
+      issues.push(`Goal ${g.id}: ${g.kind} goal must declare at least one export`)
+    }
+    if (g.depends_on.length > 0 && g.imports.length === 0) {
+      issues.push(`Goal ${g.id}: depends_on is set but imports is empty`)
+    }
+    for (const spec of g.acceptance_specs) {
+      if (spec.goal_id !== g.id) {
+        issues.push(`Goal ${g.id}: acceptance spec ${spec.id} has mismatched goal_id "${spec.goal_id}"`)
+      }
+    }
     for (const requirementID of g.requirement_ids) {
       if (!requiredTraceability.has(requirementID)) {
         requiredTraceability.set(requirementID, new Set())
@@ -160,6 +175,45 @@ export function architectValidationIssues(collector: ArchitectCollector): string
       issues.push(
         `Goal ${g.id}: missing mandatory BLOCKING metrics: ${missingBlocking.join(", ")} - register each via register_goal_metric_spec with gate_class="blocking"`,
       )
+    }
+  }
+
+  const verificationGoals = collector.goals.filter((g) => g.kind === "verification")
+  if (verificationGoals.length === 0) {
+    issues.push("Missing dedicated verification goal - register exactly one kind=\"verification\" test goal")
+  } else if (verificationGoals.length > 1) {
+    issues.push(`Exactly one dedicated verification goal is required; found ${verificationGoals.length}`)
+  } else {
+    const verificationGoal = verificationGoals[0]
+    const missingFeatureDeps = collector.goals
+      .filter((g) => g.kind === "feature")
+      .map((g) => g.id)
+      .filter((id) => !verificationGoal.depends_on.includes(id))
+    if (missingFeatureDeps.length > 0) {
+      issues.push(
+        `Verification goal ${verificationGoal.id}: missing depends_on feature goals ${missingFeatureDeps.join(", ")}`,
+      )
+    }
+    const invalidOwnedPaths = verificationGoal.owned_paths.filter(
+      (p) => !/^tests[\\/](integration|e2e|regression)[\\/]/.test(p),
+    )
+    if (invalidOwnedPaths.length > 0) {
+      issues.push(
+        `Verification goal ${verificationGoal.id}: owned_paths must stay under tests/integration, tests/e2e, or tests/regression: ${invalidOwnedPaths.join(", ")}`,
+      )
+    }
+  }
+
+  for (const seed of collector.challenge_seeds) {
+    if (seed.scope === "goal" && !knownGoalIDs.has(seed.target_ref)) {
+      issues.push(`Challenge seed ${seed.id}: target goal "${seed.target_ref}" is not registered`)
+    }
+  }
+
+  for (const contract of collector.contracts) {
+    const unknownGoalIDs = contract.goalIDs.filter((goalID) => !knownGoalIDs.has(goalID))
+    if (unknownGoalIDs.length > 0) {
+      issues.push(`Contract "${contract.title}": references unknown goals ${unknownGoalIDs.join(", ")}`)
     }
   }
 

@@ -14,11 +14,29 @@ function freshWorkDir() {
   return mkdtempSync(path.join(tmpdir(), "opencorvus-architect-tools-"))
 }
 
+function acceptance(goalID: string, requirementID: string) {
+  return {
+    id: `acc-${goalID}`,
+    source_requirement_id: requirementID,
+    goal_id: goalID,
+    title: `${goalID} passes verification`,
+    severity: "essential" as const,
+    scorers: [
+      {
+        type: "heuristic" as const,
+        name: `${goalID}-tests`,
+        spec: { kind: "shell" as const, cmd: "bun test" },
+        expect: { exit_code: 0 },
+      },
+    ],
+  }
+}
+
 const FEATURE_GOAL = {
   id: "goal_feature",
   title: "Feature",
   objective: "Implement the requested change with focused verification.",
-  acceptance_specs: [],
+  acceptance_specs: [acceptance("goal_feature", "REQ-1")],
   owned_paths: ["src/index.ts"],
   depends_on: [],
   exports: ["Router"],
@@ -32,8 +50,8 @@ const VERIFY_GOAL = {
   id: "goal_verify",
   title: "Verification",
   objective: "Run integration tests over the feature goal.",
-  acceptance_specs: [],
-  owned_paths: ["tests/router.test.ts"],
+  acceptance_specs: [acceptance("goal_verify", "REQ-2")],
+  owned_paths: ["tests/integration/router.test.ts"],
   depends_on: ["goal_feature"],
   exports: [],
   imports: ["Router from goal_feature"],
@@ -224,32 +242,42 @@ test("remove_goal followed by submit_architect finalizes — no orphan-metric de
   const { tools } = kit
 
   await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
   await tools.register_goal.execute!(
     {
-      id: "goal_tests",
-      title: "Tests",
+      id: "goal_old",
+      title: "Old redundant feature",
       objective: "Wrong-shaped goal that the architect later removes.",
-      acceptance_specs: [],
-      owned_paths: ["tests/old.ts"],
-      depends_on: ["goal_feature"],
-      exports: [],
+      acceptance_specs: [acceptance("goal_old", "REQ-3")],
+      owned_paths: ["src/old.ts"],
+      depends_on: [],
+      exports: ["OldRouter"],
       imports: [],
       priority: "advisory",
-      kind: "verification",
-      requirement_ids: [],
+      kind: "feature",
+      requirement_ids: ["REQ-3"],
     } as any,
     {} as any,
   )
   await fillMandatoryBlockingMetrics(tools, "goal_feature")
+  await fillMandatoryBlockingMetrics(tools, "goal_verify")
   for (const name of MANDATORY_GOAL_BLOCKING_METRICS) {
     await tools.register_goal_metric_spec.execute!(
-      metric("goal_tests", name, "diagnostic") as any,
+      metric("goal_old", name, "diagnostic") as any,
       {} as any,
     )
   }
   await fillMandatoryGlobalBlockingMetrics(tools)
   await tools.register_traceability.execute!(
-    { requirement_id: "REQ-1", goal_ids: ["goal_feature"] } as any,
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature", "goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-3", goal_ids: ["goal_old"] } as any,
     {} as any,
   )
   await tools.register_contract.execute!(
@@ -257,23 +285,23 @@ test("remove_goal followed by submit_architect finalizes — no orphan-metric de
       category: "interface_contract",
       title: "Router",
       spec: "```ts\nexport type Router = unknown\n```",
-      goal_ids: ["goal_feature", "goal_tests"],
+      goal_ids: ["goal_feature", "goal_verify", "goal_old"],
     } as any,
     {} as any,
   )
 
   await tools.remove_goal.execute!(
-    { id: "goal_tests", reason: "Redundant placeholder; verification covered elsewhere." } as any,
+    { id: "goal_old", reason: "Redundant placeholder; verification covered elsewhere." } as any,
     {} as any,
   )
 
   const submit = await tools.submit_architect.execute!(
-    { summary: "Single feature goal with cascaded cleanup of placeholder verification goal." } as any,
+    { summary: "Feature and verification goals with cascaded cleanup of placeholder goal." } as any,
     {} as any,
   )
   expect(submit).toMatch(/^PASS: Architect output finalized\./)
   expect(kit.getCollector().finalized).toBe(true)
-  expect(kit.getCollector().goal_metric_specs.every((m) => m.goal_id === "goal_feature")).toBe(true)
+  expect(kit.getCollector().goal_metric_specs.every((m) => m.goal_id !== "goal_old")).toBe(true)
 })
 
 test("architect readiness remains identical to submit_architect validation precondition", async () => {
@@ -290,8 +318,19 @@ test("architect readiness remains identical to submit_architect validation preco
   const complete = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
   const { tools } = complete
   await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
   await fillMandatoryBlockingMetrics(tools, "goal_feature")
+  await fillMandatoryBlockingMetrics(tools, "goal_verify")
   await fillMandatoryGlobalBlockingMetrics(tools)
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "Router",
+      spec: "```ts\nexport type Router = unknown\n```",
+      goal_ids: ["goal_feature", "goal_verify"],
+    } as any,
+    {} as any,
+  )
 
   readinessMatchesSubmitPrecondition(complete.getCollector())
   expect(isArchitectReadyToFinalize(complete.getCollector())).toBe(false)
@@ -302,7 +341,11 @@ test("architect readiness remains identical to submit_architect validation preco
   expect(missingTraceability).toContain("Missing traceability for REQ-1")
 
   await tools.register_traceability.execute!(
-    { requirement_id: "REQ-1", goal_ids: ["goal_feature"] } as any,
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature", "goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
     {} as any,
   )
   readinessMatchesSubmitPrecondition(complete.getCollector())
@@ -313,4 +356,89 @@ test("architect readiness remains identical to submit_architect validation preco
   )
   expect(accepted).toMatch(/^PASS: Architect output finalized\./)
   expect(complete.getCollector().finalized).toBe(true)
+})
+
+test("architect readiness stays false until every prompt-level finalize invariant is complete", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const { tools } = kit
+
+  await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await fillMandatoryBlockingMetrics(tools, "goal_feature")
+  await fillMandatoryGlobalBlockingMetrics(tools)
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature"] } as any,
+    {} as any,
+  )
+  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(false)
+  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain("Missing dedicated verification goal")
+
+  await tools.register_goal.execute!(
+    {
+      ...VERIFY_GOAL,
+      depends_on: [],
+      imports: [],
+      owned_paths: ["tests/unit/router.test.ts"],
+    } as any,
+    {} as any,
+  )
+  await fillMandatoryBlockingMetrics(tools, "goal_verify")
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
+    {} as any,
+  )
+  const invalidVerificationIssues = architectValidationIssues(kit.getCollector()).join("\n")
+  expect(invalidVerificationIssues).toContain("missing depends_on feature goals goal_feature")
+  expect(invalidVerificationIssues).toContain("owned_paths must stay under tests/integration")
+
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(false)
+  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain("No interface_contract or shared_type contract")
+
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "Router",
+      spec: "```ts\nexport type Router = unknown\n```",
+      goal_ids: ["goal_feature", "goal_verify"],
+    } as any,
+    {} as any,
+  )
+  readinessMatchesSubmitPrecondition(kit.getCollector())
+  expect(isArchitectReadyToFinalize(kit.getCollector())).toBe(true)
+})
+
+test("architect validator rejects every fixable registration inconsistency before terminal scoping", () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const collector = kit.getCollector()
+  collector.goals.push({
+    ...FEATURE_GOAL,
+    exports: [],
+    acceptance_specs: [{ ...acceptance("goal_feature", "REQ-1"), goal_id: "wrong_goal" }],
+  })
+  collector.goals.push({
+    ...VERIFY_GOAL,
+    imports: [],
+  })
+  collector.challenge_seeds.push({
+    id: "seed_missing",
+    scope: "goal",
+    target_ref: "goal_missing",
+    claim: "Missing goal target should not finalize.",
+    rationale: "A dangling seed target would be impossible for Prosecutor to resolve.",
+    priority_hint: "high",
+  })
+  collector.contracts.push({
+    category: "interface_contract",
+    title: "Missing goal contract",
+    spec: "```ts\nexport type Missing = unknown\n```",
+    goalIDs: ["goal_missing"],
+  })
+
+  const issues = architectValidationIssues(collector).join("\n")
+  expect(issues).toContain("feature goal must declare at least one export")
+  expect(issues).toContain("acceptance spec acc-goal_feature has mismatched goal_id")
+  expect(issues).toContain("Goal goal_verify: depends_on is set but imports is empty")
+  expect(issues).toContain("Challenge seed seed_missing: target goal \"goal_missing\" is not registered")
+  expect(issues).toContain("Contract \"Missing goal contract\": references unknown goals goal_missing")
+  expect(isArchitectReadyToFinalize(collector)).toBe(false)
 })

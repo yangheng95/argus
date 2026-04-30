@@ -42,6 +42,38 @@ function registerBaselineGoal(tools: any) {
   })
 }
 
+function registerBaselineVerificationGoal(tools: any) {
+  return exec(tools.register_goal, {
+    id: "goal_tests",
+    title: "Integration regression tests",
+    objective:
+      "Write and run integration regression tests that verify the API goal through the declared contract.",
+    acceptance_specs: [
+      {
+        id: "acc-tests-suite",
+        source_requirement_id: "REQ-1",
+        goal_id: "goal_tests",
+        title: "Integration suite passes",
+        severity: "essential",
+        scorers: [
+          {
+            type: "heuristic",
+            name: "integration",
+            spec: { kind: "shell", cmd: "bun test tests/integration/" },
+          },
+        ],
+      },
+    ],
+    owned_paths: ["tests/integration/api.test.ts"],
+    depends_on: ["goal_api"],
+    exports: [],
+    imports: ["getStocks(): Stock[] from goal_api"],
+    priority: "blocking",
+    kind: "verification",
+    requirement_ids: ["REQ-1"],
+  })
+}
+
 async function registerMandatoryPerGoalMetrics(tools: any, goalID: string) {
   for (const name of MANDATORY_GOAL_BLOCKING_METRICS) {
     await exec(tools.register_goal_metric_spec, {
@@ -259,19 +291,27 @@ describe("submit_architect — mandatory blocking coverage", () => {
   test("PASSES when every mandatory blocking metric is present", async () => {
     const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
+    await registerBaselineVerificationGoal(kit.tools)
     await exec(kit.tools.register_traceability, {
       requirement_id: "REQ-1",
-      goal_ids: ["goal_api"],
+      goal_ids: ["goal_api", "goal_tests"],
     })
     await registerMandatoryPerGoalMetrics(kit.tools, "goal_api")
+    await registerMandatoryPerGoalMetrics(kit.tools, "goal_tests")
     await registerMandatoryGlobalMetrics(kit.tools)
+    await exec(kit.tools.register_contract, {
+      category: "interface_contract",
+      title: "API contract",
+      spec: "```ts\nexport function getStocks(): Stock[]\n```",
+      goal_ids: ["goal_api", "goal_tests"],
+    })
     const msg = await exec(kit.tools.submit_architect, {
       summary: "Test task decomposition",
     })
     expect(msg).toContain("PASS")
     expect(kit.getCollector().finalized).toBe(true)
     const c = kit.getCollector()
-    expect(c.goal_metric_specs).toHaveLength(4)
+    expect(c.goal_metric_specs).toHaveLength(8)
     expect(c.global_metric_specs).toHaveLength(4)
   })
 })
