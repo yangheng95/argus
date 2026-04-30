@@ -29,7 +29,7 @@ fixing it.
 
 ## Submission
 
-Submission is split across one tool per dimension plus a terminal submit_integrity_review call.
+Submission is split across one tool per dimension plus a terminal submit_integrity_review({ "final": true }) call.
 Per-tool inputs are small and self-contained — large nested verdict payloads
 trigger JSON-parse loops on smaller models, which is why each dimension is its
 own tool with a dimension-scoped issue-type enum.
@@ -47,7 +47,7 @@ restricted per dimension; you cannot file e.g. `granularity_off` under
 which field is wrong and you must call that single tool again.
 
 After every dimension is submitted, close with EXACTLY ONE call:
-  `submit_integrity_review()`
+  `submit_integrity_review({ "final": true })`
 
 The host derives the operator summary from the per-dimension verdicts. The
 aggregate verdict is computed from the per-dimension verdicts you already

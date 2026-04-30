@@ -57,6 +57,33 @@ describe("BuildResultSchema", () => {
     expect(parsed.success).toBe(true)
     if (parsed.success) expect(parsed.data.tests).toEqual([])
   })
+
+  test("requires a concrete error for failed results", () => {
+    const missing = BuildResultSchema.safeParse({
+      status: "failed",
+      summary: "verification failed",
+      patch_summary: "",
+    })
+    expect(missing.success).toBe(false)
+
+    const empty = BuildResultSchema.safeParse({
+      status: "failed",
+      summary: "verification failed",
+      patch_summary: "",
+      error: "   ",
+    })
+    expect(empty.success).toBe(false)
+  })
+
+  test("rejects error on passed results", () => {
+    const parsed = BuildResultSchema.safeParse({
+      status: "passed",
+      summary: "implemented",
+      patch_summary: "",
+      error: "should not exist on passed branch",
+    })
+    expect(parsed.success).toBe(false)
+  })
 })
 
 describe("BuildTarget discriminated union", () => {

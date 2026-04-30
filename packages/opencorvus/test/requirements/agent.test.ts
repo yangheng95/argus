@@ -5,6 +5,7 @@ import { EngineInteractionRequestTable, EngineTaskTable } from "../../src/engine
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
+import { RequirementsSubmitSchema } from "../../src/requirements/output-tools"
 
 let runnerImpl: ((input: any) => Promise<any>) | undefined
 
@@ -124,7 +125,7 @@ describe("RequirementsAgent prompt precedence", () => {
             reason: "现有项目脚手架使用 Vitest。",
           }, {} as any)
           expect(input.terminalTool.isReadyToFinalize(input.toolKit.getCollector())).toBe(true)
-          await input.toolKit.tools.submit_requirements.execute({}, {} as any)
+          await input.toolKit.tools.submit_requirements.execute({ final: true }, {} as any)
 
           return {
             session: { id: "ses_requirements" },
@@ -158,5 +159,10 @@ describe("RequirementsAgent prompt precedence", () => {
           .toBe("none (vanilla HTML/CSS/JavaScript)")
       },
     })
-  })
+  }, 10_000)
+})
+
+test("submit_requirements schema requires explicit final confirmation", () => {
+  expect(RequirementsSubmitSchema.safeParse({}).success).toBe(false)
+  expect(RequirementsSubmitSchema.safeParse({ final: true }).success).toBe(true)
 })

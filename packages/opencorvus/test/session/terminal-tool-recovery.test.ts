@@ -62,4 +62,29 @@ describe("SessionLoop terminal tool recovery", () => {
 
     expect(SessionLoop.terminalToolChoice(contract, { register_goal: {} as any })).toBeUndefined()
   })
+
+  test("narrows tool surface to the terminal tool when collector facts are ready", () => {
+    const contract = {
+      toolName: "submit_architect",
+      isSatisfied: () => false,
+      isReadyToFinalize: () => true,
+    }
+    const tools = { submit_architect: {} as any, register_goal: {} as any }
+
+    expect(Object.keys(SessionLoop.terminalToolScopedTools(contract, tools))).toEqual(["submit_architect"])
+  })
+
+  test("keeps work tools when terminal facts are not ready", () => {
+    const contract = {
+      toolName: "report_build_result",
+      isSatisfied: () => false,
+      isReadyToFinalize: () => false,
+    }
+    const tools = { report_build_result: {} as any, merge_back: {} as any }
+
+    expect(Object.keys(SessionLoop.terminalToolScopedTools(contract, tools)).sort()).toEqual([
+      "merge_back",
+      "report_build_result",
+    ])
+  })
 })

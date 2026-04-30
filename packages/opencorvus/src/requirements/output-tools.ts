@@ -34,6 +34,10 @@ export interface RegisteredDecision {
   reason: string
 }
 
+export const RequirementsSubmitSchema = z.object({
+  final: z.literal(true).describe("Explicit confirmation that requirement and decision registration is complete."),
+})
+
 function emptyCollector(): RequirementsCollector {
   return {
     requirements: [],
@@ -84,8 +88,8 @@ export function createRequirementsOutputTools() {
     submit_requirements: tool({
       description:
         "Finalize requirements after all register_requirement and register_decision calls are complete. " +
-        "Call this with no arguments.",
-      inputSchema: z.object({}),
+        "Call this with final=true.",
+      inputSchema: RequirementsSubmitSchema,
       execute: async () => {
         if (collector.requirements.length === 0) {
           return "Error: no requirements registered. Call register_requirement at least once before submit_requirements."

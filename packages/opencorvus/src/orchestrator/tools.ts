@@ -4097,7 +4097,7 @@ export function createOrchestratorTools(input: {
                   status: result.status === "passed" ? "completed" : "failed",
                   commitRef: result.commit_ref,
                   workspaceDir: worktreeDir,
-                  error: result.error,
+                  error: result.status === "failed" ? result.error : undefined,
                   diffs,
                   summary: result.summary,
                 })
@@ -4164,7 +4164,7 @@ export function createOrchestratorTools(input: {
             ? result.tests.map((t) => `  - ${t.passed ? "✓" : "✗"} ${t.name}${t.detail ? `: ${t.detail}` : ""}`).join("\n")
             : "  (none reported)"
           const commitLine = result.commit_ref ? `- commit_ref: ${result.commit_ref}` : "- commit_ref: (none)"
-          const errorLine = result.error ? `\n- error: ${result.error}` : ""
+          const errorLine = result.status === "failed" ? `\n- error: ${result.error}` : ""
           const worktreeLine = worktreeDir ? `\n- worktreeDir: ${worktreeDir}` : ""
           return (
             `Build agent finished (status=${result.status}, session ${sessionID}).\n\n` +

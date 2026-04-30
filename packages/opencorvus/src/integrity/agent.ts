@@ -26,7 +26,7 @@
  *   • Diagnostic-only dimensions (see registry: hallucination) get a slimmer
  *     schema with no corrections / missing_goals fields — the schema itself
  *     prevents diagnostic dimensions from mutating goals.
- *   • The LLM closes with `submit_integrity_review()`. The runtime accepts
+ *   • The LLM closes with `submit_integrity_review({ final: true })`. The runtime accepts
  *     the run only when every dimension has been submitted and the terminal
  *     review tool has validated the collector. Aggregate
  *     verdict is the worst per-dimension verdict (computed here, not by the
@@ -55,6 +55,7 @@ import {
   type IntegrityDimension,
   type IntegrityIssueType,
 } from "./dimensions"
+import { IntegritySubmitSchema } from "./submit-schema"
 
 const log = Log.create({ service: "integrity-review" })
 
@@ -363,8 +364,8 @@ export async function reviewIntegrity(input: {
     return tool({
       description:
         "Finalize integrity review after every submit_<dimension_id>_verdict tool has been called. " +
-        "Call this with no arguments.",
-      inputSchema: z.object({}),
+        "Call this with final=true.",
+      inputSchema: IntegritySubmitSchema,
       execute: async () => {
         const missing = INTEGRITY_DIMENSIONS
           .filter((d) => !collector.dimensions.has(d.id))

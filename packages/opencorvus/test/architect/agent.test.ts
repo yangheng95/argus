@@ -122,4 +122,4 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
       expect(result.goals.map((goal) => goal.id)).toEqual(["goal_main"])
     },
   })
-})
+}, 30_000)

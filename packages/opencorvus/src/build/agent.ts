@@ -364,45 +364,26 @@ export namespace BuildAgent {
           description:
             "Finalize the build with status='passed' after implementation, verification, commit, and merge_back have all succeeded, " +
             "or status='failed' with a concrete blocker when the build cannot be completed.",
-          inputSchema: z.object({
-            status: z.enum(["passed", "failed"]).describe("passed after merge_back succeeded, failed for a concrete blocker."),
-            summary: z.string().min(1).describe("One-line plain-prose description of what changed or failed."),
-            error: z.string().optional().describe("Concrete failure reason when status='failed'."),
-            patch_summary: z.string().optional().describe("Short bullet list of file-level changes."),
-            tests: z.array(z.object({
-              name: z.string().min(1),
-              passed: z.boolean(),
-              detail: z.string().optional(),
-            })).default([]),
-          }),
-          execute: async ({ status, summary, error, patch_summary, tests }) => {
-            if (status === "passed" && ownsWorktree && worktreeBranch && !mergedHead) {
+          inputSchema: BuildResultSchema,
+          execute: async (result) => {
+            if (result.status === "passed" && ownsWorktree && worktreeBranch && !mergedHead) {
               buildCollector.blockedBeforeMerge = true
               return (
                 "Error: cannot report status='passed' before merge_back succeeds. " +
                 "Commit the fix, call merge_back, resolve any conflicts, and call report_build_result with status='passed' only after merge_back returns status='merged'."
               )
             }
-            if (status === "failed" && !error?.trim()) {
-              return "Error: report_build_result requires a concrete error when status='failed'."
-            }
-            buildCollector.result = status === "passed"
+            const commit_ref = mergedHead ? mergedHead.slice(0, 12) : result.commit_ref ?? ""
+            buildCollector.result = result.status === "passed"
               ? {
-                  status,
-                  summary,
-                  patch_summary: patch_summary ?? "",
-                  commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
-                  tests: tests ?? [],
+                  ...result,
+                  commit_ref,
                 }
               : {
-                  status,
-                  summary,
-                  patch_summary: patch_summary ?? "",
-                  commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
-                  tests: tests ?? [],
-                  error: error!.trim(),
+                  ...result,
+                  commit_ref,
                 }
-            return `PASS: build ${status} result recorded.`
+            return `PASS: build ${result.status} result recorded.`
           },
         }),
       })
@@ -660,7 +641,6 @@ export namespace BuildAgent {
         !mergedHead
       ) {
         const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
-        const priorError = parsed.data.error?.trim()
         const guardError =
           "merge_back was not called or did not succeed inside the build session; " +
           `last merge_back outcome: ${lastOutcome}; ` +
@@ -670,7 +650,7 @@ export namespace BuildAgent {
           data: {
             ...parsed.data,
             status: "failed" as const,
-            error: priorError ? `${guardError} | upstream error: ${priorError}` : guardError,
+            error: guardError,
           },
         }
       } else if (mergedHead && parsed.data.status === "passed") {

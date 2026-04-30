@@ -74,7 +74,7 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
       await (tool as any).execute(payload, {})
     }
     expect(input.terminalTool.isReadyToFinalize(input.toolKit.getCollector())).toBe(true)
-    await input.toolKit.tools.submit_integrity_review.execute({}, {})
+    await input.toolKit.tools.submit_integrity_review.execute({ final: true }, {})
     return {
       session: { id: "ses_integrity_complete" },
       streamErrors: [],
@@ -101,4 +101,10 @@ test("integrity accepts only complete dimension submissions plus submit_integrit
     "hallucination",
     "solution_quality",
   ])
+})
+
+test("submit_integrity_review schema requires explicit final confirmation", async () => {
+  const { IntegritySubmitSchema } = await import("../../src/integrity/submit-schema")
+  expect(IntegritySubmitSchema.safeParse({}).success).toBe(false)
+  expect(IntegritySubmitSchema.safeParse({ final: true }).success).toBe(true)
 })
