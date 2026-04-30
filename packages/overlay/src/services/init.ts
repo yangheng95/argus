@@ -32,7 +32,7 @@ import {
   type ToolPermissions,
 } from "../store/settings";
 import { setAppStore } from "../store/app";
-import { boardStore, setBoardStore, loadTasks } from "../store/board";
+import { boardStore, setBoardStore, loadTasks, clearTasksForMissingDirectory } from "../store/board";
 import { loadMeta } from "./meta";
 import { loadExtensions } from "./extensions";
 import { loadExecutors } from "./executor";
@@ -77,14 +77,24 @@ function syncApiConfig(): void {
  * Load all initial data that requires a live server connection.
  * Load all initial data in parallel after connection is established.
  */
-async function loadInitialData(): Promise<void> {
+async function loadInitialData(): Promise<boolean> {
   // Let-it-crash: init-time failures must not be swallowed, otherwise the
   // UI boots into an inconsistent state (e.g. directory unset but tasks loaded
   // against a stale cwd). Errors propagate to initApp's caller which decides
   // how to surface them.
   await ensureDefaultDirectory();
-  await ensureWorkspaceDirectory();
+  const directory = await ensureWorkspaceDirectory();
   syncApiConfig();
+  if (!directory) {
+    clearTasksForMissingDirectory();
+    setBoardStore({
+      board: null,
+      path: null,
+      vcs: null,
+      changes: [],
+    });
+    return false;
+  }
   await Promise.all([
     loadTasks(),
     loadMeta(),
@@ -92,6 +102,7 @@ async function loadInitialData(): Promise<void> {
     loadConfigInfo(),
     loadExecutors(),
   ]);
+  return true;
 }
 
 // ── Public API ──
@@ -166,20 +177,20 @@ export async function initApp(options: InitOptions = {}): Promise<void> {
 
   if (connected) {
  // 6. Load initial data
-    await loadInitialData();
-    await restoreInitialWorkspace();
+    const loaded = await loadInitialData();
+    if (loaded) await restoreInitialWorkspace();
     await onConnected?.();
-    startTaskListSSE();
+    if (loaded) startTaskListSSE();
   }
 
  // 7. Start reconnect loop
   stopConnectionMonitor();
   startConnectionMonitor(async () => {
     syncApiConfig();
-    await loadInitialData();
-    await restoreInitialWorkspace();
+    const loaded = await loadInitialData();
+    if (loaded) await restoreInitialWorkspace();
     await onReconnect?.();
-    startTaskListSSE();
+    if (loaded) startTaskListSSE();
   }, reconnectInterval);
 }
 

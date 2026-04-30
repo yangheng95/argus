@@ -113,12 +113,52 @@ function needsDirectory(path: string): boolean {
   return true;
 }
 
+type QueryMap = Record<string, string | number | boolean | undefined | null>;
+
+function splitPathQuery(path: string): { pathOnly: string; query: Record<string, string> | undefined } {
+  const qIdx = path.indexOf("?");
+  if (qIdx < 0) return { pathOnly: path, query: undefined };
+  const pathOnly = path.slice(0, qIdx);
+  const params = new URLSearchParams(path.slice(qIdx + 1));
+  const query: Record<string, string> = {};
+  params.forEach((v, k) => { query[k] = v });
+  return { pathOnly, query };
+}
+
+export function queryWithDirectory(path: string, query?: QueryMap): Record<string, string | number | boolean> | undefined {
+  const pathOnly = path.replace(/^\/+/, "");
+  const next: Record<string, string | number | boolean> = {};
+  if (query) {
+    for (const [k, v] of Object.entries(query)) {
+      if (v === undefined || v === null) continue;
+      next[k] = v;
+    }
+  }
+  if (needsDirectory(pathOnly) && directoryContext && next.directory === undefined) {
+    next.directory = directoryContext;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function requestTarget(path: string): { pathOnly: string; query: Record<string, string | number | boolean> | undefined } {
+  const url = relativePath(path);
+  const { pathOnly, query } = splitPathQuery(url);
+  return {
+    pathOnly,
+    query: queryWithDirectory(pathOnly, query),
+  };
+}
+
 export function apiUrl(path: string): string {
   const base = serverUrl.replace(/\/+$/, "");
   const next = path.replace(/^\/+/, "");
-  const url = new URL(`${base}/${next}`);
-  if (needsDirectory(next) && directoryContext && !url.searchParams.has("directory")) {
-    url.searchParams.set("directory", directoryContext);
+  const { pathOnly, query } = splitPathQuery(next);
+  const url = new URL(`${base}/${pathOnly}`);
+  const nextQuery = queryWithDirectory(pathOnly, query);
+  if (nextQuery) {
+    for (const [k, v] of Object.entries(nextQuery)) {
+      url.searchParams.set(k, String(v));
+    }
   }
   return url.toString();
 }
@@ -216,16 +256,7 @@ export async function apiRequest<T = unknown>(
   init?: RequestInit & { responseKind?: ResponseKind },
 ): Promise<TransportResponse<T>> {
   const transport = getHostTransport();
-  const url = relativePath(path);
-  let pathOnly = url;
-  let query: Record<string, string> | undefined;
-  const qIdx = url.indexOf("?");
-  if (qIdx >= 0) {
-    pathOnly = url.slice(0, qIdx);
-    const params = new URLSearchParams(url.slice(qIdx + 1));
-    query = {};
-    params.forEach((v, k) => { query![k] = v });
-  }
+  const { pathOnly, query } = requestTarget(path);
   return transport.request<T>({
     path: pathOnly,
     query,
@@ -292,18 +323,7 @@ function pickServerErrorDetail(body: unknown): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function apiJson(path: string, init?: RequestInit): Promise<any> {
   const transport = getHostTransport();
-  const url = relativePath(path);
-  // Split query out so the transport can serialise it consistently
-  // across Tauri and VSCode hosts.
-  let pathOnly = url;
-  let query: Record<string, string> | undefined;
-  const qIdx = url.indexOf("?");
-  if (qIdx >= 0) {
-    pathOnly = url.slice(0, qIdx);
-    const params = new URLSearchParams(url.slice(qIdx + 1));
-    query = {};
-    params.forEach((v, k) => { query![k] = v });
-  }
+  const { pathOnly, query } = requestTarget(path);
   const res = await transport.request({
     path: pathOnly,
     query,

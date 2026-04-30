@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { apiUrl, configure } from "../src/services/api";
+import { apiJson, apiRequest, apiUrl, configure } from "../src/services/api";
+import { __setHostTransportForTest } from "../src/services/host-transport";
+import type {
+  HostTransport,
+  TransportRequest,
+  TransportResponse,
+} from "../src/services/host-transport";
 
 /**
  * 2026-04-30 W2-V31 — overlay api.ts must decide per-path whether to
@@ -24,6 +30,25 @@ import { apiUrl, configure } from "../src/services/api";
 
 const SAVED_DIRECTORY = "/Users/alice/projects/demo";
 
+function fakeTransport(capture: (req: TransportRequest) => void): HostTransport {
+  return {
+    kind: "tauri",
+    async request<T>(req: TransportRequest): Promise<TransportResponse<T>> {
+      capture(req);
+      return { status: 200, ok: true, headers: {}, body: {} as T };
+    },
+    openStream() {
+      throw new Error("openStream not used");
+    },
+    async native() {
+      throw new Error("native not used");
+    },
+    subscribeUiCommand() {
+      return { unsubscribe() {} };
+    },
+  };
+}
+
 function expectInjects(path: string) {
   const url = new URL(apiUrl(path));
   expect(url.searchParams.get("directory")).toBe(SAVED_DIRECTORY);
@@ -40,6 +65,7 @@ describe("apiUrl directory injection (W2-V31)", () => {
   });
 
   afterEach(() => {
+    __setHostTransportForTest(undefined);
     configure({ directory: "" });
   });
 
@@ -100,6 +126,28 @@ describe("apiUrl directory injection (W2-V31)", () => {
       const url = new URL(apiUrl("tasks?directory=/explicit"));
       // explicit value wins; we never overwrite a caller-provided directory
       expect(url.searchParams.get("directory")).toBe("/explicit");
+    });
+  });
+
+  describe("transport request query injection", () => {
+    test("apiJson sends directory through HostTransport query", async () => {
+      let captured: TransportRequest | undefined;
+      __setHostTransportForTest(fakeTransport((req) => { captured = req }));
+
+      await apiJson("global/tasks");
+
+      expect(captured?.path).toBe("global/tasks");
+      expect(captured?.query?.directory).toBe(SAVED_DIRECTORY);
+    });
+
+    test("apiRequest preserves explicit directory through HostTransport query", async () => {
+      let captured: TransportRequest | undefined;
+      __setHostTransportForTest(fakeTransport((req) => { captured = req }));
+
+      await apiRequest("tasks?directory=/explicit");
+
+      expect(captured?.path).toBe("tasks");
+      expect(captured?.query?.directory).toBe("/explicit");
     });
   });
 });

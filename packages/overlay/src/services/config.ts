@@ -11,7 +11,7 @@ import { loadExtensions } from "./extensions";
 import { loadMeta } from "./meta";
 import { loadExecutors } from "./executor";
 import { restoreWorkspaceDirectory } from "./workspace";
-import { loadTasks } from "../store/board";
+import { loadTasks, clearTasksForMissingDirectory } from "../store/board";
 import { getHostTransport } from "./host-transport";
 
 // ── Check Config Accessors ──
@@ -205,6 +205,10 @@ export async function scaffoldProjectConfig(dir: string): Promise<void> {
  * port available for post-migration use.
  */
 export async function reloadProjectScope(options: { restoreWorkspace?: boolean } = {}): Promise<void> {
+  if (!settingsStore.directory.trim()) {
+    clearTasksForMissingDirectory();
+    return;
+  }
  // Mirrors loadInitialData's parallel reload — must load all project-scope
  // data including tasks and executors so the UI fully reflects the new directory.
   await Promise.all([
