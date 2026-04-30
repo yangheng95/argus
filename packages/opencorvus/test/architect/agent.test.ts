@@ -38,35 +38,80 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           id: "goal_main",
           title: "Main implementation",
           objective: "Implement the requested change with focused verification.",
-          acceptance_specs: [],
+          acceptance_specs: [
+            {
+              id: "acc-main",
+              source_requirement_id: "REQ-1",
+              goal_id: "goal_main",
+              title: "Main implementation tests pass",
+              severity: "essential",
+              scorers: [
+                {
+                  type: "heuristic",
+                  name: "main-tests",
+                  spec: { kind: "shell", cmd: "bun test src/" },
+                },
+              ],
+            },
+          ],
           owned_paths: ["src/index.ts"],
           depends_on: [],
-          exports: [],
+          exports: ["runMain(): void"],
           imports: [],
           priority: "blocking",
           kind: "feature",
           requirement_ids: ["REQ-1"],
         })
-        for (const name of [
-          "functional_correctness",
-          "scenario_coverage",
-          "contract_compliance",
-          "regression_count",
-        ]) {
-          collector.goal_metric_specs.push({
-            goal_id: "goal_main",
-            name,
-            description: `${name} must pass`,
-            unit: "ratio",
-            direction: "higher_better",
-            target: 1,
-            floor: 0.8,
-            weight: 1,
-            gate_class: "blocking",
-            evaluator_kind: "judge",
-            evaluator_config: {},
-            source_requirement_ids: ["REQ-1"],
-          })
+        collector.goals.push({
+          id: "goal_tests",
+          title: "Integration tests",
+          objective: "Write integration tests that exercise the main implementation contract.",
+          acceptance_specs: [
+            {
+              id: "acc-tests",
+              source_requirement_id: "REQ-1",
+              goal_id: "goal_tests",
+              title: "Integration test suite passes",
+              severity: "essential",
+              scorers: [
+                {
+                  type: "heuristic",
+                  name: "integration",
+                  spec: { kind: "shell", cmd: "bun test tests/integration/" },
+                },
+              ],
+            },
+          ],
+          owned_paths: ["tests/integration/main.test.ts"],
+          depends_on: ["goal_main"],
+          exports: [],
+          imports: ["runMain(): void from goal_main"],
+          priority: "blocking",
+          kind: "verification",
+          requirement_ids: ["REQ-1"],
+        })
+        for (const goalID of ["goal_main", "goal_tests"]) {
+          for (const name of [
+            "functional_correctness",
+            "scenario_coverage",
+            "contract_compliance",
+            "regression_count",
+          ]) {
+            collector.goal_metric_specs.push({
+              goal_id: goalID,
+              name,
+              description: `${name} must pass`,
+              unit: "ratio",
+              direction: "higher_better",
+              target: 1,
+              floor: 0.8,
+              weight: 1,
+              gate_class: "blocking",
+              evaluator_kind: "judge",
+              evaluator_config: {},
+              source_requirement_ids: ["REQ-1"],
+            })
+          }
         }
         for (const name of [
           "cross_goal_contract_consistency",
@@ -92,7 +137,13 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
         expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
         collector.traceability.push({
           requirementID: "REQ-1",
-          goalIDs: ["goal_main"],
+          goalIDs: ["goal_main", "goal_tests"],
+        })
+        collector.contracts.push({
+          category: "interface_contract",
+          title: "Main contract",
+          spec: "```ts\nexport function runMain(): void\n```",
+          goalIDs: ["goal_main", "goal_tests"],
         })
         expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(true)
         collector.finalized = true
@@ -124,7 +175,7 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
       })
 
       expect(result.sessionID).toBe("ses_architect")
-      expect(result.goals.map((goal) => goal.id)).toEqual(["goal_main"])
+      expect(result.goals.map((goal) => goal.id)).toEqual(["goal_main", "goal_tests"])
     },
   })
 }, 30_000)

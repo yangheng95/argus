@@ -326,6 +326,23 @@ because `architectValidationIssues(...)` did not require traceability coverage
 for `goal.requirement_ids`. The validator must reject any missing or incomplete
 REQ-N to goal traceability row before readiness can become true.
 
+Second follow-up from the same incident: traceability was only one missing
+precondition. Architect readiness now treats the full prompt-level finalize
+contract as the submit precondition, including:
+
+- exactly one dedicated `kind="verification"` test goal;
+- that verification goal depends on every feature goal and owns only
+  `tests/integration`, `tests/e2e`, or `tests/regression` paths;
+- non-`verification`/`system` goals declare at least one export;
+- goals with `depends_on` also declare imports;
+- acceptance specs reference their owning goal id;
+- challenge seeds and contracts do not reference unknown goals;
+- traceability covers every `goal.requirement_ids` mapping.
+
+If any of these is incomplete, `shouldExposeOnlyTerminalTool` must stay false
+so `register_goal`, `modify_goal`, `register_contract`,
+`register_challenge_seed`, and `register_traceability` remain available.
+
 ### Integrity
 
 Current rule:
@@ -546,6 +563,11 @@ declared by a goal must have a `register_traceability` row that maps back to
 that goal. Otherwise terminal-only scoping would remove the exact tool needed
 to complete the Architect contract.
 
+The same rule applies to every Architect work tool. Terminal-only scoping is
+permitted only after `submit_architect` would no longer return fixable issues
+about goals, metrics, verification-goal shape, exports/imports, challenge
+seeds, traceability, or contracts.
+
 ## Test Matrix
 
 Run these before implementation is accepted:
@@ -716,6 +738,9 @@ mechanism without first folding the existing two.
       invariant test.
 - [x] Add Architect traceability coverage to `submit_architect` validation so
       readiness cannot hide `register_traceability` before it is called.
+- [x] Fold the rest of Architect's prompt-level finalize contract into
+      `submit_architect` validation so readiness cannot hide any Architect
+      work tool before it is no longer needed.
 - [x] Keep integrity all-dimensions predicate.
 - [x] Document build passed-vs-failed scoping behavior in code comments and
       build prompt.
