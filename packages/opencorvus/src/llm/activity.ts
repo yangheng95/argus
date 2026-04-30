@@ -396,9 +396,9 @@ export async function withLLMActivity<T>(
   attemptFn: (run: LLMActivityRun) => Promise<T>,
   sink: (event: LLMActivityEvent) => void,
 ): Promise<T> {
-  // Surface bad config loudly — rule 11 (intercept user/configuration error)
-  // and the codex review point about firstByteMs < idleMs producing
-  // misclassified idle trips.
+  // Surface bad numeric config loudly. firstByteMs and idleMs intentionally
+  // have no ordering constraint: first-byte runs before the first upstream
+  // event, while idle starts only after that event.
   if (!Number.isFinite(policy.totalMs) || policy.totalMs <= 0) {
     throw new Error(`LLMActivityPolicy.totalMs must be positive (got ${policy.totalMs})`)
   }
@@ -407,12 +407,6 @@ export async function withLLMActivity<T>(
   }
   if (!Number.isFinite(policy.firstByteMs) || policy.firstByteMs <= 0) {
     throw new Error(`LLMActivityPolicy.firstByteMs must be positive (got ${policy.firstByteMs})`)
-  }
-  if (policy.firstByteMs < policy.idleMs) {
-    throw new Error(
-      `LLMActivityPolicy: firstByteMs (${policy.firstByteMs}ms) must be >= idleMs (${policy.idleMs}ms); ` +
-        `otherwise the first-byte gate would never have a chance to hand off to the idle gate.`,
-    )
   }
 
   const id = Identifier.ascending("activity")

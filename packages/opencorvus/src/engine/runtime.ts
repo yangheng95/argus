@@ -2,9 +2,10 @@ import { Config } from "@/config/config"
 import { ExecutorRegistry } from "@/executor/registry"
 
 import { Instance } from "@/project/instance"
-import { Database, eq } from "@/storage/db"
+import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import {
+  EngineArtifactTable,
   EngineInteractionRequestTable,
   EngineTaskTable,
 } from "./engine.sql"
@@ -61,9 +62,32 @@ const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT
  * no decision means no follow-up wake means the task sits "active"
  * forever with nobody driving it. The `resumeActiveTaskLoop` API was
  * defined for exactly this safety net but was never wired up; this poll
- * is the missing wiring. Rule 7: no fallback. The retry IS the design,
- * not a fallback.
+ * is the missing wiring.
+ *
+ * Explicit orchestrator stream errors are different: once the wake persisted
+ * `orchestrator-stream-error`, `recordOrchestratorStreamError` is the single
+ * source of truth and says the next wake must be external. Reviving that task
+ * automatically replays the same failed wake forever when the failure is
+ * deterministic preflight configuration.
  */
+function hasExplicitOrchestratorStreamErrorSinceTaskStart(task: TaskRow): boolean {
+  const startedAt = task.time_started ?? task.time_created
+  const row = Database.use((db) =>
+    db
+      .select({ id: EngineArtifactTable.id })
+      .from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, task.id),
+        eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
+        sql`${EngineArtifactTable.time_created} >= ${startedAt}`,
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .limit(1)
+      .get(),
+  )
+  return !!row
+}
+
 async function reviveZombieTasks(): Promise<void> {
   // Lazy imports avoid the runtime ↔ queue ↔ task-status circular deps
   // the rest of this file already navigates via dynamic `await import`.
@@ -75,6 +99,10 @@ async function reviveZombieTasks(): Promise<void> {
   for (const task of tasks) {
     if (!isTaskActive(task)) continue
     if (isLoopInFlight(task.id)) continue
+    if (hasExplicitOrchestratorStreamErrorSinceTaskStart(task)) {
+      log.info("reviveZombieTasks: explicit orchestrator stream error exists, waiting for external wake", { taskID: task.id })
+      continue
+    }
     log.info("reviveZombieTasks: task is active with no loop in flight, resuming", { taskID: task.id })
     await resumeActiveTaskLoop(task.id).catch((err) => {
       log.warn("reviveZombieTasks: resume failed", {

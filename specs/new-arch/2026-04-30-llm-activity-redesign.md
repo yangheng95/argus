@@ -70,8 +70,7 @@ export interface LLMActivityPolicy {
   idleMs: number                               // default 180_000
 
   /** 请求发出 → 第一帧之间的水位。第一帧到达后，转交 idle 计时器。
-   *  约束：firstByteMs 不应小于 idleMs（否则 idle 永远不会触发）。runner 在
-   *  入口校验，违例直接 throw（rule 11：拦截错误配置）。 */
+   *  firstByteMs 和 idleMs 覆盖不同阶段，允许 firstByteMs 小于 idleMs。 */
   firstByteMs: number                          // default 60_000
 
   /** 各 ErrorClass 的最大重试次数（首次不计）。可重试类通过这里限流；

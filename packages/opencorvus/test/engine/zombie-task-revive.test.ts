@@ -18,7 +18,9 @@ import path from "node:path"
  * never called from anywhere — the comment `the poll safety net` was
  * aspirational. EngineRuntime.monitorRuns now invokes
  * `reviveZombieTasks()` after every sync wave, sweeping active tasks
- * with no in-flight loop and resuming them.
+ * with no in-flight loop and resuming them unless the previous wake already
+ * wrote an explicit orchestrator stream-error artifact. That artifact means
+ * the next retry must be an external wake, not an automatic replay.
  *
  * This pins the wiring at the source level: any future refactor that
  * drops the call from monitorRuns or removes the helper fails CI.
@@ -36,6 +38,16 @@ describe("EngineRuntime — zombie task revive wiring", () => {
     // doesn't quietly orphan the safety net.
     expect(runtimeSrc).toMatch(/resumeActiveTaskLoop/)
     expect(runtimeSrc).toMatch(/isLoopInFlight/)
+  })
+
+  test("reviveZombieTasks does not auto-replay explicit orchestrator stream errors", async () => {
+    const runtimeSrc = await fs.readFile(
+      path.join(import.meta.dir, "..", "..", "src", "engine", "runtime.ts"),
+      "utf8",
+    )
+    expect(runtimeSrc).toMatch(/hasExplicitOrchestratorStreamErrorSinceTaskStart/)
+    expect(runtimeSrc).toMatch(/orchestrator-stream-error/)
+    expect(runtimeSrc).toMatch(/waiting for external wake/)
   })
 
   test("queue exports the helpers reviveZombieTasks depends on", async () => {
