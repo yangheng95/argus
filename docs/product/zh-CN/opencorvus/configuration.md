@@ -50,7 +50,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
   },
 
   "experimental": {
-    "unattended": true
+    "auto_question": true
   }
 }
 ```
@@ -71,9 +71,9 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 详见 [Permissions](./permissions.md)。
 
-### `experimental.unattended`
+### `experimental.auto_question`
 
-启用无人值守模式：ask 超时后自动采用配置的默认动作（`OPENCORVUS_PERMISSION_ASK_REPLY`），不阻塞。
+悬置澄清提问的细粒度开关。权限提示不由这里控制；内置 agent 权限默认 `allow`，显式 `ask` 规则会等待操作员回复，直到拒绝超时触发。
 
 ### `assistant` 子块
 

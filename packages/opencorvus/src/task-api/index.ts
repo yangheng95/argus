@@ -59,7 +59,6 @@ import { dispatchTaskLoop, reorderQueuedTasksForCwd } from "@/engine/queue"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
-import { AutoPermission } from "@/engine/auto-permission"
 import { EngineRuntime } from "@/engine/runtime"
 import { hooks, updateRun, updateTask, upsertTaskCriteria as upsertTaskCriteriaImpl } from "@/engine/state"
 import {
@@ -419,7 +418,6 @@ export namespace EngineService {
     const current = orchestratorState()
     if (!current.booted) {
       EngineInteraction.subscribe(hooks())
-      AutoPermission.subscribe()
       current.booted = true
     }
     // Monitor active runs (executor status) — no pipeline advancement.

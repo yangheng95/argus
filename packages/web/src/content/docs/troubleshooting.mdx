@@ -62,8 +62,8 @@ Usually evaluator's `replan_guidance` isn't providing improvement info. Check:
 
 | Check | Detail |
 |---|---|
-| Is `experimental.auto_permission` enabled | Default `true`. Required for unattended CI / benchmarks (auto-replies `permission.asked` with `"once"` for active orchestrator runs — `src/engine/auto-permission.ts`). |
-| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Auto-approve timeout, default `120000` ms (`src/permission/next.ts:163`). Only fires when `auto_permission` is on. Minimum honored value is `1000` ms. |
+| Does config explicitly set `ask` | Built-in agent permissions default to `allow`; only explicit `ask` rules wait for an operator reply. |
+| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Reject timeout for unanswered asks, default `300000` ms (`src/permission/next.ts`). Minimum honored value is `1000` ms. |
 
 See [Permissions](/docs/permissions/).
 

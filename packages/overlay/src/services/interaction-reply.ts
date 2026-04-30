@@ -1,20 +1,20 @@
 // ── Interaction reply/reject helper ──
 // Shared low-level API wrappers used by InteractionCard (the unified
 // permission / question card rendered inline in the conversation and in
-// the workflow sidebar) and the headless PermissionAutoResolver.
+// the workflow sidebar).
 //
 // `autoReply` is required on every call: `false` for direct user actions
-// (permission card buttons, question submissions), `true` for the headless
-// auto-approval driver. This flag propagates all the way through to
+// (permission card buttons, question submissions), `true` for server-side
+// timeout resolution. This flag propagates all the way through to
 // PermissionNext.Event.Replied so the transcript can render "[auto-reply]".
 //
 // Per-interaction mutex: the same interaction id can surface in multiple UI
 // surfaces simultaneously (inline conversation card + sidebar workflow card),
-// and the auto-resolver may race with a fast user click. The first request
-// wins — concurrent calls with the same id share the in-flight promise so we
-// never fire two HTTP requests against the same resolution. The server is the
-// final arbiter of conflicting actions; this layer guarantees we don't
-// generate the conflict ourselves.
+// and a timeout may race with a fast user click. The first request wins —
+// concurrent calls with the same id share the in-flight promise so we never
+// fire two HTTP requests against the same resolution. The server is the final
+// arbiter of conflicting actions; this layer guarantees we don't generate the
+// conflict ourselves.
 
 import { apiJson } from "./api";
 

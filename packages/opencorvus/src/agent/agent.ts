@@ -4,7 +4,6 @@ import { Provider } from "../provider/provider"
 import { streamObject, type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
 import { Instance, lazyInstanceState } from "../project/instance"
-import { Truncate } from "../tool/truncation"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
 
@@ -415,27 +414,6 @@ export namespace Agent {
       if (item.permission) {
         item.permission = PermissionNext.merge(item.permission, PermissionNext.fromConfig(value.permission ?? {}))
       }
-    }
-
-    // Ensure Truncate.GLOB is allowed unless explicitly configured.
-    // Only applies to agents with a permission ruleset (i.e. SessionPrompt-
-    // dispatched agents). Stage agents (delivery / requirements / architect /
-    // planner / design-analyst / orchestrator / summary) omit permission and
-    // bypass this loop — they don't go through the tool-resolver gate.
-    for (const name in result) {
-      const agent = result[name]
-      if (!agent.permission) continue
-      const explicit = agent.permission.some((r) => {
-        if (r.permission !== "external_directory") return false
-        if (r.action !== "deny") return false
-        return r.pattern === Truncate.GLOB
-      })
-      if (explicit) continue
-
-      result[name].permission = PermissionNext.merge(
-        agent.permission,
-        PermissionNext.fromConfig({ external_directory: { [Truncate.GLOB]: "allow" } }),
-      )
     }
 
     return result

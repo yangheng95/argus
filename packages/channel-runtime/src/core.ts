@@ -10,11 +10,7 @@ import {
   polishText,
   splitText,
 } from "./message-formatter"
-import {
-  permissionReply as permissionReplyRule,
-  queueLimit as queueLimitRule,
-  type PermissionReply,
-} from "./channel-policy"
+import { queueLimit as queueLimitRule } from "./channel-policy"
 import { SessionCoordinator } from "./session-coordinator"
 
 interface TaskReportProperties {
@@ -1030,10 +1026,6 @@ export class ChannelRuntime {
     return queueLimitRule(process.env)
   }
 
-  private permissionReply(): PermissionReply {
-    return permissionReplyRule(process.env)
-  }
-
   /** Format a brief status message for important tool completions */
   private formatToolStatus(tool: string, input: unknown): string | null {
     return formatToolStatusMessage(tool, input, process.env)
@@ -1234,41 +1226,23 @@ export class ChannelRuntime {
     if (event.type === "permission.asked") {
       const asked = (event as EventPermissionAsked).properties as PermissionAsked
       this.touchPending(asked.sessionID)
-      const reply = this.permissionReply()
-      const result = await this.client.permission.reply({
-        requestID: asked.id,
-        reply,
-      })
       const sessions = this.findSessions(asked.sessionID)
-      if (result.error) {
-        console.error("[ChannelRuntime] permission.reply error:", JSON.stringify(result.error).slice(0, 500))
-        this.mirrorSessions(
-          "system",
-          `Failed to reply permission request: ${asked.permission}`,
-          asked.sessionID,
-          sessions,
-        )
-        for (const session of sessions) {
-          await this.safeSend(session.adapter, session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
-        }
-        return
-      }
+      const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
       this.mirrorSessions(
         "system",
-        `Auto-replied permission (${reply}): ${asked.permission}`,
+        `Permission requested: ${asked.permission} [${patterns}]`,
         asked.sessionID,
         sessions,
       )
       for (const session of sessions) {
-        const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
         await this.safeSend(
           session.adapter,
           session.channel,
           session.thread,
-          `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
+          `Permission requested: ${asked.permission} [${patterns}]. Waiting for operator reply.`,
         )
       }
-      console.log(`[ChannelRuntime] Auto-replied permission ${asked.id} with ${reply}`)
+      console.log(`[ChannelRuntime] Permission request ${asked.id} is waiting for operator reply`)
       return
     }
 

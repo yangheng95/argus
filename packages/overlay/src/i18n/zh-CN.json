@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "554a3b017a507a9d"
+    "panel_revision": "03deef36d9c0002e"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -545,7 +545,6 @@
   "section.criteria": "评估标准",
   "section.files": "文件变更",
   "sections.title": "任务详情",
-  "settings.auto_permission": "自动批准权限",
   "settings.language": "语言",
   "settings.language.en_us": "English",
   "settings.language.zh_cn": "简体中文",
@@ -631,8 +630,6 @@
   "time.relative.minutes_ago": "{{value}} 分钟前",
   "time.relative.hours_ago": "{{value}} 小时前",
   "time.relative.days_ago": "{{value}} 天前",
-  "titlebar.auto_permission": "自动批准权限",
-  "titlebar.auto_permission_hint": "出现权限请求时自动选择长期允许。",
   "titlebar.auto_question": "问题超时自动拒绝",
   "titlebar.auto_question_hint": "提问超过 5 分钟无人回复时自动拒绝；关闭后会一直等待用户响应。",
   "titlebar.background_notice": "OpenCorvus 仍在后台运行。点击系统托盘图标可重新打开；如需彻底退出，请在托盘菜单中选择“退出”。",

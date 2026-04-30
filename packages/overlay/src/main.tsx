@@ -65,7 +65,6 @@ import GeneralPanel from "./components/settings/GeneralPanel";
 import AgentModelsPanel from "./components/settings/AgentModelsPanel";
 import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
-import { PermissionAutoResolver } from "./components/PermissionAutoResolver";
 import { WelcomeToast } from "./components/WelcomeToast";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
@@ -965,16 +964,6 @@ if (providersConfigBody) {
 // /config/providers fetches go out before credentials/serverUrl are set —
 // which hangs the WebView when Basic auth is configured.
 
-// ── Mount: PermissionAutoResolver (headless) ──
-// Permission cards render inline in the conversation via InteractionCard.
-// This mount only drives auto-approval when experimental.auto_permission
-// is enabled — it renders nothing.
-
-const interactionMountEl = document.getElementById("solidInteractionMount");
-if (interactionMountEl) {
-  render(() => <PermissionAutoResolver />, interactionMountEl);
-}
-
 // ── Native dialog close handlers ──
 // Settings dialog (configDialog) close button — no longer handles it.
 
@@ -1269,7 +1258,6 @@ disposers.push(createRoot((dispose) => {
 
  // interactionBridge.renderInteractions removed — the unified InteractionCard
  // renders the UI in both inline conversation and sidebar surfaces, and
- // PermissionAutoResolver handles auto-approval.
 
   return dispose;
 }));

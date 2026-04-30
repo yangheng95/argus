@@ -59,9 +59,8 @@ Usually evaluator's `replan_guidance` isn't providing improvement info. Check:
 
 | Check | Detail |
 |---|---|
-| Is `experimental.unattended` enabled | Required in CI / benchmarks |
-| `OPENCORVUS_PERMISSION_ASK_REPLY` | Default `reject`; set `always` for unattended |
-| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Ask timeout (default 5000) |
+| Does config explicitly set `ask` | Built-in agent permissions default to `allow`; only explicit `ask` rules wait for an operator reply. |
+| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Reject timeout for unanswered asks, default `300000` ms. Minimum honored value is `1000` ms. |
 
 ## Evaluation
 

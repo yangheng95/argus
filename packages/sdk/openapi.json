@@ -32132,7 +32132,7 @@
             "$ref": "#/components/schemas/PermissionConfig"
           },
           "tool_permissions": {
-            "description": "Default tool permission actions for new tasks. When not set, defaults to 'ask'. Set a tool to 'allow' to skip confirmation, or 'deny' to block it entirely.",
+            "description": "Default tool permission actions for new tasks. When not set, defaults to 'allow'. Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.",
             "type": "object",
             "properties": {
               "websearch": {
@@ -32538,11 +32538,6 @@
               },
               "continue_loop_on_deny": {
                 "description": "Continue the agent loop when a tool call is denied",
-                "type": "boolean"
-              },
-              "auto_permission": {
-                "description": "Auto-approve PermissionNext requests. Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
-                "default": true,
                 "type": "boolean"
               },
               "auto_question": {

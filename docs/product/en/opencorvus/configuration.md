@@ -46,7 +46,7 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
   },
 
   "experimental": {
-    "unattended": true
+    "auto_question": true
   }
 }
 ```
@@ -67,9 +67,9 @@ Per-skill / per-tool `allow / ask / deny`. **Rule order matters, last declaratio
 
 See [Permissions](./permissions.md).
 
-### `experimental.unattended`
+### `experimental.auto_question`
 
-Enables unattended mode: on ask timeout, apply the default action from `OPENCORVUS_PERMISSION_ASK_REPLY` — no blocking.
+Fine-grained switch for stale clarification questions. Permission prompts are not controlled here; built-in agent permissions default to `allow`, and explicit `ask` rules wait for an operator reply until the reject timeout fires.
 
 ### `assistant` block
 

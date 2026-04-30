@@ -53,7 +53,7 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
   },
 
   "experimental": {
-    "unattended": true
+    "auto_question": true
   }
 }
 ```
@@ -74,9 +74,9 @@ OpenCorvus 的配置分三层：**CLI flag > 环境变量 > `opencorvus.jsonc` �
 
 详见 [Permissions](/docs/zh-cn/permissions/)。
 
-### `experimental.auto_permission` / `experimental.auto_question`
+### `experimental.auto_question`
 
-两个独立的细粒度开关（默认均为 `true`——`src/config/config.ts:1297-1310`），取代了历史上的 `experimental.unattended` 总开关。`auto_permission` 开启时，活跃 orchestrator run 内的 `permission.asked` 事件会被自动回复 `"once"`，避免无人值守阻塞；`auto_question` 开启时，悬置的澄清提问超时后自动拒绝。详见 [Permissions](/docs/zh-cn/permissions/)。
+悬置澄清提问的细粒度开关（默认 `true`——`src/config/config.ts`）。开启时，过期的 question interaction 会在交互超时后被拒绝。权限提示不由这里控制；内置 agent 权限默认 `allow`，显式 `ask` 规则会等待操作员回复，直到拒绝超时触发。详见 [Permissions](/docs/zh-cn/permissions/)。
 
 ### `assistant` 子块
 

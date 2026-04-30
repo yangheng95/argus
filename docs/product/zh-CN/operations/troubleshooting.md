@@ -59,9 +59,8 @@
 
 | 检查 | 说明 |
 |---|---|
-| 是否开启 `experimental.unattended` | CI/benchmark 必须开 |
-| `OPENCORVUS_PERMISSION_ASK_REPLY` | 默认 `reject`；无人值守改 `always` |
-| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | ask 超时（默认 5000ms） |
+| config 是否显式写了 `ask` | 内置 agent 权限默认 `allow`；只有显式 `ask` 规则会等待操作员回复。 |
+| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | 未回复 ask 的拒绝超时，默认 `300000` ms；最小值 `1000` ms |
 
 ## 评估类
 

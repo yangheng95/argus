@@ -141,7 +141,6 @@ export namespace Config {
     result.agent = result.agent || {}
     result.plugin = result.plugin || []
     result.experimental = {
-      auto_permission: true,
       auto_question: true,
       ...(result.experimental ?? {}),
     }
@@ -1318,13 +1317,6 @@ export namespace Config {
             .optional()
             .describe("Tools that should only be available to primary agents."),
           continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-          auto_permission: z
-            .boolean()
-            .optional()
-            .default(true)
-            .describe(
-              "Auto-approve PermissionNext requests. Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.",
-            ),
           auto_question: z
             .boolean()
             .optional()

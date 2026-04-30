@@ -1,10 +1,9 @@
 import { createSignal } from "solid-js";
 import { t } from "../../utils/i18n";
 import { settingsStore, setSettingsStore, saveSettings } from "../../store/settings";
-import { appStore } from "../../store/app";
 import { configure as configureApi } from "../../services/api";
 import { checkConnection } from "../../services/connection";
-import { reloadProjectScope, patchConfig } from "../../services/config";
+import { reloadProjectScope } from "../../services/config";
 import { applyOpacity, applyTheme, sanitizeOpacity } from "../../services/theme";
 import { requestNotificationPermission, notificationPermissionState } from "../../services/notify";
 import { nativeMessage } from "../../services/app-dialog";
@@ -64,12 +63,6 @@ export default function GeneralPanel() {
   }
 
   const opacityPercent = () => Math.round(settingsStore.opacity * 100);
-
-  const experimental = () => (appStore.config as any)?.experimental ?? {};
-
-  function handleExperimentalToggle(key: "auto_permission", e: Event) {
-    void patchConfig({ experimental: { [key]: (e.currentTarget as HTMLInputElement).checked } });
-  }
 
   return (
     <div class="general-panel">
@@ -173,14 +166,6 @@ export default function GeneralPanel() {
         <h4 class="config-panel-group-title">{t("settings.section.behaviour")}</h4>
         <div class="config-panel-card">
           <div class="config-toggle-list">
-            <label class="config-toggle-list-item">
-              <span class="toggle-label">{t("settings.auto_permission")}</span>
-              <input
-                type="checkbox"
-                checked={!!experimental().auto_permission}
-                onChange={(e) => handleExperimentalToggle("auto_permission", e)}
-              />
-            </label>
             <label class="config-toggle-list-item">
               <span class="toggle-label">
                 {t("settings.desktop_notifications_label")}
