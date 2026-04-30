@@ -141,6 +141,16 @@ export interface TaskDesc {
   clarifications?: string
   operator_notes?: string
   goals: GoalDesc[]
+  /** When the goal set contains a `kind=bootstrap` goal whose status is not
+   *  yet `passed`, this is its id; otherwise null. Surfaced upfront so the
+   *  orchestrator LLM can serialise dispatch (build the bootstrap goal first,
+   *  THEN fan-out non-bootstrap goals) instead of attempting parallel
+   *  dispatch and getting late-rejected by the bootstrap-first gate at
+   *  orchestrator/tools.ts:3826-3862. The gate stays as defense-in-depth;
+   *  this field is the primary signal so the LLM doesn't reach the gate in
+   *  the normal case (specs/scheduler-fix-plan-2026-04-30.md P5,
+   *  audit §11.4). */
+  active_bootstrap_goal_id?: string
   budget: {
     runs_used: number
     max_runs: number
@@ -326,6 +336,14 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const history = readHistory(task.id)
   const verdict = describeVerdict(task.id)
 
+  // Bootstrap-first signal. Single source — derived from the same goal
+  // status the dispatch gate (orchestrator/tools.ts:3826-3862) reads.
+  // Surfaces upstream of the gate so the LLM can plan the dispatch order
+  // explicitly instead of being late-rejected per goal (P5).
+  const activeBootstrap = goalRows.find(
+    (g) => g.kind === "bootstrap" && goalStatusByID(g.id) !== "passed",
+  )
+
   return {
     id: task.id,
     title: task.title,
@@ -341,6 +359,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
     clarifications: clarificationTranscriptSection(task.id) || undefined,
     operator_notes: operatorNotesSection(task.id) || undefined,
     goals,
+    active_bootstrap_goal_id: activeBootstrap?.id,
     budget: {
       runs_used: totalRuns,
       max_runs: maxRuns,
@@ -443,6 +462,28 @@ export function renderTaskDescription(desc: TaskDesc): string {
     lines.push("## Goals (none authored yet)")
   } else {
     lines.push(`## Goals (${desc.goals.length})`)
+    if (desc.active_bootstrap_goal_id) {
+      // Physical-fact framing (P5): the constraint is a property of the
+      // worktree merge model, not a directive. Stating the cause lets the
+      // LLM serialise dispatch on its own. The dispatch tool's
+      // bootstrap-first gate (orchestrator/tools.ts:3826-3862) stays as
+      // defense-in-depth; the disclosure here keeps it from being a
+      // hidden state machine (rule 13 / rule 15: not synthetic / not
+      // hidden).
+      lines.push("")
+      lines.push(
+        `**Bootstrap-first dispatch order**: goal \`${desc.active_bootstrap_goal_id}\` ` +
+        `(\`kind=bootstrap\`) is not yet \`passed\`. Bootstrap goals own ` +
+        `scaffold-level files (\`package.json\`, \`vite.config.ts\`/\`bunfig.toml\`, ` +
+        `\`tsconfig.json\`, \`src/main.*\`, \`src/App.*\`); every other goal ` +
+        `would inevitably touch those files on its worktree, producing ` +
+        `guaranteed merge conflicts at delivery time. The dispatch tool ` +
+        `will refuse non-bootstrap dispatches until this goal completes ` +
+        `(build → deliver → merged). Plan accordingly: dispatch the ` +
+        `bootstrap goal first, then fan-out non-bootstrap goals once it ` +
+        `is \`passed\`.`,
+      )
+    }
     for (const g of desc.goals) {
       lines.push("")
       lines.push(...renderGoal(g))
