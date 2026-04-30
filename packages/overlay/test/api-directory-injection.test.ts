@@ -1,0 +1,105 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { apiUrl, configure } from "../src/services/api";
+
+/**
+ * 2026-04-30 W2-V31 — overlay api.ts must decide per-path whether to
+ * inject `?directory=` into the URL. The pre-fix logic used prefix
+ * matching: any `global/*` path was excluded. That correctly skipped
+ * `/global/health` (mounted on the server in GlobalRoutes, before the
+ * Instance middleware) but ALSO skipped `/global/tasks` (mounted in
+ * AppRoutes, after the middleware) — and after we removed the server's
+ * `process.cwd()` fallback (W2-V31), `/global/tasks` started returning
+ * 400 DirectoryRequiredError because the overlay never sent the directory.
+ *
+ * The fix replaces prefix matching with an explicit whitelist of routes
+ * that the server mounts pre-middleware. This test enumerates every
+ * route the overlay calls and pins the inject/no-inject decision so
+ * adding a new route to the overlay (or moving one between AppRoutes
+ * and GlobalRoutes server-side) trips a failing test.
+ *
+ * If you add a new route here, also update the matching list in
+ * `packages/overlay/src/services/api.ts` and the server bypass at
+ * `packages/opencorvus/src/server/server.ts`.
+ */
+
+const SAVED_DIRECTORY = "/Users/alice/projects/demo";
+
+function expectInjects(path: string) {
+  const url = new URL(apiUrl(path));
+  expect(url.searchParams.get("directory")).toBe(SAVED_DIRECTORY);
+}
+
+function expectDoesNotInject(path: string) {
+  const url = new URL(apiUrl(path));
+  expect(url.searchParams.has("directory")).toBe(false);
+}
+
+describe("apiUrl directory injection (W2-V31)", () => {
+  beforeEach(() => {
+    configure({ serverUrl: "http://127.0.0.1:7878", directory: SAVED_DIRECTORY });
+  });
+
+  afterEach(() => {
+    configure({ directory: "" });
+  });
+
+  describe("control-plane routes (no-inject)", () => {
+    test("log", () => expectDoesNotInject("log"));
+    test("shutdown", () => expectDoesNotInject("shutdown"));
+    test("restart", () => expectDoesNotInject("restart"));
+  });
+
+  describe("GlobalRoutes (mounted before Instance middleware) — no-inject", () => {
+    test("global/health", () => expectDoesNotInject("global/health"));
+    test("global/event", () => expectDoesNotInject("global/event"));
+    test("global/config", () => expectDoesNotInject("global/config"));
+    test("global/dispose", () => expectDoesNotInject("global/dispose"));
+    test("global/db/reset", () => expectDoesNotInject("global/db/reset"));
+  });
+
+  describe("auth routes — no-inject (cross-project by design)", () => {
+    test("auth", () => expectDoesNotInject("auth"));
+    test("auth/login", () => expectDoesNotInject("auth/login"));
+    test("auth/logout", () => expectDoesNotInject("auth/logout"));
+  });
+
+  describe("project-scoped routes (registered under AppRoutes) — must inject", () => {
+    test("global/tasks (handler is in AppRoutes, despite the URL)", () => {
+      expectInjects("global/tasks");
+    });
+    test("tasks", () => expectInjects("tasks"));
+    test("path", () => expectInjects("path"));
+    test("vcs", () => expectInjects("vcs"));
+    test("config", () => expectInjects("config"));
+    test("config/providers", () => expectInjects("config/providers"));
+    test("config/auth", () => expectInjects("config/auth"));
+    test("config/mcp", () => expectInjects("config/mcp"));
+    test("config/skill", () => expectInjects("config/skill"));
+    test("config/prompt", () => expectInjects("config/prompt"));
+    test("config/executor", () => expectInjects("config/executor"));
+    test("provider", () => expectInjects("provider"));
+    test("channel", () => expectInjects("channel"));
+    test("agent", () => expectInjects("agent"));
+    test("installed", () => expectInjects("installed"));
+    test("task/abc/followup", () => expectInjects("task/abc/followup"));
+  });
+
+  describe("when no directory is configured, no path receives the query", () => {
+    beforeEach(() => {
+      configure({ directory: "" });
+    });
+
+    test("project-scoped path skips inject when context is empty", () => {
+      const url = new URL(apiUrl("tasks"));
+      expect(url.searchParams.has("directory")).toBe(false);
+    });
+  });
+
+  describe("an explicit ?directory= already in the path is preserved", () => {
+    test("does not double-set directory", () => {
+      const url = new URL(apiUrl("tasks?directory=/explicit"));
+      // explicit value wins; we never overwrite a caller-provided directory
+      expect(url.searchParams.get("directory")).toBe("/explicit");
+    });
+  });
+});

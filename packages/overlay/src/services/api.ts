@@ -78,15 +78,46 @@ export function getServerUrl(): string {
   return serverUrl;
 }
 
+/**
+ * Server-side routes that do NOT need an Instance context. These are
+ * mounted before the project-scope middleware on the server (control
+ * plane, GlobalRoutes router) and must NOT receive `?directory=`,
+ * which would either be ignored noise or worse, change semantics on
+ * routes that happen to read a `directory` query for other reasons.
+ *
+ * Keep this list aligned with `packages/opencorvus/src/server/server.ts`
+ * (the bypass list at the middleware) and `routes/global.ts` (the
+ * GlobalRoutes mount). Adding a new /global route there means deciding
+ * here whether overlay should inject directory: routes that go through
+ * Instance.provide need it; routes mounted in GlobalRoutes do not.
+ *
+ * Rule 36 test coverage: api-directory-injection.test.ts enumerates
+ * every route in this set so any drift trips a unit test.
+ */
+const NO_DIRECTORY_PATHS = new Set<string>([
+  "log",
+  "shutdown",
+  "restart",
+  "global/health",
+  "global/event",
+  "global/config",
+  "global/dispose",
+  "global/db/reset",
+]);
+const NO_DIRECTORY_PREFIXES = ["auth/"];
+
+function needsDirectory(path: string): boolean {
+  if (NO_DIRECTORY_PATHS.has(path)) return false;
+  if (path === "auth") return false;
+  if (NO_DIRECTORY_PREFIXES.some((p) => path.startsWith(p))) return false;
+  return true;
+}
+
 export function apiUrl(path: string): string {
   const base = serverUrl.replace(/\/+$/, "");
   const next = path.replace(/^\/+/, "");
   const url = new URL(`${base}/${next}`);
-  // Routes under /global and /auth run outside the Instance.provide middleware
-  // and are explicitly cross-project; injecting ?directory= would cause
-  // /global/tasks to be filtered to a single project.
-  const isCrossProject = next.startsWith("global/") || next === "global" || next.startsWith("auth/") || next === "auth";
-  if (!isCrossProject && directoryContext && !url.searchParams.has("directory")) {
+  if (needsDirectory(next) && directoryContext && !url.searchParams.has("directory")) {
     url.searchParams.set("directory", directoryContext);
   }
   return url.toString();
