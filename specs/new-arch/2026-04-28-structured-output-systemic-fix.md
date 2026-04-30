@@ -445,3 +445,11 @@ processor.message.parts.some(...)
 `report_build_passed` / `report_build_failed` were replaced by the single
 `report_build_result` terminal tool with `status` as the payload discriminator.
 See `specs/new-arch/2026-04-30-terminal-contract-hard-pin.md`.
+
+2026-04-30 amendment: result-submit schemas were hardened again after
+requirements, architect, and integrity all showed terminal-submit misses after
+collector facts were already present. `submit_requirements` and
+`submit_integrity_review` now require `{ final: true }`; terminal-ready turns
+scope the visible tool set to the single terminal tool; and `BuildResultSchema`
+is a discriminated union that requires `error` only on the failed branch. See
+`specs/new-arch/2026-04-30-result-schema-hardening.md`.

@@ -817,7 +817,9 @@ export namespace SessionLoop {
 
     const lastUserMsg = input.msgs.findLast((m) => m.info.role === "user")
     const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
-    const tools = await resolveTools({
+    const format = input.lastUser.format ?? { type: "text" }
+    const terminalToolContract = ephemeralTerminalToolContracts.get(input.sessionID)
+    let tools = await resolveTools({
       agent,
       session: input.session,
       model: input.model,
@@ -835,6 +837,9 @@ export namespace SessionLoop {
           structured = output
         },
       })
+    }
+    if (format.type !== "json_schema") {
+      tools = terminalToolScopedTools(terminalToolContract, tools)
     }
 
     if (input.step === 1) {
@@ -870,8 +875,6 @@ export namespace SessionLoop {
       ...(skillsSection ? [skillsSection] : []),
       ...(await InstructionPrompt.system()),
     ]
-    const format = input.lastUser.format ?? { type: "text" }
-    const terminalToolContract = ephemeralTerminalToolContracts.get(input.sessionID)
     if (format.type === "json_schema") {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
     }
@@ -1223,6 +1226,18 @@ export namespace SessionLoop {
     if (contract.isSatisfied()) return undefined
     if (contract.isReadyToFinalize()) return { type: "tool", toolName: contract.toolName }
     return "required"
+  }
+
+  export function terminalToolScopedTools(
+    contract: TerminalToolContract | undefined,
+    tools: Record<string, AITool>,
+  ): Record<string, AITool> {
+    if (!contract) return tools
+    const terminalTool = tools[contract.toolName]
+    if (!terminalTool) return tools
+    if (contract.isSatisfied()) return tools
+    if (!contract.isReadyToFinalize()) return tools
+    return { [contract.toolName]: terminalTool }
   }
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input

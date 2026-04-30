@@ -71,8 +71,7 @@ export type BuildTestResult = z.infer<typeof BuildTestResult>
  * between re-dispatch, modify_goal, or fail_task without re-reading the
  * session transcript.
  */
-export const BuildResultSchema = z.object({
-  status: z.enum(["passed", "failed"]),
+const BuildResultBase = {
   summary: z
     .string()
     .min(1)
@@ -92,9 +91,25 @@ export const BuildResultSchema = z.object({
     .array(BuildTestResult)
     .default([])
     .describe("Evidence the build actually ran verification; empty when no tests were required."),
+}
+
+export const BuildPassedResultSchema = z.object({
+  status: z.literal("passed"),
+  ...BuildResultBase,
+}).strict()
+
+export const BuildFailedResultSchema = z.object({
+  status: z.literal("failed"),
+  ...BuildResultBase,
   error: z
     .string()
-    .optional()
-    .describe("Concrete failure reason when status=failed. Required in that branch."),
-})
+    .trim()
+    .min(1)
+    .describe("Concrete failure reason when status=failed."),
+}).strict()
+
+export const BuildResultSchema = z.discriminatedUnion("status", [
+  BuildPassedResultSchema,
+  BuildFailedResultSchema,
+])
 export type BuildResult = z.infer<typeof BuildResultSchema>
