@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft for implementation. This document extends:
+Implemented with review follow-up. This document extends:
 
 - `specs/new-arch/2026-04-28-structured-output-systemic-fix.md`
 - `specs/new-arch/2026-04-30-terminal-contract-hard-pin.md`
@@ -54,7 +54,7 @@ payload schemas and a single discriminated build result schema.
 
 ### Current code path evidence
 
-`SessionLoop.resolveTools` has three tool sources:
+Before this fix, the session loop had four provider-bound tool sources:
 
 1. Registry tools:
    - converted through `normalizeToolSchemaForProvider(model, z.toJSONSchema(...))`
@@ -67,10 +67,16 @@ payload schemas and a single discriminated build result schema.
    - only passed through `wrapExtraTool`
    - `wrapExtraTool` normalizes `execute` output and attachment stamping
    - `wrapExtraTool` does not normalize or validate `inputSchema`
+4. StructuredOutput tool injection:
+   - created after `resolveTools`
+   - assigned as `tools["StructuredOutput"]`
+   - did not pass through the provider schema normalization boundary
 
 All terminal submit tools used by requirements, architect, integrity, build,
-and delivery are stage-scoped extra tools. Therefore the tools most affected by
-the terminal refactor bypass the only provider schema normalization path.
+and delivery are stage-scoped extra tools. StructuredOutput uses a different
+injection point but had the same class of bypass. Therefore the impacted
+surface is every late-injected provider-bound tool source, not only extra
+tools.
 
 ### Schema shape evidence
 
@@ -91,9 +97,10 @@ This created a protocol split:
 
 | Tool source | Provider schema normalization | Current status |
 | --- | --- | --- |
-| Registry | yes | correct |
-| MCP | yes | correct |
+| Registry | yes | correct before the fix |
+| MCP | yes | correct before the fix |
 | Extra tools | no | broken for complex terminal schemas |
+| StructuredOutput | no | broken for providers that require normalized root object tool parameters |
 
 The secondary issue is that `isReadyToFinalize` now mixes two different
 meanings:
@@ -118,6 +125,9 @@ valid terminal action before merge.
 - Do not restore `report_build_passed` / `report_build_failed`.
 - Do not keep old and new terminal protocols side by side.
 - Do not change models to mask the protocol bug.
+- Do not add new source-specific schema preparation branches such as
+  `if (source === "...")`; new provider-bound tool sources must enter the
+  shared preparation boundary before `streamText`.
 
 ## Design Principles
 
@@ -148,7 +158,7 @@ prepareProviderTool(input: {
   name: string
   tool: AITool
   model: Provider.Model
-  source: "registry" | "mcp" | "extra"
+  source: "registry" | "mcp" | "extra" | "structured"
   sessionID: string
   messageID: string
 }): AITool
@@ -189,6 +199,9 @@ tools[name] = prepareProviderTool({
 If this creates accidental double-normalization in registry/MCP, delete the
 old inline normalization first. There must be only one schema transform call
 site for provider-bound tools.
+
+StructuredOutput must also call `prepareProviderTool(...)` at its injection
+point. Its source label is diagnostic only; it must not change schema behavior.
 
 ### Terminal Contract Rename
 
@@ -302,6 +315,10 @@ that is unsafe because the model would have no `register_*` tools left to fix
 the issues. Therefore `shouldExposeOnlyTerminalTool` must use the same
 validation logic as `submit_architect` before the terminal-only turn.
 
+The invariant is guarded by test: Architect readiness must equal
+`architectValidationIssues(collector).length === 0`, which is the
+`submit_architect` execution precondition.
+
 ### Integrity
 
 Current rule:
@@ -334,14 +351,17 @@ history.
 
 New rule:
 
-Build should not terminal-only scope solely from `mergedHead`. It should keep
-`toolChoice: "required"` in the work phase and rely on the schema-normalized
-`report_build_result` tool being available. Once `mergedHead` exists, it is
-safe to expose only `report_build_result` for the passed path.
+Build should terminal-only scope only after `mergedHead` exists. Before that,
+it should keep `toolChoice: "required"` in the work phase and rely on the
+schema-normalized `report_build_result` tool being available. Once
+`mergedHead` exists, it is safe to expose only `report_build_result` for the
+passed path.
 
 Failed path remains valid without terminal-only scoping:
 
 - model can call `report_build_result(status="failed")`;
+- build core prompt explicitly instructs that failure is also terminal and
+  must close with `report_build_result(status="failed")`, not prose;
 - if model stops in prose, host emits `TerminalToolMissingError`;
 - no fallback converts prose into a failed result.
 
@@ -407,7 +427,7 @@ Steps:
    - call `prepareProviderTool(...)`.
 
 5. Update extra tool merge:
-   - keep `wrapExtraTool` for execute result shape only;
+   - keep `wrapExtraTool` for execute result shape and attachment stamping;
    - call `prepareProviderTool(...)` afterward.
 
 6. Update `estimateToolPayloadChars(...)`:
@@ -501,6 +521,19 @@ Probe assertions:
 This probe is not a fallback and not a production branch. It is a capability
 test for promoting provider/model combinations.
 
+## Hidden Coupling
+
+`shouldExposeOnlyTerminalTool` is allowed to hide every work tool. Therefore it
+must be a subset of the corresponding terminal submit tool's success
+precondition. If the terminal submit tool could return fixable validation
+issues, terminal-only scoping is unsafe because the model would lose the tools
+needed to repair those issues.
+
+Architect currently shares `architectValidationIssues(collector)` between
+`isArchitectReadyToFinalize` and `submit_architect.execute(...)`. The invariant
+test in `packages/opencorvus/test/architect/output-tools.test.ts` asserts that
+readiness remains identical to that validation precondition.
+
 ## Test Matrix
 
 Run these before implementation is accepted:
@@ -544,8 +577,8 @@ bun test packages/opencorvus/test/provider/tool-choice-pin-e2e.test.ts
 Implementation is complete only when all of these are true:
 
 1. There is exactly one provider-bound tool schema normalization path for
-   registry, MCP, and extra tools.
-2. No extra tool can bypass schema normalization.
+   registry, MCP, extra tools, and StructuredOutput.
+2. No late-injected provider-bound tool can bypass schema normalization.
 3. `report_build_result` reaches the provider with a provider-normalized root
    object schema where required by provider transforms.
 4. `submit_requirements` and `submit_integrity_review` reach the provider with
@@ -584,14 +617,19 @@ submits, failed path cannot be safely hard-pinned from host state alone.
 
 Mitigation: do not invent a host-side failure detector. Keep
 `report_build_result` always available, normalize its schema, and surface
-`TerminalToolMissingError` if the model stops in prose.
+`TerminalToolMissingError` if the model stops in prose. The build core prompt
+must also state that failure is terminal and must be reported through
+`report_build_result(status="failed")`; this is checked by prompt hygiene
+tests.
 
 ## Explicitly Rejected Alternatives
 
-### Add more prompt wording
+### Prompt wording as the only fix
 
 Rejected. Prompt wording does not fix the provider-bound schema mismatch and
-would become an agent-by-agent patch.
+would become an agent-by-agent patch. Prompt wording is still required where
+the protocol relies on model intent, such as build's failed terminal report
+path.
 
 ### Special-case submit tool names
 
@@ -620,13 +658,19 @@ fixed.
 - [x] Route registry tools through the helper.
 - [x] Route MCP tools through the helper.
 - [x] Route extra tools through the helper.
-- [x] Keep `wrapExtraTool` focused on execute result shape only.
+- [x] Route StructuredOutput through the helper.
+- [x] Keep `wrapExtraTool` focused on execute result shape and attachment
+      stamping only.
 - [x] Rename terminal readiness to `shouldExposeOnlyTerminalTool`.
 - [x] Fix requirements predicate so it does not early-narrow after one
       requirement.
-- [x] Review architect predicate against `submit_architect` validator.
+- [x] Guard architect predicate against `submit_architect` validator with an
+      invariant test.
 - [x] Keep integrity all-dimensions predicate.
-- [x] Document build passed-vs-failed scoping behavior in code comments.
+- [x] Document build passed-vs-failed scoping behavior in code comments and
+      build prompt.
+- [x] Add terminal scoping observability log.
+- [x] Add build prompt hygiene test for failed `report_build_result`.
 - [x] Repair provider E2E probe context.
 - [x] Run targeted tests.
 - [x] Run typecheck.

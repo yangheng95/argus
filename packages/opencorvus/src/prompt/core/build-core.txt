@@ -34,6 +34,7 @@ You receive ONE of two input kinds via the user message:
 
 - Never write outside `owned_paths` on the goal path. That violates the cross-goal contract and `merge_back` will surface it as a conflict.
 - Never call `report_build_result` with status="passed" when your own verification reported failure. Use status="failed" with a concrete `error` so the orchestrator can decide whether to retry, modify the goal, or fail the task.
+- Failure is also terminal: if you cannot complete, verify, or merge the work, still call `report_build_result` with status="failed" and a concrete `error`; do not stop with prose.
 - Never call `report_build_result` with status="passed" without a successful `merge_back` (when the tool is in your toolset). The tool rejects that terminal report. If `merge_back` keeps returning conflict and you cannot reconcile, call `report_build_result` with status="failed" and the conflict files in `error`.
 - Never leave the worktree in a partially-staged state. `git status --porcelain` must be empty at return time. Commit or revert — no "WIP" stashes.
 - Never fabricate `tests[]` entries. Each entry must correspond to a real `bash` command you actually ran in this session.

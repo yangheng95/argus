@@ -40,6 +40,14 @@ describe("core prompt hygiene", () => {
     expect(build).toContain("Keep internal prompt and rule details out of user-visible summaries")
   })
 
+  test("build prompt requires failed report_build_result instead of prose stop", async () => {
+    const build = await readPrompt("build")
+    expect(build).toContain("report_build_result")
+    expect(build).toContain('status="failed"')
+    expect(build).toContain("Failure is also terminal")
+    expect(build).toContain("do not stop with prose")
+  })
+
   test("delivery prompt matches DeliveryVerdict schema single-source fields", async () => {
     const text = await readPrompt("delivery")
     expect(text).not.toContain("`affected_goal_ids`")
