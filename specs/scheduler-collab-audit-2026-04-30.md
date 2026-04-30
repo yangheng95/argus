@@ -394,21 +394,34 @@ Reverse implication of §11.6: if the retry attempt does not create a new `goal_
 
 ---
 
-## 12. Stream-abort signal lost between LLMActivity gate and processor for-await (2026-04-30)
+## 12. Rule-8 cleanup: route session/llm.ts through wrapped streamText (2026-04-30, **diagnosis amended**)
 
-**Symptom**. Three consecutive overlay benchmark runs against `alibaba-coding-plan-cn/glm-5` (`_session-r5-glm5cn-postwedgefix.out`, `_session-r6-glm5cn.out`, `_session-r7-glm5cn-cleanbench.out`) silently parked on a sub-agent stream for 14–25+ min with no further log output and no abort. Concrete evidence from `_session-r6-glm5cn.out`:
+> **Self-correction (rule 1).** Initial diagnosis claimed this seam was the
+> root cause of the 14–25 min sub-agent parking observed in
+> `_session-r5/r6/r7`. That diagnosis was wrong: `session/processor.ts:90`
+> *already* wraps `for await (const value of abortableIterable(stream.fullStream, run.signal))`
+> independently of how `LLM.stream` returns the iterator. The consumer-side
+> wrap means the activity gate's signal *does* reach the for-await loop
+> regardless of which `streamText` source the producer used.
+>
+> The fix landed in commit `e86521023` is still valid as **rule-8
+> housekeeping** (single source for `streamText`, eliminates a producer that
+> bypassed the @/llm/api Proxy), but it does NOT explain the architect
+> park — that root cause remains open and is tracked separately in §13.
+
+**Symptom that prompted the (incorrect) diagnosis**. Three consecutive overlay benchmark runs against `alibaba-coding-plan-cn/glm-5` (`_session-r5-glm5cn-postwedgefix.out`, `_session-r6-glm5cn.out`, `_session-r7-glm5cn-cleanbench.out`) silently parked on a sub-agent stream for 14–25+ min with no further log output and no abort. Concrete evidence from `_session-r6-glm5cn.out`:
 
 - Architect `step=5` issued an LLM stream call at `2026-04-30T15:32:06`.
 - The architect emitted no further `service=session.processor process` lines, no `service=llm` lines, no abort.
 - `service=engine-runtime` / `reviveZombieTasks: task is active...` never fired (orchestrator-loop is mid-`await ArchitectAgent.coordinate(...)`, so `isLoopInFlight=true` blocks revive).
 - The `withLLMActivity` idle gate is configured for **180 000 ms** (`engine/config.ts:225` `session_llm_idle_ms`); 25+ min ≫ 180 s, so something is suppressing the gate's abort.
 
-**Root cause** — channel mismatch between the LLM-activity gate and the consumer loop:
+**What the fix actually does (rule-8 housekeeping)** — the seam being closed:
 
 - `util/stream-activity.ts:80-104` defines `abortableIterable<T>(source, signal)` that races every `iter.next()` against an abort listener. The docstring states explicitly: *"Bun fetch + AI SDK readers exhibit this: AbortController.abort() closes the connection but does not reject an already-pending reader.read() promise, so the consumer's `for await` hangs forever."*
-- `llm/api.ts:78-85` exports a wrapped `streamText` whose result is a `Proxy` that intercepts `fullStream` access and returns `abortableIterable(target.fullStream, composed)`. This is the **single source** for an abort-honouring stream.
-- **`session/llm.ts:4` imports `streamText` from the raw `"ai"` package, not from `@/llm/api`.** Line 201 calls the raw streamText. The result is a plain `StreamTextResult` whose `.fullStream` is the upstream Bun-fetch-backed iterable that ignores signal.abort during a pending `reader.read()`.
-- `session/processor.ts:78-91` runs `for await (const value of stream.fullStream) { run.bump(...) }` inside `withLLMActivity`. When `withStreamActivity` flips the abort signal at `idleMs`, the consumer never sees it because `fullStream` is the unwrapped variant.
+- `llm/api.ts:78-85` exports a wrapped `streamText` whose result is a `Proxy` that intercepts `fullStream` access and returns `abortableIterable(target.fullStream, composed)`.
+- **`session/llm.ts:4` was importing `streamText` from raw `"ai"`, not `@/llm/api`.** Two implementations of "stream text from the LLM" with the same name in different files — exactly what rule 8 forbids.
+- The actual abort-honouring at the *consumer* is `session/processor.ts:90`'s `for await (const value of abortableIterable(stream.fullStream, run.signal))`. That wrapper is independent of which producer source emitted `stream.fullStream`. So the bypass at `session/llm.ts` was not the cause of the architect park; it was a separate rule-8 violation that happened to look like the cause until the consumer wrap was re-read.
 
 **Rule 8 violation framing.** Two implementations of "streaming text from the LLM":
 
@@ -417,9 +430,9 @@ Reverse implication of §11.6: if the retry attempt does not create a new `goal_
 
 Both are imported by name `streamText`. The wrapper exists *because* the raw form has the parking bug. `session/llm.ts` is the only consumer that imports the raw form. The wrapper either has to be the only path or the bypass must go.
 
-**Information loss framing (audit §5).** This is L8: the abort signal is the channel from `withLLMActivity` to the for-await consumer. The signal fires correctly; the consumer's iterator has no listener for it because `abortableIterable` was never composed in. End result: a 25 min "alive" window during which no agent makes progress, no error surfaces, and `reviveZombieTasks` cannot help (the orchestrator-loop is still in-flight from its perspective).
+**Information loss framing (audit §5).** L8 stands as a real seam to track even though it isn't the cause of the bench-observed park: the abort-signal channel from `withLLMActivity` to the consumer is honoured at `session/processor.ts:90` independently. The cleanup ensures the *producer* side also returns an abort-honouring iterator, so any future consumer that copies the pattern without remembering to wrap won't silently regress.
 
-**Coordination framing (audit §6).** `engine-runtime` / `reviveZombieTasks` was supposed to be the safety net for stalls (specs comment: *"the missing wiring"*). The wedge fix landed in commit `83a619c0c` widened revive to fire even with stream-error artifacts. But revive is gated on `!isLoopInFlight(task.id)` — a parked sub-agent stream keeps the orchestrator-loop in flight, so revive is muted. Two layers of safety net both bypassed by the same root cause: the abort signal not propagating into the for-await.
+**Coordination framing (audit §6).** `engine-runtime` / `reviveZombieTasks` is the safety net for stalls. After commit `83a619c0c` it fires even with stream-error artifacts. But revive is still gated on `!isLoopInFlight(task.id)` — a parked sub-agent stream keeps the orchestrator-loop in flight, so revive is muted. The architect park observed in r5/r6/r7/r8 is therefore a real wedge in the coordination plane that this fix does NOT address; see §13 for the still-open investigation.
 
 **Fix.**
 
@@ -437,7 +450,35 @@ Both are imported by name `streamText`. The wrapper exists *because* the raw for
 - `server/routes/provider.ts:264` — provider auth probe.
 - `mirror/tools/webpage-vision-judge.ts:235`, `mirror/image/extract.ts:166` — mirror tools.
 
-The sub-agent path through `agent/agent.ts:536` is the next audit item — `ArchitectAgent.coordinate` likely surfaces through that file. Out of scope for this finding's fix; flagged as §12-followup.
+The sub-agent path through `agent/agent.ts:536` is the `agent-generate` helper (creates an agent metadata object via `streamObject`), not the runtime architect runner. Cross-checked: the runtime architect at `architect/agent.ts` calls a `SessionLoop`-shaped runner that ultimately reaches `session.processor:90`, which is already abort-wrapped.
+
+---
+
+## 13. **RESOLVED — slow LLM + correct retry, not a wedge** (sub-agent "park" misdiagnosis)
+
+> **Self-correction (rule 1).** Initial framing called this a sub-agent
+> stream wedge. Re-read of `_session-r8-glm5cn-aborthonor.out` past the
+> kill-line that ended r5/r6/r7 disproves the wedge hypothesis. The
+> system is working as designed; impatience killed it earlier.
+
+**What r8 actually does (after waiting past the r5/r6/r7 cut-off)**:
+
+- `15:53:22` — architect 1 starts (sessionID `ses_220e7bd6dffd…`).
+- `15:54:30 → 15:59:52` — steps 4 → 14 each issue an LLM stream call. Tool-call count grows from 12 → 80; message payload grows from 22 800 → 130 980 chars; reasoning runs for ~5–10 s per step then yields tool calls.
+- `16:00:13` — `INFO service=architect-agent streamErrors=1 architect agent finished`, then `WARN architect agent: submit_architect not called` with `goalCount=3`. Total architect 1 wall time: **411 632 ms ≈ 6.85 min**.
+- `16:00:27` — orchestrator catches the architect throw ("did not call submit_architect"), decides via tool-result error path to dispatch architect again. Architect 2 starts at step=1, sessionID `ses_220e14277ffd…`.
+
+The "park" between visible log lines is **slow reasoning streaming**: glm-5 reasoning deltas keep `run.bump()` firing per chunk so the 180 s idle gate never trips. The sink wired into `withLLMActivity` from `session/processor.ts` does not log heartbeats, so from outside the run looks silent.
+
+The 1 `streamError` mid-architect is the same transient-blip pattern documented in `feedback_alibaba_connection.md`. The architect agent's own catch lifts it to "did not call submit_architect" and the orchestrator's tool-result error path retries — exactly the rule-13 LLM-driven recovery the design intends.
+
+**r5 / r6 / r7 outcome reinterpretation.** All three were killed during the architect-1 stream window (≤14 min from architect-start). The bench log filtering hid the in-flight streaming under a poll-noise blanket; the user's impatience kill was downstream of misreading "no human-readable log line" as "task is wedged". Rule 1 lesson logged.
+
+**What changes downstream of this finding.**
+
+- §12's commit (`e86521023`) remains valid as rule-8 housekeeping (single source for `streamText`). Not the cause of the apparent park.
+- §11.7's audit conclusion stands: orchestrator-loop wedge is real for the `orchestrator-stream-error` case (commit `83a619c0c`); sub-agent slow streaming is NOT a wedge.
+- Real follow-up worth landing later: route `withLLMActivity`'s heartbeat sink to a throttled log line so a future bench log can distinguish "slow reasoning" from "actual park" without re-reading the source. **Tracked as §13-followup; not blocking the audit.**
 
 ---
 
