@@ -65,8 +65,10 @@ export function TaskStatusHeader() {
           // innerHTML is the right Solid pattern for trusted static markup.
           innerHTML={statusIconSvg(status())}
         />
-        <span class="status-label" id="statusLabel">{labelText()}</span>
-        <span class="elapsed" id="taskElapsed">{elapsedText()}</span>
+        <span class="status-copy">
+          <span class="status-label" id="statusLabel">{labelText()}</span>
+          <span class="elapsed" id="taskElapsed">{elapsedText()}</span>
+        </span>
       </div>
     </Show>
   );
