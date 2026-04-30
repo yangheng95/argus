@@ -6,7 +6,6 @@ import { Agent } from "@/agent/agent"
 import { Snapshot } from "@/snapshot"
 import { SessionSummary } from "./summary"
 import { Bus } from "@/bus"
-import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
 import type { Provider } from "@/provider/provider"
@@ -42,7 +41,6 @@ export namespace SessionProcessor {
     const toolcalls: Record<string, Message.ToolPart> = {}
     let snapshot: string | undefined
     let blocked = false
-    let attempt = 0
     let needsCompaction = false
     // Reasoning delta buffer: aggregate per-token deltas into batched SSE updates
     const reasoningDeltaBuf = new Map<string, string>()
@@ -60,18 +58,20 @@ export namespace SessionProcessor {
         needsCompaction = false
         const shouldBreak = (await Config.get()).experimental?.continue_loop_on_deny !== true
         const idleMs = (await EngineConfig.get()).activity.session_llm_idle_ms
-        // Activity policy for per-attempt LLM streams in this session.
-        // Step 2 transitional state: maxRetries=0 so the activity runner
-        // emits exactly one terminal per attempt and rethrows; the outer
-        // while-true + SessionRetry.retryable path owns retries until
-        // step 5 collapses both layers. Once that happens, this policy
-        // gains real maxRetries and the outer retry loop is deleted.
+        // Activity owns retries (rule 8 — single source). The runner's
+        // classifier + per-class maxRetries + totalMs deadline replace the
+        // session/retry.ts SessionRetry namespace and the outer while-true
+        // loop that used to wrap this block. Retries are now invisible to
+        // the processor — withLLMActivity rethrows LLMActivityError only
+        // after exhausting its retry budget OR hitting a non-retryable class
+        // (client_4xx, request_timeout, payload_too_large, context_overflow).
+        // Aborts from the external signal raise LLMActivityAbortedError,
+        // also a single-attempt terminal.
         const activityPolicy: LLMActivityPolicy = {
           ...DefaultLLMActivityPolicy,
           idleMs,
-          maxRetries: { default: 0 },
         }
-        while (true) {
+        {
           try {
             let currentText: Message.TextPart | undefined
             let reasoningMap: Record<string, Message.ReasoningPart> = {}
@@ -474,11 +474,20 @@ export namespace SessionProcessor {
             }
               },
               (event: LLMActivityEvent) => {
-                // Step 2 transitional sink: trace terminals only. Step 3
-                // wires this through to session.bridge / overlay protocol
-                // as the canonical translator between LLMActivityEvent and
-                // the existing SessionStatus events; once that lands, this
-                // sink becomes a Bus.publish call and the bridge subscribes.
+                // Translate retry events directly into SessionStatus retry
+                // updates. The activity runner is the single source of
+                // truth for "I tried, hit a transient class, will retry
+                // after backoffMs"; the overlay's spinner reads exactly
+                // these SessionStatus retry events.
+                if (event.type === "retry") {
+                  SessionStatus.set(input.sessionID, {
+                    type: "retry",
+                    attempt: event.attempt,
+                    message: `${event.cls}: backoff ${event.backoffMs}ms`,
+                    next: event.ts + event.backoffMs,
+                  })
+                  return
+                }
                 if (event.type === "terminal") {
                   log.debug("activity terminal", {
                     activityID: event.id,
@@ -489,11 +498,13 @@ export namespace SessionProcessor {
               },
             )
           } catch (e: any) {
-            // withLLMActivity wraps the original throw as LLMActivityError
-            // (or LLMActivityAbortedError for external_abort). Unwrap so the
-            // existing Message.fromError / SessionRetry path keeps seeing
-            // the same shapes it always saw — taxonomy upgrade is a step-5
-            // responsibility, not part of this migration.
+            // withLLMActivity rethrows LLMActivityError only after exhausting
+            // its retry budget or hitting a non-retryable class (or as
+            // LLMActivityAbortedError on external_abort). The processor sees
+            // the underlying cause shape; map to Message.fromError / handle
+            // ContextOverflowError as a special-case compaction trigger;
+            // anything else terminates the processor turn with the error
+            // attached to the assistant message.
             const original =
               e instanceof LLMActivityError ? (e.cause ?? e) : e
             log.error("process", {
@@ -503,29 +514,14 @@ export namespace SessionProcessor {
             const error = Message.fromError(original, { providerID: input.model.providerID })
             if (Message.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
-              break
-            }
-            const retry = SessionRetry.retryable(error)
-            if (retry !== undefined) {
-              attempt++
-              const delay = SessionRetry.delay(attempt, error.name === "APIError" ? error : undefined)
-              SessionStatus.set(input.sessionID, {
-                type: "retry",
-                attempt,
-                message: retry,
-                next: Date.now() + delay,
+            } else {
+              input.assistantMessage.error = error
+              Bus.publish(Session.Event.Error, {
+                sessionID: input.assistantMessage.sessionID,
+                error: input.assistantMessage.error,
               })
-              await SessionRetry.sleep(delay, input.abort).catch((err) => {
-                log.debug("retry sleep aborted or failed", { error: String(err) })
-              })
-              continue
+              SessionStatus.set(input.sessionID, { type: "idle" })
             }
-            input.assistantMessage.error = error
-            Bus.publish(Session.Event.Error, {
-              sessionID: input.assistantMessage.sessionID,
-              error: input.assistantMessage.error,
-            })
-            SessionStatus.set(input.sessionID, { type: "idle" })
           }
           if (snapshot) {
             const patch = await Snapshot.patch(snapshot)

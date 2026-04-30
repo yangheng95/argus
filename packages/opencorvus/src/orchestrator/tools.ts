@@ -21,7 +21,6 @@ import { Publisher } from "@/engine/publisher"
 import { EngineGit } from "@/engine/git"
 import { EngineMemoryBridge } from "@/engine/memory-bridge"
 import { SubAgentProtocol } from "@/agent/sub-agent-protocol"
-import { withStageRetry } from "@/util/retry"
 import { Event as EngineEvent } from "@/engine/model"
 import { EngineProtocol } from "@/engine/protocol"
 import {
@@ -486,21 +485,26 @@ export function createOrchestratorTools(input: {
           const { createDecisionLog } = await import("@/decision-log")
           const decisionLog = createDecisionLog(taskID)
 
-          const result = await withStageRetry("goal", () =>
-            RequirementsAgent.run({
-              title: task.title,
-              request: task.request,
-              attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
-              designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
-              taskID,
-              parentSessionID: input.agentSessionID,
-              signal: input.signal,
-              decisionLog,
-              onStatus: () => {},
-              onSessionCreated: (id) => { runnerSessionID = id },
-            }),
-            { signal: input.signal },
-          )
+          // Stage-level retry was removed in step 5/7 (rule 8 — single
+          // source). Transient LLM-call failures are now retried inside
+          // withLLMActivity per the LLMActivityPolicy on the processor's
+          // session. A stage-level "rerun the whole agent from scratch"
+          // wrapper on top duplicated the responsibility and silently
+          // turned activity-level retry budgets into multiplied attempts
+          // (a 5-retry policy under a 2-retry stage wrapper meant up to
+          // 18 actual provider hits per logical requirements run).
+          const result = await RequirementsAgent.run({
+            title: task.title,
+            request: task.request,
+            attachments: Array.isArray(task.attachments) ? task.attachments as any : undefined,
+            designSpecs: Array.isArray(task.design_specs) ? task.design_specs as any : undefined,
+            taskID,
+            parentSessionID: input.agentSessionID,
+            signal: input.signal,
+            decisionLog,
+            onStatus: () => {},
+            onSessionCreated: (id) => { runnerSessionID = id },
+          })
           if (result.requirements.length === 0) {
             // Same contract the old RequirementsService enforced: an empty
             // REQ-N list means requirements did not converge. Surface it as
