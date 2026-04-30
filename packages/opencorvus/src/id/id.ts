@@ -46,6 +46,9 @@ export namespace Identifier {
     metric_spec: "mts",
     metric_result: "mtr",
     counterexample: "cex",
+    /** LLM provider call lifecycle (one logical request, including its
+     *  internal retries / heartbeats). See packages/opencorvus/src/llm/activity.ts. */
+    activity: "act",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {
