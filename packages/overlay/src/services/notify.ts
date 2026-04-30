@@ -34,25 +34,26 @@ function notificationApiAvailable(): boolean {
 
 async function ensurePermission(): Promise<NotificationPermission> {
   if (!notificationApiAvailable()) return "denied";
-  // Always re-read the platform state — the user may have toggled it via
-  // OS / browser settings since the last check, in which case our cached
-  // "denied" would lock them out forever even after they re-grant.
-  permissionState = Notification.permission;
-  if (permissionState === "granted" || permissionState === "denied") {
-    return permissionState;
+  // W2-V34: this path runs from lifecycle event handlers (task complete,
+  // task failed, etc.) that are NOT user gestures. Calling
+  // Notification.requestPermission() here is rejected by WebKit (darwin
+  // Tauri WKWebView) with "Notification prompting can only be done from a
+  // user gesture" and the permission is recorded as "denied" without ever
+  // showing the OS prompt. The user can only recover by changing OS-level
+  // settings.
+  //
+  // We now ONLY read Notification.permission and degrade quietly. The
+  // explicit prompt path lives in requestNotificationPermission(), which
+  // is wired to the toggle in components/settings/GeneralPanel.tsx — a
+  // real user click that satisfies WebKit's gesture requirement.
+  const current = Notification.permission;
+  permissionState = current;
+  if (current !== "granted") {
+    console.warn(
+      `[notify] Notification permission is "${current}"; degrading to in-app feedback only. Toggle the setting in GeneralPanel.tsx to request permission inside a user gesture.`,
+    );
   }
-  if (permissionRequestPending) return "default";
-  permissionRequestPending = true;
-  try {
-    const result = await Notification.requestPermission();
-    permissionState = result;
-    if (result === "denied") {
-      console.warn("[notify] Notification permission denied; degrading to in-app feedback only.");
-    }
-    return result;
-  } finally {
-    permissionRequestPending = false;
-  }
+  return current;
 }
 
 /** Surface the live platform permission state to settings UI so the
@@ -174,13 +175,13 @@ export function clearTaskNotificationState(taskID?: string): void {
   lastDispatched.delete(taskID);
 }
 
-// Initialize the permission cache early so the first real lifecycle event
-// doesn't have to wait for the prompt round-trip.
-export function primeNotificationPermission(): void {
-  if (!settingsStore.desktopNotifications) return;
-  if (!notificationApiAvailable()) return;
-  void ensurePermission();
-}
+// W2-V34: primeNotificationPermission() removed. Pre-fix, init.ts called
+// it during boot to "warm up" the permission cache, which on darwin
+// (WebKit) requested permission outside any user gesture and locked the
+// state to "denied" for the session. Permission is now requested only via
+// the explicit toggle in GeneralPanel.tsx (a click handler — a real user
+// gesture). Any other path that needs to know the current state should
+// call notificationPermissionState() (read-only).
 
 // Touch a store reference so eslint / tree-shake knows we depend on it
 // (the import is here for createEffect-driven future enhancements).
