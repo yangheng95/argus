@@ -1,12 +1,11 @@
 import fs from "fs/promises"
-import { xdgData, xdgCache, xdgState } from "xdg-basedir"
+import { xdgData, xdgCache, xdgConfig, xdgState } from "xdg-basedir"
 import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
 
 const app = "opencorvus"
 const isWin = process.platform === "win32"
-const cwd = process.cwd()
 
 function resolveHome() {
   if (process.env.OPENCORVUS_TEST_HOME) return process.env.OPENCORVUS_TEST_HOME
@@ -46,6 +45,15 @@ function statePath() {
   return path.join(xdgState || (isWin ? winLocalDir() : path.join(resolveHome(), ".local", "state")), app)
 }
 
+function configPath() {
+  const root = portableRoot()
+  if (root) return path.join(root, "config")
+  return path.join(
+    xdgConfig || (isWin ? path.join(process.env.APPDATA || winLocalDir()) : path.join(resolveHome(), ".config")),
+    app,
+  )
+}
+
 export namespace Global {
   export const Path = {
     get home() { return resolveHome() },
@@ -53,7 +61,14 @@ export namespace Global {
     get bin() { return path.join(dataPath(), "bin") },
     get log() { return path.join(dataPath(), "log") },
     get cache() { return cachePath() },
-    get config() { return process.env.OPENCORVUS_GLOBAL_CONFIG_DIR?.trim() || cwd },
+    // Global user config — XDG-style (~/.config/opencorvus on Linux, %APPDATA%/opencorvus
+    // on Windows, $OPENCORVUS_HOME/config when running portable). NEVER falls back to
+    // process.cwd(): that historical default polluted the active project's primary
+    // worktree with a synthetic package.json (`@opencorvus-ai/plugin` plugin manifest)
+    // which then collided with build-agent commits at `git merge --ff-only` time.
+    // Project-scoped config still lives under `<projectDir>/.opencorvus/`, picked up
+    // by `ConfigPaths.directories` walking up from `Instance.directory`.
+    get config() { return process.env.OPENCORVUS_GLOBAL_CONFIG_DIR?.trim() || configPath() },
     get state() { return statePath() },
   }
 }

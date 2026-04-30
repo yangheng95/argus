@@ -178,8 +178,6 @@ build/
 .env
 .env.*
 !.env.example
-*.db-shm
-*.db-wal
 *.tsbuildinfo
 coverage/
 .cache/

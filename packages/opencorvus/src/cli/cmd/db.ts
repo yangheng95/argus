@@ -90,8 +90,11 @@ const ResetCommand = cmd({
       process.exit(1)
     }
 
+    // CLI is invoked from the project directory; capture cwd BEFORE disposing
+    // any active Instance so reset() can locate `<projectDir>/.opencorvus/`.
+    const projectDir = process.cwd()
     await Instance.disposeAll().catch(() => undefined)
-    const results = await Database.reset()
+    const results = await Database.reset(projectDir)
     for (const r of results) {
       console.log(`${r.ok ? "✓" : "✗"} ${r.label}: ${r.path}${r.ok ? "" : ` (${r.error})`}`)
     }
