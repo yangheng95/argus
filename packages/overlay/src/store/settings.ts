@@ -113,6 +113,8 @@ const DEFAULT_LOCALE = sanitizeLocale(
 
 // ── Defaults ──
 
+export const DEFAULT_THEME = "vscode-dark";
+
 export const DEFAULT_SETTINGS: OverlaySettings = {
   serverUrl: DEFAULT_SERVER,
   autoServer: true,
@@ -126,7 +128,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   workspacePanelHeight: null,
   opacity: 0.99,
   zoom: 1,
-  theme: "dark",
+  theme: DEFAULT_THEME,
   locale: DEFAULT_LOCALE,
   directory: "",
   workspaceTaskID: "",
