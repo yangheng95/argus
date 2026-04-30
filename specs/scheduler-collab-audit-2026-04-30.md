@@ -17,8 +17,8 @@ This shape has consequences:
 - **One real channel forward** — typed function args.
 - **One real channel backward** — append-only DB rows + `decision_log` phase entries.
 - **One real wake mechanism** — `dispatchTaskLoop({ taskID, event: { note } })`, fire-and-forget into a queue.
-- **Three independent verdict authorities** (LLM agent, visual hard-gate, runtime-evidence pre-gate) wired as serial overrides — last writer wins. This is the most concrete rule 8 / rule 22 risk in the system.
-- **At least one stub on the polling side** — `engine/runtime.ts:syncGoalRuns` is empty; goal-run completion detection is documented but unimplemented.
+- **Three layered verdict authorities** (LLM agent, visual hard-gate, runtime-evidence pre-gate). Verified intentional after reading source — the visual hard-gate explicitly cites CLAUDE.md rule 12 ("视觉 benchmark 必须以视觉呈现") and the runtime-evidence pre-gate exists to avoid burning LLM tokens on empty-scaffold goals. The actual risk is **no single aggregated verdict object** for downstream analysis (the layered overrides are correctly designed; consumers reading `verdict` artifact see the final, but reasoning trace lives in the synthesised `summary` markdown).
+- **`engine/runtime.ts:syncGoalRuns` is intentionally empty** — verified by reading the comment at lines 161-165: per-goal execution moved to GoalPool + event bridge; the runtime poll path is for non-per-goal runs only. Not a regression.
 - **Information loss is real and measurable** — `BuildResult` only carries `{status, summary, worktree}`; detailed errors never escape the build session. Retry feedback is re-synthesised into markdown by the orchestrator.
 - **Bench data confirms intent-analysis abort + design_analysis abort + bootstrap-first serial gate**. The orchestrator continued past these without escalation — i.e. agents downstream of design_analysis received zero visual context but were not told.
 
@@ -110,20 +110,22 @@ This is the **first observed information-loss site** in the live bench.
 | Channel form (backward) | `executor.events()` is a generator that subscribes to `GlobalBus` (`executor/opencode.ts:135-198`), yields message/status events until `task-queue.completed`. |
 | Critical gap | **`orchestrator/tools.ts` does NOT consume `executor.events()`.** Build tool returns once `BuildAgent.run` resolves. There is no real-time feedback loop wired between the orchestrator and the live executor stream. The orchestrator only sees the terminal `BuildResult { status, summary, worktree }`. |
 | Polling | `TaskQueueService.poll()` runs every ~500ms (`scheduler/task-queue-service.ts:39-42`); concurrency cap 4. `executor.submit` calls `runNow()` to bypass the interval (`executor/opencode.ts:70`). |
-| `syncGoalRuns` stub | `engine/runtime.ts:167-170` is **empty**. Comment says "delegate to syncGoalRuns which handles both active-goal polling and pipeline continuation" but the function body is a no-op. Per-goal completion polling on the runtime side is **not implemented**. (Mitigation: status is re-derived at describe-time by reading the goal_run tip, so the loop does not actually depend on this poll.) |
+| `syncGoalRuns` stub | `engine/runtime.ts:167-170` body is `void runID; void hooks` — intentional no-op. **Verified** by reading the doc comment at `runtime.ts:161-165`: "Per-goal execution is owned by GoalPool + the event bridge. Startup orphan cleanup was moved to engine/recovery.ts so runtime polling no longer tries to reconcile previous-process state here." Not a regression. The runtime poll is for legacy non-per-goal runs only; per-goal completion arrives via GoalPool + EngineProtocol bus events. |
 | Loss / dup | **Severe loss at BuildResult.** `BuildResult` schema is `{status, summary, worktree?}` (`build/types.ts`). The detailed tool-call history, file edits, errors live only in `Session.message` rows. The orchestrator gets a 1-line summary. On retry the loss compounds: orchestrator must re-synthesise retry feedback from decision_log, which itself was synthesised from the summary. |
 
-### 2.6 build → delivery (verdict authority — the rule 8 hot spot)
+### 2.6 build → delivery (verdict layered architecture)
 
-This is the **largest structural risk** identified.
+This is the most architecturally complex seam — verified by reading source after first-pass audit (rule 3 self-challenge).
 
 | Aspect | Finding |
 |---|---|
-| Authority count | **Three.** Layered as serial overrides, not aggregated. |
-| Authority 1 — LLM | `DeliveryAgent.verify` produces `DeliveryVerdictType` (`accepted` \| `rejected` with `rejection_details[].goal_id`) (`delivery/verdict.ts:118-124`). |
-| Authority 2 — visual hard-gate | `finalizeVerdict()` at `delivery/verdict.ts:168-216`, called inside `DeliveryService.verify` after the LLM verdict (`delivery/service.ts:154-165`). Can override `accepted → rejected` based on visual SSIM/density thresholds. Comment: "hard gate covers soft" (verdict.ts:151-162). |
-| Authority 3 — runtime-evidence pre-gate | `synthesizeRuntimeRejection()` at `delivery/verdict.ts:227-274`, called in `DeliveryService.verify` *before* the LLM (`delivery/service.ts:78-123`). If build artifact / DOM is empty, **bypasses the LLM entirely** and emits a synthetic rejected verdict. |
-| Rule 8 / rule 22 status | The three authorities are **not aggregated into a verdict object**. Last writer wins: runtime-evidence pre-gate short-circuits everything; visual hard-gate overrides LLM; LLM is the default. There is no single "all checks passed" tally. |
+| Authority count | **Three layered gates.** Documented as intentional defense layers, not accidental double-source. |
+| Authority 1 — runtime-evidence pre-gate | `synthesizeRuntimeRejection()` at `delivery/verdict.ts:227-274`, called *first* in `DeliveryService.verify` (`delivery/service.ts:78-123`). If build artifact DOM is empty / no canvas pixels, **bypasses the LLM entirely** and emits a synthetic rejected verdict. Purpose (verbatim from `verdict.ts:218-225`): "avoid burning LLM tokens on goals that only produced scaffold/shells." |
+| Authority 2 — LLM | `DeliveryAgent.verify` produces `DeliveryVerdictType` (`accepted` \| `rejected` with `rejection_details[].goal_id`) (`delivery/verdict.ts:118-124`). Runs only if pre-gate passes. |
+| Authority 3 — visual hard-gate | `finalizeVerdict()` at `delivery/verdict.ts:168-216`, called inside `DeliveryService.verify` after the LLM verdict (`delivery/service.ts:154-165`). Purpose (verbatim from `verdict.ts:150-156`): "LLM 无权推翻 ... CLAUDE.md rule 12：视觉有关的 benchmark 必须以视觉呈现." |
+| Aggregation behaviour | **Verified by reading `finalizeVerdict`:**<br>• `metric.passed → return llmVerdict unchanged` (`verdict.ts:173`)<br>• `metric.passed=false + LLM rejected → append gate failures to rejection_details, preserve attribution` (`verdict.ts:198-203`) — this IS aggregation<br>• `metric.passed=false + LLM accepted → flip to rejected, preserve LLM summary in body` (`verdict.ts:206-215`) — this is gate veto, not silent overwrite |
+| Rule 8 / rule 22 status | **NOT a violation.** The three gates are intentional and documented. Each has a single write path. The `verdict` artifact is the canonical output. The denormalised `verification-evidence` artifact is derived single-write. |
+| Real risk | **No single aggregated reasoning trace.** The pre-gate path emits a synthetic verdict with `summary` markdown but no LLM trace. The hard-gate path either appends to LLM trace (rejected case) or overwrites LLM verdict but preserves summary (accepted-flipped case). Downstream consumers reading the verdict cannot distinguish "LLM analysed deeply and rejected with detailed evidence" from "pre-gate fired before any LLM ran" without parsing the markdown. |
 | Persistence | Verdict written as `engine_artifact kind=verdict label=delivery-agent-verdict payload=DeliveryVerdictType` (`orchestrator/tools.ts:2660-2666`). A *second* artifact `kind=verification-evidence scope=delivery` is denormalised from the first via `updateEvaluationFromDeliveryVerdict` (`engine/persist.ts:945-998`). The downstream-agent confirmed: single write site, derived not independent — **not a real double source**, but the denormalisation does mean a reader of `verification-evidence` and a reader of `verdict` can disagree if persistence is partial. |
 | Loss / dup | **Real loss on rejection re-entry.** Delivery's full `rejection_details[]` (structured array with category, file, error, suggestion) survives only in the artifact payload. The retry path reads `decision_log phase=retry` entries which are **synthesised markdown summaries** of the same content (`orchestrator/tools.ts:3951-3963`). The build agent on retry sees the markdown, never the original structured array. |
 
@@ -211,7 +213,7 @@ The decision-log is the **closest thing to a backplane** the system has.
 
 | # | Issue | Site | Verdict |
 |---|---|---|---|
-| D1 | Three serial verdict authorities (LLM agent / visual hard-gate / runtime-evidence pre-gate) override each other. | `delivery/service.ts:78-165`, `delivery/verdict.ts:151-274` | **Real rule 8/22 risk.** Last-writer-wins is not aggregation. |
+| D1 | Three layered verdict gates (runtime-evidence pre-gate → LLM → visual hard-gate). | `delivery/service.ts:78-165`, `delivery/verdict.ts:151-274` | **NOT a rule 8/22 violation** (verified rule 3 re-read). Layering is intentional & documented. Real risk is loss-of-reasoning-trace at downstream readers — synth verdicts have no LLM trace, flipped verdicts preserve summary but signal type is lost in markdown. |
 | D2 | `verdict` artifact + `verification-evidence` artifact denormalisation. | `engine/persist.ts:945-998` | Single write path — **not** a double source. Reader-side risk if write is partial. |
 | D3 | `engine_goal.workspace_dir` + `engine_goal_run.workspace_dir`. | `engine/persist.ts:1445`, `orchestrator/tools.ts:3854-3866` | Single-writer split, reader picks. **Stale-read risk** if reader hits goal_run path. |
 | D4 | `permission.asked` consumed by both auto-permission and interaction. | `engine/auto-permission.ts:58`, `engine/interaction.ts:17` | **Real** multi-subscriber drift on concurrent perms. |
@@ -262,7 +264,7 @@ This is not a bug list. It's the shape:
 
 3. **Channels are typed-forward / DB-backward.** Rich structures flow forward as args. They flow backward as **summarised markdown** (decision_log) plus **structured artifacts** (verdict, evidence, run_attempt). The summarisation is the loss.
 
-4. **Verdict is the one place where the shape genuinely breaks.** Three authorities, serial overrides, no aggregation — this is not "LLM as state machine"; it is three pre-LLM gates pretending to be one verdict. Rule 8 / 22 candidate for redesign.
+4. **Verdict is layered, not broken** (corrected after rule 3 self-challenge). The three gates are intentional defense-in-depth tied to CLAUDE.md rule 12 (visual benchmarks must be visually verified). The actual structural concern is downstream: a single `verdict` artifact carries one of three semantically different things (synth-from-runtime / LLM-only / LLM+gate-merged / gate-flipped) and consumers must read markdown to disambiguate. This is a documentation/typing concern, not a double-source.
 
 5. **Wake is a single point of failure.** `dispatchTaskLoop` async injection has no resilience. The system survives because the LLM re-derives state, but if the wake never fires, the LLM never gets to re-derive.
 
@@ -280,7 +282,7 @@ This is not a bug list. It's the shape:
 
 4. **What is the actual write path for `design_analysis_failed` / `intent_analysis_aborted` decision-log entries?** Without these, downstream agents are decision-blind.
 
-5. **`syncGoalRuns` stub** — is the no-op intentional (status comes from describe time) or a regression? Memory note `project_per_goal_worktree.md` mentions per-goal dispatch was the new arch; confirm whether runtime poll was deliberately deprecated.
+5. ~~**`syncGoalRuns` stub** — is the no-op intentional?~~ **Resolved during audit refinement.** Verified intentional via `runtime.ts:161-165` doc comment — per-goal flow lives in GoalPool + event bridge. The runtime poll is for legacy non-per-goal runs only.
 
 6. **`rejection_details[]` structured-to-markdown loss** — would persisting the structured array directly in `decision_log.value` (parsed by build agent) recover the loss? Or does the markdown form serve a real purpose?
 
