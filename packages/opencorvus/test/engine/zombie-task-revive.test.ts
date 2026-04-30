@@ -3,27 +3,29 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 /**
- * 2026-04-30 — overlay-web-benchmark wedged indefinitely after the
- * orchestrator's first wake hit `AbortError: stream idle > 180000ms` from
- * `alibaba-coding-plan-cn` (transient connection blip documented in
- * MEMORY/feedback_alibaba_connection.md). `Orchestrator.processTask`
- * returned (abort caught inside session.processor as cancel),
- * orchestrator-loop logged "task loop exited", and nothing else fired —
- * task stayed `status=active` with no in-flight loop and no downstream
- * wake. Same wedge pattern as the inject_message gap (commit 5861ebc3b)
- * and the delivery_rework gap, but on the upstream side: no decision
- * means no decision-driven wake.
+ * Engine wedge fix (specs/engine-stream-error-wedge-2026-04-30.md):
  *
- * `resumeActiveTaskLoop` was defined for exactly this safety net but was
- * never called from anywhere — the comment `the poll safety net` was
- * aspirational. EngineRuntime.monitorRuns now invokes
- * `reviveZombieTasks()` after every sync wave, sweeping active tasks
- * with no in-flight loop and resuming them unless the previous wake already
- * wrote an explicit orchestrator stream-error artifact. That artifact means
- * the next retry must be an external wake, not an automatic replay.
+ * Earlier this test pinned the inverted contract — `reviveZombieTasks`
+ * refused to wake any task that had an `orchestrator-stream-error`
+ * artifact, "waiting for external wake". In autonomous CLI bench mode
+ * there is no external wake source, so a single transient HTTP 401 on
+ * the first orchestrator wake (e.g. the international
+ * `alibaba-coding-plan` endpoint rejecting 国内 sk-sp-* keys, fixed in
+ * commit `5fe320b28`) wedged the task forever.
  *
- * This pins the wiring at the source level: any future refactor that
- * drops the call from monitorRuns or removes the helper fails CI.
+ * The fix:
+ *   - `engine/describe.ts` now projects recent
+ *     `orchestrator-stream-error` artifacts into
+ *     `TaskDesc.recent_stream_failures`, and
+ *     `renderTaskDescription` renders them as a "Recent orchestrator
+ *     stream failures" section in the orchestrator prompt.
+ *   - `reviveZombieTasks` resumes the task regardless of stream-error
+ *     history; the LLM reads the failure list on its next wake and
+ *     decides `retry_task` / `restart_from_stage` / `fail_task`
+ *     itself (rule 13 — no engine state machine deciding for the LLM).
+ *
+ * This test pins the wiring at the source level so a future refactor
+ * can't quietly reintroduce the wedge.
  */
 
 describe("EngineRuntime — zombie task revive wiring", () => {
@@ -34,20 +36,32 @@ describe("EngineRuntime — zombie task revive wiring", () => {
     )
     expect(runtimeSrc).toMatch(/async function reviveZombieTasks\b/)
     expect(runtimeSrc).toMatch(/await reviveZombieTasks\(\)/)
-    // Pin the dependency on resumeActiveTaskLoop so a queue-side rename
-    // doesn't quietly orphan the safety net.
     expect(runtimeSrc).toMatch(/resumeActiveTaskLoop/)
     expect(runtimeSrc).toMatch(/isLoopInFlight/)
   })
 
-  test("reviveZombieTasks does not auto-replay explicit orchestrator stream errors", async () => {
+  test("reviveZombieTasks no longer guards on orchestrator stream-error artifacts", async () => {
     const runtimeSrc = await fs.readFile(
       path.join(import.meta.dir, "..", "..", "src", "engine", "runtime.ts"),
       "utf8",
     )
-    expect(runtimeSrc).toMatch(/hasExplicitOrchestratorStreamErrorSinceTaskStart/)
-    expect(runtimeSrc).toMatch(/orchestrator-stream-error/)
-    expect(runtimeSrc).toMatch(/waiting for external wake/)
+    // The legacy guard helper and its log line must be gone — the wedge
+    // they produced is the regression this test exists to prevent.
+    expect(runtimeSrc).not.toMatch(/hasExplicitOrchestratorStreamErrorSinceTaskStart/)
+    expect(runtimeSrc).not.toMatch(/waiting for external wake/)
+  })
+
+  test("describe.ts is the new consumer of orchestrator-stream-error artifacts", async () => {
+    const describeSrc = await fs.readFile(
+      path.join(import.meta.dir, "..", "..", "src", "engine", "describe.ts"),
+      "utf8",
+    )
+    // Single source for projecting the artifacts into the LLM prompt — if
+    // this projection is ever dropped, the LLM goes blind to stream errors
+    // and the wedge effectively returns even with the runtime guard gone.
+    expect(describeSrc).toMatch(/listOrchestratorStreamErrorArtifacts/)
+    expect(describeSrc).toMatch(/recent_stream_failures/)
+    expect(describeSrc).toMatch(/Recent orchestrator stream failures/)
   })
 
   test("queue exports the helpers reviveZombieTasks depends on", async () => {

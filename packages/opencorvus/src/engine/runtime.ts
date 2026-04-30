@@ -2,10 +2,9 @@ import { ExecutorRegistry } from "@/executor/registry"
 import { Config } from "@/config/config"
 
 import { Instance } from "@/project/instance"
-import { Database, and, desc, eq, sql } from "@/storage/db"
+import { Database, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 import {
-  EngineArtifactTable,
   EngineInteractionRequestTable,
   EngineTaskTable,
 } from "./engine.sql"
@@ -56,38 +55,27 @@ const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT
  * orchestrator decision (`task_report`, `dispatch`, `inject_*`, …)
  * schedules its own follow-up wake, so the loop re-enters until the task
  * reaches terminal. But when `processTask` returns WITHOUT making a
- * decision — e.g. the orchestrator's LLM stream got aborted by the
- * `stream-activity` watchdog (`stream idle > 180000ms` from
- * `alibaba-coding-plan-cn` blips, which MEMORY documents as transient) —
- * no decision means no follow-up wake means the task sits "active"
- * forever with nobody driving it. The `resumeActiveTaskLoop` API was
- * defined for exactly this safety net but was never wired up; this poll
- * is the missing wiring.
+ * decision — stream-idle abort, provider onError (HTTP 4xx/5xx), or
+ * mid-stream protocol violation — no decision means no follow-up wake
+ * and the task sits "active" forever.
  *
- * Explicit orchestrator stream errors are different: once the wake persisted
- * `orchestrator-stream-error`, `recordOrchestratorStreamError` is the single
- * source of truth and says the next wake must be external. Reviving that task
- * automatically replays the same failed wake forever when the failure is
- * deterministic preflight configuration.
+ * `recordOrchestratorStreamError` writes an `orchestrator-stream-error`
+ * artifact for the latter cases; `engine/describe.ts` projects those
+ * artifacts into `TaskDesc.recent_stream_failures` and
+ * `renderTaskDescription` renders them into the orchestrator prompt.
+ * The LLM reads the failure history on its next wake and decides
+ * `retry_task` / `restart_from_stage` / `fail_task` itself (rule 13:
+ * trust LLM, no engine state machine that decides for it).
+ *
+ * Earlier this poll refused to wake any task whose recent history
+ * contained such an artifact, on the theory that "the next retry must
+ * be an external wake". In autonomous CLI bench mode there is no
+ * external wake source, so the task wedged forever
+ * (specs/engine-stream-error-wedge-2026-04-30.md). The wedge guard is
+ * gone — the LLM, given the failure list, decides what to do, and the
+ * provider rate-limit / budget cap bound any burn loop at the LLM
+ * layer rather than the engine layer.
  */
-function hasExplicitOrchestratorStreamErrorSinceTaskStart(task: TaskRow): boolean {
-  const startedAt = task.time_started ?? task.time_created
-  const row = Database.use((db) =>
-    db
-      .select({ id: EngineArtifactTable.id })
-      .from(EngineArtifactTable)
-      .where(and(
-        eq(EngineArtifactTable.task_id, task.id),
-        eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
-        sql`${EngineArtifactTable.time_created} >= ${startedAt}`,
-      ))
-      .orderBy(desc(EngineArtifactTable.time_created))
-      .limit(1)
-      .get(),
-  )
-  return !!row
-}
-
 async function reviveZombieTasks(): Promise<void> {
   // Lazy imports avoid the runtime ↔ queue ↔ task-status circular deps
   // the rest of this file already navigates via dynamic `await import`.
@@ -99,10 +87,6 @@ async function reviveZombieTasks(): Promise<void> {
   for (const task of tasks) {
     if (!isTaskActive(task)) continue
     if (isLoopInFlight(task.id)) continue
-    if (hasExplicitOrchestratorStreamErrorSinceTaskStart(task)) {
-      log.info("reviveZombieTasks: explicit orchestrator stream error exists, waiting for external wake", { taskID: task.id })
-      continue
-    }
     log.info("reviveZombieTasks: task is active with no loop in flight, resuming", { taskID: task.id })
     await resumeActiveTaskLoop(task.id).catch((err) => {
       log.warn("reviveZombieTasks: resume failed", {

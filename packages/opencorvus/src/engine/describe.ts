@@ -45,10 +45,16 @@ import {
   findTask,
   listGoalRunsByGoal,
   listGoals,
+  listOrchestratorStreamErrorArtifacts,
   type GoalRow,
   type GoalRunRow,
   type TaskRow,
 } from "./store"
+
+/** Cap recent stream-failure entries surfaced into the orchestrator prompt.
+ *  A chronically failing provider can write an artifact every wake; older
+ *  entries add no decision value once the LLM has seen the trend. */
+const STREAM_FAILURE_PROMPT_CAP = 5
 
 const LIVE_STATES = new Set(["queued", "accepted", "planning", "running", "evaluating", "blocked"])
 const TERMINAL_OK_STATES = new Set(["completed"])
@@ -110,6 +116,20 @@ export interface GoalDesc {
   never_dispatched: boolean
 }
 
+export interface StreamFailureDesc {
+  artifact_id: string
+  time_created: number
+  /** Free-text reason recorded by `recordOrchestratorStreamError` —
+   *  e.g. "APIError: Provider alibaba-coding-plan returned HTTP 401 …". */
+  reason: string
+  /** Class name from the AI SDK error (`APIError`, `AbortError`, …) when
+   *  the writer captured one. */
+  error_name?: string
+  /** Orchestrator session id active at the moment of the failure, when
+   *  available. */
+  session_id?: string
+}
+
 export interface DeliveryVerdictDesc {
   iteration: number
   verdict: string
@@ -158,6 +178,14 @@ export interface TaskDesc {
     max_fix_runs: number
   }
   recent_verdict?: DeliveryVerdictDesc
+  /** Recent orchestrator-stream-error artifacts (newest first, capped at
+   *  STREAM_FAILURE_PROMPT_CAP). Each entry marks a wake whose LLM stream
+   *  aborted before any decision was made. The orchestrator LLM reads this
+   *  list on its next wake and decides retry_task / restart_from_stage /
+   *  fail_task — there is no engine state machine that auto-handles them
+   *  (rule 13). Empty / undefined when the task has had no stream failures
+   *  since `task.time_started`. */
+  recent_stream_failures?: StreamFailureDesc[]
   iterations_count: number
 }
 
@@ -336,6 +364,33 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
   const history = readHistory(task.id)
   const verdict = describeVerdict(task.id)
 
+  // Surface recent orchestrator stream errors so the LLM can read them on
+  // its next wake and decide retry / restart / fail. The reviveZombieTasks
+  // poll resumes the task even when these are present (rule 13: no engine
+  // state machine that decides for the LLM); without this projection the
+  // artifacts would be invisible to the prompt and the LLM would be told
+  // "you woke up" with no clue why the previous attempt failed.
+  const streamErrorFloor = task.time_started ?? task.time_created
+  const streamErrorRows = listOrchestratorStreamErrorArtifacts(
+    task.id,
+    streamErrorFloor,
+    STREAM_FAILURE_PROMPT_CAP,
+  )
+  const recentStreamFailures: StreamFailureDesc[] = streamErrorRows.map((row) => {
+    const payload = (row.payload ?? {}) as {
+      reason?: string
+      errorName?: string
+      sessionID?: string
+    }
+    return {
+      artifact_id: row.id,
+      time_created: row.time_created,
+      reason: typeof payload.reason === "string" ? payload.reason : "",
+      error_name: typeof payload.errorName === "string" ? payload.errorName : undefined,
+      session_id: typeof payload.sessionID === "string" ? payload.sessionID : undefined,
+    }
+  })
+
   // Bootstrap-first signal. Single source — derived from the same goal
   // status the dispatch gate (orchestrator/tools.ts:3826-3862) reads.
   // Surfaces upstream of the gate so the LLM can plan the dispatch order
@@ -367,6 +422,7 @@ async function describeTaskFromRow(task: TaskRow): Promise<TaskDesc> {
       max_fix_runs: maxFixRuns,
     },
     recent_verdict: verdict,
+    recent_stream_failures: recentStreamFailures.length > 0 ? recentStreamFailures : undefined,
     iterations_count: history.length,
   }
 }
@@ -488,6 +544,22 @@ export function renderTaskDescription(desc: TaskDesc): string {
       lines.push("")
       lines.push(...renderGoal(g))
     }
+  }
+
+  if (desc.recent_stream_failures && desc.recent_stream_failures.length > 0) {
+    lines.push("")
+    lines.push(`## Recent orchestrator stream failures (${desc.recent_stream_failures.length})`)
+    for (const f of desc.recent_stream_failures) {
+      const ts = new Date(f.time_created).toISOString()
+      const tag = f.error_name ? `[${f.error_name}] ` : ""
+      lines.push(`- ${ts} ${tag}${truncate(f.reason, 240)}`)
+    }
+    lines.push(
+      `Each entry is an upstream LLM-call failure that aborted a wake before any ` +
+        `decision was made. Use this history to decide: \`retry_task\` (transient ` +
+        `network/idle blip), \`restart_from_stage\` (config-level — wrong provider/key), ` +
+        `or \`fail_task\` (permanent — quota exhausted, key revoked, model gone).`,
+    )
   }
 
   if (desc.recent_verdict) {
