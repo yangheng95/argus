@@ -613,6 +613,38 @@ export function findLatestDeliveryVerdictArtifactForDelivery(deliveryID: string)
   )
 }
 
+/**
+ * Recent orchestrator-stream-error artifacts for a task, newest first.
+ *
+ * Each row marks a wake whose LLM stream aborted (provider onError, idle
+ * watchdog, mid-stream protocol violation) before the orchestrator could
+ * make any decision. `recordOrchestratorStreamError` (engine/persist.ts)
+ * is the single writer; `describe.ts` is the single reader, surfacing
+ * the rows into the orchestrator prompt so the LLM can decide
+ * retry_task / restart_from_stage / fail_task on its next wake.
+ *
+ * Filtered by `time_created >= sinceMs` so a long-running task's old
+ * incidents don't follow it forever; the bench / orchestrator pass
+ * `task.time_started ?? task.time_created` as the floor.
+ */
+export function listOrchestratorStreamErrorArtifacts(
+  taskID: string,
+  sinceMs: number,
+  limit: number,
+) {
+  return Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, taskID),
+        eq(EngineArtifactTable.kind, "orchestrator-stream-error"),
+        sql`${EngineArtifactTable.time_created} >= ${sinceMs}`,
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .limit(limit)
+      .all(),
+  )
+}
+
 export function goalRunQueueTaskID(goalRun?: GoalRunRow) {
   if (!goalRun) return undefined
   const ref = goalRun.metadata as Record<string, unknown> | null
