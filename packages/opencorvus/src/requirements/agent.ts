@@ -113,7 +113,11 @@ export namespace RequirementsAgent {
       terminalTool: {
         toolName: "submit_requirements",
         isSatisfied: (collector) => collector.finalized,
-        isReadyToFinalize: (collector) => collector.requirements.length > 0,
+        // Requirements has no host-side completeness signal: one registered
+        // requirement is not proof that all explicit/implicit requirements and
+        // decisions are done. Keep work tools visible and let terminal recovery
+        // surface prose-stop misses instead of prematurely hiding collectors.
+        shouldExposeOnlyTerminalTool: () => false,
       },
     })
 

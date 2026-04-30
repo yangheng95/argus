@@ -519,7 +519,12 @@ export namespace BuildAgent {
             terminalTool: {
               toolName: "report_build_result",
               isSatisfied: (collector) => Boolean(collector.result),
-              isReadyToFinalize: () => Boolean(mergedHead),
+              // A merged HEAD makes the success terminal action host-obvious,
+              // so it is safe to hide work tools and force report_build_result.
+              // Failure is different: the concrete blocker lives in the model's
+              // work context, so failed reports stay available under "required"
+              // until a future collector-level fatal blocker exists.
+              shouldExposeOnlyTerminalTool: () => Boolean(mergedHead),
             },
           })
           const report = buildToolKit.getCollector()

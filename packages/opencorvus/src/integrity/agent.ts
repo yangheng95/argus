@@ -413,7 +413,7 @@ export async function reviewIntegrity(input: {
     terminalTool: {
       toolName: "submit_integrity_review",
       isSatisfied: (collector) => collector.finalized,
-      isReadyToFinalize: (collector) =>
+      shouldExposeOnlyTerminalTool: (collector) =>
         INTEGRITY_DIMENSIONS.every((dimension) => collector.dimensions.has(dimension.id)),
     },
     onSessionCreated: (session) => {

@@ -200,7 +200,7 @@ export namespace SessionLoop {
   export interface TerminalToolContract {
     toolName: string
     isSatisfied: () => boolean
-    isReadyToFinalize: () => boolean
+    shouldExposeOnlyTerminalTool: () => boolean
   }
 
   const ephemeralTerminalToolContracts = new Map<string, TerminalToolContract>()
@@ -551,6 +551,69 @@ export namespace SessionLoop {
     return total
   }
 
+  export type ProviderToolSource = "registry" | "mcp" | "extra" | "structured"
+
+  export class ToolInputSchemaError extends Error {
+    constructor(message: string, options?: ErrorOptions) {
+      super(message, options)
+      this.name = "ToolInputSchemaError"
+    }
+  }
+
+  export function providerBoundInputSchema(input: {
+    name: string
+    source: ProviderToolSource
+    model: Provider.Model
+    inputSchema: unknown
+  }) {
+    if (input.inputSchema === undefined || input.inputSchema === null) {
+      throw new ToolInputSchemaError(
+        `tool ${input.name} from ${input.source} is missing inputSchema`,
+      )
+    }
+    try {
+      const rawJsonSchema = asSchema(input.inputSchema as never).jsonSchema
+      const normalized = normalizeToolSchemaForProvider(input.model, rawJsonSchema)
+      return jsonSchema(normalized as any)
+    } catch (err) {
+      throw new ToolInputSchemaError(
+        `tool ${input.name} from ${input.source} has invalid inputSchema: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        { cause: err instanceof Error ? err : undefined },
+      )
+    }
+  }
+
+  export function prepareProviderTool(input: {
+    name: string
+    source: ProviderToolSource
+    model: Provider.Model
+    tool: AITool
+  }): AITool {
+    const raw = input.tool as AITool & { inputSchema?: unknown }
+    const prepared = {
+      ...(input.tool as any),
+      inputSchema: providerBoundInputSchema({
+        name: input.name,
+        source: input.source,
+        model: input.model,
+        inputSchema: raw.inputSchema,
+      }),
+    } as AITool
+    const schemaPayload = asSchema((prepared as { inputSchema?: unknown }).inputSchema as never).jsonSchema
+    const rootType = schemaPayload && typeof schemaPayload === "object" && "type" in schemaPayload
+      ? (schemaPayload as { type?: unknown }).type
+      : undefined
+    log.info("prepared provider tool schema", {
+      source: input.source,
+      tool: input.name,
+      rootType,
+      schemaChars: JSON.stringify(schemaPayload ?? {}).length,
+    })
+    return prepared
+  }
+
   function collectLoopState(msgs: Message.WithParts[]) {
     let lastUser: Message.User | undefined
     let lastAssistant: Message.Assistant | undefined
@@ -830,12 +893,17 @@ export namespace SessionLoop {
       messages: input.msgs,
     })
     if (input.lastUser.format?.type === "json_schema") {
-      tools["StructuredOutput"] = createStructuredOutputTool({
+      tools["StructuredOutput"] = prepareProviderTool({
+        name: "StructuredOutput",
+        source: "structured",
+        model: input.model,
+        tool: createStructuredOutputTool({
         schema: input.lastUser.format.schema,
         validate: ephemeralStructuredOutputGuards.get(input.sessionID),
         onSuccess(output) {
           structured = output
         },
+        }),
       })
     }
     if (format.type !== "json_schema") {
@@ -1224,7 +1292,7 @@ export namespace SessionLoop {
     if (!contract) return undefined
     if (!(contract.toolName in tools)) return undefined
     if (contract.isSatisfied()) return undefined
-    if (contract.isReadyToFinalize()) return { type: "tool", toolName: contract.toolName }
+    if (contract.shouldExposeOnlyTerminalTool()) return { type: "tool", toolName: contract.toolName }
     return "required"
   }
 
@@ -1236,7 +1304,7 @@ export namespace SessionLoop {
     const terminalTool = tools[contract.toolName]
     if (!terminalTool) return tools
     if (contract.isSatisfied()) return tools
-    if (!contract.isReadyToFinalize()) return tools
+    if (!contract.shouldExposeOnlyTerminalTool()) return tools
     return { [contract.toolName]: terminalTool }
   }
   export const loop = fn(LoopInput, async (input) => {
@@ -1467,11 +1535,10 @@ export namespace SessionLoop {
         const rule = PermissionNext.evaluate(item.id, "*", input.session.permission)
         if (rule.action === "deny") continue
       }
-      const schema = normalizeToolSchemaForProvider(input.model, z.toJSONSchema(item.parameters))
-      tools[item.id] = tool({
+      const registryTool = tool({
         id: item.id as any,
         description: item.description,
-        inputSchema: jsonSchema(schema as any),
+        inputSchema: item.parameters as any,
         async execute(args, options) {
           const ctx = context(args, options)
           await Plugin.trigger(
@@ -1508,101 +1575,110 @@ export namespace SessionLoop {
           return output
         },
       })
+      tools[item.id] = prepareProviderTool({
+        name: item.id,
+        source: "registry",
+        model: input.model,
+        tool: registryTool,
+      })
     }
 
     for (const [key, item] of Object.entries(await MCP.tools())) {
       const execute = item.execute
       if (!execute) continue
 
-      const transformed = normalizeToolSchemaForProvider(
-        input.model,
-        asSchema(item.inputSchema).jsonSchema,
-      )
-      item.inputSchema = jsonSchema(transformed)
-      item.execute = async (args, opts) => {
-        const ctx = context(args, opts)
+      const mcpTool = {
+        ...(item as any),
+        async execute(args: any, opts: ToolCallOptions) {
+          const ctx = context(args, opts)
 
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-          },
-          {
-            args,
-          },
-        )
+          await Plugin.trigger(
+            "tool.execute.before",
+            {
+              tool: key,
+              sessionID: ctx.sessionID,
+              callID: opts.toolCallId,
+            },
+            {
+              args,
+            },
+          )
 
-        await ctx.ask({
-          permission: key,
-          metadata: {},
-          patterns: ["*"],
-          always: ["*"],
-        })
+          await ctx.ask({
+            permission: key,
+            metadata: {},
+            patterns: ["*"],
+            always: ["*"],
+          })
 
-        const result = await execute(args, opts)
+          const result = await execute(args, opts)
 
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-            args,
-          },
-          result,
-        )
+          await Plugin.trigger(
+            "tool.execute.after",
+            {
+              tool: key,
+              sessionID: ctx.sessionID,
+              callID: opts.toolCallId,
+              args,
+            },
+            result,
+          )
 
-        const textParts: string[] = []
-        const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
+          const textParts: string[] = []
+          const attachments: Omit<Message.FilePart, "id" | "sessionID" | "messageID">[] = []
 
-        for (const contentItem of result.content) {
-          if (contentItem.type === "text") {
-            textParts.push(contentItem.text)
-          } else if (contentItem.type === "image") {
-            attachments.push({
-              type: "file",
-              mime: contentItem.mimeType,
-              url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
-            })
-          } else if (contentItem.type === "resource") {
-            const { resource } = contentItem
-            if (resource.text) {
-              textParts.push(resource.text)
-            }
-            if (resource.blob) {
+          for (const contentItem of result.content) {
+            if (contentItem.type === "text") {
+              textParts.push(contentItem.text)
+            } else if (contentItem.type === "image") {
               attachments.push({
                 type: "file",
-                mime: resource.mimeType ?? "application/octet-stream",
-                url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
-                filename: resource.uri,
+                mime: contentItem.mimeType,
+                url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
               })
+            } else if (contentItem.type === "resource") {
+              const { resource } = contentItem
+              if (resource.text) {
+                textParts.push(resource.text)
+              }
+              if (resource.blob) {
+                attachments.push({
+                  type: "file",
+                  mime: resource.mimeType ?? "application/octet-stream",
+                  url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
+                  filename: resource.uri,
+                })
+              }
             }
           }
-        }
 
-        const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
-        const metadata = {
-          ...(result.metadata ?? {}),
-          truncated: truncated.truncated,
-          ...(truncated.truncated && { outputPath: truncated.outputPath }),
-        }
+          const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
+          const metadata = {
+            ...(result.metadata ?? {}),
+            truncated: truncated.truncated,
+            ...(truncated.truncated && { outputPath: truncated.outputPath }),
+          }
 
-        return {
-          title: "",
-          metadata,
-          output: truncated.content,
-          attachments: attachments.map((attachment) => ({
-            ...attachment,
-            id: Identifier.ascending("part"),
-            sessionID: ctx.sessionID,
-            messageID: input.processor.message.id,
-          })),
-          content: result.content,
-        }
-      }
-      tools[key] = item
+          return {
+            title: "",
+            metadata,
+            output: truncated.content,
+            attachments: attachments.map((attachment) => ({
+              ...attachment,
+              id: Identifier.ascending("part"),
+              sessionID: ctx.sessionID,
+              messageID: input.processor.message.id,
+            })),
+            content: result.content,
+          }
+        },
+      } as AITool
+      tools[key] = prepareProviderTool({
+        name: key,
+        source: "mcp",
+        model: input.model,
+        tool: mcpTool,
+      })
     }
 
     // Merge per-session ephemeral tools last so agent-scoped callers can
@@ -1619,9 +1695,15 @@ export namespace SessionLoop {
     const sessionIDForExtras = input.session.id
     const messageIDForExtras = input.processor.message.id
     for (const [name, extraTool] of Object.entries(extras)) {
-      tools[name] = wrapExtraTool(extraTool, {
+      const wrapped = wrapExtraTool(extraTool, {
         sessionID: sessionIDForExtras,
         messageID: messageIDForExtras,
+      })
+      tools[name] = prepareProviderTool({
+        name,
+        source: "extra",
+        model: input.model,
+        tool: wrapped,
       })
     }
 

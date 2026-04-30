@@ -202,11 +202,11 @@ export interface RunAgentSessionInput<C> {
   /** Required terminal collector tool for stages whose structured facts are
    *  already captured by tool calls and whose final action is an explicit
    *  validator/submit tool. The session loop keeps work tools available until
-   *  `isReadyToFinalize`, then pins the provider to this terminal tool. */
+   *  `shouldExposeOnlyTerminalTool`, then pins the provider to this terminal tool. */
   terminalTool?: {
     toolName: string
     isSatisfied: (collector: C) => boolean
-    isReadyToFinalize: (collector: C) => boolean
+    shouldExposeOnlyTerminalTool: (collector: C) => boolean
   }
   /** Pass-through skill stage. When omitted, no skill injection runs.
    *  See `SkillStage` JSDoc. */
@@ -489,7 +489,8 @@ export async function runAgentSession<C>(
           await SessionPrompt.withTerminalToolContract(session.id, {
             toolName: input.terminalTool.toolName,
             isSatisfied: () => input.terminalTool!.isSatisfied(input.toolKit.getCollector()),
-            isReadyToFinalize: () => input.terminalTool!.isReadyToFinalize(input.toolKit.getCollector()),
+            shouldExposeOnlyTerminalTool: () =>
+              input.terminalTool!.shouldExposeOnlyTerminalTool(input.toolKit.getCollector()),
           }, promptOnce)
         }
         if (input.format?.validate) {

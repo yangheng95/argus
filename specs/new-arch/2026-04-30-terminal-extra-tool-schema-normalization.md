@@ -615,19 +615,21 @@ fixed.
 
 ## Implementation Checklist
 
-- [ ] Add failing tests for extra-tool schema normalization.
-- [ ] Extract one provider-bound tool preparation helper.
-- [ ] Route registry tools through the helper.
-- [ ] Route MCP tools through the helper.
-- [ ] Route extra tools through the helper.
-- [ ] Keep `wrapExtraTool` focused on execute result shape only.
-- [ ] Rename terminal readiness to `shouldExposeOnlyTerminalTool`.
-- [ ] Fix requirements predicate so it does not early-narrow after one
+- [x] Add failing tests for extra-tool schema normalization.
+- [x] Extract one provider-bound tool preparation helper.
+- [x] Route registry tools through the helper.
+- [x] Route MCP tools through the helper.
+- [x] Route extra tools through the helper.
+- [x] Keep `wrapExtraTool` focused on execute result shape only.
+- [x] Rename terminal readiness to `shouldExposeOnlyTerminalTool`.
+- [x] Fix requirements predicate so it does not early-narrow after one
       requirement.
-- [ ] Review architect predicate against `submit_architect` validator.
-- [ ] Keep integrity all-dimensions predicate.
-- [ ] Document build passed-vs-failed scoping behavior in code comments.
-- [ ] Repair provider E2E probe context.
-- [ ] Run targeted tests.
-- [ ] Run typecheck.
-- [ ] Re-review live/log evidence after implementation.
+- [x] Review architect predicate against `submit_architect` validator.
+- [x] Keep integrity all-dimensions predicate.
+- [x] Document build passed-vs-failed scoping behavior in code comments.
+- [x] Repair provider E2E probe context.
+- [x] Run targeted tests.
+- [x] Run typecheck.
+- [x] Re-review implementation diff and existing log evidence after
+      implementation; optional live provider probe now reaches the provider
+      boundary but local `alibaba-cn/qwen3.5-plus` credentials returned 401.
