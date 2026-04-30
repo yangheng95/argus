@@ -898,16 +898,19 @@ export namespace SessionLoop {
         source: "structured",
         model: input.model,
         tool: createStructuredOutputTool({
-        schema: input.lastUser.format.schema,
-        validate: ephemeralStructuredOutputGuards.get(input.sessionID),
-        onSuccess(output) {
-          structured = output
-        },
+          schema: input.lastUser.format.schema,
+          validate: ephemeralStructuredOutputGuards.get(input.sessionID),
+          onSuccess(output) {
+            structured = output
+          },
         }),
       })
     }
     if (format.type !== "json_schema") {
-      tools = terminalToolScopedTools(terminalToolContract, tools)
+      tools = terminalToolScopedTools(terminalToolContract, tools, {
+        sessionID: input.sessionID,
+        agent: agent.name,
+      })
     }
 
     if (input.step === 1) {
@@ -1299,12 +1302,27 @@ export namespace SessionLoop {
   export function terminalToolScopedTools(
     contract: TerminalToolContract | undefined,
     tools: Record<string, AITool>,
+    context?: {
+      sessionID?: string
+      agent?: string
+    },
   ): Record<string, AITool> {
     if (!contract) return tools
     const terminalTool = tools[contract.toolName]
     if (!terminalTool) return tools
     if (contract.isSatisfied()) return tools
     if (!contract.shouldExposeOnlyTerminalTool()) return tools
+    const originalToolNames = Object.keys(tools)
+    log.info("terminal tool scoping", {
+      sessionID: context?.sessionID,
+      agent: context?.agent,
+      terminalTool: contract.toolName,
+      originalToolCount: originalToolNames.length,
+      scopedToolCount: 1,
+      originalToolNames,
+      scopedToolNames: [contract.toolName],
+      predicateResult: true,
+    })
     return { [contract.toolName]: terminalTool }
   }
   export const loop = fn(LoopInput, async (input) => {

@@ -3,7 +3,9 @@ import { mkdtempSync } from "fs"
 import { tmpdir } from "os"
 import path from "path"
 import {
+  architectValidationIssues,
   createArchitectOutputTools,
+  isArchitectReadyToFinalize,
   MANDATORY_GOAL_BLOCKING_METRICS,
   MANDATORY_GLOBAL_BLOCKING_METRICS,
 } from "../../src/architect/output-tools"
@@ -88,6 +90,12 @@ async function fillMandatoryGlobalBlockingMetrics(
   for (const name of MANDATORY_GLOBAL_BLOCKING_METRICS) {
     await tools.register_global_metric_spec.execute!(globalMetric(name) as any, {} as any)
   }
+}
+
+function readinessMatchesSubmitPrecondition(
+  collector: ReturnType<ReturnType<typeof createArchitectOutputTools>["getCollector"]>,
+) {
+  expect(isArchitectReadyToFinalize(collector)).toBe(architectValidationIssues(collector).length === 0)
 }
 
 test("remove_goal cascades to goal metrics, traceability, contracts, challenge seeds", async () => {
@@ -266,4 +274,31 @@ test("remove_goal followed by submit_architect finalizes — no orphan-metric de
   expect(submit).toMatch(/^PASS: Architect output finalized\./)
   expect(kit.getCollector().finalized).toBe(true)
   expect(kit.getCollector().goal_metric_specs.every((m) => m.goal_id === "goal_feature")).toBe(true)
+})
+
+test("architect readiness remains identical to submit_architect validation precondition", async () => {
+  const incomplete = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  readinessMatchesSubmitPrecondition(incomplete.getCollector())
+  expect(isArchitectReadyToFinalize(incomplete.getCollector())).toBe(false)
+  const rejected = await incomplete.tools.submit_architect.execute!(
+    { summary: "Incomplete architecture should not finalize." } as any,
+    {} as any,
+  )
+  expect(rejected).toMatch(/^ISSUES \(/)
+  expect(incomplete.getCollector().finalized).toBe(false)
+
+  const complete = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const { tools } = complete
+  await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await fillMandatoryBlockingMetrics(tools, "goal_feature")
+  await fillMandatoryGlobalBlockingMetrics(tools)
+
+  readinessMatchesSubmitPrecondition(complete.getCollector())
+  expect(isArchitectReadyToFinalize(complete.getCollector())).toBe(true)
+  const accepted = await tools.submit_architect.execute!(
+    { summary: "Single complete feature goal with mandatory metrics." } as any,
+    {} as any,
+  )
+  expect(accepted).toMatch(/^PASS: Architect output finalized\./)
+  expect(complete.getCollector().finalized).toBe(true)
 })
