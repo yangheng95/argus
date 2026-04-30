@@ -1434,6 +1434,22 @@ export function beginBuildAttempt(input: {
     reason: "build_retry",
     now,
   })
+  // Resolve the parent tip the new attempt supersedes in the chain. Two retry
+  // shapes both reach here and BOTH must populate supersede_of correctly,
+  // otherwise findLatestTipGoalRun (engine/store.ts) projects the patched-old
+  // terminal row as the live tip and goal status stays `pending` while the
+  // build runs (audit §11.6, codex 3rd-pass).
+  //   1. beginBuildAttempt-only retry: openGoalImplementationVersion ran the
+  //      supersede here, returns supersededTipID directly.
+  //   2. startNewAttempt-then-beginBuildAttempt (delivery_rework /
+  //      modify_goal): startNewAttempt already patched superseded_reason on
+  //      the prior tip, so openGoalImplementationVersion short-circuits and
+  //      supersededTipID is undefined. The tip's id is still the right
+  //      parent — findLatestTipGoalRun returns the same row id (the
+  //      already-patched terminal); supersededIDs set is empty until WE
+  //      insert with supersede_of pointing at it.
+  //   3. First-ever attempt: no prior tip, parentTipID undefined → null.
+  const parentTipID = version.supersededTipID ?? findLatestTipGoalRun(input.goalID)?.id
   const payload = {
     goal_id: input.goalID,
     plan_node_id: null,
@@ -1445,7 +1461,7 @@ export function beginBuildAttempt(input: {
     workspace_dir: input.workspaceDir ?? null,
     base_ref: null,
     merge_ref: null,
-    supersede_of: null,
+    supersede_of: parentTipID ?? null,
     superseded_reason: null,
     superseded_at: null,
     metadata: null,
