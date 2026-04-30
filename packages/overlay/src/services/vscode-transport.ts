@@ -25,7 +25,7 @@ import {
   type ResponseBodyEncoding,
   type WebviewMessage,
 } from "@opencorvus-ai/transport-protocol"
-import { onAuthChange } from "./api"
+import { onAuthChange, queryWithDirectory } from "./api"
 import type {
   HostTransport,
   NativeCommand,
@@ -401,7 +401,7 @@ export function createVsCodeTransport(): HostTransport {
           id,
           method,
           path: input.path.replace(/^\/+/, ""),
-          query: buildQuery(input.query),
+          query: buildQuery(queryWithDirectory(input.path, input.query)),
           headers: input.headers ?? {},
           body: encodeBody(input.body),
           responseKind,
@@ -460,7 +460,7 @@ export function createVsCodeTransport(): HostTransport {
         id,
         method,
         path: input.path.replace(/^\/+/, ""),
-        query: buildQuery(input.query),
+        query: buildQuery(queryWithDirectory(input.path, input.query)),
         headers: input.headers ?? {},
         body: encodeBody(input.body),
       }

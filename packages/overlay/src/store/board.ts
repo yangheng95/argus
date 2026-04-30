@@ -363,6 +363,12 @@ export function applyTasks(
   }
 }
 
+export function clearTasksForMissingDirectory(): void {
+  applyTasks([], []);
+  setBoardStore("tasksError", "");
+  setBoardStore("tasksLoaded", true);
+}
+
 export async function loadTasks(): Promise<void> {
   // Let-it-crash: any fetch/parse error lands in boardStore.tasksError so the
   // UI surfaces the failure explicitly. The previous silent catch left the UI

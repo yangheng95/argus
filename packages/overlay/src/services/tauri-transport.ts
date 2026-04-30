@@ -127,6 +127,18 @@ async function readResponse<T>(res: Response, kind: ResponseKind | undefined): P
   }
 }
 
+async function readErrorResponse<T>(res: Response): Promise<T> {
+  const contentType = res.headers.get("content-type") || ""
+  try {
+    if (contentType.toLowerCase().includes("application/json")) {
+      return await readResponse<T>(res, "json")
+    }
+    return await readResponse<T>(res, "text")
+  } catch {
+    return undefined as T
+  }
+}
+
 /**
  * POST-stream support: routes like /panel/message/stream send a JSON
  * body and stream the response as text/event-stream. EventSource cannot
@@ -298,7 +310,7 @@ export function createTauriTransport(): HostTransport {
       const res = await fetch(url.toString(), init)
       const body = res.ok || input.responseKind === "binary"
         ? await readResponse<T>(res, input.responseKind)
-        : (undefined as unknown as T)
+        : await readErrorResponse<T>(res)
       return {
         status: res.status,
         ok: res.ok,

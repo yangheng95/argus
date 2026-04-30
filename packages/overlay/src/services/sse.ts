@@ -17,6 +17,7 @@ import { boardStore } from "../store/board";
 import { routeSSEEvent, handleEventStreamEvent, handleTaskListNotification } from "./events";
 import { hydrateTaskConversation } from "./conversation";
 import { getHostTransport, type StreamHandle } from "./host-transport";
+import { settingsStore } from "../store/settings";
 
 let sseHandle: StreamHandle | null = null;
 let sseRetryTimer: any = null;
@@ -163,6 +164,7 @@ let taskListRetryTimer: any = null;
 
 export function startTaskListSSE() {
   stopTaskListSSE();
+  if (!settingsStore.directory.trim()) return;
   const transport = getHostTransport();
   const handle = transport.openStream(
     { path: "task/events" },
