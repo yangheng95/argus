@@ -34,7 +34,12 @@
 
 - **Codex P3 finding "duplicated checklist at lines 341-374"**: verified by grep that v2 file has exactly one `§7. Codex review checklist` (lines 354-368) and one `§6. Items deferred` (lines 344-350) — no actual duplication in the file. Likely a diff-rendering artifact from how the v1→v2 patch presented sections. v3 leaves §6/§7 as-is. If codex still observes duplication on v3, will need pair-programming session to identify the rendering issue.
 
-- After v3, plan re-submits for third-pass review. No code change until review approves.
+- **v4 (this commit) — Codex close-out of unfinished plan work.** Remaining gaps closed:
+  1. **P3-A completed from bench logs.** `_session-r1-opencode.run-pre-fixes.out:17478-17481` shows a `glob` call evaluated against `${task_root}/*` while the ruleset already had `${worktree}/**` allow. `_session-r1-opencode.run-pre-fixes.out:26523-26525` shows a `bash` path argument resolving to the task root and then asking `external_directory` for `${task_root}/*`. Both are build-session escapes from the owned worktree, not missing legitimate worktree allow rules.
+  2. **P3 policy changed from "ask outside worktree" to "deny task-root escape".** Build sessions get an owned-worktree allow plus an explicit task-root / sibling-worktree deny so out-of-scope access fails immediately instead of burning 5 minutes. No task-root allow is introduced.
+  3. **Order, commit messages, validation markers, and review questions updated to match v3/v4 decisions.** Stale `drop late gate`, `tip selection filters superseded`, and `project-temp-root timeout` wording removed.
+
+- After v4, plan re-submits for final review. No code change until review approves.
 
 ---
 
@@ -42,10 +47,10 @@
 
 | In scope | Out of scope this round |
 |---|---|
-| P0–P3 listed below (real bugs verified by source + bench) | Whole-of-architecture redesign |
+| P0–P5 listed below (real bugs verified by source + bench) | Whole-of-architecture redesign |
 | Source-driven fixes (no behavioural patches, no fallback insertion) | `BuildResult` schema enrichment (audit §2.5; tracked separately as a follow-up because it touches every downstream consumer) |
 | Test coverage for every change (rule 36) | `dispatchTaskLoop` fire-and-forget hardening (audit §7; current LLM re-derive contract holds — not a bug, just fragile) |
-| Removal of legacy enforcement gates that break rule 13 (rule 17 — kill dead/parallel paths) | Bus event catalog overhaul — re-classify orphans vs observability-only (audit §3 caveat). Fast-follow doc work, not a fix. |
+| Disclosure and single-source cleanup for enforcement gates that currently surprise the LLM | Bus event catalog overhaul — re-classify orphans vs observability-only (audit §3 caveat). Fast-follow doc work, not a fix. |
 
 ---
 
@@ -56,7 +61,7 @@
 | **P0** | Retry attempt's `goal_run` row exists but is invisible to `deriveGoalStatus` — goal stays at `pending` while build is actually running | §11.6, L8 | log line 19356 vs missing `from=pending to=running reason=beginBuildAttempt` for `gol_*0001` after retry | **Verified mechanism (v3):** `findLatestTipGoalRun` (`store.ts:505-512`), `engine/describe.ts:180`, `engine/goal-status.ts:79`, `engine/workflow.ts:411`, `workbench/board.ts:892-898` ALL filter by `supersede_of` set-membership — this is the **designed** chain abstraction. The bug is **`beginBuildAttempt` writes `supersede_of: null` at `persist.ts:1448`** instead of threading `openGoalImplementationVersion().supersededTipID` (which is computed at `persist.ts:617-666` but never propagated). Without supersede_of populated, the OLD terminal row's id never enters the supersededIDs set, so `find` returns the OLD row by `time_created DESC` (the patched-old has `time_created = max(old.time_updated+1, now) ≥ new.time_created`). Derive then projects to OLD's superseded-pending state forever. v2 incorrectly diagnosed this as "supersede_of is dead" — actual diagnosis is "supersede_of is correctly designed but `beginBuildAttempt` skips populating it". | **High** — every retry hides progress; orchestrator may double-dispatch or miscount budget. |
 | **P1** | Same session emits two contradictory terminal events (`reason=aborted` then `reason=completed`) on cancel-during-finish | §11.3 | log lines 19182-19183 | **Verified mechanism (v3):** `SessionStatus.set` (`session/status.ts:77-114`) HAS a first-terminal-wins latch at line 97 (`if (state()[sessionID]?.type === "terminal") return`). The bug is the latch's TOCTOU window: line 98 publishes via `Bus.publish` (synchronous dispatch — subscribers run in-thread); line 113 writes state. A subscriber that re-enters `set()` (e.g. via `Bus.subscribeAll` consumers calling back into the session lifecycle) sees state still un-written and bypasses the latch. Two terminal publishes both pass before either writes. v2 inventory said "no latch" — was wrong; latch exists, has a re-entrancy hole. | **Medium** — overlay UI / consumers may act on the wrong terminal. |
 | **P2** | Build agent terminal report missing → orchestrator only sees Zod schema rejection of `undefined`; agent's actual progress invisible | §11.1, L1 | log line 19180 (`Invalid input: expected object, received undefined`) | When LLM session is cancelled before calling `report_build_result`, BuildAgent.run finishes with `hasStructured=false`. The `build` tool then validates `undefined` against `BuildResultSchema`, throws, and the orchestrator only sees `build tool failed`. There is no contract enforcement at the protocol layer. | **Medium-high** — masks agent failure mode and prevents rule 1 root-cause analysis. |
-| **P3** | Permission `external_directory` for the bench project root times out at 5 min, cancelling the build session | §11.2, memory `feedback_goal_permission_hang.md` | log line 19171 (`permission=external_directory patterns=["…UkylGI/*"] permission timeout rejected`) | Build session inherits default `ask` policy; auto-permission rules don't auto-allow the session's own worktree / project-root paths. | **Medium-high** — first build attempt always burns 5 minutes. |
+| **P3** | Permission `external_directory` for the bench project root times out at 5 min, cancelling the build session | §11.2, memory `feedback_goal_permission_hang.md` | log lines 17480→19171 and 26523→28222 (`permission=external_directory patterns=["…UkylGI/*"] permission timeout rejected`) | **Verified mechanism (v4):** build sessions already carry `${worktree}/**` allow, but the LLM/tool call escaped to the task root. First occurrence: `glob **/*` caused an external-directory ask for `${task_root}/*`; second occurrence: `bash` had an absolute task-root path argument. The gap is not "missing worktree allow"; it is "out-of-scope task-root access falls through to `ask` and waits 5 minutes." | **Medium-high** — first build attempt can burn 5 minutes and hide the real contract failure. |
 | **P4** | `design_analysis` abort writes only stderr WARN — no `decision_log` entry → architect / build see `designSpecs=undefined` with no explanation | §2.3, L3 | log line 1729 (`materialCount=0 design_analysis: no visual input materialized — aborting before agent call`) | Abort path (`task-tools` design_analysis) bypasses `decision_log.append({phase: "design_analysis", ...})`. The phase exists structurally (audit §4 table) but has no writer for the abort case. | **Medium** — silent information loss across upstream→downstream seam. |
 | **P5** | Bootstrap-first gate is **late rejection** rather than upstream constraint — orchestrator dispatches non-bootstrap goals in parallel intending "第一波并行构建", gate rejects each post-dispatch | §11.4 | log lines 7456, 7860 | `task-tools` build dispatch path enforces `pendingBootstrap` check after the orchestrator has already issued the dispatch. The constraint is not surfaced via `describe()` so the LLM cannot anticipate it. CLAUDE.md rule 13 ambiguity: late gate is closer to a hidden state machine than to LLM-driven flow. | **Medium** — wastes orchestrator turns; symptom of rule 13 violation. |
 
@@ -193,7 +198,7 @@ In `orchestrator/tools.ts` (the `build` tool body, around `:3950+`):
 - **Return a `BuildResult { status: "failed", summary, worktree? }` directly to the orchestrator** — DO NOT rethrow. The orchestrator's tool result reads as a normal failed build (NOT the generic `build tool failed` error path).
 - The generic catch (for non-typed errors — model unavailable, worktree creation failed) keeps its rethrow behaviour. Only the typed contract error short-circuits to a `failed` BuildResult.
 
-**Rule 7 check (v2).**
+**Rule 7 check (v4).**
 - Both paths now throw the same typed error. No fallback (no fake result, no continue-on-error).
 - Diagnostic context survives via the typed error and the decision_log entry; next attempt's prompt receives "Prior attempt failed: contract violation — code=…" verbatim.
 
@@ -209,59 +214,57 @@ In `orchestrator/tools.ts` (the `build` tool body, around `:3950+`):
      - **The build tool returned a `BuildResult { status: "failed" }` object — orchestrator's tool result is a normal failure, NOT a tool error / NOT a Zod-rejection error / NOT a rethrown `BuildAgentContractError`** (codex P2 #1: assert the orchestrator does not see the generic `build tool failed` path).
    - Negative on the rethrow gap: configure a non-typed error (e.g. mock `BuildAgent.run` throwing a generic `Error("simulated infra failure")`) → assert that path DOES rethrow (the contract change must not weaken infrastructure-error visibility).
 
-### P3 — Permission injection ordering + worktree-only allow (v3 split into investigation + fix)
+### P3 — Build-session permission policy: owned worktree allow, task-root escape deny
 
-**Codex P1 + cron self-challenge.** v2 P3 had two errors: (a) revision-history said "task-root allow dropped" but body still added it (contradiction); (b) "appended AFTER user config" reverses precedence — `PermissionNext.merge` flattens rulesets and `evaluate` uses `findLast`, so a later allow OVERRIDES an explicit user deny. Plus cron self-challenge: bench timeout (line 19171) was for `${task_root}/*`, NOT worktree — so v2's "worktree-only auto-allow" is a no-op against the actual bench evidence. v3 splits into:
+**Codex P1 + v4 close-out.** v2/v3 already corrected two design errors: no task-root allow, and injected rules must sit before user config because `PermissionNext.evaluate` uses `findLast`. The remaining P3-A question is now closed from bench evidence: the timeout was not missing legitimate worktree access. It was task-root escape.
 
-#### P3-A — Investigate which path the agent actually requested at `${task_root}/*`
+**P3-A evidence and decision (v4).**
+- `_session-r1-opencode.run-pre-fixes.out:17478-17481` shows `external_directory` evaluated for `${task_root}/*` while the effective ruleset already contained `${worktree}/**` allow.
+- `_session-r1-opencode.run-pre-fixes.out:26523-26525` shows `bash` resolving an absolute task-root argument and then requesting `external_directory` for `${task_root}/*`.
+- `tool/glob.ts:32-34` defaults to `Instance.directory`, but an explicit path can escape; `tool/bash.ts:133` defaults `workdir` to `Instance.directory`, while `bash.ts:181-213` extracts static path arguments and asks external-directory permission for paths outside `Instance.containsPath`.
+- `build/agent.ts:499-504` starts build sessions with `sessionDirectory: worktreeDir`, so the owned scope is the build worktree. The observed task-root access is out-of-scope for a build session.
 
-**Pre-fix investigation.** Bench `_session-r1-opencode.out:17478` shows the existing ruleset already auto-allows `${worktree}/**` (line 17478 ruleset entry). The timeout at line 19171 is for an `external_directory` request whose pattern matches `${task_root}/*` (one segment). **What specific path did the agent request?** Investigation steps:
-- Locate the tool call that initiated permission `per_dde267938001E4OId9SwbdVVBt` in the bench log (search by `id=per_dde267938001`).
-- Identify the exact path (look for a `read`/`bash`/`write` tool call near that timestamp).
-- Decide one of:
-  - **Inappropriate access** (e.g. agent reaching outside its worktree by mistake): no permission rule needed; instead fix the agent / tool prompt to stay inside the worktree.
-  - **Legitimate read-only access** (e.g. shared cache, npm registry, lockfile): allow specifically that path, NOT the entire `${task_root}/*` glob.
-  - **Legitimate dependency**: thread that specific dependency into the goal's allowed-scope metadata.
+**Files in scope (rule 35 grep, v4).**
+- `packages/opencorvus/src/permission/next.ts:319` — `findLast` evaluator.
+- `packages/opencorvus/src/permission/next.ts` — `PermissionNext.merge` flattening behaviour.
+- `packages/opencorvus/src/agent/agent.ts:75-90` and `packages/opencorvus/src/agent/agent.ts:524-535` — existing session ruleset injection.
+- `packages/opencorvus/src/tool/glob.ts:32-34` and `packages/opencorvus/src/tool/bash.ts:133,181-213` — concrete escape paths to cover in tests.
+- `packages/opencorvus/src/orchestrator/tools.ts:3870+` — build session ruleset composition site, where `${worktree}` and task root are both known.
 
-**Output of P3-A:** a concrete decision recorded in this plan as a v4 amendment, before P3-B lands.
+**Fix (v4).**
 
-#### P3-B — Permission injection slot + worktree-only allow (codex P1 #2 corrections applied)
+When BuildAgent composes the session ruleset, inject one scoped build-session block before user config:
+1. `external_directory deny "${taskRoot}/**"` for task-root and sibling-worktree escapes.
+2. `external_directory allow "${worktree}/**"` after the task-root deny inside the same injected block so the owned worktree remains usable even when it is physically nested under `${taskRoot}/.opencorvus/worktrees/...`.
+3. Optional opt-in rules for explicit scratch/cache paths declared via goal metadata, still before user config and never as a broad task-root allow.
+4. User config rules remain later. Because `findLast` wins, an explicit operator deny inside the worktree still overrides the injected allow; an explicit operator allow can deliberately widen scope.
 
-**Files in scope (rule 35 grep, v3).**
-- `packages/opencorvus/src/permission/next.ts:319` — `findLast` evaluator (verified by codex)
-- `packages/opencorvus/src/permission/next.ts` — `PermissionNext.merge` flattening behaviour (codex P1 #2)
-- `packages/opencorvus/src/agent/agent.ts:75-90` (existing `Instance.directory/**` whitelist)
-- `packages/opencorvus/src/agent/agent.ts:524-535` (existing injection of default `external_directory: allow` when no user rule)
-- `packages/opencorvus/src/orchestrator/tools.ts:3870+` (build session ruleset composition site, where `${worktree}` becomes available)
+**Why deny instead of ask for task root.**
+- `ask` is the bench failure mode: unattended permission waits burn the full timeout and mask the real build failure.
+- Task-root and sibling-worktree reads are outside a build agent's owned scope. Immediate deny is the single-source policy; it lets the LLM correct to the worktree on the next turn without waiting 5 minutes.
+- Unrelated paths outside task root remain `ask` unless user config explicitly allows or denies them.
 
-**Fix (v3 — corrected ordering).**
+**Rule 7 / 8 / isolation check (v4).**
+- Not a fallback: one `PermissionNext` ruleset expresses both boundary deny and owned-worktree allow.
+- Single source: no parallel permission evaluator, no hidden compatibility path.
+- Worktree isolation: sibling worktree access is `deny`, not `allow` and not a hanging `ask`.
+- User precedence: later user config still has the last word under `findLast`.
 
-When BuildAgent composes the session ruleset:
-1. Inject `external_directory: allow, pattern: "${worktree}/**"` rule **BEFORE user config rules** (codex P1 #2: `findLast`-wins means user-explicit deny must come AFTER, so user can still override). Concretely: prepend to the per-session rule list during the `agent/agent.ts:524-535` injection.
-2. **No task-root rule.** v2's "task primary directory" line is removed entirely. Sibling worktree access stays in `ask` territory.
-3. Optional opt-in: explicit scratch/cache paths declared via goal metadata, also injected pre-user-config.
-
-**Why prepend, not append.**
-- `findLast` evaluator: last matching rule wins.
-- If we APPEND our `allow` rule, a user's explicit `deny C:/sensitive-path` earlier in the ruleset is silently overridden when the path also matches our worktree pattern.
-- If we PREPEND, our `allow` only takes effect when no later (user) rule matches the same path. User explicit deny survives.
-
-**Rule 7 / 8 / isolation check (v3).**
-- Not a fallback: `allow` is a positive rule for paths inside the agent's owned scope. `findLast` evaluator gives user explicit denies the last word.
-- Single source: same `PermissionNext` ruleset; no parallel engine.
-- Worktree isolation: cross-worktree access still hits `ask` (no change).
-
-**Tests (v3 — adds deny-wins regression).**
+**Tests (v4).**
 1. Unit `packages/opencorvus/test/permission/build-session.test.ts`:
-   - Compose ruleset with worktree `${A}` injected pre-user-config; user config has `external_directory: deny, pattern: "${A}/secret/**"`.
-     - Request `${A}/file.ts` → assert `allow` (only the prepended worktree rule matches; user deny doesn't match).
-     - Request `${A}/secret/key` → assert `deny` (user deny is `findLast` and matches; **deny-wins regression**).
-   - Compose ruleset with worktree `${A}`. Simulate request for `${A}/../sibling-B/file.ts` → assert `ask` (isolation preserved).
-   - Simulate `${A}/../../task-root/scratch/file` → assert `ask` (no task-root auto-allow).
-   - Simulate `C:/Users/random-other-path/file` → assert `ask`.
-2. E2E `packages/opencorvus/test/build/permission-no-timeout.e2e.test.ts`:
-   - Spawn build session against temp worktree; run a 60-second build touching only worktree paths → assert zero permission timeouts.
-   - **CONDITIONAL on P3-A outcome:** if P3-A finds the bench timeout was for a legitimate path that should be allowed, add that path to the test as an `allow` assertion. If P3-A finds it was inappropriate, this test stays worktree-only.
+   - Compose ruleset with task root `${T}` and worktree `${T}/.opencorvus/worktrees/goal-A`.
+   - Request `${worktree}/file.ts` → assert `allow`.
+   - User config has `external_directory: deny, pattern: "${worktree}/secret/**"`; request `${worktree}/secret/key` → assert `deny`.
+   - Request `${T}/package.json` → assert `deny`, not `ask`.
+   - Request `${T}/.opencorvus/worktrees/goal-B/file.ts` → assert `deny`, not `ask`.
+   - Request `C:/Users/random-other-path/file` → assert `ask` unless user config says otherwise.
+2. Tool integration `packages/opencorvus/test/tool/build-permission-boundary.test.ts`:
+   - Build-session `glob({ pattern: "**/*" })` searches the worktree and creates no external-directory ask.
+   - `glob({ pattern: "**/*", path: taskRoot })` denies immediately.
+   - `bash({ command: "ls <taskRoot>", workdir: worktree })` denies immediately.
+3. E2E `packages/opencorvus/test/build/permission-no-timeout.e2e.test.ts`:
+   - Spawn build session against temp worktree; run a build touching only worktree paths → assert zero permission timeouts.
+   - Negative case: attempted task-root access denies within 1 second and leaves no pending permission row.
 
 ### P4 — Decision-log writer for `design_analysis` AND `intent-analysis` aborts (rule 4 systemic)
 
@@ -270,7 +273,7 @@ When BuildAgent composes the session ruleset:
 - `packages/opencorvus/src/decision-log/index.ts` (verify `phase="design_analysis"` and `phase="intent_analysis"` are accepted; if `phase` is a closed enum, extend it)
 - `packages/opencorvus/src/prompt/upstream-context.ts` (must inject both phases into architect / build / orchestrator-wake prompts; if injection is keyed on a fixed phase list, extend it)
 
-**Fix (v2 — bundled, rule 4 systemic).**
+**Fix (v4 — bundled, rule 4 systemic).**
 
 Both `design_analysis` and `intent-analysis` abort paths must write a `decision_log` entry on abort:
 
@@ -286,7 +289,7 @@ Verify reader side end-to-end:
 - `decision-log/index.ts:phasePromptSection` must support both phases (audit §4 lists `design_analysis` as "writer site not located"; intent-analysis is missing entirely from §4 table).
 - `prompt/upstream-context.ts` must include the two phases in its injection set so architect / build prompts say "Intent analysis aborted: …" or "Design analysis aborted: …" verbatim.
 
-**Rule 1 / rule 4 check (v2).**
+**Rule 1 / rule 4 check (v4).**
 - Audit L3 (design abort) and L7 (intent abort) are the same architectural shape. Fixing only one is rule-4 patch-shape. v2 bundles both in one commit.
 - Writer + reader symmetry verified before landing (rule 35).
 
@@ -341,19 +344,19 @@ Verify reader side end-to-end:
 
 ## 3. Order of operations
 
-P0 must land first because P1/P2 tests depend on the retry path emitting correct status. Then P1 (cleanup terminal events) so P2's contract violation surfaces cleanly. Then P3 (so P2 isn't masked by 5-min permission timeouts in the test fixture). Then P4, then P5.
+P0 must land first because later retry tests depend on `beginBuildAttempt` producing a visible supersede chain. Then P1 seals terminal-event re-entry before contract-violation tests assert exactly one terminal outcome. Then P3 lands before P2 integration work so permission timeouts cannot mask the build-agent contract failure. Then P2, P4, and P5.
 
 ```
-P0 → P1 → P2 → P3 → P4 → P5
+P0 → P1 → P3 → P2 → P4 → P5
 ```
 
 Each lands as its own commit:
-- `fix(engine): tip selection filters superseded before ordering (P0)`
-- `fix(session): single-emit terminal latch (P1)`
+- `fix(engine): thread supersede chain on build retry (P0)`
+- `fix(session): seal terminal latch before publish (P1)`
+- `fix(permission): deny task-root escape and allow owned worktree (P3)`
 - `fix(build): surface missing terminal report as contract violation (P2)`
-- `fix(permission): worktree path is primary allow rule for build session (P3)`
-- `fix(orchestrator): write decision_log on design_analysis abort (P4)`
-- `refactor(orchestrator): bootstrap-first as LLM-readable constraint, drop late gate (P5)`
+- `fix(orchestrator): write decision_log on stage aborts (P4)`
+- `fix(orchestrator): surface bootstrap gate before dispatch (P5)`
 
 After each commit: pre-push hook (typecheck / api:routes-check / docs:check / panel-i18n / secret-scan) must pass. Tests must pass. Push immediately.
 
@@ -368,23 +371,23 @@ After all six commits land:
    - **P0**: every retry attempt emits `from=pending to=running reason=beginBuildAttempt` immediately after `supersedeGoalRun:build_retry`.
    - **P1**: zero sessions emit two terminal `[overlay-benchmark] session.terminal …` lines for the same session ID.
    - **P2**: if any build agent finishes without `report_build_result`, log shows `BuildAgentContractError` with diagnostic context (and orchestrator surfaces a normal `failed` goal_run, not Zod schema rejection).
-   - **P3**: zero `permission=external_directory pattern=…/{project-temp-root}/* permission timeout rejected` lines.
-   - **P4**: when design_analysis aborts, the decision_log table (verifiable via DB query) contains a `phase=design_analysis` entry; the architect's first prompt contains "Design analysis aborted" verbatim.
-   - **P5**: zero `bootstrap-first gate rejected non-bootstrap dispatch` WARN lines (the LLM no longer attempts those dispatches).
+   - **P3**: zero `permission timeout rejected` lines; if task-root or sibling-worktree access is attempted, it denies immediately (target <1s) and leaves no pending permission row.
+   - **P4**: when `design_analysis` or `intent_analysis` aborts, the decision_log table contains the matching phase entry; the next architect/build prompt contains the concrete abort reason verbatim.
+   - **P5**: zero `bootstrap-first gate rejected non-bootstrap dispatch` WARN lines on a normal bench run because the LLM serializes bootstrap first; direct gate regression still returns the disclosed structured error.
 
 Bench must reach `qualityVerdict: accepted` (or produce a clean rejection trace if real quality fails) with all six markers in place. CLAUDE.md rule 24 — even on accept, run a manual second review.
 
 ---
 
-## 5. Open questions for review
+## 5. Review decisions now closed
 
-1. **P0 query change scope** — does `latestPerGoalRun` have any other call site that depends on the current "patched-old wins on time_updated" ordering? Need full grep before landing.
-2. **P1 terminal latch placement** — should the latch live on the in-memory Session record, or in DB as a `terminal_emitted_at` column? In-memory is faster; DB survives restarts. Audit §7 W2 noted the `dispatchTaskLoop` fragility — should this be a DB latch to survive that?
-3. **P2 contract violation handling** — if `BuildAgentContractError` is thrown, should the orchestrator's retry budget count it? Currently `delivery.max_fix_runs` is the only budget. Should there be a separate "agent contract violation" budget that escalates faster (e.g. fail_task after 1 violation, since it indicates LLM model incompatibility, not goal difficulty)?
-4. **P3 worktree-allow scope** — is the worktree directory the right boundary, or should the project temp root be the boundary? Bench creates `…/UkylGI/.opencorvus/worktrees/goal-…`; the build agent occasionally touches paths outside the worktree (e.g. shared cache). Need behavioural verification.
-5. **P5 prompt phrasing** — "When the goal set contains any goal with kind=bootstrap whose status is not terminal, dispatch only that bootstrap goal" is a directive; rule 6 prefers LLM-driven flexibility. Is there a softer phrasing that still produces the right behaviour without sounding like a hardcoded rule?
-6. **Test infrastructure** — do we need new test helpers for "spawn build session against temp worktree" (P3 E2E), or are existing fixtures sufficient?
-7. **Bench reset mechanics** — does `bench --reset` exist? If not, manual delete of `mirrorcode-overlay-benchmark-*` temp dirs is the contract; safe under autonomous run? (Memory note `project_resume_bench_cwd_leak_2026_04_29.md` warns against `--resume-task-id`; fresh bench is preferred.)
+1. **P0 query change scope** — no query change. Keep `latestPerGoalRun`, `findLatestTipGoalRun`, and existing `supersede_of` readers; fix the writer by threading `openGoalImplementationVersion().supersededTipID` into `beginBuildAttempt`.
+2. **P1 terminal latch placement** — keep the latch in-memory for this round and seal state before publish. A DB-level terminal-emission column is deferred unless restart-time duplicate terminal events are reproduced.
+3. **P2 contract violation handling** — `BuildAgentContractError` counts as a normal failed build attempt under the existing retry budget. Add a separate contract-violation budget only if repeated contract violations still loop after P2.
+4. **P3 permission scope** — owned worktree is the build-session boundary. Task-root and sibling-worktree escapes deny immediately; no task-root allow.
+5. **P5 prompt phrasing** — use the physical-fact prompt from §P5 and disclose the gate. No hidden "dispatch only" instruction and no runtime-only refusal claim without prompt disclosure.
+6. **Test infrastructure** — add narrow helpers only if existing tmpdir/worktree fixtures create duplication. Fixture extraction is not a blocker for the six commits.
+7. **Bench reset mechanics** — run a fresh bench only. Delete `packages/opencorvus/script/benchmark/runs/` outputs and benchmark scratch DB/temp dirs after verifying absolute paths under benchmark-owned directories; do not use `--resume-task-id`.
 
 ---
 
@@ -409,7 +412,7 @@ Reviewer should verify:
 5. Does each fix have unit AND e2e coverage (rule 28 / 36)?
 6. Do P0/P1/P2 fixes introduce drift between in-memory and DB state?
 7. Does P5's prompt-driven rephrasing actually drive the LLM to the same behaviour, or does it leave a window where the bootstrap goal can be skipped?
-8. Are the open questions in §5 answered or explicitly deferred?
+8. Are the closed decisions in §5 reflected in P0-P5 and the implementation order?
 9. Is the validation bench in §4 sufficient to declare done, or does it need extra fixtures?
 
 If any check fails, reject the plan and request revision before any code change.
