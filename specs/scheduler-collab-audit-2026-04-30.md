@@ -366,9 +366,20 @@ line 19360-20359: build agent reading package.json/vite.config.ts/tsconfig.json/
 
 **The retry attempt has no `from=pending to=running reason=beginBuildAttempt` transition log.** Yet the build agent is genuinely running — `service=session.prompt step=0..3`, multiple `service=file.time` reads, multiple `service=llm ... stream` events. Meanwhile the bench's progress snapshots over T+~25..30min show `gol_*0001:pending` with `sessions=["build:ses_221d4c84..."]` — the **goal status is `pending` while the build session is actively running**.
 
-Two possibilities:
-1. **`beginBuildAttempt` was not called on the retry path** — a code-path divergence between first attempt (`build_tool → beginBuildAttempt`) and retry (`build_tool → supersedeGoalRun → ??? bypass beginBuildAttempt`). If so, no `goal_run_attempt` artifact was written for attempt 2, which means audit §2.5 worktree/goal_run linking risk is real (no DB row for the running attempt).
-2. **`beginBuildAttempt` was called but the derive path saw no transition** — e.g. it inserted a goal_run with status=`pending` instead of `running`, so the derived goal status had no change to log. This would mean the goal_run row exists but is in the wrong status; `engine.poll`/describe would not see this attempt as active.
+**Narrowed by source read** (rule 35 grep through `beginBuildAttempt`/`supersedeGoalRun`/`openGoalImplementationVersion` call sites):
+
+- `beginBuildAttempt` has exactly one caller: `orchestrator/tools.ts:4020`, inside a try/catch that **throws on error and aborts dispatch** (`tools.ts:4031-4036`). The retry's build session `ses_221d4c84...` was created and is streaming, so `beginBuildAttempt` did not throw → it **did run**. Hypothesis (1) discarded.
+- `beginBuildAttempt` (`engine/persist.ts:1410-1489`):
+  1. Calls `openGoalImplementationVersion(goal, reason="build_retry", now)` — which calls `supersedeGoalRun(oldGoalRunID, "build_retry", now)`. `supersedeGoalRun` patches the old row via `appendGoalRunArtifact` with `time_updated = Math.max(existing.time_updated + 1, now)` (`persist.ts:565`).
+  2. Inserts a new `goal_run_attempt` artifact with `status: "running"`, `time_created: now`, `time_updated: now` (`persist.ts:1455-1469`).
+  3. Calls `syncGoalStatus(goalID, "beginBuildAttempt")` (`persist.ts:1471`).
+- The supersedeGoalRun's `service=goal-status from=failed to=pending reason=supersedeGoalRun:build_retry` log (line 19356) DID emit. The follow-up `beginBuildAttempt`'s `syncGoalStatus` did NOT emit a new log line (greppable: zero `goalID=gol_*0001` transitions after line 19356).
+
+**The most plausible root cause**: `syncGoalStatus` re-derived the goal status, but tip selection (`findLatestTipGoalRun` / `latestPerGoalRun`) did **not** pick the newly-inserted running row. The likely mechanism — verified by source — is the time-ordering race: the supersedeGoalRun patch sets old row's `time_updated >= now+1`, while the new row's `time_created == now`. If tip selection orders by `time_updated DESC` (or any ordering where the patched-old wins over the new at equal-or-near `now`), `deriveGoalStatus` continues to see the old superseded row and projects to `pending`.
+
+This means the new running goal_run row **exists** in the DB but is **invisible to `deriveGoalStatus`**. Externally:
+- The orchestrator describes goal as `pending` until something else changes the tip ordering (e.g. `finalizeBuildAttempt` writing time_completed will likely re-order).
+- Bus event `Event.GoalRunUpdated` IS emitted at `persist.ts:1475-1488` with `status: "running"`, but it's the observability sidecar — does not change the derived status authority.
 
 Either way, the **invariant "goal status reflects what is actually running" is broken on the retry path**. Severity:
 - Overlay UI / external observers cannot tell that retry is in progress.
