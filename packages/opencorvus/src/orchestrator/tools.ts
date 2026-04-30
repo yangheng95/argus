@@ -4032,22 +4032,43 @@ export function createOrchestratorTools(input: {
             }
           }
 
-          const { result, sessionID, worktreeDir, worktreeBranch, worktreeBaseRef, diffs } = await BuildAgent.run({
-            target,
-            task,
-            context,
-            parentSessionID: input.agentSessionID,
-            signal: input.signal,
-            managedWorktree,
-          })
-
-          if (attachedGoalID && worktreeDir && worktreeBranch) {
-            updateGoalWorkspace({
-              goalID: attachedGoalID,
-              workspaceDir: worktreeDir,
-              workspaceBranch: worktreeBranch,
-              workspaceBaseRef: worktreeBaseRef,
+          // BuildAgent.run reserves thrown errors for infrastructure faults
+          // (model unavailable, worktree creation failed, session stream
+          // error — the G4 TLS-mid-stream class). Before this try/finally,
+          // a thrown error skipped finalizeBuildAttempt entirely, leaving
+          // the goal_run in attempt-running forever (see incident report
+          // tsk_ddc529dfd0011ajJTgBqdlroyk G4 in
+          // specs/new-arch/2026-04-30-llm-activity-redesign.md). Step 4
+          // closes that gap by ALWAYS finalising the goal_run when one
+          // was opened, with status derived from the BuildAgent outcome
+          // or, on throw, from the underlying error class.
+          let buildOutcome:
+            | { kind: "ok"; result: Awaited<ReturnType<typeof BuildAgent.run>> }
+            | { kind: "throw"; error: unknown }
+          try {
+            const ok = await BuildAgent.run({
+              target,
+              task,
+              context,
+              parentSessionID: input.agentSessionID,
+              signal: input.signal,
+              managedWorktree,
             })
+            buildOutcome = { kind: "ok", result: ok }
+          } catch (runErr) {
+            buildOutcome = { kind: "throw", error: runErr }
+          }
+
+          if (buildOutcome.kind === "ok") {
+            const { worktreeDir, worktreeBranch, worktreeBaseRef } = buildOutcome.result
+            if (attachedGoalID && worktreeDir && worktreeBranch) {
+              updateGoalWorkspace({
+                goalID: attachedGoalID,
+                workspaceDir: worktreeDir,
+                workspaceBranch: worktreeBranch,
+                workspaceBaseRef: worktreeBaseRef,
+              })
+            }
           }
 
           // Finalize the goal_run opened above. updateGoalRun writes a new
@@ -4055,28 +4076,50 @@ export function createOrchestratorTools(input: {
           // and finalizeBuildAttempt also lays down the per-goal delivery
           // artifact when the build passed with concrete diffs (overlay's
           // right-side Files panel reads it via findDeliveryByGoalRun).
+          // For the throw branch we synthesise a failed finalisation from
+          // the underlying error message — diffs/commit/summary are absent
+          // by definition, but the goal_run row reaches a clean terminal
+          // state instead of orphaning at attempt-running.
           if (attachedGoalID && goalRunID) {
             try {
               const { finalizeBuildAttempt } = await import("@/engine/persist")
-              finalizeBuildAttempt({
-                goalRunID,
-                taskID,
-                goalID: attachedGoalID,
-                runID: coordinatorRunID,
-                status: result.status === "passed" ? "completed" : "failed",
-                commitRef: result.commit_ref,
-                workspaceDir: worktreeDir,
-                error: result.error,
-                diffs,
-                summary: result.summary,
-              })
-              // Backfill session_id on the goal_run now that BuildAgent.run
-              // has assigned one. Routing keys on goalID, but downstream
-              // tracing (orphan detection, audit) expects session_id on the
-              // tip artifact. updateGoalRun's append model handles this.
-              if (sessionID) {
-                const { updateGoalRun } = await import("@/engine/persist")
-                updateGoalRun(goalRunID, { session_id: sessionID })
+              if (buildOutcome.kind === "ok") {
+                const { result, sessionID, worktreeDir, diffs } = buildOutcome.result
+                finalizeBuildAttempt({
+                  goalRunID,
+                  taskID,
+                  goalID: attachedGoalID,
+                  runID: coordinatorRunID,
+                  status: result.status === "passed" ? "completed" : "failed",
+                  commitRef: result.commit_ref,
+                  workspaceDir: worktreeDir,
+                  error: result.error,
+                  diffs,
+                  summary: result.summary,
+                })
+                // Backfill session_id on the goal_run now that BuildAgent.run
+                // has assigned one. Routing keys on goalID, but downstream
+                // tracing (orphan detection, audit) expects session_id on the
+                // tip artifact. updateGoalRun's append model handles this.
+                if (sessionID) {
+                  const { updateGoalRun } = await import("@/engine/persist")
+                  updateGoalRun(goalRunID, { session_id: sessionID })
+                }
+              } else {
+                const errMsg =
+                  buildOutcome.error instanceof Error
+                    ? `${buildOutcome.error.name}: ${buildOutcome.error.message}`
+                    : String(buildOutcome.error)
+                finalizeBuildAttempt({
+                  goalRunID,
+                  taskID,
+                  goalID: attachedGoalID,
+                  runID: coordinatorRunID,
+                  status: "failed",
+                  workspaceDir: managedWorktree?.directory,
+                  error: errMsg,
+                  summary: `BuildAgent.run threw before producing a verdict: ${errMsg.slice(0, 240)}`,
+                })
               }
             } catch (persistErr) {
               // Failing to record the attempt does NOT abort the build —
@@ -4090,6 +4133,18 @@ export function createOrchestratorTools(input: {
               })
             }
           }
+
+          // If BuildAgent.run threw, surface the original error to the caller
+          // AFTER the goal_run is finalised. The throw shape is preserved so
+          // the orchestrator's existing tool-error / wake-loop logic isn't
+          // disturbed — only the persistent state was previously orphaned.
+          if (buildOutcome.kind === "throw") {
+            throw buildOutcome.error
+          }
+          const { result, sessionID, worktreeDir } = buildOutcome.result
+          // diffs is captured by the surrounding scope's destructure for the
+          // ok-branch report rendering below; pull it back out for clarity.
+          const diffs = buildOutcome.result.diffs
 
           if (isTaskLevelBuild) await trackStepComplete("build")
 
