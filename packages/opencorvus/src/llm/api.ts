@@ -1,5 +1,4 @@
 import {
-  APICallError,
   streamObject as streamObjectBase,
   streamText as streamTextBase,
   type StreamTextOnChunkCallback,
@@ -26,8 +25,6 @@ export type TextHooks<TOOLS extends ToolSet = ToolSet> = {
 }
 
 const DEFAULT_TIMEOUT_MS = 5_000
-const DEFAULT_RETRIES = 2
-const DEFAULT_RETRY_DELAY_MS = 250
 
 function timeoutMs(value?: number | false) {
   if (value === false) return undefined
@@ -37,15 +34,16 @@ function timeoutMs(value?: number | false) {
 }
 
 function retries(value?: number) {
-  if (typeof value === "number" && value >= 0) return value
-  const env = Number.parseInt(Env.get("OPENCORVUS_LLM_MAX_RETRIES") ?? "", 10)
-  return Number.isFinite(env) && env >= 0 ? env : DEFAULT_RETRIES
-}
-
-function retryDelayMs(value?: number) {
-  if (typeof value === "number" && value >= 0) return value
-  const env = Number.parseInt(Env.get("OPENCORVUS_LLM_RETRY_DELAY_MS") ?? "", 10)
-  return Number.isFinite(env) && env >= 0 ? env : DEFAULT_RETRY_DELAY_MS
+  // Retries are now owned by withLLMActivity (packages/opencorvus/src/llm/activity.ts).
+  // The AI SDK's `maxRetries` is set to 0 here so the SDK does NOT also retry —
+  // double-retry was the cause of confused terminal events / mismatched
+  // attempt counters / quota exhaustion noise across the layered retry stack
+  // (see specs/new-arch/2026-04-30-llm-activity-redesign.md). The `value`
+  // parameter is preserved on the input type for forward-compat but is
+  // intentionally ignored — callers that want retries should configure
+  // their LLMActivityPolicy.maxRetries instead.
+  void value
+  return 0
 }
 
 function signal(signal?: AbortSignal, timeout?: number | false) {
@@ -54,62 +52,6 @@ function signal(signal?: AbortSignal, timeout?: number | false) {
   const next = AbortSignal.timeout(ms)
   if (!signal) return next
   return AbortSignal.any([signal, next])
-}
-
-function retryable(error: unknown) {
-  if (error instanceof DOMException && error.name === "AbortError") return true
-  if (APICallError.isInstance(error)) return error.isRetryable
-  if (!(error instanceof Error)) return false
-  const message = error.message.toLowerCase()
-  return [
-    "timeout",
-    "timed out",
-    "connectionrefused",
-    "econnreset",
-    "fetch failed",
-    "overloaded",
-    "rate limit",
-    "too many requests",
-  ].some((part) => message.includes(part))
-}
-
-async function wait(ms: number, abort?: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    const done = () => {
-      clearTimeout(timer)
-      abort?.removeEventListener("abort", stop)
-      resolve()
-    }
-    const stop = () => {
-      clearTimeout(timer)
-      abort?.removeEventListener("abort", stop)
-      reject(new DOMException("Aborted", "AbortError"))
-    }
-    const timer = setTimeout(done, ms)
-    abort?.addEventListener("abort", stop, { once: true })
-  })
-}
-
-async function call<T>(run: (attemptSignal: AbortSignal | undefined) => Promise<T>, input: {
-  retries?: number
-  retryDelayMs?: number
-  abortSignal?: AbortSignal
-  timeoutMs?: number | false
-}) {
-  const max = retries(input.retries)
-  const base = retryDelayMs(input.retryDelayMs)
-  for (let attempt = 0; attempt <= max; attempt++) {
-    // Create a fresh per-attempt timeout signal so earlier timeouts don't poison retries.
-    const attemptSignal = signal(input.abortSignal, input.timeoutMs)
-    try {
-      return await run(attemptSignal)
-    } catch (error) {
-      if (attempt >= max || !retryable(error)) throw error
-      // Use only the caller's abort signal for the delay (not the already-expired per-attempt signal).
-      await wait(base * Math.pow(2, attempt), input.abortSignal)
-    }
-  }
-  throw new Error("unreachable")
 }
 
 export function streamText<TOOLS extends ToolSet = ToolSet>(
