@@ -104,9 +104,11 @@ export function dashscopeCodingKey() {
   return key?.startsWith("sk-sp-") ? key : undefined
 }
 
+// `alibaba-coding-plan` (international) deliberately excluded — bench keys are
+// 国内 sk-sp-*, the international endpoint coding-intl.dashscope.aliyuncs.com
+// rejects them with HTTP 401. Use `-cn` exclusively (rule 8: no double source).
 const preferredProviders = [
   "alibaba-coding-plan-cn",
-  "alibaba-coding-plan",
   "alibaba-cn",
   "hexin",
   "google",
@@ -131,10 +133,15 @@ async function resetBenchmarkState() {
   await Instance.disposeAll().catch(() => undefined)
 }
 
-function explicitModel(
+export function explicitModel(
   providers: Awaited<ReturnType<typeof providerList>>,
   explicit: string,
 ) {
+  if (explicit.startsWith("alibaba-coding-plan/")) {
+    throw new Error(
+      `benchmark model "${explicit}" rejected: international alibaba-coding-plan endpoint does not accept 国内 sk-sp-* keys (rule 8). Use alibaba-coding-plan-cn/<model> instead.`,
+    )
+  }
   if (explicit.includes("/")) return explicit
   for (const providerID of preferredProviders) {
     const provider = providers[providerID]
