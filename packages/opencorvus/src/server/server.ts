@@ -13,6 +13,7 @@ import { NotFoundError } from "../storage/db"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { websocket } from "hono/bun"
 import { HTTPException } from "hono/http-exception"
+import z from "zod"
 import { AuthRoutes } from "./routes/auth"
 import { AppDocumentation, AppRoutes } from "./routes/app"
 import { GlobalRoutes } from "./routes/global"
@@ -25,6 +26,20 @@ muteAISdkWarnings()
 
 export namespace Server {
   const log = Log.create({ service: "server" })
+
+  /**
+   * Project-scoped routes require an explicit `directory` (via `?directory=`
+   * or `x-opencorvus-directory` header). Falling back to `process.cwd()`
+   * silently bound the entire orchestrator to whatever directory the
+   * sidecar was launched in — on darwin .app this is `/`, which made
+   * every subsequent project request 500 (rule 7: no fallback).
+   */
+  export const DirectoryRequiredError = NamedError.create(
+    "DirectoryRequiredError",
+    z.object({
+      message: z.string(),
+    }),
+  )
 
   let _url: URL | undefined
   let _corsWhitelist: string[] = []
@@ -54,6 +69,13 @@ export namespace Server {
             let status: ContentfulStatusCode
             if (err instanceof NotFoundError) status = 404
             else if (err instanceof Provider.ModelNotFoundError) status = 400
+            else if (err instanceof DirectoryRequiredError) status = 400
+            // WorktreeNotGitError is a precondition (the directory is reachable
+            // and valid, but does not contain a `.git` repository). 412 lets
+            // the overlay distinguish "fix your input" (400) from "init the
+            // repo and retry" (412); the former is an irrecoverable user error,
+            // the latter is a one-click recovery prompt.
+            else if (err.name === "WorktreeNotGitError") status = 412
             else if (err.name.startsWith("Worktree")) status = 400
             else status = 500
             return c.json(err.toObject(), { status })
@@ -126,7 +148,12 @@ export namespace Server {
           if (c.req.path === "/log" || c.req.path === "/shutdown" || c.req.path === "/restart") {
             return next()
           }
-          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory") || process.cwd()
+          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory")
+          if (!raw) {
+            throw new DirectoryRequiredError({
+              message: `Project-scoped route ${c.req.path} requires ?directory= query parameter or x-opencorvus-directory header`,
+            })
+          }
           const directory = decodeDirectory(raw)
           return Instance.provide({
             directory,
