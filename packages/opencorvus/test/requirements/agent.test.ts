@@ -93,7 +93,7 @@ describe("RequirementsAgent prompt precedence", () => {
           runnerCalls += 1
           expect(input.format).toBeUndefined()
           expect(input.terminalTool?.toolName).toBe("submit_requirements")
-          expect(input.terminalTool?.isReadyToFinalize(input.toolKit.getCollector())).toBe(false)
+          expect(input.terminalTool?.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
           expect(input.toolKit.tools.submit_requirements).toBeDefined()
           const parts = await input.buildUserParts()
           const text = parts
@@ -124,7 +124,7 @@ describe("RequirementsAgent prompt precedence", () => {
             value: "vitest",
             reason: "现有项目脚手架使用 Vitest。",
           }, {} as any)
-          expect(input.terminalTool.isReadyToFinalize(input.toolKit.getCollector())).toBe(true)
+          expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
           await input.toolKit.tools.submit_requirements.execute({ final: true }, {} as any)
 
           return {

@@ -30,7 +30,7 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
         expect(input.format).toBeUndefined()
         expect(input.terminalTool?.toolName).toBe("submit_architect")
         expect(input.terminalTool?.isSatisfied(input.toolKit.getCollector())).toBe(false)
-        expect(input.terminalTool?.isReadyToFinalize(input.toolKit.getCollector())).toBe(false)
+        expect(input.terminalTool?.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
 
         const collector = input.toolKit.getCollector()
         collector.summary = "Single goal decomposition"
@@ -89,7 +89,7 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           })
         }
 
-        expect(input.terminalTool.isReadyToFinalize(input.toolKit.getCollector())).toBe(true)
+        expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(true)
         collector.finalized = true
         expect(input.terminalTool.isSatisfied(input.toolKit.getCollector())).toBe(true)
         return {

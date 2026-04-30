@@ -29,7 +29,7 @@ describe("SessionLoop terminal tool recovery", () => {
     const contract = {
       toolName: "submit_architect",
       isSatisfied: () => false,
-      isReadyToFinalize: () => true,
+      shouldExposeOnlyTerminalTool: () => true,
     }
     const tools = { submit_architect: {} as any, register_goal: {} as any }
 
@@ -43,7 +43,7 @@ describe("SessionLoop terminal tool recovery", () => {
     const contract = {
       toolName: "report_build_result",
       isSatisfied: () => false,
-      isReadyToFinalize: () => false,
+      shouldExposeOnlyTerminalTool: () => false,
     }
     const tools = {
       report_build_result: {} as any,
@@ -57,7 +57,7 @@ describe("SessionLoop terminal tool recovery", () => {
     const contract = {
       toolName: "submit_architect",
       isSatisfied: () => false,
-      isReadyToFinalize: () => true,
+      shouldExposeOnlyTerminalTool: () => true,
     }
 
     expect(SessionLoop.terminalToolChoice(contract, { register_goal: {} as any })).toBeUndefined()
@@ -67,7 +67,7 @@ describe("SessionLoop terminal tool recovery", () => {
     const contract = {
       toolName: "submit_architect",
       isSatisfied: () => false,
-      isReadyToFinalize: () => true,
+      shouldExposeOnlyTerminalTool: () => true,
     }
     const tools = { submit_architect: {} as any, register_goal: {} as any }
 
@@ -78,7 +78,7 @@ describe("SessionLoop terminal tool recovery", () => {
     const contract = {
       toolName: "report_build_result",
       isSatisfied: () => false,
-      isReadyToFinalize: () => false,
+      shouldExposeOnlyTerminalTool: () => false,
     }
     const tools = { report_build_result: {} as any, merge_back: {} as any }
 

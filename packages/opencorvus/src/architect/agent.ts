@@ -148,7 +148,7 @@ export namespace ArchitectAgent {
       terminalTool: {
         toolName: "submit_architect",
         isSatisfied: (collector) => collector.finalized,
-        isReadyToFinalize: isArchitectReadyToFinalize,
+        shouldExposeOnlyTerminalTool: isArchitectReadyToFinalize,
       },
     })
 

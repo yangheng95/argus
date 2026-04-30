@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { tool } from "ai"
+import { asSchema, tool } from "ai"
 import z from "zod"
 // Import order matters: SessionPrompt loads session/index first which pulls
 // in the rest of the session module graph; SessionLoop is then already
@@ -8,6 +8,7 @@ import z from "zod"
 // destructure sees an empty stub.
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionLoop } from "../../src/session/loop"
+import { BuildResultSchema } from "../../src/build/types"
 
 const dummyTool = () =>
   tool({
@@ -132,6 +133,69 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     const extras = SessionLoop.getExtraTools(sessionID)
     expect(Object.keys(extras).sort()).toEqual(["full", "partial", "plain"])
     SessionLoop.setExtraTools(sessionID, undefined)
+  })
+})
+
+describe("extra tool provider schema preparation", () => {
+  const dashScopeModel = {
+    providerID: "alibaba-cn",
+    id: "kimi-k2.5",
+    api: {
+      id: "kimi-k2.5",
+      npm: "@ai-sdk/openai-compatible",
+      url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    },
+  } as any
+
+  test("keeps explicit final confirmation required on extra submit tools", () => {
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "submit_requirements",
+      source: "extra",
+      model: dashScopeModel,
+      tool: tool({
+        description: "submit",
+        inputSchema: z.object({ final: z.literal(true) }),
+        async execute() {
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    const schema = asSchema(prepared.inputSchema).jsonSchema as any
+    expect(schema.type).toBe("object")
+    expect(schema.required).toContain("final")
+    expect(schema.properties.final.const).toBe(true)
+  })
+
+  test("normalizes extra discriminated result tools to provider-bound root object schema", () => {
+    const prepared = SessionLoop.prepareProviderTool({
+      name: "report_build_result",
+      source: "extra",
+      model: dashScopeModel,
+      tool: tool({
+        description: "report build result",
+        inputSchema: BuildResultSchema,
+        async execute() {
+          return { output: "ok", title: "", metadata: {} }
+        },
+      }),
+    }) as any
+
+    const schema = asSchema(prepared.inputSchema).jsonSchema as any
+    expect(schema.type).toBe("object")
+    expect(schema.anyOf).toBeUndefined()
+    expect(schema.properties.status.enum).toEqual(["passed", "failed"])
+  })
+
+  test("rejects provider-bound tools without an input schema", () => {
+    expect(() =>
+      SessionLoop.prepareProviderTool({
+        name: "broken_extra",
+        source: "extra",
+        model: dashScopeModel,
+        tool: { description: "broken" } as any,
+      }),
+    ).toThrow("missing inputSchema")
   })
 })
 
