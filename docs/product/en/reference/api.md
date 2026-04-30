@@ -236,6 +236,7 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/provider` | List providers | `provider.list` |
 | GET | `/provider/auth` | Get provider auth methods | `provider.auth` |
 | POST | `/provider/hexin/refresh` | Refresh hexin gateway model list | `provider.hexin.refresh` |
+| POST | `/provider/refresh` | Refresh the models.dev registry snapshot | `provider.refresh` |
 | POST | `/provider/{providerID}/auth/execute` | Execute auth method | `provider.auth.execute` |
 | POST | `/provider/{providerID}/auth/prompts` | Get auth prompts | `provider.auth.prompts` |
 | POST | `/provider/{providerID}/oauth/authorize` | OAuth authorize | `provider.oauth.authorize` |

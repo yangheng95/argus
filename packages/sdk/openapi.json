@@ -165,7 +165,7 @@
       "post": {
         "operationId": "global.db.reset",
         "summary": "Reset database",
-        "description": "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-cwd worktree/ownership markers. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+        "description": "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-project worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir in the request body since the DB is project-local. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
         "responses": {
           "200": {
             "description": "Reset results",
@@ -208,6 +208,24 @@
                     "targets"
                   ]
                 }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "projectDir": {
+                    "description": "Absolute filesystem path of the project whose DB should be wiped (the directory containing .opencorvus/).",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "projectDir"
+                ]
               }
             }
           }
@@ -5935,6 +5953,54 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.auth({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/provider/refresh": {
+      "post": {
+        "operationId": "provider.refresh",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Refresh the models.dev registry snapshot",
+        "description": "Pulls api.json from the configured registry URL and persists it to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.",
+        "responses": {
+          "200": {
+            "description": "Refresh outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "fetchedAt": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.refresh({\n  ...\n})"
           }
         ]
       }
@@ -33027,7 +33093,7 @@
             ]
           },
           "reuseIfValid": {
-            "description": "When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Falls back to the standard reclaim path when the existing tree is invalid (zombie linkage, missing branch, etc.) so corrupt state never silently survives a retry.",
+            "description": "When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.",
             "type": "boolean"
           }
         }

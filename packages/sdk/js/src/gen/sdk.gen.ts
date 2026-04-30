@@ -145,6 +145,7 @@ import type {
   ProviderOauthAuthorizeResponses,
   ProviderOauthCallbackErrors,
   ProviderOauthCallbackResponses,
+  ProviderRefreshResponses,
   ProviderTestErrors,
   ProviderTestResponses,
   PtyConnectErrors,
@@ -407,12 +408,24 @@ export class Db extends HeyApiClient {
   /**
    * Reset database
    *
-   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-cwd worktree/ownership markers. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
+   * DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-project worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir in the request body since the DB is project-local. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).
    */
-  public reset<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+  public reset<ThrowOnError extends boolean = false>(
+    parameters?: {
+      projectDir?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "projectDir" }] }])
     return (options?.client ?? this.client).post<GlobalDbResetResponses, unknown, ThrowOnError>({
       url: "/global/db/reset",
       ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -3197,6 +3210,25 @@ export class Provider extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<ProviderAuthResponses, unknown, ThrowOnError>({
       url: "/provider/auth",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Refresh the models.dev registry snapshot
+   *
+   * Pulls api.json from the configured registry URL and persists it to the per-instance cache; subsequent provider/model lookups use the new data. The CLI runtime never refreshes implicitly — UI button, `opencorvus models --refresh`, and this route are the three explicit entry points.
+   */
+  public refresh<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<ProviderRefreshResponses, unknown, ThrowOnError>({
+      url: "/provider/refresh",
       ...options,
       ...params,
     })
