@@ -3,8 +3,9 @@ import { Event } from "./model"
 import { EngineProtocol } from "./protocol"
 import { progressStatus } from "./helpers"
 import { EngineArtifactTable, EngineProgressSnapshotTable, EngineTaskTable } from "./engine.sql"
-import { findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
+import { findActiveRunForTask, findRun, requireRun, requireTask, type RunRow, type TaskRow } from "./store"
 import { deriveTaskStatus } from "./task-status"
+import { isLiveRunStatus } from "./catalog"
 import { Identifier } from "@/id/id"
 
 /**
@@ -22,6 +23,12 @@ import { Identifier } from "@/id/id"
 export type TaskUpdateValues = Omit<Partial<typeof EngineTaskTable.$inferInsert>, "status"> & {
   status?: "queued" | "active" | "completed" | "failed" | "cancelled"
 }
+
+const TERMINAL_TASK_RUN_STATUS = {
+  completed: "completed",
+  failed: "failed",
+  cancelled: "aborted",
+} as const satisfies Partial<Record<NonNullable<TaskUpdateValues["status"]>, RunRow["status"]>>
 
 export async function updateTask(
   row: TaskRow,
@@ -93,6 +100,7 @@ export async function updateTask(
     nextStarted === row.time_started &&
     nextCompleted === row.time_completed
   ) {
+    await finalizeLiveRunForTerminalTask(row, intent, resolved, summary)
     return row
   }
 
@@ -133,7 +141,35 @@ export async function updateTask(
       ),
     )
   })
-  return updated ?? requireTask(row.id)
+  const result = updated ?? requireTask(row.id)
+  await finalizeLiveRunForTerminalTask(result, intent, resolved, summary)
+  return result
+}
+
+async function finalizeLiveRunForTerminalTask(
+  task: TaskRow,
+  intent: TaskUpdateValues["status"],
+  resolved: Partial<typeof EngineTaskTable.$inferInsert>,
+  summary: string,
+) {
+  const runStatus = intent ? TERMINAL_TASK_RUN_STATUS[intent] : undefined
+  if (!runStatus) return
+  const run = findActiveRunForTask(task.id)
+  if (!isLiveRunStatus(run?.status)) return
+  const completedAt = typeof resolved.time_completed === "number"
+    ? resolved.time_completed
+    : task.time_completed ?? Date.now()
+  const error = runStatus === "completed" ? null : String(resolved.error ?? task.error ?? summary)
+  await updateRun(
+    run,
+    {
+      status: runStatus,
+      blocking_reason: null,
+      error,
+      time_completed: completedAt,
+    },
+    summary,
+  )
 }
 
 export async function updateRun(

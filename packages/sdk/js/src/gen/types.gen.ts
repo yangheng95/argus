@@ -1164,6 +1164,21 @@ export type EventVcsBranchUpdated = {
   }
 }
 
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
 export type EventSessionCompacted = {
   type: "session.compacted"
   properties: {
@@ -1429,21 +1444,6 @@ export type EventPtyDeleted = {
   }
 }
 
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
 export type EventWorkspaceReady = {
   type: "workspace.ready"
   properties: {
@@ -1524,6 +1524,8 @@ export type Event =
   | EventMcpResourcesChanged
   | EventFileWatcherUpdated
   | EventVcsBranchUpdated
+  | EventWorktreeReady
+  | EventWorktreeFailed
   | EventSessionCompacted
   | EventFileEdited
   | EventTodoUpdated
@@ -1539,8 +1541,6 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
-  | EventWorktreeReady
-  | EventWorktreeFailed
   | EventWorkspaceReady
   | EventWorkspaceFailed
 
