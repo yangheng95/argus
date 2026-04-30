@@ -616,6 +616,40 @@ export function createOrchestratorTools(input: {
           // actor close path emits {type:"terminal", reason:"error"}); the
           // error message itself surfaces via the thrown error in the
           // orchestrator's tool result. No phase-completed bus event needed.
+          //
+          // Workflow.step.requirements must flip to `failed` (not stay
+          // `running` forever) so the overlay shows the failure and the
+          // operator can see WHICH stage broke. trackStepComplete is best-
+          // effort (it swallows its own errors) so wrapping it in try/catch
+          // here is intentional belt-and-braces (rule 1 / rule 7).
+          try {
+            await trackStepComplete("requirements", undefined, true)
+          } catch (trackErr) {
+            log.warn("requirements: trackStepComplete(failed) emit failed", {
+              taskID,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            })
+          }
+          // P4 (rule 4 — same systemic shape as analyze_intent / design_analysis
+          // catch paths): write decision_log so downstream agents see WHY
+          // requirements failed instead of silently inheriting an empty
+          // requirements set. Without this the abort surfaces only as a
+          // thrown tool result the orchestrator may swallow during recovery.
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            const reason = err instanceof Error ? err.message : String(err)
+            createDecisionLog(taskID).append({
+              phase: "requirements",
+              key: "abort_requirements_failed",
+              value: `Requirements stage aborted: ${reason.slice(0, 400)}`,
+              reason: "requirements_threw",
+            })
+          } catch (logErr) {
+            log.warn("requirements: decision_log write failed (non-fatal)", {
+              taskID,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
           throw err
         } finally {
           // No caller-level guard: the pre-migration runtime enforces progress/absolute timeouts.
@@ -1291,6 +1325,34 @@ export function createOrchestratorTools(input: {
 
           return summary
         } catch (err) {
+          // Same shape as requirements catch above (rule 4 — failure
+          // surfacing is uniform across stage agents). Without this the
+          // workflow.step.architect stays "running" forever in the overlay
+          // when ArchitectAgent.coordinate throws (LLM hard error,
+          // structured-output miss, persistence error).
+          try {
+            await trackStepComplete("architect", undefined, true)
+          } catch (trackErr) {
+            log.warn("architect: trackStepComplete(failed) emit failed", {
+              taskID,
+              error: trackErr instanceof Error ? trackErr.message : String(trackErr),
+            })
+          }
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            const reason = err instanceof Error ? err.message : String(err)
+            createDecisionLog(taskID).append({
+              phase: "architect",
+              key: "abort_architect_failed",
+              value: `Architect stage aborted: ${reason.slice(0, 400)}`,
+              reason: "architect_threw",
+            })
+          } catch (logErr) {
+            log.warn("architect: decision_log write failed (non-fatal)", {
+              taskID,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
           throw err
         }
       },

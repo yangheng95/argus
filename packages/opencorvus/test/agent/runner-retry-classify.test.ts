@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { classifyAttemptOutcome } from "../../src/agent/runner"
+import { AgentRunError, classifyAttemptOutcome } from "../../src/agent/runner"
 import { Message } from "../../src/session/message"
 
 /**
@@ -109,6 +109,34 @@ describe("classifyAttemptOutcome", () => {
     // of looping silently.
     const out = classifyAttemptOutcome({})
     expect(out.action).toBe("fail-fast")
+  })
+
+  test("AgentRunError nonRetryable=true → fail-fast (no retry)", () => {
+    // Regression for the intent-analysis "秒退" incident on tsk_ddf383614:
+    // deepseek-reasoner returned HTTP 400 "tool_choice not supported"
+    // (isRetryable=false). The runner now wraps such failures as
+    // AgentRunError with nonRetryable=true; the classifier MUST fail-fast
+    // so retry helpers do not burn maxRetries on a deterministically
+    // failing request (rule 7 — no fallback, surface real cause).
+    const err = new AgentRunError(
+      "intent-analysis",
+      "LLM error during intent-analysis: APIError: deepseek-reasoner does not support this tool_choice",
+      { nonRetryable: true },
+    )
+    const out = classifyAttemptOutcome({ thrownError: err })
+    expect(out.action).toBe("fail-fast")
+    if (out.action === "fail-fast") {
+      expect(out.reason).toContain("deepseek-reasoner")
+    }
+  })
+
+  test("AgentRunError nonRetryable=false → retry (transient)", () => {
+    // The default for AgentRunError without an explicit nonRetryable flag
+    // is treated as transient (e.g. ECONNRESET wrapped by the runner).
+    const err = new AgentRunError("requirements", "transient ECONNRESET")
+    expect(err.nonRetryable).toBe(false)
+    const out = classifyAttemptOutcome({ thrownError: err })
+    expect(out.action).toBe("retry")
   })
 
   test("thrown error precedence over decision (throw wins)", () => {
