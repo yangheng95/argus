@@ -694,6 +694,25 @@ export function createOrchestratorTools(input: {
         const liveUrls = inputUrls.filter((u) => !/(^|\.)figma\.com\//i.test(u))
         const materialPaths = Array.isArray(materials) ? materials.filter((m) => typeof m === "string" && m.length > 0) : []
         if (!hasAttachments && liveUrls.length === 0 && figmaUrls.length === 0 && materialPaths.length === 0) {
+          // P4: decision_log entry before throw so downstream stage agents
+          // (architect / build) see the abort cause via TaskContext.snapshot
+          // and upstream-context.ts. Without this, the abort surfaces only
+          // as a stderr WARN and design_specs stays undefined with no
+          // explanation in any prompt (audit §11.3 / L3).
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            createDecisionLog(taskID).append({
+              phase: "design_analysis",
+              key: "abort_no_visual_input",
+              value: "Design analysis aborted before agent call: caller provided no visual reference (no attachments, no url, no figma_url, no materials).",
+              reason: "no_visual_input_provided",
+            })
+          } catch (logErr) {
+            log.warn("design_analysis: decision_log write failed (non-fatal)", {
+              taskID,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
           throw new Error(
             "Design analysis requires at least one real visual reference: image attachment, URL, Figma URL, or local material path.",
           )
@@ -908,6 +927,27 @@ export function createOrchestratorTools(input: {
             figmaUrlCount: figmaUrls.length,
             materialCount: materialPaths.length,
           })
+          // P4: write decision_log so downstream agents see "design analysis
+          // was attempted but produced no visual context" rather than
+          // running blind on designSpecs=undefined (audit §11.3 / L3, bench
+          // tsk_dde13a67c001sbz6y2Qe0at8Fc:1729).
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            createDecisionLog(taskID).append({
+              phase: "design_analysis",
+              key: "abort_materialization_failed",
+              value:
+                `Design analysis aborted before agent call: all ${providedCount} provided visual ` +
+                `source(s) (live=${liveUrls.length}, figma=${figmaUrls.length}, materials=${materialPaths.length}) ` +
+                `failed to materialize.`,
+              reason: "materialization_failed_all_sources",
+            })
+          } catch (logErr) {
+            log.warn("design_analysis: decision_log write failed (non-fatal)", {
+              taskID,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
           throw new Error(message)
         }
 
@@ -1707,6 +1747,27 @@ export function createOrchestratorTools(input: {
           })
         } catch (err) {
           await trackStepComplete("analyze_intent", undefined, true)
+          // P4 (rule 4 systemic — bundles intent_analysis abort with
+          // design_analysis abort, both audit L7 + L3 same shape): write
+          // decision_log so downstream agents see "intent analysis was
+          // attempted but failed" instead of silently inheriting an empty
+          // intent classification. The success path already writes (lines
+          // 1722-1763 below); this commit closes the abort gap.
+          try {
+            const { createDecisionLog } = await import("@/decision-log")
+            const reason = err instanceof Error ? err.message : String(err)
+            createDecisionLog(taskID).append({
+              phase: "intent_analysis",
+              key: "abort_intent_analysis_failed",
+              value: `Intent analysis aborted: ${reason.slice(0, 400)}`,
+              reason: "intent_analysis_threw",
+            })
+          } catch (logErr) {
+            log.warn("analyze_intent: decision_log write failed (non-fatal)", {
+              taskID,
+              error: logErr instanceof Error ? logErr.message : String(logErr),
+            })
+          }
           throw err
         }
         const r = out.result
