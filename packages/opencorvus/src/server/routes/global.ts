@@ -192,7 +192,7 @@ export const GlobalRoutes = lazy(() =>
       describeRoute({
         summary: "Reset database",
         description:
-          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-cwd worktree/ownership markers. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
+          "DESTRUCTIVE. Disposes all in-memory Instance handles, closes the SQLite DB, and removes the DB file (with WAL/SHM), snapshot scratch, and per-project worktree/ownership markers under <projectDir>/.opencorvus/. Caller must specify projectDir in the request body since the DB is project-local. Schema is rebuilt from DDL on next access. Active executor sessions block the reset (409).",
         operationId: "global.db.reset",
         responses: {
           200: {
@@ -218,14 +218,21 @@ export const GlobalRoutes = lazy(() =>
           ...errors(409),
         },
       }),
+      validator(
+        "json",
+        z.object({
+          projectDir: z.string().describe("Absolute filesystem path of the project whose DB should be wiped (the directory containing .opencorvus/)."),
+        }),
+      ),
       async (c) => {
+        const { projectDir } = c.req.valid("json")
         const { hasActiveSessions } = await import("@/engine/runtime")
         if (hasActiveSessions()) {
           return c.json({ error: "Active executor sessions exist, refusing DB reset" }, 409)
         }
         await Instance.disposeAll().catch(() => undefined)
-        const targets = await Database.reset()
-        log.warn("db reset via /global/db/reset", { targets })
+        const targets = await Database.reset(projectDir)
+        log.warn("db reset via /global/db/reset", { projectDir, targets })
         return c.json({ ok: targets.every((t) => t.ok), targets })
       },
     ),

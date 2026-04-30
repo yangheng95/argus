@@ -156,7 +156,8 @@ export namespace Config {
     const deps: Promise<void>[] = []
 
     for (const dir of unique(directories)) {
-      if (dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR) {
+      const isOpencorvusDir = dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR || dir === Global.Path.config
+      if (isOpencorvusDir) {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
@@ -166,12 +167,24 @@ export namespace Config {
         }
       }
 
-      deps.push(
-        iife(async () => {
-          const shouldInstall = await needsInstall(dir)
-          if (shouldInstall) await installDependencies(dir)
-        }),
-      )
+      // The plugin manifest install (`@opencorvus-ai/plugin` written as
+      // `package.json` + node_modules) MUST stay inside opencorvus-owned
+      // directories: the global config root, the project's `.opencorvus/`,
+      // or an explicit `OPENCORVUS_CONFIG_DIR`. Writing it into a directory
+      // walked-to from `Instance.directory` (e.g. the project root itself,
+      // when a `.opencorvus/` sibling sits one level up) would drop an
+      // untracked `package.json` into the user's primary worktree — which
+      // then collides with build-agent commits at `git merge --ff-only`
+      // time. Those collisions were the root cause of the 2026-04-29
+      // gemini-task scaffold merge failure.
+      if (isOpencorvusDir) {
+        deps.push(
+          iife(async () => {
+            const shouldInstall = await needsInstall(dir)
+            if (shouldInstall) await installDependencies(dir)
+          }),
+        )
+      }
 
       result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
       result.agent = mergeDeep(result.agent, await loadAgent(dir))

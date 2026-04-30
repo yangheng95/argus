@@ -32,16 +32,27 @@ function ensureSchemaCompatibility(sqlite: BunDatabase) {
 
 
 export namespace Database {
-  // Path() is a function (not a const) so it resolves OPENCORVUS_HOME lazily.
-  // Required for benchmark isolation — benchmarks set OPENCORVUS_HOME at runtime
-  // after static imports have already completed.
-  // Default: cwd (project-local, mirrors Global.Path.config). OPENCORVUS_HOME
-  // explicit override still uses the portable Global.Path.data layout.
+  // Project-local DB lives under `<projectDir>/.opencorvus/opencorvus.db` so
+  // engine state (sqlite + WAL + SHM) is fully isolated from the user's
+  // primary worktree contents — `git merge --ff-only` can never trip on an
+  // untracked opencorvus.db dropped at the project root.
+  //
+  // Anchor: process.cwd(). The project context (Instance) is established
+  // AFTER Database.Client opens (Instance.provide → Project.fromDirectory
+  // → Database.use), so resolving via Instance.directory would deadlock the
+  // bootstrap. opencorvus is always invoked with cwd == project dir, so cwd
+  // and Instance.directory agree. The `.opencorvus/` subfolder is the
+  // architectural guarantee — not which variable provides the project root.
+  //
+  // OPENCORVUS_HOME (benchmarks, portable installs) keeps using the
+  // Global.Path.data layout. Path() stays a function — not a const — so
+  // OPENCORVUS_HOME resolves lazily on first DB open, after benchmarks have
+  // set their env.
   export function Path() {
     if (process.env.OPENCORVUS_HOME?.trim()) {
       return path.join(Global.Path.data, "opencorvus.db")
     }
-    return path.join(process.cwd(), "opencorvus.db")
+    return path.join(process.cwd(), ".opencorvus", "opencorvus.db")
   }
   type Schema = typeof schema
   export type Transaction = SQLiteTransaction<"sync", void, Schema>
@@ -50,10 +61,15 @@ export namespace Database {
 
   const state = {
     sqlite: undefined as BunDatabase | undefined,
+    // Path used at last open. Captured so `reset()` can wipe the right files
+    // after `Instance.disposeAll()` has cleared the project context — Path()
+    // would otherwise throw when no Instance is active.
+    lastPath: undefined as string | undefined,
   }
 
   export const Client = lazy(() => {
     const dbPath = Path()
+    state.lastPath = dbPath
     log.info("opening database", { path: dbPath })
     // Ensure data dir exists — benchmarks create OPENCORVUS_HOME at runtime,
     // so the data subdirectory may not have been created by global/index.ts
@@ -95,20 +111,20 @@ export namespace Database {
   }
 
   // Atomic on-disk wipe shared by `opencorvus db reset` CLI and the
-  // /global/db/reset HTTP backdoor. Caller is responsible for disposing
-  // any in-memory Instance handles BEFORE invoking — otherwise WAL flush
-  // races leave half-released file locks on Windows.
-  export async function reset(): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
+  // /global/db/reset HTTP backdoor. Caller MUST pass the project directory
+  // explicitly — the DB path now lives under `<projectDir>/.opencorvus/`,
+  // and Instance state may already have been disposed before reset() runs
+  // (so we can't rely on Instance.directory here).
+  export async function reset(projectDir: string): Promise<Array<{ label: string; path: string; ok: boolean; error?: string }>> {
     close()
-    const dbPath = Path()
-    const cwdPrimary = process.cwd()
+    const dbPath = path.join(projectDir, ".opencorvus", "opencorvus.db")
     const targets: Array<{ label: string; path: string }> = [
       { label: "db", path: dbPath },
       { label: "db-wal", path: `${dbPath}-wal` },
       { label: "db-shm", path: `${dbPath}-shm` },
       { label: "snapshot", path: path.join(Global.Path.data, "snapshot") },
-      { label: "cwd-worktrees", path: path.join(cwdPrimary, ".opencorvus", "worktrees") },
-      { label: "cwd-ownership", path: path.join(cwdPrimary, ".opencorvus", "ownership") },
+      { label: "worktrees", path: path.join(projectDir, ".opencorvus", "worktrees") },
+      { label: "ownership", path: path.join(projectDir, ".opencorvus", "ownership") },
     ]
     const results: Array<{ label: string; path: string; ok: boolean; error?: string }> = []
     for (const target of targets) {
@@ -119,6 +135,7 @@ export namespace Database {
         results.push({ ...target, ok: false, error: err instanceof Error ? err.message : String(err) })
       }
     }
+    state.lastPath = undefined
     return results
   }
 
