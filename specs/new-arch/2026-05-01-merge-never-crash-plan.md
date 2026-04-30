@@ -1,6 +1,6 @@
 # Merge Never Crash Plan
 
-**Status**: Proposed (2026-05-01)
+**Status**: Implemented (2026-05-01)
 
 ## Goal
 
@@ -125,9 +125,10 @@ Add focused tests for:
 
 ## Acceptance
 
-- `merge_back` never throws into `runAgentSession`.
-- BuildAgent never reports a raw merge exception as a generic build crash.
-- Every non-merged outcome is visible in goal state and retry context.
-- Conflict worktrees remain physically present and reusable.
-- No tracked runtime DB or benchmark output can dirty the primary worktree during normal tests.
-- Existing convergence tests still pass.
+- Done: `Worktree.mergeSafely` is the public non-crashing boundary for merge publication.
+- Done: in-process build `merge_back` routes through `mergeSafely` and returns typed tool output.
+- Done: external executor host merge routes through `mergeSafely` and records typed tool output.
+- Done: non-merged outcomes flow into the existing BuildResult error field, which `finalizeBuildAttempt` persists into the goal_run attempt.
+- Done: conflict worktrees remain physically present and reusable.
+- Done: focused tests cover clean merge, textual conflict, dirty blocked worktree, and existing convergence.
+- Remaining: repository policy should separately remove tracked runtime DB and benchmark output from normal publication paths.

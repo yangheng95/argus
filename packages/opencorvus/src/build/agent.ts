@@ -412,57 +412,58 @@ export namespace BuildAgent {
                   "    possible; respect owned_paths), `git add <path>`, then once " +
                   "    all paths are resolved `git commit` — that finalizes the " +
                   "    merge. Call merge_back again to ff-publish into primary.\n" +
-                  "  • {status:'error', reason} — infrastructure problem; report it " +
+                  "  • {status:'blocked', reason, dirty_paths?, merge_head?} — repository state " +
+                  "    prevents merge from starting; fix that exact state in this worktree.\n" +
+                  "  • {status:'infra_error', reason} — infrastructure problem; report it " +
                   "    via report_build_result with status='failed'.",
                 inputSchema: z.object({}),
                 execute: async () => {
-                  try {
-                    const result = await Worktree.mergeWithMerge({
-                      branch: worktreeBranch!,
-                      worktreeDir: worktreeDir!,
-                    })
-                    mergedHead = result.primaryHead
+                  const outcome = await Worktree.mergeSafely({
+                    branch: worktreeBranch!,
+                    worktreeDir: worktreeDir!,
+                  })
+                  if (outcome.status === "merged") {
+                    mergedHead = outcome.primaryHead
                     return {
                       status: "merged" as const,
-                      primary_head: result.primaryHead,
-                      primary_branch: result.primaryBranch,
+                      primary_head: outcome.primaryHead,
+                      primary_branch: outcome.primaryBranch,
                     }
-                  } catch (err) {
-                    if (Worktree.MergeConflictError.isInstance(err)) {
-                      const { primaryBranch, primaryTip, conflictPaths } = err.data
-                      lastMergeBackOutcome =
-                        `conflict on ${primaryBranch} (tip ${primaryTip.slice(0, 12)}); ` +
-                        `paths: ${conflictPaths.join(", ")}`
-                      return {
-                        status: "conflict" as const,
-                        primary_branch: primaryBranch,
-                        primary_tip: primaryTip,
-                        conflict_paths: conflictPaths,
-                        hint:
-                          "Worktree is in MERGING state with conflict markers in " +
-                          "the listed paths. Edit each path to resolve the markers, " +
-                          "git add <path>, then `git commit` to finalize the merge. " +
-                          "Then call merge_back again to ff-publish into " +
-                          primaryBranch + ".",
-                      }
-                    }
-                    const mergeFailure = Worktree.mergeFailureDetail(err)
-                    if (mergeFailure) {
-                      const output = {
-                        status: "error" as const,
-                        reason: mergeFailure.reason,
-                        branch: mergeFailure.branch,
-                        ...(mergeFailure.stderr ? { stderr: mergeFailure.stderr } : {}),
-                      }
-                      lastMergeBackOutcome = `error on ${mergeFailure.branch}: ${mergeFailure.reason}`
-                      return output
-                    }
-                    const reason = err instanceof Error ? err.message : String(err)
-                    lastMergeBackOutcome = `error: ${reason}`
+                  }
+                  if (outcome.status === "conflict") {
+                    lastMergeBackOutcome =
+                      `conflict on ${outcome.primaryBranch} (tip ${outcome.primaryTip.slice(0, 12)}); ` +
+                      `paths: ${outcome.conflictPaths.join(", ")}`
                     return {
-                      status: "error" as const,
-                      reason,
+                      status: "conflict" as const,
+                      primary_branch: outcome.primaryBranch,
+                      primary_tip: outcome.primaryTip,
+                      conflict_paths: outcome.conflictPaths,
+                      hint:
+                        "Worktree is in MERGING state with conflict markers in " +
+                        "the listed paths. Edit each path to resolve the markers, " +
+                        "git add <path>, then `git commit` to finalize the merge. " +
+                        "Then call merge_back again to ff-publish into " +
+                        outcome.primaryBranch + ".",
                     }
+                  }
+                  if (outcome.status === "blocked") {
+                    lastMergeBackOutcome = `blocked on ${outcome.branch}: ${outcome.reason}`
+                    return {
+                      status: "blocked" as const,
+                      reason: outcome.reason,
+                      branch: outcome.branch,
+                      worktree_dir: outcome.worktreeDir,
+                      ...(outcome.dirtyPaths ? { dirty_paths: outcome.dirtyPaths } : {}),
+                      ...(outcome.mergeHead ? { merge_head: true } : {}),
+                    }
+                  }
+                  lastMergeBackOutcome = `infra_error on ${outcome.branch}: ${outcome.reason}`
+                  return {
+                    status: "infra_error" as const,
+                    reason: outcome.reason,
+                    branch: outcome.branch,
+                    ...(outcome.stderr ? { stderr: outcome.stderr } : {}),
                   }
                 },
               }),
@@ -1467,152 +1468,106 @@ async function runWithExternalProviderImpl(args: {
     },
     metadata: mergeMetadata,
   })
-  try {
-    const result = await Worktree.mergeWithMerge({
-      branch: args.worktreeBranch,
-      worktreeDir: args.worktreeDir,
+  const completeMergePart = async (output: unknown, title: string) => {
+    await Session.updatePart({
+      id: mergePartID,
+      sessionID: session.id,
+      messageID: assistantMessageID,
+      type: "tool",
+      tool: "merge_back",
+      callID: mergeCallID,
+      state: {
+        status: "completed",
+        input: mergeInput,
+        output: JSON.stringify(output, null, 2),
+        title,
+        metadata: mergeMetadata,
+        time: { start: mergeStarted, end: Date.now() },
+      },
+      metadata: mergeMetadata,
     })
-    mergedHead = result.primaryHead
+  }
+
+  const outcome = await Worktree.mergeSafely({
+    branch: args.worktreeBranch,
+    worktreeDir: args.worktreeDir,
+  })
+  if (outcome.status === "merged") {
+    mergedHead = outcome.primaryHead
     const output = {
       status: "merged" as const,
-      primary_head: result.primaryHead,
-      primary_branch: result.primaryBranch,
+      primary_head: outcome.primaryHead,
+      primary_branch: outcome.primaryBranch,
     }
-    await Session.updatePart({
-      id: mergePartID,
-      sessionID: session.id,
-      messageID: assistantMessageID,
-      type: "tool",
-      tool: "merge_back",
-      callID: mergeCallID,
-      state: {
-        status: "completed",
-        input: mergeInput,
-        output: JSON.stringify(output, null, 2),
-        title: `merged ${result.primaryBranch}@${result.primaryHead.slice(0, 12)}`,
-        metadata: mergeMetadata,
-        time: { start: mergeStarted, end: Date.now() },
-      },
-      metadata: mergeMetadata,
-    })
-  } catch (err) {
-    if (Worktree.MergeConflictError.isInstance(err)) {
-      const { primaryBranch, primaryTip, conflictPaths } = err.data
-      const pathList = conflictPaths.join(", ")
-      const output = {
-        status: "conflict" as const,
-        primary_branch: primaryBranch,
-        primary_tip: primaryTip,
-        conflict_paths: conflictPaths,
-        hint:
-          "Worktree is preserved in MERGING state. The next agent attempt must edit the listed paths, " +
-          "git add them, git commit to finalize the merge, then retry merge_back.",
-      }
-      await Session.updatePart({
-        id: mergePartID,
-        sessionID: session.id,
-        messageID: assistantMessageID,
-        type: "tool",
-        tool: "merge_back",
-        callID: mergeCallID,
-        state: {
-          status: "completed",
-          input: mergeInput,
-          output: JSON.stringify(output, null, 2),
-          title: `conflict ${args.worktreeBranch} -> ${primaryBranch}`,
-          metadata: mergeMetadata,
-          time: { start: mergeStarted, end: Date.now() },
-        },
-        metadata: mergeMetadata,
-      })
-      return {
-        sessionID: session.id,
-        structured: {
-          status: "failed" as const,
-          commit_ref: "",
-          summary:
-            `merge_back hit conflicts on ${args.worktreeBranch} → ${primaryBranch} ` +
-            `(${conflictPaths.length} conflict${conflictPaths.length === 1 ? "" : "s"}): ${pathList}`,
-          patch_summary: "",
-          tests: [],
-          error:
-            `Merge left ${args.worktreeDir} in MERGING state against ${primaryBranch} ` +
-            `(tip ${primaryTip.slice(0, 12)}); conflict paths: ${pathList}. ` +
-            `Resolve markers in this same worktree, git add, and git commit before retrying.`,
-        },
-      }
-    }
-    const mergeFailure = Worktree.mergeFailureDetail(err)
-    if (mergeFailure) {
-      const output = {
-        status: "error" as const,
-        reason: mergeFailure.reason,
-        branch: mergeFailure.branch,
-        ...(mergeFailure.stderr ? { stderr: mergeFailure.stderr } : {}),
-      }
-      await Session.updatePart({
-        id: mergePartID,
-        sessionID: session.id,
-        messageID: assistantMessageID,
-        type: "tool",
-        tool: "merge_back",
-        callID: mergeCallID,
-        state: {
-          status: "completed",
-          input: mergeInput,
-          output: JSON.stringify(output, null, 2),
-          title: `error ${args.worktreeBranch}`,
-          metadata: mergeMetadata,
-          time: { start: mergeStarted, end: Date.now() },
-        },
-        metadata: mergeMetadata,
-      })
-      return {
-        sessionID: session.id,
-        structured: {
-          status: "failed" as const,
-          commit_ref: "",
-          summary:
-            `merge_back returned status=error for ${args.worktreeBranch}: ${mergeFailure.reason}`,
-          patch_summary: "",
-          tests: [],
-          error:
-            `${mergeFailure.reason}. External executors must commit their own changes; ` +
-            `the host will not auto-commit or clean the worktree.`,
-        },
-      }
-    }
-    const detail = err instanceof Error ? err.message : String(err)
+    await completeMergePart(output, `merged ${outcome.primaryBranch}@${outcome.primaryHead.slice(0, 12)}`)
+  } else if (outcome.status === "conflict") {
+    const pathList = outcome.conflictPaths.join(", ")
     const output = {
-      status: "error" as const,
-      reason: detail,
+      status: "conflict" as const,
+      primary_branch: outcome.primaryBranch,
+      primary_tip: outcome.primaryTip,
+      conflict_paths: outcome.conflictPaths,
+      hint:
+        "Worktree is preserved in MERGING state. The next agent attempt must edit the listed paths, " +
+        "git add them, git commit to finalize the merge, then retry merge_back.",
     }
-    await Session.updatePart({
-      id: mergePartID,
-      sessionID: session.id,
-      messageID: assistantMessageID,
-      type: "tool",
-      tool: "merge_back",
-      callID: mergeCallID,
-      state: {
-        status: "completed",
-        input: mergeInput,
-        output: JSON.stringify(output, null, 2),
-        title: `error ${args.worktreeBranch}`,
-        metadata: mergeMetadata,
-        time: { start: mergeStarted, end: Date.now() },
-      },
-      metadata: mergeMetadata,
-    })
+    await completeMergePart(output, `conflict ${args.worktreeBranch} -> ${outcome.primaryBranch}`)
     return {
       sessionID: session.id,
       structured: {
         status: "failed" as const,
         commit_ref: "",
-        summary: `merge_back returned status=error for ${args.worktreeBranch}: ${detail}`,
+        summary:
+          `merge_back hit conflicts on ${args.worktreeBranch} → ${outcome.primaryBranch} ` +
+          `(${outcome.conflictPaths.length} conflict${outcome.conflictPaths.length === 1 ? "" : "s"}): ${pathList}`,
         patch_summary: "",
         tests: [],
-        error: detail,
+        error:
+          `Merge left ${args.worktreeDir} in MERGING state against ${outcome.primaryBranch} ` +
+          `(tip ${outcome.primaryTip.slice(0, 12)}); conflict paths: ${pathList}. ` +
+          `Resolve markers in this same worktree, git add, and git commit before retrying.`,
+      },
+    }
+  } else if (outcome.status === "blocked") {
+    const output = {
+      status: "blocked" as const,
+      reason: outcome.reason,
+      branch: outcome.branch,
+      worktree_dir: outcome.worktreeDir,
+      ...(outcome.dirtyPaths ? { dirty_paths: outcome.dirtyPaths } : {}),
+      ...(outcome.mergeHead ? { merge_head: true } : {}),
+    }
+    await completeMergePart(output, `blocked ${args.worktreeBranch}`)
+    return {
+      sessionID: session.id,
+      structured: {
+        status: "failed" as const,
+        commit_ref: "",
+        summary: `merge_back blocked for ${args.worktreeBranch}: ${outcome.reason}`,
+        patch_summary: "",
+        tests: [],
+        error:
+          `${outcome.reason}. Worktree preserved at ${outcome.worktreeDir}; ` +
+          `the next attempt must resolve that repository state before retrying merge_back.`,
+      },
+    }
+  } else {
+    const output = {
+      status: "infra_error" as const,
+      reason: outcome.reason,
+      branch: outcome.branch,
+      ...(outcome.stderr ? { stderr: outcome.stderr } : {}),
+    }
+    await completeMergePart(output, `infra_error ${args.worktreeBranch}`)
+    return {
+      sessionID: session.id,
+      structured: {
+        status: "failed" as const,
+        commit_ref: "",
+        summary: `merge_back returned status=infra_error for ${args.worktreeBranch}: ${outcome.reason}`,
+        patch_summary: "",
+        tests: [],
+        error: outcome.reason,
       },
     }
   }

@@ -70,6 +70,36 @@ export namespace Worktree {
     }
   }
 
+  export type MergeOutcome =
+    | {
+        status: "merged"
+        primaryBranch: string
+        primaryHead: string
+      }
+    | {
+        status: "conflict"
+        branch: string
+        primaryBranch: string
+        primaryTip: string
+        conflictPaths: string[]
+        worktreeDir: string
+      }
+    | {
+        status: "blocked"
+        branch: string
+        reason: string
+        worktreeDir: string
+        dirtyPaths?: string[]
+        mergeHead?: boolean
+      }
+    | {
+        status: "infra_error"
+        branch: string
+        reason: string
+        stderr?: string
+        worktreeDir?: string
+      }
+
   /**
    * Surfaced when `git merge` against the primary branch hit textual conflicts
    * inside files. Unlike rebase-style flows, the merge is left IN PROGRESS:
@@ -230,6 +260,65 @@ export namespace Worktree {
       })
     },
   )
+
+  /**
+   * Public merge publication boundary. This is the only merge API callers
+   * should use from agent/session paths: every repository condition resolves
+   * to a typed outcome, so merge publication cannot crash the session loop.
+   * `mergeWithMerge` remains the lower-level implementation that preserves
+   * the exact git topology and named errors for focused unit tests.
+   */
+  export async function mergeSafely(input: { branch: string; worktreeDir: string }): Promise<MergeOutcome> {
+    try {
+      const result = await mergeWithMerge(input)
+      return {
+        status: "merged",
+        primaryBranch: result.primaryBranch,
+        primaryHead: result.primaryHead,
+      }
+    } catch (err) {
+      if (MergeConflictError.isInstance(err)) {
+        const { branch, primaryBranch, primaryTip, conflictPaths } = err.data
+        return {
+          status: "conflict",
+          branch,
+          primaryBranch,
+          primaryTip,
+          conflictPaths,
+          worktreeDir: input.worktreeDir,
+        }
+      }
+
+      if (MergeFailedError.isInstance(err)) {
+        const { message, branch } = err.data
+        const details = await inspectBlockedMergeWorktree(input.worktreeDir)
+        return {
+          status: "blocked",
+          branch,
+          reason: message,
+          worktreeDir: input.worktreeDir,
+          ...(details.dirtyPaths.length > 0 ? { dirtyPaths: details.dirtyPaths } : {}),
+          ...(details.mergeHead ? { mergeHead: true } : {}),
+        }
+      }
+
+      if (NotGitError.isInstance(err)) {
+        return {
+          status: "infra_error",
+          branch: input.branch,
+          reason: err.data.message,
+          worktreeDir: input.worktreeDir,
+        }
+      }
+
+      return {
+        status: "infra_error",
+        branch: input.branch,
+        reason: err instanceof Error ? err.message : String(err),
+        worktreeDir: input.worktreeDir,
+      }
+    }
+  }
 
   export const Info = z
     .object({
@@ -428,6 +517,27 @@ export namespace Worktree {
 
   function errorText(result: { stdout?: Uint8Array; stderr?: Uint8Array }) {
     return [outputText(result.stderr), outputText(result.stdout)].filter(Boolean).join("\n")
+  }
+
+  async function inspectBlockedMergeWorktree(directory: string) {
+    const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
+      .quiet()
+      .nothrow()
+      .cwd(directory)
+      .then((result) => result.exitCode === 0)
+      .catch(() => false)
+    const dirtyPaths = await $`git -c core.quotepath=false status --porcelain`
+      .quiet()
+      .nothrow()
+      .cwd(directory)
+      .then((result) =>
+        outputText(result.stdout)
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean),
+      )
+      .catch(() => [])
+    return { mergeHead, dirtyPaths }
   }
 
   function failed(result: { stdout?: Uint8Array; stderr?: Uint8Array }) {
