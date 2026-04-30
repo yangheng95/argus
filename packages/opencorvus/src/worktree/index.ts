@@ -107,8 +107,9 @@ export namespace Worktree {
    *        conflict markers in files). We capture the path list and throw
    *        MergeConflictError WITHOUT aborting. The caller (in-session agent)
    *        edits the markers away in place, `git add`s, `git commit`s — that
-   *        completes the merge. The host path catches the same error and runs
-   *        `git merge --abort` to clean up before failing the build.
+   *        completes the merge. Host callers must preserve the same MERGING
+   *        worktree so the next agent attempt can continue from the conflict
+   *        state.
    *   3. From the primary worktree, `git merge --ff-only <branch>`. ff is
    *      guaranteed because the goal tip strictly descends primary tip.
    *
@@ -126,64 +127,6 @@ export namespace Worktree {
    * textual conflicts via MergeConflictError, and converges in one round of
    * reconcile per actual divergence.
    */
-  /**
-   * Stage and commit any uncommitted changes in `worktreeDir` so the next
-   * `git merge <primary>` runs against a clean tree. External executors
-   * (claude-code, codex) cannot call OpenCorvus's `merge_back` tool — the
-   * host owns finalization for them — so the host is the only place that
-   * knows the branch is about to be merged. If the executor wrote files but
-   * never ran `git commit` (claude-code does this when the system prompt
-   * does not explicitly require a commit), `git merge` would either refuse
-   * to start (dirty tree) or silently swallow the changes into the merge
-   * commit, masking a real protocol violation.
-   *
-   * Returns `{ committed: false }` if the worktree is already clean,
-   * else `{ committed: true, head }` after the new commit. Uses local
-   * git config so the commit identity does not require a global
-   * `user.email`. Idempotent: a second call on a clean tree is a no-op.
-   */
-  export const commitDirty = fn(
-    z.object({
-      worktreeDir: z.string().describe("Filesystem path of the worktree to scan + commit."),
-      label: z
-        .string()
-        .describe("Short context tag used in the commit message body (e.g. branch name or session ID).")
-        .default("opencorvus host autocommit"),
-    }),
-    async (input) => {
-      if (!Project.isGitRepo(input.worktreeDir)) {
-        throw new NotGitError({ message: `commitDirty: ${input.worktreeDir} is not a git worktree` })
-      }
-      const status = await $`git status --porcelain`.quiet().nothrow().cwd(input.worktreeDir)
-      const dirty = outputText(status.stdout).trim().length > 0
-      if (!dirty) return { committed: false as const }
-
-      // `-A` covers added / modified / deleted; `--allow-empty` is omitted on
-      // purpose — if status was non-empty but `add` produced no index change
-      // (e.g. all entries are .gitignored), we want the commit to fail loudly
-      // rather than create an empty commit that hides the misconfig.
-      const add = await $`git add -A`.quiet().nothrow().cwd(input.worktreeDir)
-      if (add.exitCode !== 0) {
-        throw new MergeFailedError({
-          message: `commitDirty: git add -A failed in ${input.worktreeDir}: ${errorText(add)}`,
-          branch: input.label,
-          stderr: errorText(add),
-        })
-      }
-      const commit = await $`git -c user.name=opencorvus -c user.email=build@opencorvus.local commit -m ${`build(host): ${input.label}`}`
-        .quiet().nothrow().cwd(input.worktreeDir)
-      if (commit.exitCode !== 0) {
-        throw new MergeFailedError({
-          message: `commitDirty: git commit failed in ${input.worktreeDir}: ${errorText(commit)}`,
-          branch: input.label,
-          stderr: errorText(commit),
-        })
-      }
-      const head = await $`git rev-parse HEAD`.quiet().nothrow().cwd(input.worktreeDir)
-      return { committed: true as const, head: outputText(head.stdout) }
-    },
-  )
-
   export const mergeWithMerge = fn(
     z.object({
       branch: z
@@ -210,9 +153,9 @@ export namespace Worktree {
         // Pre-flight: refuse to start a new merge if the worktree still has
         // an unfinished one (MERGE_HEAD present) or uncommitted changes.
         // Either is a contract violation — the caller must complete the
-        // previous merge (`git commit`) or abandon it (`git merge --abort`)
-        // before retrying, otherwise we silently subsume their state into
-        // a new merge commit and lose the signal.
+        // previous merge (`git commit`) and commit ordinary edits before
+        // retrying, otherwise we silently subsume their state into a new
+        // merge commit and lose the signal.
         const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
           .quiet().nothrow().cwd(input.worktreeDir)
         if (mergeHead.exitCode === 0) {
@@ -220,7 +163,7 @@ export namespace Worktree {
             message:
               `mergeWithMerge(${input.branch}): worktree is in an unfinished MERGING state ` +
               `(MERGE_HEAD exists). Resolve conflicts and \`git commit\` to finalize, or ` +
-              `\`git merge --abort\` to discard, then retry.`,
+              `report the blocker before retrying.`,
             branch: input.branch,
           })
         }
@@ -238,8 +181,8 @@ export namespace Worktree {
         // goal lags primary with no own commits); otherwise a 3-way merge
         // produces a merge commit. Conflicts leave MERGE_HEAD + markers in
         // files; we capture and re-throw without aborting so the in-session
-        // agent can reconcile in place. Host-path callers catch this error
-        // and abort externally.
+        // agent can reconcile in place. Host-path callers preserve the same
+        // worktree for the next attempt.
         const merged = await $`git merge --no-edit ${primaryBranch}`
           .quiet().nothrow().cwd(input.worktreeDir)
         if (merged.exitCode !== 0) {
@@ -288,177 +231,6 @@ export namespace Worktree {
     },
   )
 
-  /**
-   * Strategy used by orchestrator-arbitrated merge resolution. Build agents
-   * that hit textual conflicts in `mergeWithMerge` abort and surface the
-   * conflict path list back to the orchestrator; the orchestrator (the
-   * single source of truth for "how to integrate this goal's work") picks
-   * one of these and calls `resolveAndMerge` to drive the merge to ff.
-   *
-   *   take_goal     — for every conflict path, keep the goal branch's bytes
-   *                   (`git checkout --ours --` inside the goal worktree
-   *                   where ours = goal). Use when the goal is the source of
-   *                   truth for the file (e.g. `src/App.tsx` rewritten by
-   *                   the feature, primary's stale copy is irrelevant).
-   *   take_primary  — for every conflict path, keep the primary branch's
-   *                   bytes (`git checkout --theirs --`). Use when primary
-   *                   already converged on the right scaffold and this goal
-   *                   redundantly re-scaffolded.
-   *   per_path      — fine-grained: each conflict path picks "goal" or
-   *                   "primary" independently. Used when the goal touched
-   *                   one file legitimately but redundantly re-scaffolded
-   *                   the rest.
-   *
-   * No "manual edits" branch: the orchestrator is a dispatcher, not a code
-   * editor — if neither side is acceptable, it should call build again
-   * with explicit instructions to reconcile, not paste textual edits here.
-   */
-  export const ResolveStrategy = z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("take_goal") }),
-    z.object({ kind: z.literal("take_primary") }),
-    z.object({
-      kind: z.literal("per_path"),
-      paths: z.array(z.object({
-        path: z.string(),
-        take: z.enum(["goal", "primary"]),
-      })),
-    }),
-  ])
-  export type ResolveStrategy = z.infer<typeof ResolveStrategy>
-
-  /**
-   * Resolve a previously-aborted merge conflict by orchestrator decree, then
-   * complete the merge → ff-only path. Idempotent against partial state:
-   * always starts by ensuring the worktree is clean (no MERGE_HEAD residue,
-   * no uncommitted edits) before re-running the merge.
-   *
-   * Why this lives outside `mergeWithMerge`: the conflict-time decision —
-   * which side wins — is an orchestrator-level concern (rule 22 single
-   * source: orchestrator is the only authority on merge integration) and
-   * has no business being baked into the build agent's auto-merge path.
-   * Build hits conflict → returns; orchestrator inspects → calls this.
-   */
-  export const resolveAndMerge = fn(
-    z.object({
-      branch: z.string(),
-      worktreeDir: z.string(),
-      strategy: ResolveStrategy,
-    }),
-    async (input) => {
-      if (!Project.isGitRepo(Instance.directory)) {
-        throw new NotGitError({ message: "resolveAndMerge: not a git project" })
-      }
-      const primary = await primaryWorktreeInfo().catch((err) => {
-        throw new MergeFailedError({
-          message: `resolveAndMerge(${input.branch}): ${err instanceof Error ? err.message : String(err)}`,
-          branch: input.branch,
-        })
-      })
-      return withGitLock(async () => {
-        const primaryDir = primary.directory
-        const primaryBranch = primary.branch
-
-        // Pre-clean: previous merge attempt may have left MERGE_HEAD; the
-        // worktree might also be dirty from agent edits between attempts.
-        // Both states would block a fresh `git merge`. Abort + reset so we
-        // start from a known-clean tip-of-branch.
-        const mergeHead = await $`git rev-parse --verify --quiet MERGE_HEAD`
-          .quiet().nothrow().cwd(input.worktreeDir)
-        if (mergeHead.exitCode === 0) {
-          await $`git merge --abort`.quiet().nothrow().cwd(input.worktreeDir)
-        }
-        const status = await $`git status --porcelain`.quiet().nothrow().cwd(input.worktreeDir)
-        if (outputText(status.stdout).trim().length > 0) {
-          await $`git reset --hard HEAD`.quiet().nothrow().cwd(input.worktreeDir)
-        }
-
-        // Re-run merge to materialise the conflict state. We need actual
-        // unmerged entries on disk for `git checkout --ours/--theirs` to
-        // operate on — a recorded conflict path list from a prior attempt
-        // is not enough; the working tree must be in MERGING state right
-        // now.
-        const merged = await $`git merge --no-edit --no-commit ${primaryBranch}`
-          .quiet().nothrow().cwd(input.worktreeDir)
-
-        if (merged.exitCode !== 0) {
-          // Collect conflicts the merge actually produced this time.
-          const unmergedProbe = await $`git diff --name-only --diff-filter=U`
-            .quiet().nothrow().cwd(input.worktreeDir)
-          const unmerged = outputText(unmergedProbe.stdout)
-            .split("\n")
-            .map((line) => line.trim())
-            .filter(Boolean)
-
-          // Apply strategy.
-          if (input.strategy.kind === "take_goal") {
-            for (const p of unmerged) {
-              await $`git checkout --ours -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
-              await $`git add -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
-            }
-          } else if (input.strategy.kind === "take_primary") {
-            for (const p of unmerged) {
-              await $`git checkout --theirs -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
-              await $`git add -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
-            }
-          } else {
-            // per_path
-            const decided = new Map(input.strategy.paths.map((p) => [p.path, p.take]))
-            const missing: string[] = []
-            for (const p of unmerged) {
-              const take = decided.get(p)
-              if (!take) {
-                missing.push(p)
-                continue
-              }
-              const side = take === "goal" ? "ours" : "theirs"
-              await $`git checkout --${side} -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
-              await $`git add -- ${p}`.quiet().nothrow().cwd(input.worktreeDir)
-            }
-            if (missing.length > 0) {
-              await $`git merge --abort`.quiet().nothrow().cwd(input.worktreeDir)
-              throw new MergeFailedError({
-                message:
-                  `resolveAndMerge(${input.branch}): per_path strategy did not cover all unmerged paths. ` +
-                  `Missing decisions for: ${missing.join(", ")}`,
-                branch: input.branch,
-              })
-            }
-          }
-
-          // Finalize the merge with a single commit.
-          const finalize = await $`git -c user.email=opencorvus@local -c user.name=OpenCorvus commit --no-edit -m ${"merge: arbitrated by orchestrator (strategy=" + input.strategy.kind + ")"}`
-            .quiet().nothrow().cwd(input.worktreeDir)
-          if (finalize.exitCode !== 0) {
-            const stderr = errorText(finalize) || "merge commit failed after conflict resolution"
-            throw new MergeFailedError({
-              message: `resolveAndMerge(${input.branch}): ${stderr}`,
-              branch: input.branch,
-              stderr,
-            })
-          }
-        }
-
-        // Step 2 — ff-merge into primary. With the goal tip now strictly
-        // descending primary tip (either via clean merge or via our
-        // arbitrated commit above), fast-forward must succeed.
-        const ff = await $`git merge --ff-only --no-edit ${input.branch}`
-          .quiet().nothrow().cwd(primaryDir)
-        if (ff.exitCode !== 0) {
-          const stderr = errorText(ff) || "git merge --ff-only failed after resolveAndMerge"
-          throw new MergeFailedError({
-            message: `resolveAndMerge(${input.branch}): post-resolve ff-merge failed: ${stderr}`,
-            branch: input.branch,
-            stderr,
-          })
-        }
-
-        const headProbe = await $`git rev-parse HEAD`.quiet().nothrow().cwd(primaryDir)
-        const primaryHead = outputText(headProbe.stdout)
-        return { primaryBranch, primaryHead, strategy: input.strategy.kind }
-      })
-    },
-  )
-
   export const Info = z
     .object({
       name: z.string(),
@@ -488,7 +260,7 @@ export namespace Worktree {
         .describe(
           "When true and `name` is supplied, skip the reclaim wipe and return the existing worktree if its `.git` linkage and `git worktree list` registration both still pass `isValid()`. " +
           "Used by build-agent retries that want to pick up the previous attempt's files (passed-verdict-without-merge_back case) instead of regenerating ~20 minutes of code from scratch. " +
-          "Falls back to the standard reclaim path when the existing tree is invalid (zombie linkage, missing branch, etc.) so corrupt state never silently survives a retry.",
+          "Invalid existing trees (zombie linkage, missing branch, etc.) are rejected by the validity gate before the standard reclaim path runs, so corrupt state never silently survives a retry.",
         ),
     })
     .meta({
@@ -1066,11 +838,12 @@ export namespace Worktree {
    * process (bun test runner, fsmonitor, vite dev server, MSVC-file-locked
    * `node_modules/*.dll`) still holds a handle, the rm fails — but the two
    * git-level deletes already succeeded. Residue on disk: everything except
-   * `.git`. The fallback `fs.rm` in cleanupGoalWorkspace swallows the same
-   * error. On the next dispatch, `existsSync(workspace_dir)` still returns
-   * true, so the reuse path reuses a directory whose git operations now
-   * walk up and land on the PRIMARY repo's `.git` — commits go to master,
-   * the goal branch never advances, every retry silently overwrites itself.
+   * `.git`. If cleanup clears `engine_goal.workspace_dir` despite that
+   * physical failure, the next dispatch loses the only pointer to the leaked
+   * worktree. If it reuses a directory with broken `.git` linkage, git
+   * operations can walk up and land on the PRIMARY repo's `.git` — commits
+   * go to master, the goal branch never advances, every retry silently
+   * overwrites itself.
    * Callers that intend to reuse a recorded workspace_dir must gate on this.
    */
   export async function isValid(directory: string): Promise<{ valid: boolean; reason?: string }> {

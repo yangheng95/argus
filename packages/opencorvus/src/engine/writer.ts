@@ -148,13 +148,7 @@ export async function cleanupGoalWorkspaceForGoal(goalID: string): Promise<boole
   if (!goal?.workspace_dir) return false
 
   const { cleanupGoalWorkspace } = await import("@/goal/runner")
-  await cleanupGoalWorkspace(goal.workspace_dir).catch((error) => {
-    log.warn("goal workspace cleanup failed", {
-      goalID,
-      workspaceDir: goal.workspace_dir,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  })
+  await cleanupGoalWorkspace(goal.workspace_dir)
   updateGoalWorkspace({
     goalID,
     workspaceDir: null,

@@ -44,7 +44,7 @@ Call `merge_back` once after step 4, before step 6. No arguments. Outcomes:
     3. `write` (or `edit`) the reconciled content with all markers removed, then `bash`: `git add <path>`.
     4. After every path in `conflict_paths` has been reconciled and added: `bash`: `git commit -m "reconcile with <primary_branch>"`. This commit FINALIZES the merge — it is the merge commit at the topology join point.
     5. Call `merge_back` again. The host now sees a clean tree whose tip strictly descends `<primary_branch>` and ff-publishes. If new commits arrived on primary in the meantime a fresh conflict may appear; repeat the loop.
-- `{status:"error", reason}` — infrastructure problem (no primary branch, lock failure, dirty/unfinished MERGING state from a prior aborted attempt, etc.). Call `report_build_failed` with `reason` in `error`; do not retry. If the reason names an unfinished MERGING state you can recover with `bash`: `git merge --abort` and start over, but only if you have not yet committed reconciled work.
+- `{status:"error", reason}` — infrastructure problem (no primary branch, lock failure, dirty worktree, or unfinished MERGING state from a prior attempt). Call `report_build_failed` with `reason` in `error`; do not retry. If the reason names an unfinished MERGING state, finish that merge in the same worktree by resolving markers, `git add`, and `git commit`.
 
 merge_back is idempotent: if your branch already strictly descends primary, the merge is a fast-forward / no-op and ff-merge advances primary cleanly.
 

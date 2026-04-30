@@ -15,8 +15,9 @@
  *   3. SessionPrompt.prompt runs the build agent in a child session with
  *      report_build_passed / report_build_failed terminal tools. The tool
  *      name is the status discriminator; text output is ignored.
- *   4. Finally block runs cleanupGoalWorkspace so the worktree dir, git
- *      branch, fsmonitor, and LSP servers all unwind regardless of outcome.
+ *   4. Worktree lifetime is goal-scoped. Retryable failures preserve the
+ *      same directory so the next agent can continue from real files,
+ *      commits, or MERGING state.
  *
  * No DB state. No GoalPool. No lease. No coordinator_run_id. Post-phase-5
  * every run is anchored to the child session (UI / audit) and the result
@@ -36,7 +37,6 @@ import { SessionStatus } from "@/session/status"
 import { Worktree } from "@/worktree"
 import { BuildSemaphore } from "@/engine/build-semaphore"
 import { Ownership } from "@/engine/ownership"
-import { cleanupGoalWorkspace } from "@/goal/runner"
 import { findActiveRunForTask, type TaskRow } from "@/engine/store"
 import { EngineConfig } from "@/engine/config"
 import { ExecutorRegistry } from "@/executor/registry"
@@ -135,9 +135,17 @@ export namespace BuildAgent {
     signal?: AbortSignal
     /** Optional pre-allocated worktree dir. When provided, the build agent
      *  uses it as-is and does NOT manage its lifecycle (caller owns cleanup).
-     *  When absent the agent creates + cleans its own worktree under
+     *  When absent the agent creates a managed worktree under
      *  `<primary>/.opencorvus/worktrees/`. */
     workDir?: string
+    /** Goal-scoped managed worktree recorded on engine_goal. Unlike workDir,
+     *  this still participates in the build agent's merge_back protocol; the
+     *  orchestrator owns lifetime, while BuildAgent owns publication. */
+    managedWorktree?: {
+      directory: string
+      branch: string
+      baseRef?: string | null
+    }
   }
 
   export interface RunOutput {
@@ -149,6 +157,10 @@ export namespace BuildAgent {
     /** The worktree directory used by this run. Absent when the caller
      *  supplied `workDir` (caller already has it). */
     worktreeDir?: string
+    /** Branch checked out by worktreeDir. Present for build-managed worktrees. */
+    worktreeBranch?: string
+    /** Base commit captured when the goal worktree was first allocated. */
+    worktreeBaseRef?: string
     /** Per-file diffs from worktree base → goal branch HEAD. Captured before
      *  cleanup so the orchestrator can persist a per-goal delivery artifact
      *  the overlay's right-side panel reads via `findDeliveryByGoalRun`.
@@ -186,11 +198,14 @@ export namespace BuildAgent {
       // ── Worktree acquisition ─────────────────────────────────────────────
       // Happens OUTSIDE runAgentSession because the worktree is the
       // session's working directory — the runner needs it resolved before
-      // it calls Session.createNext. When ownsWorktree is false, the
-      // caller (re-attempt / user-preallocated dir) is responsible for
-      // cleanup; we neither create nor clean up the directory.
+      // it calls Session.createNext. `workDir` means a caller-owned directory
+      // that opts out of merge_back. `managedWorktree` is goal-owned state
+      // supplied by the orchestrator and still uses merge_back.
+      if (input.workDir && input.managedWorktree) {
+        throw new Error("BuildAgent.run: workDir and managedWorktree are mutually exclusive")
+      }
       const ownsWorktree = !input.workDir
-      let worktreeDir = input.workDir
+      let worktreeDir = input.managedWorktree?.directory ?? input.workDir
       let worktreeBranch: string | undefined
       // Worktree HEAD commit at creation time. Equals primary HEAD because
       // Worktree.create branches off it; we capture the SHA so post-build
@@ -198,7 +213,23 @@ export namespace BuildAgent {
       // without depending on git merge-base (which fails after merge-back
       // when ff-only collapses both refs to the same tip).
       let baseRef: string | undefined
-      if (ownsWorktree) {
+      if (input.managedWorktree) {
+        const managedDir = input.managedWorktree.directory
+        worktreeDir = managedDir
+        worktreeBranch = input.managedWorktree.branch
+        await Ownership.Worktree.record({
+          primaryWorktreeDir: Instance.worktree,
+          worktreeDir: managedDir,
+          taskID: input.task.id,
+          sessionID: input.parentSessionID ?? "",
+          runID: findActiveRunForTask(input.task.id)?.id,
+          goalID: input.target.kind === "goal" ? input.target.id : undefined,
+        })
+        baseRef = input.managedWorktree.baseRef ?? undefined
+        if (!baseRef) {
+          baseRef = (await $`git rev-parse HEAD`.quiet().nothrow().cwd(managedDir).text()).trim() || undefined
+        }
+      } else if (ownsWorktree) {
         const targetLabel = labelFromTarget(input.target)
         // `reuseIfValid: true` lets a re-attempted build pick up a preserved
         // worktree when the prior session wrote commits but never completed
@@ -582,14 +613,14 @@ export namespace BuildAgent {
         }
       } finally {
         // Worktree lifecycle is owned by the orchestrator (rule 22 single
-        // source: orchestrator decides merge_arbitrate / fail_task /
+        // source: orchestrator decides retry_build / fail_task /
         // modify_goal, so it also decides when the worktree is no longer
         // needed). Build agent only cleans up in the narrow case where it
         // could not even produce a usable worktree state — i.e. ownership
         // is set but the worktree dir disappeared mid-flight (rare; FS
         // failures, OS-level rm). In every other case — pass + merged,
         // pass without merged (continuation), merge conflict, hard failure
-        // — the worktree stays so merge_arbitrate / retry_build can use it.
+        // — the worktree stays so the next build attempt can use it.
         // engine/writer.ts cleanupGoalWorkspaces is the safety-net at
         // task terminal that catches any orchestrator-skipped cleanup.
         if (ownsWorktree && worktreeBranch && !mergedHead && mergeBackBlockedReport) {
@@ -679,6 +710,8 @@ export namespace BuildAgent {
         result: parsed.data,
         sessionID: out.session.id,
         worktreeDir: ownsWorktree ? worktreeDir : undefined,
+        worktreeBranch: ownsWorktree ? worktreeBranch : undefined,
+        worktreeBaseRef: ownsWorktree ? baseRef : undefined,
         diffs,
       }
     })
@@ -1444,15 +1477,6 @@ async function runWithExternalProviderImpl(args: {
     metadata: mergeMetadata,
   })
   try {
-    // External executors (claude-code, codex) don't have access to the
-    // OpenCorvus `merge_back` tool, so the host is the only place that
-    // knows the branch is about to be merged. Stage + commit anything
-    // the executor wrote but didn't commit before merging — otherwise
-    // mergeWithMerge's pre-flight rejects the dirty tree.
-    await Worktree.commitDirty({
-      worktreeDir: args.worktreeDir,
-      label: `${args.executor}/${args.worktreeBranch}`,
-    })
     const result = await Worktree.mergeWithMerge({
       branch: args.worktreeBranch,
       worktreeDir: args.worktreeDir,
@@ -1484,16 +1508,14 @@ async function runWithExternalProviderImpl(args: {
     if (Worktree.MergeConflictError.isInstance(err)) {
       const { primaryBranch, primaryTip, conflictPaths } = err.data
       const pathList = conflictPaths.join(", ")
-      // Host-path callers (external executors) can't reconcile multi-step;
-      // abort the in-progress merge so the worktree is reusable for the
-      // next attempt instead of staying stuck in MERGING state.
-      await $`git merge --abort`.quiet().nothrow().cwd(args.worktreeDir)
       const output = {
         status: "conflict" as const,
         primary_branch: primaryBranch,
         primary_tip: primaryTip,
         conflict_paths: conflictPaths,
-        hint: "Merge aborted; worktree restored. Reconcile the listed paths in a fresh attempt and retry merge_back.",
+        hint:
+          "Worktree is preserved in MERGING state. The next agent attempt must edit the listed paths, " +
+          "git add them, git commit to finalize the merge, then retry merge_back.",
       }
       await Session.updatePart({
         id: mergePartID,
@@ -1523,8 +1545,9 @@ async function runWithExternalProviderImpl(args: {
           patch_summary: "",
           tests: [],
           error:
-            `Merge aborted into ${primaryBranch} (tip ${primaryTip.slice(0, 12)}); ` +
-            `conflict paths: ${pathList}`,
+            `Merge left ${args.worktreeDir} in MERGING state against ${primaryBranch} ` +
+            `(tip ${primaryTip.slice(0, 12)}); conflict paths: ${pathList}. ` +
+            `Resolve markers in this same worktree, git add, and git commit before retrying.`,
         },
       }
     }
@@ -1558,10 +1581,13 @@ async function runWithExternalProviderImpl(args: {
         structured: {
           status: "failed" as const,
           commit_ref: "",
-          summary: `merge_back returned status=error for ${args.worktreeBranch}: ${mergeFailure.reason}`,
+          summary:
+            `merge_back returned status=error for ${args.worktreeBranch}: ${mergeFailure.reason}`,
           patch_summary: "",
           tests: [],
-          error: mergeFailure.reason,
+          error:
+            `${mergeFailure.reason}. External executors must commit their own changes; ` +
+            `the host will not auto-commit or clean the worktree.`,
         },
       }
     }

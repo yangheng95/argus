@@ -45,6 +45,50 @@ export default function ProvidersPanel() {
   // user-visible writes here; clearForm / startAdd / startEdit / cancel
   // resets it so a new attempt starts clean.
   const [formError, setFormError] = createSignal<string | null>(null);
+  // Manual catalog refresh state. The runtime no longer hits models.dev
+  // on startup or on a timer — `handleRefreshCatalog` is the only path
+  // that touches the network for the registry, so the UI is the
+  // authoritative trigger and needs to expose the result + timing back
+  // to the operator. `null` lastRefreshedAt = never refreshed in this
+  // session; we deliberately don't persist across reloads to keep the
+  // signal honest about what the running process saw.
+  const [refreshing, setRefreshing] = createSignal(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = createSignal<number | null>(null);
+
+  function formatRelative(ms: number): string {
+    const diff = Date.now() - ms;
+    if (diff < 60_000) return t("provider.refresh.just_now");
+    const mins = Math.floor(diff / 60_000);
+    if (mins < 60) return t("provider.refresh.minutes_ago", { n: mins });
+    const hours = Math.floor(mins / 60);
+    return t("provider.refresh.hours_ago", { n: hours });
+  }
+
+  async function handleRefreshCatalog() {
+    if (refreshing()) return;
+    setFormError(null);
+    setRefreshing(true);
+    try {
+      const result = await apiJson("provider/refresh", { method: "POST" }) as {
+        ok: boolean;
+        fetchedAt?: number;
+        error?: string;
+      };
+      if (!result.ok) {
+        setFormError(t("provider.refresh.failed", { reason: result.error || "unknown" }));
+        return;
+      }
+      setLastRefreshedAt(result.fetchedAt ?? Date.now());
+      // Server has reset Provider/Agent caches; reload the local config
+      // mirror so the catalog list visible below reflects the new data.
+      const newCfg = await apiJson("config");
+      setAppStore("config", newCfg);
+    } catch (e) {
+      setFormError(t("provider.refresh.failed", { reason: describeFailure(e) }));
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleTest(providerId: string, models: Record<string, ProviderModel>) {
     const modelID = Object.keys(models)[0];
@@ -232,13 +276,33 @@ export default function ProvidersPanel() {
       <div class="config-panel-group">
         <div class="config-panel-group-head">
           <h4 class="config-panel-group-title">Custom Providers</h4>
-          <button
-            type="button"
-            class="btn btn-primary mini"
-            onClick={startAdd}
-          >
-            + Add
-          </button>
+          <div class="provider-head-actions">
+            <Show when={lastRefreshedAt()}>
+              {(ts) => (
+                <span class="provider-refresh-meta" title={new Date(ts()).toLocaleString()}>
+                  {t("provider.refresh.last", { when: formatRelative(ts()) })}
+                </span>
+              )}
+            </Show>
+            <button
+              type="button"
+              class="btn mini provider-refresh-btn"
+              onClick={() => void handleRefreshCatalog()}
+              disabled={refreshing()}
+              title={t("provider.refresh.title")}
+              data-spinning={refreshing() ? "true" : "false"}
+            >
+              <span class="provider-refresh-icon" aria-hidden="true">↻</span>
+              {refreshing() ? t("provider.refresh.refreshing") : t("provider.refresh.button")}
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary mini"
+              onClick={startAdd}
+            >
+              + Add
+            </button>
+          </div>
         </div>
 
         <Show when={providerEntries().length === 0 && !showAdd()}>

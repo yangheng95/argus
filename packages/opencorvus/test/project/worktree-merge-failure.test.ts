@@ -9,7 +9,7 @@ describe("Worktree merge failure detail", () => {
       stderr: "fatal: invalid upstream 'main'",
     })
 
-    expect(err.message).toBe("WorktreeMergeFailedError")
+    expect(err.message).toContain("WorktreeMergeFailedError")
     expect(Worktree.mergeFailureDetail(err)).toEqual({
       reason: "mergeWithMerge(opencorvus/build-page): Primary worktree is detached",
       branch: "opencorvus/build-page",

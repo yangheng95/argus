@@ -97,4 +97,71 @@ describe("engine writer goal workspace cleanup", () => {
       },
     })
   })
+
+  test("cleanupGoalWorkspaceForGoal keeps workspace fields when physical cleanup is refused", async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const projectID = Instance.project.id
+        const taskID = `task_writer_refuse_${now}`
+        const goalID = `goal_writer_refuse_${now}`
+
+        Database.transaction((db) => {
+          db.insert(ProjectTable).values({
+            id: projectID,
+            worktree: tmp.path,
+            name: "Writer Test",
+            sandboxes: [],
+            time_created: now,
+            time_updated: now,
+          }).onConflictDoNothing().run()
+
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: projectID,
+            source: "test",
+            title: "writer cleanup refusal task",
+            request: "cleanup workspace",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run()
+
+          db.insert(EngineGoalTable).values({
+            id: goalID,
+            task_id: taskID,
+            title: "cleanup refusal goal",
+            slug: "cleanup-refusal-goal",
+            objective: "verify failed cleanup keeps workspace pointer",
+            acceptance_specs: [],
+            owned_paths: [],
+            depends_on: [],
+            exports: [],
+            imports: [],
+            kind: "feature",
+            requirement_ids: [],
+            priority: "blocking",
+            source: "test",
+            status: "failed",
+            retry_count: 0,
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }).run()
+        })
+
+        updateGoalWorkspace({
+          goalID,
+          workspaceDir: tmp.path,
+          workspaceBranch: "opencorvus/not-a-goal-worktree",
+        })
+
+        await expect(cleanupGoalWorkspaceForGoal(goalID)).rejects.toThrow("outside goal workspace roots")
+        expect(findGoal(goalID)?.workspace_dir).toBe(tmp.path)
+        expect(findGoal(goalID)?.workspace_branch).toBe("opencorvus/not-a-goal-worktree")
+      },
+    })
+  })
 })
