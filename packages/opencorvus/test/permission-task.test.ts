@@ -127,7 +127,7 @@ describe("PermissionNext.disabled for task tool", () => {
     expect(disabled.has("task")).toBe(false)
   })
 
-  test("task tool is enabled when no task rules exist (default ask)", () => {
+  test("task tool is enabled when no task rules exist (default allow)", () => {
     const disabled = PermissionNext.disabled(["task"], [])
     expect(disabled.has("task")).toBe(false)
   })

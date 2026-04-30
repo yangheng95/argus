@@ -28,8 +28,7 @@ async function handlePermissionAsked(request: PermissionNext.Request) {
   if (cfg.experimental?.auto_permission !== true) return
   const directRun = activeRunBySession(request.sessionID)
   const taskID = directRun?.task_id ?? taskIDForSession(request.sessionID)
-  if (!taskID) return
-  const run = directRun ?? findActiveRunForTask(taskID)
+  const run = directRun ?? (taskID ? findActiveRunForTask(taskID) : undefined)
 
   log.info("auto-approving permission", {
     permissionID: request.id,

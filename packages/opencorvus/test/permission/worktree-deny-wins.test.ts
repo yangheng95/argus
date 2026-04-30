@@ -2,23 +2,16 @@ import { test, expect } from "bun:test"
 import { PermissionNext } from "../../src/permission/next"
 
 /**
- * Regression for specs/scheduler-fix-plan-2026-04-30.md P3 (commit
- * e87333dbb) + codex 2nd-pass [P2] "Place worktree allow between defaults
- * and user rules". The composition in agent/agent.ts:155-175 layers as:
+ * Regression for the debug permission policy requested on 2026-04-30. The
+ * composition in agent/agent.ts layers as:
  *
- *   defaults (whitelistedDirs adds Instance.directory/** as allow)
- *   → agent overrides (e.g. webfetch: allow on the build agent)
+ *   defaults (external_directory defaults to allow)
+ *   → agent overrides
  *   → user (cfg.permission)
  *
- * `findLast`-wins evaluator means user explicit `deny` rules MUST override
- * the worktree allow rule (otherwise users have no way to lock a sensitive
- * subdirectory inside their worktree). This test pins that invariant — if
- * a future change moves whitelistedDirs to a layer AFTER user, this test
- * fails.
- *
- * Also locks the inverse: a worktree-internal request with no user override
- * resolves to `allow` (NOT the default `*: ask`) — that's the
- * unattended-bench-friendliness property whitelistedDirs exists for.
+ * `findLast`-wins evaluator means user explicit `deny` or `ask` rules still
+ * override the debug default. With no user override, worktree and sibling
+ * paths both resolve to allow so unattended benchmark runs do not hang.
  */
 
 const WORKTREE = "C:/Users/test/worktree-A"
@@ -28,11 +21,8 @@ function buildBuildLikeRuleset(userOverrides: Record<string, unknown> = {}) {
   // external_directory rule shape matters for this test; other rules are
   // omitted to keep the ruleset focused.
   const defaults = PermissionNext.fromConfig({
-    "*": "ask",
-    external_directory: {
-      "*": "ask",
-      [`${WORKTREE}/**`]: "allow",
-    },
+    "*": "allow",
+    external_directory: "allow",
   })
   const agentOverrides = PermissionNext.fromConfig({
     question: "allow",
@@ -42,24 +32,16 @@ function buildBuildLikeRuleset(userOverrides: Record<string, unknown> = {}) {
   return PermissionNext.merge(defaults, agentOverrides, user)
 }
 
-test("worktree-internal path with no user override resolves to allow (whitelistedDirs effective)", () => {
+test("worktree-internal path with no user override resolves to allow", () => {
   const ruleset = buildBuildLikeRuleset()
-  const rule = PermissionNext.evaluate(
-    "external_directory",
-    `${WORKTREE}/src/main.ts`,
-    ruleset,
-  )
+  const rule = PermissionNext.evaluate("external_directory", `${WORKTREE}/src/main.ts`, ruleset)
   expect(rule.action).toBe("allow")
 })
 
-test("path outside worktree falls through to ask (boundary defense intact)", () => {
+test("path outside worktree defaults to allow for unattended debugging", () => {
   const ruleset = buildBuildLikeRuleset()
-  const rule = PermissionNext.evaluate(
-    "external_directory",
-    "C:/Users/test/sibling-worktree-B/src/main.ts",
-    ruleset,
-  )
-  expect(rule.action).toBe("ask")
+  const rule = PermissionNext.evaluate("external_directory", "C:/Users/test/sibling-worktree-B/src/main.ts", ruleset)
+  expect(rule.action).toBe("allow")
 })
 
 test("user explicit deny within worktree wins over worktree allow (deny-wins ordering)", () => {
@@ -70,11 +52,7 @@ test("user explicit deny within worktree wins over worktree allow (deny-wins ord
   })
   // Path matches BOTH the defaults' worktree-allow AND user's secret-deny;
   // user's deny is the LAST matching rule in the merged array → deny wins.
-  const rule = PermissionNext.evaluate(
-    "external_directory",
-    `${WORKTREE}/secret/api-key.env`,
-    ruleset,
-  )
+  const rule = PermissionNext.evaluate("external_directory", `${WORKTREE}/secret/api-key.env`, ruleset)
   expect(rule.action).toBe("deny")
 })
 
@@ -86,25 +64,16 @@ test("user override outside the worktree-deny pattern still resolves to allow", 
       [`${WORKTREE}/secret/**`]: "deny",
     },
   })
-  const rule = PermissionNext.evaluate(
-    "external_directory",
-    `${WORKTREE}/src/main.ts`,
-    ruleset,
-  )
+  const rule = PermissionNext.evaluate("external_directory", `${WORKTREE}/src/main.ts`, ruleset)
   expect(rule.action).toBe("allow")
 })
 
-test("user general external_directory ask overrides whitelistedDirs (operator's prerogative)", () => {
+test("user general external_directory ask overrides debug allow default", () => {
   // If a user explicitly says "ask for all external_directory", that
-  // intentionally suppresses the convenience auto-allow. The user is
-  // accepting that unattended runs will block; that's their call.
+  // intentionally suppresses the debug auto-allow.
   const ruleset = buildBuildLikeRuleset({
     external_directory: "ask",
   })
-  const rule = PermissionNext.evaluate(
-    "external_directory",
-    `${WORKTREE}/src/main.ts`,
-    ruleset,
-  )
+  const rule = PermissionNext.evaluate("external_directory", `${WORKTREE}/src/main.ts`, ruleset)
   expect(rule.action).toBe("ask")
 })

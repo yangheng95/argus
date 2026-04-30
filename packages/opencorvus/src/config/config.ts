@@ -1174,8 +1174,8 @@ export namespace Config {
         })
         .optional()
         .describe(
-          "Default tool permission actions for new tasks. When not set, defaults to 'ask'. " +
-          "Set a tool to 'allow' to skip confirmation, or 'deny' to block it entirely.",
+          "Default tool permission actions for new tasks. When not set, defaults to 'allow'. " +
+          "Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.",
         ),
       compaction: z
         .object({
