@@ -113,3 +113,47 @@ export const BuildResultSchema = z.discriminatedUnion("status", [
   BuildFailedResultSchema,
 ])
 export type BuildResult = z.infer<typeof BuildResultSchema>
+
+/**
+ * Typed contract violation thrown by BuildAgent.run when an opencode build
+ * session ends without honouring its terminal-tool contract. Two shapes:
+ *
+ *   - missing_terminal_report — session ended without a `report_build_result`
+ *     tool call that validates against BuildResultSchema. Pre-fix, this
+ *     surfaced as a generic `build agent: terminal build report did not
+ *     match BuildResultSchema` Error and the orchestrator only saw a tool
+ *     error. The actual progress (file edits, tool calls) was invisible
+ *     above the BuildResult window.
+ *
+ *   - merge_back_blocked — session ended with merge_back unfinished after
+ *     report_build_result(passed) was rejected. The previous synthesis
+ *     path constructed a fake success-encoded-as-failed BuildResult inside
+ *     BuildAgent.run (rule-7 fallback); v3 P2 replaces that synthesis with
+ *     a typed throw the orchestrator catches and converts.
+ *
+ * Scope: opencode executor only. External executors (codex / claude-code)
+ * host-synthesise the BuildResult after the provider finishes — there is
+ * no in-session report_build_result tool call to be missing.
+ */
+export class BuildAgentContractError extends Error {
+  readonly code: "missing_terminal_report" | "merge_back_blocked"
+  readonly diagnostics: {
+    sessionID?: string
+    parseError?: string
+    lastMergeBackOutcome?: string | null
+  }
+  constructor(
+    code: "missing_terminal_report" | "merge_back_blocked",
+    diagnostics: {
+      sessionID?: string
+      parseError?: string
+      lastMergeBackOutcome?: string | null
+    },
+    message: string,
+  ) {
+    super(message)
+    this.name = "BuildAgentContractError"
+    this.code = code
+    this.diagnostics = diagnostics
+  }
+}

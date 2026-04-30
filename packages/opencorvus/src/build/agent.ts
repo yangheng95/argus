@@ -47,7 +47,7 @@ import { MCPServe } from "@/mcp/serve"
 import type { VisualSpec } from "@/design-analyst/types"
 import { renderVisualContractPromptSection } from "@/design-analyst/prompt-section"
 import type { FileDiff } from "@/snapshot/types"
-import { BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
+import { BuildAgentContractError, BuildResultSchema, type BuildResult, type BuildTarget } from "./types"
 import { AttachmentStore } from "@/storage/attachment-store"
 import { withStreamActivity } from "@/util/stream-activity"
 import { PermissionNext } from "@/permission/next"
@@ -612,27 +612,45 @@ export namespace BuildAgent {
       }
 
       if (!parsed || !parsed.success) {
-        if (mergeBackBlockedReport) {
-          const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
-          parsed = {
-            success: true as const,
-            data: {
-              status: "failed" as const,
-              summary: `Build session ended before merge_back completed: ${lastOutcome}`,
-              patch_summary: "",
-              tests: [],
-              error:
+        // Opencode executor: the build session is contractually obligated
+        // to call report_build_result and (when ownsWorktree) to complete
+        // merge_back before reporting passed. Surface as a typed
+        // BuildAgentContractError so the orchestrator can convert it to
+        // a schema-valid failed BuildResult and continue the retry budget
+        // path WITHOUT rethrowing as a generic build-tool error.
+        // Replaces the rule-7 mergeBackBlockedReport synthesis (rule 17
+        // single path; the synthesised "success-encoded-as-failed" result
+        // is gone — the typed error carries the same diagnostic detail).
+        if (executor === "opencode") {
+          if (mergeBackBlockedReport) {
+            const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
+            throw new BuildAgentContractError(
+              "merge_back_blocked",
+              {
+                sessionID: out?.session?.id,
+                lastMergeBackOutcome: lastOutcome,
+              },
+              `Build session ended before merge_back completed: ${lastOutcome}; ` +
                 "report_build_result status='passed' was rejected because merge_back had not succeeded; " +
-                `last merge_back outcome: ${lastOutcome}; ` +
                 "the model did not repair the session by calling merge_back before the run ended.",
-            },
+            )
           }
+          throw new BuildAgentContractError(
+            "missing_terminal_report",
+            {
+              sessionID: out?.session?.id,
+              parseError: parsed?.error?.message,
+            },
+            `Build agent terminated without a valid report_build_result tool call: ${parsed?.error?.message ?? "(no parsed output)"}`,
+          )
         }
-      }
-
-      if (!parsed || !parsed.success) {
+        // External executors (codex / claude-code) host-synthesise the
+        // BuildResult after the provider finishes; if the structured
+        // output fails BuildResultSchema validation, that's a
+        // provider-side bug — keep the generic Error throw so the
+        // orchestrator's existing infra-error rethrow path surfaces it.
         throw new Error(
-          `build agent: terminal build report did not match BuildResultSchema: ${parsed?.error?.message ?? "(no parsed output)"}`,
+          `build agent: external executor structured output did not match BuildResultSchema: ${parsed?.error?.message ?? "(no parsed output)"}`,
         )
       }
 

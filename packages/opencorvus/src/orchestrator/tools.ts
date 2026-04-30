@@ -4060,7 +4060,56 @@ export function createOrchestratorTools(input: {
             })
             buildOutcome = { kind: "ok", result: ok }
           } catch (runErr) {
-            buildOutcome = { kind: "throw", error: runErr }
+            // P2: typed BuildAgentContractError converts to a schema-valid
+            // failed BuildResult and routes through the normal failed path
+            // (NOT rethrow). Preserves the retry-budget contract: the
+            // orchestrator's tool result reads as a normal failed build,
+            // decision_log gets the contract-violation diagnostics, and
+            // generic infra errors keep their existing rethrow shape.
+            const { BuildAgentContractError } = await import("@/build/types")
+            if (runErr instanceof BuildAgentContractError) {
+              const synthFailed: Awaited<ReturnType<typeof BuildAgent.run>>["result"] = {
+                status: "failed",
+                summary: `Build agent contract violation (${runErr.code}): ${runErr.message.slice(0, 200)}`,
+                patch_summary: "",
+                tests: [],
+                error: runErr.message,
+              }
+              buildOutcome = {
+                kind: "ok",
+                result: {
+                  result: synthFailed,
+                  sessionID: runErr.diagnostics.sessionID ?? "",
+                  worktreeDir: managedWorktree?.directory,
+                  worktreeBranch: managedWorktree?.branch,
+                  worktreeBaseRef: managedWorktree?.baseRef,
+                  diffs: undefined,
+                } as Awaited<ReturnType<typeof BuildAgent.run>>,
+              }
+              // Drop a phase=retry decision_log entry so the next attempt's
+              // prompt receives the structured contract diagnostic instead
+              // of just "tool failed". Single source: decision_log; the
+              // orchestrator already reads phase=retry filtered by goalID.
+              if (attachedGoalID) {
+                try {
+                  const { createDecisionLog } = await import("@/decision-log")
+                  createDecisionLog(taskID).append({
+                    phase: "retry",
+                    goalID: attachedGoalID,
+                    key: "build_agent_contract_violation",
+                    value: `code=${runErr.code}; sessionID=${runErr.diagnostics.sessionID ?? "?"}`,
+                    reason: runErr.message,
+                  })
+                } catch (logErr) {
+                  log.warn("build: failed to record contract-violation decision_log entry (non-fatal)", {
+                    taskID, goalID: attachedGoalID,
+                    error: logErr instanceof Error ? logErr.message : String(logErr),
+                  })
+                }
+              }
+            } else {
+              buildOutcome = { kind: "throw", error: runErr }
+            }
           }
 
           if (buildOutcome.kind === "ok") {
