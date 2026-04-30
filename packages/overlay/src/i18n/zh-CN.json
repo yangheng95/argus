@@ -373,6 +373,7 @@
   "git.init": "初始化 Git",
   "git.init_done": "已在 {{dir}} 初始化 Git",
   "git.init_exists": "{{dir}} 已有 Git 仓库",
+  "git.init_required": "当前目录尚未初始化 Git 仓库。是否立即初始化以创建任务？",
   "goal.context.criteria": "   验收标准：{{value}}",
   "goal.context.list": "**目标**（共 {{total}} 项）",
   "goal.context.origin": "   来源：{{value}}",
