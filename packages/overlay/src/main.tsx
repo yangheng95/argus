@@ -186,7 +186,7 @@ function buildTaskDebugBlob(board: any): string {
     `  - LLM stream stalls (mid-stream silence with no terminal event) MUST surface as an AbortError from the LLM client; if the board sits "running" with no events for >> session_llm_idle_ms (default 180s), that's a bug at the stream-read layer (util/stream-activity.ts + llm/api.ts), not something to triage from this template.`,
     ``,
     `# SQL templates (read-only — open the DB with bun:sqlite readonly:true,`,
-    `#  default project DB path: ${String(task?.directory ?? "<task.directory>")}/.opencorvus/opencorvus.db)`,
+    `#  DB path (resolved by engine at runtime via /global/health): ${appStore.enginePaths?.database ?? "<not yet known — engine offline; reconnect and retry>"})`,
     ``,
     `-- Task snapshot (no status column — derive from time_completed / error / criteria_results)`,
     `SELECT * FROM engine_task WHERE id = '${id}';`,

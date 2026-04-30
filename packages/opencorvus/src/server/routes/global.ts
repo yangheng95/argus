@@ -22,21 +22,41 @@ export const GlobalRoutes = lazy(() =>
       "/health",
       describeRoute({
         summary: "Get health",
-        description: "Get health information about the OpenCorvus server.",
+        description:
+          "Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and reflects whether OPENCORVUS_HOME is set or the project-local `.opencorvus/` layout is in effect — UIs should read this rather than rebuilding the path from a template.",
         operationId: "global.health",
         responses: {
           200: {
             description: "Health information",
             content: {
               "application/json": {
-                schema: resolver(z.object({ healthy: z.literal(true), version: z.string() })),
+                schema: resolver(
+                  z.object({
+                    healthy: z.literal(true),
+                    version: z.string(),
+                    paths: z.object({
+                      database: z.string(),
+                      data: z.string(),
+                      home: z.string(),
+                    }),
+                  }),
+                ),
               },
             },
           },
         },
       }),
       async (c) => {
-        return c.json({ healthy: true, version: Installation.VERSION })
+        const { Global } = await import("../../global")
+        return c.json({
+          healthy: true as const,
+          version: Installation.VERSION,
+          paths: {
+            database: Database.Path(),
+            data: Global.Path.data,
+            home: Global.Path.home,
+          },
+        })
       },
     )
     .get(

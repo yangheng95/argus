@@ -146,7 +146,16 @@ export async function checkConnection(): Promise<boolean> {
 
   for (let i = 0; i < attempts; i++) {
     try {
-      await apiJson("global/health", { signal: AbortSignal.timeout(5000) });
+      const health: any = await apiJson("global/health", { signal: AbortSignal.timeout(5000) });
+      const paths = health?.paths;
+      if (
+        paths &&
+        typeof paths.database === "string" &&
+        typeof paths.data === "string" &&
+        typeof paths.home === "string"
+      ) {
+        setAppStore("enginePaths", { database: paths.database, data: paths.data, home: paths.home });
+      }
       setConnectionStatus("online");
       return true;
     } catch (e) {
