@@ -651,6 +651,42 @@ Rejected. That reintroduces dual terminal schema sources. The single
 `report_build_result` tool is the correct protocol once schema delivery is
 fixed.
 
+### Replace `ProviderToolSource` enum with a single registry
+
+Rejected as scope for this spec. Today four call sites in `resolveTools`
+invoke `prepareProviderTool({source: ...})` — registry, MCP, extra, and
+StructuredOutput. A future refactor could fold them into one
+`ProviderBoundToolRegistry.register(name, rawTool)` and run
+`prepareProviderTool` once at the end of `resolveTools`, removing the enum.
+Until then §Non-Goals forbids new source-specific schema branches and
+§Acceptance Criteria #1#2 keep the four current sources covered. Re-opening
+this requires a new spec; do not silently extend the enum.
+
+### Move readiness predicate onto the collector
+
+Rejected as scope for this spec. Today each agent supplies a `terminalTool`
+record with `shouldExposeOnlyTerminalTool: (collector) => boolean`. A future
+refactor could push that predicate onto the collector itself
+(e.g. `collector.describeReadiness()`), so architect's readiness can never
+drift from `submit_architect`'s precondition by construction. Until then the
+architect-side invariant is enforced by the test in
+`packages/opencorvus/test/architect/output-tools.test.ts`. Other agents'
+predicates remain per-agent lambdas. Re-opening this requires a new spec.
+
+### Merge `TerminalToolContract` and structured-output guard into one
+`TurnExitContract`
+
+Rejected as scope for this spec. Today the session loop carries two parallel
+turn-exit mechanisms: `TerminalToolContract`
+(`shouldEnterTerminalToolRecovery`, `terminalToolChoice`,
+`terminalToolScopedTools`) and the structured-output guard
+(`shouldEnterStructuredOutputRecovery`, `structuredOutputToolChoice`). They
+share the same shape — "model must close the turn with a specific tool, else
+prose-stop is a contract violation" — but each has its own recovery, choice,
+and scoping helpers. A future refactor could collapse them into one
+`TurnExitContract` abstraction. Until then, do not add a third turn-exit
+mechanism without first folding the existing two.
+
 ## Implementation Checklist
 
 - [x] Add failing tests for extra-tool schema normalization.
