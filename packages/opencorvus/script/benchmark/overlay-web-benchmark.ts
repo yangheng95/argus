@@ -1140,6 +1140,18 @@ async function scaffoldProject(dir: string, model: string) {
   await Bun.write(path.join(dir, "data", ".gitkeep"), "")
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
   await fs.mkdir(temp.config, { recursive: true })
+  // W2-V32: the server no longer auto-runs git init for non-git directories
+  // (task-api/index.ts:289 throws WorktreeNotGitError). The benchmark is
+  // unattended and creates its own scratch dir, so it must init git itself
+  // — there is no overlay user gesture to prompt for.
+  {
+    const proc = Bun.spawn(["git", "init"], { cwd: dir, stdout: "pipe", stderr: "pipe" })
+    const code = await proc.exited
+    if (code !== 0) {
+      const err = (await proc.stderr.text()).trim() || "git init failed"
+      throw new Error(`scaffoldProject: git init failed in ${dir}: ${err}`)
+    }
+  }
   // Generate .gitignore only if one doesn't already exist
   const gitignorePath = path.join(dir, ".gitignore")
   if (!(await Bun.file(gitignorePath).exists())) {
