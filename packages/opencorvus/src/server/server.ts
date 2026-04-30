@@ -9,6 +9,7 @@ import { Flag } from "../flag/flag"
 import { lazy } from "../util/lazy"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { Instance } from "../project/instance"
+import { Filesystem } from "../util/filesystem"
 import { NotFoundError } from "../storage/db"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { websocket } from "hono/bun"
@@ -70,6 +71,7 @@ export namespace Server {
             if (err instanceof NotFoundError) status = 404
             else if (err instanceof Provider.ModelNotFoundError) status = 400
             else if (err instanceof DirectoryRequiredError) status = 400
+            else if (err instanceof Filesystem.InvalidDirectoryError) status = 400
             // WorktreeNotGitError is a precondition (the directory is reachable
             // and valid, but does not contain a `.git` repository). 412 lets
             // the overlay distinguish "fix your input" (400) from "init the
