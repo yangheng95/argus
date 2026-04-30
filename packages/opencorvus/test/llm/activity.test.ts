@@ -344,17 +344,38 @@ test("total_timeout terminates with cls=total_timeout when retries keep failing 
   expect(term.cls).toBe("total_timeout")
 })
 
-test("invalid policy: firstByteMs < idleMs throws synchronously", async () => {
-  const { sink } = record()
-  await expect(
-    withLLMActivity(
-      CTX,
-      { ...DefaultLLMActivityPolicy, firstByteMs: 50, idleMs: 100 },
-      new AbortController().signal,
-      async () => "x",
-      sink,
-    ),
-  ).rejects.toThrow(/firstByteMs.*>= idleMs/)
+test("policy accepts firstByteMs below idleMs because the gates cover different phases", async () => {
+  const { events, sink } = record()
+  const result = await withLLMActivity(
+    CTX,
+    fastPolicy({ firstByteMs: 50, idleMs: 100 }),
+    new AbortController().signal,
+    async (run) => {
+      run.bump("text-delta")
+      return "ok"
+    },
+    sink,
+  )
+  expect(result).toBe("ok")
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.outcome).toBe("done")
+})
+
+test("production default policy is internally valid", async () => {
+  const { events, sink } = record()
+  const result = await withLLMActivity(
+    CTX,
+    DefaultLLMActivityPolicy,
+    new AbortController().signal,
+    async (run) => {
+      run.bump("text-delta")
+      return "ok"
+    },
+    sink,
+  )
+  expect(result).toBe("ok")
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.outcome).toBe("done")
 })
 
 test("invariant: exactly one started + one terminal regardless of path", async () => {
