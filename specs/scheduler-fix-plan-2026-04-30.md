@@ -23,7 +23,18 @@
   - **P2 scoped to opencode executor.** Codex flagged: BuildAgent.run also serves `codex`/`claude-code` external executors where the host synthesises the BuildResult after the provider finishes — there is no in-session `report_build_result` tool call. v1's "make terminal report mandatory" would mark every external-executor build as a contract violation. v2 scopes the contract error to the opencode terminal-tool collector path; external executors keep their host-synthesised shape.
   - **P3 dropped task-root allow.** Codex flagged: auto-allowing the task primary directory covers sibling worktrees too, which breaks worktree isolation (a build for goal A could touch goal B's worktree via `../../goal-B/…`). v2 narrows the new allow rules to the **current goal's worktree path only**, plus an explicit list of scratch/cache directories the goal opted into (no shared parent).
   - **P5 keeps defense-in-depth gate, demotes to safety net.** Codex flagged: removing the gate entirely leaves the same LLM mistake unblocked. Bench evidence shows the LLM dispatched non-bootstrap goals while bootstrap was live. v2 keeps the gate as a final enforcement, BUT raises the constraint into describe + prompt as the *primary* signal so the LLM doesn't get there. The gate's role becomes belt-and-braces for the LLM-misbehaviour case, with a clear log line that distinguishes "LLM ignored the constraint" from "the gate is the constraint." Rule 17 still kills the previous redundant emit/return paths inside the gate; only the assertive check stays.
-- After v2, plan re-submits for second-pass review. No code change until v2 review approves.
+
+- **v3 (this commit) — codex second-pass + cron self-challenge.** Six revisions:
+  1. **P0 reversed.** Codex P1: `supersede_of` is the **designed** chain — verified 10+ readers (`engine/persist.ts:345/364/484/552/623/666/694`, `engine/store.ts:122/501/509/1556/1578`, `engine/goal-status.ts:79`, `engine/describe.ts:165/180`, `engine/workflow.ts:411`, `workbench/board.ts:892-898`, plus `test/engine/state-invariants.test.ts:82-123` enforcing invariants on it). The bug is **`beginBuildAttempt:1448` writing `supersede_of: null` instead of threading `openGoalImplementationVersion().supersededTipID` through**. v3 fix: populate `supersede_of` from the version output. Single source remains `supersede_of`. v2's "filter by `superseded_reason`" plan is dropped — it would have deleted a working abstraction with a parallel one.
+  2. **P3 contradiction resolved + ordering correction.** v2 revision-history said "task-root allow dropped" but v2 body still added a task-primary-directory rule and tested it (lines 196-200). Codex P1: this also reverses permission precedence — `PermissionNext.merge` flattens, `evaluate` uses `findLast`, so an allow appended after user config OVERRIDES an explicit user deny. v3: align body with revision-history (worktree-only, no task-root). Define injection slot BEFORE user config so user-explicit deny wins via `findLast`. Add deny-wins regression test.
+  3. **P3 root-cause investigation added.** Cron self-challenge: bench rule pattern at line 17478 already includes `${worktree}/**` allow. Bench timeout (line 19171) was for `${task_root}/*` request — NOT worktree. v2 P3's worktree-only fix would be a no-op against the actual bench evidence. v3 P3 splits into P3-A (investigate which tool call requested `${task_root}/*` and whether the agent's intent was correct) + P3-B (the worktree+ordering fix above). P3-B lands regardless; P3-A determines if more is needed.
+  4. **P5 contradiction aligned.** Codex P1: v2 revision-history said "gate stays" but v2 body still included "delete the late gate" + grep invariant test. v3 picks one: gate stays as defense-in-depth; drop the "kill" framing from body; drop the grep invariant test; keep the gate-still-works regression test.
+  5. **P2 control-flow specified.** Codex P2: current orchestrator catches BuildAgent errors → finalizes failed → **rethrows**. v2 said "orchestrator sees normal failed attempt" but didn't specify the catch. v3 adds: build tool's catch block on `BuildAgentContractError` → `finalizeBuildAttempt({status:failed, ...})` → return `BuildResult { status: "failed", ... }` directly to the orchestrator (DO NOT rethrow). Add a test asserting the orchestrator does NOT see the generic "build tool failed" error path.
+  6. **P1 inventory updated.** Codex P2: §1 inventory still said "No single-emit latch on the session" (line 46) while v2 §body says "latch exists at status.ts:97". v3 fixes inventory and narrows root cause to H1: `SessionStatus.set` calls `Bus.publish(Event.Status, ...)` at line 98 BEFORE writing state at line 113. `Bus.dispatch` invokes subscribers synchronously, so a subscriber can re-enter `set()` before the latch is sealed. Tests target subscriber re-entry, not "latch absent."
+
+- **Codex P3 finding "duplicated checklist at lines 341-374"**: verified by grep that v2 file has exactly one `§7. Codex review checklist` (lines 354-368) and one `§6. Items deferred` (lines 344-350) — no actual duplication in the file. Likely a diff-rendering artifact from how the v1→v2 patch presented sections. v3 leaves §6/§7 as-is. If codex still observes duplication on v3, will need pair-programming session to identify the rendering issue.
+
+- After v3, plan re-submits for third-pass review. No code change until review approves.
 
 ---
 
@@ -42,8 +53,8 @@
 
 | # | Issue | Audit ref | Bench ref | Verified root cause | Severity |
 |---|---|---|---|---|---|
-| **P0** | Retry attempt's `goal_run` row exists but is invisible to `deriveGoalStatus` — goal stays at `pending` while build is actually running | §11.6, L8 | log line 19356 vs missing `from=pending to=running reason=beginBuildAttempt` for `gol_*0001` after retry | **Verified mechanism (v2):** `listGoalRunsByGoal` orders by `time_created DESC` (`engine/store.ts:493`) and returns artifact rows. `appendGoalRunArtifact` writes the supersede patch as a NEW artifact row whose `time_created = Math.max(existing.time_updated+1, now)` (`engine/persist.ts:565, 581-587`), so the patched-old artifact lands AFTER the new running row's `time_created = now`. `findLatestTipGoalRun` (`store.ts:505-512`) further filters by `supersede_of` set-membership, but **no writer populates `supersede_of`** (`persist.ts:1448` writes `null`; only `superseded_reason` is patched), so this filter is dead and `find` returns the first row by time_created — i.e. the patched-old row. Result: derive sees the OLD row's now-`pending` projection forever. | **High** — every retry hides progress; orchestrator may double-dispatch or miscount budget. |
-| **P1** | Same session emits two contradictory terminal events (`reason=aborted` then `reason=completed`) on cancel-during-finish | §11.3 | log lines 19182-19183 | The session cancel path and the agent-runner natural-finish finally block are independent emit sites. No single-emit latch on the session. | **Medium** — overlay UI / consumers may act on the wrong terminal. |
+| **P0** | Retry attempt's `goal_run` row exists but is invisible to `deriveGoalStatus` — goal stays at `pending` while build is actually running | §11.6, L8 | log line 19356 vs missing `from=pending to=running reason=beginBuildAttempt` for `gol_*0001` after retry | **Verified mechanism (v3):** `findLatestTipGoalRun` (`store.ts:505-512`), `engine/describe.ts:180`, `engine/goal-status.ts:79`, `engine/workflow.ts:411`, `workbench/board.ts:892-898` ALL filter by `supersede_of` set-membership — this is the **designed** chain abstraction. The bug is **`beginBuildAttempt` writes `supersede_of: null` at `persist.ts:1448`** instead of threading `openGoalImplementationVersion().supersededTipID` (which is computed at `persist.ts:617-666` but never propagated). Without supersede_of populated, the OLD terminal row's id never enters the supersededIDs set, so `find` returns the OLD row by `time_created DESC` (the patched-old has `time_created = max(old.time_updated+1, now) ≥ new.time_created`). Derive then projects to OLD's superseded-pending state forever. v2 incorrectly diagnosed this as "supersede_of is dead" — actual diagnosis is "supersede_of is correctly designed but `beginBuildAttempt` skips populating it". | **High** — every retry hides progress; orchestrator may double-dispatch or miscount budget. |
+| **P1** | Same session emits two contradictory terminal events (`reason=aborted` then `reason=completed`) on cancel-during-finish | §11.3 | log lines 19182-19183 | **Verified mechanism (v3):** `SessionStatus.set` (`session/status.ts:77-114`) HAS a first-terminal-wins latch at line 97 (`if (state()[sessionID]?.type === "terminal") return`). The bug is the latch's TOCTOU window: line 98 publishes via `Bus.publish` (synchronous dispatch — subscribers run in-thread); line 113 writes state. A subscriber that re-enters `set()` (e.g. via `Bus.subscribeAll` consumers calling back into the session lifecycle) sees state still un-written and bypasses the latch. Two terminal publishes both pass before either writes. v2 inventory said "no latch" — was wrong; latch exists, has a re-entrancy hole. | **Medium** — overlay UI / consumers may act on the wrong terminal. |
 | **P2** | Build agent terminal report missing → orchestrator only sees Zod schema rejection of `undefined`; agent's actual progress invisible | §11.1, L1 | log line 19180 (`Invalid input: expected object, received undefined`) | When LLM session is cancelled before calling `report_build_result`, BuildAgent.run finishes with `hasStructured=false`. The `build` tool then validates `undefined` against `BuildResultSchema`, throws, and the orchestrator only sees `build tool failed`. There is no contract enforcement at the protocol layer. | **Medium-high** — masks agent failure mode and prevents rule 1 root-cause analysis. |
 | **P3** | Permission `external_directory` for the bench project root times out at 5 min, cancelling the build session | §11.2, memory `feedback_goal_permission_hang.md` | log line 19171 (`permission=external_directory patterns=["…UkylGI/*"] permission timeout rejected`) | Build session inherits default `ask` policy; auto-permission rules don't auto-allow the session's own worktree / project-root paths. | **Medium-high** — first build attempt always burns 5 minutes. |
 | **P4** | `design_analysis` abort writes only stderr WARN — no `decision_log` entry → architect / build see `designSpecs=undefined` with no explanation | §2.3, L3 | log line 1729 (`materialCount=0 design_analysis: no visual input materialized — aborting before agent call`) | Abort path (`task-tools` design_analysis) bypasses `decision_log.append({phase: "design_analysis", ...})`. The phase exists structurally (audit §4 table) but has no writer for the abort case. | **Medium** — silent information loss across upstream→downstream seam. |
@@ -53,78 +64,90 @@
 
 ## 2. Fix specifications
 
-### P0 — Tip-selection: kill dead `supersede_of` filter, use `superseded_reason`
+### P0 — Populate `supersede_of` from `openGoalImplementationVersion().supersededTipID` in `beginBuildAttempt`
 
-**Files in scope (rule 35 grep targets).**
-- `packages/opencorvus/src/engine/store.ts:482-512` (`listGoalRunsByGoal`, `findLatestTipGoalRun`)
-- `packages/opencorvus/src/engine/store.ts` `latestPerGoalRun` (full grep — also called from `listGoalRunsForRun`, `listGoalRunsForTask`)
-- `packages/opencorvus/src/engine/goal-status.ts:74-117` (`deriveGoalStatus` — also filters by `supersede_of`, same dead path)
-- `packages/opencorvus/src/engine/persist.ts:506-528` (`supersedeGoalRun`), `:559-590` (`appendGoalRunArtifact`), `:1410-1490` (`beginBuildAttempt`)
-- `packages/opencorvus/src/engine/describe.ts:tipFromChain` (around line 177-184 per reviewer — verify is parallel impl of same logic = rule 8 risk)
+**Codex P1 reversed v2.** `supersede_of` is the **designed chain abstraction**, used by 10+ readers and a state-invariant test. v2's "kill the supersede_of filter" plan would delete a working abstraction. v3 fix: populate the column properly. Single source remains `supersede_of`.
 
-**Verified state of the code (v2, after reviewer pass).**
-- `listGoalRunsByGoal` issues `SELECT … ORDER BY time_created DESC` then runs `latestPerGoalRun` JS aggregator.
-- `findLatestTipGoalRun` collects `supersede_of` strings from the rows, then returns first row whose `id` ∉ that set.
-- The `supersede_of` column is **never populated by current writers** — `beginBuildAttempt:1448` writes `null`, and `appendGoalRunArtifact` patches only `superseded_reason` / `superseded_at`. The filter set is therefore always empty in practice; `find` returns the first by `time_created DESC`, which after the patch's bumped `time_created` is the OLD superseded row.
-- Same dead filter at `goal-status.ts:79` (verified by reviewer).
+**Files in scope (rule 35 grep — full coverage verified).**
+- **Bug site:** `packages/opencorvus/src/engine/persist.ts:1410-1490` (`beginBuildAttempt`) — line 1448 hardcodes `supersede_of: null`; `openGoalImplementationVersion`'s return value (`supersededTipID`) is computed at `:617-666`/`:673-694` but never threaded.
+- **Readers (must keep working — rule 35):**
+  - `engine/store.ts:505-512` (`findLatestTipGoalRun`)
+  - `engine/store.ts:122` (column type), `:1556`, `:1578` (writer field)
+  - `engine/goal-status.ts:79-90` (`deriveGoalStatus` supersede chain)
+  - `engine/describe.ts:165, 180` (workflow projection)
+  - `engine/workflow.ts:411` (workflow goal-run filtering)
+  - `workbench/board.ts:892-898` (`currentGoalRunFromRows` supersede filter)
+  - `engine/persist.ts:345` (existing `supersede_of` consumer in `superseded` query)
+  - `engine/persist.ts:484` (cleanup metric counter)
+- **Tests (must continue to pass + extend):**
+  - `test/engine/state-invariants.test.ts:82-123` (asserts `supersede_of` references exist, no dangling links)
+  - `test/engine/start-new-attempt.test.ts:128, 164, 213, 230, 246, 253` (asserts `supersededTipID` returned)
 
-**Fix (single-source, no fallback, kills dead path).**
+**Fix (single-source, no fallback).**
 
-1. **`findLatestTipGoalRun`** — replace the `supersede_of`-set filter with `superseded_reason IS NULL` predicate at the JS layer. Concrete:
-   ```ts
-   export function findLatestTipGoalRun(goalID: string): GoalRunRow | undefined {
-     const rows = listGoalRunsByGoal(goalID)
-     return rows.find((r) => !r.superseded_reason)
-   }
-   ```
-   `listGoalRunsByGoal` already orders by `time_created DESC`. The first row whose `superseded_reason` is null is the live tip.
+In `engine/persist.ts:beginBuildAttempt`:
+- Capture `openGoalImplementationVersion`'s return: `const version = openGoalImplementationVersion({ goal, reason: "build_retry", now })`. (Already there.)
+- At line 1448 (`supersede_of: null`), replace with `supersede_of: version.supersededTipID ?? null`.
+- That's it. Every reader already filters by this column correctly; the bug was the column staying `null` on retry.
 
-2. **`deriveGoalStatus`** — apply the same predicate change at `goal-status.ts:79` (kills the parallel dead filter, rule 8 + rule 17).
+**Why this is the right fix (rule 1 root cause).**
+- `openGoalImplementationVersion:683` calls `supersedeGoalRun(oldGoalRunID, reason, now)` which patches the OLD row with `superseded_reason` + `superseded_at`. It then returns `{supersededTipID: tip.id}` — the OLD goal_run_id the new attempt is superseding.
+- `beginBuildAttempt` ignores this return value's `supersededTipID` field. Threading it through completes the designed chain.
+- After fix: NEW row has `supersede_of = OLD.id`. `findLatestTipGoalRun`'s loop collects `[OLD.id]` into supersededIDs, then `find` skips the OLD row, returns NEW. Derive returns `running`.
+- Math.max bump at `appendGoalRunArtifact:565` stays — it serves intra-goal_run_id monotonicity, unrelated to tip selection now that the filter works.
 
-3. **`engine/describe.ts:tipFromChain`** (verify reviewer's claim about parallel implementation) — if it duplicates the tip-selection logic, replace the duplication with a call to `findLatestTipGoalRun` (rule 9 — extract pattern).
-
-4. **DO NOT remove the `Math.max` bump in `appendGoalRunArtifact:565`.** Reviewer Finding B: the bump guarantees monotonic ordering across multiple appends to the same `goal_run_id` (rapid patch sequences). After this fix, the cross-`goal_run_id` tip selection is correct regardless of the bump, so the bump's purpose is preserved cleanly within one logical goal_run. Removing it would risk nondeterministic SQLite ordering on equal-ms appends.
-
-**Rule 8 / rule 17 check (v2).**
-- The dead `supersede_of`-set filter is removed at both `findLatestTipGoalRun` AND `deriveGoalStatus`. Single predicate (`superseded_reason IS NULL`) at both. Single source.
-- `appendGoalRunArtifact`'s `Math.max` bump kept for its documented purpose. Not a fallback — it serves a different invariant (intra-goal_run monotonicity).
+**Rule 8 / rule 17 check (v3).**
+- Single source: `supersede_of`. No `superseded_reason`-based parallel filter introduced (v2's mistake).
+- No dead code added. The existing dead-by-data state of `supersede_of` (always null) becomes live-by-data once the writer is fixed.
 
 **Tests (rule 28 / 36).**
-1. Unit `packages/opencorvus/test/engine/goal-tip-selection.test.ts` (new file):
-   - Build a goal with: one OLD goal_run (`status=failed`, `superseded_reason="build_retry"`, post-patch `time_created=T+5`), one NEW goal_run (`status=running`, `time_created=T+3`, `superseded_reason=null`).
-   - Assert `findLatestTipGoalRun(goalID).id === NEW.id`.
+1. Unit `packages/opencorvus/test/engine/begin-build-attempt-supersede.test.ts` (new):
+   - Set up goal with one terminal `goal_run` (`status=failed`).
+   - Call `beginBuildAttempt(...)`, assert the new row's `supersede_of === oldRun.id`.
+   - Assert `findLatestTipGoalRun(goalID).id === newRun.id`.
    - Assert `deriveGoalStatus(goalID) === "running"`.
-   - Negative case (rule 36): with NO running attempt opened, assert `deriveGoalStatus(goalID) === "pending"` (the supersede projection still holds).
-2. E2E in `packages/opencorvus/test/engine/retry-status-emission.e2e.test.ts`:
-   - Spawn in-process bench, force first build attempt to fail (mock `BuildAgent.run` to return `{status: "failed"}`).
-   - Drive the orchestrator's retry call, assert `service=goal-status from=pending to=running reason=beginBuildAttempt` log line emits within 3s.
+   - Negative (rule 36): on first-ever attempt (no prior tip), assert `supersede_of === null` and tip lookup returns the new running row.
+2. Run existing `test/engine/state-invariants.test.ts` — assert it still passes (the new write satisfies the dangling-link invariant: `supersede_of` points at an existing logical goal_run id).
+3. E2E `test/engine/retry-status-emission.e2e.test.ts`:
+   - Force first attempt to fail. Drive retry. Assert `service=goal-status from=pending to=running reason=beginBuildAttempt` log line emits within 3s of the build tool re-invocation.
 
-### P1 — Investigate why the existing terminal latch fails (then fix that)
+### P1 — Seal the latch BEFORE publishing in `SessionStatus.set` (close the re-entrancy hole)
 
-**v1 was rejected.** Reviewer surfaced that the latch v1 proposed already exists at `session/status.ts:77-114` (verified by direct read). The `if (state()[sessionID]?.type === "terminal") return` guard at line 97 is exactly "first terminal wins"; the comment block at 78-96 even cites the prior aborted+completed double-fire. v1 would have created a parallel latch (rule 8 violation) without fixing why the existing one fails.
+**Codex P2 narrowed v2's three hypotheses to H1.** v2 carried three candidates (TOCTOU re-entrancy, multi-Instance state map, direct Bus.publish bypass). Codex pointed out the concrete shape: `SessionStatus.set` (`session/status.ts:77-114`) calls `Bus.publish` at line 98 BEFORE writing state at line 113. `Bus.dispatch` is synchronous, so a subscriber can re-enter `set()` before the latch is sealed. v3 commits to this as the verified root cause; the remaining hypotheses (H2 multi-Instance, H3 direct publish) become regression-test invariants enforced separately.
 
-**Pre-fix investigation required.** The bench evidence (lines 19182-19183 — same sessionID, two terminal emits) means the existing latch at `status.ts:97` was bypassed. Three hypotheses, all to be checked before any code change:
+**Files in scope.**
+- `packages/opencorvus/src/session/status.ts:77-114` (the `set()` function — fix site).
+- `packages/opencorvus/src/bus/index.ts` (verify `Bus.publish` synchronous-dispatch contract).
+- `packages/opencorvus/test/session/terminal-latch-reentrancy.test.ts` (new test).
 
-**H1 — TOCTOU between read at `status.ts:97` and write at `status.ts:113`.** Two concurrent `set(sessionID, …)` calls could both pass the check before either writes. JS is single-threaded but `Bus.publish` (line 98) may be sync but launches subscribers as Promises; if a subscriber synchronously calls back into `set(...)` (re-entrancy), the inner call sees state still un-written. **Verify by:** instrumenting `set()` to log the read/write ordering during the actual bench reproduction; static-grep `Bus.subscribe` handlers that touch sessions.
+**Fix (single-source, no parallel latch).**
 
-**H2 — Multi-Instance state map.** `lazyInstanceState` at `status.ts:60` keys on the current `Instance` (i.e. `Instance.directory`). Build sessions live in per-goal worktree paths; orchestrator sessions live at the project root. If `set(sessionID, …)` is reached from two different `Instance` contexts, each has its own `state()` map and the latch in each passes independently. **Verify by:** logging `Instance.directory` at every `set()` call for the failing sessionID; checking whether the build session is created under a different `Instance.provide(...)` boundary than the orchestrator's emit path.
+In `session/status.ts:set`:
+- **Move the state write BEFORE the publish.** Order becomes:
+  1. Read latch at line 97 — if already terminal, return.
+  2. Write state at (formerly line 113) — seals the latch *before* any subscriber runs.
+  3. Publish at (formerly line 98) — subscribers run after the latch is sealed; any re-entrant `set()` call sees the sealed state.
+- Same applies to the `idle` branch's `delete state()[sessionID]` ordering — but idle's semantics are different (re-entrant set after idle is allowed), so leave its ordering and only change the terminal path.
 
-**H3 — Direct `Bus.publish(SessionStatus.Event.Status, ...)` bypassing `set()`.** Anywhere that calls `Bus.publish` for the Status event without going through `SessionStatus.set` skips the latch entirely. **Verify by:** `grep -rn "Bus.publish.*Event.Status\|publish.*session.status" packages/opencorvus/src` and reviewing every hit.
+The terminal-keep behaviour (line 113 retains terminal in state) stays. The idle-delete behaviour stays. Only the publish/write order on terminal changes.
 
-**Fix scope decided AFTER hypothesis is confirmed.** Likely outcomes:
-- H1 (re-entrancy): swap order at `status.ts:97-113` so the state write happens BEFORE the publish, or wrap in an atomic-update. Single-source change, no parallel latch added.
-- H2 (multi-Instance): trace and unify the Instance boundary for session lifecycle events; the `state()` map needs to be process-wide for terminal latches, not per-Instance. Replace `lazyInstanceState` for THIS use with a process-singleton (rule 8 — single source of session terminal authority).
-- H3 (direct publish): refactor the offending callers to go through `SessionStatus.set`. Delete the bypass (rule 17).
-
-**Rule check (v2).**
-- Rule 1: root cause first, no patches over symptoms.
-- Rule 8: outcome is one latch (the existing one fixed), not two.
-- Rule 17: any dead/parallel emit path discovered in H3 is deleted.
+**Why this is the right fix (rule 1 root cause + rule 8 single source).**
+- Single source: the existing latch at line 97. No new boolean, no DB column, no parallel structure.
+- Re-entrancy hole closed: subscribers running synchronously inside `Bus.publish` see the sealed state when they call `set()` again.
+- Rule 13: no state machine introduced. The fix is pure ordering of two existing operations.
 
 **Tests (rule 28 / 36).**
-1. The hypothesis confirmation itself produces a regression test: whichever H is the cause, the test reproduces the cancel-during-finish race and asserts exactly one `SessionStatus.Event.Status` Bus event with `type=terminal` per session.
-2. If H2: cross-Instance test — emit terminal from two different `Instance` contexts for the same sessionID, assert the second is dropped.
-3. If H3: lint / negative test asserting no direct `Bus.publish(Event.Status, ...)` calls outside `SessionStatus.set` (a small `bun run script/check/...` invariant).
+1. Unit `test/session/terminal-latch-reentrancy.test.ts`:
+   - Subscribe a synchronous handler to `Bus.subscribe(SessionStatus.Event.Status)` that re-enters `SessionStatus.set(sessionID, {type: "terminal", reason: "completed"})` when it sees a terminal status.
+   - Call `SessionStatus.set(sessionID, {type: "terminal", reason: "aborted"})`.
+   - Assert: exactly ONE Bus.publish observed (only the original `aborted`); the re-entrant `completed` is dropped by the now-sealed latch.
+2. Static check (rule 35) `script/check/session-status-emit-discipline.ts`:
+   - Greps `packages/opencorvus/src/**/*.ts` for `Bus.publish(SessionStatus.Event.Status` / `Bus.publish(.*session.status` outside `session/status.ts`. Asserts zero hits — closes H3 (direct publish bypass).
+3. Existing `test/session/*` regressions stay green; the order change must not affect non-terminal transitions.
+
+**Out of scope here (verified-not-needed by H1 confirmation).**
+- H2 multi-Instance: the `lazyInstanceState` map IS per-Instance, but session lifecycles flow through one Instance context per session. No cross-Instance set() calls observed in the bench evidence. Tracking as defer-only.
+- DB-persistent latch: out of scope; in-memory is correct because session lifecycle is process-bounded.
 
 ### P2 — Build-agent contract (opencode-only path): replace generic Error throw + bring `mergeBackBlockedReport` synthesis into typed-error regime
 
@@ -163,60 +186,82 @@ In `build/agent.ts` — **opencode terminal-tool collector path only** (verify b
 
 External executors (`codex` / `claude-code`) host-synthesised path: untouched. Those paths already produce a structured BuildResult from the provider response shape, so the contract violation surface does not apply.
 
-In `orchestrator/tools.ts`:
-- The build tool catches `BuildAgentContractError`, calls `finalizeBuildAttempt({ status: "failed", summary: \`build agent contract violation (${code}): ${message}\`, error: diagnostics })`, then writes a `decision_log phase="retry"` entry with `key="build_agent_contract_violation"` and `value` carrying the diagnostics. Orchestrator sees a normal failed attempt; retry budget applies.
+In `orchestrator/tools.ts` (the `build` tool body, around `:3950+`):
+- **Catch `BuildAgentContractError` SPECIFICALLY** before the generic catch.
+- Call `finalizeBuildAttempt({ status: "failed", summary: \`build agent contract violation (${code}): ${message}\`, error: diagnostics })`.
+- Write `decision_log phase="retry"` entry with `key="build_agent_contract_violation"` and `value` carrying diagnostics.
+- **Return a `BuildResult { status: "failed", summary, worktree? }` directly to the orchestrator** — DO NOT rethrow. The orchestrator's tool result reads as a normal failed build (NOT the generic `build tool failed` error path).
+- The generic catch (for non-typed errors — model unavailable, worktree creation failed) keeps its rethrow behaviour. Only the typed contract error short-circuits to a `failed` BuildResult.
 
 **Rule 7 check (v2).**
 - Both paths now throw the same typed error. No fallback (no fake result, no continue-on-error).
 - Diagnostic context survives via the typed error and the decision_log entry; next attempt's prompt receives "Prior attempt failed: contract violation — code=…" verbatim.
 
-**Tests.**
+**Tests (v3 — control-flow specified per codex P2 #1).**
 1. Unit `packages/opencorvus/test/build/contract.test.ts` (new file):
    - Mock LLM stream that emits messages but never calls `report_build_result` → assert `BuildAgentContractError` thrown with `code="missing_terminal_report"`, diagnostics populated.
    - Mock LLM stream that calls `merge_back` followed by `report_build_result` with a result that fails the structured-output guard → assert `code="merge_back_blocked"`.
    - Negative case (rule 36): LLM emits a clean `report_build_result` → assert no error, normal `BuildResult` returned.
 2. Integration `packages/opencorvus/test/orchestrator/build-contract-violation.test.ts`:
-   - Drive the build tool past a contract-violating BuildAgent → assert `goal_run` row has `status=failed`, `decision_log` row exists with `phase="retry"` `key="build_agent_contract_violation"`.
+   - Drive the build tool past a contract-violating BuildAgent → assert:
+     - `goal_run` row has `status=failed`
+     - `decision_log` row exists with `phase="retry"` `key="build_agent_contract_violation"`
+     - **The build tool returned a `BuildResult { status: "failed" }` object — orchestrator's tool result is a normal failure, NOT a tool error / NOT a Zod-rejection error / NOT a rethrown `BuildAgentContractError`** (codex P2 #1: assert the orchestrator does not see the generic `build tool failed` path).
+   - Negative on the rethrow gap: configure a non-typed error (e.g. mock `BuildAgent.run` throwing a generic `Error("simulated infra failure")`) → assert that path DOES rethrow (the contract change must not weaken infrastructure-error visibility).
 
-### P3 — Worktree-path + project-directory as primary allow-rules for build session
+### P3 — Permission injection ordering + worktree-only allow (v3 split into investigation + fix)
 
-**Files in scope (rule 35 grep targets, refined v2).**
-- `packages/opencorvus/src/permission/next.ts` (`PermissionNext.fromConfig`, `findLast` evaluator at line ~319)
-- `packages/opencorvus/src/agent/agent.ts:75-90` (existing whitelist includes `Instance.directory/**` — the gap is the bench project root is OUTSIDE Instance.directory)
-- `packages/opencorvus/src/agent/agent.ts:524-535` (existing injection logic: when user config has no explicit `external_directory` rule, injects a default `external_directory: { GLOB: "allow" }` — must thread through, not duplicate)
-- `packages/opencorvus/src/orchestrator/tools.ts:3870+` (where build session ruleset is composed and worktree path becomes available)
+**Codex P1 + cron self-challenge.** v2 P3 had two errors: (a) revision-history said "task-root allow dropped" but body still added it (contradiction); (b) "appended AFTER user config" reverses precedence — `PermissionNext.merge` flattens rulesets and `evaluate` uses `findLast`, so a later allow OVERRIDES an explicit user deny. Plus cron self-challenge: bench timeout (line 19171) was for `${task_root}/*`, NOT worktree — so v2's "worktree-only auto-allow" is a no-op against the actual bench evidence. v3 splits into:
 
-**Verified state (v2).**
-- Reviewer pass: `agent/agent.ts:86-89` already whitelists `Instance.directory/**`. Bench project root `…/UkylGI/` is NOT under that — it's the per-task primary directory and lives separately.
-- Reviewer pass: `findLast`-wins evaluator means new allow rules MUST come AFTER any default `ask` rule.
-- Reviewer pass: the `agent/agent.ts:524-535` special injection MUST be the threading point, not a sibling site.
+#### P3-A — Investigate which path the agent actually requested at `${task_root}/*`
 
-**Fix (v2 — codex feedback applied: per-goal-worktree only, no shared root).**
+**Pre-fix investigation.** Bench `_session-r1-opencode.out:17478` shows the existing ruleset already auto-allows `${worktree}/**` (line 17478 ruleset entry). The timeout at line 19171 is for an `external_directory` request whose pattern matches `${task_root}/*` (one segment). **What specific path did the agent request?** Investigation steps:
+- Locate the tool call that initiated permission `per_dde267938001E4OId9SwbdVVBt` in the bench log (search by `id=per_dde267938001`).
+- Identify the exact path (look for a `read`/`bash`/`write` tool call near that timestamp).
+- Decide one of:
+  - **Inappropriate access** (e.g. agent reaching outside its worktree by mistake): no permission rule needed; instead fix the agent / tool prompt to stay inside the worktree.
+  - **Legitimate read-only access** (e.g. shared cache, npm registry, lockfile): allow specifically that path, NOT the entire `${task_root}/*` glob.
+  - **Legitimate dependency**: thread that specific dependency into the goal's allowed-scope metadata.
 
-Codex reviewer flagged: auto-allowing the project/task primary root opens `../../sibling-worktree/…` paths, breaking worktree isolation between goals. v2 narrows to the **current goal's worktree path only**, plus an opt-in list of explicit scratch/cache paths the goal declared.
+**Output of P3-A:** a concrete decision recorded in this plan as a v4 amendment, before P3-B lands.
+
+#### P3-B — Permission injection slot + worktree-only allow (codex P1 #2 corrections applied)
+
+**Files in scope (rule 35 grep, v3).**
+- `packages/opencorvus/src/permission/next.ts:319` — `findLast` evaluator (verified by codex)
+- `packages/opencorvus/src/permission/next.ts` — `PermissionNext.merge` flattening behaviour (codex P1 #2)
+- `packages/opencorvus/src/agent/agent.ts:75-90` (existing `Instance.directory/**` whitelist)
+- `packages/opencorvus/src/agent/agent.ts:524-535` (existing injection of default `external_directory: allow` when no user rule)
+- `packages/opencorvus/src/orchestrator/tools.ts:3870+` (build session ruleset composition site, where `${worktree}` becomes available)
+
+**Fix (v3 — corrected ordering).**
 
 When BuildAgent composes the session ruleset:
-1. Always include an `external_directory: allow` rule for the **current goal's worktree absolute path with trailing `/**`** only (`${worktree}/**`).
-2. Optional: include allow rules for explicit scratch/cache paths the goal declared (e.g. `node_modules` cache directory if explicitly configured). These come from goal metadata, NOT from a shared root.
-3. **Do NOT auto-allow the task primary directory or any parent of multiple worktrees.** Sibling worktree access stays in `ask` territory (which is correct: a goal's build agent has no business touching another goal's worktree).
+1. Inject `external_directory: allow, pattern: "${worktree}/**"` rule **BEFORE user config rules** (codex P1 #2: `findLast`-wins means user-explicit deny must come AFTER, so user can still override). Concretely: prepend to the per-session rule list during the `agent/agent.ts:524-535` injection.
+2. **No task-root rule.** v2's "task primary directory" line is removed entirely. Sibling worktree access stays in `ask` territory.
+3. Optional opt-in: explicit scratch/cache paths declared via goal metadata, also injected pre-user-config.
 
-Rules are appended AFTER user config rules (so `findLast`-wins respects explicit overrides) but BEFORE the default `ask` so in-scope paths resolve immediately. Threading: the injection happens at the same site as the existing `agent/agent.ts:524-535` block — that block is extended to emit ONLY the current worktree allow pattern when available from agent input.
+**Why prepend, not append.**
+- `findLast` evaluator: last matching rule wins.
+- If we APPEND our `allow` rule, a user's explicit `deny C:/sensitive-path` earlier in the ruleset is silently overridden when the path also matches our worktree pattern.
+- If we PREPEND, our `allow` only takes effect when no later (user) rule matches the same path. User explicit deny survives.
 
-**Rule 7 / 8 / isolation check.**
-- Not a fallback: a positive `allow` rule at a more specific pattern; `findLast`-wins picks it for paths under the worktree.
-- Single source: the new rule lives in the same `PermissionNext` ruleset; no parallel engine.
-- Worktree isolation preserved: per-goal worktrees do not see each other; cross-worktree access falls back to `ask` (operator-gated).
-- Threads through existing injection logic (rule 11 abstraction).
+**Rule 7 / 8 / isolation check (v3).**
+- Not a fallback: `allow` is a positive rule for paths inside the agent's owned scope. `findLast` evaluator gives user explicit denies the last word.
+- Single source: same `PermissionNext` ruleset; no parallel engine.
+- Worktree isolation: cross-worktree access still hits `ask` (no change).
 
-**Tests.**
+**Tests (v3 — adds deny-wins regression).**
 1. Unit `packages/opencorvus/test/permission/build-session.test.ts`:
-   - Compose a build-session ruleset with worktree `${A}`. Simulate request for `${A}/file.ts` → assert immediate `allow`.
-   - Simulate request for `${A}/../sibling-B/file.ts` (sibling worktree) → assert `ask` (isolation preserved).
-   - Simulate request for `${A}/../../task-root/scratch/file` (parent task root) → assert `ask` (isolation preserved).
-   - Simulate request for `C:/Users/random-other-path/file` → assert `ask`.
+   - Compose ruleset with worktree `${A}` injected pre-user-config; user config has `external_directory: deny, pattern: "${A}/secret/**"`.
+     - Request `${A}/file.ts` → assert `allow` (only the prepended worktree rule matches; user deny doesn't match).
+     - Request `${A}/secret/key` → assert `deny` (user deny is `findLast` and matches; **deny-wins regression**).
+   - Compose ruleset with worktree `${A}`. Simulate request for `${A}/../sibling-B/file.ts` → assert `ask` (isolation preserved).
+   - Simulate `${A}/../../task-root/scratch/file` → assert `ask` (no task-root auto-allow).
+   - Simulate `C:/Users/random-other-path/file` → assert `ask`.
 2. E2E `packages/opencorvus/test/build/permission-no-timeout.e2e.test.ts`:
-   - Spawn an in-process build session against a temp worktree; run a 60-second build that only touches files inside the worktree → assert zero permission timeouts.
-   - Negative E2E: run a build that tries to access a sibling worktree path → assert the request hits `ask` (not `allow`); operator-side no-op approver lets it through, but the audit trail records the cross-worktree attempt.
+   - Spawn build session against temp worktree; run a 60-second build touching only worktree paths → assert zero permission timeouts.
+   - **CONDITIONAL on P3-A outcome:** if P3-A finds the bench timeout was for a legitimate path that should be allowed, add that path to the test as an `allow` assertion. If P3-A finds it was inappropriate, this test stays worktree-only.
 
 ### P4 — Decision-log writer for `design_analysis` AND `intent-analysis` aborts (rule 4 systemic)
 
@@ -253,42 +298,44 @@ Verify reader side end-to-end:
    - After each abort kind, run architect agent prompt builder → assert the prompt contains the abort reason verbatim.
    - Negative case: when no abort happened, assert no spurious "aborted" text in the prompt.
 
-### P5 — Bootstrap-first: describe-time annotation + physical-fact prompt as primary, gate retained as defense-in-depth (v2 codex-folded)
+### P5 — Bootstrap-first: keep the gate, add describe field, add physical-fact prompt (v3: contradiction resolved)
 
-**Codex reviewer flagged (correctly):** v1's "remove the gate entirely" leaves the LLM mistake unblocked. The bench evidence shows the LLM already attempted non-bootstrap dispatch while bootstrap was running. Removing the gate without proving the LLM will respect the constraint is unsafe. v2 keeps the gate as a final safety net but moves the primary signal upstream so the LLM doesn't reach the gate in the normal case.
+**Codex P1 #3 flagged v2 internal contradiction.** v2 revision-history said "gate stays as defense-in-depth" but v2 §body said "delete the late gate" and added a grep invariant that asserts the gate stays deleted. v3 picks ONE design: **the gate stays.** v2's deletion plan and the grep invariant are dropped from this section.
 
 **Files in scope.**
-- `packages/opencorvus/src/orchestrator/tools.ts:3760-3880` (`pendingBootstrap` gate stays; cleanup of redundant log lines + clearer error message)
+- `packages/opencorvus/src/orchestrator/tools.ts:3760-3880` (`pendingBootstrap` gate STAYS; minor cleanup only — single clearer WARN)
 - `packages/opencorvus/src/engine/describe.ts:60-243` (add `task.activeBootstrapGoalID: string | null`)
 - `packages/opencorvus/src/orchestrator/agent.ts` (system prompt physical-fact paragraph)
 
-**Fix (v2).**
+**Fix (v3).**
 
-1. **Add `task.activeBootstrapGoalID`** at `engine/describe.ts`: derived per-wake from goal set. Single source at the task level (avoids the per-goal naming concern reviewer Q5b raised).
+1. **Add `task.activeBootstrapGoalID: string | null`** at `engine/describe.ts`: derived per-wake from goal set (one bootstrap goal not yet terminal → its ID; otherwise null). Single source at task level.
 
-2. **Orchestrator prompt addition** (physical-fact framing — no directive):
-   > "Bootstrap goals own scaffold-level files (`package.json`, `vite.config.ts`/`bunfig.toml`, `tsconfig.json`, `src/main.*`, `src/App.*`). Every other goal in this task will need those files on its worktree. Dispatching bootstrap and non-bootstrap goals in parallel produces guaranteed merge conflicts on those files at delivery time. When `task.activeBootstrapGoalID` is set, the bootstrap goal must complete first; the dispatch tool will refuse non-bootstrap dispatches in this state."
-   The last clause is honest disclosure: the gate exists. The LLM can decide to wait.
+2. **Orchestrator prompt addition** (physical-fact framing including honest disclosure that the gate exists):
+   > "Bootstrap goals own scaffold-level files (`package.json`, `vite.config.ts`/`bunfig.toml`, `tsconfig.json`, `src/main.*`, `src/App.*`). Every other goal in this task will need those files on its worktree. Dispatching bootstrap and non-bootstrap goals in parallel produces guaranteed merge conflicts at delivery time. When `task.activeBootstrapGoalID` is set, the dispatch tool will refuse non-bootstrap dispatches until the bootstrap goal completes. Plan accordingly."
+   Disclosure of the gate (rule 15: not synthetic / not hidden).
 
-3. **Gate stays at `orchestrator/tools.ts:3760-3880`** but cleaned up:
-   - Single-line WARN with the dispatched goalID + pending bootstrapID, distinguishing "LLM ignored the constraint" from "the constraint exists." (Rule 1 visibility.)
-   - No silent passthrough; no synthesised result; tool returns a clear error to the orchestrator LLM so the next turn can choose another goal.
-   - Rule 17 cleanup of the previous duplicated log/return paths within the gate (if any).
+3. **Gate at `orchestrator/tools.ts:3760-3880` stays as defense-in-depth.** Minor cleanup:
+   - Single clear WARN log including dispatched goalID + active bootstrapID + the dispatch was blocked because of the bootstrap-first invariant.
+   - Tool returns a structured error to the orchestrator LLM; the next turn can pick the bootstrap goal explicitly.
+   - No deletion of the gate. v2 had an internal "delete + keep" contradiction; v3 picks "keep".
 
-**Rule 13 / rule 17 check (v2 codex-folded).**
-- Late gate retained as defense-in-depth — codex correctly argued this against pure rule 17 application. The cost-benefit: removing the gate to satisfy rule 17 risks LLM mistakes producing merge conflicts at delivery time (a worse failure mode). The gate is a single check (not a state machine), and its presence is now disclosed in the prompt (rule 15: not synthetic / not hidden).
-- Rule 13: a single bool/null check is not a state machine. The gate's role is constrained to rejecting the dispatch and returning an LLM-readable error.
+**Rule check (v3).**
+- Rule 13: the gate is a single condition check, not a state machine.
+- Rule 15: gate is disclosed in the prompt; not hidden / not synthetic.
+- Rule 17: NO grep invariant for "gate stays deleted." The gate is part of the design.
+- Rule 6 (LLM intelligence): the prompt now gives the LLM the constraint upfront so it picks bootstrap on first turn. Gate becomes safety net (rare path).
 
-**Tests (v2).**
-1. Unit `packages/opencorvus/test/engine/describe-bootstrap-active.test.ts`:
+**Tests (v3 — codex-corrected: drop the "stay deleted" invariant).**
+1. Unit `test/engine/describe-bootstrap-active.test.ts`:
    - Task with bootstrap+4 features, bootstrap.status="running" → assert `task.activeBootstrapGoalID === bootstrap.id`.
    - Bootstrap completes → assert `null`.
    - No bootstrap goal in set → assert `null`.
-2. E2E `packages/opencorvus/test/orchestrator/bootstrap-serial-dispatch.e2e.test.ts`:
-   - Orchestrator on bootstrap+features task: assert first-turn `build` is called with `goalID=bootstrap`. Externally-observable contract.
-3. Gate-still-works regression test `packages/opencorvus/test/orchestrator/bootstrap-gate-defense.test.ts`:
-   - Direct `build` tool call with a feature goalID while bootstrap is running → assert the tool returns the gate error with the disclosed message.
-4. Bench-evidence regression: zero `bootstrap-first gate rejected non-bootstrap dispatch` lines on a normal bench run (LLM follows the constraint). If the line appears, it's diagnostic of the LLM ignoring the prompt — flag for prompt revision, but the gate still saved us.
+2. E2E `test/orchestrator/bootstrap-serial-dispatch.e2e.test.ts`:
+   - Orchestrator on bootstrap+features task: assert first-turn `build` is called with `goalID=bootstrap` (LLM-driven, externally-observable).
+3. Gate-still-works regression `test/orchestrator/bootstrap-gate-defense.test.ts`:
+   - Direct `build` tool call with a feature goalID while bootstrap is running → assert the tool returns the gate error with the disclosed message; the gate IS still there.
+4. Bench-evidence regression: zero `bootstrap-first gate rejected non-bootstrap dispatch` WARN lines on a normal bench run *because* the LLM read the prompt and chose serial dispatch — this validates the prompt is effective. If WARN appears, the gate saved us, and the prompt needs tightening.
 
 ---
 
