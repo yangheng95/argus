@@ -176,9 +176,16 @@ export namespace Project {
         }
       }
 
-      const inherited = local ? undefined : await text(["rev-parse", "--show-toplevel"], directory)
-      const root = inherited ? gitpath(directory, inherited) : undefined
-      const hasLocalGit = local || (!!root && root !== Filesystem.resolve(directory) && (await initRepo(directory)))
+      // Note (W2-V32): a previous version auto-ran `git init` here when the
+      // directory was a non-git subfolder of an existing parent repo (the old
+      // `(await initRepo(directory))` branch). That silently materialized a
+      // sub-repo as a side effect of *any* request reaching Project.fromDirectory
+      // — which violated rule 7 (no fallback) and made the darwin 500-storm
+      // possible (cwd-fallback sites would init repos in unintended locations).
+      // We now leave non-git subfolders as non-git: callers that need a
+      // working tree throw WorktreeNotGitError and the overlay drives an
+      // explicit user-confirmed init via POST /project/current/init-git.
+      const hasLocalGit = local
 
       if (hasLocalGit) {
         let sandbox = directory

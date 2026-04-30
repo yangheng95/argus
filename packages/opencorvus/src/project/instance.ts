@@ -41,18 +41,17 @@ export const Instance: InstanceApi = {
     if (!existing) {
       Log.Default.info("creating instance", { directory })
       existing = iife(async () => {
-        let { project, sandbox } = await Project.fromDirectory(directory)
-        // Auto-bootstrap a fresh project: if the directory has no `.git`, run
-        // `git init` and seed `.gitignore` so subsequent `Worktree.create` /
-        // commit paths have a repo to work against. Idempotent — initGit is a
-        // no-op when `.git` already exists. Re-reads project info after init
-        // so the cached ctx reflects the new vcs="git" state.
-        if (!Project.isGitRepo(directory)) {
-          await Project.initGit(directory)
-          const refreshed = await Project.fromDirectory(directory)
-          project = refreshed.project
-          sandbox = refreshed.sandbox
-        }
+        const { project, sandbox } = await Project.fromDirectory(directory)
+        // Note (W2-V32): the previous bootstrap auto-ran `Project.initGit` for
+        // any non-git directory. That violated rule 7 (silent fallback) and
+        // was the root cause of the darwin 500-storm: when `process.cwd()`
+        // ended up as the directory (Tauri sidecar launched from Finder has
+        // cwd="/"), the auto-init tried `git init /`, hit permission denied,
+        // and turned every project-scoped HTTP request into a 500. Worktree
+        // operations that *require* a `.git` now throw `WorktreeNotGitError`
+        // explicitly (mapped to 412), which the overlay surfaces as an
+        // explicit "init this directory?" prompt — gated by a real user
+        // gesture, not a side effect of any GET request.
         const ctx = {
           directory,
           worktree: sandbox,

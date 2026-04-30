@@ -16,6 +16,7 @@ import { EngineProtocol } from "@/engine/protocol"
 import { ensureGitignore } from "@/engine/git"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
+import { Worktree } from "@/worktree"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
@@ -273,14 +274,22 @@ async function messageContext(_sessionID: string) {
 }
 
 async function prepareProject(project?: string) {
-  // Disk-truth guard: Project.isGitRepo probes `.git` every call, so an
-  // externally-deleted `.git` (e.g. a prior cleanup path, user rm -rf) is
-  // self-healed here before any Worktree.create downstream. The old guard
-  // consulted Instance.project.vcs — a cached DB column that silently went
-  // out of sync with disk and made this branch never run.
+  // Note (W2-V32): a previous version auto-ran `Project.initGit` here when
+  // `Instance.directory` was not a git repo. That made task creation a
+  // hidden side effect that wrote `.git` to disk without user confirmation
+  // (rule 7: no fallback). It also cascaded the darwin failure mode: any
+  // failing project bootstrap on the wrong directory would attempt git init
+  // before throwing.
+  //
+  // We now throw WorktreeNotGitError (NamedError → onError 412) so the
+  // overlay can render an explicit "Initialize this directory as a git
+  // repository?" prompt and call POST /project/current/init-git on a real
+  // user gesture. The error message names the directory so the prompt has
+  // context.
   if (!Project.isGitRepo(Instance.directory)) {
-    await Project.initGit(Instance.directory)
-    await Instance.refresh()
+    throw new Worktree.NotGitError({
+      message: `Cannot create a task in ${Instance.directory}: the directory is not a git repository. Initialize it via POST /project/current/init-git or pick a different working directory.`,
+    })
   }
   // Create .gitignore before executor starts so the agent's own commits never include node_modules/dist etc.
   await ensureGitignore()
