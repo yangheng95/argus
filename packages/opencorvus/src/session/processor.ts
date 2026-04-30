@@ -15,6 +15,7 @@ import { EngineConfig } from "@/engine/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { abortableIterable } from "@/util/stream-activity"
 import {
   withLLMActivity,
   chunkHeartbeatKind,
@@ -86,7 +87,7 @@ export namespace SessionProcessor {
               async (run) => {
             const stream = await LLM.stream({ ...streamInput, abort: run.signal })
 
-            for await (const value of stream.fullStream) {
+            for await (const value of abortableIterable(stream.fullStream, run.signal)) {
               run.bump(chunkHeartbeatKind(value))
               run.signal.throwIfAborted()
               switch (value.type) {
