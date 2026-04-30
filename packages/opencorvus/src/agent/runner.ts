@@ -255,10 +255,63 @@ export interface RunAgentSessionOutput<C> {
 // ---------------------------------------------------------------------------
 
 export class AgentRunError extends Error {
-  constructor(public readonly kind: SessionKind, message: string, options?: ErrorOptions) {
+  /**
+   * Marks the wrapped failure as deterministically non-retryable. Set when
+   * the underlying provider error carries `isRetryable: false` (e.g. HTTP
+   * 400 schema rejections — retrying the identical request guarantees the
+   * same response and only burns budget). `runAgentSessionWithRetry`'s
+   * classifier short-circuits to fail-fast when this is true.
+   */
+  public readonly nonRetryable: boolean
+  constructor(
+    public readonly kind: SessionKind,
+    message: string,
+    options?: ErrorOptions & { nonRetryable?: boolean },
+  ) {
     super(`[${kind}] ${message}`, options)
     this.name = "AgentRunError"
+    this.nonRetryable = options?.nonRetryable === true
   }
+}
+
+/**
+ * Pure assertion that converts a finished `finalMessage.info.error` into a
+ * thrown AgentRunError when the error must abort the agent run. Returns
+ * `null` when no failure should be raised — i.e. no error stamped, or the
+ * error is `Message.AbortedError` (soft cancellation already represented
+ * by SessionStatus terminal "aborted").
+ *
+ * Extracted from runAgentSession so the conversion logic (provider error
+ * shape → AgentRunError, isRetryable propagation) can be exercised by unit
+ * tests without standing up SessionPrompt / Provider mocks.
+ *
+ * Spec: surface hard LLM failures so the orchestrator's catch path runs.
+ * Root cause of the intent-analysis "秒退" incident on tsk_ddf383614
+ * (2026-04-30) — see runAgentSession callsite below.
+ */
+export function buildHardErrorFromFinalMessage(input: {
+  kind: SessionKind
+  agentName: string
+  finalMessage: { info: { role: string; error?: unknown } }
+}): AgentRunError | null {
+  const { kind, agentName, finalMessage } = input
+  if (finalMessage.info.role !== "assistant") return null
+  const err = finalMessage.info.error
+  if (!err) return null
+  if (Message.AbortedError.isInstance(err as Error)) return null
+  const errName = (err as { name?: string }).name ?? "UnknownError"
+  const errMessage =
+    (err as { data?: { message?: string } }).data?.message ?? errName
+  // Provider errors carry an `isRetryable` flag (AI SDK APIError surfaces
+  // it through `.data.isRetryable`). Honour it so retry helpers do not
+  // loop deterministically-failing requests.
+  const isRetryable = (err as { data?: { isRetryable?: boolean } }).data
+    ?.isRetryable
+  return new AgentRunError(
+    kind,
+    `LLM error during ${agentName}: ${errName}: ${errMessage}`,
+    { nonRetryable: isRetryable === false },
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +566,30 @@ export async function runAgentSession<C>(
     if (!finalMessage) {
       throw new AgentRunError(kind, "SessionPrompt.prompt returned no message")
     }
+    // Propagate hard LLM errors (HTTP 4xx/5xx, schema-rejected payloads,
+    // missing terminal-tool calls). The processor stamps them onto the
+    // assistant message via `processor.message.error` and returns "stop"
+    // without throwing, which historically let runAgentSession return
+    // success with an empty collector + structured=undefined — every
+    // worker tool wrapper then projected fallback defaults forward as if
+    // the agent had succeeded (rule 7 violation; root cause of the
+    // intent-analysis "秒退" silent-completed incident on tsk_ddf383614,
+    // 2026-04-30). Surface the error here so the orchestrator-tool catch
+    // path (trackStepComplete failed=true + decision_log abort entry)
+    // and `runAgentSessionWithRetry` retry logic actually run.
+    //
+    // Aborted errors are NOT propagated as failures: `Message.AbortedError`
+    // is a soft cancellation (operator pressed stop, parent goal aborted)
+    // already represented by SessionStatus terminal "aborted". The signal
+    // check above already converted that into a thrown AgentRunError when
+    // the abort propagated; this guard is for the edge case where the
+    // assistant message was stamped before the signal observed.
+    const hardError = buildHardErrorFromFinalMessage({
+      kind,
+      agentName,
+      finalMessage,
+    })
+    if (hardError) throw hardError
   } catch (err) {
     if (AgentTrace.isEnabled()) {
       AgentTrace.recordAgentReport({
@@ -718,6 +795,13 @@ export function classifyAttemptOutcome(input: {
     ) {
       return { action: "fail-fast", reason: namedErrorReason(input.thrownError) }
     }
+    // Provider-marked non-retryable errors (HTTP 400 schema rejections,
+    // unsupported tool_choice, etc.) — retrying the same request hits the
+    // same wall. Surface to the caller's catch path immediately instead of
+    // burning maxRetries on a guaranteed failure.
+    if (input.thrownError instanceof AgentRunError && input.thrownError.nonRetryable) {
+      return { action: "fail-fast", reason: input.thrownError.message }
+    }
     return { action: "retry", reason: input.thrownError.message }
   }
   if (input.streamErrors && input.streamErrors.length > 0) {
@@ -826,6 +910,17 @@ export async function runAgentSessionWithRetry<C>(
         log.error(`${agentLabel}: deterministic budget overflow, fail-fast`, {
           attempt,
           error: thrownError.name,
+          message: thrownError.message,
+        })
+        throw thrownError
+      }
+      // Provider-marked non-retryable failures (e.g. deepseek-reasoner
+      // HTTP 400 "tool_choice not supported"). Re-throw so the caller's
+      // catch path sees the actual cause instead of a "all retries
+      // exhausted" wrap that hides the root.
+      if (thrownError instanceof AgentRunError && thrownError.nonRetryable) {
+        log.error(`${agentLabel}: provider non-retryable, fail-fast`, {
+          attempt,
           message: thrownError.message,
         })
         throw thrownError

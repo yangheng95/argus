@@ -96,6 +96,16 @@ export namespace IntentAnalysisAgent {
     })
 
     const structured = out.structured as IntentFinal | undefined
+    if (!structured) {
+      // Should never happen: the runner now throws on
+      // `finalMessage.info.error` AND the SessionLoop emits a
+      // StructuredOutputError when the model finishes without calling
+      // StructuredOutput. Reaching this branch means one of those guards
+      // is broken — fail loud rather than fabricate defaults (rule 7).
+      throw new Error(
+        `intent-analysis: runAgentSession returned without a StructuredOutput payload (sessionID=${out.session.id})`,
+      )
+    }
     const result = collectorToResult(out.collector, structured)
 
     log.info("intent-analysis agent finished", {
@@ -105,7 +115,6 @@ export namespace IntentAnalysisAgent {
       missing: result.missing_info.length,
       clarifications: result.clarifications.length,
       confidence: result.confidence,
-      structuredMissing: !structured,
     })
 
     return { result, sessionID: out.session.id }

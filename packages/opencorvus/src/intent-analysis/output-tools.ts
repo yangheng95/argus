@@ -204,20 +204,26 @@ export function createIntentOutputTools() {
 
 /**
  * Merge incremental collector state with the terminal StructuredOutput
- * payload. Returns a fully-populated IntentAnalysisResult. Passing
- * `final=undefined` keeps `intent_class="unclear"` / `complexity="unknown"`
- * and `confidence=0` so callers can still render something when the LLM
- * skipped the StructuredOutput call — the same defensive defaults the
- * pre-migration `collectorToResult` used.
+ * payload. The terminal payload is required — passing `final=undefined`
+ * throws.
+ *
+ * Removed 2026-04-30 (rule 7 / rule 16): the prior implementation returned
+ * `intent_class="unclear" / complexity="unknown" / confidence=0` defaults
+ * when `final` was missing, which is exactly the fallback path that let
+ * the intent-analysis "秒退" incident silently mark workflow.step as
+ * completed despite an HTTP 400 from deepseek-reasoner. The runner now
+ * throws on `finalMessage.info.error` (agent/runner.ts), so a caller that
+ * reaches `collectorToResult` is guaranteed to have a successful
+ * StructuredOutput call — making the defensive defaults dead code.
  */
-export function collectorToResult(c: IntentCollector, final?: IntentFinal): IntentAnalysisResult {
+export function collectorToResult(c: IntentCollector, final: IntentFinal): IntentAnalysisResult {
   return {
-    intent_class: final?.intent_class ?? "unclear",
-    complexity: final?.complexity ?? "unknown",
+    intent_class: final.intent_class,
+    complexity: final.complexity,
     extracted_slots: c.slots,
     missing_info: c.missing,
     clarifications: c.clarifications,
-    confidence: final?.confidence ?? 0,
-    summary: final?.summary ?? "",
+    confidence: final.confidence,
+    summary: final.summary,
   }
 }
