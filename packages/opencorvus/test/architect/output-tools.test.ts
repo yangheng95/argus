@@ -294,6 +294,18 @@ test("architect readiness remains identical to submit_architect validation preco
   await fillMandatoryGlobalBlockingMetrics(tools)
 
   readinessMatchesSubmitPrecondition(complete.getCollector())
+  expect(isArchitectReadyToFinalize(complete.getCollector())).toBe(false)
+  const missingTraceability = await tools.submit_architect.execute!(
+    { summary: "Single feature goal without traceability must not finalize." } as any,
+    {} as any,
+  )
+  expect(missingTraceability).toContain("Missing traceability for REQ-1")
+
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature"] } as any,
+    {} as any,
+  )
+  readinessMatchesSubmitPrecondition(complete.getCollector())
   expect(isArchitectReadyToFinalize(complete.getCollector())).toBe(true)
   const accepted = await tools.submit_architect.execute!(
     { summary: "Single complete feature goal with mandatory metrics." } as any,

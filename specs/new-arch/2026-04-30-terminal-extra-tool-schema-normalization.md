@@ -319,6 +319,13 @@ The invariant is guarded by test: Architect readiness must equal
 `architectValidationIssues(collector).length === 0`, which is the
 `submit_architect` execution precondition.
 
+2026-04-30 follow-up: live Architect showed
+`Model tried to call unavailable tool 'register_traceability'. Available tools:
+submit_architect.` The tool was not deleted; terminal-only scoping hid it
+because `architectValidationIssues(...)` did not require traceability coverage
+for `goal.requirement_ids`. The validator must reject any missing or incomplete
+REQ-N to goal traceability row before readiness can become true.
+
 ### Integrity
 
 Current rule:
@@ -534,6 +541,11 @@ Architect currently shares `architectValidationIssues(collector)` between
 test in `packages/opencorvus/test/architect/output-tools.test.ts` asserts that
 readiness remains identical to that validation precondition.
 
+Architect traceability is part of that precondition: every requirement id
+declared by a goal must have a `register_traceability` row that maps back to
+that goal. Otherwise terminal-only scoping would remove the exact tool needed
+to complete the Architect contract.
+
 ## Test Matrix
 
 Run these before implementation is accepted:
@@ -702,6 +714,8 @@ mechanism without first folding the existing two.
       requirement.
 - [x] Guard architect predicate against `submit_architect` validator with an
       invariant test.
+- [x] Add Architect traceability coverage to `submit_architect` validation so
+      readiness cannot hide `register_traceability` before it is called.
 - [x] Keep integrity all-dimensions predicate.
 - [x] Document build passed-vs-failed scoping behavior in code comments and
       build prompt.
