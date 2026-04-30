@@ -75,6 +75,26 @@ export namespace SessionStatus {
   }
 
   export function set(sessionID: string, status: Info) {
+    // Single-source terminal guard (rule 8): once a session reaches a
+    // terminal state, subsequent set() calls are silently dropped.
+    //
+    // Without this guard, multiple cleanup paths each thought they were
+    // authoritative and emitted their own terminal: prompt/state.ts cancel()
+    // emitted `terminal aborted`, the actor's natural serve() exit emitted
+    // `terminal completed` 6 ms later, and the bus carried both — producing
+    // the `terminal=aborted` + `terminal=completed` double-fire that left
+    // engine_artifact kind=goal_run_attempt permanently `running` in
+    // tsk_ddc529dfd0011ajJTgBqdlroyk G4 (TLS error 03:32:16 → status=idle
+    // 03:32:21.577 → status=terminal reason=aborted 03:32:21.595 →
+    // status=terminal reason=completed 03:32:21.601 → goal_run never
+    // reaches attempt-failed/aborted because the second terminal mis-classified
+    // the session as a clean completion).
+    //
+    // First terminal wins. Streaming/retry/idle after terminal are also
+    // dropped — there is no "back from terminal", and any late arrival
+    // is a sign of a cleanup race we do NOT want to paper over by reopening
+    // the session.
+    if (state()[sessionID]?.type === "terminal") return
     Bus.publish(Event.Status, {
       sessionID,
       status,
