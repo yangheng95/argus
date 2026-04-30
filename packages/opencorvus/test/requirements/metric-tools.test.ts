@@ -141,7 +141,7 @@ describe("architect output-tools — metric registration", () => {
     expect(msg).toContain("floor must be strictly lower")
   })
 
-  test("register_global_metric_spec rejects duplicate names", async () => {
+  test("register_global_metric_spec overwrites duplicate names", async () => {
     const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await exec(kit.tools.register_global_metric_spec, {
       name: "user_intent_fidelity",
@@ -169,7 +169,10 @@ describe("architect output-tools — metric registration", () => {
       evaluator_config: {},
       source_requirement_ids: [],
     })
-    expect(msg).toContain("already registered")
+    expect(msg).toContain("overwritten")
+    const dups = kit.getCollector().global_metric_specs.filter((m) => m.name === "user_intent_fidelity")
+    expect(dups).toHaveLength(1)
+    expect(dups[0].description).toBe("dupe")
   })
 
   test("register_challenge_seed stores seed with all fields", async () => {

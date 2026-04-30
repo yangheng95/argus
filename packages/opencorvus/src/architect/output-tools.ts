@@ -118,7 +118,15 @@ export function architectValidationIssues(collector: ArchitectCollector): string
   if (collector.goals.length === 0) {
     issues.push("No goals registered - Architect must produce at least one goal")
   }
+  const knownGoalIDs = new Set(collector.goals.map((g) => g.id))
+  const requiredTraceability = new Map<string, Set<string>>()
   for (const g of collector.goals) {
+    for (const requirementID of g.requirement_ids) {
+      if (!requiredTraceability.has(requirementID)) {
+        requiredTraceability.set(requirementID, new Set())
+      }
+      requiredTraceability.get(requirementID)!.add(g.id)
+    }
     if (
       g.exports.length === 0 &&
       g.kind !== "verification" &&
@@ -151,6 +159,33 @@ export function architectValidationIssues(collector: ArchitectCollector): string
     if (missingBlocking.length > 0) {
       issues.push(
         `Goal ${g.id}: missing mandatory BLOCKING metrics: ${missingBlocking.join(", ")} - register each via register_goal_metric_spec with gate_class="blocking"`,
+      )
+    }
+  }
+
+  const traceabilityByRequirement = new Map<string, Set<string>>()
+  for (const row of collector.traceability) {
+    const mappedGoalIDs = traceabilityByRequirement.get(row.requirementID) ?? new Set<string>()
+    for (const goalID of row.goalIDs) {
+      if (!knownGoalIDs.has(goalID)) {
+        issues.push(`Traceability ${row.requirementID}: references unknown goal "${goalID}"`)
+      }
+      mappedGoalIDs.add(goalID)
+    }
+    traceabilityByRequirement.set(row.requirementID, mappedGoalIDs)
+  }
+  for (const [requirementID, goalIDs] of requiredTraceability) {
+    const mappedGoalIDs = traceabilityByRequirement.get(requirementID)
+    if (!mappedGoalIDs) {
+      issues.push(
+        `Missing traceability for ${requirementID}: call register_traceability with goals ${[...goalIDs].join(", ")}`,
+      )
+      continue
+    }
+    const missingGoalIDs = [...goalIDs].filter((goalID) => !mappedGoalIDs.has(goalID))
+    if (missingGoalIDs.length > 0) {
+      issues.push(
+        `Traceability ${requirementID}: missing goal mappings ${missingGoalIDs.join(", ")}`,
       )
     }
   }

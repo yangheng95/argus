@@ -89,6 +89,11 @@ test("ArchitectAgent registers submit_architect as the terminal collector contra
           })
         }
 
+        expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(false)
+        collector.traceability.push({
+          requirementID: "REQ-1",
+          goalIDs: ["goal_main"],
+        })
         expect(input.terminalTool.shouldExposeOnlyTerminalTool(input.toolKit.getCollector())).toBe(true)
         collector.finalized = true
         expect(input.terminalTool.isSatisfied(input.toolKit.getCollector())).toBe(true)
