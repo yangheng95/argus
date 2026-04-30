@@ -10,7 +10,7 @@
       "get": {
         "operationId": "global.health",
         "summary": "Get health",
-        "description": "Get health information about the OpenCorvus server.",
+        "description": "Get health information about the OpenCorvus server, including the runtime-resolved on-disk paths the engine is actually using (database, data dir, home). The DB path is resolved by `Database.Path()` and reflects whether OPENCORVUS_HOME is set or the project-local `.opencorvus/` layout is in effect — UIs should read this rather than rebuilding the path from a template.",
         "responses": {
           "200": {
             "description": "Health information",
@@ -25,11 +25,31 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "paths": {
+                      "type": "object",
+                      "properties": {
+                        "database": {
+                          "type": "string"
+                        },
+                        "data": {
+                          "type": "string"
+                        },
+                        "home": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "database",
+                        "data",
+                        "home"
+                      ]
                     }
                   },
                   "required": [
                     "healthy",
-                    "version"
+                    "version",
+                    "paths"
                   ]
                 }
               }

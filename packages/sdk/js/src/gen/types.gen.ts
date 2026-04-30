@@ -3096,6 +3096,11 @@ export type GlobalHealthResponses = {
   200: {
     healthy: true
     version: string
+    paths: {
+      database: string
+      data: string
+      home: string
+    }
   }
 }
 
