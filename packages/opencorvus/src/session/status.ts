@@ -1,6 +1,5 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
-import { Instance, lazyInstanceState } from "@/project/instance"
 import z from "zod"
 
 export namespace SessionStatus {
@@ -57,21 +56,26 @@ export namespace SessionStatus {
     ),
   }
 
-  const state = lazyInstanceState(() => {
-    const data: Record<string, Info> = {}
-    return data
-  })
+  // Process-singleton, NOT lazyInstanceState. Sessions cross Instance
+  // boundaries during their lifecycle: build sessions run their actor in the
+  // worktree Instance (close() emits `terminal aborted`) while
+  // runAgentSession returns in the caller / orchestrator Instance (emits
+  // `terminal completed`). With a per-Instance map, each Instance's local
+  // latch passed independently and the bus carried both — exactly the
+  // duplicate-terminal shape audit §11.3 documented at bench lines
+  // 19182-19183. One process = one map = one latch (rule 8 single source).
+  const state: Record<string, Info> = {}
 
   export function get(sessionID: string) {
     return (
-      state()[sessionID] ?? {
+      state[sessionID] ?? {
         type: "idle",
       }
     )
   }
 
   export function list() {
-    return state()
+    return state
   }
 
   export function set(sessionID: string, status: Info) {
@@ -94,7 +98,18 @@ export namespace SessionStatus {
     // dropped — there is no "back from terminal", and any late arrival
     // is a sign of a cleanup race we do NOT want to paper over by reopening
     // the session.
-    if (state()[sessionID]?.type === "terminal") return
+    if (state[sessionID]?.type === "terminal") return
+    // Seal the latch BEFORE publishing. Bus.publish dispatches subscribers
+    // synchronously; if a subscriber re-enters set() (audit §11.3 H1 —
+    // observed when message-bridge handlers chain into other session writes),
+    // the inner call must see the sealed state and short-circuit. Original
+    // ordering (publish → write) opened a TOCTOU window where two concurrent
+    // terminal calls could both pass the line-97 check before either wrote.
+    if (status.type === "idle") {
+      delete state[sessionID]
+    } else {
+      state[sessionID] = status
+    }
     Bus.publish(Event.Status, {
       sessionID,
       status,
@@ -103,13 +118,10 @@ export namespace SessionStatus {
       Bus.publish(Event.Idle, {
         sessionID,
       })
-      delete state()[sessionID]
-      return
     }
     // Terminal is kept in state (not deleted) so SessionStatus.get() can
     // distinguish a closed session from one that simply has no entry yet.
     // Idle is the default fallback in get(), so we delete idle to avoid
     // unbounded accumulation; terminal is rare and bounded by session count.
-    state()[sessionID] = status
   }
 }
