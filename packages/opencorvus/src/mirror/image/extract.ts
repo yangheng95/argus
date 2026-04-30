@@ -27,7 +27,13 @@ import { extname } from "node:path"
 import { streamObject, type LanguageModel, type ModelMessage } from "ai"
 
 import { Log } from "@/util/log"
-import { withStreamActivity } from "@/util/stream-activity"
+import {
+  withLLMActivity,
+  chunkHeartbeatKind,
+  DefaultLLMActivityPolicy,
+  LLMActivityError,
+  type LLMActivityPolicy,
+} from "@/llm/activity"
 import { EngineConfig } from "@/engine/config"
 import { ImageExtractError } from "../errors"
 import {
@@ -125,38 +131,56 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
       // signal with the gate's own internal abort so either path
       // (caller cancel or provider stall) unwinds the same way.
       const idleMs = (await EngineConfig.get()).activity.session_llm_idle_ms
-      const gate = withStreamActivity({
+      // Step 2 transitional policy: maxRetries=0 keeps caller's existing
+      // try/catch + ImageExtractError rethrow path the source of truth for
+      // failure handling; activity gives us proper terminal events + idle
+      // gate + classification in one place. Step 5 will let the activity
+      // own retries and remove the per-callsite catch.
+      const visionPolicy: LLMActivityPolicy = {
+        ...DefaultLLMActivityPolicy,
         idleMs,
-        signal: input.signal,
-        label: `mirror.image.extract:${img.label}`,
-      })
+        maxRetries: { default: 0 },
+      }
       try {
-        const result = streamObject({
-          model: input.model,
-          schema: ImageAnalysisSchema,
-          system,
-          messages: messages as unknown as ModelMessage[],
-          abortSignal: gate.signal,
-        })
-        // Single drain via fullStream — partialObjectStream and textStream
-        // share one underlying ReadableStream, so reading both concurrently
-        // throws "Invalid state: ReadableStream is locked". fullStream
-        // yields typed events that include both raw text deltas (for our
-        // diagnostic capture) and validation/error signals.
-        for await (const part of result.fullStream) {
-          gate.observe()
-          if (part.type === "text-delta") {
-            const delta = (part as any).delta ?? (part as any).textDelta ?? ""
-            if (typeof delta === "string" && delta) captureRaw(delta)
-          } else if (part.type === "error") {
-            throw (part as any).error
-          }
-        }
-        analysis = (await result.object) as ImageAnalysis
+        await withLLMActivity(
+          {
+            sessionID: `mirror.image.extract:${img.label}`,
+            provider: (input.model as { provider?: string })?.provider ?? "unknown",
+            model: (input.model as { modelId?: string })?.modelId ?? "unknown",
+          },
+          visionPolicy,
+          input.signal ?? new AbortController().signal,
+          async (run) => {
+            const result = streamObject({
+              model: input.model,
+              schema: ImageAnalysisSchema,
+              system,
+              messages: messages as unknown as ModelMessage[],
+              abortSignal: run.signal,
+            })
+            // Single drain via fullStream — partialObjectStream and textStream
+            // share one underlying ReadableStream, so reading both concurrently
+            // throws "Invalid state: ReadableStream is locked". fullStream
+            // yields typed events that include both raw text deltas (for our
+            // diagnostic capture) and validation/error signals.
+            for await (const part of result.fullStream) {
+              run.bump(chunkHeartbeatKind(part as { type?: string }))
+              if (part.type === "text-delta") {
+                const delta = (part as any).delta ?? (part as any).textDelta ?? ""
+                if (typeof delta === "string" && delta) captureRaw(delta)
+              } else if (part.type === "error") {
+                throw (part as any).error
+              }
+            }
+            analysis = (await result.object) as ImageAnalysis
+          },
+          () => { /* sink: vision activity events surfaced via log only for now; step 3 wires bus */ },
+        )
       } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err)
+        const original = err instanceof LLMActivityError ? (err.cause ?? err) : err
+        const reason = original instanceof Error ? original.message : String(original)
         const causeMsg =
-          err instanceof Error && err.cause instanceof Error ? err.cause.message : undefined
+          original instanceof Error && original.cause instanceof Error ? original.cause.message : undefined
         log.error("image extract: vision-LLM call failed", {
           imagePath: img.label,
           reason,
@@ -172,10 +196,18 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
           imagePath: img.label,
           cause: causeMsg || reason,
         })
-      } finally {
-        gate.dispose()
       }
 
+      // Activity returned without throwing → `analysis` was assigned inside
+      // the attemptFn closure. TS cannot see through the closure to narrow
+      // the outer let, so assert at the boundary instead of restructuring
+      // the entire try/catch block.
+      if (!analysis) {
+        throw new ImageExtractError({
+          reason: `vision-LLM call returned without producing an analysis for image ${i + 1}/${loaded.length}`,
+          imagePath: img.label,
+        })
+      }
       input.onProgress?.(`Analyzed image ${i + 1}/${loaded.length}`)
       return analysis
     }),

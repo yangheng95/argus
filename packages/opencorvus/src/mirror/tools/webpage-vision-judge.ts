@@ -31,7 +31,13 @@ import { Provider } from "../../provider/provider"
 import { ProviderLLM } from "../../provider/llm"
 import { Config } from "../../config/config"
 import { Log } from "../../util/log"
-import { withStreamActivity } from "../../util/stream-activity"
+import {
+  withLLMActivity,
+  chunkHeartbeatKind,
+  DefaultLLMActivityPolicy,
+  LLMActivityError,
+  type LLMActivityPolicy,
+} from "../../llm/activity"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 // Idle window before we abort a hung vision-judge stream. Mirrors the
@@ -176,46 +182,69 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
 
     const judgePath = path.join(outputDir, "vision-judge.json")
 
-    let verdict: z.infer<typeof VerdictSchema>
-    const gate = withStreamActivity({
+    // 1-element holder so TS narrowing inside the closure doesn't conclude
+    // the outer `verdict` may be unassigned after withLLMActivity returns —
+    // the assignment happens inside the attemptFn lambda which TS cannot
+    // see through.
+    const verdictHolder: { value?: z.infer<typeof VerdictSchema> } = {}
+    // Step 2 transitional policy: maxRetries=0 keeps the existing
+    // failure-payload-on-throw path the source of truth; activity adds
+    // proper terminal events + idle gate. Step 5 may grant retries here
+    // once the failurePayload write is moved into a sink-aware finalizer.
+    const visionPolicy: LLMActivityPolicy = {
+      ...DefaultLLMActivityPolicy,
       idleMs: VISION_JUDGE_IDLE_MS,
-      label: `vision-judge:${parsed.providerID}/${parsed.modelID}`,
-    })
+      firstByteMs: Math.max(VISION_JUDGE_IDLE_MS, DefaultLLMActivityPolicy.firstByteMs),
+      maxRetries: { default: 0 },
+    }
     try {
-      // streamObject (rule 27 — every LLM interaction is streaming). The SDK
-      // enforces VerdictSchema on the streamed JSON; partial-stream draining
-      // surfaces validation failures at the same point a generateObject call
-      // would have thrown. The activity gate's signal is wired through
-      // abortSignal; observe() each partial chunk so a stalled provider
-      // (alibaba kimi-k2.5 has a documented 20+ min hang pattern) trips the
-      // idle window instead of wedging the parent build session.
-      const result = streamObject({
-        model: language,
-        schema: VerdictSchema,
-        abortSignal: gate.signal,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: userPrompt },
-              { type: "text", text: "\n--- REFERENCE (target) ---\n" },
-              { type: "file", mediaType: "image/png", data: referenceBytes },
-              { type: "text", text: "\n--- RENDERED (current attempt) ---\n" },
-              { type: "file", mediaType: "image/png", data: renderedBytes },
+      await withLLMActivity(
+        {
+          sessionID: `vision-judge:${parsed.providerID}/${parsed.modelID}`,
+          provider: parsed.providerID,
+          model: parsed.modelID,
+        },
+        visionPolicy,
+        new AbortController().signal,
+        async (run) => {
+          // streamObject (rule 27 — every LLM interaction is streaming). The SDK
+          // enforces VerdictSchema on the streamed JSON; partial-stream draining
+          // surfaces validation failures at the same point a generateObject call
+          // would have thrown. run.signal is composed from external + idle +
+          // first-byte + total deadlines; bumps refresh the idle window so a
+          // stalled provider (alibaba kimi-k2.5 has a documented 20+ min hang
+          // pattern) trips a clean terminal=failed cls=idle instead of wedging
+          // the parent build session.
+          const result = streamObject({
+            model: language,
+            schema: VerdictSchema,
+            abortSignal: run.signal,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: userPrompt },
+                  { type: "text", text: "\n--- REFERENCE (target) ---\n" },
+                  { type: "file", mediaType: "image/png", data: referenceBytes },
+                  { type: "text", text: "\n--- RENDERED (current attempt) ---\n" },
+                  { type: "file", mediaType: "image/png", data: renderedBytes },
+                ],
+              },
             ],
-          },
-        ],
-      })
-      for await (const _ of result.partialObjectStream) {
-        void _
-        gate.observe()
-      }
-      verdict = (await result.object) as z.infer<typeof VerdictSchema>
+          })
+          for await (const part of result.fullStream) {
+            run.bump(chunkHeartbeatKind(part as { type?: string }))
+          }
+          verdictHolder.value = (await result.object) as z.infer<typeof VerdictSchema>
+        },
+        () => { /* sink: vision-judge surfaces via log only for now; step 3 wires bus */ },
+      )
     } catch (err) {
-      const errMessage = err instanceof Error ? err.message : String(err)
-      const errName = err instanceof Error ? err.name : "UnknownError"
-      const errStack = err instanceof Error ? err.stack : undefined
-      const cause = err instanceof Error && "cause" in err ? (err as { cause?: unknown }).cause : undefined
+      const original = err instanceof LLMActivityError ? (err.cause ?? err) : err
+      const errMessage = original instanceof Error ? original.message : String(original)
+      const errName = original instanceof Error ? original.name : "UnknownError"
+      const errStack = original instanceof Error ? original.stack : undefined
+      const cause = original instanceof Error && "cause" in original ? (original as { cause?: unknown }).cause : undefined
       const causeMessage =
         cause instanceof Error ? cause.message : cause !== undefined ? String(cause) : undefined
       log.error("vision judge streamObject failed", {
@@ -244,12 +273,18 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
           `(2) the model timed out streaming (idle > ${VISION_JUDGE_IDLE_MS}ms — provider stalled); ` +
           `(3) the model rejected the image payload. ` +
           `A failure verdict was written to ${judgePath} so downstream gates can proceed.`,
-        { cause: err instanceof Error ? err : undefined },
+        { cause: original instanceof Error ? original : undefined },
       )
-    } finally {
-      gate.dispose()
     }
 
+    // Activity returned without throwing → verdictHolder.value is set.
+    // Narrow once at the boundary so the rest of the function uses the
+    // local `verdict` directly (rule 26 — keep the closure pattern from
+    // leaking into the report-rendering code below).
+    if (!verdictHolder.value) {
+      throw new Error("webpage_vision_judge: streamObject returned without producing a verdict")
+    }
+    const verdict = verdictHolder.value
     const payload = {
       generatedAt: new Date().toISOString(),
       model: `${parsed.providerID}/${parsed.modelID}`,
