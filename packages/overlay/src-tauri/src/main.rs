@@ -636,6 +636,27 @@ fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> Result<bool, Str
     }
 }
 
+/// Resolve the writable directory we want the spawned sidecar's
+/// `process.cwd()` to be. The sidecar inherits whatever cwd the Tauri
+/// host had when it spawned, which on macOS .app launched from
+/// Finder/Dock is `/` — a read-only directory that turned every
+/// fallback-to-cwd code path on the server into a 500 (W2-V31 fixed
+/// the explicit fallback; this fix removes the implicit one too so a
+/// future regression cannot reach `/` again).
+///
+/// We use the same per-OS app-data root that `opencorvus_log_dir`
+/// already creates and that the sidecar already has write access to.
+/// Walking the path so the cwd lands at the parent of `log/` keeps
+/// scope minimal — we don't want to land *inside* `log/` because
+/// every random `git init` or `mkdir` the sidecar issues would then
+/// pollute the log tree.
+fn sidecar_cwd_dir() -> PathBuf {
+    opencorvus_log_dir()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(std::env::temp_dir)
+}
+
 /// Resolve the directory where opencorvus stores its log files. Mirrors
 /// `Global.Path.log` on the sidecar side so all logs land together:
 ///   - Windows: %LOCALAPPDATA%\opencorvus\log
@@ -721,8 +742,22 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     // log file is the only signal.
     let (stdout_target, stderr_target) = sidecar_stdio_targets();
 
+    // W2-V35: ensure the spawned sidecar inherits a writable, predictable
+    // cwd. Without this, macOS .app launched from Finder/Dock spawns the
+    // sidecar with `cwd="/"`. Anything inside the sidecar that reads
+    // `process.cwd()` (or did so before W2-V31 / W2-V32 removed the
+    // server-side fallbacks) would then attempt to write at `/` and
+    // permission-deny across every project route.
+    let sidecar_cwd = sidecar_cwd_dir();
+    if let Err(err) = fs::create_dir_all(&sidecar_cwd) {
+        eprintln!(
+            "overlay: cannot create sidecar cwd {:?}: {} (continuing with default cwd inheritance)",
+            sidecar_cwd, err
+        );
+    }
     let mut cmd = Command::new(path);
-    cmd.arg("serve")
+    cmd.current_dir(&sidecar_cwd)
+        .arg("serve")
         .arg("--hostname")
         .arg(LOCAL_SERVER_HOST)
         .arg("--port")
@@ -1301,4 +1336,66 @@ fn create_tray_icon() -> tauri::image::Image<'static> {
 fn create_attention_tray_icon() -> tauri::image::Image<'static> {
     static CACHED: OnceLock<CachedIcon> = OnceLock::new();
     cached_icon_image(CACHED.get_or_init(build_attention_tray_icon))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    /// W2-V35 — `sidecar_cwd_dir()` MUST never resolve to `/` (macOS app
+    /// bundle launch default) or any other read-only root. Pre-fix, the
+    /// Tauri sidecar inherited cwd from Finder, which is `/` on macOS;
+    /// every server-side route that fell back to `process.cwd()` then
+    /// tried to write at `/` and permission-denied. This test pins the
+    /// new contract: the chosen cwd is a child of an app-data root, not
+    /// the filesystem root.
+    #[test]
+    fn sidecar_cwd_dir_is_not_filesystem_root() {
+        let dir = sidecar_cwd_dir();
+        assert_ne!(dir, Path::new("/"), "sidecar cwd should not be filesystem root");
+        // The chosen cwd must have at least one non-root path component
+        // (e.g. `opencorvus`, `Application Support`, `AppData`, etc.) —
+        // landing directly at `/` or `C:\` is the regression we're guarding
+        // against.
+        let has_meaningful_component = dir
+            .components()
+            .filter(|c| matches!(c, std::path::Component::Normal(_)))
+            .next()
+            .is_some();
+        assert!(has_meaningful_component, "sidecar cwd has no meaningful path components: {:?}", dir);
+    }
+
+    /// `sidecar_cwd_dir()` must be deterministic for the same env so
+    /// repeated launches don't drift between locations.
+    #[test]
+    fn sidecar_cwd_dir_is_deterministic() {
+        let a = sidecar_cwd_dir();
+        let b = sidecar_cwd_dir();
+        assert_eq!(a, b);
+    }
+
+    /// On a portable install (`OPENCORVUS_HOME` set), the sidecar cwd
+    /// must point under that root rather than the per-user app-data
+    /// directory.
+    #[test]
+    fn sidecar_cwd_dir_respects_opencorvus_home() {
+        let original = std::env::var("OPENCORVUS_HOME").ok();
+        let tmp = std::env::temp_dir().join("oc_cwd_test_portable");
+        std::env::set_var("OPENCORVUS_HOME", &tmp);
+        let dir = sidecar_cwd_dir();
+        // Reset before assert so a panic doesn't leak the var.
+        match original {
+            Some(v) => std::env::set_var("OPENCORVUS_HOME", v),
+            None => std::env::remove_var("OPENCORVUS_HOME"),
+        }
+        // The portable layout is `OPENCORVUS_HOME/data/log` for log_dir;
+        // the cwd we pick is its parent, i.e. `OPENCORVUS_HOME/data`.
+        assert!(
+            dir.starts_with(&tmp),
+            "expected cwd to start with {:?}, got {:?}",
+            tmp,
+            dir
+        );
+    }
 }
