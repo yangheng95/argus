@@ -1,6 +1,6 @@
 // ── Theme Service ──
 // Exported surface:
-// sanitizeTheme(value) — "light" | "system" | "dark" (
+// sanitizeTheme(value) — supported theme id or DEFAULT_THEME
 // sanitizeOpacity(value) — number clamped to [0.5, 1.0]
 // sanitizeZoom(value) — number clamped to [0.8, 1.6]
 // resolvedTheme() — effective "light" | "dark" after system detection
@@ -10,6 +10,7 @@
 
 import {
   MIN_WINDOW_OPACITY,
+  DEFAULT_THEME,
   sanitizeOpacity,
   settingsStore,
 } from "../store/settings";
@@ -34,7 +35,7 @@ const systemThemeMedia: MediaQueryList | null =
     : null;
 
 // ── sanitizeTheme ──
-// "light" | "system" → returned as-is; everything else → "dark"
+// "light" | "system" → returned as-is; everything else → default theme
 
 export function sanitizeTheme(value: any): string {
   if (
@@ -44,7 +45,7 @@ export function sanitizeTheme(value: any): string {
     value === "vscode-dark"
   )
     return value as string;
-  return "dark";
+  return DEFAULT_THEME;
 }
 
 // ── sanitizeZoom ──

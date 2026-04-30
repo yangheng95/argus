@@ -16,10 +16,10 @@
       try {
         var saved = localStorage.getItem("oc_theme");
         var preferLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-        var effective = (!saved || saved === "system") ? (preferLight ? "light" : "dark") : saved;
+        var effective = !saved ? "vscode-dark" : (saved === "system" ? (preferLight ? "light" : "dark") : saved);
         document.body.dataset.theme = effective;
       } catch {
-        document.body.dataset.theme = "dark";
+        document.body.dataset.theme = "vscode-dark";
       }
     })();
   </script>
