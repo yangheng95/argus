@@ -3675,9 +3675,10 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   min-width: 0;
   max-width: min(100%, calc(280px * var(--ui-scale)));
   justify-content: center;
-  gap: calc(4px * var(--ui-scale));
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
   margin-inline: auto;
-  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
 }
 
 .chat-task-status .status-icon {
@@ -3685,8 +3686,13 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   height: calc(12px * var(--ui-scale));
 }
 
-.chat-task-status .status-label,
-.chat-task-status .elapsed {
+.chat-task-status .status-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: calc(1px * var(--ui-scale));
   line-height: 1.05;
 }
 
@@ -3698,6 +3704,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 .chat-task-status .elapsed {
   font-size: var(--ui-font-meta);
+  line-height: 1;
 }
 
 .btn-terminate {
