@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "554a3b017a507a9d"
+    "panel_revision": "03deef36d9c0002e"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -545,7 +545,6 @@
   "section.criteria": "Evaluation Criteria",
   "section.files": "Files",
   "sections.title": "Inspector",
-  "settings.auto_permission": "Auto-approve permissions",
   "settings.language": "Language",
   "settings.language.en_us": "English",
   "settings.language.zh_cn": "Chinese (Simplified)",
@@ -631,8 +630,6 @@
   "time.relative.minutes_ago": "{{value}}m ago",
   "time.relative.hours_ago": "{{value}}h ago",
   "time.relative.days_ago": "{{value}}d ago",
-  "titlebar.auto_permission": "Auto-approve permissions",
-  "titlebar.auto_permission_hint": "Automatically allow permission prompts with the persistent option.",
   "titlebar.auto_question": "Auto-reject questions",
   "titlebar.auto_question_hint": "Auto-reject unanswered questions after 5 minutes; off means wait indefinitely for a reply.",
   "titlebar.background_notice": "OpenCorvus is still running in the background. Use the tray icon to reopen, or choose Quit from the tray menu to exit completely.",

@@ -1,8 +1,8 @@
 // ── TitlebarMenu Component ──
 // Dropdown menu attached to the "more" button in the titlebar. Hosts:
 // language toggle, theme picker, server-config / log entry buttons,
-// auto-permission / auto-question toggles, max_runs / max_executor_groups
-// budget sliders, and the window opacity slider.
+// auto-question toggle, max_runs / max_executor_groups budget sliders, and
+// the window opacity slider.
 
 import {
   createSignal,
@@ -190,14 +190,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
  // Log button —
   function handleOpenLog() {
     props.onOpenLog?.();
-    closeMenu();
-  }
-
- // Auto-permission toggle — PATCH server config
-  async function handleAutoPermissionChange(checked: boolean) {
-    try {
-      await patchConfig({ experimental: { auto_permission: checked } });
-    } catch (e) { console.error("[titlebar] failed to update auto_permission", e); }
     closeMenu();
   }
 
@@ -478,29 +470,6 @@ export function TitlebarMenu(props: TitlebarMenuProps) {
 
         {/* ── Divider ── */}
         <div class="titlebar-menu-divider" aria-hidden="true" />
-
-        {/* ── Auto-approve permissions toggle ── */}
-        <label class="titlebar-menu-toggle" for="chkAutoPermission">
-          <span class="titlebar-menu-copy">
-            <span class="titlebar-menu-title">
-              {t("titlebar.auto_permission")}
-            </span>
-            <span class="titlebar-menu-meta">
-              {t("titlebar.auto_permission_hint")}
-            </span>
-          </span>
-          <input
-            class="titlebar-menu-check"
-            id="chkAutoPermission"
-            type="checkbox"
-            checked={appStore.config?.experimental?.auto_permission === true}
-            onChange={(e) =>
-              void handleAutoPermissionChange(
-                (e.target as HTMLInputElement).checked,
-              )
-            }
-          />
-        </label>
 
         {/* ── Auto-reject questions toggle ── */}
         <label class="titlebar-menu-toggle" for="chkAutoQuestion">

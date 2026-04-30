@@ -2331,7 +2331,7 @@ export type Config = {
   instructions?: Array<string>
   permission?: PermissionConfig
   /**
-   * Default tool permission actions for new tasks. When not set, defaults to 'ask'. Set a tool to 'allow' to skip confirmation, or 'deny' to block it entirely.
+   * Default tool permission actions for new tasks. When not set, defaults to 'allow'. Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.
    */
   tool_permissions?: {
     websearch?: PermissionActionConfig
@@ -2595,10 +2595,6 @@ export type Config = {
      * Continue the agent loop when a tool call is denied
      */
     continue_loop_on_deny?: boolean
-    /**
-     * Auto-approve PermissionNext requests. Independent fine-grained switch — replaces the old `unattended` umbrella flag. Set to false if you want to be prompted for each tool-use permission.
-     */
-    auto_permission?: boolean
     /**
      * Auto-reject unanswered question interactions after the five-minute stale timeout. Independent fine-grained switch. When false, questions wait indefinitely for a user reply.
      */

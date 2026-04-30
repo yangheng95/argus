@@ -137,4 +137,4 @@ Ensure Socket Mode is used; HTTP Request URLs latency suffers in some regions.
 Likely both `opencorvus slack` and `channel-runtime` are subscribing. Run only one.
 
 **Permission ask never answered**
-Check `OPENCORVUS_CHANNEL_PERMISSION_ASK_REPLY`; default `reject` causes denial on timeout. For CI, set `always`.
+Built-in permissions default to `allow`; check whether project config explicitly sets `ask`, then approve from an operator surface or change that rule to `allow`.

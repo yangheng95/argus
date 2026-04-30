@@ -145,4 +145,4 @@ Slack 的 `file_share` 子类型（语音消息）会被下载并走 STT pipelin
 **检查**：去重逻辑在 `src/adapters/slack.ts`，基于 `event_id`；若看到重复，很可能是同时启动了 `opencorvus slack` 与 `channel-runtime`，二者都在订阅。
 
 **问题**：权限审批消息无人回复
-**检查**：`OPENCORVUS_CHANNEL_PERMISSION_ASK_REPLY` 是否设为 `reject`（默认 reject 会导致 ask 超时后拒绝）。CI 场景改为 `always`。
+**检查**：内置权限默认 `allow`；检查项目配置是否显式写了 `ask`，然后从操作员界面审批，或把对应规则改为 `allow`。

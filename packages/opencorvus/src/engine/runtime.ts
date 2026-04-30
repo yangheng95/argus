@@ -1,5 +1,5 @@
-import { Config } from "@/config/config"
 import { ExecutorRegistry } from "@/executor/registry"
+import { Config } from "@/config/config"
 
 import { Instance } from "@/project/instance"
 import { Database, and, desc, eq, sql } from "@/storage/db"
@@ -199,12 +199,10 @@ export namespace EngineRuntime {
     if (pending.length > 0) {
       const now = Date.now()
       const cfg = await Config.get()
-      const allowAutoPermission = cfg.experimental?.auto_permission === true
-      const allowAutoQuestion = cfg.experimental?.auto_question === true
+      const autoQuestion = cfg.experimental?.auto_question === true
       const stale = pending.filter((p) => {
         if ((now - (p.time_created ?? 0)) <= INTERACTION_STALE_MS) return false
-        if (p.request_type === "permission") return allowAutoPermission
-        if (p.request_type === "question") return allowAutoQuestion
+        if (p.request_type === "question") return autoQuestion
         return false
       })
       if (stale.length > 0) {

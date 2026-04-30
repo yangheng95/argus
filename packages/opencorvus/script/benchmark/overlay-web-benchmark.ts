@@ -832,8 +832,6 @@ try {
       localStorage.setItem("oc_directory", directory)
       localStorage.setItem("oc_directory_mode", "custom")
       localStorage.setItem("oc_workspace_directory", directory)
-      localStorage.setItem("oc_unattended", "true")
-      localStorage.setItem("oc_auto_permission", "true")
       localStorage.setItem("oc_auto_question", "true")
     }, server.url.origin, temp.dir)
 
@@ -1195,16 +1193,7 @@ async function writeBenchmarkModelConfig(dir: string, model: string) {
       $schema: "https://opencorvus.ai/config.json",
       model,
       experimental: {
-        unattended: false,
-        // Bench runs unattended — every permission ask must be auto-approved
-        // upstream of the interaction queue, otherwise the build agent stalls
-        // 5 min on `external_directory:*=ask` (the agent default) when it
-        // tries to read the parent project root from inside its worktree.
-        // PermissionNext.ask publishes Bus.Asked → AutoPermission.subscribe
-        // gates on this flag and short-circuits with `reply:"once"`. Bench's
-        // settle() poll cannot help here because EngineInteraction.upsertPermission
-        // can race with the auto-reply (the interaction row may never exist).
-        auto_permission: true,
+        auto_question: true,
       },
       lsp: {
         biome: {
@@ -1841,8 +1830,6 @@ async function verifyResume(
     localStorage.setItem("oc_directory_mode", "custom")
     localStorage.setItem("oc_workspace_directory", dir)
     localStorage.setItem("oc_workspace_task", id)
-    localStorage.setItem("oc_unattended", "true")
-    localStorage.setItem("oc_auto_permission", "true")
     localStorage.setItem("oc_auto_question", "true")
   }, serverUrl, directory, taskID)
   await next.goto(new URL("/ui/index.html", serverUrl).toString(), { waitUntil: "load" })

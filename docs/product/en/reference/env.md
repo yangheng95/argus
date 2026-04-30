@@ -36,13 +36,10 @@ All variables, grouped by category. Sources: `packages/opencorvus/src/flag/flag.
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Ask timeout | 5000 |
-| `OPENCORVUS_PERMISSION_ASK_REPLY` | Timeout action | `reject` |
+| `OPENCORVUS_PERMISSION_TIMEOUT_MS` | Reject timeout for unanswered permission asks | 300000 |
 | `OPENCORVUS_CHANNEL_PERMISSION_PROFILE` | Channel template | `standard` |
-| `OPENCORVUS_CHANNEL_PERMISSION_ASK_REPLY` | Channel ask reply strategy | `reject` |
 
 Valid profiles: `restricted / standard / permissive / passthrough`.
-Valid ask replies: `once / always / reject`.
 
 ## Plugins / skills
 

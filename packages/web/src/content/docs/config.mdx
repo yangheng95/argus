@@ -49,7 +49,7 @@ Modeled on the real `packages/opencorvus/.opencorvus/opencorvus.jsonc`:
   },
 
   "experimental": {
-    "unattended": true
+    "auto_question": true
   }
 }
 ```
@@ -70,9 +70,9 @@ Per-skill / per-tool `allow / ask / deny`. **Rule order matters, last declaratio
 
 See [Permissions](/docs/permissions/).
 
-### `experimental.auto_permission` / `experimental.auto_question`
+### `experimental.auto_question`
 
-Two independent fine-grained switches (default `true` for both — `src/config/config.ts:1297-1310`) replacing the historical `experimental.unattended` umbrella flag. With `auto_permission` on, an active orchestrator run auto-replies `permission.asked` events with `"once"` so unattended runs don't block on operator input. With `auto_question` on, a stale clarification question is auto-rejected after the timeout. See [Permissions](/docs/permissions/).
+Fine-grained switch for stale clarification questions (default `true` — `src/config/config.ts`). When enabled, a stale question interaction is rejected after the interaction timeout. Permission prompts are not controlled here; built-in agent permissions default to `allow`, and explicit `ask` rules wait for an operator reply until the reject timeout fires. See [Permissions](/docs/permissions/).
 
 ### `assistant` block
 

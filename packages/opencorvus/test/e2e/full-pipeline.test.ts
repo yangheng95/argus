@@ -180,11 +180,8 @@ const PROJECT_CONFIG = JSON.stringify(
     $schema: "https://opencorvus.ai/config.json",
     model: MODEL,
     experimental: {
-      // auto_permission + auto_question together replicate what the old
-      // `unattended: true` umbrella flag used to mean for e2e headless
-      // runs: approve every permission request, auto-reject stale
-      // questions so the pipeline never parks waiting for a human.
-      auto_permission: true,
+      // Headless runs auto-reject stale questions so the pipeline never parks
+      // waiting for a human. Permissions default to allow in PermissionNext.
       auto_question: true,
     },
     provider: {
@@ -237,7 +234,7 @@ async function settle(taskID: string, progress: Awaited<ReturnType<typeof Engine
       await EngineService.replyInteraction(item.id, {
         reply: "always",
         autoReply: true,
-        message: "Live E2E auto-approved",
+        message: "Live E2E permission accepted",
       })
       continue
     }

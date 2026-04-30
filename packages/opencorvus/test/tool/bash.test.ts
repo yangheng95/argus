@@ -288,7 +288,7 @@ describe("tool.bash permissions", () => {
     })
   })
 
-  test("includes always patterns for auto-approval", async () => {
+  test("includes always patterns for persistent approval", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,

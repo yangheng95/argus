@@ -23,7 +23,6 @@ export interface DomRefs {
   btnSettings: HTMLButtonElement | null;
 
  // Settings checkboxes / controls
-  chkAutoPermission: HTMLInputElement | null;
   chkAutoQuestion: HTMLInputElement | null;
   chkShowTranscriptDetails: HTMLInputElement | null;
   opacityRange: HTMLInputElement | null;
@@ -286,7 +285,6 @@ export function getDomRefs(): DomRefs {
     btnSettings: $<HTMLButtonElement>("#btnSettings"),
 
  // Settings checkboxes / controls
-    chkAutoPermission: $<HTMLInputElement>("#chkAutoPermission"),
     chkAutoQuestion: $<HTMLInputElement>("#chkAutoQuestion"),
     chkShowTranscriptDetails: $<HTMLInputElement>("#chkShowTranscriptDetails"),
     opacityRange: $<HTMLInputElement>("#opacityRange"),
