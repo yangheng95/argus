@@ -488,6 +488,7 @@ function handlePartUpdated(event: any): void {
   }
 
   upsertPart(sessionID, partID, { ...part });
+  if (sessions.get(sessionID)?.stage === "executor") rebuildTopLevelOrder();
 }
 
 function handlePartDelta(event: any): void {
@@ -517,6 +518,7 @@ function handlePartDelta(event: any): void {
     field as any,
     (prev: any) => String(prev ?? "") + delta,
   );
+  if (session.stage === "executor") rebuildTopLevelOrder();
 }
 
 function handleTaskChanged(event: any): void {
@@ -1709,6 +1711,19 @@ function pushUniqueChild(target: string[], childID: string): void {
   target.push(childID);
 }
 
+function cardHasDisplayPart(card: CardNode | undefined): boolean {
+  if (!card) return false;
+  for (const part of card.parts || []) {
+    if (!part || part.type === "boundary") continue;
+    if (part.type === "text" || part.type === "reasoning") {
+      if (String(part.text || "").replace(/[\[\]\s]/g, "")) return true;
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
 function resolveGoalContainerCardID(goalID: string, stage: string): string | null {
   if (!goalID) return null;
   const phase = goalStagePhaseID(stage);
@@ -1867,8 +1882,10 @@ function normalizeStepStatus(raw: any): CardStatus {
 //   • Phase and integrity cards are always claimed as childIDs of their
 //     parent (step / requirements session) before this runs, so they drop
 //     out via the `claimedChildIDs` filter instead of needing kind logic.
-//   • `stage === "executor"` sessions are the goal's executor container
-//     (empty, parentID anchor only); the step card is their visual proxy.
+//   • Empty `stage === "executor"` sessions are the goal's executor container
+//     (parentID anchor only); the step card is their visual proxy. If an
+//     executor session does receive visible parts, surface the card rather
+//     than hiding real reasoning/text/tool output.
 //   • `resolveSessionContainerCardID(info)` sessions are goal-phase-routed;
 //     their parts live on the phase card, not a duplicate top-level card.
 
@@ -1888,7 +1905,9 @@ function rebuildTopLevelOrder(): void {
   // the standard path is sufficient.
   const hiddenSessionCardIDs = new Set<string>();
   for (const info of sessions.values()) {
-    if (info.stage === "executor" || resolveSessionContainerCardID(info)) {
+    const card = cardTreeStore.cards[info.cardID];
+    const emptyExecutorContainer = info.stage === "executor" && !cardHasDisplayPart(card);
+    if (emptyExecutorContainer || resolveSessionContainerCardID(info)) {
       if (info.cardID) hiddenSessionCardIDs.add(info.cardID);
     }
   }

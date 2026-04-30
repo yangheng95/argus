@@ -124,6 +124,76 @@ test("phase cards absorb goal-scoped session parts — no nested session cards",
   expect(snapshot.order).toContain(rootCardID);
 });
 
+test("executor sessions surface when they contain visible reasoning", () => {
+  setBoardStore("board", {
+    task: {
+      id: TASK_ID,
+      status: "active",
+      request: "show executor reasoning",
+      sessionID: ROOT_SID,
+      time: { created: 1_776_000_000_000 },
+      attachments: [],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+  setBoardStore("selectedTaskID", TASK_ID);
+  resetWriter();
+
+  const executorCardID = `executor:session:${EXECUTOR_SID}`;
+  const reasoningPartID = "part_executor_reasoning";
+  applyEvent({
+    type: "message.updated",
+    properties: {
+      taskID: TASK_ID,
+      info: stampedInfo("executor", {
+        id: "msg_executor_reasoning",
+        sessionID: EXECUTOR_SID,
+        role: "assistant",
+        resolvedRole: "executor",
+        agent: "executor",
+        time: { created: 1_776_000_001_000 },
+      }),
+    },
+  });
+
+  expect(cardTreeStore.order).not.toContain(executorCardID);
+
+  applyEvent({
+    type: "message.part.updated",
+    properties: {
+      taskID: TASK_ID,
+      part: stampedPart("executor", {
+        id: reasoningPartID,
+        messageID: "msg_executor_reasoning",
+        sessionID: EXECUTOR_SID,
+        type: "reasoning",
+        text: "",
+      }),
+    },
+  });
+  expect(cardTreeStore.order).not.toContain(executorCardID);
+
+  applyEvent({
+    type: "message.part.delta",
+    properties: {
+      taskID: TASK_ID,
+      partID: reasoningPartID,
+      messageID: "msg_executor_reasoning",
+      sessionID: EXECUTOR_SID,
+      field: "text",
+      delta: "thinking through the executor path",
+    },
+  });
+
+  expect(cardTreeStore.order).toContain(executorCardID);
+  expect(
+    cardTreeStore.cards[executorCardID]?.parts.some(
+      (part: any) => part.type === "reasoning" && part.text.includes("executor path"),
+    ),
+  ).toBe(true);
+});
+
 test("non-goal sub-agent sessions surface at top level, not under their parent session", () => {
   setBoardStore("board", {
     task: {
