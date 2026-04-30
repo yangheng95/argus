@@ -373,6 +373,7 @@
   "git.init": "Init Git",
   "git.init_done": "Git initialized in {{dir}}",
   "git.init_exists": "Git already exists in {{dir}}",
+  "git.init_required": "This directory is not a git repository. Initialize it now to create the task?",
   "goal.context.criteria": "   Criteria: {{value}}",
   "goal.context.list": "**Goals** ({{total}})",
   "goal.context.origin": "   Origin: {{value}}",

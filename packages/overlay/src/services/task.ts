@@ -8,9 +8,12 @@
 // This module owns no render-side effects. Callers are responsible for
 // driving UI updates through reactive Solid stores.
 
-import { apiJson } from "./api";
+import { apiJson, ApiError } from "./api";
 import { getHostTransport } from "./host-transport";
 import { startSSE, stopSSE } from "./sse";
+import { showAppDialog } from "./app-dialog";
+import { initGitCurrent } from "../utils/git";
+import { t } from "../utils/i18n";
 import {
   clearMessages,
   setSelectedTaskID,
@@ -409,6 +412,32 @@ export async function submitMessage(
 // ── Public: createTask ──
 
 /**
+ * Server-side: W2-V32 (commit aa14f20e7) removed every auto git-init in the
+ * project bootstrap, so task creation throws WorktreeNotGitError when the
+ * active directory is not a git repo. Detect that single error and offer the
+ * user the explicit init gesture, then retry once. Any other failure (or a
+ * declined prompt) propagates to the caller so the existing handlers in
+ * panelMessage / submitChat surface it normally.
+ */
+function isWorktreeNotGitError(err: unknown): err is ApiError {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status !== 412) return false;
+  const body = err.body as { name?: unknown } | null;
+  return !!body && typeof body === "object" && body.name === "WorktreeNotGitError";
+}
+
+async function offerInitGitAndRetry(): Promise<boolean> {
+  const result = await showAppDialog({
+    title: t("git.init"),
+    message: t("git.init_required"),
+    cancel: true,
+    okLabel: t("common.ok"),
+  });
+  if (!result.confirmed) return false;
+  return await initGitCurrent({ notify: false });
+}
+
+/**
  * Create a new task via direct API. Returns the task_id immediately.
  * No LLM round-trip — the backend persists the task in ~10ms.
  */
@@ -417,29 +446,40 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
   if (!text) throw new Error("createTask: text is required");
   const requestID = crypto.randomUUID();
   const executor = settingsStore.executor ?? "opencode";
-  const result = (await apiJson("task", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      request: text,
-      executor,
-      requestID,
-      metadata,
-      source: "panel",
-      ...(budget ? { budget } : {}),
-      ...(attachments.length > 0
-        ? {
-            attachments: attachments.map((att) => ({
-              mime: att.mime,
-              // TaskAttachment schema expects pure base64 (no data URL prefix)
-              data: att.url.includes(",") ? att.url.split(",")[1] : att.url,
-              ...(att.filename ? { filename: att.filename } : {}),
-            })),
-          }
-        : {}),
-    }),
-    signal,
-  })) as any;
+  const body = JSON.stringify({
+    request: text,
+    executor,
+    requestID,
+    metadata,
+    source: "panel",
+    ...(budget ? { budget } : {}),
+    ...(attachments.length > 0
+      ? {
+          attachments: attachments.map((att) => ({
+            mime: att.mime,
+            // TaskAttachment schema expects pure base64 (no data URL prefix)
+            data: att.url.includes(",") ? att.url.split(",")[1] : att.url,
+            ...(att.filename ? { filename: att.filename } : {}),
+          })),
+        }
+      : {}),
+  });
+  const post = () =>
+    apiJson("task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal,
+    });
+  let result: any;
+  try {
+    result = await post();
+  } catch (err) {
+    if (!isWorktreeNotGitError(err)) throw err;
+    const initialized = await offerInitGitAndRetry();
+    if (!initialized) throw err;
+    result = await post();
+  }
   return typeof result?.task_id === "string" ? result.task_id : "";
 }
 
