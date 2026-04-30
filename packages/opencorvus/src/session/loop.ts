@@ -1198,7 +1198,9 @@ export namespace SessionLoop {
       }
     }
 
-    const turnToolChoice = structuredOutputToolChoice(format) ?? terminalToolChoice(terminalToolContract, tools, input.model)
+    const turnToolChoice =
+      structuredOutputToolChoice(format, input.model) ??
+      terminalToolChoice(terminalToolContract, tools, input.model)
 
     const result = await processor.process({
       user: input.lastUser,
@@ -1280,11 +1282,22 @@ export namespace SessionLoop {
    *
    * StructuredOutput may be preceded by work tools, so this asks the
    * provider for a tool call without naming a specific tool.
+   *
+   * Reasoning ("thinking") models reject `tool_choice: "required"` (e.g.
+   * deepseek-reasoner / deepseek-v4-flash returns HTTP 400 "deepseek-reasoner
+   * does not support this tool_choice"; alibaba-coding-plan-cn/glm-5 returns
+   * "tool_choice parameter does not support being set to required or object
+   * in thinking mode"). For these models we soft-pin the StructuredOutput
+   * tool via prompt (STRUCTURED_OUTPUT_SYSTEM_PROMPT) + the structured-output
+   * recovery channel (shouldEnterStructuredOutputRecovery), and let the
+   * provider pick "auto". Same strategy as `terminalToolChoice`.
    */
   export function structuredOutputToolChoice(
     format: z.infer<typeof Message.Format>,
-  ): "required" | { type: "tool"; toolName: string } | undefined {
+    model?: { capabilities?: { reasoning?: boolean } },
+  ): "required" | "auto" | { type: "tool"; toolName: string } | undefined {
     if (format.type !== "json_schema") return undefined
+    if (model?.capabilities?.reasoning) return "auto"
     return "required"
   }
 
