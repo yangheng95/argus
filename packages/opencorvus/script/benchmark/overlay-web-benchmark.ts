@@ -111,7 +111,6 @@ const KNOWN_FLAGS = new Set<string>([
   "--max-executor-groups",
   "--max-fix-runs",
   "--max-runs",
-  "--planner-max-steps",
   "--project-dir",
   "--reference-images",
   "--report",
@@ -121,7 +120,6 @@ const KNOWN_FLAGS = new Set<string>([
   "--resume-message",
   "--resume-task-id",
   "--max-auto-resumes",
-  "--spec-max-steps",
   "--title",
   "--figma-url",
   // boolean (no value) switches
@@ -160,9 +158,6 @@ function validateFlags(): void {
 }
 validateFlags()
 
-// Legacy: spec/planner max steps from the old fixed-pipeline architecture.
-const specMaxSteps = Number(flag("--spec-max-steps")) || 80
-const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
 const maxRuns = Number(flag("--max-runs")) || 20
 const maxFixRuns = Number(flag("--max-fix-runs")) || 8
 const report = flag("--report")
@@ -179,7 +174,6 @@ const resumeMessage = flag("--resume-message") || "请继续完成项目，修�
 // wake-up message instead of giving up. Bounded so a permanently broken
 // task does not loop forever. Set to 0 to disable.
 const maxAutoResumes = Number(flag("--max-auto-resumes") ?? "3")
-const headless = false
 const executor = (flag("--executor") || "opencode") as
   | "opencode"
   | "codex"
@@ -204,21 +198,21 @@ const noBrowser = process.argv.includes("--no-browser")
 // Otherwise leave undefined so the task inherits the config-level default (opencorvus.jsonc).
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
 
-const DEFAULT_TASK_TITLE = "Overlay Web Benchmark — Ainvest Page Clone"
+const DEFAULT_TASK_TITLE = "Overlay Web Benchmark"
 const DEFAULT_REFERENCE = path.join(import.meta.dir, "assets", "ainvest.png")
-// When the caller runs with no custom request/attachment/reference, the default
-// Ainvest-clone task drives the visual-diff gate using the committed fixture
-// at script/benchmark/assets/ainvest.png. Drop the file in there before running
-// the default case; otherwise the benchmark still kicks off but the visual-diff
-// gate has no reference to score against.
+// When the caller runs with no custom request/attachment/reference, the
+// default brief drives the visual-diff gate against the committed fixture at
+// script/benchmark/assets/ainvest.png. Drop a screenshot at that path before
+// running the default case; otherwise the benchmark still kicks off but the
+// visual-diff gate has no reference to score against.
 const defaultRefExists = await fs.stat(DEFAULT_REFERENCE).then(() => true).catch(() => false)
 if (!defaultRefExists && rawReferenceImages.length === 0 && !requestFile && !requestAttachment) {
-  console.warn(`[overlay-benchmark] default reference missing: ${DEFAULT_REFERENCE} — pass --reference or --url to provide one, or drop a screenshot at that path.`)
+  console.warn(`[overlay-benchmark] default reference missing: ${DEFAULT_REFERENCE} — pass --reference-images <path> or --request-file <brief> to provide one, or drop a screenshot at that path.`)
 }
 const referenceImages = rawReferenceImages.length > 0
   ? rawReferenceImages
   : (!requestFile && !requestAttachment && defaultRefExists ? [DEFAULT_REFERENCE] : [])
-const DEFAULT_TASK_REQUEST = `1：1复刻Ainvest的页面https://chart.ainvest.com/NASDAQ-NVDA/ 要求包含完整的前端和后端实现，网页组件不缺漏，组件交互完整，例如k线和指标等等。数据要严谨，你需要实现虚拟数据的生成引擎，而不是糊弄用静态数据`
+const DEFAULT_TASK_REQUEST = `帮我写一个调用Claude 模型的chat项目，支持用户Google一键登录（先用mock模拟延时登录），chat历史记录（删除、修改title等），以及会话中支持断点续传（用户刷新后继续获取sse对话）。input输入框支持添加附件（文档/图片）等，并支持md格式的渲染。new chat页面支持示例展示，UI截图仿照主流产品。提供API key填写功能实现真实对话`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
@@ -265,9 +259,6 @@ const TASK_TITLE = flag("--title")?.trim()
 //   2. external --request-file with no reference images → no auto-verify
 // Fig2code SSIM thresholds (mean 0.85, worst-5% 0.55) come from visual-diff defaults.
 let DELIVERY_VERIFY_CMD = ""
-// Legacy: TASK_GOALS used the old { description, criteria, priority } format
-// to hint the Goal Agent. In the new agent-driven architecture, the Decompose
-// Agent infers goals entirely from the request text — no hints needed.
 
 const AUTO_REPLY =
   "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
@@ -280,11 +271,6 @@ const DIAG_TYPES = new Set([
   "orchestrator.run.updated",
   "orchestrator.task.created",
   "orchestrator.task.updated",
-  // Legacy spec/plan events — kept for backward compatibility with older traces
-  "orchestrator.spec.created",
-  "orchestrator.spec.updated",
-  "orchestrator.plan.created",
-  "orchestrator.plan.activated",
   "orchestrator.interaction.requested",
   "orchestrator.interaction.resolved",
   // Executor events flow through Message — tool calls and text arrive
@@ -380,8 +366,6 @@ await ensureBenchmarkModel(import.meta.dir, model)
 
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
-process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
-process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 // Complex replication tasks legitimately need >3 delivery iterations to converge.
 // Schema allows up to 10. 6 balances convergence room against total wall time.
 process.env.OPENCORVUS_MAX_DELIVERY_ITERATIONS = "6"
@@ -596,11 +580,6 @@ function formatEventLine(
   }
   if (entry.stage === "architect" && entry.kind === "status") {
     return `[overlay-benchmark] architect ${clipText(entry.summary || entry.status, 120)}`
-  }
-  // Plan: show plan summary when plan is created or activated
-  if (entry.type === "orchestrator.plan.created" || entry.type === "orchestrator.plan.activated") {
-    const detail = entry.summary || entry.text
-    return `[overlay-benchmark] event=${entry.type.replace("orchestrator.", "")}${detail ? ` detail=${clipText(detail, 240)}` : ""}`
   }
   // Integrity reviewer events. `chunk` is reasoning-delta — too noisy to print
   // line-per-event; the alive-stall timer is what we care about. `progress` is
@@ -1410,11 +1389,6 @@ async function buildBenchmarkReport(error?: unknown) {
     server: server.url.toString(),
     taskID,
     error: reportError,
-    stage_max_steps: {
-      // Legacy spec/planner max steps kept for backward compatibility
-      spec: specMaxSteps,
-      planner: plannerMaxSteps,
-    },
     taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
     evaluation: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
     changedFiles,
