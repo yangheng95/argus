@@ -205,8 +205,10 @@ export function createArchitectOutputTools(input: {
         "Remove a previously-registered goal (typically during a re-run when " +
         "delivery feedback showed the goal was redundant or wrong). The goal " +
         "id is recorded so the orchestrator can delete the DB row on finalize. " +
-        "Any metric specs / seeds / traceability / contracts referencing the " +
-        "removed id must also be re-registered without it.",
+        "Cascades to every dependent registration: per-goal metrics, challenge " +
+        "seeds scoped to this goal, traceability rows referencing it, and " +
+        "cross-goal contracts that mention it. Goal is the single source of " +
+        "truth for these dependents — there is no orphan recovery path.",
       inputSchema: z.object({
         id: z.string().min(1).describe("Goal id to remove"),
         reason: z
@@ -223,18 +225,89 @@ export function createArchitectOutputTools(input: {
         if (!collector.removed_goal_ids.includes(id)) {
           collector.removed_goal_ids.push(id)
         }
-        return `OK: goal "${id}" removed. Reason: ${reason}. (${collector.goals.length} remaining)`
+
+        const cascade = {
+          goal_metric_specs: 0,
+          challenge_seeds: 0,
+          traceability_rows: 0,
+          traceability_refs: 0,
+          contracts: 0,
+          contract_refs: 0,
+        }
+
+        const beforeMetrics = collector.goal_metric_specs.length
+        collector.goal_metric_specs = collector.goal_metric_specs.filter(
+          (m) => m.goal_id !== id,
+        )
+        cascade.goal_metric_specs = beforeMetrics - collector.goal_metric_specs.length
+
+        const beforeSeeds = collector.challenge_seeds.length
+        collector.challenge_seeds = collector.challenge_seeds.filter(
+          (s) => !(s.scope === "goal" && s.target_ref === id),
+        )
+        cascade.challenge_seeds = beforeSeeds - collector.challenge_seeds.length
+
+        const traceNext: TraceabilityEntry[] = []
+        for (const t of collector.traceability) {
+          if (!t.goalIDs.includes(id)) {
+            traceNext.push(t)
+            continue
+          }
+          const filtered = t.goalIDs.filter((g) => g !== id)
+          cascade.traceability_refs++
+          if (filtered.length === 0) {
+            cascade.traceability_rows++
+            continue
+          }
+          traceNext.push({ ...t, goalIDs: filtered })
+        }
+        collector.traceability = traceNext
+
+        const contractNext: RegisteredContract[] = []
+        for (const c of collector.contracts) {
+          if (!c.goalIDs.includes(id)) {
+            contractNext.push(c)
+            continue
+          }
+          const filtered = c.goalIDs.filter((g) => g !== id)
+          cascade.contract_refs++
+          if (filtered.length === 0) {
+            cascade.contracts++
+            continue
+          }
+          contractNext.push({ ...c, goalIDs: filtered })
+        }
+        collector.contracts = contractNext
+
+        const cascadeBits: string[] = []
+        if (cascade.goal_metric_specs) cascadeBits.push(`${cascade.goal_metric_specs} goal metric(s)`)
+        if (cascade.challenge_seeds) cascadeBits.push(`${cascade.challenge_seeds} challenge seed(s)`)
+        if (cascade.traceability_rows || cascade.traceability_refs) {
+          cascadeBits.push(
+            `${cascade.traceability_refs} traceability ref(s) (${cascade.traceability_rows} row(s) dropped)`,
+          )
+        }
+        if (cascade.contracts || cascade.contract_refs) {
+          cascadeBits.push(
+            `${cascade.contract_refs} contract ref(s) (${cascade.contracts} contract(s) dropped)`,
+          )
+        }
+        const cascadeMsg = cascadeBits.length > 0 ? ` Cascaded: ${cascadeBits.join(", ")}.` : ""
+        return `OK: goal "${id}" removed. Reason: ${reason}. (${collector.goals.length} remaining)${cascadeMsg}`
       },
     }),
 
     register_goal_metric_spec: tool({
       description:
-        "Register ONE per-goal metric. Call once per (goal, metric_name). Every " +
-        "goal MUST end with all four mandatory BLOCKING metrics: " +
-        "functional_correctness, scenario_coverage, contract_compliance, " +
-        "regression_count. Diagnostic metrics (rubric_judge_score, " +
-        "reproducibility, defect_density) are recommended. Specs are immutable " +
-        "after Architect finalize — the Prosecutor cannot edit them.",
+        "Register or overwrite ONE per-goal metric, keyed by (goal_id, name). " +
+        "Calling again with the same key replaces the prior spec — this is the " +
+        "single correction path for gate_class / target / floor mistakes during " +
+        "the architect iteration. Every goal MUST end with all four mandatory " +
+        "BLOCKING metrics: functional_correctness, scenario_coverage, " +
+        "contract_compliance, regression_count. Diagnostic metrics " +
+        "(rubric_judge_score, reproducibility, defect_density) are recommended. " +
+        "Specs become immutable only after submit_architect succeeds; the " +
+        "Prosecutor cannot edit them post-finalize.",
       inputSchema: z.object({
         goal_id: z
           .string()
@@ -248,12 +321,6 @@ export function createArchitectOutputTools(input: {
         if (!collector.goals.some((g) => g.id === input.goal_id)) {
           return `Error: goal "${input.goal_id}" not registered — call register_goal first`
         }
-        const dup = collector.goal_metric_specs.find(
-          (m) => m.goal_id === input.goal_id && m.name === input.name,
-        )
-        if (dup) {
-          return `Error: metric "${input.name}" already registered for goal "${input.goal_id}"`
-        }
         if (
           input.gate_class === "blocking" &&
           input.floor === input.target &&
@@ -261,7 +328,7 @@ export function createArchitectOutputTools(input: {
         ) {
           return `Error: blocking metric "${input.name}" has floor==target (${input.floor}) — floor must be strictly lower than target for higher_better direction`
         }
-        collector.goal_metric_specs.push({
+        const spec: ArchitectGoalMetricSpec = {
           goal_id: input.goal_id,
           name: input.name,
           description: input.description,
@@ -274,27 +341,39 @@ export function createArchitectOutputTools(input: {
           evaluator_kind: input.evaluator_kind,
           evaluator_config: input.evaluator_config,
           source_requirement_ids: input.source_requirement_ids,
-        })
+        }
+        const dupIdx = collector.goal_metric_specs.findIndex(
+          (m) => m.goal_id === input.goal_id && m.name === input.name,
+        )
+        if (dupIdx >= 0) {
+          collector.goal_metric_specs[dupIdx] = spec
+          return `OK: goal metric "${input.name}" overwritten for ${input.goal_id} (${collector.goal_metric_specs.length} total goal metrics)`
+        }
+        collector.goal_metric_specs.push(spec)
         return `OK: goal metric "${input.name}" registered for ${input.goal_id} (${collector.goal_metric_specs.length} total goal metrics)`
       },
     }),
 
     register_global_metric_spec: tool({
       description:
-        "Register ONE global (task-scoped) metric. Mandatory BLOCKING set: " +
-        "cross_goal_contract_consistency, non_regression_surface, " +
+        "Register or overwrite ONE global (task-scoped) metric, keyed by name. " +
+        "Calling again with the same name replaces the prior spec. Mandatory " +
+        "BLOCKING set: cross_goal_contract_consistency, non_regression_surface, " +
         "architecture_integrity, user_intent_fidelity. Global blocking metrics " +
         "can VETO acceptance even when every per-goal metric is green.",
       inputSchema: z.object(metricCommonFields()),
       execute: async (input) => {
-        const dup = collector.global_metric_specs.find((m) => m.name === input.name)
-        if (dup) return `Error: global metric "${input.name}" already registered`
         if (
           input.gate_class === "blocking" &&
           input.floor === input.target &&
           input.direction === "higher_better"
         ) {
           return `Error: blocking metric "${input.name}" has floor==target (${input.floor}) — floor must be strictly lower than target`
+        }
+        const dupIdx = collector.global_metric_specs.findIndex((m) => m.name === input.name)
+        if (dupIdx >= 0) {
+          collector.global_metric_specs[dupIdx] = input
+          return `OK: global metric "${input.name}" overwritten (${collector.global_metric_specs.length} total globals)`
         }
         collector.global_metric_specs.push(input)
         return `OK: global metric "${input.name}" registered (${collector.global_metric_specs.length} total globals)`
@@ -494,16 +573,7 @@ export function createArchitectOutputTools(input: {
           )
         }
 
-        // 3. Metric-goal cross references -----------------------------------
-        for (const m of collector.goal_metric_specs) {
-          if (!collector.goals.some((g) => g.id === m.goal_id)) {
-            issues.push(
-              `Goal metric "${m.name}" references unknown goal "${m.goal_id}"`,
-            )
-          }
-        }
-
-        // 4. Contract category coverage -------------------------------------
+        // 3. Contract category coverage -------------------------------------
         const categories = new Set(collector.contracts.map((c) => c.category))
         if (collector.goals.length >= 2) {
           if (
@@ -512,18 +582,6 @@ export function createArchitectOutputTools(input: {
           ) {
             issues.push(
               "No interface_contract or shared_type contract — cross-goal types will be undefined",
-            )
-          }
-        }
-
-        // 5. Seed target references -----------------------------------------
-        for (const s of collector.challenge_seeds) {
-          if (
-            s.scope === "goal" &&
-            !collector.goals.some((g) => g.id === s.target_ref)
-          ) {
-            issues.push(
-              `Challenge seed "${s.id}" targets unknown goal "${s.target_ref}"`,
             )
           }
         }
