@@ -21,9 +21,7 @@ import PROMPT_GENERAL from "./prompt/general.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { PermissionNext } from "@/permission/next"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
-import path from "path"
 import { Plugin } from "@/plugin"
-import { Skill } from "../skill"
 import { entries, values as objectValues } from "@/util/object"
 
 export namespace Agent {
@@ -72,50 +70,25 @@ export namespace Agent {
     // delivery module at startup.
     const { DELIVERY_AGENT_SYSTEM } = await import("@/delivery/agent")
 
-    const skillDirs = await Skill.dirs()
-    // Build agents run inside per-goal worktrees under
-    // `<Instance.directory>/.opencorvus/worktrees/<branch>/`. The worktree IS
-    // a checkout of the same project — reading sibling/parent files in
-    // Instance.directory is the same VCS data at a different commit, not
-    // genuinely "external". Without this entry every `external_directory`
-    // probe matches the `*=ask` rule and (in unattended bench runs) sits
-    // 5min on a permission prompt nobody can answer → goal_run.status=failed.
-    // Allowlisting Instance.directory keeps the safety surface (system
-    // paths like `~/.ssh`, `/etc/...`, etc. still hit `*=ask`) while letting
-    // the agent freely walk its own project tree.
-    const whitelistedDirs = [
-      Truncate.GLOB,
-      path.join(Instance.directory, "**"),
-      ...skillDirs.map((dir) => path.join(dir, "*")),
-    ]
+    // Debug-default permission policy: tools are accepted unless an operator
+    // supplies an explicit `deny` or `ask` rule in config. Tool availability is
+    // still controlled separately by each agent's include/exclude list.
     const defaults = PermissionNext.fromConfig({
-      "*": "ask",
+      "*": "allow",
       invalid: "allow",
-      doom_loop: "ask",
+      doom_loop: "allow",
       list: "allow",
       glob: "allow",
       search_code: "allow",
       bash: "allow",
       edit: "allow",
       task: "allow",
-      // webfetch is restricted to the `build` agent (the one actually turning a
-      // URL reference into code). design-analyst / planner / architect / explore
-      // read cached mirror artifacts instead of hitting the live network — the
-      // mirror pipeline (`webpage_extract` → compile / analyze / render /
-      // evaluate) is the canonical path for URL work. Keep default at `deny`
-      // so no stage agent reaches over the build-agent fence.
-      webfetch: "deny",
-      websearch: "deny",
+      webfetch: "allow",
+      websearch: "allow",
       // Mirror tools — the canonical pipeline for any URL work (extract →
       // compile | analyze → render → evaluate → text_diff). `allow` for ALL
-      // six: unattended benchmark / pipeline runs (overlay-web-benchmark, CI,
-      // scheduled agents) block on "ask" and can never reach them, which
-      // defeats the whole webpage-generate pipeline. Leaving only 2 of 6 on
-      // `allow` (the historical state) also caused inconsistent behaviour
-      // where agents ran `webpage_extract` fine but then hit a permission
-      // ask on `webpage_compile` / `webpage_analyze` / `webpage_evaluate` /
-      // `webpage_text_diff` mid-pipeline. Restrictive installs can override
-      // any of them via user config.
+      // six so unattended benchmark / pipeline runs cannot stall mid-pipeline.
+      // Restrictive installs can override any of them via user config.
       webpage_extract: "allow",
       webpage_compile: "allow",
       webpage_analyze: "allow",
@@ -138,19 +111,10 @@ export namespace Agent {
       todoread: "allow",
       todowrite: "allow",
       screen: "allow",
-      input: "ask",
-      external_directory: {
-        "*": "ask",
-        ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
-      },
-      question: "deny",
-      // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
-      read: {
-        "*": "allow",
-        "*.env": "ask",
-        "*.env.*": "ask",
-        "*.env.example": "allow",
-      },
+      input: "allow",
+      external_directory: "allow",
+      question: "allow",
+      read: "allow",
     })
     const user = PermissionNext.fromConfig(cfg.permission ?? {})
 
@@ -165,10 +129,6 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
-            // webfetch is allowed ONLY on the build agent. Default is `deny`
-            // everywhere else so stage agents route URL work through the
-            // mirror pipeline (`webpage_extract` → compile / analyze / render /
-            // evaluate) instead of re-fetching text markup.
             webfetch: "allow",
           }),
           user,
@@ -179,47 +139,15 @@ export namespace Agent {
       general: {
         name: "general",
         description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
-        tools: { exclude: ["planner", "panel", "task_report", "analytics"] },
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            todoread: "deny",
-            todowrite: "deny",
-            // `general` inherits `task: "allow"` from `defaults`. Without this
-            // explicit deny a `general` subagent could spawn another `general`
-            // (or `explore`) via the task tool, recursively. task.ts only
-            // hard-denies task in the child session when the DISPATCHED agent
-            // lacks the `task` permission — so we must remove it here.
-            task: "deny",
-          }),
-          user,
-        ),
+        tools: { exclude: ["planner", "panel", "task_report", "analytics", "task", "todoread", "todowrite"] },
+        permission: PermissionNext.merge(defaults, user),
         options: {},
         mode: "subagent",
         native: true,
       },
       explore: {
         name: "explore",
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            "*": "deny",
-            search_code: "allow",
-            glob: "allow",
-            list: "allow",
-            bash: "allow",
-            webfetch: "allow",
-            websearch: "deny",
-            external_code_search: "allow",
-            read: "allow",
-            memory: "allow",
-            external_directory: {
-              "*": "ask",
-              ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
-            },
-          }),
-          user,
-        ),
+        permission: PermissionNext.merge(defaults, user),
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
         tools: { include: ["read", "glob", "search_code", "bash", "external_code_search", "lsp", "webfetch", "memory"] },
         prompt: PROMPT_EXPLORE,
@@ -234,13 +162,7 @@ export namespace Agent {
         native: true,
         hidden: true,
         prompt: PROMPT_COMPACTION,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            "*": "deny",
-          }),
-          user,
-        ),
+        permission: PermissionNext.merge(defaults, user),
         options: {},
       },
       title: {
@@ -251,13 +173,7 @@ export namespace Agent {
         native: true,
         hidden: true,
         temperature: 0.5,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            "*": "deny",
-          }),
-          user,
-        ),
+        permission: PermissionNext.merge(defaults, user),
         prompt: PROMPT_TITLE,
       },
       // ── Stage agents (dispatched through SessionPrompt) ─
@@ -296,10 +212,8 @@ export namespace Agent {
         // / explore subagents get a goal each with clean context.
         tools: { exclude: ["planner", "panel", "task_report", "goal_report", "analytics"] },
         // Inherit the shared `defaults` ruleset (task: "allow" included) so
-        // subagent dispatch does not trip the permission "ask" default and
-        // hang the flow waiting for a non-existent operator. Without this
-        // delivery was relying implicitly on `experimental.auto_permission`
-        // to auto-approve its own tool calls — making auto-dispatch brittle.
+        // delivery's own review subagent dispatch follows the same debug
+        // accept-by-default permission policy as build sessions.
         permission: PermissionNext.merge(defaults, user),
         options: {},
         prompt: DELIVERY_AGENT_SYSTEM,
@@ -418,18 +332,7 @@ export namespace Agent {
         description: "Per-goal implementation planner. Reads the GoalContract + Architect decisions and produces a stepwise execution plan. Dispatch from the build agent (via the `task` tool) when a goal is large enough to benefit from up-front decomposition before edits.",
         prompt: PLANNER_CORE,
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            // planner inherits `task: "allow"` from defaults; explicitly
-            // deny so a planner subagent cannot recursively spawn another
-            // planner / general / explore (mirrors `general` agent).
-            task: "deny",
-            todoread: "allow",
-            todowrite: "allow",
-          }),
-          user,
-        ),
+        permission: PermissionNext.merge(defaults, user),
         options: {},
         mode: "subagent",
         native: true,

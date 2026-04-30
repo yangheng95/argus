@@ -4,9 +4,8 @@ import path from "node:path"
 
 /**
  * 2026-04-30 — overlay-web-benchmark goal 002 (bootstrap) failed twice in a
- * row at the 5-minute permission timeout: build agent in worktree tried to
- * access parent project root → matched `external_directory:*=ask` (agent
- * default) → no UI to answer → 5min reject → goal failed.
+ * row at the 5-minute permission timeout after a build agent raised an
+ * external_directory permission prompt that had no UI responder.
  *
  * The fix is in writeBenchmarkModelConfig: emit `experimental.auto_permission
  * = true` so AutoPermission.subscribe (engine/auto-permission.ts) short-circuits

@@ -75,7 +75,7 @@ test.skip("plan agent is read-only except for plan files", async () => {
   })
 })
 
-test("explore agent denies edit and write", async () => {
+test("explore agent limits exposed tools without permission denials", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -83,15 +83,15 @@ test("explore agent denies edit and write", async () => {
       const explore = await Agent.get("explore")
       expect(explore).toBeDefined()
       expect(explore?.mode).toBe("subagent")
-      expect(evalPerm(explore, "edit")).toBe("deny")
-      expect(evalPerm(explore, "write")).toBe("deny")
-      expect(evalPerm(explore, "todoread")).toBe("deny")
-      expect(evalPerm(explore, "todowrite")).toBe("deny")
+      expect(explore?.tools?.include).not.toContain("edit")
+      expect(explore?.tools?.include).not.toContain("write")
+      expect(evalPerm(explore, "edit")).toBe("allow")
+      expect(evalPerm(explore, "write")).toBe("allow")
     },
   })
 })
 
-test("explore agent asks for external directories and allows Truncate.GLOB", async () => {
+test("explore agent allows external directories and Truncate.GLOB", async () => {
   const { Truncate } = await import("../../src/tool/truncation")
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -99,13 +99,15 @@ test("explore agent asks for external directories and allows Truncate.GLOB", asy
     fn: async () => {
       const explore = await Agent.get("explore")
       expect(explore).toBeDefined()
-      expect(PermissionNext.evaluate("external_directory", "/some/other/path", explore!.permission).action).toBe("ask")
+      expect(PermissionNext.evaluate("external_directory", "/some/other/path", explore!.permission).action).toBe(
+        "allow",
+      )
       expect(PermissionNext.evaluate("external_directory", Truncate.GLOB, explore!.permission).action).toBe("allow")
     },
   })
 })
 
-test("general agent denies todo tools", async () => {
+test("general agent removes recursive tools from its exposed tool list", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -114,13 +116,16 @@ test("general agent denies todo tools", async () => {
       expect(general).toBeDefined()
       expect(general?.mode).toBe("subagent")
       expect(general?.hidden).toBeUndefined()
-      expect(evalPerm(general, "todoread")).toBe("deny")
-      expect(evalPerm(general, "todowrite")).toBe("deny")
+      expect(general?.tools?.exclude).toContain("task")
+      expect(general?.tools?.exclude).toContain("todoread")
+      expect(general?.tools?.exclude).toContain("todowrite")
+      expect(evalPerm(general, "todoread")).toBe("allow")
+      expect(evalPerm(general, "todowrite")).toBe("allow")
     },
   })
 })
 
-test("compaction agent denies all permissions", async () => {
+test("compaction agent exposes no tools while permissions default to allow", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -128,9 +133,10 @@ test("compaction agent denies all permissions", async () => {
       const compaction = await Agent.get("compaction")
       expect(compaction).toBeDefined()
       expect(compaction?.hidden).toBe(true)
-      expect(evalPerm(compaction, "bash")).toBe("deny")
-      expect(evalPerm(compaction, "edit")).toBe("deny")
-      expect(evalPerm(compaction, "read")).toBe("deny")
+      expect(compaction?.tools).toEqual({ include: [] })
+      expect(evalPerm(compaction, "bash")).toBe("allow")
+      expect(evalPerm(compaction, "edit")).toBe("allow")
+      expect(evalPerm(compaction, "read")).toBe("allow")
     },
   })
 })
@@ -421,14 +427,14 @@ test("Agent.get returns undefined for non-existent agent", async () => {
   })
 })
 
-test("default permission includes doom_loop and external_directory as ask", async () => {
+test("default permission accepts doom_loop and external_directory", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const build = await Agent.get("build")
-      expect(evalPerm(build, "doom_loop")).toBe("ask")
-      expect(evalPerm(build, "external_directory")).toBe("ask")
+      expect(evalPerm(build, "doom_loop")).toBe("allow")
+      expect(evalPerm(build, "external_directory")).toBe("allow")
     },
   })
 })
@@ -459,13 +465,13 @@ test("design-analyst advertises url_screenshot and omits webfetch", async () => 
   })
 })
 
-test("unknown permission defaults to ask", async () => {
+test("unknown permission defaults to allow", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
       const build = await Agent.get("build")
-      expect(evalPerm(build, "future_tool")).toBe("ask")
+      expect(evalPerm(build, "future_tool")).toBe("allow")
     },
   })
 })
