@@ -112,6 +112,82 @@ function emptyCollector(): ArchitectCollector {
   }
 }
 
+export function architectValidationIssues(collector: ArchitectCollector): string[] {
+  const issues: string[] = []
+
+  if (collector.goals.length === 0) {
+    issues.push("No goals registered - Architect must produce at least one goal")
+  }
+  for (const g of collector.goals) {
+    if (
+      g.exports.length === 0 &&
+      g.kind !== "verification" &&
+      g.kind !== "system"
+    ) {
+      const hasConsumers = collector.goals.some((other) =>
+        other.depends_on.includes(g.id),
+      )
+      if (hasConsumers) {
+        issues.push(
+          `Goal ${g.id}: has dependents but no exports - dependents can't code against its interfaces`,
+        )
+      }
+    }
+    for (const dep of g.depends_on) {
+      if (!collector.goals.some((gl) => gl.id === dep)) {
+        issues.push(`Goal ${g.id}: depends_on "${dep}" not registered`)
+      }
+    }
+
+    const goalMetrics = collector.goal_metric_specs.filter(
+      (m) => m.goal_id === g.id,
+    )
+    const blockingNames = new Set(
+      goalMetrics.filter((m) => m.gate_class === "blocking").map((m) => m.name),
+    )
+    const missingBlocking = MANDATORY_GOAL_BLOCKING_METRICS.filter(
+      (n) => !blockingNames.has(n),
+    )
+    if (missingBlocking.length > 0) {
+      issues.push(
+        `Goal ${g.id}: missing mandatory BLOCKING metrics: ${missingBlocking.join(", ")} - register each via register_goal_metric_spec with gate_class="blocking"`,
+      )
+    }
+  }
+
+  const globalBlockingNames = new Set(
+    collector.global_metric_specs
+      .filter((m) => m.gate_class === "blocking")
+      .map((m) => m.name),
+  )
+  const missingGlobal = MANDATORY_GLOBAL_BLOCKING_METRICS.filter(
+    (n) => !globalBlockingNames.has(n),
+  )
+  if (missingGlobal.length > 0) {
+    issues.push(
+      `Missing mandatory GLOBAL BLOCKING metrics: ${missingGlobal.join(", ")} - register each via register_global_metric_spec with gate_class="blocking"`,
+    )
+  }
+
+  const categories = new Set(collector.contracts.map((c) => c.category))
+  if (collector.goals.length >= 2) {
+    if (
+      !categories.has("interface_contract") &&
+      !categories.has("shared_type")
+    ) {
+      issues.push(
+        "No interface_contract or shared_type contract - cross-goal types will be undefined",
+      )
+    }
+  }
+
+  return issues
+}
+
+export function isArchitectReadyToFinalize(collector: ArchitectCollector): boolean {
+  return architectValidationIssues(collector).length === 0
+}
+
 // ---------------------------------------------------------------------------
 // Tool factory
 // ---------------------------------------------------------------------------
@@ -514,77 +590,8 @@ export function createArchitectOutputTools(input: {
       }),
       execute: async ({ summary }) => {
         collector.summary = summary
-        const issues: string[] = []
-
-        // 1. Goal structural integrity --------------------------------------
-        if (collector.goals.length === 0) {
-          issues.push("No goals registered — Architect must produce at least one goal")
-        }
-        for (const g of collector.goals) {
-          if (
-            g.exports.length === 0 &&
-            g.kind !== "verification" &&
-            g.kind !== "system"
-          ) {
-            const hasConsumers = collector.goals.some((other) =>
-              other.depends_on.includes(g.id),
-            )
-            if (hasConsumers) {
-              issues.push(
-                `Goal ${g.id}: has dependents but no exports — dependents can't code against its interfaces`,
-              )
-            }
-          }
-          for (const dep of g.depends_on) {
-            if (!collector.goals.some((gl) => gl.id === dep)) {
-              issues.push(`Goal ${g.id}: depends_on "${dep}" not registered`)
-            }
-          }
-
-          // Mandatory blocking metric coverage per goal.
-          const goalMetrics = collector.goal_metric_specs.filter(
-            (m) => m.goal_id === g.id,
-          )
-          const blockingNames = new Set(
-            goalMetrics.filter((m) => m.gate_class === "blocking").map((m) => m.name),
-          )
-          const missingBlocking = MANDATORY_GOAL_BLOCKING_METRICS.filter(
-            (n) => !blockingNames.has(n),
-          )
-          if (missingBlocking.length > 0) {
-            issues.push(
-              `Goal ${g.id}: missing mandatory BLOCKING metrics: ${missingBlocking.join(", ")} — register each via register_goal_metric_spec with gate_class="blocking"`,
-            )
-          }
-        }
-
-        // 2. Mandatory global blocking metrics ------------------------------
-        const globalBlockingNames = new Set(
-          collector.global_metric_specs
-            .filter((m) => m.gate_class === "blocking")
-            .map((m) => m.name),
-        )
-        const missingGlobal = MANDATORY_GLOBAL_BLOCKING_METRICS.filter(
-          (n) => !globalBlockingNames.has(n),
-        )
-        if (missingGlobal.length > 0) {
-          issues.push(
-            `Missing mandatory GLOBAL BLOCKING metrics: ${missingGlobal.join(", ")} — register each via register_global_metric_spec with gate_class="blocking"`,
-          )
-        }
-
-        // 3. Contract category coverage -------------------------------------
+        const issues = architectValidationIssues(collector)
         const categories = new Set(collector.contracts.map((c) => c.category))
-        if (collector.goals.length >= 2) {
-          if (
-            !categories.has("interface_contract") &&
-            !categories.has("shared_type")
-          ) {
-            issues.push(
-              "No interface_contract or shared_type contract — cross-goal types will be undefined",
-            )
-          }
-        }
 
         if (issues.length === 0) {
           collector.finalized = true

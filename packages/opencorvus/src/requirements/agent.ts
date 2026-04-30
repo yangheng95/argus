@@ -113,6 +113,7 @@ export namespace RequirementsAgent {
       terminalTool: {
         toolName: "submit_requirements",
         isSatisfied: (collector) => collector.finalized,
+        isReadyToFinalize: (collector) => collector.requirements.length > 0,
       },
     })
 

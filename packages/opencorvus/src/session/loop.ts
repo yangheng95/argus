@@ -199,9 +199,8 @@ export namespace SessionLoop {
   const ephemeralStructuredOutputGuards = new Map<string, StructuredOutputGuard>()
   export interface TerminalToolContract {
     toolName: string
-    toolNames?: string[]
-    allowHardPin?: boolean
     isSatisfied: () => boolean
+    isReadyToFinalize: () => boolean
   }
 
   const ephemeralTerminalToolContracts = new Map<string, TerminalToolContract>()
@@ -1125,11 +1124,7 @@ export namespace SessionLoop {
       }
     }
 
-    const turnToolChoice = structuredOutputToolChoice(format, {
-      forceStructuredOutput: false,
-    }) ?? terminalToolChoice(terminalToolContract, tools, {
-      forceTerminalTool: false,
-    })
+    const turnToolChoice = structuredOutputToolChoice(format) ?? terminalToolChoice(terminalToolContract, tools)
 
     const result = await processor.process({
       user: input.lastUser,
@@ -1209,38 +1204,24 @@ export namespace SessionLoop {
   /**
    * Resolve the toolChoice to send the provider for a json-schema turn.
    *
-   * Default ('required'): any tool — lets the model do work first, then
-   * call StructuredOutput when it decides it is done.
-   *
-   * Forced ({type:'tool', toolName:'StructuredOutput'}): the protocol-
-   * level guarantee that the next assistant turn can call only this
-   * tool. Use after at least one prior soft miss on the same user turn
-   * — at that point the work tools have already produced enough state
-   * to finalise, and pinning the next call structurally cannot select
-   * anything else. The caller must verify that StructuredOutput is in
-   * the tool set before passing forceStructuredOutput=true.
+   * StructuredOutput may be preceded by work tools, so this asks the
+   * provider for a tool call without naming a specific tool.
    */
   export function structuredOutputToolChoice(
     format: z.infer<typeof Message.Format>,
-    options?: { forceStructuredOutput?: boolean },
   ): "required" | { type: "tool"; toolName: string } | undefined {
     if (format.type !== "json_schema") return undefined
-    if (options?.forceStructuredOutput) return { type: "tool", toolName: "StructuredOutput" }
     return "required"
   }
 
   export function terminalToolChoice(
     contract: TerminalToolContract | undefined,
     tools: Record<string, AITool>,
-    options?: { forceTerminalTool?: boolean },
   ): "required" | { type: "tool"; toolName: string } | undefined {
     if (!contract) return undefined
-    const available = (contract.toolNames ?? [contract.toolName]).filter((name) => name in tools)
-    if (available.length === 0) return undefined
+    if (!(contract.toolName in tools)) return undefined
     if (contract.isSatisfied()) return undefined
-    if (options?.forceTerminalTool && contract.allowHardPin !== false && contract.toolName in tools) {
-      return { type: "tool", toolName: contract.toolName }
-    }
+    if (contract.isReadyToFinalize()) return { type: "tool", toolName: contract.toolName }
     return "required"
   }
   export const loop = fn(LoopInput, async (input) => {

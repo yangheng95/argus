@@ -13,8 +13,8 @@
  *      marker is written via Ownership.Worktree.record so OS-level restart
  *      cleanup can reclaim it.
  *   3. SessionPrompt.prompt runs the build agent in a child session with
- *      report_build_passed / report_build_failed terminal tools. The tool
- *      name is the status discriminator; text output is ignored.
+ *      the report_build_result terminal tool. The payload status is the
+ *      discriminator; text output is ignored.
  *   4. Worktree lifetime is goal-scoped. Retryable failures preserve the
  *      same directory so the next agent can continue from real files,
  *      commits, or MERGING state.
@@ -149,7 +149,7 @@ export namespace BuildAgent {
   }
 
   export interface RunOutput {
-    /** The terminal result the LLM emitted via report_build_passed / report_build_failed. */
+    /** The terminal result the LLM emitted via report_build_result. */
     result: BuildResult
     /** The child "build" session created for this invocation. Callers may
      *  inspect its message stream for audit / UI. */
@@ -360,60 +360,49 @@ export namespace BuildAgent {
       }
       const buildCollector: BuildCollector = { blockedBeforeMerge: false }
       const createBuildReportTools = (): ToolSet => ({
-        report_build_passed: tool({
+        report_build_result: tool({
           description:
-            "Finalize a successful build after implementation, verification, commit, and merge_back have all succeeded. " +
-            "Do not call this before merge_back reports status='merged'.",
+            "Finalize the build with status='passed' after implementation, verification, commit, and merge_back have all succeeded, " +
+            "or status='failed' with a concrete blocker when the build cannot be completed.",
           inputSchema: z.object({
-            summary: z.string().min(1).describe("One-line plain-prose description of what changed."),
-            patch_summary: z.string().describe("Short bullet list of file-level changes."),
+            status: z.enum(["passed", "failed"]).describe("passed after merge_back succeeded, failed for a concrete blocker."),
+            summary: z.string().min(1).describe("One-line plain-prose description of what changed or failed."),
+            error: z.string().optional().describe("Concrete failure reason when status='failed'."),
+            patch_summary: z.string().optional().describe("Short bullet list of file-level changes."),
             tests: z.array(z.object({
               name: z.string().min(1),
               passed: z.boolean(),
               detail: z.string().optional(),
             })).default([]),
           }),
-          execute: async ({ summary, patch_summary, tests }) => {
-            if (ownsWorktree && worktreeBranch && !mergedHead) {
+          execute: async ({ status, summary, error, patch_summary, tests }) => {
+            if (status === "passed" && ownsWorktree && worktreeBranch && !mergedHead) {
               buildCollector.blockedBeforeMerge = true
               return (
-                "Error: cannot report_build_passed before merge_back succeeds. " +
-                "Commit the fix, call merge_back, resolve any conflicts, and call report_build_passed only after merge_back returns status='merged'."
+                "Error: cannot report status='passed' before merge_back succeeds. " +
+                "Commit the fix, call merge_back, resolve any conflicts, and call report_build_result with status='passed' only after merge_back returns status='merged'."
               )
             }
-            buildCollector.result = {
-              status: "passed",
-              summary,
-              patch_summary,
-              commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
-              tests: tests ?? [],
+            if (status === "failed" && !error?.trim()) {
+              return "Error: report_build_result requires a concrete error when status='failed'."
             }
-            return "PASS: build result recorded."
-          },
-        }),
-        report_build_failed: tool({
-          description:
-            "Finalize a failed build with the concrete blocker after implementation or verification could not be completed.",
-          inputSchema: z.object({
-            summary: z.string().min(1).describe("One-line plain-prose description of what failed."),
-            error: z.string().min(1).describe("Concrete failure reason."),
-            patch_summary: z.string().optional().describe("Short bullet list of partial file-level changes, if any."),
-            tests: z.array(z.object({
-              name: z.string().min(1),
-              passed: z.boolean(),
-              detail: z.string().optional(),
-            })).default([]),
-          }),
-          execute: async ({ summary, error, patch_summary, tests }) => {
-            buildCollector.result = {
-              status: "failed",
-              summary,
-              patch_summary: patch_summary ?? "",
-              commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
-              tests: tests ?? [],
-              error,
-            }
-            return "PASS: build failure recorded."
+            buildCollector.result = status === "passed"
+              ? {
+                  status,
+                  summary,
+                  patch_summary: patch_summary ?? "",
+                  commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
+                  tests: tests ?? [],
+                }
+              : {
+                  status,
+                  summary,
+                  patch_summary: patch_summary ?? "",
+                  commit_ref: mergedHead ? mergedHead.slice(0, 12) : "",
+                  tests: tests ?? [],
+                  error: error!.trim(),
+                }
+            return `PASS: build ${status} result recorded.`
           },
         }),
       })
@@ -429,11 +418,11 @@ export namespace BuildAgent {
                   "atomically under a host-side lock so concurrent goals do not " +
                   "race each other.\n\n" +
                   "Call this AFTER you have committed all your changes and your " +
-                  "verification passed, and BEFORE calling report_build_passed. It " +
+                  "verification passed, and BEFORE calling report_build_result with status='passed'. It " +
                   "is the LAST git-affecting action of the session.\n\n" +
                   "Returns one of:\n" +
                   "  • {status:'merged', primary_head, primary_branch} — done; emit " +
-                  "    report_build_passed.\n" +
+                  "    report_build_result with status='passed'.\n" +
                   "  • {status:'conflict', primary_branch, primary_tip, " +
                   "    conflict_paths[]} — the merge hit textual conflicts. Your " +
                   "    worktree is now IN MERGING state: each path in conflict_paths " +
@@ -443,7 +432,7 @@ export namespace BuildAgent {
                   "    all paths are resolved `git commit` — that finalizes the " +
                   "    merge. Call merge_back again to ff-publish into primary.\n" +
                   "  • {status:'error', reason} — infrastructure problem; report it " +
-                  "    via report_build_failed.",
+                  "    via report_build_result with status='failed'.",
                 inputSchema: z.object({}),
                 execute: async () => {
                   try {
@@ -512,7 +501,7 @@ export namespace BuildAgent {
       let parsed: ReturnType<typeof BuildResultSchema.safeParse> | undefined
       let diffs: FileDiff[] | undefined
       // When the agent tries to close with status=passed before merge_back,
-      // report_build_passed is rejected in-session. If the model still fails to
+      // report_build_result is rejected in-session. If the model still fails to
       // repair that by calling merge_back, preserve the worktree so the next
       // attempt can continue from the written files instead of discarding
       // real progress.
@@ -547,10 +536,9 @@ export namespace BuildAgent {
             skillsStage: "build",
             skillTaskSignals: taskSignals,
             terminalTool: {
-              toolName: "report_build_passed",
-              toolNames: ["report_build_passed", "report_build_failed"],
-              allowHardPin: false,
+              toolName: "report_build_result",
               isSatisfied: (collector) => Boolean(collector.result),
+              isReadyToFinalize: () => Boolean(mergedHead),
             },
           })
           const report = buildToolKit.getCollector()
@@ -598,7 +586,7 @@ export namespace BuildAgent {
         // Decide before the finally cleanup whether the next attempt should
         // be allowed to pick up where this one left off. The continuable
         // cases are: the model reported passed without merge_back after the
-        // guard rejected that report_build_passed, or an older path somehow
+        // guard rejected that report_build_result, or an older path somehow
         // returned a passed payload without a merged head.
         if (
           ownsWorktree &&
@@ -648,7 +636,7 @@ export namespace BuildAgent {
               patch_summary: "",
               tests: [],
               error:
-                "report_build_passed was rejected because merge_back had not succeeded; " +
+                "report_build_result status='passed' was rejected because merge_back had not succeeded; " +
                 `last merge_back outcome: ${lastOutcome}; ` +
                 "the model did not repair the session by calling merge_back before the run ended.",
             },
@@ -1781,7 +1769,7 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
       lines.push("## Dependencies (should be merged into your worktree base)")
       lines.push("")
       lines.push(
-        "These goals are listed as prerequisites — the orchestrator is supposed to have waited for them to pass and merge before dispatching you, so their files SHOULD already exist in your base branch. Verify by reading them before you consume their exports. If a declared export is missing or the file is absent, do NOT re-implement it: call `report_build_failed` with a concrete error naming the missing dependency so the orchestrator can fix the dispatch order.",
+        "These goals are listed as prerequisites — the orchestrator is supposed to have waited for them to pass and merge before dispatching you, so their files SHOULD already exist in your base branch. Verify by reading them before you consume their exports. If a declared export is missing or the file is absent, do NOT re-implement it: call `report_build_result` with status='failed' and a concrete error naming the missing dependency so the orchestrator can fix the dispatch order.",
       )
       lines.push("")
       for (const d of deps) {
@@ -1813,7 +1801,7 @@ function buildUserPrompt(target: BuildTarget, context?: BuildAgent.BuildContext)
     lines.push(`**Objective**: ${target.objective}`)
     if (target.acceptance_specs.length > 0) {
       lines.push("")
-      lines.push("**Acceptance Specs** (every one MUST be observably satisfied before report_build_passed):")
+      lines.push("**Acceptance Specs** (every one MUST be observably satisfied before report_build_result status='passed'):")
       for (const spec of target.acceptance_specs) lines.push(`- ${spec}`)
     }
     if (target.owned_paths.length > 0) {

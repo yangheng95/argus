@@ -58,8 +58,8 @@ export const BuildTestResult = z.object({
 export type BuildTestResult = z.infer<typeof BuildTestResult>
 
 /**
- * Terminal payload the build agent records through report_build_passed or
- * report_build_failed. Orchestrator reads this typed result and decides
+ * Terminal payload the build agent records through report_build_result.
+ * Orchestrator reads this typed result and decides
  * whether to call `deliver`, `build` again with feedback, or stop.
  *
  * `status="passed"` means the build agent believes every acceptance_spec is met

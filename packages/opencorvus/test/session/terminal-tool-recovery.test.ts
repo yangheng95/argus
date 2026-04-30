@@ -25,33 +25,41 @@ describe("SessionLoop terminal tool recovery", () => {
     ).toBe(false)
   })
 
-  test("can hard-pin a single terminal tool when explicitly requested", () => {
+  test("hard-pins a single terminal tool when collector facts are ready", () => {
     const contract = {
       toolName: "submit_architect",
       isSatisfied: () => false,
+      isReadyToFinalize: () => true,
     }
     const tools = { submit_architect: {} as any, register_goal: {} as any }
 
-    expect(SessionLoop.terminalToolChoice(contract, tools)).toBe("required")
-    expect(
-      SessionLoop.terminalToolChoice(contract, tools, { forceTerminalTool: true }),
-    ).toEqual({ type: "tool", toolName: "submit_architect" })
+    expect(SessionLoop.terminalToolChoice(contract, tools)).toEqual({
+      type: "tool",
+      toolName: "submit_architect",
+    })
   })
 
-  test("keeps discriminator terminal tools on required choice instead of pinning one branch", () => {
+  test("keeps work tools available until collector facts are ready to finalize", () => {
     const contract = {
-      toolName: "report_build_passed",
-      toolNames: ["report_build_passed", "report_build_failed"],
-      allowHardPin: false,
+      toolName: "report_build_result",
       isSatisfied: () => false,
+      isReadyToFinalize: () => false,
     }
     const tools = {
-      report_build_passed: {} as any,
-      report_build_failed: {} as any,
+      report_build_result: {} as any,
+      merge_back: {} as any,
     }
 
-    expect(
-      SessionLoop.terminalToolChoice(contract, tools, { forceTerminalTool: true }),
-    ).toBe("required")
+    expect(SessionLoop.terminalToolChoice(contract, tools)).toBe("required")
+  })
+
+  test("does not choose a terminal tool that is absent from the model tool set", () => {
+    const contract = {
+      toolName: "submit_architect",
+      isSatisfied: () => false,
+      isReadyToFinalize: () => true,
+    }
+
+    expect(SessionLoop.terminalToolChoice(contract, { register_goal: {} as any })).toBeUndefined()
   })
 })
