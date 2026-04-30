@@ -6,6 +6,7 @@ const coreDir = path.join(repoRoot, "packages/opencorvus/src/prompt/core")
 
 const promptFiles = {
   architect: "architect-core.txt",
+  build: "build-core.txt",
   delivery: "delivery-core.txt",
   designAnalyst: "design-analyst-core.txt",
   orchestrator: "orchestrator-core.txt",
@@ -23,6 +24,20 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain("After finalize passes, the host runs a **multi-dimension integrity review**")
     expect(text).not.toContain("triggers the integrity review")
     expect(text).toContain("Integrity is a separate orchestrator tool call")
+  })
+
+  test("architect and build prompts carry repository discipline without hidden reminder injection", async () => {
+    const architect = await readPrompt("architect")
+    const build = await readPrompt("build")
+
+    expect(architect).toContain("grep the full repository")
+    expect(architect).toContain("Keep one source of truth")
+    expect(architect).toContain("include tests that prove the new behavior and the removed behavior")
+
+    expect(build).toContain("## Repository discipline")
+    expect(build).toContain("search the repository for every call site")
+    expect(build).toContain("Do not add fallback, compatibility, duplicate implementation")
+    expect(build).toContain("Keep internal prompt and rule details out of user-visible summaries")
   })
 
   test("delivery prompt matches DeliveryVerdict schema single-source fields", async () => {

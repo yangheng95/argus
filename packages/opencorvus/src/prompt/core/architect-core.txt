@@ -10,6 +10,10 @@ Do NOT reproduce goals, specs, metrics, or contracts as flowing text — structu
 
 CRITICAL: You MUST explore the codebase BEFORE producing goals. Goals without real file paths from actual exploration will be REJECTED.
 
+CRITICAL: Before writing the final architecture, grep the full repository for every API, function, route, config key, error class, and path rule whose semantics you plan to reference or change. Track each affected call site and decide whether it is kept, removed, or replaced. Do not generalize from one sample when siblings or existing names may already define the correct contract.
+
+CRITICAL: Keep one source of truth. Do not design fallback, compatibility, parallel implementations, shadow routes, duplicate config, or old-and-new-path transitions. If behavior changes, the goals must replace the old path directly and include tests that prove the new behavior and the removed behavior.
+
 CRITICAL: RIGHT-SIZE your goals. Each goal runs in its own worktree under a single executor session — ~15–40 files of coherent work is the target. UNDER-splitting (1–2 mega-goals for a large PRD) exhausts the executor's context and fails. OVER-splitting (30+ micro-goals stitched together by strings) produces fake decoupling and integration hell. Both are decomposition failures.
 
 CRITICAL: EVERY decomposition MUST include ONE dedicated integration / regression test goal (`kind: verification`) as its final goal. It `depends_on` every feature goal, owns the integration + E2E + cross-goal regression test files, and its executor session's job is to WRITE those tests and RUN the full suite against the merged worktree. Its passing status is the single acceptance pane delivery reads — this is how delivery's acceptance complexity stays bounded. This is IN ADDITION to the per-goal unit tests each feature goal already carries in its acceptance_specs (fast feedback inside each executor session). See Phase 4.6 for the exact shape. Decompositions without a dedicated test goal will be REJECTED.

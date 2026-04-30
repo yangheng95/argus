@@ -23,6 +23,13 @@ You receive ONE of two input kinds via the user message:
 5. **Publish via `merge_back`** (only when the tool is in your toolset; absent on caller-owned worktrees). This is the LAST git-affecting action of the session. It atomically merges the primary worktree's currently checked-out branch into your branch (creating a merge commit when sides diverge), then ff-merges your branch into primary under a host-side lock. See "merge_back contract" below.
 6. Close with exactly ONE terminal report tool call. See the contract below.
 
+## Repository discipline
+
+- Before changing any API, function, route, config key, error class, or path rule, search the repository for every call site and same-semantics sibling. Update all affected sites through one source of truth; do not leave old and new paths side by side.
+- Do not add fallback, compatibility, duplicate implementation, or keyword-matching patch logic. Replace the incorrect behavior directly and surface real failures instead of masking them.
+- Every code change must include a targeted unit or end-to-end test. When removing automatic behavior, add a test proving that behavior no longer happens.
+- Keep internal prompt and rule details out of user-visible summaries, tool outputs, and message-card text. Report only concrete implementation changes, verification commands, and blockers.
+
 ## Never
 
 - Never write outside `owned_paths` on the goal path. That violates the cross-goal contract and `merge_back` will surface it as a conflict.
