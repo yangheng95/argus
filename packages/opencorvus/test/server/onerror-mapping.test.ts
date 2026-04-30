@@ -6,6 +6,7 @@ import { Worktree } from "../../src/worktree/index"
 import { Server } from "../../src/server/server"
 import { Provider } from "../../src/provider/provider"
 import { NotFoundError } from "../../src/storage/db"
+import { Filesystem } from "../../src/util/filesystem"
 import { Log } from "../../src/util/log"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 
@@ -45,6 +46,7 @@ function buildOnErrorProbe(throwFn: () => never): Hono {
       if (err instanceof NotFoundError) status = 404
       else if (err instanceof Provider.ModelNotFoundError) status = 400
       else if (err instanceof Server.DirectoryRequiredError) status = 400
+      else if (err instanceof Filesystem.InvalidDirectoryError) status = 400
       else if (err.name === "WorktreeNotGitError") status = 412
       else if (err.name.startsWith("Worktree")) status = 400
       else status = 500
@@ -78,6 +80,20 @@ describe("server onError NamedError → status code mapping (W2-V31)", () => {
       },
       400,
       "DirectoryRequiredError",
+    )
+  })
+
+  test("Filesystem.InvalidDirectoryError maps to 400", async () => {
+    await expectMapping(
+      () => {
+        throw new Filesystem.InvalidDirectoryError({
+          value: "C:\\Users\\foo",
+          reason: "windows-path-on-posix",
+          message: "windows path on posix",
+        })
+      },
+      400,
+      "InvalidDirectoryError",
     )
   })
 
