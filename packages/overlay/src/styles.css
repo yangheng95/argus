@@ -11909,7 +11909,7 @@ body[data-theme="light"] .btn-primary {
   }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 760px) {
   .titlebar {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -11920,6 +11920,55 @@ body[data-theme="light"] .btn-primary {
   .titlebar-utility {
     flex-basis: 100%;
     justify-content: flex-start;
+  }
+
+  .titlebar-utility,
+  .titlebar-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .titlebar-utility {
+    margin-left: 0;
+  }
+
+  .titlebar-actions {
+    justify-content: flex-end;
+    gap: calc(3px * var(--ui-scale));
+  }
+
+  .titlebar-status-chip,
+  .titlebar-status-icon {
+    display: none;
+  }
+
+  .titlebar-setup-cta {
+    flex-shrink: 0;
+    max-width: calc(56px * var(--ui-scale));
+    padding-inline: calc(7px * var(--ui-scale));
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .titlebar-menubar {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: calc(1px * var(--ui-scale));
+  }
+
+  .titlebar-menubar-trigger {
+    width: calc(24px * var(--ui-scale));
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .titlebar-menubar-trigger::after {
+    content: attr(data-compact);
+    font-size: var(--ui-font-control);
   }
 
   .engine-bar {
