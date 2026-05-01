@@ -21,6 +21,7 @@ export {
   requiredReviewersForSurfaces,
   validateDeliverySpecialistReview,
 } from "./specialist-review"
+export { runTestIntegrationReview } from "./specialists/test-integration"
 export type {
   DeliveryReviewFinding,
   DeliverySpecialistReview,

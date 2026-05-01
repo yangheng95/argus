@@ -195,8 +195,8 @@ Detector rules must be structural:
 - route detection reads server route registrations or framework conventions.
 - visual detection reads the task request, design analysis output, attachments,
   and runtime probes.
-- test detection reads test directories, package scripts, and goal acceptance
-  specs.
+- test detection reads test directories and package scripts; the selected
+  reviewer then maps those tests back to goal acceptance specs.
 - security detection reads code and config surfaces, not generic keywords alone.
 
 ## Specialist Output Contract
@@ -469,6 +469,8 @@ Completed in Phase 2 implementation:
 
 ### Phase 3: Test And Integration Review
 
+Status: complete.
+
 Reason to implement first: it catches fake acceptance, stub tests, and missing
 coverage across every project type.
 
@@ -484,6 +486,23 @@ Acceptance:
 - Fixture with fake tests is rejected.
 - Fixture with meaningful tests and passing commands passes this reviewer.
 - Findings identify file and command evidence.
+
+Completed in Phase 3 implementation:
+
+- Added `packages/opencorvus/src/delivery/specialists/test-integration.ts`
+  as the deterministic `test_integration_review` evidence producer.
+- The reviewer consumes the surface manifest, package test script, test files,
+  existing command results, and goal requirement IDs without introducing a
+  second command execution path.
+- It emits blocking `test_quality` findings for empty test files, no-op test
+  scripts, snapshot-only test shells, missing test files for acceptance-backed
+  goals, failing required test commands, and tests without observable
+  assertions.
+- Requirement-ID mapping gaps are recorded as major specialist findings for the
+  future arbiter, while fake-green and missing-test evidence blocks the existing
+  delivery evidence gate immediately.
+- Meaningful acceptance-mapped tests produce a completed specialist review with
+  concrete file and command evidence refs and no findings.
 
 ### Phase 4: Frontend And Visual Runtime Reviews
 

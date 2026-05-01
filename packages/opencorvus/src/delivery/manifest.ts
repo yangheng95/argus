@@ -3,6 +3,7 @@ import { and, Database, desc, eq } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import { Identifier } from "@/id/id"
 import type { DeliverySurfaceManifest } from "./surface-detector"
+import type { DeliverySpecialistReview } from "./specialist-review"
 
 export type DeliveryCheckStatus = "passed" | "failed" | "skipped"
 
@@ -107,6 +108,7 @@ export type DeliveryEvidenceManifest = {
   runtimeFlows: DeliveryRuntimeFlowResult[]
   reviewEvidence: DeliveryReviewEvidence[]
   surfaceManifest?: DeliverySurfaceManifest
+  specialistReviews?: DeliverySpecialistReview[]
   changedFiles: string[]
   finalGate: DeliveryGateVerdict
   timeCreated: number
@@ -240,6 +242,20 @@ export function persistDeliveryEvidenceManifest(input: {
         time_updated: input.manifest.surfaceManifest.timeCreated,
       }).run()
     }
+    for (const review of input.manifest.specialistReviews ?? []) {
+      db.insert(EngineArtifactTable).values({
+        id: review.id,
+        task_id: review.taskId,
+        run_id: review.runId,
+        goal_run_id: review.goalRunId,
+        delivery_id: review.deliveryId,
+        kind: "delivery_specialist_review",
+        label: `delivery-specialist-review:${review.reviewer}`,
+        payload: review,
+        time_created: review.timeCreated,
+        time_updated: review.timeCreated,
+      }).run()
+    }
     db.insert(EngineArtifactTable).values({
       id: input.manifest.id,
       task_id: input.manifest.taskId!,
@@ -324,7 +340,13 @@ export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest)
   const coverageKeys = manifest.finalGate.failedCoverageIds.map((item) => `coverage:${item}`)
   const runtimeKeys = manifest.finalGate.failedRuntimeFlowIds.map((item) => `runtime:${item}`)
   const reviewKeys = (manifest.finalGate.failedReviewIds ?? []).map((item) => `review:${item}`)
-  return [...new Set([...checkKeys, ...coverageKeys, ...runtimeKeys, ...reviewKeys])].sort()
+  const specialistKeys = (manifest.specialistReviews ?? [])
+    .flatMap((review) =>
+      review.findings
+        .filter((finding) => finding.proposedSeverity === "blocking")
+        .map((finding) => `specialist:${review.reviewer}:${finding.category}:${finding.claim}`),
+    )
+  return [...new Set([...checkKeys, ...coverageKeys, ...runtimeKeys, ...reviewKeys, ...specialistKeys])].sort()
 }
 
 export function repeatedDeliveryFailureSignatures(input: {
