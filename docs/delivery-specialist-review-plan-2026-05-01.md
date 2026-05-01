@@ -635,6 +635,10 @@ Completed in Phase 7 implementation:
 - Final persistence still writes only the existing `kind="verdict"` artifact
   with `label="delivery-agent-verdict"`; no `delivery_arbiter_verdict` path was
   added.
+- Delivery prompt broad review sections were narrowed so DeliveryAgent consumes
+  specialist evidence for API, client, security/data, visual-runtime, and
+  test-quality surfaces instead of duplicating those policies in its main
+  prompt.
 
 ## Benchmark Plan
 
