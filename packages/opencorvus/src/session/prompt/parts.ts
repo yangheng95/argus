@@ -215,6 +215,10 @@ export async function createUserMessage(input: PromptInput) {
                 part.mime = "application/x-directory"
               }
 
+              if (Filesystem.isTextLikeMime(part.mime)) {
+                part.mime = "text/plain"
+              }
+
               if (part.mime === "text/plain") {
                 let offset: number | undefined = undefined
                 let limit: number | undefined = undefined
