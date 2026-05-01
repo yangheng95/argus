@@ -28,6 +28,19 @@ test("returns default native agents when no config", async () => {
   })
 })
 
+test("planner is not exposed as a native agent", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await Agent.get("planner")).toBeUndefined()
+      expect(await Agent.nativeDefaultPrompt("planner")).toBeUndefined()
+      const agents = await Agent.list()
+      expect(agents.map((a) => a.name)).not.toContain("planner")
+    },
+  })
+})
+
 test("build agent has correct default properties", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -49,7 +62,7 @@ test("build agent has correct default properties", async () => {
 // the current build: there is no "plan" entry in agent.ts's BUILT_IN
 // dict (only build / general / explore / compaction / title /
 // summary / delivery / orchestrator / requirements / architect /
-// planner / integrity / prosecutor — see agent.ts:144-621). The
+// integrity / prosecutor — see agent.ts). The
 // plan-mode feature was either renamed or removed; the
 // `plan_enter`/`plan_exit` permission keys are no longer in the
 // Permission schema either (see config.ts:625-647 — they fall

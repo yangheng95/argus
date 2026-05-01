@@ -1,5 +1,5 @@
 /**
- * Skill injection for headless agents (spec, planner, delivery, goal).
+ * Skill injection for headless agents (spec, delivery, goal).
  *
  * Loads skills by:
  * 1. Explicit names from config (orchestrator.{stage}.skills)
@@ -110,7 +110,7 @@ export interface ResolvedSkills {
 /**
  * Load skills for a pipeline stage: explicit config + auto-detected.
  * @param explicitNames - skill names from orchestrator config
- * @param stage - pipeline stage ("spec", "planner", "delivery", "goal")
+ * @param stage - pipeline stage ("spec", "delivery", "goal")
  * @param taskSignals - task-level detection signals (attachments, request text)
  */
 export async function loadStageSkills(

@@ -173,7 +173,7 @@ describe("orchestrator protocol", () => {
           sessionID: root.id,
           role: "user",
           time: { created: now },
-          agent: "planner",
+          agent: "architect",
           model: { providerID: "test", modelID: "test" },
         } satisfies Message.User)
         await Session.updatePart({
@@ -181,7 +181,7 @@ describe("orchestrator protocol", () => {
           sessionID: root.id,
           messageID: rootMessageID,
           type: "text",
-          text: "planner output",
+          text: "architect output",
         } satisfies Message.TextPart)
 
         const childMessageID = Identifier.ascending("message")
@@ -296,7 +296,7 @@ describe("orchestrator protocol", () => {
           sessionID: root.id,
           role: "user" as const,
           time: { created: now },
-          agent: "planner",
+          agent: "architect",
           model: { providerID: "test", modelID: "test" },
         } satisfies Message.User
 

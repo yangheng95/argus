@@ -11,7 +11,6 @@ import PROMPT_GENERATE from "./generate.txt"
 import ARCHITECT_CORE from "@/prompt/core/architect-core.txt"
 import REQUIREMENTS_CORE from "@/prompt/core/requirements-core.txt"
 import DESIGN_ANALYST_CORE from "@/prompt/core/design-analyst-core.txt"
-import PLANNER_CORE from "@/prompt/core/planner-core.txt"
 import INTENT_ANALYSIS_CORE from "@/prompt/core/intent-analysis-core.txt"
 import PROMPT_BUILD from "./prompt/build.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -37,7 +36,7 @@ export namespace Agent {
       // Permission ruleset — consumed only by SessionProcessor / SessionPrompt
       // flow (build / spec / plan / general / explore / compaction / title).
       // Stage agents dispatched through SessionPrompt (orchestrator / requirements /
-      // architect / planner / design-analyst / delivery / summary) do NOT consult
+      // architect / design-analyst / delivery / summary) do NOT consult
       // permission; they may omit this field. Code that iterates Agent.Info
       // permission must therefore handle `undefined`.
       permission: PermissionNext.Ruleset.optional(),
@@ -318,29 +317,12 @@ export namespace Agent {
         native: true,
         hidden: true,
       },
-      planner: {
-        // Per-goal implementation planner, dispatched by the build agent via
-        // the `task` tool. Reads the GoalContract + Architect decisions and
-        // produces a stepwise execution plan that the build agent then
-        // implements. The pre-phase-5 path that ran planner before every
-        // goal was deleted (commit a9c3cb5d3); planner is now subagent-mode
-        // so build calls it autonomously when a goal warrants up-front
-        // decomposition, instead of running unconditionally.
-        name: "planner",
-        description: "Per-goal implementation planner. Reads the GoalContract + Architect decisions and produces a stepwise execution plan. Dispatch from the build agent (via the `task` tool) when a goal is large enough to benefit from up-front decomposition before edits.",
-        prompt: PLANNER_CORE,
-        tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "todoread", "todowrite"] },
-        permission: PermissionNext.merge(defaults, user),
-        options: {},
-        mode: "subagent",
-        native: true,
-      },
       "design-analyst": {
         name: "design-analyst",
         description: "Design analyst agent. Analyzes visual references (images, URLs) to produce structured design specifications.",
         prompt: DESIGN_ANALYST_CORE,
         // design-analyst uses dedicated url_screenshot + read_attachment/output
-        // tools in its factory; shared planner tools listed here are the only
+        // tools in its factory; shared context tools listed here are the only
         // ones filtered by include/exclude.
         tools: { include: ["read_file", "find_files", "search_code", "list_directory", "memory_search", "memory_get", "url_screenshot", "todoread", "todowrite"] },
         options: {},
@@ -430,7 +412,6 @@ export namespace Agent {
     compaction: PROMPT_COMPACTION,
     title: PROMPT_TITLE,
     architect: ARCHITECT_CORE,
-    planner: PLANNER_CORE,
     requirements: REQUIREMENTS_CORE,
     "design-analyst": DESIGN_ANALYST_CORE,
     "intent-analysis": INTENT_ANALYSIS_CORE,

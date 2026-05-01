@@ -60,7 +60,6 @@ describe("overlay contract", () => {
           "orchestrator",
           "requirements",
           "architect",
-          "planner",
           "design-analyst",
         ]) {
           expect(names).toContain(expected)
@@ -71,15 +70,15 @@ describe("overlay contract", () => {
 
   test("Agent.list surfaces stage agents and user-facing agents", async () => {
     // audit-2026-04-29 W2-V34 — pre-fix asserted stage agents
-    // (delivery, orchestrator, requirements, architect, planner,
+    // (delivery, orchestrator, requirements, architect,
     // design-analyst, summary) have UNDEFINED permission and
     // user-facing agents (build, spec, plan, general, explore,
     // compaction, title) have ARRAY permission. Two pieces of
     // drift:
     //   - "spec" and "plan" agents were removed entirely (W2-V27).
-    //   - delivery / planner / others now carry permission rulesets
+    //   - delivery / others now carry permission rulesets
     //     (see agent.ts:289 for delivery `PermissionNext.merge(
-    //     defaults, user)`; planner same pattern at line 407).
+    //     defaults, user)`).
     //     The "AgentRuntime-driven, no permission needed"
     //     architecture changed.
     // The assertion was tracking an internal invariant that no
@@ -97,7 +96,6 @@ describe("overlay contract", () => {
           "orchestrator",
           "requirements",
           "architect",
-          "planner",
           "design-analyst",
           "summary",
         ]) {

@@ -22,7 +22,7 @@
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
 import { AttachmentStore } from "@/storage/attachment-store"
-import { createPlannerTools } from "@/planner/tools"
+import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import type { IntentAnalysisResult } from "./types"
@@ -122,14 +122,14 @@ export namespace IntentAnalysisAgent {
 }
 
 // ---------------------------------------------------------------------------
-// Tool kit — planner read-only tools + intent-specific collector tools.
+// Tool kit — shared read-only context tools + intent-specific collector tools.
 // ---------------------------------------------------------------------------
 
 async function buildToolKit() {
-  const plannerTools = await filterAgentTools(createPlannerTools(), "intent-analysis")
+  const contextTools = await filterAgentTools(createAgentContextTools(), "intent-analysis")
   const outputToolKit = createIntentOutputTools()
   return {
-    tools: { ...plannerTools, ...outputToolKit.tools },
+    tools: { ...contextTools, ...outputToolKit.tools },
     getCollector: () => outputToolKit.getCollector(),
   }
 }

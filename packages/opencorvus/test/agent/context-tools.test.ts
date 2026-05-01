@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { createPlannerTools } from "../../src/planner/tools"
+import { createAgentContextTools } from "../../src/agent/context-tools"
 import { Instance } from "../../src/project/instance"
 
-describe("planner tools", () => {
+describe("agent context tools", () => {
   const original = process.env.OPENCORVUS_ENABLE_WEB_SEARCH
   beforeEach(() => {
     delete process.env.OPENCORVUS_ENABLE_WEB_SEARCH
@@ -16,7 +16,7 @@ describe("planner tools", () => {
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {
-        const tools = createPlannerTools()
+        const tools = createAgentContextTools()
         expect("web_search" in tools).toBe(false)
       },
     })
@@ -27,7 +27,7 @@ describe("planner tools", () => {
     await Instance.provide({
       directory: process.cwd(),
       fn: async () => {
-        const tools = createPlannerTools()
+        const tools = createAgentContextTools()
         expect("web_search" in tools).toBe(true)
       },
     })

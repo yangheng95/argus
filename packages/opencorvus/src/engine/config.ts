@@ -1,7 +1,7 @@
 /**
  * EngineConfig — 编排 agent 的统一配置中心
  *
- * 所有 agent（requirements / planner / evaluator / delivery）和编排策略的默认值
+ * 所有 agent（requirements / architect / delivery）和编排策略的默认值
  * 集中定义在此，并从 opencorvus.jsonc 的 `assistant` 字段加载用户自定义值。
  *
  * 优先级：opencorvus.jsonc > 此处硬编码默认值
@@ -24,11 +24,6 @@ interface RequirementsConfig {
 }
 
 interface ArchitectConfig {
-  max_steps: number
-  skills: string[]
-}
-
-interface PlannerConfig {
   max_steps: number
   skills: string[]
 }
@@ -137,7 +132,6 @@ interface DeliveryVisualConfig {
 export interface EngineConfigType {
   requirements: RequirementsConfig
   architect: ArchitectConfig
-  planner: PlannerConfig
   delivery: DeliveryConfig
   delivery_visual: DeliveryVisualConfig
   design_analyst: DesignAnalystConfig
@@ -169,10 +163,6 @@ const DEFAULTS: EngineConfigType = {
     skills: [],
   },
   architect: {
-    max_steps: 1000,
-    skills: [],
-  },
-  planner: {
     max_steps: 1000,
     skills: [],
   },
@@ -282,10 +272,6 @@ function merge(user?: Config.Info["assistant"]): EngineConfigType {
     architect: {
       max_steps: user?.architect?.max_steps ?? DEFAULTS.architect.max_steps,
       skills: user?.architect?.skills ?? DEFAULTS.architect.skills,
-    },
-    planner: {
-      max_steps: user?.planner?.max_steps ?? DEFAULTS.planner.max_steps,
-      skills: user?.planner?.skills ?? DEFAULTS.planner.skills,
     },
     delivery: {
       max_steps: user?.delivery?.max_steps ?? DEFAULTS.delivery.max_steps,

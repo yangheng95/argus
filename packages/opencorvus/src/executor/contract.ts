@@ -108,7 +108,7 @@ export type ExecutorAdapter = {
     sessionID: string
     prompt: string
     priority?: "critical" | "high" | "normal" | "low"
-    source?: "planner" | "evaluator" | "system"
+    source?: "evaluator" | "system"
     cwd?: string
     /** Per-submission system prompt override — takes precedence over options.system. */
     system?: string
