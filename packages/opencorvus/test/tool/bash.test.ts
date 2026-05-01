@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import os from "os"
 import path from "path"
-import { BashTool } from "../../src/tool/bash"
+import { BashTool, disposeSyntaxTree } from "../../src/tool/bash"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -23,6 +23,19 @@ const ctx = {
 const projectRoot = path.join(__dirname, "../..")
 
 describe("tool.bash", () => {
+  test("disposes parser syntax trees after extracting permission metadata", () => {
+    let disposed = false
+
+    disposeSyntaxTree({
+      delete() {
+        disposed = true
+      },
+    })
+
+    expect(disposed).toBe(true)
+    expect(() => disposeSyntaxTree({})).not.toThrow()
+  })
+
   test("basic", async () => {
     await Instance.provide({
       directory: projectRoot,

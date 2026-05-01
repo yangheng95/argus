@@ -323,6 +323,33 @@ describe("tool.edit", () => {
   })
 
   describe("edge cases", () => {
+    test("preserves a leading Byte Order Mark when editing existing text", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "marked.txt")
+      await fs.writeFile(filepath, Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from("alpha\nbeta")]))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          FileTime.read(ctx.sessionID, filepath)
+
+          const edit = await EditTool.init()
+          await edit.execute(
+            {
+              filePath: filepath,
+              oldString: "alpha",
+              newString: "omega",
+            },
+            ctx,
+          )
+
+          const buf = await fs.readFile(filepath)
+          expect([...buf.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+          expect(buf.toString("utf-8")).toBe("\ufeffomega\nbeta")
+        },
+      })
+    })
+
     test("handles multiline replacements", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")
