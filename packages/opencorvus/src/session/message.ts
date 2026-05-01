@@ -622,34 +622,48 @@ export namespace Message {
       return false
     })()
 
-    const toModelOutput = (output: unknown) => {
+    // AI SDK v6 invokes tool.toModelOutput with an args object
+    // ({ toolCallId, input, output }), not a raw output. v5 passed `output`
+    // directly. Reading the wrapped argument as if it were the output gave
+    // outputObject.text === undefined for every tool result, which the v6
+    // ToolModelOutput zod schema rejected ("expected string, received
+    // undefined" at value[0].text), surfacing as
+    // `Invalid prompt: The messages do not match the ModelMessage[] schema`
+    // and a hard orchestrator retry loop.
+    const toModelOutput = (args: { toolCallId: string; input: unknown; output: unknown }) => {
+      const { output } = args
       if (typeof output === "string") {
         return { type: "text", value: output }
       }
 
-      if (typeof output === "object") {
+      if (typeof output === "object" && output !== null) {
         const outputObject = output as {
-          text: string
+          text?: string
           attachments?: Array<{ mime: string; url: string }>
         }
         const attachments = (outputObject.attachments ?? []).filter((attachment) => {
           return attachment.url.startsWith("data:") && attachment.url.includes(",")
         })
 
-        return {
-          type: "content",
-          value: [
-            { type: "text", text: outputObject.text },
-            ...attachments.map((attachment) => ({
-              type: "media",
-              mediaType: attachment.mime,
-              data: iife(() => {
-                const commaIndex = attachment.url.indexOf(",")
-                return commaIndex === -1 ? attachment.url : attachment.url.slice(commaIndex + 1)
-              }),
-            })),
-          ],
-        }
+        // ToolModelOutput.content also rejects a `text` part with undefined or
+        // empty text (screenshot-only outputs) — drop the text part when the
+        // tool produced no caption. Use `image-data` (v6 preferred) over the
+        // deprecated `media` discriminator for base64 image attachments.
+        const textPart =
+          typeof outputObject.text === "string" && outputObject.text.length > 0
+            ? [{ type: "text" as const, text: outputObject.text }]
+            : []
+        const attachmentParts = attachments.map((attachment) => ({
+          type: "image-data" as const,
+          mediaType: attachment.mime,
+          data: iife(() => {
+            const commaIndex = attachment.url.indexOf(",")
+            return commaIndex === -1 ? attachment.url : attachment.url.slice(commaIndex + 1)
+          }),
+        }))
+        const value = [...textPart, ...attachmentParts]
+        if (value.length === 0) return { type: "json", value: outputObject as never }
+        return { type: "content", value }
       }
 
       return { type: "json", value: output as never }
