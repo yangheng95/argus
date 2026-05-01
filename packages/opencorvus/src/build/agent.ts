@@ -177,7 +177,7 @@ export namespace BuildAgent {
     const mcpPrompt = input.executor === "codex"
       ? MCPServe.codingExecutorPromptSection()
       : ""
-    const system = [input.baseSystem ?? "", mcpPrompt, input.skillPrompt ?? ""]
+    const system = [input.baseSystem ?? "", externalBuildSystemContract(input.executor), mcpPrompt, input.skillPrompt ?? ""]
       .map((s) => s.trim())
       .filter(Boolean)
       .join("\n\n")
@@ -710,6 +710,24 @@ export namespace BuildAgent {
   }
 }
 
+function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "opencode">): string {
+  return [
+    `You are the OpenCorvus external build executor running through ${executor}.`,
+    "",
+    "Your job is to implement the scoped build request in the current worktree, verify it, and commit the result on the worktree branch.",
+    "",
+    "Hard contract:",
+    "- Treat the user prompt as a build contract, not as a chat request.",
+    "- Read only the files needed to confirm dependencies and local patterns, then edit the owned files.",
+    "- Do not perform broad inventories or spawn exploratory subagents unless a concrete missing dependency blocks implementation.",
+    "- Keep reasoning, plans, prompt/rule details, and progress narration out of assistant text. Use tools to act.",
+    "- Run the acceptance commands from the prompt before claiming success.",
+    "- Commit changes with a concrete commit message before finishing.",
+    "- If the dependency contract is missing, verification fails, or you cannot commit, finish with a concise failure summary and the exact blocker.",
+    "- Do not call OpenCorvus-only tools such as report_build_result or merge_back; the host will publish and synthesize the terminal BuildResult after your process exits.",
+  ].join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // External CodingProvider dispatch
 // ---------------------------------------------------------------------------
@@ -952,7 +970,7 @@ export function externalToolProtocolErrorMessage(input: {
   )
 }
 
-function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
+export function externalEventPartText(event: CodingEventInfo, executor: string): string | undefined {
   // Progress events are intentionally NOT rendered as user-visible parts:
   // claude-code + codex both emit a stream of fine-grained "Phase: X" /
   // "Summary: Y" pings that bury the actual conversation under noise.
@@ -1029,7 +1047,16 @@ async function runWithExternalProvider(args: {
     // to terminate. Actor close paths still cover this.
     throw err
   }
-  SessionStatus.set(result.sessionID, { type: "terminal", reason: "completed" })
+  const parsed = BuildResultSchema.safeParse(result.structured)
+  if (parsed.success && parsed.data.status === "failed") {
+    SessionStatus.set(result.sessionID, {
+      type: "terminal",
+      reason: "error",
+      error: parsed.data.error,
+    })
+  } else {
+    SessionStatus.set(result.sessionID, { type: "terminal", reason: "completed" })
+  }
   return result
 }
 
@@ -1110,11 +1137,9 @@ async function runWithExternalProviderImpl(args: {
   let errored: string | undefined
   const protocolErrors: string[] = []
 
-  // Live part trackers — events stream in async; we keep open part rows for
-  // text/reasoning to extend, and a callID→ToolPart map so tool_result can
-  // upgrade pending → completed without a second lookup.
-  let activeText: { id: string; buf: string } | undefined
-  let activeReasoning: { id: string; buf: string; start: number } | undefined
+  // Live tool tracker — external assistant narration is intentionally not
+  // materialized as build-card parts. The visible build card is for concrete
+  // tool activity, operator decisions, errors, and host terminal outcome.
   const tools = new Map<string, {
     id: string
     name: string
@@ -1123,36 +1148,9 @@ async function runWithExternalProviderImpl(args: {
     start: number
   }>()
 
-  const flushText = async (final: boolean) => {
-    if (!activeText) return
-    await Session.updatePart({
-      id: activeText.id,
-      sessionID: session.id,
-      messageID: assistantMessageID,
-      type: "text",
-      text: activeText.buf,
-    })
-    if (final) activeText = undefined
-  }
-
-  const flushReasoning = async (final: boolean) => {
-    if (!activeReasoning) return
-    await Session.updatePart({
-      id: activeReasoning.id,
-      sessionID: session.id,
-      messageID: assistantMessageID,
-      type: "reasoning",
-      text: activeReasoning.buf,
-      time: { start: activeReasoning.start, ...(final ? { end: Date.now() } : {}) },
-    })
-    if (final) activeReasoning = undefined
-  }
-
   const appendExternalEventPart = async (event: CodingEventInfo) => {
     const text = externalEventPartText(event, args.executor)
     if (!text) return
-    if (activeText) await flushText(true)
-    if (activeReasoning) await flushReasoning(true)
     await Session.updatePart({
       id: Identifier.ascending("part"),
       sessionID: session.id,
@@ -1237,26 +1235,14 @@ async function runWithExternalProviderImpl(args: {
       events.push(event)
       switch (event.type) {
         case "text_delta": {
-          if (activeReasoning) await flushReasoning(true)
-          if (!activeText) activeText = { id: Identifier.ascending("part"), buf: "" }
-          activeText.buf += event.text
           textCharCount += event.text.length
-          await flushText(false)
           break
         }
         case "reasoning_delta": {
-          if (activeText) await flushText(true)
-          if (!activeReasoning) {
-            activeReasoning = { id: Identifier.ascending("part"), buf: "", start: Date.now() }
-          }
-          activeReasoning.buf += event.text
-          await flushReasoning(false)
           break
         }
         case "tool_call": {
           toolUseCount += 1
-          if (activeText) await flushText(true)
-          if (activeReasoning) await flushReasoning(true)
           const partID = Identifier.ascending("part")
           const start = Date.now()
           const inputObj = externalToolInput(event.input)
@@ -1369,9 +1355,7 @@ async function runWithExternalProviderImpl(args: {
     gate.dispose()
   }
 
-  // Finalize any open parts so overlay sees the closing state.
-  if (activeText) await flushText(true)
-  if (activeReasoning) await flushReasoning(true)
+  // Finalize any open tool parts so overlay sees the closing state.
   for (const [callID, t] of tools) {
     const end = Date.now()
     const protocolError = externalToolProtocolErrorMessage({
