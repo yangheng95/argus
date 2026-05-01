@@ -26,6 +26,30 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("Integrity is a separate orchestrator tool call")
   })
 
+  test("architect prompt ships the chat-app worked example so feature-rich SPA briefs have a reference shape", async () => {
+    const text = await readPrompt("architect")
+    expect(text).toContain("WORKED EXAMPLE — feature-rich frontend (chat-app)")
+    // Goal IDs from the canonical 10-goal decomposition must all be present so the
+    // example stays a coherent set, not a drifting fragment.
+    for (const id of [
+      "goal_bootstrap",
+      "goal_shared_types",
+      "goal_storage",
+      "goal_auth",
+      "goal_sse_manager",
+      "goal_claude_api",
+      "goal_chat_components",
+      "goal_hooks",
+      "goal_pages",
+      "goal_tests",
+    ]) {
+      expect(text).toContain(id)
+    }
+    // The fully-worked register_goal anchor and the cross-goal contract anchor must both survive edits.
+    expect(text).toContain('id: "goal_sse_manager"')
+    expect(text).toContain('category: "shared_type"')
+  })
+
   test("architect and build prompts carry repository discipline without hidden reminder injection", async () => {
     const architect = await readPrompt("architect")
     const build = await readPrompt("build")
