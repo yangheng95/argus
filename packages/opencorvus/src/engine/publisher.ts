@@ -238,6 +238,16 @@ export namespace Publisher {
       }
     }
 
+    const patchGate = validatePatchExport(input.delivery, artifacts)
+    if (patchGate) {
+      return {
+        status: "failed" as const,
+        summary: patchGate,
+        artifacts,
+        publish,
+      }
+    }
+
     return {
       status: "delivered" as const,
       summary:
@@ -248,4 +258,26 @@ export namespace Publisher {
       publish,
     }
   }
+}
+
+function validatePatchExport(delivery: DeliveryRow, artifacts: DeliveryArtifact[]) {
+  const declaredChangedFiles = Array.isArray(delivery.result?.changed_files)
+    ? delivery.result.changed_files.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : []
+  if (declaredChangedFiles.length === 0) return undefined
+  const patchArtifact = artifacts.find((item) => item.kind === "patch" && item.label === "delivery.patch")
+  const payload = patchArtifact?.payload
+  const exportedChangedFiles = Array.isArray(payload?.changed_files)
+    ? payload.changed_files.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : []
+  const patch = typeof payload?.patch === "string" ? payload.patch : ""
+  const exportedSet = new Set(exportedChangedFiles)
+  const missingDeclaredFiles = declaredChangedFiles.filter((item) => !exportedSet.has(item))
+  if (exportedChangedFiles.length === 0 || patch.trim().length === 0 || missingDeclaredFiles.length > 0) {
+    return (
+      `Publish blocked: delivery declared ${declaredChangedFiles.length} changed file(s), ` +
+      `but workspace_export did not include ${missingDeclaredFiles.length} declared file(s) from the publish baseline.`
+    )
+  }
+  return undefined
 }

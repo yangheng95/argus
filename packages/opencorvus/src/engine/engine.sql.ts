@@ -109,6 +109,7 @@ export type EngineArtifactKind =
   | "evaluation"
   | "pr"
   | "verification-evidence"
+  | "delivery_evidence_manifest"
   | "delivery"
   | "goal_run_attempt"
   | "integrity_attempt"
