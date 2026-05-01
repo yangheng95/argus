@@ -400,6 +400,8 @@ Phase 0 implementation note:
 
 ### Phase 1: Surface Detector
 
+Status: complete.
+
 Tasks:
 
 - Add `DeliverySurfaceManifest` and detector implementation.
@@ -418,6 +420,18 @@ Acceptance:
 - No keyword-only detection is accepted.
 - Existing deterministic gates consume the same detector result where they need
   project-surface classification.
+
+Completed in Phase 1 implementation:
+
+- Added `packages/opencorvus/src/delivery/surface-detector.ts` as the single
+  owner of delivery surface selection.
+- Added `delivery_surface_manifest` artifact persistence through the existing
+  delivery evidence manifest writer and reader helpers.
+- Wired `buildDeliveryEvidenceManifest()` to attach one surface manifest and
+  made runtime flow classification consume that manifest instead of re-reading
+  package frontend metadata.
+- Added detector fixtures for frontend, backend API, fullstack, visual runtime,
+  security/data, and text-only non-detection cases.
 
 ### Phase 2: Shared Specialist Review Contract
 

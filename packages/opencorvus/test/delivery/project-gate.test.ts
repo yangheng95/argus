@@ -268,6 +268,37 @@ console.log("lint scope ok", cwd())
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
   })
 
+  test("attaches surface manifest and uses it for frontend runtime classification", async () => {
+    const dir = await packageFixture(
+      { build: "bun -e \"process.exit(1)\"" },
+      {
+        dependencies: { react: "latest" },
+        files: {
+          "src/App.tsx": "export function App() { return <main /> }\n",
+        },
+      },
+    )
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_surface_runtime",
+        runID: "run_surface_runtime",
+        deliveryID: "dlv_surface_runtime",
+        changedFiles: ["src/App.tsx"],
+      }),
+    })
+
+    expect(manifest.surfaceManifest?.surfaces).toEqual(["frontend", "visual_runtime"])
+    expect(manifest.runtimeFlows).toEqual([{
+      id: "runtime:web:.",
+      name: "Web Runtime Render",
+      status: "failed",
+      evidence: ["build check failed; runtime render cannot be trusted until build passes"],
+    }])
+    expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
+  })
+
   test("fails non-trivial goal graph when integrity review evidence is missing", async () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",
@@ -326,7 +357,14 @@ console.log("lint scope ok", cwd())
   })
 })
 
-async function packageFixture(scripts: Record<string, string>) {
+async function packageFixture(
+  scripts: Record<string, string>,
+  options?: {
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+    files?: Record<string, string>
+  },
+) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "oc-delivery-gate-"))
   tempDirs.push(dir)
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
@@ -334,7 +372,14 @@ async function packageFixture(scripts: Record<string, string>) {
   await fs.writeFile(path.join(dir, "package.json"), JSON.stringify({
     type: "module",
     scripts,
+    dependencies: options?.dependencies ?? {},
+    devDependencies: options?.devDependencies ?? {},
   }, null, 2))
+  for (const [file, text] of Object.entries(options?.files ?? {})) {
+    const target = path.join(dir, file)
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, text)
+  }
   return dir
 }
 

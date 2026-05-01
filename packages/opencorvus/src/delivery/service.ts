@@ -93,6 +93,7 @@ export namespace DeliveryService {
         specSnapshotID: input.specSnapshotID,
         iteration: input.iteration,
         changedFiles: input.delivery.changedFiles,
+        taskRequest: input.task.request,
         metadata: input.task.metadata,
         goals: input.goals,
       })
