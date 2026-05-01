@@ -177,7 +177,7 @@ describe("engine queue", () => {
             payload: {
               plan_version_id: null,
               session_id: null,
-              executor: "opencode",
+              executor: "mirrorcode",
               status: "failed",
               phase: "dispatch",
               blocking_reason: null,

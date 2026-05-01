@@ -2,7 +2,7 @@
  * BuildAgent — phase 5-b-2 implementation of the `build` tool's agent body.
  *
  * Replaces the GoalPool + executor adapter path for coding work: instead of
- * delegating to an external coding executor (opencode / codex / claude-code),
+ * delegating to an external coding executor (MirrorCode / codex / claude-code),
  * build runs an in-process LLM via SessionPrompt with the broad coding
  * toolset (read / write / edit / bash / ...) and the build-core prompt.
  *
@@ -170,7 +170,7 @@ export namespace BuildAgent {
   }
 
   export function composeExternalCodingSystem(input: {
-    executor: Exclude<TaskRow["executor"], "opencode">
+    executor: Exclude<TaskRow["executor"], "mirrorcode">
     baseSystem?: string
     skillPrompt?: string
   }) {
@@ -489,14 +489,14 @@ export namespace BuildAgent {
       // real progress.
       let preserveWorktreeForRetry = false
       let mergeBackBlockedReport = false
-      // Dispatch fork: executor === "opencode" → in-process LLM via SessionPrompt
+      // Dispatch fork: executor === "mirrorcode" → in-process LLM via SessionPrompt
       // (the existing runAgentSession path with merge_back tool). Anything else
       // (claude-code, codex) → external CodingProvider; the provider edits files
       // in the worktree on its own, then BuildAgent runs merge_back itself
       // because the SDK has no way to call our merge_back tool.
-      const executor = input.task.executor ?? "opencode"
+      const executor = input.task.executor ?? "mirrorcode"
       try {
-        if (executor === "opencode") {
+        if (executor === "mirrorcode") {
           out = await runAgentSession({
             kind: "build",
             core: BUILD_CORE,
@@ -622,7 +622,7 @@ export namespace BuildAgent {
         // Replaces the rule-7 mergeBackBlockedReport synthesis (rule 17
         // single path; the synthesised "success-encoded-as-failed" result
         // is gone — the typed error carries the same diagnostic detail).
-        if (executor === "opencode") {
+        if (executor === "mirrorcode") {
           if (mergeBackBlockedReport) {
             const lastOutcome = lastMergeBackOutcome ?? "merge_back tool was never invoked"
             throw new BuildAgentContractError(
@@ -710,7 +710,7 @@ export namespace BuildAgent {
   }
 }
 
-function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "opencode">): string {
+function externalBuildSystemContract(executor: Exclude<TaskRow["executor"], "mirrorcode">): string {
   return [
     `You are the OpenCorvus external build executor running through ${executor}.`,
     "",
@@ -1018,11 +1018,11 @@ export function externalEventPartText(event: CodingEventInfo, executor: string):
  * and hydrate paths share the same rendering model.
  *
  * Returns a synthesized `BuildResult` matching `BuildResultSchema` so the
- * post-run path is identical for opencode and external executors (rule 22:
+ * post-run path is identical for MirrorCode and external executors (rule 22:
  * single contract, multiple implementations).
  */
 async function runWithExternalProvider(args: {
-  executor: Exclude<TaskRow["executor"], "opencode">
+  executor: Exclude<TaskRow["executor"], "mirrorcode">
   target: BuildTarget
   taskID: string
   parentSessionID?: string
@@ -1036,7 +1036,7 @@ async function runWithExternalProvider(args: {
   // External-build dispatch boundary: surface terminal to the overlay when
   // the inner function returns (every return below structures failure as a
   // `failed` status rather than throwing) or throws. Mirrors agent/runner.ts
-  // for the opencode executor path; without this the build session card
+  // for the MirrorCode executor path; without this the build session card
   // stays at idle (no checkmark) once the external provider stops streaming.
   // Idempotent: a later actor close just rewrites the same terminal status.
   let result: Awaited<ReturnType<typeof runWithExternalProviderImpl>>
@@ -1061,7 +1061,7 @@ async function runWithExternalProvider(args: {
 }
 
 async function runWithExternalProviderImpl(args: {
-  executor: Exclude<TaskRow["executor"], "opencode">
+  executor: Exclude<TaskRow["executor"], "mirrorcode">
   target: BuildTarget
   taskID: string
   parentSessionID?: string
@@ -1168,7 +1168,7 @@ async function runWithExternalProviderImpl(args: {
   }
 
   // Auto-detect build-stage skills for the same taskSignals the in-process
-  // opencode path uses, and append the skill bundle (stage invariant + matched
+  // MirrorCode path uses, and append the skill bundle (stage invariant + matched
   // skill bodies, e.g. webpage-generate.md / image-generate.md) to the system
   // prompt forwarded to the external coding provider. Without this, claude-code
   // / codex never see the mirror SOP, the hard "no text-only fallback" rule, or

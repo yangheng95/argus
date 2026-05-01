@@ -1421,7 +1421,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "opencode",
+                                "mirrorcode",
                                 "codex",
                                 "claude-code"
                               ]
@@ -1564,7 +1564,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "opencode",
+                      "mirrorcode",
                       "codex",
                       "claude-code"
                     ]
@@ -1821,7 +1821,7 @@
                       "id": {
                         "type": "string",
                         "enum": [
-                          "opencode",
+                          "mirrorcode",
                           "codex",
                           "claude-code"
                         ]
@@ -7386,7 +7386,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "opencode",
+                                "mirrorcode",
                                 "codex",
                                 "claude-code"
                               ]
@@ -7517,7 +7517,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "opencode",
+                      "mirrorcode",
                       "codex",
                       "claude-code"
                     ]
@@ -7644,7 +7644,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "opencode",
+                                "mirrorcode",
                                 "codex",
                                 "claude-code"
                               ]
@@ -7775,7 +7775,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "opencode",
+                      "mirrorcode",
                       "codex",
                       "claude-code"
                     ]
@@ -8882,7 +8882,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "opencode",
+                                "mirrorcode",
                                 "codex",
                                 "claude-code"
                               ]
@@ -8992,7 +8992,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "opencode",
+                      "mirrorcode",
                       "codex",
                       "claude-code"
                     ]
@@ -9174,7 +9174,7 @@
                       "executor": {
                         "type": "string",
                         "enum": [
-                          "opencode",
+                          "mirrorcode",
                           "codex",
                           "claude-code"
                         ]
@@ -10312,7 +10312,7 @@
                       "executor": {
                         "type": "string",
                         "enum": [
-                          "opencode",
+                          "mirrorcode",
                           "codex",
                           "claude-code"
                         ]
@@ -10520,7 +10520,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "opencode",
+                                "mirrorcode",
                                 "codex",
                                 "claude-code"
                               ]
@@ -10644,7 +10644,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "opencode",
+                      "mirrorcode",
                       "codex",
                       "claude-code"
                     ]
@@ -10888,7 +10888,7 @@
                   "executor": {
                     "type": "string",
                     "enum": [
-                      "opencode",
+                      "mirrorcode",
                       "codex",
                       "claude-code"
                     ]
@@ -12621,7 +12621,7 @@
                               "executor": {
                                 "type": "string",
                                 "enum": [
-                                  "opencode",
+                                  "mirrorcode",
                                   "codex",
                                   "claude-code"
                                 ]
@@ -13288,7 +13288,7 @@
                               "executor": {
                                 "type": "string",
                                 "enum": [
-                                  "opencode",
+                                  "mirrorcode",
                                   "codex",
                                   "claude-code"
                                 ]
@@ -14453,7 +14453,7 @@
                         "executor": {
                           "type": "string",
                           "enum": [
-                            "opencode",
+                            "mirrorcode",
                             "codex",
                             "claude-code"
                           ]
@@ -15450,7 +15450,7 @@
                             "executor": {
                               "type": "string",
                               "enum": [
-                                "opencode",
+                                "mirrorcode",
                                 "codex",
                                 "claude-code"
                               ]
@@ -17661,7 +17661,7 @@
                         "executor": {
                           "type": "string",
                           "enum": [
-                            "opencode",
+                            "mirrorcode",
                             "codex",
                             "claude-code"
                           ]
@@ -19191,7 +19191,7 @@
                       "executor": {
                         "type": "string",
                         "enum": [
-                          "opencode",
+                          "mirrorcode",
                           "codex",
                           "claude-code"
                         ]
@@ -20227,7 +20227,7 @@
                     "executor": {
                       "type": "string",
                       "enum": [
-                        "opencode",
+                        "mirrorcode",
                         "codex",
                         "claude-code"
                       ]
@@ -20403,7 +20403,7 @@
                     "executor": {
                       "type": "string",
                       "enum": [
-                        "opencode",
+                        "mirrorcode",
                         "codex",
                         "claude-code"
                       ]
@@ -20639,7 +20639,7 @@
                     "executor": {
                       "type": "string",
                       "enum": [
-                        "opencode",
+                        "mirrorcode",
                         "codex",
                         "claude-code"
                       ]
@@ -20796,7 +20796,7 @@
                     "provider": {
                       "type": "string",
                       "enum": [
-                        "opencode",
+                        "mirrorcode",
                         "codex",
                         "claude-code"
                       ]

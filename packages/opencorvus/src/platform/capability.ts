@@ -156,9 +156,9 @@ export namespace Capability {
   async function executors() {
     const found = await ExecutorDiscovery.scan()
     return [
-      found.opencode.available
-        ? line("executor_opencode", "Executor MirrorCode", "ok", found.opencode.detail)
-        : line("executor_opencode", "Executor MirrorCode", "fail", found.opencode.detail),
+      found.mirrorcode.available
+        ? line("executor_mirrorcode", "Executor MirrorCode", "ok", found.mirrorcode.detail)
+        : line("executor_mirrorcode", "Executor MirrorCode", "fail", found.mirrorcode.detail),
       found.codex.available
         ? line("executor_codex", "Executor codex", "ok", found.codex.version ? `${found.codex.detail} (${found.codex.version})` : found.codex.detail)
         : line(

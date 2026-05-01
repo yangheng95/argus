@@ -135,7 +135,7 @@ test("overlay controls trigger without runtime failures", async () => {
     executors: [
       { id: "codex", label: "Codex", detail: "Connected", version: "1.0.0", selectable: true, discovered: true },
       {
-        id: "opencode",
+        id: "mirrorcode",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",
@@ -157,7 +157,7 @@ test("overlay controls trigger without runtime failures", async () => {
     board: {
       task,
       run: {
-        executor: "opencode",
+        executor: "mirrorcode",
         phase: "execute",
       },
       overview: {

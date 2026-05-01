@@ -17,7 +17,7 @@ const ExecutorToolInfo = z.object({
 })
 
 const ExecutorInfo = z.object({
-  id: z.enum(["opencode", "codex", "claude-code"]),
+  id: z.enum(["mirrorcode", "codex", "claude-code"]),
   label: z.string(),
   registered: z.boolean(),
   discovered: z.boolean(),
@@ -55,28 +55,28 @@ export const ExecutorRoutes = lazy(() => {
     async (c) => {
       await ExecutorBootstrap.autoRegister(true).catch(() => undefined)
       const found = await ExecutorDiscovery.scan()
-      const opencode = protocolInfo("opencode")
+      const mirrorcode = protocolInfo("mirrorcode")
       const codex = protocolInfo("codex")
       const claude = protocolInfo("claude-code")
       const tools = {
-        opencode: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "opencode", capabilities: opencode.capabilities })),
+        mirrorcode: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "mirrorcode", capabilities: mirrorcode.capabilities })),
         codex: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "codex", capabilities: codex.capabilities })),
         claude: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "claude-code", capabilities: claude.capabilities })),
       }
       return c.json([
         {
-          id: "opencode",
+          id: "mirrorcode",
           label: "MirrorCode",
-          registered: ExecutorRegistry.has("opencode"),
-          discovered: found.opencode.available,
-          selectable: ExecutorRegistry.has("opencode"),
-          protocol: opencode.protocol,
-          protocolVersion: opencode.version,
-          transport: opencode.transport.kind,
-          features: opencode.capabilities,
-          tools: tools.opencode,
-          detail: found.opencode.detail,
-          version: found.opencode.version,
+          registered: ExecutorRegistry.has("mirrorcode"),
+          discovered: found.mirrorcode.available,
+          selectable: ExecutorRegistry.has("mirrorcode"),
+          protocol: mirrorcode.protocol,
+          protocolVersion: mirrorcode.version,
+          transport: mirrorcode.transport.kind,
+          features: mirrorcode.capabilities,
+          tools: tools.mirrorcode,
+          detail: found.mirrorcode.detail,
+          version: found.mirrorcode.version,
         },
         {
           id: "codex",

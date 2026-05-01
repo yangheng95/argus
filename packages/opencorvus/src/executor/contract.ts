@@ -2,7 +2,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Snapshot } from "@/snapshot"
 import z from "zod"
 
-export const ExecutorName = z.enum(["opencode", "codex", "claude-code"])
+export const ExecutorName = z.enum(["mirrorcode", "codex", "claude-code"])
 export type ExecutorNameInfo = z.infer<typeof ExecutorName>
 
 export const CodingExecutor = z.enum(["codex", "claude-code"])

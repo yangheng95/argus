@@ -24,7 +24,7 @@ export function createGatewayTools(input: { sessionID: string; defaultCwd: strin
         request: z.string().min(1),
         title: z.string().optional(),
         priority: z.enum(["critical", "high", "normal", "low"]).optional(),
-        executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
+        executor: z.enum(["mirrorcode", "codex", "claude-code"]).optional(),
       }),
       async (params) => EngineService.createTask({
         request: params.request,

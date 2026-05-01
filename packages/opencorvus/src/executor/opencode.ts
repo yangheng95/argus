@@ -179,7 +179,7 @@ export namespace OpencodeExecutor {
       queue = createEventQueue<z.infer<typeof EventResult>>({
         idleMs: cfg.activity.executor_events_idle_ms,
         signal: input.signal,
-        label: `opencode-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
+        label: `mirrorcode-executor:${input.queueTaskID ?? input.sessionID ?? input.goalID}`,
       })
       // Drain anything we caught during the EngineConfig.get await.
       for (const ev of buffered) {

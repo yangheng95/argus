@@ -23,7 +23,7 @@ describe("executor discovery", () => {
 
     const found = await ExecutorDiscovery.scan()
 
-    expect(found.opencode.available).toBe(true)
+    expect(found.mirrorcode.available).toBe(true)
     expect(found.codex.available).toBe(true)
     expect(found.codex.path).toBe(codex)
     expect(found["claude-code"].available).toBe(true)

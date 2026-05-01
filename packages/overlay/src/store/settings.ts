@@ -120,7 +120,7 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   autoServer: true,
   password: "",
   username: "opencorvus",
-  executor: "opencode",
+  executor: "mirrorcode",
   initGit: true,
   sidebarCollapsed: false,
   sidebarWidth: null,

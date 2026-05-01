@@ -15,8 +15,8 @@ describe("executor.bootstrap", () => {
   test("injects OpenCorvus MCP config into codex app-server via -c flags", async () => {
     const seen: Array<{ command: string[] }> = []
     spyOn(ExecutorDiscovery, "scan").mockResolvedValue({
-      opencode: {
-        name: "opencode",
+      mirrorcode: {
+        name: "mirrorcode",
         available: true,
         source: "builtin",
         detail: "builtin",
@@ -121,8 +121,8 @@ describe("executor.bootstrap", () => {
 
   test("does not override an executor that is already registered", async () => {
     spyOn(ExecutorDiscovery, "scan").mockResolvedValue({
-      opencode: {
-        name: "opencode",
+      mirrorcode: {
+        name: "mirrorcode",
         available: true,
         source: "builtin",
         detail: "builtin",

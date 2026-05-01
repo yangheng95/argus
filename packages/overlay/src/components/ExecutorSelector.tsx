@@ -36,7 +36,7 @@ export function ExecutorSelector() {
   // iterates `appStore.executors` directly — whatever the backend reported.
   // No frontend canonical list (rule 22 single source — backend's
   // /executor route at server/routes/executor.ts owns the membership).
-  const activeID = createMemo(() => settingsStore.executor || "opencode");
+  const activeID = createMemo(() => settingsStore.executor || "mirrorcode");
   const executors = createMemo(() => appStore.executors as ExecutorDescriptor[]);
   const activeLabel = createMemo(() => executorLabel(activeID()));
   const activeModel = createMemo(() => executorCurrentModel(activeID()));
@@ -81,7 +81,7 @@ export function ExecutorSelector() {
 
   return (
     // Chip is always rendered: activeID comes from settingsStore (never
-    // empty, defaults to the MirrorCode executor id ("opencode")) and
+    // empty, defaults to the MirrorCode executor id ("mirrorcode")) and
     // executorLabel handles the three
     // known ids without any backend round-trip. The menu body shows
     // whatever appStore.executors holds — empty during the brief

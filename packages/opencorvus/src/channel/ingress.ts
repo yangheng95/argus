@@ -22,7 +22,7 @@ export const ChannelIngressInput = z.object({
   user_id: z.string().optional(),
   request_id: z.string().optional(),
   source: z.string().optional(),
-  executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
+  executor: z.enum(["mirrorcode", "codex", "claude-code"]).optional(),
   allow_create: z.boolean().default(true),
   allow_session_mutation: z.boolean().default(false),
   bind: z.boolean().default(true),

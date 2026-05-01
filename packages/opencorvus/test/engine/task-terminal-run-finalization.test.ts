@@ -38,7 +38,7 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
         payload: {
           plan_version_id: null,
           session_id: null,
-          executor: "opencode",
+          executor: "mirrorcode",
           status: "running",
           phase: "deliver",
           blocking_reason: null,
