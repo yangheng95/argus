@@ -181,6 +181,35 @@ describe("delivery project evidence gate", () => {
     expect(repeatedDeliveryFailureSignatures({ current, previous }).repeated).toBe(false)
   })
 
+  test("detects repeated manifest failure signature sets across history window", () => {
+    const olderMatch = manifestWithFailures({
+      id: "artifact_older_match",
+      normalizedError: "same old failure",
+      failedCoverageIds: ["goal:gol_a"],
+    })
+    const adjacentDifferent = manifestWithFailures({
+      id: "artifact_adjacent_different",
+      normalizedError: "different adjacent failure",
+      failedCoverageIds: ["goal:gol_b"],
+    })
+    const current = manifestWithFailures({
+      id: "artifact_current_history",
+      normalizedError: "same old failure",
+      failedCoverageIds: ["goal:gol_a"],
+    })
+
+    expect(repeatedDeliveryFailureSignatures({
+      current,
+      history: [adjacentDifferent, olderMatch],
+    })).toEqual({
+      repeated: true,
+      signatures: [
+        "check:lint#1:digest-a:same old failure",
+        "coverage:goal:gol_a",
+      ],
+    })
+  })
+
   test("does not create runtime flows for non-frontend package metadata", async () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",

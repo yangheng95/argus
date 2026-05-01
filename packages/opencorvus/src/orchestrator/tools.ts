@@ -3359,20 +3359,21 @@ export function createOrchestratorTools(input: {
           }
           const {
             findLatestDeliveryEvidenceManifest,
-            findPreviousDeliveryEvidenceManifest,
+            findDeliveryEvidenceManifestHistory,
             repeatedDeliveryFailureSignatures,
           } = await import("@/delivery/manifest")
           const currentManifest = findLatestDeliveryEvidenceManifest({ deliveryID })
-          const previousManifest = currentManifest?.taskId
-            ? findPreviousDeliveryEvidenceManifest({
+          const priorManifests = currentManifest?.taskId
+            ? findDeliveryEvidenceManifestHistory({
                 taskID: currentManifest.taskId,
                 beforeTime: currentManifest.timeCreated,
+                limit: 5,
               })
-            : undefined
+            : []
           const repeatedFailure = currentManifest
             ? repeatedDeliveryFailureSignatures({
                 current: currentManifest,
-                previous: previousManifest,
+                history: priorManifests,
               })
             : { repeated: false, signatures: [] }
           if (repeatedFailure.repeated) {
