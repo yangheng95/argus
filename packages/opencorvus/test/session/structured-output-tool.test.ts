@@ -23,6 +23,7 @@ type AIToolLike = {
   execute: (args: unknown, opts: { toolCallId?: string; messages?: unknown[]; abortSignal?: AbortSignal }) => Promise<{ output: string; title: string; metadata: Record<string, unknown> }>
   toModelOutput?: (result: { output: string }) => { type: string; value: string }
   description?: string
+  strict?: boolean
 }
 
 async function expectStructuredOutputPayloadError(
@@ -66,6 +67,7 @@ describe("SessionLoop.createStructuredOutputTool", () => {
     // ai's tool() stores id separately; we only check the wired description.
     expect(typeof t.description).toBe("string")
     expect((t.description ?? "").length).toBeGreaterThan(0)
+    expect(t.strict).toBe(true)
   })
 
   test("execute delivers the args to onSuccess verbatim and returns success output", async () => {

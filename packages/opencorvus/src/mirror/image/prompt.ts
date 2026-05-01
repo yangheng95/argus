@@ -8,7 +8,7 @@
  *
  * Ported from `opencode-private/packages/mirror/src/prompt/image.ts` with
  * adaptations:
- *   - Output is consumed by AI SDK `streamObject({ schema: ImageAnalysisSchema })`,
+ *   - Output is consumed by AI SDK `streamText({ output: Output.object(...) })`,
  *     so the upstream "wrap in ```json fences" instruction is removed — the
  *     SDK enforces strict JSON via the model's tool-use / structured-output
  *     channel and the schema rejects shape drift instead.
@@ -85,8 +85,8 @@ export interface UserPart {
 /**
  * Build the AI SDK `messages` array (system + single user message with
  * interleaved text + image parts). The caller sets the model + schema and
- * passes the result straight to `streamObject` (rule 27 — streaming-only;
- * the SDK enforces the schema as the structured-output contract so no
+ * passes the result straight to `streamText` object output (rule 27 —
+ * streaming-only; the SDK enforces the schema as the structured-output contract so no
  * post-stream defensive parsing is needed).
  */
 export function imageExtractMessages(input: ImageExtractPromptInput): {
