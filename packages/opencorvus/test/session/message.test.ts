@@ -116,7 +116,7 @@ describe("session.message.toModelMessage", () => {
     expect(Message.Part.safeParse({ ...base, audience: { ui: false } }).success).toBe(false)
   })
 
-  test("filters out messages with no parts", () => {
+  test("filters out messages with no parts", async () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("m-empty"),
@@ -134,7 +134,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "hello" }],
@@ -142,7 +142,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("includes every user text part without visibility flags", () => {
+  test("includes every user text part without visibility flags", async () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -158,7 +158,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "visible" }],
@@ -166,7 +166,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("includes every assistant text part without visibility flags", () => {
+  test("includes every assistant text part without visibility flags", async () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -192,7 +192,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "hello" }],
@@ -204,7 +204,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("converts user text/file parts and injects compaction/subtask prompts", () => {
+  test("converts user text/file parts and injects compaction/subtask prompts", async () => {
     const messageID = "m-user"
 
     const input: Message.WithParts[] = [
@@ -258,7 +258,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [
@@ -329,7 +329,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(await Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -423,7 +423,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    const result = await Message.toModelMessages(input, model)
+    const result = await await Message.toModelMessages(input, model)
     const toolMsg = result.find((m: { role: string }) => m.role === "tool") as
       | {
           role: "tool"
@@ -445,7 +445,7 @@ describe("session.message.toModelMessage", () => {
     expect(imagePart!.data).toBe("UE5H")
   })
 
-  test("omits provider metadata when assistant model differs", () => {
+  test("omits provider metadata when assistant model differs", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -488,7 +488,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -520,7 +520,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("replaces compacted tool output with placeholder", () => {
+  test("replaces compacted tool output with placeholder", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -556,7 +556,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -587,7 +587,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("converts assistant tool error into error-text tool result", () => {
+  test("converts assistant tool error into error-text tool result", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -623,7 +623,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -656,7 +656,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("filters assistant messages with non-abort errors", () => {
+  test("filters assistant messages with non-abort errors", async () => {
     const assistantID = "m-assistant"
 
     const input: Message.WithParts[] = [
@@ -676,10 +676,10 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([])
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([])
   })
 
-  test("includes aborted assistant messages only when they have non-step-start/reasoning content", () => {
+  test("includes aborted assistant messages only when they have non-step-start/reasoning content", async () => {
     const assistantID1 = "m-assistant-1"
     const assistantID2 = "m-assistant-2"
 
@@ -719,7 +719,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "assistant",
         content: [
@@ -730,7 +730,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("splits assistant messages on step-start boundaries", () => {
+  test("splits assistant messages on step-start boundaries", async () => {
     const assistantID = "m-assistant"
 
     const input: Message.WithParts[] = [
@@ -755,7 +755,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "assistant",
         content: [{ type: "text", text: "first" }],
@@ -767,7 +767,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("drops messages that only contain step-start parts", () => {
+  test("drops messages that only contain step-start parts", async () => {
     const assistantID = "m-assistant"
 
     const input: Message.WithParts[] = [
@@ -782,10 +782,10 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([])
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([])
   })
 
-  test("converts pending/running tool calls to error results to prevent dangling tool_use", () => {
+  test("converts pending/running tool calls to error results to prevent dangling tool_use", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -829,7 +829,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    const result = Message.toModelMessages(input, model)
+    const result = await Message.toModelMessages(input, model)
 
     expect(result).toStrictEqual([
       {
@@ -875,7 +875,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("projects earlier stateful-snapshot tool results to a superseded note", () => {
+  test("projects earlier stateful-snapshot tool results to a superseded note", async () => {
     const firstAssistant = "m-a1"
     const secondUser = "m-u2"
     const secondAssistant = "m-a2"
@@ -933,7 +933,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    const out = Message.toModelMessages(input, model)
+    const out = await Message.toModelMessages(input, model)
     // Find the two tool-result messages and inspect their output values.
     const toolResults = out
       .filter((m) => m.role === "tool")
@@ -949,7 +949,7 @@ describe("session.message.toModelMessage", () => {
     expect(first.output.value).not.toContain("SNAPSHOT_OLD")
   })
 
-  test("does not project non-stateful tool results (e.g. bash) across turns", () => {
+  test("does not project non-stateful tool results (e.g. bash) across turns", async () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("m-u1"),
@@ -1003,7 +1003,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    const out = Message.toModelMessages(input, model)
+    const out = await Message.toModelMessages(input, model)
     const toolResults = out
       .filter((m) => m.role === "tool")
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
@@ -1013,7 +1013,7 @@ describe("session.message.toModelMessage", () => {
     expect(toolResults[1].output.value).toBe("OUTPUT_SECOND")
   })
 
-  test("keeps a single stateful-snapshot call unchanged when it is the only one", () => {
+  test("keeps a single stateful-snapshot call unchanged when it is the only one", async () => {
     const input: Message.WithParts[] = [
       {
         info: userInfo("m-u1"),
@@ -1042,7 +1042,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    const out = Message.toModelMessages(input, model)
+    const out = await Message.toModelMessages(input, model)
     const toolResults = out
       .filter((m) => m.role === "tool")
       .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
@@ -1051,7 +1051,7 @@ describe("session.message.toModelMessage", () => {
     expect(toolResults[0].output.value).toBe("FAILED_GOALS_SNAPSHOT")
   })
 
-  test("preserves reasoning on every assistant message — no strip (cache + Anthropic protocol)", () => {
+  test("preserves reasoning on every assistant message — no strip (cache + Anthropic protocol)", async () => {
     // Locks in pass-through. Stripping older reasoning was tried and
     // reverted because it broke prompt-cache hits (cache prefix bytes
     // change every turn) and risked Anthropic's thinking+tool_use
@@ -1080,7 +1080,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
     const input: Message.WithParts[] = [...turn(1), ...turn(2), ...turn(3)]
-    const out = Message.toModelMessages(input, model)
+    const out = await Message.toModelMessages(input, model)
 
     const reasoningTexts: string[] = []
     for (const msg of out) {
