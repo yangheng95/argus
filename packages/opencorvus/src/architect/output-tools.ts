@@ -20,6 +20,8 @@ import { Instance } from "@/project/instance"
 import {
   GoalContractFieldsSchema,
   GoalContractUpdateSchema,
+  normalizeGoalContractFields,
+  normalizeGoalContractUpdate,
 } from "@/pipeline/goal-contract.schema"
 import type { AcceptanceSpec } from "@/acceptance/types"
 import type {
@@ -97,6 +99,16 @@ const VALID_CONTRACT_CATEGORIES: ArchitectDecisionKey[] = [
   "naming_convention",
   "dependency_order",
 ]
+
+function toRegisteredGoal(input: unknown): RegisteredGoal {
+  const parsed = normalizeGoalContractFields(
+    input as Parameters<typeof normalizeGoalContractFields>[0],
+  )
+  return {
+    ...parsed,
+    kind: parsed.kind,
+  }
+}
 
 function emptyCollector(): ArchitectCollector {
   return {
@@ -296,7 +308,7 @@ export function createArchitectOutputTools(input: {
   // without the LLM having to re-register them first. register_goal still
   // wins if the LLM chooses to overwrite an existing id.
   if (input.existingGoals?.length) {
-    for (const g of input.existingGoals) collector.goals.push({ ...g })
+    for (const g of input.existingGoals) collector.goals.push(toRegisteredGoal(g))
   }
 
   const tools = {
@@ -311,8 +323,9 @@ export function createArchitectOutputTools(input: {
         "next unused G number.",
       inputSchema: GoalContractFieldsSchema,
       execute: async (input) => {
+        const goal = toRegisteredGoal(input)
         const warnings: string[] = []
-        for (const p of input.owned_paths) {
+        for (const p of goal.owned_paths) {
           try {
             const abs = path.resolve(dir, p)
             if (!fs.existsSync(abs) && !fs.existsSync(path.dirname(abs))) {
@@ -321,18 +334,18 @@ export function createArchitectOutputTools(input: {
           } catch { /* cross-platform path issues — skip */ }
         }
 
-        const existingIdx = collector.goals.findIndex((g) => g.id === input.id)
+        const existingIdx = collector.goals.findIndex((g) => g.id === goal.id)
         let msg: string
         if (existingIdx >= 0) {
-          collector.goals[existingIdx] = input
-          msg = `OK: goal "${input.id}" updated in-place (${collector.goals.length} total)`
+          collector.goals[existingIdx] = goal
+          msg = `OK: goal "${goal.id}" updated in-place (${collector.goals.length} total)`
         } else {
-          collector.goals.push(input)
-          msg = `OK: goal "${input.id}" registered (${collector.goals.length} total)`
+          collector.goals.push(goal)
+          msg = `OK: goal "${goal.id}" registered (${collector.goals.length} total)`
         }
         // A newly registered/updated id cannot also be in the removal list.
         collector.removed_goal_ids = collector.removed_goal_ids.filter(
-          (id) => id !== input.id,
+          (id) => id !== goal.id,
         )
         if (warnings.length > 0) {
           msg += `\nWarning: paths without an existing parent directory: ${warnings.join(", ")}. Verify these are intentional.`
@@ -360,8 +373,11 @@ export function createArchitectOutputTools(input: {
           return `Error: goal "${id}" not registered. Use register_goal to add new goals.`
         }
         const prior = collector.goals[idx]
-        collector.goals[idx] = { ...prior, ...updates }
-        return `OK: goal "${id}" fields updated (${Object.keys(updates).length} change(s))`
+        const normalizedUpdates = normalizeGoalContractUpdate(
+          updates as Parameters<typeof normalizeGoalContractUpdate>[0],
+        )
+        collector.goals[idx] = toRegisteredGoal({ ...prior, ...normalizedUpdates })
+        return `OK: goal "${id}" fields updated (${Object.keys(normalizedUpdates).length} change(s))`
       },
     }),
 
@@ -705,7 +721,7 @@ export function createArchitectOutputTools(input: {
     reset() {
       collector = emptyCollector()
       if (input.existingGoals?.length) {
-        for (const g of input.existingGoals) collector.goals.push({ ...g })
+        for (const g of input.existingGoals) collector.goals.push(toRegisteredGoal(g))
       }
       return collector
     },
