@@ -23,5 +23,5 @@ Separately, `runWithExternalProviderImpl` persisted external `text_delta` and `r
    - commit the worktree branch;
    - do not call unavailable OpenCorvus terminal tools;
    - keep assistant prose out of the visible stream.
-2. Stop materializing external assistant `text_delta` and `reasoning_delta` into build session parts. Keep tool calls/results, approvals/input, errors, plan/diff decisions, and the host terminal `BuildResult`.
+2. Stop materializing external assistant narration into build session parts. This includes `text_delta`, `reasoning_delta`, and Codex app-server `plan_delta` / `diff_delta`; keep tool calls/results, approvals/input, errors, and the host terminal `BuildResult`.
 3. Add focused tests for the injected contract and the external assistant-text materialization policy.

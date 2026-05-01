@@ -975,16 +975,16 @@ export function externalEventPartText(event: CodingEventInfo, executor: string):
   // claude-code + codex both emit a stream of fine-grained "Phase: X" /
   // "Summary: Y" pings that bury the actual conversation under noise.
   // The events still flow through the events[] array (so logs/diagnostics
-  // see them) — only the chat-card materialisation is dropped. Plan/diff/
-  // approval/input/usage/error remain visible because those carry decisions
-  // the operator needs to see.
+  // see them) — only the chat-card materialisation is dropped. Codex app-
+  // server plan/diff deltas are model narration / previews, not a stable
+  // build result channel; concrete actions already surface through tool
+  // parts. Approval/input/error remain visible because those carry operator
+  // decisions or blockers.
   if (event.type === "plan_delta") {
-    const summary = event.summary?.trim()
-    return summary ? `**${executor} plan**\n\n${summary}` : undefined
+    return undefined
   }
   if (event.type === "diff_delta") {
-    const summary = event.summary?.trim()
-    return summary ? `**${executor} diff**\n\n${summary}` : undefined
+    return undefined
   }
   if (event.type === "approval_request") {
     const lines = [`**${executor} approval request**`, "", `Approval: ${event.approval}`]
