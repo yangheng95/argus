@@ -441,3 +441,18 @@ type FailureSignature = {
 - P3：真实 runtime flow 还没有按任务类型结构化生成。
 - P4：重复 failure signature 的 retry budget 升级尚未接入 orchestrator 调度。
 - P7：delivery prompt 中的 Phase 2.5 subagent review 仍需进一步与 manifest/review artifact 硬门禁对齐。
+
+### 2026-05-01 第五轮
+
+已完成：
+
+- P4 部分完成：manifest 层新增 `deliveryFailureSignatureKeys` 和 `repeatedDeliveryFailureSignatures`，同时比较 check failure signature 与 coverage failure id。
+- P4 硬门禁：delivery rejected 后，如果当前 manifest 的失败签名集合完全重复上一份 manifest，orchestrator 不再打开相同的 `delivery_rework`，而是写 decision log 并要求 `modify_goal` / `restart_from_stage` / `fail_task`。
+- P4 回归覆盖：重复签名会被识别，新 failure signature 不会被误判为重复。
+- benchmark 覆盖：`test/benchmark` 与 delivery project gate 通过。
+
+未完成，后续继续：
+
+- P3：真实 runtime flow 还没有按任务类型结构化生成。
+- P4：重复签名 gate 目前基于相邻 manifest；后续可把更长历史窗口纳入 manifest helper。
+- P7：Phase 2.5 review artifact 硬门禁仍未接入。

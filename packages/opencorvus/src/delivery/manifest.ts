@@ -204,6 +204,50 @@ export function findLatestDeliveryEvidenceManifest(input: {
   return row?.payload as DeliveryEvidenceManifest | undefined
 }
 
+export function findPreviousDeliveryEvidenceManifest(input: {
+  taskID: string
+  beforeTime: number
+}): DeliveryEvidenceManifest | undefined {
+  const row = Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, input.taskID),
+        eq(EngineArtifactTable.kind, "delivery_evidence_manifest"),
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .all()
+      .find((item) => item.time_created < input.beforeTime),
+  )
+  return row?.payload as DeliveryEvidenceManifest | undefined
+}
+
+export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest): string[] {
+  const checkKeys = manifest.checkResults
+    .filter((item) => item.status === "failed")
+    .map((item) =>
+      item.failureSignature
+        ? `check:${item.failureSignature.checkId}:${item.failureSignature.commandDigest}:${item.failureSignature.normalizedError}`
+        : `check:${item.id}:${item.commandDigest}:${item.failureReason ?? item.outputExcerpt}`,
+    )
+  const coverageKeys = manifest.finalGate.failedCoverageIds.map((item) => `coverage:${item}`)
+  return [...new Set([...checkKeys, ...coverageKeys])].sort()
+}
+
+export function repeatedDeliveryFailureSignatures(input: {
+  current: DeliveryEvidenceManifest
+  previous?: DeliveryEvidenceManifest
+}): { repeated: boolean; signatures: string[] } {
+  if (!input.previous) return { repeated: false, signatures: [] }
+  const current = deliveryFailureSignatureKeys(input.current)
+  if (current.length === 0) return { repeated: false, signatures: [] }
+  const previous = new Set(deliveryFailureSignatureKeys(input.previous))
+  const repeated = current.filter((item) => previous.has(item))
+  return {
+    repeated: repeated.length === current.length,
+    signatures: repeated,
+  }
+}
+
 export function createManifestId() {
   return Identifier.ascending("artifact")
 }

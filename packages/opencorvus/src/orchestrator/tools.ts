@@ -3354,6 +3354,53 @@ export function createOrchestratorTools(input: {
               pointer: `verdict artifact ${verdictArtifactId}; budget exhausted, escalate or fail`,
             })
           }
+          const {
+            findLatestDeliveryEvidenceManifest,
+            findPreviousDeliveryEvidenceManifest,
+            repeatedDeliveryFailureSignatures,
+          } = await import("@/delivery/manifest")
+          const currentManifest = findLatestDeliveryEvidenceManifest({ deliveryID })
+          const previousManifest = currentManifest?.taskId
+            ? findPreviousDeliveryEvidenceManifest({
+                taskID: currentManifest.taskId,
+                beforeTime: currentManifest.timeCreated,
+              })
+            : undefined
+          const repeatedFailure = currentManifest
+            ? repeatedDeliveryFailureSignatures({
+                current: currentManifest,
+                previous: previousManifest,
+              })
+            : { repeated: false, signatures: [] }
+          if (repeatedFailure.repeated) {
+            log.info("deliver: repeated failure signatures — refusing identical delivery_rework", {
+              taskID,
+              iteration,
+              signatures: repeatedFailure.signatures.length,
+            })
+            try {
+              const { createDecisionLog } = await import("@/decision-log")
+              createDecisionLog(taskID).append({
+                phase: "delivery",
+                key: `delivery_repeated_failure_signature_${iteration}`,
+                value: `Repeated delivery failure signatures: ${repeatedFailure.signatures.join(" | ")}`,
+                reason: "Current DeliveryEvidenceManifest repeats the prior manifest failure set; another identical delivery_rework would re-run the same prompt without new information.",
+              })
+            } catch {
+              /* best effort */
+            }
+            await trackStepComplete("deliver", undefined, true)
+            requestStopAfterCurrentStep("delivery_repeated_failure_signature")
+            return SubAgentProtocol.yieldResult({
+              headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). No identical delivery_rework attempt opened; orchestrator MUST change strategy with modify_goal/restart_from_stage or fail the task.`,
+              fields: [
+                ["failure_signatures", repeatedFailure.signatures],
+                ["iteration", String(iteration)],
+                ["agent_summary", verdict.summary],
+              ],
+              pointer: `verdict artifact ${verdictArtifactId}; repeated manifest failures require strategy change`,
+            })
+          }
           // Per-goal rejection slice: the delivery agent already attributed
           // each rejection_details[] entry to a specific goal_id; feed that
           // subset (plus the task-level summary) into startNewAttempt so the
