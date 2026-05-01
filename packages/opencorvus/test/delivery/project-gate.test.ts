@@ -38,6 +38,7 @@ describe("delivery project evidence gate", () => {
     expect(manifest.checkResults.find((item) => item.name === "build")?.status).toBe("passed")
     expect(manifest.checkResults.find((item) => item.name === "test")?.status).toBe("passed")
     expect(manifest.checkResults.find((item) => item.name === "lint")?.status).toBe("failed")
+    expect(manifest.checkResults.find((item) => item.name === "lint")?.failureSignature?.checkId).toBe("lint#1")
     expect(manifest.finalGate.status).toBe("failed")
   })
 
