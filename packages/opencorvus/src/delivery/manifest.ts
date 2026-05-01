@@ -116,6 +116,16 @@ export type DeliveryEvidenceManifest = {
   timeCreated: number
 }
 
+export type DeliveryManifestFailureDetail = {
+  kind: "check" | "coverage" | "runtime" | "review"
+  id: string
+  name: string
+  status?: string
+  command?: string
+  exitCode?: number
+  evidence: string
+}
+
 export function digestCommand(input: {
   command: string
   cwd?: string
@@ -198,6 +208,115 @@ export function validateDeliveryCoverage(input: {
   return failedCoverageIds
 }
 
+export function deliveryManifestFailureDetails(
+  manifest: DeliveryEvidenceManifest,
+): DeliveryManifestFailureDetail[] {
+  const failedCheckIds = new Set(manifest.finalGate.failedCheckIds)
+  const failedCoverageIds = new Set(manifest.finalGate.failedCoverageIds)
+  const failedRuntimeFlowIds = new Set(manifest.finalGate.failedRuntimeFlowIds)
+  const failedReviewIds = new Set(manifest.finalGate.failedReviewIds ?? [])
+
+  const checkDetails = manifest.checkResults
+    .filter((item) => failedCheckIds.has(item.id) || item.status === "failed")
+    .map((item) => ({
+      kind: "check" as const,
+      id: item.id,
+      name: item.label ?? item.name,
+      status: item.status,
+      command: item.command,
+      exitCode: item.exitCode,
+      evidence: firstEvidence([
+        item.failureReason,
+        item.failureSignature?.normalizedError,
+        item.outputExcerpt,
+      ]),
+    }))
+
+  const missingCheckDetails = manifest.requiredChecks
+    .filter((item) =>
+      failedCheckIds.has(item.id) &&
+      !manifest.checkResults.some((result) => result.id === item.id),
+    )
+    .map((item) => ({
+      kind: "check" as const,
+      id: item.id,
+      name: item.label ?? item.name,
+      status: "missing",
+      command: item.command,
+      evidence: "Required check did not produce a result.",
+    }))
+
+  const goalCoverageDetails = manifest.goalCoverage
+    .filter((item) => failedCoverageIds.has(`goal:${item.goalId}`))
+    .map((item) => ({
+      kind: "coverage" as const,
+      id: `goal:${item.goalId}`,
+      name: item.title,
+      status: item.status,
+      evidence: firstEvidence(item.evidence),
+    }))
+
+  const requirementCoverageDetails = manifest.requirementCoverage
+    .filter((item) => failedCoverageIds.has(`requirement:${item.requirementId}`))
+    .map((item) => ({
+      kind: "coverage" as const,
+      id: `requirement:${item.requirementId}`,
+      name: item.requirementId,
+      status: item.status,
+      evidence: firstEvidence(item.evidence),
+    }))
+
+  const runtimeDetails = manifest.runtimeFlows
+    .filter((item) => failedRuntimeFlowIds.has(item.id) || item.status === "failed")
+    .map((item) => ({
+      kind: "runtime" as const,
+      id: item.id,
+      name: item.name,
+      status: item.status,
+      evidence: firstEvidence([
+        ...item.evidence,
+        ...(item.interaction?.errors ?? []),
+        item.dom ? `dom.textLength=${item.dom.textLength} nodes=${item.dom.nodeCount}` : undefined,
+      ]),
+    }))
+
+  const reviewDetails = manifest.reviewEvidence
+    .filter((item) => failedReviewIds.has(item.id) || item.status === "failed")
+    .map((item) => ({
+      kind: "review" as const,
+      id: item.id,
+      name: item.name,
+      status: item.status,
+      evidence: firstEvidence(item.evidence),
+    }))
+
+  return [
+    ...checkDetails,
+    ...missingCheckDetails,
+    ...goalCoverageDetails,
+    ...requirementCoverageDetails,
+    ...runtimeDetails,
+    ...reviewDetails,
+  ]
+}
+
+export function formatDeliveryManifestFailureDetails(
+  manifest: DeliveryEvidenceManifest,
+  limit = 20,
+): string[] {
+  return deliveryManifestFailureDetails(manifest).slice(0, limit).map((item) => {
+    const status = item.status ? ` status=${item.status}` : ""
+    const command = item.command ? ` command=${item.command}` : ""
+    const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
+    return `[${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${item.evidence}`
+  })
+}
+
+function firstEvidence(items: Array<string | undefined>): string {
+  const found = items.find((item) => typeof item === "string" && item.trim().length > 0)
+  return found?.trim().slice(0, 500) ?? "No evidence captured."
+}
+
 export function persistDeliveryEvidenceManifest(input: {
   manifest: DeliveryEvidenceManifest
 }) {
@@ -257,6 +376,7 @@ export function persistDeliveryEvidenceManifest(input: {
       failedCheckCount: input.manifest.finalGate.failedCheckIds.length,
       failedRuntimeFlowCount: input.manifest.finalGate.failedRuntimeFlowIds.length,
       failedReviewCount: (input.manifest.finalGate.failedReviewIds ?? []).length,
+      failureDetails: deliveryManifestFailureDetails(input.manifest).slice(0, 20),
     },
     { source: "delivery.manifest" },
   )

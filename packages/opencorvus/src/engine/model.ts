@@ -1138,6 +1138,15 @@ export const Event = {
       failedCheckCount: z.number(),
       failedRuntimeFlowCount: z.number(),
       failedReviewCount: z.number(),
+      failureDetails: z.array(z.object({
+        kind: z.enum(["check", "coverage", "runtime", "review"]),
+        id: z.string(),
+        name: z.string(),
+        status: z.string().optional(),
+        command: z.string().optional(),
+        exitCode: z.number().optional(),
+        evidence: z.string(),
+      })),
     }),
   ),
   IntegrityReviewCompleted: BusEvent.define(

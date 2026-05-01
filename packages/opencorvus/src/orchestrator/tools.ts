@@ -3318,6 +3318,16 @@ export function createOrchestratorTools(input: {
           // restart_from_stage) or call `fail_task`. Compare with `>=` so a
           // budget of N permits N fix runs (iterations 0..N-1 open new
           // attempts; iteration N is the cutoff).
+          const {
+            findLatestDeliveryEvidenceManifest,
+            findDeliveryEvidenceManifestHistory,
+            formatDeliveryManifestFailureDetails,
+            repeatedDeliveryFailureSignatures,
+          } = await import("@/delivery/manifest")
+          const currentManifest = findLatestDeliveryEvidenceManifest({ deliveryID })
+          const manifestFailureDetails = currentManifest
+            ? formatDeliveryManifestFailureDetails(currentManifest)
+            : []
           const fixBudget = await effectiveMaxFixRuns(task)
           if (iteration >= fixBudget) {
             log.info("deliver: fix-runs budget exhausted — refusing delivery_rework", {
@@ -3343,6 +3353,7 @@ export function createOrchestratorTools(input: {
               headline: `Delivery rejected and fix-runs budget exhausted (iteration=${iteration}, max_fix_runs=${fixBudget}). No more delivery_rework attempts; orchestrator MUST either: (a) call restart_from_stage(plan|executor) to change strategy, OR (b) call fail_task with a final summary explaining what went wrong.`,
               fields: [
                 ["issues_found", rejectionIssues],
+                ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["max_fix_runs", String(fixBudget)],
                 ["agent_summary", verdict.summary],
@@ -3350,12 +3361,6 @@ export function createOrchestratorTools(input: {
               pointer: `verdict artifact ${verdictArtifactId}; budget exhausted, escalate or fail`,
             })
           }
-          const {
-            findLatestDeliveryEvidenceManifest,
-            findDeliveryEvidenceManifestHistory,
-            repeatedDeliveryFailureSignatures,
-          } = await import("@/delivery/manifest")
-          const currentManifest = findLatestDeliveryEvidenceManifest({ deliveryID })
           const priorManifests = currentManifest?.taskId
             ? findDeliveryEvidenceManifestHistory({
                 taskID: currentManifest.taskId,
@@ -3392,6 +3397,7 @@ export function createOrchestratorTools(input: {
               headline: `Delivery rejected with repeated failure signatures (iteration=${iteration}). No identical delivery_rework attempt opened; orchestrator MUST change strategy with modify_goal/restart_from_stage or fail the task.`,
               fields: [
                 ["failure_signatures", repeatedFailure.signatures],
+                ["manifest_failures", manifestFailureDetails],
                 ["iteration", String(iteration)],
                 ["agent_summary", verdict.summary],
               ],
@@ -3469,10 +3475,13 @@ export function createOrchestratorTools(input: {
             headline: `Delivery rejected — iteration ${iteration}, agent_verdict=${verdict.verdict}, assistant must re-plan`,
             fields: [
               ["issues_found", rejectionIssues],
+              ["manifest_failures", manifestFailureDetails],
               ["iteration", String(iteration)],
               ["agent_summary", verdict.summary],
             ],
-            pointer: `verdict artifact ${verdictArtifactId}; call query_metric_trajectory for full trajectory`,
+            pointer: currentManifest
+              ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; use manifest_failures above before deciding the next tool`
+              : `verdict artifact ${verdictArtifactId}; call query_metric_trajectory for full trajectory`,
           })
         } catch (err) {
           await trackStepComplete("deliver", undefined, true)
