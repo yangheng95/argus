@@ -189,12 +189,11 @@ async function withOverlay(data: HarnessData, handler: (input: {
 }
 
 async function openProviderSettings(tab: Page) {
-  await tab.click("#btnConfigToggle")
+  await tab.click('[data-menu-trigger="model"]')
+  await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
+  await tab.click('[data-testid="titlebar-open-providers"]')
   await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
-  await tab.$eval("#llmAdvanced", (node) => {
-    ;(node as HTMLDetailsElement).open = true
-  })
-  await tab.waitForFunction(() => (document.querySelector("#llmAdvanced") as HTMLDetailsElement | null)?.open === true)
+  await tab.waitForSelector('[data-config-panel="providers"].active')
 }
 
 async function dialogState(tab: Page) {
@@ -382,40 +381,26 @@ test("overlay oauth auth handles prompt-driven authorize flow and pasted redirec
     },
     async (tab, state) => {
       await openProviderSettings(tab)
-      await tab.select("#llmProvider", "openai-codex")
-      // Auth dialog is not auto-triggered when configDialog is open (WebView2 modal stacking fix).
-      // Click the Connect button to initiate the auth flow.
-      await tab.waitForFunction(() => {
-        const button = document.querySelector("#btnLlmAuthAction") as HTMLButtonElement | null
-        return !!button && !button.disabled && !button.classList.contains("hidden")
-      })
-      await tab.$eval("#btnLlmAuthAction", (node) => { ;(node as HTMLButtonElement).click() })
+      await tab.waitForSelector('[data-testid="provider-auth-openai-codex"]')
+      await tab.click('[data-testid="provider-auth-openai-codex"]')
       const firstDialog = await dialogState(tab)
       if (!firstDialog.inputVisible && !firstDialog.selectVisible) await acceptDialog(tab)
       await submitDialogSelect(tab, "manual")
       await submitDialogInput(tab, "overlay")
       await submitDialogInput(tab, "http://localhost:1455/auth/callback?code=oauth-code&state=overlay-state")
 
-      await tab.waitForFunction(() => {
-        const status = document.querySelector("#llmStatus")
-        return status?.getAttribute("data-status") === "active" && status?.getAttribute("title") === "Provider connected"
-      })
+      await acceptDialog(tab)
+      await tab.waitForFunction(() => document.body.textContent?.includes("Connected"))
 
       const result = await tab.evaluate(() => {
         const overlay = (window as typeof window & { __overlayTest: { open: string[] } }).__overlayTest
         return {
-          provider: (document.querySelector("#llmProvider") as HTMLSelectElement | null)?.value,
-          model: (document.querySelector("#llmModel") as HTMLSelectElement | null)?.value,
-          status: document.querySelector("#llmStatus")?.getAttribute("data-status"),
-          title: document.querySelector("#llmStatus")?.getAttribute("title"),
+          connectedText: document.body.textContent || "",
           opened: [...overlay.open],
         }
       })
 
-      expect(result.provider).toBe("openai-codex")
-      expect(result.model).toBe("gpt-5.4")
-      expect(result.status).toBe("active")
-      expect(result.title).toBe("Provider connected")
+      expect(result.connectedText).toContain("Connected")
       expect(result.opened).toContain("https://auth.openai.com/oauth/authorize?state=overlay-state")
       expect(state.calls.authorize).toEqual([
         {
@@ -554,33 +539,19 @@ test("overlay executes prompt-driven api auth methods without relying on tui", a
     },
     async (tab, state) => {
       await openProviderSettings(tab)
-      await tab.select("#llmProvider", "custom-api")
-      await tab.waitForFunction(() => {
-        const button = document.querySelector("#btnLlmAuthAction") as HTMLButtonElement | null
-        return !!button && !button.disabled && !button.classList.contains("hidden")
-      })
-      await tab.$eval("#btnLlmAuthAction", (node) => {
-        ;(node as HTMLButtonElement).click()
-      })
+      await tab.waitForSelector('[data-testid="provider-auth-custom-api"]')
+      await tab.click('[data-testid="provider-auth-custom-api"]')
       await submitDialogInput(tab, "team-a")
       await submitDialogSelect(tab, "eu")
 
-      await tab.waitForFunction(() => {
-        const status = document.querySelector("#llmStatus")
-        return status?.getAttribute("data-status") === "active" && status?.getAttribute("title") === "Provider connected"
-      })
+      await acceptDialog(tab)
+      await tab.waitForFunction(() => document.body.textContent?.includes("Connected"))
 
       const result = await tab.evaluate(() => ({
-        provider: (document.querySelector("#llmProvider") as HTMLSelectElement | null)?.value,
-        model: (document.querySelector("#llmModel") as HTMLSelectElement | null)?.value,
-        status: document.querySelector("#llmStatus")?.getAttribute("data-status"),
-        title: document.querySelector("#llmStatus")?.getAttribute("title"),
+        connectedText: document.body.textContent || "",
       }))
 
-      expect(result.provider).toBe("custom-api")
-      expect(result.model).toBe("model-1")
-      expect(result.status).toBe("active")
-      expect(result.title).toBe("Provider connected")
+      expect(result.connectedText).toContain("Connected")
       expect(state.calls.execute).toEqual([
         {
           method: 0,

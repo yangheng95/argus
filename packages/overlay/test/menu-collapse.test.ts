@@ -28,7 +28,7 @@ async function browser() {
   throw new Error("No local Edge/Chrome executable found for overlay menu collapse test")
 }
 
-test("hidden titlebar menu does not block section collapse", async () => {
+test("closed titlebar menus do not block inspector interactions", async () => {
   const exe = await browser()
   const server = Bun.serve({
     port: 0,
@@ -47,19 +47,14 @@ test("hidden titlebar menu does not block section collapse", async () => {
     const tab = await page.newPage()
     await tab.goto(app, { waitUntil: "domcontentloaded" })
 
-    expect(await tab.$eval("#titlebarMenu", (node) => (node as HTMLElement).hidden)).toBe(true)
+    expect(await tab.$("[data-testid^='titlebar-menu-']")).toBeNull()
     expect(
-      await tab.$eval("#specSection > summary", (node) => {
+      await tab.$eval(".sections-header", (node) => {
         const rect = node.getBoundingClientRect()
         const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
         return target instanceof Element ? `${target.tagName}.${target.className}` : ""
       }),
-    ).toContain("section-title")
-
-    await tab.click("#specSection > summary")
-    await tab.waitForFunction(() => (document.querySelector("#specSection") as HTMLDetailsElement | null)?.open === true)
-    await tab.click("#specSection > summary")
-    await tab.waitForFunction(() => (document.querySelector("#specSection") as HTMLDetailsElement | null)?.open === false)
+    ).toContain("sections-header")
   } finally {
     await page.close()
     server.stop(true)

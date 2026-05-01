@@ -4,7 +4,6 @@ import { settingsStore, setSettingsStore, saveSettings } from "../../store/setti
 import { configure as configureApi } from "../../services/api";
 import { checkConnection } from "../../services/connection";
 import { reloadProjectScope } from "../../services/config";
-import { applyOpacity, applyTheme, sanitizeOpacity } from "../../services/theme";
 import { requestNotificationPermission, notificationPermissionState } from "../../services/notify";
 import { nativeMessage } from "../../services/app-dialog";
 
@@ -12,27 +11,6 @@ export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false);
 
   // ── Handlers ──
-
-  function handleThemeChange(e: Event) {
-    const value = (e.currentTarget as HTMLSelectElement).value;
-    setSettingsStore("theme", value);
-    applyTheme(value);
-    saveSettings();
-  }
-
-  function handleLocaleChange(e: Event) {
-    const value = (e.currentTarget as HTMLSelectElement).value;
-    setSettingsStore("locale", value);
-    saveSettings();
-  }
-
-  function handleOpacityChange(e: Event) {
-    const raw = Number((e.currentTarget as HTMLInputElement).value);
-    const value = sanitizeOpacity(raw / 100);
-    setSettingsStore("opacity", value);
-    applyOpacity(value);
-    saveSettings();
-  }
 
   function handleServerUrlChange(e: Event) {
     setSettingsStore("serverUrl", (e.currentTarget as HTMLInputElement).value.trim());
@@ -61,8 +39,6 @@ export default function GeneralPanel() {
       /* reconnect monitor will retry */
     }
   }
-
-  const opacityPercent = () => Math.round(settingsStore.opacity * 100);
 
   return (
     <div class="general-panel">
@@ -109,54 +85,6 @@ export default function GeneralPanel() {
             >
               {saved() ? t("common.saved") : t("common.save")}
             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Appearance ── */}
-      <div class="config-panel-group">
-        <h4 class="config-panel-group-title">{t("settings.section.appearance")}</h4>
-        <div class="config-panel-card">
-          <label class="field">
-            <span class="field-label">{t("settings.theme.label")}</span>
-            <select
-              class="field-input"
-              value={settingsStore.theme}
-              onChange={handleThemeChange}
-            >
-              <option value="dark">{t("settings.theme.dark")}</option>
-              <option value="vscode-dark">{t("settings.theme.vscode_dark")}</option>
-              <option value="light">{t("settings.theme.light")}</option>
-              <option value="system">{t("settings.theme.system")}</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span class="field-label">{t("settings.locale.label")}</span>
-            <select
-              class="field-input"
-              value={settingsStore.locale}
-              onChange={handleLocaleChange}
-            >
-              <option value="zh-CN">中文</option>
-              <option value="en-US">English</option>
-            </select>
-          </label>
-
-          <div class="field opacity-field">
-            <div class="opacity-header">
-              <span class="field-label">{t("settings.opacity.label")}</span>
-              <span class="opacity-value">{opacityPercent()}%</span>
-            </div>
-            <input
-              type="range"
-              min={10}
-              max={100}
-              step={1}
-              value={opacityPercent()}
-              onInput={handleOpacityChange}
-              onChange={handleOpacityChange}
-            />
           </div>
         </div>
       </div>

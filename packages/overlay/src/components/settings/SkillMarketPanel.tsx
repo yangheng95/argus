@@ -9,7 +9,6 @@
 import {
   createSignal,
   createMemo,
-  createEffect,
   For,
   Show,
 } from "solid-js";
@@ -108,16 +107,6 @@ export default function SkillMarketPanel() {
   const removableSkills = createMemo(() => customSkills().filter(skillRemovable));
   const builtinCount = createMemo(() => skills().length - customSkills().length);
   const mcpEntries = createMemo(() => Object.entries(mcp()));
-
-  // Mirror live counts into the configArea summary badge (sibling DOM node).
-  createEffect(() => {
-    const el = document.getElementById("extensionsSummary");
-    if (!el) return;
-    el.textContent = t("extensions.summary", {
-      skills: skills().length,
-      mcp: mcpEntries().length,
-    });
-  });
 
   async function reloadAll() {
     setLoading(true);

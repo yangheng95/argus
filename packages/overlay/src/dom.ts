@@ -10,17 +10,11 @@ export interface DomRefs {
   titlebar: HTMLElement | null;
   connBadge: HTMLElement | null;
   brandLogo: HTMLElement | null;
-  brandVersion: HTMLElement | null;
   chatVersion: HTMLElement | null;
 
  // Titlebar controls
-  btnTitlebarMenu: HTMLButtonElement | null;
-  titlebarMenu: HTMLElement | null;
-  btnLocale: HTMLButtonElement | null;
-  btnLocaleLabel: HTMLElement | null;
-  btnTheme: HTMLButtonElement | null;
-  btnThemeValue: HTMLElement | null;
-  btnSettings: HTMLButtonElement | null;
+  solidTitlebarMenu: HTMLElement | null;
+  solidTitlebarStatus: HTMLElement | null;
 
  // Settings checkboxes / controls
   chkAutoQuestion: HTMLInputElement | null;
@@ -60,8 +54,6 @@ export interface DomRefs {
   taskStatus: HTMLElement | null;
 
  // Config dialog
-  btnConfigToggle: HTMLButtonElement | null;
-  configToggleMeta: HTMLElement | null;
   configDialog: HTMLDialogElement | null;
   btnCloseConfigDialog: HTMLButtonElement | null;
 
@@ -87,8 +79,6 @@ export interface DomRefs {
   channelConfigBody: HTMLElement | null;
   channelPublicUrl: HTMLInputElement | null;
   btnSaveChannelPublicUrl: HTMLButtonElement | null;
-  cfgAvailableProviders: HTMLElement | null;
-
  // Lists
   channelList: HTMLElement | null;
 
@@ -194,21 +184,6 @@ export interface DomRefs {
   btnAppDialogCancel: HTMLButtonElement | null;
   btnAppDialogOk: HTMLButtonElement | null;
 
- // LLM form
-  llmForm: HTMLFormElement | null;
-  llmSection: HTMLElement | null;
-  llmAdvanced: HTMLElement | null;
-  llmSummary: HTMLElement | null;
-  llmProvider: HTMLSelectElement | null;
-  llmModel: HTMLInputElement | null;
-  llmApiKey: HTMLInputElement | null;
-  llmApiKeySummary: HTMLElement | null;
-  btnLlmApiKeyToggle: HTMLButtonElement | null;
-  btnLlmApiKeyCopy: HTMLButtonElement | null;
-  btnLlmAuthAction: HTMLButtonElement | null;
-  llmStatus: HTMLElement | null;
-  llmNotice: HTMLElement | null;
-
  // Channel dialog
   channelDialog: HTMLDialogElement | null;
   channelForm: HTMLFormElement | null;
@@ -216,15 +191,6 @@ export interface DomRefs {
   channelId: HTMLInputElement | null;
   channelFields: HTMLElement | null;
   btnCancelChannel: HTMLButtonElement | null;
-
- // Settings dialog
-  settingsDialog: HTMLDialogElement | null;
-  settingsForm: HTMLFormElement | null;
-  serverUrl: HTMLInputElement | null;
-  serverPassword: HTMLInputElement | null;
-  serverUsername: HTMLInputElement | null;
-  localeMode: HTMLSelectElement | null;
-  themeMode: HTMLSelectElement | null;
 
  // Knowledge: Memory
   memoryBadge: HTMLElement | null;
@@ -272,17 +238,11 @@ export function getDomRefs(): DomRefs {
     titlebar: $<HTMLElement>("#titlebar"),
     connBadge: $<HTMLElement>("#connBadge"),
     brandLogo: $<HTMLElement>(".brand-logo"),
-    brandVersion: $<HTMLElement>("#brandVersion"),
     chatVersion: $<HTMLElement>("#chatVersion"),
 
  // Titlebar controls
-    btnTitlebarMenu: $<HTMLButtonElement>("#btnTitlebarMenu"),
-    titlebarMenu: $<HTMLElement>("#titlebarMenu"),
-    btnLocale: $<HTMLButtonElement>("#btnLocale"),
-    btnLocaleLabel: $<HTMLElement>("#btnLocaleLabel"),
-    btnTheme: $<HTMLButtonElement>("#btnTheme"),
-    btnThemeValue: $<HTMLElement>("#btnThemeValue"),
-    btnSettings: $<HTMLButtonElement>("#btnSettings"),
+    solidTitlebarMenu: $<HTMLElement>("#solidTitlebarMenu"),
+    solidTitlebarStatus: $<HTMLElement>("#solidTitlebarStatus"),
 
  // Settings checkboxes / controls
     chkAutoQuestion: $<HTMLInputElement>("#chkAutoQuestion"),
@@ -322,8 +282,6 @@ export function getDomRefs(): DomRefs {
     taskStatus: $<HTMLElement>("#taskStatus"),
 
  // Config dialog
-    btnConfigToggle: $<HTMLButtonElement>("#btnConfigToggle"),
-    configToggleMeta: $<HTMLElement>("#configToggleMeta"),
     configDialog: $<HTMLDialogElement>("#configDialog"),
     btnCloseConfigDialog: $<HTMLButtonElement>("#btnCloseConfigDialog"),
 
@@ -349,7 +307,6 @@ export function getDomRefs(): DomRefs {
     channelConfigBody: $<HTMLElement>("#channelConfigBody"),
     channelPublicUrl: $<HTMLInputElement>("#channelPublicUrl"),
     btnSaveChannelPublicUrl: $<HTMLButtonElement>("#btnSaveChannelPublicUrl"),
-    cfgAvailableProviders: $<HTMLElement>("#cfgAvailableProviders"),
 
  // Lists
     channelList: $<HTMLElement>("#channelList"),
@@ -456,21 +413,6 @@ export function getDomRefs(): DomRefs {
     btnAppDialogCancel: $<HTMLButtonElement>("#btnAppDialogCancel"),
     btnAppDialogOk: $<HTMLButtonElement>("#btnAppDialogOk"),
 
- // LLM form
-    llmForm: $<HTMLFormElement>("#llmForm"),
-    llmSection: $<HTMLElement>("#llmSection"),
-    llmAdvanced: $<HTMLElement>("#llmAdvanced"),
-    llmSummary: $<HTMLElement>("#llmSummary"),
-    llmProvider: $<HTMLSelectElement>("#llmProvider"),
-    llmModel: $<HTMLInputElement>("#llmModel"),
-    llmApiKey: $<HTMLInputElement>("#llmApiKey"),
-    llmApiKeySummary: $<HTMLElement>("#llmApiKeySummary"),
-    btnLlmApiKeyToggle: $<HTMLButtonElement>("#btnLlmApiKeyToggle"),
-    btnLlmApiKeyCopy: $<HTMLButtonElement>("#btnLlmApiKeyCopy"),
-    btnLlmAuthAction: $<HTMLButtonElement>("#btnLlmAuthAction"),
-    llmStatus: $<HTMLElement>("#llmStatus"),
-    llmNotice: $<HTMLElement>("#llmNotice"),
-
  // Channel dialog
     channelDialog: $<HTMLDialogElement>("#channelDialog"),
     channelForm: $<HTMLFormElement>("#channelForm"),
@@ -478,15 +420,6 @@ export function getDomRefs(): DomRefs {
     channelId: $<HTMLInputElement>("#channelId"),
     channelFields: $<HTMLElement>("#channelFields"),
     btnCancelChannel: $<HTMLButtonElement>("#btnCancelChannel"),
-
- // Settings dialog
-    settingsDialog: $<HTMLDialogElement>("#settingsDialog"),
-    settingsForm: $<HTMLFormElement>("#settingsForm"),
-    serverUrl: $<HTMLInputElement>("#serverUrl"),
-    serverPassword: $<HTMLInputElement>("#serverPassword"),
-    serverUsername: $<HTMLInputElement>("#serverUsername"),
-    localeMode: $<HTMLSelectElement>("#localeMode"),
-    themeMode: $<HTMLSelectElement>("#themeMode"),
 
  // Knowledge: Memory
     memoryBadge: $<HTMLElement>("#memoryBadge"),

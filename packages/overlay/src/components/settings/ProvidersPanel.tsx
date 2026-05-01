@@ -8,7 +8,16 @@ import { t } from "../../utils/i18n";
 import { appStore, setAppStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
 import { apiJson, ApiError } from "../../services/api";
-import { testProviderConnection, type ProviderTestResult } from "../../services/llm";
+import {
+  authenticateSelectedProvider,
+  providerAuthMethods,
+  providerState,
+  testProviderConnection,
+  type AuthDialogCallbacks,
+  type ProviderTestResult,
+} from "../../services/llm";
+import { nativeConfirm, nativeOpen, nativePrompt, nativeSelect } from "../../utils/native";
+import { nativeMessage } from "../../services/app-dialog";
 
 function describeFailure(e: unknown): string {
   if (e instanceof ApiError) return e.message;
@@ -38,6 +47,7 @@ export default function ProvidersPanel() {
   // edited or removed (covered by row remount via the For key).
   const [testing, setTesting] = createSignal<Set<string>>(new Set());
   const [testResults, setTestResults] = createSignal<Map<string, ProviderTestResult>>(new Map());
+  const [authing, setAuthing] = createSignal<Set<string>>(new Set());
   // Surface every save / delete / form-validation failure into the UI.
   // Before this signal existed, handleSave/handleDelete only `console.error`d
   // (Tauri WebView users have no devtools), and a silent `return` on missing
@@ -117,6 +127,58 @@ export default function ProvidersPanel() {
       });
     } finally {
       setTesting((prev) => {
+        const next = new Set(prev);
+        next.delete(providerId);
+        return next;
+      });
+    }
+  }
+
+  const authCallbacks: AuthDialogCallbacks = {
+    nativePrompt: (message, opts) => nativePrompt(message, opts),
+    nativeSelect: (message, opts) =>
+      nativeSelect(message, {
+        ...opts,
+        options: opts.options.map((item) => ({
+          value: item.value,
+          label: item.hint ? `${item.label} - ${item.hint}` : item.label,
+        })),
+      }),
+    nativeConfirm: (message, opts) => nativeConfirm(message, opts),
+    nativeOpen,
+    showLlmNotice: (message, tone = "info") => {
+      void nativeMessage(message, { title: t("llm.title"), kind: tone });
+    },
+  };
+
+  async function refreshAuthState() {
+    const [catalog, auth] = await Promise.all([
+      apiJson("provider"),
+      apiJson("provider/auth"),
+    ]);
+    setAppStore({
+      providerCatalog: catalog ?? null,
+      providerAuth: auth ?? null,
+    });
+  }
+
+  async function handleAuth(providerId: string) {
+    if (!providerAuthMethods(providerId).length || authing().has(providerId)) return;
+    setFormError(null);
+    setAuthing((prev) => new Set(prev).add(providerId));
+    try {
+      const ok = await authenticateSelectedProvider(providerId, authCallbacks);
+      if (ok) {
+        await refreshAuthState();
+        await nativeMessage(t("llm.status.connected"), {
+          title: t("llm.title"),
+          kind: "success",
+        });
+      }
+    } catch (e) {
+      setFormError(t("provider.auth.failed", { reason: describeFailure(e) }));
+    } finally {
+      setAuthing((prev) => {
         const next = new Set(prev);
         next.delete(providerId);
         return next;
@@ -267,6 +329,8 @@ export default function ProvidersPanel() {
         name: p.name || p.id,
         source: p.source || "auto",
         modelCount: Object.keys(p.models || {}).length,
+        authMethods: providerAuthMethods(p.id).length,
+        status: providerState(p.id),
       }));
   };
 
@@ -317,6 +381,18 @@ export default function ProvidersPanel() {
               <div class="config-panel-card-head">
                 <strong class="config-panel-card-title">{provider.name || id}</strong>
                 <div class="config-panel-card-actions">
+                  <Show when={providerAuthMethods(id).length > 0}>
+                    <button
+                      type="button"
+                      class="btn mini"
+                      onClick={() => void handleAuth(id)}
+                      disabled={authing().has(id)}
+                      title={t("llm.auth_connect_title")}
+                      data-testid={`provider-auth-${id}`}
+                    >
+                      {authing().has(id) ? t("common.loading") : t("llm.auth_connect")}
+                    </button>
+                  </Show>
                   <button
                     type="button"
                     class="btn mini"
@@ -365,6 +441,16 @@ export default function ProvidersPanel() {
               <div class="provider-card-meta">
                 {t("provider.label.api")}: {provider.api}
               </div>
+              <Show when={providerAuthMethods(id).length > 0}>
+                {() => {
+                  const status = providerState(id, undefined);
+                  return (
+                    <div class="provider-card-meta" data-tone={status.tone}>
+                      {status.label}: {status.detail}
+                    </div>
+                  );
+                }}
+              </Show>
               <Show when={provider.env?.length}>
                 <div class="provider-card-meta">
                   {t("provider.label.env")}: {provider.env.join(", ")}
@@ -489,6 +575,19 @@ export default function ProvidersPanel() {
                 {(p) => (
                   <div class="config-panel-list-row">
                     <span class="config-panel-list-main">{p.name}</span>
+                    <span class="config-panel-list-meta">{p.status.label}</span>
+                    <Show when={p.authMethods > 0}>
+                      <button
+                        type="button"
+                        class="btn mini"
+                        onClick={() => void handleAuth(p.id)}
+                        disabled={authing().has(p.id)}
+                        title={t("llm.auth_connect_title")}
+                        data-testid={`provider-auth-${p.id}`}
+                      >
+                        {authing().has(p.id) ? t("common.loading") : t("llm.auth_connect")}
+                      </button>
+                    </Show>
                     <span class="config-panel-list-meta">{p.modelCount} models</span>
                   </div>
                 )}
