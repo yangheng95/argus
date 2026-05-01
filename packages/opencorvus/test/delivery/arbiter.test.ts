@@ -64,6 +64,44 @@ describe("delivery arbiter", () => {
     expect(affectedGoalIDs(decision.verdict)).toEqual([])
   })
 
+  test("manifest rejection reports every failure family with functional blockers first", () => {
+    const decision = arbitrateDeliveryVerdict({
+      manifest: manifestWithMixedFunctionalAndAuxiliaryFailures(),
+      goalIds: ["gol_ui"],
+    })
+
+    expect(decision?.source).toBe("manifest")
+    expect(decision?.verdict.verdict).toBe("rejected")
+    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
+    expect(decision.verdict.summary).toContain("Functional completion failed")
+    const errors = decision.verdict.rejection_details.map((item) => item.error)
+    expect(errors.some((item) => item.includes("goal:gol_ui failed"))).toBe(true)
+    expect(errors.some((item) => item.includes("runtime:web:. failed"))).toBe(true)
+    expect(errors.some((item) => item.includes("specialist:frontend failed"))).toBe(true)
+    expect(errors.some((item) => item.includes("check:build failed"))).toBe(true)
+    expect(errors.at(-1)).toContain("check:build failed")
+    const formatted = formatDeliveryManifestFailureDetails(manifestWithMixedFunctionalAndAuxiliaryFailures())
+    expect(formatted[0]).toContain("[coverage] goal:gol_ui")
+    expect(formatted.at(-1)).toContain("[check] check:build")
+  })
+
+  test("keeps broad specialist requirement mappings task-scoped without suggested owner", () => {
+    const decision = arbitrateDeliveryVerdict({
+      manifest: manifestWithBroadSpecialistFinding(),
+      goalIds: ["gol_auth", "gol_ui"],
+    })
+
+    expect(decision?.source).toBe("manifest")
+    expect(decision?.verdict.verdict).toBe("rejected")
+    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
+    expect(decision.verdict.rejection_details).toEqual([{
+      category: "quality",
+      error: "specialist:test_integration failed: blocking:test_quality: Required test command failed",
+      suggestion: "Fix the Specialist Review: test_integration failure and rerun specialist_review.",
+    }])
+    expect(affectedGoalIDs(decision.verdict)).toEqual([])
+  })
+
   test("keeps delivery agent rejection text when manifest gate also fails", () => {
     const rejected: DeliveryVerdictType = {
       verdict: "rejected",
@@ -212,6 +250,107 @@ function manifestWithSpecialistFinding(): DeliveryEvidenceManifest {
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
       failedReviewIds: ["specialist:security_data"],
+    },
+  }
+}
+
+function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceManifest {
+  return {
+    ...manifestWithFailedBuildCheck(),
+    goalCoverage: [{
+      goalId: "gol_ui",
+      title: "UI flow",
+      priority: "blocking",
+      status: "uncovered",
+      acceptanceSpecCount: 0,
+      evidence: ["blocking goal has no functional evidence"],
+    }],
+    runtimeFlows: [{
+      id: "runtime:web:.",
+      name: "Web Runtime Render",
+      status: "failed",
+      evidence: ["no_build_artifact: no index.html found"],
+    }],
+    reviewEvidence: [{
+      id: "specialist:frontend",
+      name: "Specialist Review: frontend",
+      status: "failed",
+      evidence: ["blocking:runtime: Frontend runtime flow failed"],
+    }],
+    functionalAssessment: {
+      status: "incomplete",
+      primaryFailureIds: ["goal:gol_ui", "runtime:web:.", "specialist:frontend"],
+      auxiliaryFailureIds: ["check:build"],
+      summary: "Functional completion failed with 3 primary blocker(s) and 1 auxiliary blocker(s).",
+    },
+    finalGate: {
+      status: "failed",
+      summary: "Functional completion failed with 3 primary blocker(s) and 1 auxiliary blocker(s).",
+      failedCheckIds: ["check:build"],
+      failedCoverageIds: ["goal:gol_ui"],
+      failedRuntimeFlowIds: ["runtime:web:."],
+      failedReviewIds: ["specialist:frontend"],
+      functionalAssessment: {
+        status: "incomplete",
+        primaryFailureIds: ["goal:gol_ui", "runtime:web:.", "specialist:frontend"],
+        auxiliaryFailureIds: ["check:build"],
+        summary: "Functional completion failed with 3 primary blocker(s) and 1 auxiliary blocker(s).",
+      },
+    },
+  }
+}
+
+function manifestWithBroadSpecialistFinding(): DeliveryEvidenceManifest {
+  const specialist = createDeliverySpecialistReview({
+    taskId: "tsk_arbiter",
+    runId: "run_arbiter",
+    deliveryId: "dlv_arbiter",
+    reviewer: "test_integration",
+    executionStatus: "completed",
+    summary: "Test integration review found 1 issue.",
+    findings: [{
+      proposedSeverity: "blocking",
+      category: "test_quality",
+      claim: "Required test command failed",
+      evidence: [{ kind: "command", ref: "bun test" }],
+      affectedRequirementIDs: ["REQ-AUTH", "REQ-UI"],
+    }],
+    evidenceRefs: ["command:bun test"],
+    reviewedSurfaces: ["test_integration"],
+  })
+  return {
+    ...baseManifest(),
+    reviewEvidence: [{
+      id: "specialist:test_integration",
+      name: "Specialist Review: test_integration",
+      status: "failed",
+      artifactId: specialist.id,
+      evidence: ["blocking:test_quality: Required test command failed"],
+    }],
+    specialistReviews: [specialist],
+    requirementCoverage: [
+      { requirementId: "REQ-AUTH", status: "covered", goalIds: ["gol_auth"], evidence: ["mapped"] },
+      { requirementId: "REQ-UI", status: "covered", goalIds: ["gol_ui"], evidence: ["mapped"] },
+    ],
+    functionalAssessment: {
+      status: "complete",
+      primaryFailureIds: [],
+      auxiliaryFailureIds: ["specialist:test_integration"],
+      summary: "Functional completion passed, but 1 auxiliary quality gate(s) failed.",
+    },
+    finalGate: {
+      status: "failed",
+      summary: "Functional completion passed, but 1 auxiliary quality gate(s) failed.",
+      failedCheckIds: [],
+      failedCoverageIds: [],
+      failedRuntimeFlowIds: [],
+      failedReviewIds: ["specialist:test_integration"],
+      functionalAssessment: {
+        status: "complete",
+        primaryFailureIds: [],
+        auxiliaryFailureIds: ["specialist:test_integration"],
+        summary: "Functional completion passed, but 1 auxiliary quality gate(s) failed.",
+      },
     },
   }
 }

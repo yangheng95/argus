@@ -31,6 +31,7 @@ import {
   type DeliveryEvidenceManifest,
   type DeliveryGoalCoverage,
   type DeliveryRequirementCoverage,
+  type DeliveryManifestFunctionalAssessment,
   type DeliveryRequiredCheck,
   type DeliveryReviewEvidence,
   type DeliveryRuntimeFlowResult,
@@ -154,8 +155,76 @@ export async function buildDeliveryEvidenceManifest(input: {
   const failedReviewIds = reviewEvidence
     .filter((item) => item.status === "failed")
     .map((item) => item.id)
-  manifest.finalGate = arbitrateDeliveryGate({ checks, failedCoverageIds, failedRuntimeFlowIds, failedReviewIds })
+  const functionalAssessment = assessFunctionalCompletion({
+    failedCheckIds: checks.failedCheckIds,
+    failedCoverageIds,
+    failedRuntimeFlowIds,
+    failedReviewIds,
+    specialistReviews,
+  })
+  manifest.functionalAssessment = functionalAssessment
+  manifest.finalGate = arbitrateDeliveryGate({
+    checks,
+    failedCoverageIds,
+    failedRuntimeFlowIds,
+    failedReviewIds,
+    functionalAssessment,
+  })
   return manifest
+}
+
+function assessFunctionalCompletion(input: {
+  failedCheckIds: string[]
+  failedCoverageIds: string[]
+  failedRuntimeFlowIds: string[]
+  failedReviewIds: string[]
+  specialistReviews: DeliverySpecialistReview[]
+}): DeliveryManifestFunctionalAssessment {
+  const primaryFailureIds = [
+    ...input.failedCoverageIds,
+    ...input.failedRuntimeFlowIds,
+    ...input.failedReviewIds.filter((id) =>
+      specialistReviewBlocksFunctionalCompletion({ id, reviews: input.specialistReviews })
+    ),
+  ]
+  const primary = new Set(primaryFailureIds)
+  const auxiliaryFailureIds = [
+    ...input.failedCheckIds,
+    ...input.failedReviewIds.filter((id) => !primary.has(id)),
+  ]
+  const status = primaryFailureIds.length === 0 ? "complete" : "incomplete"
+  const summary = status === "complete"
+    ? auxiliaryFailureIds.length === 0
+      ? "Functional completion passed and auxiliary quality gates passed."
+      : `Functional completion passed, but ${auxiliaryFailureIds.length} auxiliary quality gate(s) failed.`
+    : `Functional completion failed with ${primaryFailureIds.length} primary blocker(s) and ${auxiliaryFailureIds.length} auxiliary blocker(s).`
+  return {
+    status,
+    primaryFailureIds: [...new Set(primaryFailureIds)].sort(),
+    auxiliaryFailureIds: [...new Set(auxiliaryFailureIds)].sort(),
+    summary,
+  }
+}
+
+function specialistReviewBlocksFunctionalCompletion(input: {
+  id: string
+  reviews: DeliverySpecialistReview[]
+}) {
+  const reviewer = input.id.slice("specialist:".length)
+  const review = input.reviews.find((item) => item.reviewer === reviewer)
+  if (!review) return false
+  return review.findings.some((finding) =>
+    finding.proposedSeverity === "blocking" &&
+    (
+      finding.category === "startup" ||
+      finding.category === "runtime" ||
+      finding.category === "functional" ||
+      finding.category === "contract" ||
+      finding.category === "visual" ||
+      finding.category === "evidence_quality" ||
+      finding.category === "user_intent"
+    )
+  )
 }
 
 async function runSpecialistReviews(input: {

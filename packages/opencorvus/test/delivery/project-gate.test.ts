@@ -42,6 +42,13 @@ describe("delivery project evidence gate", () => {
     expect(manifest.checkResults.find((item) => item.name === "lint")?.status).toBe("failed")
     expect(manifest.checkResults.find((item) => item.name === "lint")?.failureSignature?.checkId).toBe("lint#1")
     expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.functionalAssessment).toMatchObject({
+      status: "complete",
+      primaryFailureIds: [],
+    })
+    expect(manifest.functionalAssessment?.auxiliaryFailureIds).toContain("lint#1")
+    expect(manifest.finalGate.summary).toContain("Functional completion passed")
+    expect(manifest.finalGate.summary).toContain("auxiliary quality gate")
   })
 
   test("rejects package scripts that coerce shell failure into success", async () => {
@@ -182,6 +189,14 @@ console.log("lint scope ok", cwd())
       "goal:gol_missing_acceptance",
       "requirement:REQ-1",
     ])
+    expect(manifest.functionalAssessment).toMatchObject({
+      status: "incomplete",
+      primaryFailureIds: [
+        "goal:gol_missing_acceptance",
+        "requirement:REQ-1",
+      ],
+    })
+    expect(manifest.finalGate.summary).toContain("Functional completion failed")
   })
 
   test("detects repeated manifest failure signature sets", () => {
