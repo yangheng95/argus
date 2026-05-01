@@ -234,6 +234,18 @@ function shouldCopyIntoRenderWorkspace(sourceRoot: string, candidate: string) {
   return relative.split(path.sep).every((part) => !RENDER_WORKSPACE_EXCLUDED_NAMES.has(part))
 }
 
+const ANSI_ESCAPE_PATTERN = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
+const ANNOUNCED_LOCAL_URL_PATTERN = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{1,5})\/?/i
+
+export function announcedLocalUrlFromOutput(output: string): string | undefined {
+  const plain = output.replace(ANSI_ESCAPE_PATTERN, "")
+  const match = plain.match(ANNOUNCED_LOCAL_URL_PATTERN)
+  if (!match) return undefined
+  const port = Number(match[1])
+  if (!Number.isInteger(port) || port <= 0 || port > 65_535) return undefined
+  return `http://127.0.0.1:${port}`
+}
+
 /**
  * Spawn `bun run <script>` from `projectRoot`, then poll every 500ms up to
  * `timeoutMs` for an HTTP listener on the returned URL candidates (app
@@ -320,18 +332,15 @@ async function startProjectServer(
   // ended up screenshotting the wrong app entirely (rule 25: no hardcoded
   // resource lists). Capturing the launch script's own URL announcement
   // is the only honest way to identify "the port THIS process bound".
-  const URL_PATTERN = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::(\d+))?\/?/i
   let detectedUrl: string | undefined
   const onChunk = (chunk: Buffer) => {
     const text = chunk.toString("utf8")
     captured.push(text)
     if (!detectedUrl) {
-      const match = text.match(URL_PATTERN)
-      if (match) {
-        // Normalize 0.0.0.0 → 127.0.0.1 so puppeteer can connect locally.
-        const port = match[1] ?? "80"
-        detectedUrl = `http://127.0.0.1:${port}`
-      }
+      // Vite colorizes the port itself (`localhost:\x1b[1m4180`), and
+      // stdout may split the URL across chunks. Parse the recent captured
+      // window after stripping terminal control codes; never infer port 80.
+      detectedUrl = announcedLocalUrlFromOutput(captured.join("").slice(-4_000))
     }
   }
   child.stdout?.on("data", onChunk)
