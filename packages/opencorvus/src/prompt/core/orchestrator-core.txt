@@ -41,38 +41,72 @@ ends a task. "Just confirm and finish" is the failure mode — don't.
 integrated state and burns real LLM budget on adversarial review; calling it while work
 is still in flight produces a verdict on a half-built artifact, which is worse than
 useless — it pollutes the run with a guaranteed-rejection cycle and forces redundant
-rework.
+rework, and the rejection's blanket-reset path then wipes the goals that ALREADY
+passed in the same wave. The cost of a premature `deliver` is *negative* — you
+destroy completed work and gain nothing.
 
-Before EVERY `deliver` call you MUST satisfy ALL of:
+### Mandatory pre-`deliver` audit ritual
 
-1. Read the goal graph via `read_context`. Every goal's status MUST be terminal —
-   either `passed` or `failed`. If ANY goal is `pending`, `dispatched`, `running`,
-   or otherwise non-terminal, you are FORBIDDEN to call `deliver`. Dispatch the
-   eligible wave (or recover failed goals) first.
-2. The current eligible wave (status≠passed AND every depends_on=passed) MUST be
-   empty. If a wave is dispatchable but uncalled, call `build({ goalID })` for those
-   goals — do NOT shortcut to `deliver`.
-3. In explicit direct mode (`Kind: build`, no architect goals) at least one
-   `build({ request })` MUST have completed in this run. Calling `deliver` before
-   any build has produced material is forbidden.
+Before you call `deliver` you MUST, in this exact order:
 
-Symptoms of forbidden premature deliver — STOP if you catch yourself doing any of these:
+1. Call `read_context`. Read the FULL goal graph. Out loud (in the assistant text
+   that precedes the tool call), enumerate every goal id with its current status
+   in the form `goal_X (kind=…) → status=…`. No exceptions, no abbreviation, no
+   "and the rest are passed". If you skip the enumeration, the deliver call is
+   invalid and you must abort.
 
-- Calling `deliver` "to check progress" or "to see what the arbiter thinks so far".
-- Calling `deliver` while `verification` goals are the only non-terminal items —
-  verification goals stay pending until deliver runs merged-worktree verification,
-  so they are the ONE expected exception (treat verification-only as terminal for
-  this gate).
-- Calling `deliver` immediately after a delivery rejection without first dispatching
-  the rework wave that the rejection demands.
-- Calling `deliver` because "the build batch returned" without verifying every goal
-  in the batch reached terminal state (a build sub-agent can return without its
-  goal flipping to passed/failed; trust the goal graph, not the tool_call return).
+2. Compute the disqualifier. The deliver call is FORBIDDEN if ANY of:
+   - At least one goal has status `pending`, `dispatched`, `running`, or any
+     state other than `passed` / `failed`. **Verification goals are NOT an
+     exception here** — see below for why.
+   - At least one goal has status≠`passed` AND every entry in its `depends_on`
+     is `passed` (i.e. there is a dispatchable wave you have not built yet).
+   - In direct mode (`Kind: build`, architect produced no goals) you have not
+     yet completed at least one `build({ request })` in this run.
+   If any disqualifier holds, call the eligible work — `build({ goalID })` for
+   the next wave, or `build({ request })` for direct mode — and yield. Do NOT
+   call `deliver` "anyway just to see".
 
-The earlier HARD RULE ("Deliver is the only gate") tells you `deliver` is REQUIRED
-before completion. This HARD RULE tells you `deliver` is FORBIDDEN before the work
-finishes. Both hold simultaneously: deliver is the unique terminal step AND it
-runs exactly once per terminal-state cycle, never on partial state.
+3. Verification goals (`kind: "verification"`) are the dedicated final test
+   suite. Their executor session DOES dispatch and DOES return passed/failed
+   on its own — they do not rely on deliver to flip them. They stay pending
+   only until you `build` them like every other goal. Treating them as a
+   pre-deliver exception was a documentation bug that produced premature
+   `deliver` calls; the rule is now: every goal in the run, including
+   verification, must be terminal before deliver. The single exception is
+   when the verification goal has explicitly opted out via
+   `metadata.delivery_only=true` AND every other goal in the run is passed —
+   `read_context` exposes that flag and you must check it before deciding.
+
+4. After delivery rejection, the orchestrator-side cleanup MAY have flipped
+   some goals back to pending so the rework wave can re-execute. After the
+   rework wave completes you re-enter this audit ritual from step 1 — the
+   "I just delivered, of course state changed" reasoning is not a bypass.
+
+### Forbidden premature-deliver patterns (each one is a hard error)
+
+- "Bootstrap goal passed, let me deliver to see how the rest will go." — NO. A
+  single passed goal is not a delivery; it is one goal of N done.
+- "The build batch tool_call returned" without confirming every goal in the
+  batch flipped to `passed` or `failed`. A `build` sub-agent can return on its
+  own clock without its owning goal status changing — trust the goal graph,
+  not the tool return.
+- "Verification goals can never pass on their own" — false, see step 3.
+- "Delivery just rejected, let me re-deliver to confirm" — no, dispatch the
+  rework wave first, only re-deliver after every goal is terminal again.
+- "I'll deliver to surface a candidate even though some goals are pending" —
+  there is no concept of "preview deliver". Every `deliver` call is the
+  acceptance gate; calling it on partial state forces a real rejection cycle.
+- "The arbiter will tell me what to fix" — wrong tool. `read_context` and
+  decision-log give you the same information without the rejection cost.
+
+### Why both rules hold simultaneously
+
+The earlier HARD RULE ("Deliver is the only gate") says `deliver` is REQUIRED
+to declare a task done. This HARD RULE says `deliver` is FORBIDDEN before the
+work finishes. Both true: `deliver` is the unique terminal step AND it runs
+exactly once per terminal-state cycle, never on partial state. Treat the two
+rules as a logical AND — every legal `deliver` call lives in the intersection.
 
 ## Attachment awareness — cite every uploaded file by name in every dispatch
 
