@@ -56,6 +56,12 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 export namespace SessionLoop {
   const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
 
+  type StrictAITool = AITool & { strict?: boolean }
+
+  function strictTool(input: AITool): AITool {
+    return { ...(input as StrictAITool), strict: true } as AITool
+  }
+
   // ---------------------------------------------------------------------------
   // Ephemeral per-session tools (phase 3-a-1 of specs/new-arch/16-unified-teardown.md)
   //
@@ -1346,7 +1352,7 @@ export namespace SessionLoop {
       scopedToolNames: [contract.toolName],
       predicateResult: true,
     })
-    return { [contract.toolName]: terminalTool }
+    return { [contract.toolName]: strictTool(terminalTool) }
   }
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
@@ -1821,7 +1827,7 @@ export namespace SessionLoop {
     const inputSchema = jsonSchema(toolSchema as any)
     const payloadValidator = compileStructuredOutputPayloadValidator(toolSchema)
 
-    return tool({
+    return strictTool(tool({
       id: "StructuredOutput" as any,
       description: STRUCTURED_OUTPUT_DESCRIPTION,
       inputSchema,
@@ -1848,7 +1854,7 @@ export namespace SessionLoop {
           value: result.output,
         }
       },
-    })
+    }))
   }
 
   async function ensureTitle(input: {

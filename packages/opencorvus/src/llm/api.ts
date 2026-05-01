@@ -1,6 +1,6 @@
 import {
-  streamObject as streamObjectBase,
   streamText as streamTextBase,
+  Output,
   type StreamTextOnChunkCallback,
   type StreamTextOnErrorCallback,
   type StreamTextOnFinishCallback,
@@ -54,8 +54,11 @@ function signal(signal?: AbortSignal, timeout?: number | false) {
   return AbortSignal.any([signal, next])
 }
 
-export function streamText<TOOLS extends ToolSet = ToolSet>(
-  input: Parameters<typeof streamTextBase<TOOLS>>[0] & {
+export function streamText<
+  TOOLS extends ToolSet = ToolSet,
+  STRUCTURED_OUTPUT extends Output.Output = Output.Output<string, string, never>,
+>(
+  input: Parameters<typeof streamTextBase<TOOLS, STRUCTURED_OUTPUT>>[0] & {
     timeoutMs?: number | false
     retries?: number
   },
@@ -63,7 +66,7 @@ export function streamText<TOOLS extends ToolSet = ToolSet>(
   const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
   const composed = signal(abortSignal, timeout)
   const result = streamTextBase({
-    ...(rest as Parameters<typeof streamTextBase<TOOLS>>[0]),
+    ...(rest as Parameters<typeof streamTextBase<TOOLS, STRUCTURED_OUTPUT>>[0]),
     abortSignal: composed,
     maxRetries: retries(count),
   })
@@ -79,33 +82,6 @@ export function streamText<TOOLS extends ToolSet = ToolSet>(
     get(target, prop, receiver) {
       if (prop === "fullStream") return abortableIterable(target.fullStream, composed)
       if (prop === "textStream") return abortableIterable(target.textStream, composed)
-      return Reflect.get(target, prop, receiver)
-    },
-  })
-}
-
-export function streamObject(
-  input: Parameters<typeof streamObjectBase>[0] & {
-    timeoutMs?: number | false
-    retries?: number
-  },
-) {
-  const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
-  const composed = signal(abortSignal, timeout)
-  const result = streamObjectBase({
-    ...(rest as Parameters<typeof streamObjectBase>[0]),
-    abortSignal: composed,
-    maxRetries: retries(count),
-  })
-  if (!composed) return result
-  return new Proxy(result, {
-    get(target, prop, receiver) {
-      if (prop === "partialObjectStream") return abortableIterable(target.partialObjectStream, composed)
-      if (prop === "textStream") return abortableIterable(target.textStream, composed)
-      if (prop === "elementStream") {
-        const v = (target as any).elementStream
-        return v ? abortableIterable(v, composed) : v
-      }
       return Reflect.get(target, prop, receiver)
     },
   })

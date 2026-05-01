@@ -25,9 +25,9 @@ Terminology:
 - JSON: JavaScript Object Notation, the schema-validated payload format for
   tools and structured outputs.
 
-## Current State
+## Initial State
 
-The repository currently pins:
+At plan creation, the repository pinned:
 
 - root workspace catalog `ai: 5.0.124`
 - `packages/opencorvus` dependency `ai: catalog:`
@@ -46,6 +46,37 @@ Official current target versions checked on 2026-05-01:
 - `@ai-sdk/provider`: `3.0.10`
 - `@ai-sdk/provider-utils`: `4.0.25`
 - `@openrouter/ai-sdk-provider`: `2.9.0`
+
+## Implementation Status
+
+Completed in the active migration branch:
+
+- Replaced the runtime dependency graph with `ai@6.0.172`,
+  `@ai-sdk/provider@3.0.10`, `@ai-sdk/provider-utils@4.0.25`, and
+  `@openrouter/ai-sdk-provider@2.9.0`.
+- Updated `script/check-ai-runtime.ts` so the guard enforces AI SDK v6,
+  provider v3, provider-utils v4, and OpenRouter v2.
+- Removed the stale OpenRouter v1 patch and regenerated `bun.lock`.
+- Migrated provider/session API references to AI SDK v6 types, including async
+  `convertToModelMessages()`, `ToolExecutionOptions`, and v6 usage fields.
+- Removed all repo source/test references to `streamObject()` and
+  `generateObject()`; structured helpers now use
+  `streamText({ output: Output.object(...) })`.
+- Kept `@/llm/api` as the single stream wrapper for timeout, retry, and
+  abortable iterable behavior.
+- Marked `StructuredOutput` strict and marked terminal submit tools strict when
+  terminal-tool scoping exposes the submit tool as the only available tool.
+- Verified the current GitLab provider still exposes a v2 language-model
+  implementation under the v6 runtime. `ProviderLLM.wrapModel()` therefore
+  wraps only v3 models and passes non-v3 models through as the AI SDK v6
+  `LanguageModel` union allows. This is a provider-version fact, not a v5/v6
+  fallback path.
+
+Focused verification completed:
+
+- `bun run check:ai-runtime`
+- `bun run --cwd packages/opencorvus typecheck`
+- `bun test --timeout 60000 packages/opencorvus/test/session/structured-output-tool.test.ts packages/opencorvus/test/session/terminal-tool-recovery.test.ts packages/opencorvus/test/mirror/webpage-vision-judge-idle-gate.test.ts`
 
 ## Official Migration Constraints
 

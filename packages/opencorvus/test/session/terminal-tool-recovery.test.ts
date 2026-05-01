@@ -74,6 +74,19 @@ describe("SessionLoop terminal tool recovery", () => {
     expect(Object.keys(SessionLoop.terminalToolScopedTools(contract, tools))).toEqual(["submit_architect"])
   })
 
+  test("marks the scoped terminal tool strict for providers that support strict tool input", () => {
+    const contract = {
+      toolName: "submit_architect",
+      isSatisfied: () => false,
+      shouldExposeOnlyTerminalTool: () => true,
+    }
+    const tools = { submit_architect: { description: "terminal" } as any, register_goal: {} as any }
+
+    const scoped = SessionLoop.terminalToolScopedTools(contract, tools)
+    expect((scoped.submit_architect as any).strict).toBe(true)
+    expect((tools.submit_architect as any).strict).toBeUndefined()
+  })
+
   test("keeps work tools when terminal facts are not ready", () => {
     const contract = {
       toolName: "report_build_result",

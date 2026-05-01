@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import z from "zod"
-import { streamObject } from "ai"
+import { Output } from "ai"
+import { streamText } from "@/llm/api"
 import { Agent } from "@/agent/agent"
 import { resolveAgentModel } from "@/agent/model"
 import { Bus } from "@/bus"
@@ -1387,18 +1388,18 @@ export namespace EngineService {
       },
       { role: "user" as const, content: context },
     ]
-    const stream = streamObject({
+    const stream = streamText({
       model: language,
       temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
       messages: followupMessages,
-      schema: z.object({ suggestion: z.string() }),
+      output: Output.object({ schema: z.object({ suggestion: z.string() }) }),
     })
 
     try {
       for await (const part of stream.fullStream) {
         if (part.type === "error") throw part.error
       }
-      const final = await stream.object
+      const final = await stream.output
       const suggestion = (final?.suggestion ?? "").trim()
       const { AgentTrace } = await import("@/trace")
       if (AgentTrace.isEnabled()) {

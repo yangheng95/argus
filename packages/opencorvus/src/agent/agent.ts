@@ -1,7 +1,8 @@
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
-import { streamObject, type ModelMessage } from "ai"
+import { Output, type ModelMessage } from "ai"
+import { streamText } from "@/llm/api"
 import { SystemPrompt } from "../session/system"
 import { Instance, lazyInstanceState } from "../project/instance"
 import { Auth } from "../auth"
@@ -492,7 +493,7 @@ export namespace Agent {
       systemPrompt: z.string(),
     })
 
-    const result = streamObject({
+    const result = streamText({
       experimental_telemetry: {
         isEnabled: cfg.experimental?.openTelemetry,
         metadata: {
@@ -502,7 +503,7 @@ export namespace Agent {
       temperature: 0.3,
       messages: helperMessages,
       model: language,
-      schema: helperSchema,
+      output: Output.object({ schema: helperSchema }),
       ...(isOpenAIOAuth
         ? {
             providerOptions: ProviderTransform.providerOptions(model, { store: false }),
@@ -516,7 +517,7 @@ export namespace Agent {
       for await (const part of result.fullStream) {
         if (part.type === "error") throw part.error
       }
-      const finalObj = await result.object
+      const finalObj = await result.output
       const { AgentTrace } = await import("@/trace")
       if (AgentTrace.isEnabled()) {
         AgentTrace.recordHelperLLMCall({

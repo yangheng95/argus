@@ -24,7 +24,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
 
-import { streamObject } from "ai"
+import { Output } from "ai"
 
 import { Tool } from "../../tool/tool"
 import { Provider } from "../../provider/provider"
@@ -38,13 +38,14 @@ import {
   LLMActivityError,
   type LLMActivityPolicy,
 } from "../../llm/activity"
+import { streamText } from "../../llm/api"
 import { resolveMirrorOutputDir, DEFAULT_MIRROR_SUBDIR } from "./output-dir"
 
 // Idle window before we abort a hung vision-judge stream. Mirrors the
 // session.processor 180s gate (util/stream-activity.ts callers); kept in
 // sync via the same heuristic — provider stalls past 3 minutes are stuck,
 // not slow. Without this gate, a hung alibaba-coding-plan-cn (kimi-k2.5)
-// upstream call wedges the entire build session: streamObject parks on a
+// upstream call wedges the entire build session: the SDK stream reader parks on a
 // reader.read() promise that AbortController alone does not unblock, and
 // the parent agent's stream-idle gate has been pause()d while this tool
 // runs (session.processor's pause-around-tool semantics — see
@@ -207,18 +208,18 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
         visionPolicy,
         new AbortController().signal,
         async (run) => {
-          // streamObject (rule 27 — every LLM interaction is streaming). The SDK
-          // enforces VerdictSchema on the streamed JSON; partial-stream draining
-          // surfaces validation failures at the same point a generateObject call
-          // would have thrown. run.signal is composed from external + idle +
-          // first-byte + total deadlines; bumps refresh the idle window so a
-          // stalled provider (alibaba kimi-k2.5 has a documented 20+ min hang
-          // pattern) trips a clean terminal=failed cls=idle instead of wedging
-          // the parent build session.
-          const result = streamObject({
+          // streamText object output (rule 27 — every LLM interaction is
+          // streaming). The SDK enforces VerdictSchema on the streamed JSON;
+          // fullStream draining surfaces validation failures. run.signal is
+          // composed from external + idle + first-byte + total deadlines; bumps
+          // refresh the idle window so a stalled provider (alibaba kimi-k2.5 has
+          // a documented 20+ min hang pattern) trips a clean terminal=failed
+          // cls=idle instead of wedging the parent build session.
+          const result = streamText({
             model: language,
-            schema: VerdictSchema,
+            output: Output.object({ schema: VerdictSchema }),
             abortSignal: run.signal,
+            timeoutMs: false,
             messages: [
               {
                 role: "user",
@@ -235,7 +236,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
           for await (const part of result.fullStream) {
             run.bump(chunkHeartbeatKind(part as { type?: string }))
           }
-          verdictHolder.value = (await result.object) as z.infer<typeof VerdictSchema>
+          verdictHolder.value = (await result.output) as z.infer<typeof VerdictSchema>
         },
         () => { /* sink: vision-judge surfaces via log only for now; step 3 wires bus */ },
       )
@@ -247,7 +248,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
       const cause = original instanceof Error && "cause" in original ? (original as { cause?: unknown }).cause : undefined
       const causeMessage =
         cause instanceof Error ? cause.message : cause !== undefined ? String(cause) : undefined
-      log.error("vision judge streamObject failed", {
+      log.error("vision judge structured stream failed", {
         providerID: parsed.providerID,
         modelID: parsed.modelID,
         errName,
@@ -282,7 +283,7 @@ Pure transformation, no network besides the LLM call. Deterministic per (model, 
     // local `verdict` directly (rule 26 — keep the closure pattern from
     // leaking into the report-rendering code below).
     if (!verdictHolder.value) {
-      throw new Error("webpage_vision_judge: streamObject returned without producing a verdict")
+      throw new Error("webpage_vision_judge: structured stream returned without producing a verdict")
     }
     const verdict = verdictHolder.value
     const payload = {

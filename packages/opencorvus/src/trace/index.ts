@@ -24,7 +24,7 @@
  *     sessionID → agentName → taskID without scanning every per-session
  *     file. Index lines also fire for helper LLM calls (no sessionID), so
  *     Agent.generate and generateFollowup show up.
- *   - `helper-<agentName>-<ts>.jsonl` — for direct streamObject calls that
+ *   - `helper-<agentName>-<ts>.jsonl` — for direct structured helper LLM calls that
  *     have no session context (Agent.generate / generateFollowup).
  *
  * Event shape:
@@ -243,7 +243,7 @@ export namespace AgentTrace {
     })
   }
 
-  /** Capture a direct streamObject / generateText call that bypasses the
+  /** Capture a direct structured helper LLM call that bypasses the
    *  session pipeline (Agent.generate, generateFollowup). Synthesises a
    *  helper sessionID from agentName + timestamp so the event lands in its
    *  own file under the same trace dir. Both the input and the structured

@@ -7,7 +7,7 @@
  * may pass either a path or a pre-loaded Buffer).
  *
  * Adaptations vs `opencode-private/packages/mirror/src/service/image-extract.ts`:
- *   - Streams via AI SDK `streamObject` instead of `trackedChatCompletion`
+ *   - Streams via AI SDK `streamText` object output instead of `trackedChatCompletion`
  *     (rule 27: streaming-only LLM calls). The SDK's structured-output
  *     channel enforces the schema, so no `extractFencedCode` / `parseJSON` /
  *     `validateAnalysis` defensive parsing.
@@ -24,7 +24,7 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { extname } from "node:path"
 
-import { streamObject, type LanguageModel, type ModelMessage } from "ai"
+import { Output, type LanguageModel, type ModelMessage } from "ai"
 
 import { Log } from "@/util/log"
 import {
@@ -34,6 +34,7 @@ import {
   LLMActivityError,
   type LLMActivityPolicy,
 } from "@/llm/activity"
+import { streamText } from "@/llm/api"
 import { EngineConfig } from "@/engine/config"
 import { ImageExtractError } from "../errors"
 import {
@@ -151,18 +152,16 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
           visionPolicy,
           input.signal ?? new AbortController().signal,
           async (run) => {
-            const result = streamObject({
+            const result = streamText({
               model: input.model,
-              schema: ImageAnalysisSchema,
+              output: Output.object({ schema: ImageAnalysisSchema }),
               system,
               messages: messages as unknown as ModelMessage[],
               abortSignal: run.signal,
+              timeoutMs: false,
             })
-            // Single drain via fullStream — partialObjectStream and textStream
-            // share one underlying ReadableStream, so reading both concurrently
-            // throws "Invalid state: ReadableStream is locked". fullStream
-            // yields typed events that include both raw text deltas (for our
-            // diagnostic capture) and validation/error signals.
+            // Single drain via fullStream so the structured-output parser and
+            // diagnostic capture observe one ordered event stream.
             for await (const part of result.fullStream) {
               run.bump(chunkHeartbeatKind(part as { type?: string }))
               if (part.type === "text-delta") {
@@ -172,7 +171,7 @@ export async function extractImage(input: ImageExtractInput): Promise<ImageAnaly
                 throw (part as any).error
               }
             }
-            analysis = (await result.object) as ImageAnalysis
+            analysis = (await result.output) as ImageAnalysis
           },
           () => { /* sink: vision activity events surfaced via log only for now; step 3 wires bus */ },
         )
