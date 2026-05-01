@@ -127,7 +127,7 @@ export interface WorkflowState {
  *
  *  适合：显式 kind=build 的单文件 / 局部 bugfix / 配置调整 / 短调试。无需 goal 分解。
  *  流程：build 实现 → deliver 验证；deliver rejection 触发 orchestrator 重新 call
- *  build 修复（最多 max_delivery_iterations 轮）。
+ *  build 修复（最多 max_delivery_iterations 轮）；delivery 只审查和出 verdict。
  */
 const DIRECT: MiniWorkflow = {
   id: "direct",
@@ -156,7 +156,7 @@ const DIRECT: MiniWorkflow = {
       id: "deliver",
       tool: "deliver",
       label: "Deliver",
-      hint: "delivery agent 端到端验收 + 修复 + 发布。Reject 会触发 orchestrator 再次 call build 修复，最多 max_delivery_iterations 轮。",
+      hint: "delivery agent 端到端验收 + 发布判定。Reject 会触发 orchestrator 再次 call build 修复，最多 max_delivery_iterations 轮。",
       scope: "task",
       skippable: false,
       after: ["build"],
@@ -233,7 +233,7 @@ const PIPELINE: MiniWorkflow = {
       id: "deliver",
       tool: "deliver",
       label: "Deliver",
-      hint: "聚合所有 goal 交付物，delivery agent 端到端验收 + 修复 + 发布。Reject 触发 orchestrator 再 dispatch 受影响的 goal 进行返工。",
+      hint: "聚合所有 goal 交付物，delivery agent 端到端验收 + 发布判定。Reject 触发 orchestrator 再 dispatch 受影响的 goal 进行返工。",
       scope: "task",
       skippable: false,
       after: ["build"],

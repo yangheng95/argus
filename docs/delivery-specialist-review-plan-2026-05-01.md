@@ -330,6 +330,8 @@ specialist reviews are enabled.
 
 ### Phase 0: Inventory And Remove Delivery Repair
 
+Status: complete.
+
 Owner files:
 
 - `packages/opencorvus/src/delivery/`
@@ -365,6 +367,14 @@ Acceptance:
   project files.
 - The only final verdict artifact remains `kind="verdict"` with
   `label="delivery-agent-verdict"`.
+
+Completed in Phase 0 implementation:
+
+- Delivery tool surface no longer exposes `write_file` or `edit_file`.
+- Delivery prompt is review-only and routes repair through rejection details and
+  orchestrator retry/replan.
+- Prompt and workflow comments no longer describe delivery as the fixer.
+- Regression tests cover tool-surface read-only behavior and prompt hygiene.
 
 ### Phase 1: Surface Detector
 

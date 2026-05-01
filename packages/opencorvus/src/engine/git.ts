@@ -384,13 +384,11 @@ function result(task: TaskRow) {
 /**
  * P0-C.1 — anchor each delivery picky-loop iteration in git.
  *
- * The delivery agent edits the main worktree directly (Phase 5 repair
- * loop in `delivery/agent.ts`). Until this helper landed, those edits
- * stayed uncommitted between iterations: a rejected round handed back
- * a dirty tree to the next dispatch cycle, an accepted round folded
- * into the final `EngineGit.complete` squash. Either way the picky
- * loop had no per-round commits — meaning no LKG (P0-C.4) anchor and
- * no historical record of which round produced which state.
+ * Delivery is review-only, but each picky-loop iteration still needs a git
+ * anchor. Rejected rounds identify the exact merged state that delivery
+ * reviewed; accepted rounds anchor the final state before publishing. Without
+ * this helper the loop has no per-round LKG (Last Known Good) anchor and no
+ * historical record of which round produced which verdict.
  *
  * Always commits — `--allow-empty` plus `--no-gpg-sign` keep this a
  * pure time anchor when the LLM made no code edits. Best-effort: any

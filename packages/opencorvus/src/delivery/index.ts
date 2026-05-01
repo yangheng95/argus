@@ -1,5 +1,5 @@
 /**
- * `delivery` agent — adversarial verification + fix + verdict gate.
+ * `delivery` agent — adversarial verification + verdict gate.
  *
  * Public surface:
  *   - DeliveryAgent.verify(input) → DeliveryVerdictType

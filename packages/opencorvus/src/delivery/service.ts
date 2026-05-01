@@ -4,7 +4,7 @@
  * 责任（从外到内的判决层级）：
  *   1. **Runtime-evidence 前置闸（P1-A）** — 先于 LLM 采集真 build 产物 + DOM 快照。
  *      缺 build / 空 root shell / DOM 过薄 ⇒ 直接合成 rejected verdict，不召唤 LLM。
- *   2. **LLM verdict（DeliveryAgent.verify）** — 只有 runtime-evidence 通过才跑。
+ *   2. **LLM verdict（DeliveryAgent.verify）** — 只有 runtime-evidence 通过才跑；只审查不改交付物。
  *   3. **视觉硬门（P0-B）** — 复用 runtime-evidence 同轮产出的 rendered.png，
  *      避免双重渲染（rule 22）；任一硬门 fail ⇒ finalizeVerdict 把 accepted 翻为 rejected。
  *
