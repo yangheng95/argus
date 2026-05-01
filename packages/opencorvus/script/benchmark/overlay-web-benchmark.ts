@@ -174,8 +174,8 @@ const resumeMessage = flag("--resume-message") || "请继续完成项目，修�
 // wake-up message instead of giving up. Bounded so a permanently broken
 // task does not loop forever. Set to 0 to disable.
 const maxAutoResumes = Number(flag("--max-auto-resumes") ?? "3")
-const executor = (flag("--executor") || "opencode") as
-  | "opencode"
+const executor = (flag("--executor") || "mirrorcode") as
+  | "mirrorcode"
   | "codex"
   | "claude-code"
 const requestFile = flag("--request-file")
