@@ -99,3 +99,126 @@ test("hydrateConversationView routes goal-phase transcript messages into the pha
     ),
   ).toBe(true);
 });
+
+test("hydrateConversationView restores task-scope agent cards with reasoning parts", () => {
+  resetWriter();
+  setBoardStore("selectedTaskID", "tsk_task_scope_hydrate");
+  setBoardStore("board", {
+    task: {
+      id: "tsk_task_scope_hydrate",
+      status: "active",
+      request: "restore task-scope transcript",
+      sessionID: "ses_root",
+      time: { created: 1_776_000_100_000 },
+      attachments: [],
+    },
+    workflow: {
+      steps: [
+        {
+          id: "requirements",
+          status: "completed",
+          completedAt: 1_776_000_101_000,
+        },
+        {
+          id: "architect",
+          status: "running",
+          startedAt: 1_776_000_102_000,
+        },
+      ],
+    },
+    goalWorkflows: [],
+    interactions: [],
+  });
+
+  const transcript = [
+    {
+      info: {
+        id: "msg_requirements",
+        sessionID: "ses_requirements",
+        role: "assistant",
+        resolvedRole: "requirements",
+        channel: "requirements",
+        time: { created: 1_776_000_101_100 },
+      },
+      parts: [
+        {
+          id: "part_requirements_reasoning",
+          messageID: "msg_requirements",
+          sessionID: "ses_requirements",
+          type: "reasoning",
+          text: "Reading the user request and extracting requirements.",
+        },
+        {
+          id: "part_requirements_text",
+          messageID: "msg_requirements",
+          sessionID: "ses_requirements",
+          type: "text",
+          text: "Requirements registered.",
+        },
+      ],
+    },
+    {
+      info: {
+        id: "msg_architect",
+        sessionID: "ses_architect",
+        role: "assistant",
+        resolvedRole: "architect",
+        channel: "architect",
+        time: { created: 1_776_000_102_100 },
+      },
+      parts: [
+        {
+          id: "part_architect_reasoning",
+          messageID: "msg_architect",
+          sessionID: "ses_architect",
+          type: "reasoning",
+          text: "Designing goals and contracts.",
+        },
+        {
+          id: "part_architect_text",
+          messageID: "msg_architect",
+          sessionID: "ses_architect",
+          type: "text",
+          text: "Architect is preparing contracts.",
+        },
+      ],
+    },
+  ];
+
+  hydrateConversationView(
+    {
+      sessions: [
+        {
+          sessionID: "ses_requirements",
+          stage: "requirements",
+          messageIDs: ["msg_requirements"],
+          firstMessageTime: 1_776_000_101_100,
+          placement: "top_level",
+        },
+        {
+          sessionID: "ses_architect",
+          stage: "architect",
+          messageIDs: ["msg_architect"],
+          firstMessageTime: 1_776_000_102_100,
+          placement: "top_level",
+        },
+      ],
+    },
+    transcript,
+  );
+
+  const requirementsCardID = "requirements:session:ses_requirements";
+  const architectCardID = "architect:session:ses_architect";
+  expect(cardTreeStore.order).toContain(requirementsCardID);
+  expect(cardTreeStore.order).toContain(architectCardID);
+  expect(
+    cardTreeStore.cards[requirementsCardID]?.parts.some(
+      (part) => part.type === "reasoning" && String(part.text || "").includes("extracting requirements"),
+    ),
+  ).toBe(true);
+  expect(
+    cardTreeStore.cards[architectCardID]?.parts.some(
+      (part) => part.type === "reasoning" && String(part.text || "").includes("Designing goals"),
+    ),
+  ).toBe(true);
+});
