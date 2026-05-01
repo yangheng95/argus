@@ -277,7 +277,7 @@ describe("session.message.toModelMessage", () => {
     ])
   })
 
-  test("converts assistant tool completion into tool-call + tool-result messages with attachments", () => {
+  test("converts assistant tool completion into tool-call + tool-result messages with attachments", async () => {
     const userID = "m-user"
     const assistantID = "m-assistant"
 
@@ -329,7 +329,7 @@ describe("session.message.toModelMessage", () => {
       },
     ]
 
-    expect(Message.toModelMessages(input, model)).toStrictEqual([
+    expect(await Message.toModelMessages(input, model)).toStrictEqual([
       {
         role: "user",
         content: [{ type: "text", text: "run tool" }],
@@ -359,7 +359,7 @@ describe("session.message.toModelMessage", () => {
               type: "content",
               value: [
                 { type: "text", text: "ok" },
-                { type: "media", mediaType: "image/png", data: "Zm9v" },
+                { type: "image-data", mediaType: "image/png", data: "Zm9v" },
               ],
             },
             providerOptions: { openai: { tool: "meta" } },
@@ -367,6 +367,82 @@ describe("session.message.toModelMessage", () => {
         ],
       },
     ])
+  })
+
+  test("screenshot-only tool output (no text) emits image-data without an empty text part", async () => {
+    // Regression: AI SDK v6 ToolModelOutput.content rejects items where the
+    // discriminator type matches but the required field is undefined. Pre-fix
+    // we always emitted `{type: "text", text: outputObject.text}` first; when
+    // a tool produced only attachments (e.g. screen tool with no caption) the
+    // text part landed with `text: undefined` and failed standardizePrompt
+    // with `Invalid prompt: The messages do not match the ModelMessage[] schema`.
+    // Assert the empty text part is gone AND no project-scoped media-type
+    // shape leaks back in.
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+
+    const input: Message.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [
+          {
+            ...basePart(userID, "u1"),
+            type: "text",
+            text: "screenshot please",
+          },
+        ] as Message.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-screen-1",
+            tool: "screen",
+            state: {
+              status: "completed",
+              input: { region: "active" },
+              output: "",
+              title: "Screen",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-1"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "shot.png",
+                  url: "data:image/png;base64,UE5H",
+                },
+              ],
+            },
+            metadata: {},
+          },
+        ] as Message.Part[],
+      },
+    ]
+
+    const result = await Message.toModelMessages(input, model)
+    const toolMsg = result.find((m: { role: string }) => m.role === "tool") as
+      | {
+          role: "tool"
+          content: Array<{
+            type: string
+            output: { type: string; value: Array<{ type: string; text?: string; data?: string }> }
+          }>
+        }
+      | undefined
+    expect(toolMsg).toBeDefined()
+    const output = toolMsg!.content[0].output
+    expect(output.type).toBe("content")
+    // No empty text part survived.
+    expect(output.value.find((p) => p.type === "text")).toBeUndefined()
+    // The attachment landed under the v6 `image-data` discriminator (not the
+    // deprecated `media` shape).
+    const imagePart = output.value.find((p) => p.type === "image-data")
+    expect(imagePart).toBeDefined()
+    expect(imagePart!.data).toBe("UE5H")
   })
 
   test("omits provider metadata when assistant model differs", () => {
