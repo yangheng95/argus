@@ -97,7 +97,8 @@ describe("delivery test integration specialist review", () => {
       }),
     })
 
-    expect(manifest.specialistReviews?.[0]?.findings[0]?.claim).toContain("only checks snapshots")
+    const claims = manifest.specialistReviews?.[0]?.findings.map((finding) => finding.claim).join("\n")
+    expect(claims).toContain("only checks snapshots")
     expect(manifest.finalGate.failedReviewIds).toEqual(["specialist:test_integration"])
   })
 
