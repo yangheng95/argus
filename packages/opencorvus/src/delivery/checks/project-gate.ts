@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { randomUUID } from "node:crypto"
 import { Instance } from "@/project/instance"
 import { Database, and, desc, eq, sql } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
@@ -29,6 +30,17 @@ import {
 } from "../manifest"
 
 const COMMAND_TIMEOUT_MS = 180_000
+const CHECK_WORKSPACE_EXCLUDED_NAMES = new Set([
+  ".git",
+  ".opencorvus",
+  ".opencorvus-worktrees",
+  ".next",
+  ".turbo",
+  ".cache",
+  "coverage",
+  "node_modules",
+  "out",
+])
 
 export async function buildDeliveryEvidenceManifest(input: {
   taskID?: string
@@ -387,10 +399,14 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
     }
   }
 
-  const result = await runShellCommand({
-    command: check.command,
-    cwd: check.cwd ?? Instance.directory,
-    timeoutMs: COMMAND_TIMEOUT_MS,
+  let executionCwd: string | undefined
+  const result = await withIsolatedCheckWorkspace(check.cwd ?? Instance.directory, async (workspace) => {
+    executionCwd = workspace
+    return runShellCommand({
+      command: check.command,
+      cwd: workspace,
+      timeoutMs: COMMAND_TIMEOUT_MS,
+    })
   })
   const status = result.exitCode === 0 ? "passed" : "failed"
   const outputExcerpt = clip([result.stdout, result.stderr].filter(Boolean).join("\n"), 4000)
@@ -398,6 +414,7 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
     ...check,
     status,
     exitCode: result.exitCode,
+    executionCwd,
     outputExcerpt,
     startedAt,
     completedAt: Date.now(),
@@ -410,6 +427,54 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
         })
       : undefined,
   }
+}
+
+async function withIsolatedCheckWorkspace<T>(
+  sourceCwd: string,
+  fn: (workspace: string) => Promise<T>,
+): Promise<T> {
+  const scratchParent = path.join(sourceCwd, ".opencorvus", "delivery-check-workspaces")
+  await fs.mkdir(scratchParent, { recursive: true })
+  const scratchRoot = await fs.mkdtemp(path.join(scratchParent, `${randomUUID()}-`))
+  const workspace = path.join(scratchRoot, "workspace")
+  try {
+    await copyTreeIntoCheckWorkspace(sourceCwd, workspace, sourceCwd)
+    return await fn(workspace)
+  } finally {
+    await fs.rm(scratchRoot, { recursive: true, force: true })
+  }
+}
+
+async function copyTreeIntoCheckWorkspace(source: string, destination: string, sourceRoot: string): Promise<void> {
+  if (!shouldCopyIntoCheckWorkspace(sourceRoot, source)) return
+  const stat = await fs.lstat(source)
+  if (stat.isDirectory()) {
+    await fs.mkdir(destination, { recursive: true })
+    const entries = await fs.readdir(source)
+    for (const entry of entries) {
+      await copyTreeIntoCheckWorkspace(
+        path.join(source, entry),
+        path.join(destination, entry),
+        sourceRoot,
+      )
+    }
+    return
+  }
+  if (stat.isSymbolicLink()) {
+    const target = await fs.readlink(source)
+    await fs.symlink(target, destination)
+    return
+  }
+  if (stat.isFile()) {
+    await fs.mkdir(path.dirname(destination), { recursive: true })
+    await fs.copyFile(source, destination)
+  }
+}
+
+function shouldCopyIntoCheckWorkspace(sourceCwd: string, candidate: string) {
+  const relative = path.relative(sourceCwd, candidate)
+  if (!relative) return true
+  return relative.split(path.sep).every((part) => !CHECK_WORKSPACE_EXCLUDED_NAMES.has(part))
 }
 
 async function runShellCommand(input: {

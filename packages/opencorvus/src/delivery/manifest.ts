@@ -18,6 +18,7 @@ export type DeliveryRequiredCheck = {
 export type DeliveryCheckResult = DeliveryRequiredCheck & {
   status: DeliveryCheckStatus
   exitCode?: number
+  executionCwd?: string
   outputExcerpt: string
   startedAt: number
   completedAt: number

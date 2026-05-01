@@ -65,6 +65,45 @@ describe("delivery project evidence gate", () => {
     expect(manifest.finalGate.status).toBe("failed")
   })
 
+  test("runs required checks from a source snapshot that excludes opencorvus internal worktrees", async () => {
+    const dir = await packageFixture({
+      lint: "node scripts/check-lint-scope.mjs",
+    })
+    await fs.mkdir(path.join(dir, ".opencorvus", "worktrees", "goal-demo", ".next"), { recursive: true })
+    await fs.writeFile(
+      path.join(dir, ".opencorvus", "worktrees", "goal-demo", ".next", "generated-bad.js"),
+      "throw new Error('generated worktree output must not be linted')\n",
+    )
+    await fs.mkdir(path.join(dir, "scripts"), { recursive: true })
+    await fs.writeFile(path.join(dir, "scripts", "check-lint-scope.mjs"), `
+import { existsSync } from "node:fs"
+import { cwd } from "node:process"
+
+if (existsSync(".opencorvus/worktrees/goal-demo/.next/generated-bad.js")) {
+  console.error("lint saw opencorvus internal worktree output")
+  process.exit(1)
+}
+console.log("lint scope ok", cwd())
+`)
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_isolated_check",
+        runID: "run_isolated_check",
+        deliveryID: "dlv_isolated_check",
+        changedFiles: ["src/app.ts"],
+      }),
+    })
+
+    const lint = manifest.checkResults.find((item) => item.name === "lint")
+    expect(lint?.status).toBe("passed")
+    expect(lint?.executionCwd).toContain(`${path.join(".opencorvus", "delivery-check-workspaces")}`)
+    expect(lint?.executionCwd).not.toBe(dir)
+    expect(lint?.outputExcerpt).toContain("lint scope ok")
+    expect(manifest.finalGate.failedCheckIds).toEqual([])
+  })
+
   test("validator rejects missing required check results", () => {
     const manifest: DeliveryEvidenceManifest = {
       id: "artifact_manifest",
