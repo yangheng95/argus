@@ -442,6 +442,17 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
       .where(eq(EngineProgressSnapshotTable.task_id, task.id))
       .get(),
   )
+  const protocolEvents = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        seq: sql<number>`coalesce(max(${ProtocolEventTable.seq}), 0)`,
+        updated: sql<number>`coalesce(max(${ProtocolEventTable.emitted_at}), 0)`,
+      })
+      .from(ProtocolEventTable)
+      .where(eq(ProtocolEventTable.task_id, task.id))
+      .get(),
+  )
   const noteStats = Database.use((db) =>
     db
       .select({
@@ -481,6 +492,9 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
     bindings?.updated ?? 0,
     snapshots?.count ?? 0,
     snapshots?.updated ?? 0,
+    protocolEvents?.count ?? 0,
+    protocolEvents?.seq ?? 0,
+    protocolEvents?.updated ?? 0,
   ].join("|")
 }
 
@@ -804,7 +818,10 @@ function buildWorkflowFields(
   // — task-scope from known side-effects (spec / goals / runs / delivery /
   // design_specs presence), goal-scope from the goal_run chain.
   const projectedGoalSteps = projectGoalSteps(task.id, workflow)
-  const projectedTaskSteps = projectTaskSteps(task.id, workflow)
+  const projectedTaskSteps = mergeTaskStepProjections(
+    projectTaskSteps(task.id, workflow),
+    projectTaskStepsFromWorkflowEvents(task.id),
+  )
 
   const workflowBoard = {
     id: workflow.id,
@@ -893,6 +910,68 @@ function buildWorkflowFields(
     requirements,
     architect,
   }
+}
+
+type TaskStepProjection = Record<string, { status: string; startedAt?: number; completedAt?: number }>
+
+function isWorkflowStepStatus(value: unknown): value is "pending" | "running" | "completed" | "skipped" | "failed" {
+  return value === "pending"
+    || value === "running"
+    || value === "completed"
+    || value === "skipped"
+    || value === "failed"
+}
+
+function projectTaskStepsFromWorkflowEvents(taskID: string): TaskStepProjection {
+  const rows = Database.use((db) =>
+    db
+      .select({
+        payload: ProtocolEventTable.payload,
+        emittedAt: ProtocolEventTable.emitted_at,
+      })
+      .from(ProtocolEventTable)
+      .where(
+        and(
+          eq(ProtocolEventTable.task_id, taskID),
+          eq(ProtocolEventTable.type, "workflow.step.updated"),
+        ),
+      )
+      .orderBy(ProtocolEventTable.seq)
+      .all(),
+  )
+  const out: TaskStepProjection = {}
+  for (const row of rows) {
+    const payload = row.payload as { stepID?: unknown; status?: unknown } | null
+    const stepID = payload?.stepID
+    const status = payload?.status
+    if (typeof stepID !== "string" || stepID.length === 0 || !isWorkflowStepStatus(status)) {
+      throw new Error(`workflow.step.updated payload invalid: ${JSON.stringify(payload)}`)
+    }
+    out[stepID] = {
+      status,
+      ...(status === "running" ? { startedAt: row.emittedAt } : {}),
+      ...(status === "completed" || status === "skipped" || status === "failed"
+        ? { completedAt: row.emittedAt }
+        : {}),
+    }
+  }
+  return out
+}
+
+function mergeTaskStepProjections(
+  sideEffects: TaskStepProjection,
+  events: TaskStepProjection,
+): TaskStepProjection {
+  const out: TaskStepProjection = { ...sideEffects }
+  for (const [stepID, eventStep] of Object.entries(events)) {
+    const sideEffectStep = sideEffects[stepID]
+    if (sideEffectStep && sideEffectStep.status !== "pending") {
+      out[stepID] = sideEffectStep
+      continue
+    }
+    out[stepID] = eventStep
+  }
+  return out
 }
 
 /** Derive aggregate status for a goal-scope step from the projected goal steps */
