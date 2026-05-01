@@ -369,3 +369,25 @@ type FailureSignature = {
 - 任意失败都能归因到 check、requirement、goal、runtime step 或 integrity finding。
 - 迭代修复不会靠重复 prompt 自旋。
 - 发布只存在一个事实源，不存在第二套 verdict 或 criteria 判断链。
+
+## 10. 实施记录
+
+### 2026-05-01 第一轮
+
+已完成：
+
+- P0 部分完成：新增 `DeliveryEvidenceManifest` 类型、validator、artifact 持久化、manifest id。
+- P1 部分完成：deliver 进入 LLM verdict 前，先通过 `discoverChecks` 生成 build/test/lint/typecheck 等 required checks，并由 `ProjectCheckRunner` 真实执行。
+- P1 回归覆盖：当 build/test 通过但 lint 失败时，manifest gate 失败，delivery 被合成为 rejected。
+- P1 回归覆盖：package script 使用 `|| exit 0` / `|| true` 这类吞错表达时，manifest gate 失败。
+- P5 部分完成：auto publish 和 manual `publish_delivery` 都要求 accepted verdict + passed manifest。
+- P5 部分完成：Publisher 校验 delivery 声明的 changed files 必须被 `workspace_export` patch 覆盖，否则返回 failed，不允许 completed。
+- benchmark 覆盖：现有 `test/benchmark` 套件和新增 deliver/publish gate 回归测试通过。
+
+未完成，后续继续：
+
+- P2：AcceptanceCoverageGate，blocking requirement 结构化覆盖。
+- P3：RuntimeFlowGate，chat/web/upload/auth 真实浏览器流程。
+- P4：failure signature 与 rework scope。
+- P6：board/debug 查询显示 manifest。
+- P7：删除旧 prompt-only 验收话术和冗余 sink。

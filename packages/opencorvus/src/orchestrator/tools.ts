@@ -2912,6 +2912,8 @@ export function createOrchestratorTools(input: {
               signal: input.signal,
               iteration: deliverIteration,
               parentSessionID: input.agentSessionID,
+              runID: run?.id,
+              deliveryID,
             })
 
           // Persist verdict as artifact
@@ -3153,6 +3155,12 @@ export function createOrchestratorTools(input: {
                   .where(eq(EngineArtifactTable.id, verdictArtifactId))
                   .get()
               )
+              const { findLatestDeliveryEvidenceManifest } = await import("@/delivery/manifest")
+              const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: delivery.id })
+              if (!manifest) return "Delivery verified and ACCEPTED but no delivery evidence manifest was persisted; publish blocked."
+              if (manifest.finalGate.status !== "passed") {
+                return `Delivery verified and ACCEPTED but evidence manifest gate is ${manifest.finalGate.status}: ${manifest.finalGate.summary}`
+              }
               markDeliveryPublishing(delivery.id, Date.now())
               const PUBLISH_TIMEOUT_MS = 60_000
               const currentTask = requireTask(taskID)
@@ -3521,6 +3529,20 @@ export function createOrchestratorTools(input: {
             .limit(1).get()
         )
         if (!verdictArtifact) return "Delivery not verified. Run deliver first to aggregate and verify goal deliveries."
+        const verdictPayload = verdictArtifact.payload as
+          | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
+          | null
+        if (verdictPayload?.verdict !== "accepted") {
+          return "Delivery verdict is not accepted; publish blocked until deliver verifies the current output."
+        }
+        const { findLatestDeliveryEvidenceManifest } = await import("@/delivery/manifest")
+        const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: delivery.id })
+        if (!manifest) {
+          return "Delivery evidence manifest is missing; publish blocked until deliver reruns the project gates."
+        }
+        if (manifest.finalGate.status !== "passed") {
+          return `Delivery evidence manifest gate is ${manifest.finalGate.status}: ${manifest.finalGate.summary}`
+        }
 
         markDeliveryPublishing(delivery.id, Date.now())
 
@@ -3551,9 +3573,6 @@ export function createOrchestratorTools(input: {
           // No `checks` argument: the `deliver` tool already wrote the full
           // structured check set; updateEvaluationFromDeliveryVerdict
           // preserves existing checks when none are supplied.
-          const verdictPayload = verdictArtifact.payload as
-            | (import("@/delivery/agent").DeliveryVerdictType & { verdict: "accepted" | "rejected" })
-            | null
           if (verdictPayload?.verdict) {
             updateEvaluationFromDeliveryVerdict({
               deliveryID: delivery.id,

@@ -29,6 +29,11 @@ import {
   summarizeRuntimeViolations,
   type RuntimeEvidenceReport,
 } from "./checks/runtime-evidence"
+import { buildDeliveryEvidenceManifest } from "./checks/project-gate"
+import {
+  persistDeliveryEvidenceManifest,
+  type DeliveryEvidenceManifest,
+} from "./manifest"
 import { EngineProtocol } from "@/engine/protocol"
 import { Event as EngineEvent } from "@/engine/model"
 
@@ -65,6 +70,8 @@ export namespace DeliveryService {
      *  delivery agent creates its own child session; this is only an
      *  optional parent pointer. */
     parentSessionID?: string
+    runID?: string
+    deliveryID?: string
   }): Promise<DeliveryVerdictType> {
     log.info("delivery service verify starting", {
       title: input.task.title,
@@ -75,7 +82,32 @@ export namespace DeliveryService {
     const referencePath = resolveReferenceAttachmentPath(input.attachments)
     const goalIds = input.goals.map((g) => g.id)
 
-    // 1. Runtime-evidence 前置闸（P1-A）
+    // 1. Project evidence manifest hard gate.
+    let manifest: DeliveryEvidenceManifest
+    try {
+      manifest = await buildDeliveryEvidenceManifest({
+        taskID: input.task.id,
+        runID: input.runID,
+        deliveryID: input.deliveryID,
+        iteration: input.iteration,
+        changedFiles: input.delivery.changedFiles,
+        metadata: input.task.metadata,
+      })
+      persistDeliveryEvidenceManifest({ manifest })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log.error("delivery evidence manifest raised", { title: input.task.title, error: msg })
+      throw new DeliveryFailureError(`delivery evidence manifest crashed: ${msg}`, { cause: err })
+    }
+    if (manifest.finalGate.status !== "passed") {
+      log.warn("delivery evidence manifest gate rejected delivery", {
+        title: input.task.title,
+        failedCheckIds: manifest.finalGate.failedCheckIds,
+      })
+      return synthesizeManifestRejection(manifest, goalIds)
+    }
+
+    // 2. Runtime-evidence 前置闸（P1-A）
     let runtimeReport: RuntimeEvidenceReport | undefined
     if (referencePath) {
       try {
@@ -128,7 +160,7 @@ export namespace DeliveryService {
       })
     }
 
-    // 2. LLM verdict
+    // 3. LLM verdict
     let llmVerdict: DeliveryVerdictType
     try {
       llmVerdict = await DeliveryAgent.verify({
@@ -148,7 +180,7 @@ export namespace DeliveryService {
       throw new DeliveryFailureError("delivery agent failed", { cause: error })
     }
 
-    // 3. P0-B 视觉硬门——复用 runtime-evidence 的 rendered.png
+    // 4. P0-B 视觉硬门——复用 runtime-evidence 的 rendered.png
     let finalVerdict = llmVerdict
     try {
       const metric = await runVisualHardGate({
@@ -182,6 +214,66 @@ export namespace DeliveryService {
       startupSuccess: finalVerdict.startup_verification.success,
     })
     return finalVerdict
+  }
+}
+
+function synthesizeManifestRejection(
+  manifest: DeliveryEvidenceManifest,
+  goalIds: readonly string[],
+): DeliveryVerdictType {
+  const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
+  const failedResults = manifest.checkResults.filter((item) =>
+    manifest.finalGate.failedCheckIds.includes(item.id)
+  )
+  const failed = failedResults.length > 0
+    ? failedResults
+    : manifest.requiredChecks
+        .filter((item) => manifest.finalGate.failedCheckIds.includes(item.id))
+        .map((item) => ({
+          ...item,
+          status: "failed" as const,
+          outputExcerpt: "Required check did not produce a result.",
+          startedAt: manifest.timeCreated,
+          completedAt: manifest.timeCreated,
+        }))
+  return {
+    verdict: "rejected",
+    summary: manifest.finalGate.summary,
+    startup_verification: {
+      attempted: true,
+      success: false,
+      output: manifest.finalGate.summary,
+    },
+    frontend_check: {
+      attempted: false,
+      issues: failed.map((item) => `${item.name}: ${item.failureReason ?? item.outputExcerpt}`).slice(0, 10),
+    },
+    deferred_checks: manifest.checkResults.map((item) => ({
+      name: item.id,
+      result: item.status,
+      evidence: item.outputExcerpt || item.failureReason || "No output captured.",
+    })),
+    tool_call_evidence: [
+      {
+        tool: "delivery_evidence_manifest",
+        passed: false,
+        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s) in manifest ${manifest.id}.`,
+      },
+    ],
+    rejection_details: allGoalIds.flatMap((goalId) =>
+      failed.map((item) => ({
+        goal_id: goalId,
+        category: item.family === "test"
+          ? "test" as const
+          : item.family === "lint"
+            ? "lint" as const
+            : item.family === "build"
+              ? "build" as const
+              : "quality" as const,
+        error: `${item.id} failed: ${item.failureReason ?? item.outputExcerpt}`,
+        suggestion: `Fix the ${item.label ?? item.name} failure and rerun ${item.command}.`,
+      })),
+    ),
   }
 }
 

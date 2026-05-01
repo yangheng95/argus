@@ -40,3 +40,6 @@ export {
   type RuntimeEvidenceViolation,
   type RuntimeEvidenceViolationKind,
 } from "./runtime-evidence"
+export {
+  buildDeliveryEvidenceManifest,
+} from "./project-gate"
