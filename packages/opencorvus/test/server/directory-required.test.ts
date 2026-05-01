@@ -57,6 +57,13 @@ describe("project-scope middleware: directory required", () => {
     expect(body.healthy).toBe(true)
   })
 
+  test("cross-project DELETE /auth/:providerID works without ?directory=", async () => {
+    const app = Server.App()
+    const response = await app.request("/auth/test-provider", { method: "DELETE" })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toBe(true)
+  })
+
   // The assertion that the header (or query) directory is accepted by
   // the middleware is covered by full-engine integration tests; we
   // intentionally do NOT exercise that branch here because it would

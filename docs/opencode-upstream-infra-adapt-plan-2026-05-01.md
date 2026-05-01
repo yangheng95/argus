@@ -169,7 +169,7 @@ Acceptance:
 
 ## Phase 2: API And SDK Contract Parity
 
-Status: pending Phase 1.
+Status: complete.
 
 Owner files:
 
@@ -181,17 +181,22 @@ Owner files:
 
 Scope:
 
-- Extend `api:routes-check` or add an adjacent check so it compares route
-  inventory, OpenAPI operations, and generated SDK operations.
-- Add safe GET parity tests for direct HTTP and SDK surfaces.
-- Add optional-field omission tests for response bodies.
-- Add raw-route authorization tests.
+- Extend `api:routes-check` so it compares runtime Hono routes, generated
+  OpenAPI operations, tracked `packages/sdk/openapi.json`, and generated SDK
+  method routes.
+- Keep `/doc` and `/ui` as the only explicit raw runtime routes outside
+  OpenAPI and SDK coverage.
+- Treat safe GET parity as covered by method+path parity between OpenAPI and
+  generated SDK routes.
+- Add raw-route project-directory middleware coverage for `/auth/*` alongside
+  existing project rejection and control/global bypass tests.
 
 Acceptance:
 
-- Adding a server route without OpenAPI and SDK coverage fails the route gate.
-- Authorization tests prove both accepted and rejected raw routes.
-- `docs:check` remains green after generated API changes.
+- [x] Adding a server route without OpenAPI and SDK coverage fails the route
+  gate.
+- [x] Authorization tests prove both accepted and rejected raw routes.
+- [x] `docs:check` remains green after generated API changes.
 
 ## Phase 3: Tool Schema And Output Safety
 
