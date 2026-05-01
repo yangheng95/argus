@@ -29,7 +29,7 @@ bun run script/benchmark/overlay-web-benchmark.ts \
 |---|---|
 | `--request-file=PATH` | 任务描述文件（PRD） |
 | `--model=MODEL` | 指定模型（默认自动探测） |
-| `--executor=opencode\|codex\|claude-code` | 执行器 |
+| `--executor=opencode\|codex\|claude-code` | 执行器：MirrorCode / Codex / Claude Code |
 | `--title=TITLE` | 任务标题 |
 | `--report=PATH` | 输出报告 JSON |
 | `--max-runs=N` | 最大 Run 次数 |

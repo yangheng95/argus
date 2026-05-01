@@ -81,7 +81,8 @@ export function ExecutorSelector() {
 
   return (
     // Chip is always rendered: activeID comes from settingsStore (never
-    // empty, defaults to "opencode") and executorLabel handles the three
+    // empty, defaults to the MirrorCode executor id ("opencode")) and
+    // executorLabel handles the three
     // known ids without any backend round-trip. The menu body shows
     // whatever appStore.executors holds — empty during the brief
     // cold-start gap before loadExecutors() resolves, full afterwards.

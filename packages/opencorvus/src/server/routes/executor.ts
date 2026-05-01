@@ -66,7 +66,7 @@ export const ExecutorRoutes = lazy(() => {
       return c.json([
         {
           id: "opencode",
-          label: "Opencode",
+          label: "MirrorCode",
           registered: ExecutorRegistry.has("opencode"),
           discovered: found.opencode.available,
           selectable: ExecutorRegistry.has("opencode"),
