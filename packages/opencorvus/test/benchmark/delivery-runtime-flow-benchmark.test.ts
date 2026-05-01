@@ -69,9 +69,37 @@ describe("delivery runtime flow benchmark", () => {
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
     expect(manifest.runtimeFlows[0]?.evidence.join("\n")).toContain("interaction_required_but_missing")
   }, 60_000)
+
+  test("structured runtime scenario evaluates the post-interaction DOM for auth-gated apps", async () => {
+    const dir = await frontendFixture({ interactive: "auth-gated" })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_runtime_auth_gate",
+        runID: "run_runtime_auth_gate",
+        deliveryID: "dlv_runtime_auth_gate",
+        changedFiles: ["dist/index.html"],
+        goals: [{
+          id: "gol_auth_runtime",
+          title: "Mock login runtime flow",
+          priority: "blocking",
+          requirement_ids: ["REQ-auth"],
+          acceptance_spec_count: 1,
+          runtime_scenario_count: 1,
+        }],
+      }),
+    })
+
+    expect(manifest.finalGate.status).toBe("passed")
+    expect(manifest.runtimeFlows[0]?.status).toBe("passed")
+    expect(manifest.runtimeFlows[0]?.dom?.textLength).toBeGreaterThanOrEqual(120)
+    expect(manifest.runtimeFlows[0]?.dom?.nodeCount).toBeGreaterThanOrEqual(60)
+    expect(manifest.runtimeFlows[0]?.interaction?.htmlChanged).toBe(true)
+  }, 60_000)
 })
 
-async function frontendFixture(input: { interactive: boolean }) {
+async function frontendFixture(input: { interactive: boolean | "auth-gated" }) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "oc-delivery-runtime-bench-"))
   tempDirs.push(dir)
   await fs.mkdir(path.join(dir, "dist"), { recursive: true })
@@ -88,7 +116,8 @@ async function frontendFixture(input: { interactive: boolean }) {
   return dir
 }
 
-function htmlFixture(interactive: boolean) {
+function htmlFixture(interactive: boolean | "auth-gated") {
+  if (interactive === "auth-gated") return authGatedHtmlFixture()
   const rows = Array.from({ length: 80 }, (_, index) =>
     `<li>Runtime benchmark transcript row ${index}: persistent chat history, mock login, upload state, and editable title are visible.</li>`,
   ).join("\n")
@@ -115,6 +144,35 @@ function htmlFixture(interactive: boolean) {
       <section>${controls}</section>
       <ol>${rows}</ol>
     </main>
+  </body>
+</html>`
+}
+
+function authGatedHtmlFixture() {
+  const rows = Array.from({ length: 72 }, (_, index) =>
+    `<li>Authenticated chat row ${index}: sessions, messages, uploads, settings, and editable titles are available after mock login.</li>`,
+  ).join("\n")
+  return `<!doctype html>
+<html>
+  <head><meta charset="utf-8"><title>Auth Gated Runtime Benchmark</title></head>
+  <body>
+    <main id="app">
+      <h1>Claude Chat</h1>
+      <p>Login to continue.</p>
+      <button id="login" type="button">Mock Google login</button>
+    </main>
+    <script>
+      document.getElementById("login").addEventListener("click", () => {
+        document.getElementById("app").innerHTML = \`
+          <h1>Claude Chat workspace</h1>
+          <label>Message <textarea id="message"></textarea></label>
+          <button id="send" type="button">Send</button>
+          <button id="rename" type="button">Rename session</button>
+          <button id="delete" type="button">Delete session</button>
+          <section aria-label="history"><ol>${rows}</ol></section>
+        \`;
+      });
+    </script>
   </body>
 </html>`
 }

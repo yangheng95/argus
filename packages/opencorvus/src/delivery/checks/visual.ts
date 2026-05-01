@@ -23,7 +23,7 @@ import { existsSync } from "node:fs"
 import fs from "node:fs/promises"
 import http from "node:http"
 import path from "node:path"
-import puppeteer from "puppeteer-core"
+import puppeteer, { type Page } from "puppeteer-core"
 import { PNG } from "pngjs"
 import ssim from "ssim.js"
 
@@ -596,12 +596,7 @@ export async function renderPage(opts: {
     // root). 2.5s is a conservative cap — most apps hydrate in <500ms but
     // a cold first-paint with code-splitting can stretch to 1-2s.
     await new Promise((r) => setTimeout(r, 2_500))
-    await page.screenshot({
-      path: renderedPath,
-      type: "png",
-      clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
-    })
-    dom = await page.evaluate(() => {
+    const collectDom = () => page.evaluate(() => {
       const body = document.body
       const text = body ? (body.innerText ?? "").trim() : ""
       const nodeCount = document.querySelectorAll("*").length
@@ -625,68 +620,18 @@ export async function renderPage(opts: {
         isEmptyRootShell,
       }
     })
+    dom = await collectDom()
     if (opts.probeInteractions) {
-      interaction = await page.evaluate(async () => {
-        const visible = (el: Element) => {
-          const rect = el.getBoundingClientRect()
-          const style = window.getComputedStyle(el)
-          return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"
-        }
-        const textBefore = document.body?.innerText ?? ""
-        const htmlBefore = document.body?.innerHTML ?? ""
-        const controls = Array.from(document.querySelectorAll(
-          "button,a[href],input,textarea,select,[role='button'],[contenteditable='true']",
-        )).filter((el) => visible(el))
-        const textInputs = controls.filter((el) => {
-          if (el instanceof HTMLTextAreaElement) return true
-          if (!(el instanceof HTMLInputElement)) return false
-          const type = (el.type || "text").toLowerCase()
-          return ["email", "password", "search", "text", "url"].includes(type)
-        })
-        const fileInputs = controls.filter((el) =>
-          el instanceof HTMLInputElement && (el.type || "").toLowerCase() === "file"
-        )
-        let attempted = 0
-        const errors: string[] = []
-        for (const el of textInputs.slice(0, 3)) {
-          try {
-            if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-              el.focus()
-              el.value = "opencorvus runtime probe"
-              el.dispatchEvent(new Event("input", { bubbles: true }))
-              el.dispatchEvent(new Event("change", { bubbles: true }))
-              attempted++
-            }
-          } catch (error) {
-            errors.push(error instanceof Error ? error.message : String(error))
-          }
-        }
-        for (const el of controls.filter((item) => !(item instanceof HTMLInputElement && item.type === "file")).slice(0, 5)) {
-          try {
-            if (el instanceof HTMLElement) {
-              el.focus()
-              el.click()
-              attempted++
-            }
-          } catch (error) {
-            errors.push(error instanceof Error ? error.message : String(error))
-          }
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1_000))
-        const textAfter = document.body?.innerText ?? ""
-        const htmlAfter = document.body?.innerHTML ?? ""
-        return {
-          visibleControlCount: controls.length,
-          textInputCount: textInputs.length,
-          fileInputCount: fileInputs.length,
-          attemptedInteractionCount: attempted,
-          textChanged: textBefore !== textAfter,
-          htmlChanged: htmlBefore !== htmlAfter,
-          errorCount: errors.length,
-          errors: errors.slice(0, 5),
-        }
-      })
+      interaction = await probeRuntimeInteractions(page)
+      if (interaction.textChanged || interaction.htmlChanged) {
+        dom = await collectDom()
+      }
     }
+    await page.screenshot({
+      path: renderedPath,
+      type: "png",
+      clip: { x: 0, y: 0, width: viewport.width, height: viewport.height },
+    })
   } finally {
     await browser.close()
     if (staticServer) await staticServer.close()
@@ -710,6 +655,97 @@ export type RuntimeInteractionProbe = {
   htmlChanged: boolean
   errorCount: number
   errors: string[]
+}
+
+async function probeRuntimeInteractions(page: Page): Promise<RuntimeInteractionProbe> {
+  const before = await page.evaluate(() => ({
+    text: document.body?.innerText ?? "",
+    html: document.body?.innerHTML ?? "",
+  }))
+  const seen = new Set<string>()
+  const errors: string[] = []
+  let attempted = 0
+  let visibleControlCount = 0
+  let textInputCount = 0
+  let fileInputCount = 0
+
+  for (let round = 0; round < 3; round++) {
+    const controls = await page.evaluate(() => {
+      const state = window as unknown as { __opencorvusRuntimeProbeNext?: number }
+      state.__opencorvusRuntimeProbeNext ??= 0
+      const visible = (el: Element) => {
+        const rect = el.getBoundingClientRect()
+        const style = window.getComputedStyle(el)
+        return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"
+      }
+      const elements = Array.from(document.querySelectorAll(
+        "button,a[href],input,textarea,select,[role='button'],[contenteditable='true']",
+      )).filter((el) => visible(el))
+      return elements.map((el) => {
+        let id = el.getAttribute("data-opencorvus-runtime-probe-id")
+        if (!id) {
+          const next = state.__opencorvusRuntimeProbeNext ?? 0
+          id = String(next)
+          state.__opencorvusRuntimeProbeNext = next + 1
+          el.setAttribute("data-opencorvus-runtime-probe-id", id)
+        }
+        const selector = `[data-opencorvus-runtime-probe-id="${id}"]`
+        const isFileInput = el instanceof HTMLInputElement && (el.type || "").toLowerCase() === "file"
+        const isTextInput = el instanceof HTMLTextAreaElement
+          || (el instanceof HTMLInputElement
+            && ["email", "password", "search", "text", "url"].includes((el.type || "text").toLowerCase()))
+        return { id, selector, isTextInput, isFileInput }
+      })
+    })
+    visibleControlCount = Math.max(visibleControlCount, controls.length)
+    const roundTextInputCount = controls.filter((item) => item.isTextInput).length
+    textInputCount = Math.max(textInputCount, roundTextInputCount)
+    fileInputCount = Math.max(fileInputCount, controls.filter((item) => item.isFileInput).length)
+
+    for (const item of controls.filter((control) => control.isTextInput).slice(0, 3)) {
+      try {
+        await page.click(item.selector, { delay: 10 })
+        await page.keyboard.down("Control")
+        await page.keyboard.press("KeyA")
+        await page.keyboard.up("Control")
+        await page.keyboard.type("opencorvus runtime probe", { delay: 5 })
+        attempted++
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error))
+      }
+    }
+
+    const clickTargets = controls
+      .filter((item) => !item.isFileInput && !seen.has(item.id))
+      .slice(0, 5)
+    if (clickTargets.length === 0 && roundTextInputCount === 0) break
+    for (const item of clickTargets) {
+      seen.add(item.id)
+      try {
+        await page.click(item.selector, { delay: 20 })
+        attempted++
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error))
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_200))
+  }
+  await new Promise((resolve) => setTimeout(resolve, 2_000))
+
+  const after = await page.evaluate(() => ({
+    text: document.body?.innerText ?? "",
+    html: document.body?.innerHTML ?? "",
+  }))
+  return {
+    visibleControlCount,
+    textInputCount,
+    fileInputCount,
+    attemptedInteractionCount: attempted,
+    textChanged: before.text !== after.text,
+    htmlChanged: before.html !== after.html,
+    errorCount: errors.length,
+    errors: errors.slice(0, 5),
+  }
 }
 
 /** SSIM visual diff — retained for the external benchmark CLI and operator
