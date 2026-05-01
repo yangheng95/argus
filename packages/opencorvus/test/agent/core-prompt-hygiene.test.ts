@@ -58,8 +58,8 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain('category="missing_requirement"')
     expect(text).toContain("DeliveryEvidenceManifest")
     expect(text).toContain("host arbiter is the only owner")
-    expect(text).toContain("\\`tool_call_evidence\\`")
-    expect(text).toContain("\\`rejection_details[]\\` is the rework plan and the single source")
+    expect(text).toContain("`tool_call_evidence`")
+    expect(text).toContain("`rejection_details[]` is the rework plan and the single source")
   })
 
   test("design-analysis and delivery agree that design_specs are delivery-verified", async () => {
@@ -69,7 +69,18 @@ describe("core prompt hygiene", () => {
     expect(design).not.toContain("not automatically scored or gated")
     expect(design).not.toContain("soft preference")
     expect(design).toContain("part of delivery's visual contract")
-    expect(delivery).toContain("EVERY \\`design_spec\\`")
+    expect(delivery).toContain("EVERY `design_spec`")
+  })
+
+  test("no core prompt smuggles JS template-literal escapes into raw text", async () => {
+    // Earlier prompts lived in TS template literals where backticks had to be
+    // escaped (\`). When they were extracted to .txt the escapes were left
+    // behind, so the LLM saw literal "\`name\`" instead of "`name`". This
+    // regression locks the cleaned-up state.
+    for (const name of Object.keys(promptFiles) as Array<keyof typeof promptFiles>) {
+      const text = await readPrompt(name)
+      expect(text, `${name} prompt must not contain literal backslash-backtick`).not.toMatch(/\\`/)
+    }
   })
 
   test("orchestrator prompt keeps direct build behind task-kind contract", async () => {
