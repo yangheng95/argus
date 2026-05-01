@@ -243,7 +243,6 @@ function opencorvusMcpServers(cwd?: string) {
       type: "stdio" as const,
       command: mcp.command,
       args: mcp.args,
-      env: mcp.env,
     },
   }
 }

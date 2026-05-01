@@ -167,19 +167,23 @@ export namespace MCPServe {
   export const Toolset = TOOLSET
   export const ServerName = DEFAULT_SERVER_NAME
 
-  export function command(cwd: string) {
-    // Stdio MCP semantics: when `env` is present, the spawned child sees only
-    // those vars. Inherit the full environment so Windows process bootstrap
-    // and provider credentials are identical for every caller.
-    const env: Record<string, string> = {}
-    for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === "string") env[key] = value
-    }
+  export function command(
+    cwd: string,
+    runtime: {
+      execPath?: string
+      moduleDir?: string
+    } = {},
+  ) {
+    const execPath = runtime.execPath ?? process.execPath
+    const moduleDir = runtime.moduleDir ?? import.meta.dir
+    const args = isBunRuntime(execPath)
+      ? [path.resolve(moduleDir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"]
+      : ["mcp", "serve", "--cwd", cwd, "--toolset", "executor"]
+
     return {
       name: DEFAULT_SERVER_NAME,
-      command: process.execPath,
-      args: [path.resolve(import.meta.dir, "stdio.ts"), "--cwd", cwd, "--toolset", "executor"],
-      env,
+      command: execPath,
+      args,
     }
   }
 
@@ -390,6 +394,11 @@ export namespace MCPServe {
       },
     })
   }
+}
+
+function isBunRuntime(execPath: string) {
+  const executable = path.basename(execPath).toLowerCase().replace(/\.exe$/, "")
+  return executable === "bun"
 }
 
 function mcpSafeName(input: string) {

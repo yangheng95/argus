@@ -344,6 +344,31 @@ export type EventDeliveryGateRejected = {
   }
 }
 
+export type EventDeliveryEvidenceUpdated = {
+  type: "delivery.evidence.updated"
+  properties: {
+    taskID: string
+    runID?: string
+    deliveryID: string
+    manifestID: string
+    iteration: number
+    status: "passed" | "failed"
+    summary: string
+    failedCheckCount: number
+    failedRuntimeFlowCount: number
+    failedReviewCount: number
+    failureDetails: Array<{
+      kind: "check" | "coverage" | "runtime" | "review"
+      id: string
+      name: string
+      status?: string
+      command?: string
+      exitCode?: number
+      evidence: string
+    }>
+  }
+}
+
 export type EventIntegrityReviewCompleted = {
   type: "integrity.review.completed"
   properties: {
@@ -630,7 +655,7 @@ export type TextPart = {
   type: "text"
   text: string
   kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "planner" | "goal_gate" | "task_tool"
+  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
   time?: {
     start: number
     end?: number
@@ -1179,6 +1204,16 @@ export type EventWorktreeFailed = {
   }
 }
 
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+  }
+}
+
 export type EventSessionCompacted = {
   type: "session.compacted"
   properties: {
@@ -1284,16 +1319,6 @@ export type EventGoalReport = {
   }
 }
 
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-  }
-}
-
 export type PermissionAction = "allow" | "deny" | "ask"
 
 export type PermissionRule = {
@@ -1328,7 +1353,6 @@ export type Session = {
     | "intent-analysis"
     | "requirements"
     | "design-analyst"
-    | "planner"
     | "goal"
     | "architect"
     | "integrity"
@@ -1493,6 +1517,7 @@ export type Event =
   | EventIntegrityReviewProgress
   | EventIntegrityReviewChunk
   | EventDeliveryGateRejected
+  | EventDeliveryEvidenceUpdated
   | EventIntegrityReviewCompleted
   | EventProjectUpdated
   | EventServerInstanceDisposed
@@ -1526,12 +1551,12 @@ export type Event =
   | EventVcsBranchUpdated
   | EventWorktreeReady
   | EventWorktreeFailed
+  | EventCommandExecuted
   | EventSessionCompacted
   | EventFileEdited
   | EventTodoUpdated
   | EventTaskPlanUpdated
   | EventGoalReport
-  | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
@@ -2360,7 +2385,7 @@ export type Config = {
     threshold?: number
   }
   /**
-   * Assistant agent configuration — controls requirements, planner, evaluator, and delivery agent behavior
+   * Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior
    */
   assistant?: {
     /**
@@ -2386,19 +2411,6 @@ export type Config = {
       max_steps?: number
       /**
        * Additional skill paths for architect agent
-       */
-      skills?: Array<string>
-    }
-    /**
-     * Planner agent configuration
-     */
-    planner?: {
-      /**
-       * Maximum agentic steps for planner agent
-       */
-      max_steps?: number
-      /**
-       * Additional skill paths for planner agent
        */
       skills?: Array<string>
     }
@@ -2837,7 +2849,6 @@ export type GlobalSession = {
     | "intent-analysis"
     | "requirements"
     | "design-analyst"
-    | "planner"
     | "goal"
     | "architect"
     | "integrity"
@@ -2865,7 +2876,7 @@ export type TextPartInput = {
   type: "text"
   text: string
   kind?: "user_content" | "control" | "context"
-  source?: "user" | "system" | "evaluator" | "planner" | "goal_gate" | "task_tool"
+  source?: "user" | "system" | "evaluator" | "goal_gate" | "task_tool"
   time?: {
     start: number
     end?: number
@@ -4489,7 +4500,6 @@ export type SessionCreateData = {
       | "intent-analysis"
       | "requirements"
       | "design-analyst"
-      | "planner"
       | "goal"
       | "architect"
       | "integrity"
