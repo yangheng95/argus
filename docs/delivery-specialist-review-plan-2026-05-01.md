@@ -535,6 +535,8 @@ Completed in Phase 4 implementation:
 
 ### Phase 5: Backend API And Client Contract Reviews
 
+Status: complete.
+
 Scope:
 
 - `backend_api_review` probes routes, status codes, error handling, streaming,
@@ -547,6 +549,16 @@ Acceptance:
 - Route/client mismatch is rejected with both call-site and route evidence.
 - SSE endpoints are verified as streaming when the task requires streaming.
 - Backend-only tasks can pass without frontend review.
+
+Completed in Phase 5 implementation:
+
+- Added `packages/opencorvus/src/delivery/specialists/backend-client.ts`
+  with separate `backend_api` and `client_contract` evidence producers.
+- Backend review requires structural route evidence from the surface manifest.
+- Client contract review requires client file or endpoint evidence and flags
+  client endpoint calls that have no matching backend route evidence.
+- `buildDeliveryEvidenceManifest()` runs backend and client reviews through
+  the same specialist collection path as test, frontend, and visual reviews.
 
 ### Phase 6: Security And Data Review
 

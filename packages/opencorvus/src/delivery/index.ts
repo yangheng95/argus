@@ -21,6 +21,7 @@ export {
   requiredReviewersForSurfaces,
   validateDeliverySpecialistReview,
 } from "./specialist-review"
+export { runBackendApiReview, runClientContractReview } from "./specialists/backend-client"
 export { runFrontendReview, runVisualRuntimeReview } from "./specialists/frontend-visual"
 export { runTestIntegrationReview } from "./specialists/test-integration"
 export type {
