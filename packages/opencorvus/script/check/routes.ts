@@ -1,9 +1,15 @@
 #!/usr/bin/env bun
 import path from "node:path"
 import fs from "node:fs"
+import { Server } from "../../src/server/server"
 
 const ROOT = path.resolve(import.meta.dir, "..", "..")
 const ROUTES_DIR = path.join(ROOT, "src", "server", "routes")
+const SDK_OPENAPI = path.resolve(ROOT, "..", "sdk", "openapi.json")
+const SDK_TS = path.resolve(ROOT, "..", "sdk", "js", "src", "gen", "sdk.gen.ts")
+const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"])
+const OPENAPI_METHODS = new Set(["get", "post", "put", "patch", "delete"])
+const RAW_RUNTIME_ROUTES_WITHOUT_OPENAPI = new Set(["GET /doc", "GET /ui"])
 
 type Rule = {
   name: string
@@ -61,6 +67,11 @@ type Violation = {
   text: string
 }
 
+type InventoryViolation = {
+  rule: string
+  entries: string[]
+}
+
 function listFiles(dir: string): string[] {
   const out: string[] = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -89,21 +100,118 @@ function scan(): Violation[] {
   return violations
 }
 
+function normalizeRuntimePath(input: string) {
+  const normalized = input.replace(/:([A-Za-z0-9_]+)/g, (_match, name: string) => `{${name}}`).replace(/\/$/, "")
+  return normalized || "/"
+}
+
+function runtimeRoutes() {
+  const app = Server.App() as unknown as {
+    routes: Array<{ method: string; path: string }>
+  }
+  const routes = new Set<string>()
+  for (const route of app.routes) {
+    if (!HTTP_METHODS.has(route.method)) continue
+    if (route.path.includes("*")) continue
+    const entry = `${route.method} ${normalizeRuntimePath(route.path)}`
+    if (RAW_RUNTIME_ROUTES_WITHOUT_OPENAPI.has(entry)) continue
+    routes.add(entry)
+  }
+  return routes
+}
+
+function openapiRoutes(spec: { paths?: Record<string, Record<string, unknown>> }) {
+  const routes = new Set<string>()
+  for (const [routePath, operations] of Object.entries(spec.paths ?? {})) {
+    for (const method of Object.keys(operations)) {
+      if (!OPENAPI_METHODS.has(method)) continue
+      routes.add(`${method.toUpperCase()} ${routePath}`)
+    }
+  }
+  return routes
+}
+
+function sdkRoutes() {
+  const routes = new Set<string>()
+  const text = fs.readFileSync(SDK_TS, "utf8")
+  const pattern = /\.(?:sse\.)?(get|post|put|patch|delete)<[\s\S]*?\{\s*url:\s*"([^"]+)"/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text))) {
+    routes.add(`${match[1].toUpperCase()} ${match[2]}`)
+  }
+  return routes
+}
+
+function difference(left: Set<string>, right: Set<string>) {
+  return [...left].filter((entry) => !right.has(entry)).sort()
+}
+
+async function scanInventory(): Promise<InventoryViolation[]> {
+  const generated = await Server.openapi()
+  const tracked = JSON.parse(fs.readFileSync(SDK_OPENAPI, "utf8")) as {
+    paths?: Record<string, Record<string, unknown>>
+  }
+  const runtime = runtimeRoutes()
+  const generatedOpenapi = openapiRoutes(generated)
+  const trackedOpenapi = openapiRoutes(tracked)
+  const generatedSdk = sdkRoutes()
+
+  return [
+    {
+      rule: "runtime-route-missing-openapi",
+      entries: difference(runtime, generatedOpenapi),
+    },
+    {
+      rule: "openapi-route-missing-runtime",
+      entries: difference(generatedOpenapi, runtime),
+    },
+    {
+      rule: "generated-openapi-missing-tracked-openapi",
+      entries: difference(generatedOpenapi, trackedOpenapi),
+    },
+    {
+      rule: "tracked-openapi-missing-generated-openapi",
+      entries: difference(trackedOpenapi, generatedOpenapi),
+    },
+    {
+      rule: "openapi-route-missing-sdk",
+      entries: difference(trackedOpenapi, generatedSdk),
+    },
+    {
+      rule: "sdk-route-missing-openapi",
+      entries: difference(generatedSdk, trackedOpenapi),
+    },
+  ].filter((violation) => violation.entries.length > 0)
+}
+
 const violations = scan()
-if (violations.length === 0) {
-  console.log(`api:routes-check ok — ${RULES.length} rules clean across ${listFiles(ROUTES_DIR).length} files`)
+const inventoryViolations = await scanInventory()
+if (violations.length === 0 && inventoryViolations.length === 0) {
+  console.log(
+    `api:routes-check ok — ${RULES.length} rules and route inventory clean across ${listFiles(ROUTES_DIR).length} files`,
+  )
   process.exit(0)
 }
 
-console.error(`api:routes-check found ${violations.length} violation(s):\n`)
-for (const v of violations) {
-  const rel = path.relative(ROOT, v.file).replace(/\\/g, "/")
-  console.error(`  ${rel}:${v.line}  [${v.rule}]`)
-  console.error(`    ${v.text}`)
+if (violations.length > 0) {
+  console.error(`api:routes-check found ${violations.length} static violation(s):\n`)
+  for (const v of violations) {
+    const rel = path.relative(ROOT, v.file).replace(/\\/g, "/")
+    console.error(`  ${rel}:${v.line}  [${v.rule}]`)
+    console.error(`    ${v.text}`)
+  }
+  console.error("")
+  console.error("Rules:")
+  for (const rule of RULES) {
+    console.error(`  - ${rule.name}: ${rule.description}`)
+  }
 }
-console.error("")
-console.error("Rules:")
-for (const rule of RULES) {
-  console.error(`  - ${rule.name}: ${rule.description}`)
+
+if (inventoryViolations.length > 0) {
+  console.error(`api:routes-check found ${inventoryViolations.length} route inventory violation(s):\n`)
+  for (const violation of inventoryViolations) {
+    console.error(`  [${violation.rule}]`)
+    for (const entry of violation.entries) console.error(`    ${entry}`)
+  }
 }
 process.exit(1)
