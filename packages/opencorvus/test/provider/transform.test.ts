@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { convertToOpenAICompatibleChatMessages } from "@ai-sdk/openai-compatible/internal"
 import { ProviderTransform } from "../../src/provider/transform"
 
 describe("ProviderTransform.options - setCacheKey", () => {
@@ -703,6 +704,41 @@ describe("ProviderTransform.schema - gemini non-object properties removal", () =
 })
 
 describe("ProviderTransform.message - DeepSeek reasoning content", () => {
+  const deepseekModel = {
+    id: "deepseek/deepseek-chat",
+    providerID: "deepseek",
+    api: {
+      id: "deepseek-chat",
+      url: "https://api.deepseek.com",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "DeepSeek Chat",
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: false,
+      toolcall: true,
+      input: { text: true, audio: false, image: false, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: {
+        field: "reasoning_content",
+      },
+    },
+    cost: {
+      input: 0.001,
+      output: 0.002,
+      cache: { read: 0.0001, write: 0.0002 },
+    },
+    limit: {
+      context: 128000,
+      output: 8192,
+    },
+    status: "active",
+    options: {},
+    headers: {},
+    release_date: "2023-04-01",
+  } as any
+
   test("DeepSeek with tool calls includes reasoning_content in providerOptions", () => {
     const msgs = [
       {
@@ -719,44 +755,7 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
       },
     ] as any[]
 
-    const result = ProviderTransform.message(
-      msgs,
-      {
-        id: "deepseek/deepseek-chat",
-        providerID: "deepseek",
-        api: {
-          id: "deepseek-chat",
-          url: "https://api.deepseek.com",
-          npm: "@ai-sdk/openai-compatible",
-        },
-        name: "DeepSeek Chat",
-        capabilities: {
-          temperature: true,
-          reasoning: true,
-          attachment: false,
-          toolcall: true,
-          input: { text: true, audio: false, image: false, video: false, pdf: false },
-          output: { text: true, audio: false, image: false, video: false, pdf: false },
-          interleaved: {
-            field: "reasoning_content",
-          },
-        },
-        cost: {
-          input: 0.001,
-          output: 0.002,
-          cache: { read: 0.0001, write: 0.0002 },
-        },
-        limit: {
-          context: 128000,
-          output: 8192,
-        },
-        status: "active",
-        options: {},
-        headers: {},
-        release_date: "2023-04-01",
-      },
-      {},
-    )
+    const result = ProviderTransform.message(msgs, deepseekModel, {})
 
     expect(result).toHaveLength(1)
     expect(result[0].content).toEqual([
@@ -768,6 +767,72 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
       },
     ])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("Let me think about this...")
+  })
+
+  test("DeepSeek assistant turns without reasoning still include empty reasoning_content", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "test",
+            toolName: "bash",
+            input: { command: "echo hello" },
+          },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, deepseekModel, {})
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toEqual([
+      {
+        type: "tool-call",
+        toolCallId: "test",
+        toolName: "bash",
+        input: { command: "echo hello" },
+      },
+    ])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("")
+  })
+
+  test("DeepSeek transformed messages serialize reasoning_content into the provider payload", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "test",
+            toolName: "bash",
+            input: { command: "echo hello" },
+          },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, deepseekModel, {}) as any[]
+    const serialized = convertToOpenAICompatibleChatMessages(result)
+
+    expect(serialized).toEqual([
+      {
+        role: "assistant",
+        content: "",
+        reasoning_content: "",
+        tool_calls: [
+          {
+            id: "test",
+            type: "function",
+            function: {
+              name: "bash",
+              arguments: JSON.stringify({ command: "echo hello" }),
+            },
+          },
+        ],
+      },
+    ])
   })
 
   test("Non-DeepSeek providers leave reasoning content unchanged", () => {
@@ -823,6 +888,73 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
       { type: "text", text: "Answer" },
     ])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
+  test("OpenRouter reasoning_details remains on the reasoning part", () => {
+    const reasoningDetails = [
+      {
+        type: "reasoning.text",
+        text: "thinking",
+        format: "unknown",
+        index: 0,
+      },
+    ]
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "thinking",
+            providerOptions: {
+              openrouter: {
+                reasoning_details: reasoningDetails,
+              },
+            },
+          },
+          { type: "text", text: "Answer" },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(
+      msgs,
+      {
+        ...deepseekModel,
+        id: "deepseek/deepseek-v4-pro",
+        providerID: "openrouter",
+        api: {
+          id: "deepseek/deepseek-v4-pro",
+          url: "https://openrouter.ai/api/v1",
+          npm: "@openrouter/ai-sdk-provider",
+        },
+        capabilities: {
+          ...deepseekModel.capabilities,
+          interleaved: {
+            field: "reasoning_details",
+          },
+        },
+      },
+      {},
+    )
+
+    expect(result).toEqual([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "thinking",
+            providerOptions: {
+              openrouter: {
+                reasoning_details: reasoningDetails,
+              },
+            },
+          },
+          { type: "text", text: "Answer" },
+        ],
+      },
+    ])
   })
 })
 
