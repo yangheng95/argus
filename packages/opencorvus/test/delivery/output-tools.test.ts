@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { createDeliveryOutputTools } from "../../src/delivery/output-tools"
 import { deriveRequiredEvidenceFacets } from "../../src/delivery/agent"
+import { DeliveryVerdict, affectedGoalIDs } from "../../src/delivery/verdict"
 
 const acceptedBase = {
   verdict: "accepted" as const,
@@ -66,5 +67,34 @@ describe("delivery output tools", () => {
       delivery: { changedFiles: ["src/components/App.tsx", "src/styles.css"] },
       attachments: [{ mime: "image/png" }],
     })).toEqual(["frontend", "runtime", "startup", "visual"])
+  })
+
+  test("task-scope rejection details do not derive affected goals", async () => {
+    const kit = createDeliveryOutputTools()
+    const parsed = DeliveryVerdict.parse({
+      verdict: "rejected",
+      summary: "Merged worktree render could not be verified.",
+      deferred_checks: [],
+      tool_call_evidence: [
+        {
+          tool: "delivery_arbiter",
+          passed: false,
+          detail: "render process failed before page verification",
+        },
+      ],
+      rejection_details: [
+        {
+          category: "startup",
+          error: "merged worktree preview server did not accept HTTP before timeout",
+          suggestion: "Fix delivery render workspace startup instead of retrying every goal.",
+        },
+      ],
+    })
+
+    const result = await kit.tools.submit_verdict.execute!(parsed, {} as any)
+
+    expect(affectedGoalIDs(parsed)).toEqual([])
+    expect(result).toContain("1 rejection_details across 0 goal(s)")
+    expect(kit.getCollector().verdict?.verdict).toBe("rejected")
   })
 })

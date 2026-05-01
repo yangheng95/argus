@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto"
 import { and, Database, desc, eq } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
+import { Event as EngineEvent } from "@/engine/model"
+import { EngineProtocol } from "@/engine/protocol"
 import { Identifier } from "@/id/id"
 import type { DeliverySurfaceManifest } from "./surface-detector"
 import type { DeliverySpecialistReview } from "./specialist-review"
@@ -242,6 +244,22 @@ export function persistDeliveryEvidenceManifest(input: {
       time_updated: input.manifest.timeCreated,
     }).run()
   })
+  void EngineProtocol.emit(
+    EngineEvent.DeliveryEvidenceUpdated,
+    {
+      taskID: input.manifest.taskId!,
+      runID: input.manifest.runId,
+      deliveryID: input.manifest.deliveryId!,
+      manifestID: input.manifest.id,
+      iteration: input.manifest.iteration,
+      status: input.manifest.finalGate.status,
+      summary: input.manifest.finalGate.summary,
+      failedCheckCount: input.manifest.finalGate.failedCheckIds.length,
+      failedRuntimeFlowCount: input.manifest.finalGate.failedRuntimeFlowIds.length,
+      failedReviewCount: (input.manifest.finalGate.failedReviewIds ?? []).length,
+    },
+    { source: "delivery.manifest" },
+  )
 }
 
 export function findLatestDeliverySurfaceManifest(input: {

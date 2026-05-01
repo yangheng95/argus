@@ -413,7 +413,7 @@ function buildProsecutorBrief(input: {
   // list are both derived from rejection_details — no `issues_found` /
   // `affected_goal_ids` shadow fields on the verdict.
   const issues = rejectionDetails.map((d) => d.error)
-  const affectedGoalIds = Array.from(new Set(rejectionDetails.map((d) => d.goal_id)))
+  const affectedGoalIds = Array.from(new Set(rejectionDetails.map((d) => d.goal_id).filter((item): item is string => Boolean(item))))
   const seeds = [...input.architectSeeds].sort((a, b) => {
     const rank = { high: 0, medium: 1, low: 2 }
     return rank[a.priority_hint] - rank[b.priority_hint]
@@ -439,8 +439,10 @@ function buildProsecutorBrief(input: {
       : "",
     rejectionDetails.length > 0 ? `\nrejection_details (${rejectionDetails.length}):` : "",
     ...rejectionDetails.map(
-      (d) =>
-        `- [${d.goal_id} ${d.category}${d.file ? ` ${d.file}` : ""}] ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`,
+      (d) => {
+        const scope = d.goal_id ?? "task-scope"
+        return `- [${scope} ${d.category}${d.file ? ` ${d.file}` : ""}] ${d.error}${d.suggestion ? ` → ${d.suggestion}` : ""}`
+      },
     ),
   ]
   if (seeds.length > 0) {

@@ -72,6 +72,33 @@ function deliveryStatusLabel(status: string): string {
   return t("delivery.status.candidate");
 }
 
+function deliveryEvidenceRows(delivery: any): Array<{ id: string; label: string; status: string }> {
+  const manifest = delivery?.evidenceManifest;
+  if (!manifest) return [];
+  const checks = Array.isArray(manifest.checkResults)
+    ? manifest.checkResults.map((item: any) => ({
+        id: String(item.id || item.name || "check"),
+        label: String(item.label || item.name || item.id || "check"),
+        status: String(item.status || "unknown"),
+      }))
+    : [];
+  const runtime = Array.isArray(manifest.runtimeFlows)
+    ? manifest.runtimeFlows.map((item: any) => ({
+        id: String(item.id || item.name || "runtime"),
+        label: String(item.name || item.id || "runtime"),
+        status: String(item.status || "unknown"),
+      }))
+    : [];
+  const reviews = Array.isArray(manifest.reviewEvidence)
+    ? manifest.reviewEvidence.map((item: any) => ({
+        id: String(item.id || item.name || "review"),
+        label: String(item.name || item.id || "review"),
+        status: String(item.status || "unknown"),
+      }))
+    : [];
+  return [...checks, ...runtime, ...reviews].slice(0, 12);
+}
+
 interface DeliveryPanelProps {
   delivery: any;
 }
@@ -109,6 +136,18 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
             {tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
               count: props.delivery.result.changedFiles.length,
             })}
+          </div>
+        </Show>
+        <Show when={deliveryEvidenceRows(props.delivery).length > 0}>
+          <div class="delivery-evidence-list">
+            <For each={deliveryEvidenceRows(props.delivery)}>
+              {(item) => (
+                <div class="delivery-evidence-row">
+                  <span class="delivery-evidence-name">{item.label}</span>
+                  <span class="delivery-evidence-status" data-status={item.status}>{item.status}</span>
+                </div>
+              )}
+            </For>
           </div>
         </Show>
       </div>

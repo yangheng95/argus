@@ -58,8 +58,8 @@ export function createDeliveryOutputTools(input?: {
         "is treated as a failed parse and retried.\n\n" +
         "Schema shape (discriminated by `verdict`):\n" +
         "- verdict='accepted' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), plus only the task-applicable evidence facets listed below. NO rejection_details.\n" +
-        "- verdict='rejected' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), any evidence facets you actually probed, AND rejection_details (≥1 entry, every entry attributes to a goal_id).\n" +
-        "There is NO separate affected_goal_ids or issues_found field — the orchestrator derives those from rejection_details.\n" +
+        "- verdict='rejected' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), any evidence facets you actually probed, AND rejection_details (≥1 entry). Include goal_id only when a responsible goal is actually identifiable; omit it for task-scope project failures.\n" +
+        "There is NO separate affected_goal_ids or issues_found field — goal rework routing derives only from rejection_details entries that truthfully include goal_id.\n" +
         (requiredEvidenceFacets.length > 0
           ? `\nHost-required evidence facets for verdict='accepted': [${requiredEvidenceFacets.join(", ")}].\n`
           : "\nHost-required evidence facets for verdict='accepted': none. Do not fabricate startup/frontend evidence for non-runnable work.\n") +
@@ -169,7 +169,7 @@ export function createDeliveryOutputTools(input?: {
 
         const rejections = obj.verdict === "rejected" ? obj.rejection_details.length : 0
         const distinctGoals = obj.verdict === "rejected"
-          ? new Set(obj.rejection_details.map((d) => d.goal_id)).size
+          ? new Set(obj.rejection_details.map((d) => d.goal_id).filter((item): item is string => Boolean(item))).size
           : 0
         return [
           `PASS: verdict=${obj.verdict} submitted.`,

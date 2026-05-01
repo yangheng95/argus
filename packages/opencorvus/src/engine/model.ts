@@ -1125,6 +1125,21 @@ export const Event = {
       })),
     }),
   ),
+  DeliveryEvidenceUpdated: BusEvent.define(
+    "delivery.evidence.updated",
+    z.object({
+      taskID: Identifier.schema("task"),
+      runID: Identifier.schema("run").optional(),
+      deliveryID: Identifier.schema("delivery"),
+      manifestID: Identifier.schema("artifact"),
+      iteration: z.number(),
+      status: z.enum(["passed", "failed"]),
+      summary: z.string(),
+      failedCheckCount: z.number(),
+      failedRuntimeFlowCount: z.number(),
+      failedReviewCount: z.number(),
+    }),
+  ),
   IntegrityReviewCompleted: BusEvent.define(
     "integrity.review.completed",
     z.object({

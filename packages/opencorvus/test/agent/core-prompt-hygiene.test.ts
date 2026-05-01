@@ -83,7 +83,8 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("DeliveryEvidenceManifest")
     expect(text).toContain("host arbiter is the only owner")
     expect(text).toContain("`tool_call_evidence`")
-    expect(text).toContain("`rejection_details[]` is the rework plan and the single source")
+    expect(text).toContain("Only entries with a truthful")
+    expect(text).toContain("`goal_id` are used for goal routing")
   })
 
   test("design-analysis and delivery agree that design_specs are delivery-verified", async () => {
