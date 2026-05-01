@@ -16,12 +16,6 @@ export interface DomRefs {
   solidTitlebarMenu: HTMLElement | null;
   solidTitlebarStatus: HTMLElement | null;
 
- // Settings checkboxes / controls
-  chkAutoQuestion: HTMLInputElement | null;
-  chkShowTranscriptDetails: HTMLInputElement | null;
-  opacityRange: HTMLInputElement | null;
-  opacityValue: HTMLElement | null;
-
  // Window controls
   btnMinimize: HTMLButtonElement | null;
   btnMaximize: HTMLButtonElement | null;
@@ -128,33 +122,6 @@ export interface DomRefs {
   btnRefreshTasks: HTMLButtonElement | null;
   btnCreateTask: HTMLButtonElement | null;
 
- // Skill dialog
-  skillDialog: HTMLDialogElement | null;
-  skillForm: HTMLFormElement | null;
-  skillType: HTMLSelectElement | null;
-  skillValue: HTMLInputElement | null;
-  skillPolicy: HTMLSelectElement | null;
-  btnPickSkillPath: HTMLButtonElement | null;
-  btnCancelSkill: HTMLButtonElement | null;
-
- // Skill market dialog
-  skillMarketDialog: HTMLDialogElement | null;
-  skillMarketList: HTMLElement | null;
-  btnCloseSkillMarket: HTMLButtonElement | null;
-
- // MCP dialog
-  mcpDialog: HTMLDialogElement | null;
-  mcpForm: HTMLFormElement | null;
-  mcpName: HTMLInputElement | null;
-  mcpType: HTMLSelectElement | null;
-  mcpUrl: HTMLInputElement | null;
-  mcpCommand: HTMLInputElement | null;
-  mcpArgs: HTMLInputElement | null;
-  mcpRemoteField: HTMLElement | null;
-  mcpCommandField: HTMLElement | null;
-  mcpArgsField: HTMLElement | null;
-  btnCancelMcp: HTMLButtonElement | null;
-
  // Goal dialog
   goalDialog: HTMLDialogElement | null;
   goalForm: HTMLFormElement | null;
@@ -183,14 +150,6 @@ export interface DomRefs {
   appDialogSelect: HTMLSelectElement | null;
   btnAppDialogCancel: HTMLButtonElement | null;
   btnAppDialogOk: HTMLButtonElement | null;
-
- // Channel dialog
-  channelDialog: HTMLDialogElement | null;
-  channelForm: HTMLFormElement | null;
-  channelDialogTitle: HTMLElement | null;
-  channelId: HTMLInputElement | null;
-  channelFields: HTMLElement | null;
-  btnCancelChannel: HTMLButtonElement | null;
 
  // Knowledge: Memory
   memoryBadge: HTMLElement | null;
@@ -243,12 +202,6 @@ export function getDomRefs(): DomRefs {
  // Titlebar controls
     solidTitlebarMenu: $<HTMLElement>("#solidTitlebarMenu"),
     solidTitlebarStatus: $<HTMLElement>("#solidTitlebarStatus"),
-
- // Settings checkboxes / controls
-    chkAutoQuestion: $<HTMLInputElement>("#chkAutoQuestion"),
-    chkShowTranscriptDetails: $<HTMLInputElement>("#chkShowTranscriptDetails"),
-    opacityRange: $<HTMLInputElement>("#opacityRange"),
-    opacityValue: $<HTMLElement>("#opacityValue"),
 
  // Window controls
     btnMinimize: $<HTMLButtonElement>("#btnMinimize"),
@@ -357,33 +310,6 @@ export function getDomRefs(): DomRefs {
     btnRefreshTasks: $<HTMLButtonElement>("#btnRefreshTasks"),
     btnCreateTask: $<HTMLButtonElement>("#btnCreateTask"),
 
- // Skill dialog
-    skillDialog: $<HTMLDialogElement>("#skillDialog"),
-    skillForm: $<HTMLFormElement>("#skillForm"),
-    skillType: $<HTMLSelectElement>("#skillType"),
-    skillValue: $<HTMLInputElement>("#skillValue"),
-    skillPolicy: $<HTMLSelectElement>("#skillPolicy"),
-    btnPickSkillPath: $<HTMLButtonElement>("#btnPickSkillPath"),
-    btnCancelSkill: $<HTMLButtonElement>("#btnCancelSkill"),
-
- // Skill market dialog
-    skillMarketDialog: $<HTMLDialogElement>("#skillMarketDialog"),
-    skillMarketList: $<HTMLElement>("#skillMarketList"),
-    btnCloseSkillMarket: $<HTMLButtonElement>("#btnCloseSkillMarket"),
-
- // MCP dialog
-    mcpDialog: $<HTMLDialogElement>("#mcpDialog"),
-    mcpForm: $<HTMLFormElement>("#mcpForm"),
-    mcpName: $<HTMLInputElement>("#mcpName"),
-    mcpType: $<HTMLSelectElement>("#mcpType"),
-    mcpUrl: $<HTMLInputElement>("#mcpUrl"),
-    mcpCommand: $<HTMLInputElement>("#mcpCommand"),
-    mcpArgs: $<HTMLInputElement>("#mcpArgs"),
-    mcpRemoteField: $<HTMLElement>("#mcpRemoteField"),
-    mcpCommandField: $<HTMLElement>("#mcpCommandField"),
-    mcpArgsField: $<HTMLElement>("#mcpArgsField"),
-    btnCancelMcp: $<HTMLButtonElement>("#btnCancelMcp"),
-
  // Goal dialog
     goalDialog: $<HTMLDialogElement>("#goalDialog"),
     goalForm: $<HTMLFormElement>("#goalForm"),
@@ -412,14 +338,6 @@ export function getDomRefs(): DomRefs {
     appDialogSelect: $<HTMLSelectElement>("#appDialogSelect"),
     btnAppDialogCancel: $<HTMLButtonElement>("#btnAppDialogCancel"),
     btnAppDialogOk: $<HTMLButtonElement>("#btnAppDialogOk"),
-
- // Channel dialog
-    channelDialog: $<HTMLDialogElement>("#channelDialog"),
-    channelForm: $<HTMLFormElement>("#channelForm"),
-    channelDialogTitle: $<HTMLElement>("#channelDialogTitle"),
-    channelId: $<HTMLInputElement>("#channelId"),
-    channelFields: $<HTMLElement>("#channelFields"),
-    btnCancelChannel: $<HTMLButtonElement>("#btnCancelChannel"),
 
  // Knowledge: Memory
     memoryBadge: $<HTMLElement>("#memoryBadge"),

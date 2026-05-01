@@ -1029,6 +1029,20 @@ test("overlay controls trigger without runtime failures", async () => {
     })
     expect(menu.open).toBe(true)
     expect(menu.closed).toBe(true)
+
+    await page.click('[data-menu-trigger="tools"]')
+    await page.waitForSelector('[data-testid="titlebar-open-tools"]')
+    seen.push('[data-testid="titlebar-open-tools"]')
+    await tap('[data-testid="titlebar-open-tools"]')
+    await page.waitForFunction(() =>
+      (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true &&
+      document.querySelector('[data-config-panel="tools"]')?.classList.contains("active") === true,
+    )
+    await page.waitForFunction(() => document.body.textContent?.includes("alpha-skill"))
+    seen.push("#btnCloseConfigDialog")
+    await tap("#btnCloseConfigDialog")
+    await page.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open !== true)
+
     await page.click('[data-menu-trigger="view"]')
     await page.waitForSelector('[data-testid="titlebar-opacity-range"]')
     await page.$eval('[data-testid="titlebar-opacity-range"]', (node) => {

@@ -1,6 +1,6 @@
 # Overlay Titlebar Settings Refactor Plan - 2026-05-02
 
-## Problem
+## Original Problem
 
 The overlay currently exposes configuration through several unrelated surfaces:
 
@@ -11,6 +11,18 @@ The overlay currently exposes configuration through several unrelated surfaces:
 - `packages/overlay/src/services/dialog.ts` imperatively rewrites `#brandVersion` for channel status and opens channel settings from the titlebar.
 
 This creates a split mental model: core runtime controls live in the titlebar, model/provider controls live in the right inspector, deep settings live in a modal, and server settings live in a second modal. The operator has to remember where a setting belongs instead of scanning a single product-level control area.
+
+## Implementation Status
+
+Status as of 2026-05-02: implemented and pushed on `codex/opencode-upstream-infra-adapt`.
+
+- `TitlebarMenu.tsx`, `services/llm-inline.ts`, `#llmSection`, `#extensionsSection`, `#btnConfigToggle`, and `#settingsDialog` were removed from the overlay runtime.
+- `TitlebarMenubar.tsx` is the titlebar configuration entry point for Workspace, Model, Run, Tools, View, and Help.
+- `GeneralPanel` owns connection and notification settings only; View owns theme, locale, zoom, and opacity writes.
+- `SkillMarketPanel` is mounted in the real config-dialog `tools` tab, and Tools menu routes to that tab.
+- Provider/model setup routes through Model menu into the Providers and Agent Models tabs; no inline LLM double writer remains.
+- Browser tests now run against the Vite `dist-vite` bundle through `packages/overlay/test/overlay-dist.ts`, so runtime import and hydration errors surface in the harness.
+- Residual sweep on 2026-05-02 removed dead `dom.ts` refs for deleted settings, Skill/MCP, and channel dialogs, and added regression coverage that Tools opens the real Skills/MCP tab.
 
 ## Target
 
@@ -384,22 +396,23 @@ When width is tight:
 
 ## Tests and Acceptance
 
-Add or update tests:
+Implemented test coverage:
 
 - `packages/overlay/test/titlebar-menubar.test.ts`
-  - Menu labels render in titlebar.
-  - Hidden menus do not intercept clicks.
-  - Model menu opens the config dialog on Providers and Agent Models actions.
-  - Tools menu opens Permissions, Channels, Skills, Memory, and Prompts tabs.
-  - View menu changes theme, locale, zoom, and opacity through existing stores.
-  - Run menu changes assistant budget through `patchConfig`.
-  - Tools menu opens the real config-dialog `tools` tab before `#extensionsSection` is removed.
-  - Menubar uses `role="menubar"`, menu triggers expose `aria-expanded` / `aria-controls`, focus returns to the trigger after close, Escape closes, Tab exits the menu, disabled controls announce disabled state, sliders and toggles have accessible labels.
-
-- Update existing tests:
-  - `menu-collapse.test.ts`: target the new menu panel IDs.
-  - `provider-oauth.test.ts` and `provider-auth-panel.test.ts`: open Providers via Model menu instead of `#btnConfigToggle`.
-  - Any tests using `#btnConfigToggle`, `#llmSection`, `#extensionsSection`, or `#settingsDialog` must be rewritten and then those IDs should disappear from overlay source.
+  - Covers documented widths `320`, `480`, `600`, `760`, and `1440` in both `en-US` and `zh-CN`.
+  - Verifies menu triggers render, the titlebar stays in bounds, visible controls do not overlap, and brand drag space remains present.
+- `packages/overlay/test/menu-collapse.test.ts`
+  - Opens and closes the new titlebar menu panel, then verifies hidden panels do not intercept inspector clicks.
+- `packages/overlay/test/provider-oauth.test.ts` and `packages/overlay/test/provider-auth-panel.test.ts`
+  - Open Providers through the Model menu instead of `#btnConfigToggle`.
+  - Assert OAuth/API auth flows complete through the config dialog provider surface.
+- `packages/overlay/test/controls.test.ts`
+  - Exercises Help/View/Tools titlebar paths in the real Vite dist bundle.
+  - Verifies Tools opens the real config-dialog `tools` tab and renders the Skills/MCP surface before the old right-column `#extensionsSection` can regress.
+  - Verifies View changes theme, locale, zoom, and opacity through the existing stores.
+- Static residual scans after implementation:
+  - `#btnConfigToggle`, `#llmSection`, `#extensionsSection`, and `#settingsDialog` no longer appear in overlay source or browser tests.
+  - `services/llm-inline.ts` and `TitlebarMenu.tsx` are deleted.
 
 Visual acceptance:
 

@@ -13,6 +13,7 @@ type MenuID = "product" | "workspace" | "model" | "run" | "tools" | "view" | "he
 type MenuDef = {
   id: MenuID;
   label: string;
+  compact: string;
 };
 
 type TitlebarMenubarProps = {
@@ -196,13 +197,13 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   let rootRef: HTMLDivElement | undefined;
 
   const menus = createMemo<MenuDef[]>(() => [
-    { id: "product", label: "OpenCorvus" },
-    { id: "workspace", label: t("titlebar.menu.workspace") },
-    { id: "model", label: t("titlebar.menu.model") },
-    { id: "run", label: t("titlebar.menu.run") },
-    { id: "tools", label: t("titlebar.menu.tools") },
-    { id: "view", label: t("titlebar.menu.view") },
-    { id: "help", label: t("titlebar.menu.help") },
+    { id: "product", label: "OpenCorvus", compact: "OC" },
+    { id: "workspace", label: t("titlebar.menu.workspace"), compact: "W" },
+    { id: "model", label: t("titlebar.menu.model"), compact: "M" },
+    { id: "run", label: t("titlebar.menu.run"), compact: "R" },
+    { id: "tools", label: t("titlebar.menu.tools"), compact: "T" },
+    { id: "view", label: t("titlebar.menu.view"), compact: "V" },
+    { id: "help", label: t("titlebar.menu.help"), compact: "?" },
   ]);
 
   function closeMenu() {
@@ -319,7 +320,10 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
               class="titlebar-menubar-trigger"
               role="menuitem"
               data-menu-trigger={menu.id}
+              data-compact={menu.compact}
               data-active={openMenu() === menu.id ? "true" : "false"}
+              title={menu.label}
+              aria-label={menu.label}
               aria-haspopup="menu"
               aria-expanded={openMenu() === menu.id ? "true" : "false"}
               aria-controls={`titlebar-menu-${menu.id}`}

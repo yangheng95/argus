@@ -8,6 +8,7 @@ export const { default: puppeteer } = await import(
 
 let browserQueue: Promise<void> = Promise.resolve()
 const browserLockDir = join(tmpdir(), "pptr-overlay-browser-lock")
+const browserLockHeartbeat = join(browserLockDir, "heartbeat")
 const STALE_BROWSER_LOCK_MS = 120_000
 
 async function acquireBrowserLock() {
@@ -15,12 +16,14 @@ async function acquireBrowserLock() {
     try {
       mkdirSync(browserLockDir)
       writeFileSync(join(browserLockDir, "owner"), `${process.pid}\n${Date.now()}\n`)
+      writeFileSync(browserLockHeartbeat, `${Date.now()}\n`)
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException | undefined)?.code
       if (code !== "EEXIST") throw error
       try {
-        const age = Date.now() - statSync(browserLockDir).mtimeMs
+        const lockStat = statSync(browserLockHeartbeat)
+        const age = Date.now() - lockStat.mtimeMs
         if (age > STALE_BROWSER_LOCK_MS) {
           rmSync(browserLockDir, { recursive: true, force: true })
           continue
@@ -65,6 +68,9 @@ export async function launchBrowser(extraArgs?: string[]) {
 
   await waitForTurn
   await acquireBrowserLock()
+  const heartbeat = setInterval(() => {
+    writeFileSync(browserLockHeartbeat, `${Date.now()}\n`)
+  }, Math.floor(STALE_BROWSER_LOCK_MS / 4))
   const exe = await findBrowser()
   try {
     const browser = await puppeteer.launch({
@@ -78,6 +84,7 @@ export async function launchBrowser(extraArgs?: string[]) {
     const releaseOnce = () => {
       if (released) return
       released = true
+      clearInterval(heartbeat)
       releaseTurn()
       releaseBrowserLock()
     }
@@ -95,6 +102,7 @@ export async function launchBrowser(extraArgs?: string[]) {
 
     return browser
   } catch (error) {
+    clearInterval(heartbeat)
     releaseTurn()
     releaseBrowserLock()
     throw error

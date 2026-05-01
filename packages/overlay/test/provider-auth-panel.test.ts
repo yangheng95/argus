@@ -216,10 +216,21 @@ async function submitDialogInput(tab: Page, value: string) {
     (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
     document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false,
   )
+  const before = await tab.evaluate(() => ({
+    body: document.querySelector("#appDialogBody")?.textContent || "",
+    label: document.querySelector("#appDialogInputLabel")?.textContent || "",
+  }))
   await tab.click("#appDialogInput", { clickCount: 3 })
   await tab.type("#appDialogInput", value)
   await tab.click("#btnAppDialogOk")
-  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
+  await tab.waitForFunction((prev) => {
+    const dialog = document.querySelector("#appDialog") as HTMLDialogElement | null
+    if (dialog?.open !== true) return true
+    const inputVisible = document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false
+    const body = document.querySelector("#appDialogBody")?.textContent || ""
+    const label = document.querySelector("#appDialogInputLabel")?.textContent || ""
+    return !inputVisible || body !== prev.body || label !== prev.label
+  }, {}, before)
 }
 
 async function submitDialogSelect(tab: Page, value: string) {
@@ -227,9 +238,20 @@ async function submitDialogSelect(tab: Page, value: string) {
     (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
     document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false,
   )
+  const before = await tab.evaluate(() => ({
+    body: document.querySelector("#appDialogBody")?.textContent || "",
+    label: document.querySelector("#appDialogSelectLabel")?.textContent || "",
+  }))
   await tab.select("#appDialogSelect", value)
   await tab.click("#btnAppDialogOk")
-  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
+  await tab.waitForFunction((prev) => {
+    const dialog = document.querySelector("#appDialog") as HTMLDialogElement | null
+    if (dialog?.open !== true) return true
+    const selectVisible = document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false
+    const body = document.querySelector("#appDialogBody")?.textContent || ""
+    const label = document.querySelector("#appDialogSelectLabel")?.textContent || ""
+    return !selectVisible || body !== prev.body || label !== prev.label
+  }, {}, before)
 }
 
 test("overlay oauth auth handles prompt-driven authorize flow and pasted redirect urls", async () => {
