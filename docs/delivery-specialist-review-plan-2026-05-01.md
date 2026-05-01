@@ -43,6 +43,28 @@ The refactor must preserve a single final verdict owner. Specialist reviewers
 produce evidence only; they never accept, reject, or patch the delivery
 directly.
 
+## Agent Review Corrections
+
+This plan was reviewed by three read-only explorer agents on 2026-05-01. Their
+findings are incorporated as hard design constraints:
+
+1. The final verdict must continue to use the existing `kind="verdict"` artifact
+   with `label="delivery-agent-verdict"` unless every reader is migrated in the
+   same change. Do not add a parallel `delivery_arbiter_verdict` final verdict
+   artifact.
+2. Current delivery can edit files through `write_file` and `edit_file`. The
+   specialist-review rollout must first remove delivery repair capability and
+   rewrite the delivery prompt/tools so delivery is review-only.
+3. Specialist output must not contain a pass/fail verdict. Specialists may only
+   report execution completion, findings, proposed severity, and evidence.
+   Arbiter revalidates evidence and assigns final severity.
+4. Final `DeliveryVerdict` remains `accepted | rejected`. Missing required
+   evidence is represented as a rejected verdict with evidence-quality findings,
+   not a new delivery-level `inconclusive` state.
+5. Existing hard gates that currently synthesize or override verdicts must move
+   behind the arbiter as evidence producers, or the arbiter must be the sole
+   function that converts their results into the final verdict.
+
 ## Non-Goals
 
 - Do not add optional human-style reviewers that may or may not run by model
@@ -95,7 +117,7 @@ their surface is detected, and absent when their surface is not detected.
 | `security_data_review` | Auth, payments, upload, file paths, secrets, database writes, migrations, permissions, or user data are detected | auth flows, secret scan, input validation, file/data access paths |
 
 If a detector cannot classify a surface with evidence, the arbiter must treat
-that as `inconclusive` rather than silently skipping review.
+that as rejected `evidence_quality` rather than silently skipping review.
 
 ## Surface Detector Contract
 
@@ -152,7 +174,7 @@ type DeliverySpecialistReview = {
     | "test_integration"
     | "visual_runtime"
     | "security_data"
-  status: "passed" | "failed" | "inconclusive"
+  executionStatus: "completed" | "tool_failed" | "evidence_missing"
   summary: string
   findings: DeliveryReviewFinding[]
   evidenceRefs: string[]
@@ -160,7 +182,7 @@ type DeliverySpecialistReview = {
 }
 
 type DeliveryReviewFinding = {
-  severity: "blocking" | "major" | "minor"
+  proposedSeverity: "blocking" | "major" | "minor"
   category:
     | "startup"
     | "runtime"
@@ -168,6 +190,7 @@ type DeliveryReviewFinding = {
     | "contract"
     | "visual"
     | "test_quality"
+    | "evidence_quality"
     | "security"
     | "data_integrity"
     | "user_intent"
@@ -192,9 +215,10 @@ type DeliveryReviewFinding = {
 Rules:
 
 - A finding without evidence is invalid.
-- A `blocking` finding rejects delivery.
-- A required specialist returning `inconclusive` prevents acceptance unless the
-  arbiter has deterministic evidence proving that surface is irrelevant.
+- Specialist `proposedSeverity` is advisory. The arbiter independently validates
+  the evidence and assigns the final severity in the final `DeliveryVerdict`.
+- A required specialist with `executionStatus !== "completed"` blocks acceptance
+  unless the surface detector proves that specialist was not required.
 - Specialists may recommend owner goals, but the orchestrator decides retry or
   replan.
 
@@ -212,8 +236,9 @@ The arbiter consumes:
 Verdict rules:
 
 1. Any failed required deterministic check is `rejected`.
-2. Any specialist `blocking` finding is `rejected`.
-3. Any required specialist with missing or invalid evidence is `inconclusive`.
+2. Any arbiter-validated blocking specialist finding is `rejected`.
+3. Any required specialist with missing or invalid evidence is `rejected` with
+   category `evidence_quality`.
 4. Any visual task without real rendered screenshot or post-interaction DOM
    evidence is `rejected`.
 5. Any test-quality finding that proves fake tests, empty tests, stub checks, or
@@ -221,7 +246,8 @@ Verdict rules:
 6. If all required deterministic checks pass and all required specialists pass
    with evidence, delivery may be `accepted`.
 
-The arbiter writes a single final structured verdict. Specialist outputs are
+The arbiter writes the existing final structured verdict artifact:
+`kind="verdict"` with `label="delivery-agent-verdict"`. Specialist outputs are
 attached as evidence artifacts, not competing verdicts.
 
 ## Context Budget Strategy
@@ -253,21 +279,29 @@ parallel specialist reviews
         ↓
 arbiter verdict
         ↓
-accepted | rejected | inconclusive
+accepted | rejected
 ```
 
-`deliver` remains read-only over the deliverable. It may start servers, run
-commands, take screenshots, send HTTP requests, and inspect files. It does not
-patch project files.
+The target delivery stage is read-only over the deliverable. It may start
+servers, run commands, take screenshots, send HTTP requests, and inspect files.
+It does not patch project files. The current code still exposes delivery repair
+tools, so the first implementation phase must remove those tools before
+specialist reviews are enabled.
 
 ## Implementation Phases
 
-### Phase 0: Inventory Current Delivery Flow
+### Phase 0: Inventory And Remove Delivery Repair
 
 Owner files:
 
 - `packages/opencorvus/src/delivery/`
 - `packages/opencorvus/src/prompt/core/delivery-core.txt`
+- `packages/opencorvus/src/engine/engine.sql.ts`
+- `packages/opencorvus/src/engine/persist.ts`
+- `packages/opencorvus/src/engine/store.ts`
+- `packages/opencorvus/src/orchestrator/tools.ts`
+- `packages/opencorvus/src/task-api/index.ts`
+- `packages/opencorvus/src/workbench/board.ts`
 - `packages/opencorvus/test/delivery/`
 - `packages/opencorvus/test/benchmark/`
 
@@ -277,11 +311,22 @@ Tasks:
 - Identify the current single owner of delivery manifest persistence.
 - Identify where delivery prompt context is assembled.
 - Mark current evidence artifacts and their payload shapes.
+- Remove delivery repair capability from the delivery prompt and tool exposure:
+  `write_file`, `edit_file`, and any equivalent write tool must not be available
+  in delivery review sessions.
+- Keep orchestrator retry/replan as the only repair path after rejected
+  delivery.
+- Record every current final-verdict reader before touching verdict artifacts:
+  publish, workflow projection, task API, workbench board, prosecutor/retry
+  context, and delivery history reads.
 
 Acceptance:
 
 - A short implementation note lists current owners and the new insertion point.
-- No runtime behavior changes.
+- Delivery can still inspect, run, render, and reject/accept, but cannot patch
+  project files.
+- The only final verdict artifact remains `kind="verdict"` with
+  `label="delivery-agent-verdict"`.
 
 ### Phase 1: Surface Detector
 
@@ -291,12 +336,18 @@ Tasks:
 - Persist the detector output as a delivery artifact.
 - Add detector tests for frontend-only, backend-only, fullstack, visual, and
   security-sensitive projects.
+- Reuse or move existing structural discovery code instead of duplicating
+  framework/package detection. `delivery/checks/discovery.ts` and
+  `delivery/checks/project-gate.ts` must not remain a second source of surface
+  classification.
 
 Acceptance:
 
 - Detector selects surfaces from structural evidence.
 - Detector output is deterministic for fixture projects.
 - No keyword-only detection is accepted.
+- Existing deterministic gates consume the same detector result where they need
+  project-surface classification.
 
 ### Phase 2: Shared Specialist Review Contract
 
@@ -306,12 +357,17 @@ Tasks:
 - Add validation that every finding has evidence.
 - Add artifact persistence for specialist outputs.
 - Add arbiter input loading for specialist outputs.
+- Add `delivery_surface_manifest` and `delivery_specialist_review` to the
+  artifact kind union and artifact read helpers. Do not add a new final verdict
+  kind.
 
 Acceptance:
 
 - Invalid specialist output fails before arbitration.
 - Specialist artifacts are queryable by task and delivery.
 - Existing delivery verdict format remains single-source.
+- Specialist `executionStatus`, findings, and proposed severities cannot by
+  themselves publish an accepted or rejected final verdict.
 
 ### Phase 3: Test And Integration Review
 
@@ -382,14 +438,20 @@ Acceptance:
 Tasks:
 
 - Aggregate specialist findings into final delivery verdict.
-- Map blocking findings to suggested owner goals.
+- Map arbiter-validated blocking findings to suggested owner goals.
 - Emit structured retry or replan guidance without direct repair.
+- Convert existing manifest rejection, runtime-evidence rejection, and visual
+  hard-gate override paths into arbiter inputs. The final verdict conversion
+  must happen in one arbiter owner.
+- Write the final result through the existing `delivery-agent-verdict` artifact
+  path so workflow, publish, board, and task API readers stay single-source.
 
 Acceptance:
 
 - One final verdict owner remains.
 - Rejected delivery contains specialist evidence and owner mapping.
 - Existing orchestrator retry/replan loop receives actionable root cause.
+- No code path writes or reads a parallel final verdict artifact.
 
 ## Benchmark Plan
 
@@ -402,14 +464,46 @@ Add focused benchmark fixtures before enabling the full path:
 5. Test suite with empty or fake tests.
 6. Auth/upload app with a security flaw.
 
+Use a table-driven fixture harness. Each fixture declares:
+
+```ts
+type DeliverySpecialistFixtureExpectation = {
+  name: string
+  projectFixture: string
+  expectedVerdict: "accepted" | "rejected"
+  expectedReviewer?: DeliverySpecialistReview["reviewer"]
+  expectedCategory?: DeliveryReviewFinding["category"]
+  requiredArtifactKinds: Array<
+    "delivery_surface_manifest" |
+    "delivery_specialist_review" |
+    "verdict"
+  >
+  requiredEvidenceKinds: Array<
+    "file" |
+    "command" |
+    "screenshot" |
+    "dom" |
+    "network" |
+    "api_response" |
+    "log"
+  >
+  maxContextFiles?: number
+  maxLogChars?: number
+}
+```
+
 Benchmark success criteria:
 
-- Each bad fixture is rejected for the correct specialist reason.
-- Each good fixture is accepted.
-- Final verdict always comes from delivery arbiter.
-- Specialist evidence includes file, command, screenshot, DOM, network, or log
-  refs as appropriate.
-- Context packs stay bounded and do not include unrelated full logs.
+- Each bad fixture is rejected with the expected reviewer and finding category.
+- Each good fixture is accepted without requiring irrelevant specialists.
+- Final verdict is written only as `kind="verdict"` with
+  `label="delivery-agent-verdict"`.
+- Required artifact kinds and evidence kinds are present.
+- Context packs respect fixture-specific `maxContextFiles` and `maxLogChars`.
+- Tests assert there is no `delivery_arbiter_verdict` final artifact.
+- Fake-test fixtures cover: empty test files, `test` scripts that only
+  `echo ok`, file-existence-only checks, self-grep checks, and tests that pass
+  while mapping to no requirement or acceptance spec.
 
 ## Data Persistence
 
@@ -420,7 +514,14 @@ Artifact kinds:
 
 - `delivery_surface_manifest`
 - `delivery_specialist_review`
-- `delivery_arbiter_verdict`
+
+Final verdict persistence:
+
+- Continue writing the existing `kind="verdict"` artifact with
+  `label="delivery-agent-verdict"`.
+- Do not add `delivery_arbiter_verdict` unless every verdict reader is migrated
+  in the same change and the old path is deleted. This plan chooses the existing
+  verdict path.
 
 Each artifact should carry `task_id`, `run_id`, `delivery_id`, and optional
 `goal_run_id` when the evidence maps cleanly to one goal.
@@ -435,6 +536,9 @@ Delivery prompt should state:
 - no specialist may patch files
 - arbiter is the only final verdict owner
 - missing evidence from a required specialist blocks acceptance
+- final delivery verdict remains `accepted | rejected`
+- delivery repair belongs to orchestrator retry/replan and build agents, not
+  delivery review
 
 Specialist prompts should be short and surface-specific. They should not repeat
 the entire delivery policy.
@@ -444,26 +548,32 @@ the entire delivery policy.
 | Risk | Control |
 |---|---|
 | Specialists become a second verdict path | Arbiter consumes specialist artifacts and remains only final verdict owner |
-| Surface detector misses a project type | Detector tests and inconclusive verdict for unclassified evidence |
+| Surface detector misses a project type | Detector tests and rejected evidence-quality verdict for unclassified evidence |
 | Review context still grows too large | Surface-specific evidence packs and bounded logs |
-| Specialists produce generic prose | Schema requires concrete evidence refs |
-| Delivery starts repairing code | Deliver stays read-only; retry/replan owns repair |
+| Specialists produce generic prose | Schema requires concrete evidence refs and arbiter rejects invalid evidence |
+| Delivery starts repairing code | Phase 0 removes delivery write/edit tools before specialist rollout |
+| New verdict artifact becomes a second source | Final verdict continues through existing `delivery-agent-verdict` artifact |
+| Specialist status becomes hidden verdict | Specialists emit execution status and proposed severity only; arbiter assigns final severity |
 | Review latency grows | Run independent specialists in parallel and skip absent surfaces structurally |
 
 ## Rollout Strategy
 
-1. Land detector and schemas behind the existing delivery path.
-2. Enable `test_integration_review` first because it is project-agnostic.
-3. Enable frontend and visual reviews for UI projects.
-4. Enable backend and client contract reviews for fullstack/API projects.
-5. Enable security/data review only when detector evidence selects it.
-6. Make arbiter consume all required specialist outputs.
-7. Remove any old broad prompt sections that duplicate specialist-specific
+1. Remove delivery write/edit repair tools and update the delivery prompt to
+   review-only.
+2. Land detector and schemas behind the existing delivery path.
+3. Add the table-driven specialist fixture harness before enabling reviewers.
+4. Enable `test_integration_review` first because it is project-agnostic.
+5. Enable frontend and visual reviews for UI projects.
+6. Enable backend and client contract reviews for fullstack/API projects.
+7. Enable security/data review only when detector evidence selects it.
+8. Move manifest/runtime/visual hard-gate verdict conversion into the arbiter.
+9. Remove any old broad prompt sections that duplicate specialist-specific
    responsibilities.
 
 ## Completion Criteria
 
 - Delivery has one final verdict owner.
+- Final verdict remains the existing `delivery-agent-verdict` artifact.
 - Required specialists run based on structural surface evidence.
 - Every specialist finding carries concrete evidence.
 - Bad fixtures fail for the intended specialist reason.
