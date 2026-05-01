@@ -220,7 +220,7 @@ export namespace DeliveryService {
       overridden: llmVerdict.verdict !== finalVerdict.verdict,
       arbiterSource: decision.source,
       issuesFound: issuesFound(finalVerdict).length,
-      startupSuccess: finalVerdict.startup_verification.success,
+      startupSuccess: finalVerdict.startup_verification?.success,
     })
     return finalVerdict
   }

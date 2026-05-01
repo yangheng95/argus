@@ -3,7 +3,7 @@
  *
  * The Architect sits between Requirements and Dispatch. It reads the
  * requirement list + foundational decisions, explores the codebase, and
- * produces the final goal set along with metric specs, challenge seeds,
+ * produces the final goal set along with optional metric specs, challenge seeds,
  * traceability, and cross-goal interface contracts. On a re-run (triggered
  * by delivery/evaluation feedback) it also refines the existing goal set.
  */
@@ -35,14 +35,14 @@ export interface ArchitectContract {
 }
 
 // ---------------------------------------------------------------------------
-// Metric specs emitted by the Architect (per-goal + global).
+// Optional metric specs emitted by the Architect (per-goal + global).
 //
 // LLM-facing: `goal_id` refers to the Architect's own string id (e.g.
 // "goal_api"), not the DB row. The orchestrator maps LLM id → DB id at
 // persistence time. Field semantics match engine_metric_spec exactly
 // except `source` / `created_by` / `frozen_at` / `id` which are assigned
-// by the store layer. See docs/spec-dynamic-adversarial-metrics.md for
-// gate-class rules.
+// by the store layer. These are diagnostic hints; acceptance gating is owned
+// by acceptance_specs and delivery evidence.
 // ---------------------------------------------------------------------------
 
 export interface ArchitectGoalMetricSpec {
@@ -75,9 +75,8 @@ export interface ArchitectGlobalMetricSpec {
 }
 
 /**
- * Prosecutor priors — candidate challenges the Architect thinks are worth
- * probing. Phase 4 (delivery) consumes these when the Prosecutor runs its
- * first pass.
+ * Candidate challenge priors the Architect thinks are worth probing. These
+ * are optional diagnostics, not a parallel acceptance contract.
  */
 export interface ArchitectChallengeSeed {
   id: string

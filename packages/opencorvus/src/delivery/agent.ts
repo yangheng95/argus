@@ -30,6 +30,7 @@ import { AttachmentStore } from "@/storage/attachment-store"
 import type { GoalInfo, DeliveryInfo } from "@/delivery/checks"
 import {
   DeliveryVerdict,
+  type DeliveryEvidenceFacetType,
   FrontendCheck,
   StartupVerification,
   affectedGoalIDs,
@@ -72,7 +73,8 @@ export namespace DeliveryAgent {
   export async function verify(input: VerifyInput): Promise<DeliveryVerdictType> {
     const deliveryCfg = (await EngineConfig.get()).delivery
     const context = prefetchDeliveryContext(input)
-    const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments }, context)
+    const requiredEvidenceFacets = deriveRequiredEvidenceFacets(input)
+    const textPrompt = buildUserPrompt({ ...input, attachments: input.attachments, requiredEvidenceFacets }, context)
     const taskSignals: TaskSignals = {
       has_attachment_image: (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/")),
       ...deriveUrlSignals(input.task.request ?? ""),
@@ -93,6 +95,7 @@ export namespace DeliveryAgent {
       goals: input.goals.length,
       changedFiles: input.delivery.changedFiles.length,
       config: deliveryCfg,
+      requiredEvidenceFacets,
     })
 
     // Retry across attempts is owned by `runAgentSessionWithRetry` (rule 22 /
@@ -114,7 +117,10 @@ export namespace DeliveryAgent {
       maxRetries: deliveryCfg.max_retries,
       toolKitFactory: () => {
         const reviewTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
-        const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
+        const outputToolKit = createDeliveryOutputTools({
+          requiredTools: systemResolved.requiredTools,
+          requiredEvidenceFacets,
+        })
         const guard = toolGuard({ ...reviewTools, ...outputToolKit.tools })
         return {
           tools: guard.tools as any,
@@ -140,7 +146,7 @@ export namespace DeliveryAgent {
     log.info("delivery agent output", {
       verdict: verdict.verdict,
       issuesFound: issuesFound(verdict).length,
-      startupSuccess: verdict.startup_verification.success,
+      startupSuccess: verdict.startup_verification?.success,
       attempts: out.attempts,
     })
 
@@ -209,6 +215,7 @@ function buildUserPrompt(
     goals: GoalInfo[]
     delivery: DeliveryInfo
     attachments?: Array<{ sha: string; mime: string; filename?: string; intent?: string }>
+    requiredEvidenceFacets?: DeliveryEvidenceFacetType[]
   },
   context?: string,
 ): string {
@@ -219,6 +226,8 @@ function buildUserPrompt(
   sections.push(
     `# Task\n\nTitle: ${input.task.title}\n\nRequest:\n${input.task.request}`,
   )
+
+  sections.push(renderRequiredEvidenceFacets(input.requiredEvidenceFacets ?? []))
 
   // Design Contract — visual specs from design-analyst.
   // Not auto-scored. Delivery treats them as a checklist during its own
@@ -503,6 +512,65 @@ function buildUserPrompt(
   )
 
   return sections.join("\n\n")
+}
+
+function renderRequiredEvidenceFacets(facets: DeliveryEvidenceFacetType[]): string {
+  if (facets.length === 0) {
+    return (
+      "# Required Delivery Evidence Facets\n\n" +
+      "The host did not classify this task as requiring startup, runtime, frontend, or visual evidence. " +
+      "Do not fabricate startup_verification or frontend_check fields just to satisfy a fixed shape. " +
+      "Verify the actual acceptance specs with appropriate code/test/config evidence and cite those calls in tool_call_evidence."
+    )
+  }
+  const lines = facets.map((facet) => {
+    switch (facet) {
+      case "startup":
+        return "- startup: start or invoke the delivered runnable surface from the repository root and report startup_verification."
+      case "runtime":
+        return "- runtime: exercise the public entry point or user workflow and cite observable output in tool_call_evidence."
+      case "frontend":
+        return "- frontend: verify rendered UI behavior and report frontend_check."
+      case "visual":
+        return "- visual: capture or inspect rendered visual output against the design/reference material and report frontend_check."
+    }
+  })
+  return (
+    "# Required Delivery Evidence Facets\n\n" +
+    "The host classified these evidence facets as applicable. verdict='accepted' is rejected unless the matching evidence fields and tool_call_evidence are present:\n\n" +
+    lines.join("\n")
+  )
+}
+
+export function deriveRequiredEvidenceFacets(input: {
+  task: { design_specs?: Array<unknown> }
+  goals: Array<{ runtime_scenario_count?: number }>
+  delivery: { changedFiles: string[] }
+  attachments?: Array<{ mime?: string; intent?: string }>
+}): DeliveryEvidenceFacetType[] {
+  const facets = new Set<DeliveryEvidenceFacetType>()
+  const files = input.delivery.changedFiles.map((file) => file.replaceAll("\\", "/"))
+  const hasRuntimeScenario = input.goals.some((goal) => (goal.runtime_scenario_count ?? 0) > 0)
+  const hasImageReference = (input.attachments ?? []).some((a) => (a.mime ?? "").startsWith("image/"))
+  const hasDesignSpecs = (input.task.design_specs ?? []).length > 0
+  const touchesFrontend = files.some((file) =>
+    /(^|\/)(src\/)?(app|pages|components)\//.test(file)
+    || /\.(tsx|jsx|vue|svelte|astro|css|scss)$/.test(file)
+    || /(^|\/)(index\.html|vite\.config\.|next\.config\.)/.test(file)
+  )
+  const touchesRuntime = files.some((file) =>
+    /(^|\/)(api|routes|server|controllers|handlers|bin|cli)\//.test(file)
+    || /(^|\/)app\/api\//.test(file)
+    || /(server|routes|api|cli|main|index)\.[cm]?[jt]sx?$/.test(file)
+    || /^package\.json$/.test(file)
+  )
+
+  if (hasRuntimeScenario || touchesRuntime || touchesFrontend) facets.add("runtime")
+  if (touchesRuntime || touchesFrontend || hasRuntimeScenario) facets.add("startup")
+  if (touchesFrontend || hasDesignSpecs || hasImageReference) facets.add("frontend")
+  if (hasDesignSpecs || hasImageReference || touchesFrontend) facets.add("visual")
+
+  return [...facets].sort()
 }
 
 function renderGoalContractDetails(

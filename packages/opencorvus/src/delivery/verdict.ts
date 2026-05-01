@@ -50,6 +50,9 @@ export const FrontendCheck = z.object({
   issues: z.array(z.string()).optional().describe("Frontend issues found"),
 })
 
+export const DeliveryEvidenceFacet = z.enum(["startup", "runtime", "frontend", "visual"])
+export type DeliveryEvidenceFacetType = z.infer<typeof DeliveryEvidenceFacet>
+
 export const DeferredCheck = z.object({
   name: z.string().min(1).describe("Check name (e.g. code_review, dead_code_review)"),
   result: z.enum(["passed", "failed", "skipped"]),
@@ -93,8 +96,12 @@ export type RejectionDetailType = z.infer<typeof RejectionDetail>
 
 const SharedVerdictFields = {
   summary: z.string().min(1),
-  startup_verification: StartupVerification,
-  frontend_check: FrontendCheck,
+  startup_verification: StartupVerification.optional().describe(
+    "Startup verification evidence. Required only when the host marks the startup facet as applicable to this task.",
+  ),
+  frontend_check: FrontendCheck.optional().describe(
+    "Frontend render evidence. Required only when the host marks the frontend or visual facet as applicable to this task.",
+  ),
   deferred_checks: z.array(DeferredCheck).default([]).describe(
     "Extended checks that the evaluator deferred to delivery. Empty when no extended checks were required.",
   ),
@@ -110,7 +117,7 @@ const SharedVerdictFields = {
 export const AcceptedVerdict = z.object({
   verdict: z.literal("accepted"),
   ...SharedVerdictFields,
-  launch_command: z.string().optional().describe("The exact verified command to start the application (only present when startup_verification.success is true). Will be used to auto-launch after publish."),
+  launch_command: z.string().optional().describe("The exact verified command to start the application (only present when startup_verification.success is true and startup is applicable). Will be used to auto-launch after publish."),
 })
 
 export const RejectedVerdict = z.object({

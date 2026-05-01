@@ -6,8 +6,8 @@ import {
   architectValidationIssues,
   createArchitectOutputTools,
   isArchitectReadyToFinalize,
-  MANDATORY_GOAL_BLOCKING_METRICS,
-  MANDATORY_GLOBAL_BLOCKING_METRICS,
+  RECOMMENDED_GOAL_METRICS,
+  RECOMMENDED_GLOBAL_METRICS,
 } from "../../src/architect/output-tools"
 
 function freshWorkDir() {
@@ -97,7 +97,7 @@ async function fillMandatoryBlockingMetrics(
   tools: ReturnType<typeof createArchitectOutputTools>["tools"],
   goalID: string,
 ) {
-  for (const name of MANDATORY_GOAL_BLOCKING_METRICS) {
+  for (const name of RECOMMENDED_GOAL_METRICS) {
     await tools.register_goal_metric_spec.execute!(metric(goalID, name) as any, {} as any)
   }
 }
@@ -105,7 +105,7 @@ async function fillMandatoryBlockingMetrics(
 async function fillMandatoryGlobalBlockingMetrics(
   tools: ReturnType<typeof createArchitectOutputTools>["tools"],
 ) {
-  for (const name of MANDATORY_GLOBAL_BLOCKING_METRICS) {
+  for (const name of RECOMMENDED_GLOBAL_METRICS) {
     await tools.register_global_metric_spec.execute!(globalMetric(name) as any, {} as any)
   }
 }
@@ -166,7 +166,7 @@ test("remove_goal cascades to goal metrics, traceability, contracts, challenge s
   )
 
   const before = kit.getCollector()
-  expect(before.goal_metric_specs.length).toBe(MANDATORY_GOAL_BLOCKING_METRICS.length * 2)
+  expect(before.goal_metric_specs.length).toBe(RECOMMENDED_GOAL_METRICS.length * 2)
   expect(before.traceability.length).toBe(2)
   expect(before.contracts.length).toBe(2)
   expect(before.challenge_seeds.length).toBe(1)
@@ -181,7 +181,7 @@ test("remove_goal cascades to goal metrics, traceability, contracts, challenge s
   const c = kit.getCollector()
   expect(c.goals.map((g) => g.id)).toEqual(["goal_feature"])
   expect(c.goal_metric_specs.every((m) => m.goal_id === "goal_feature")).toBe(true)
-  expect(c.goal_metric_specs.length).toBe(MANDATORY_GOAL_BLOCKING_METRICS.length)
+  expect(c.goal_metric_specs.length).toBe(RECOMMENDED_GOAL_METRICS.length)
   expect(c.challenge_seeds.length).toBe(0)
   expect(c.traceability.length).toBe(2)
   const reqTwo = c.traceability.find((t) => t.requirementID === "REQ-2")!
@@ -300,7 +300,7 @@ test("remove_goal followed by submit_architect finalizes — no orphan-metric de
   )
   await fillMandatoryBlockingMetrics(tools, "goal_feature")
   await fillMandatoryBlockingMetrics(tools, "goal_verify")
-  for (const name of MANDATORY_GOAL_BLOCKING_METRICS) {
+  for (const name of RECOMMENDED_GOAL_METRICS) {
     await tools.register_goal_metric_spec.execute!(
       metric("goal_old", name, "diagnostic") as any,
       {} as any,
@@ -395,6 +395,40 @@ test("architect readiness remains identical to submit_architect validation preco
   )
   expect(accepted).toMatch(/^PASS: Architect output finalized\./)
   expect(complete.getCollector().finalized).toBe(true)
+})
+
+test("architect finalizes from goals traceability and contracts without metric ruler", async () => {
+  const kit = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const { tools } = kit
+
+  await tools.register_goal.execute!({ ...FEATURE_GOAL } as any, {} as any)
+  await tools.register_goal.execute!({ ...VERIFY_GOAL } as any, {} as any)
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-1", goal_ids: ["goal_feature", "goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_traceability.execute!(
+    { requirement_id: "REQ-2", goal_ids: ["goal_verify"] } as any,
+    {} as any,
+  )
+  await tools.register_contract.execute!(
+    {
+      category: "interface_contract",
+      title: "Router",
+      spec: "```ts\nexport type Router = unknown\n```",
+      goal_ids: ["goal_feature", "goal_verify"],
+    } as any,
+    {} as any,
+  )
+
+  expect(architectValidationIssues(kit.getCollector())).toEqual([])
+  const accepted = await tools.submit_architect.execute!(
+    { summary: "Goal contracts are complete without duplicate metric gates." } as any,
+    {} as any,
+  )
+  expect(accepted).toMatch(/^PASS: Architect output finalized\./)
+  expect(kit.getCollector().goal_metric_specs).toEqual([])
+  expect(kit.getCollector().global_metric_specs).toEqual([])
 })
 
 test("architect readiness stays false until every prompt-level finalize invariant is complete", async () => {
