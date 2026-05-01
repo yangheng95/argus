@@ -41,6 +41,7 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
 import { plannerReportFromMetadata } from "@/planner/output-tools"
+import { findLatestDeliveryEvidenceManifest } from "@/delivery/manifest"
 
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
@@ -533,6 +534,7 @@ function viewBoardDelivery(
     | { verdict?: string; summary?: string }
     | null
   const verdict = verdictPayload?.verdict
+  const manifest = findLatestDeliveryEvidenceManifest({ deliveryID: row.id })
   const projectedStatus =
     verdict === "rejected"
       ? "failed"
@@ -546,6 +548,30 @@ function viewBoardDelivery(
     status: projectedStatus,
     verdict: verdict ?? undefined,
     verdictSummary: verdictPayload?.summary ? clipBoard(verdictPayload.summary) : undefined,
+    evidenceManifest: manifest
+      ? {
+          id: manifest.id,
+          status: manifest.finalGate.status,
+          summary: clipBoard(manifest.finalGate.summary),
+          requiredChecks: manifest.requiredChecks.map((item) => ({
+            id: item.id,
+            name: item.name,
+            label: item.label,
+            family: item.family,
+            command: item.command,
+            cwd: item.cwd,
+          })),
+          checkResults: manifest.checkResults.map((item) => ({
+            id: item.id,
+            name: item.name,
+            status: item.status,
+            exitCode: item.exitCode,
+            failureReason: item.failureReason,
+            failureSignature: item.failureSignature,
+            outputExcerpt: clipBoard(item.outputExcerpt),
+          })),
+        }
+      : undefined,
     summary: clipBoard(row.summary),
     result: {
       summary: clipBoard(String(result.summary ?? row.summary)),
