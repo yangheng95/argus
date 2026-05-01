@@ -20,11 +20,9 @@ export {
   persistDeliverySpecialistReview,
   requiredReviewersForSurfaces,
   validateDeliverySpecialistReview,
-}
-  from "./specialist-review"
+} from "./specialist-review"
 export type {
   DeliveryReviewFinding,
   DeliverySpecialistReview,
   DeliverySpecialistReviewer,
-}
-  from "./specialist-review"
+} from "./specialist-review"
