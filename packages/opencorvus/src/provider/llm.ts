@@ -15,7 +15,7 @@
  *
  * What this module still owns:
  *
- *   - `wrapModel(language, model, options)` — wraps a `LanguageModelV2`
+ *   - `wrapModel(language, model, options)` — wraps a `LanguageModelV3`
  *     with the message-transform middleware that normalises messages for
  *     the target provider (Anthropic empty-content filtering, modality
  *     pruning, cache markers, …). Used by `session/llm.ts:241`.
@@ -25,13 +25,14 @@
  *     `session/llm.ts:170`.
  */
 import { wrapLanguageModel } from "ai"
+import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { Provider } from "./provider"
 import { ProviderTransform } from "./transform"
 import { applyVendorHeaders } from "./vendor-headers"
 
 export namespace ProviderLLM {
   /**
-   * Wrap a LanguageModelV2 with the message-transform middleware that
+   * Wrap a LanguageModelV3 with the message-transform middleware that
    * normalizes messages for the target provider (Anthropic empty-content
    * filtering, unsupported modality removal, cache markers, etc.).
    */
@@ -40,10 +41,12 @@ export namespace ProviderLLM {
     model: Provider.Model,
     options: Record<string, any>,
   ) {
+    if (!isLanguageModelV3(language)) return language
     return wrapLanguageModel({
       model: language,
       middleware: [
         {
+          specificationVersion: "v3",
           async transformParams(args: any) {
             if (args.type === "stream") {
               args.params.prompt = ProviderTransform.message(
@@ -57,6 +60,10 @@ export namespace ProviderLLM {
         },
       ],
     })
+  }
+
+  function isLanguageModelV3(language: Awaited<ReturnType<typeof Provider.getLanguage>>): language is LanguageModelV3 {
+    return typeof language === "object" && language !== null && language.specificationVersion === "v3"
   }
 
   /**

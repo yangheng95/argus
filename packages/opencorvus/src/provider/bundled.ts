@@ -1,4 +1,4 @@
-import type { Provider as SDK } from "ai"
+import type { LanguageModel } from "ai"
 import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createAzure } from "@ai-sdk/azure"
@@ -20,7 +20,11 @@ import { createXai } from "@ai-sdk/xai"
 import { createGitLab } from "@gitlab/gitlab-ai-provider"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 
-export const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
+type LanguageModelProvider = {
+  languageModel(modelId: string): LanguageModel
+}
+
+export const BUNDLED_PROVIDERS: Record<string, (options: any) => LanguageModelProvider> = {
   "@ai-sdk/amazon-bedrock": createAmazonBedrock,
   "@ai-sdk/anthropic": createAnthropic,
   "@ai-sdk/azure": createAzure,
