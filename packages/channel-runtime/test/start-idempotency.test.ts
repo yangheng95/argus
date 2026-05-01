@@ -38,7 +38,7 @@ function stubClient() {
   return {
     auth: { set: async () => ({ data: {}, error: undefined }) },
     channel: { message: async () => ({ data: { kind: "message" as const, message: "" }, error: undefined }) },
-    event: { subscribe: async () => ({ stream: emptyStream() }) },
+    global: { event: async () => ({ stream: emptyStream() }) },
     permission: { reply: async () => ({ data: {}, error: undefined }) },
     session: {
       create: async () => ({ data: { id: "session_mock" }, error: undefined }),

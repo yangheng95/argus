@@ -1447,16 +1447,25 @@ export class ChannelRuntime {
     }
   }
 
+  // ChannelRuntime relays events from every active OpenCorvus instance into
+  // IM channels, so it must subscribe to the cross-instance bus (/global/event).
+  // The project-scoped /event endpoint requires a directory and emits one
+  // instance's events only — using it here rejects with DirectoryRequiredError
+  // and breaks cross-project relaying. Mirror the ACP agent contract
+  // (packages/opencorvus/src/acp/agent.ts) which already uses global.event +
+  // payload unwrap.
   private subscribeEvents(): void {
     const reconnect = async () => {
       let delay = 1000
       while (this.running) {
         try {
-          const events = await this.client.event.subscribe()
+          const events = await this.client.global.event()
           delay = 1000 // reset backoff on successful connection
-          for await (const event of events.stream) {
+          for await (const wrapped of events.stream) {
+            const payload = (wrapped as { payload?: unknown })?.payload
+            if (!payload) continue
             try {
-              await this.handleEvent(event as Event)
+              await this.handleEvent(payload as Event)
             } catch (err) {
               console.error("[ChannelRuntime] event handler error:", err)
             }
