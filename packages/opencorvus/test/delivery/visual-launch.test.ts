@@ -94,9 +94,14 @@ test("announcedLocalUrlFromOutput parses ANSI-colored vite preview port", () => 
     "\x1b[32m➜\x1b[39m \x1b[1mLocal\x1b[22m: \x1b[36mhttp://localhost:\x1b[1m4180\x1b[22m/\x1b[39m",
   ].join("\n")
 
-  expect(announcedLocalUrlFromOutput(output)).toBe("http://127.0.0.1:4180")
+  expect(announcedLocalUrlFromOutput(output)).toBe("http://localhost:4180")
 })
 
 test("announcedLocalUrlFromOutput refuses localhost URLs without an explicit port", () => {
   expect(announcedLocalUrlFromOutput("Local: http://localhost/")).toBeUndefined()
+})
+
+test("announcedLocalUrlFromOutput only normalizes wildcard host", () => {
+  expect(announcedLocalUrlFromOutput("Local: http://0.0.0.0:4180/")).toBe("http://127.0.0.1:4180")
+  expect(announcedLocalUrlFromOutput("Local: http://127.0.0.1:4180/")).toBe("http://127.0.0.1:4180")
 })

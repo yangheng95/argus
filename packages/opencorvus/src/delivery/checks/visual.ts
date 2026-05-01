@@ -24,6 +24,7 @@ import { existsSync } from "node:fs"
 import fs from "node:fs/promises"
 import http from "node:http"
 import path from "node:path"
+import { Shell } from "@/shell/shell"
 import puppeteer, { type Page } from "puppeteer-core"
 import { PNG } from "pngjs"
 import ssim from "ssim.js"
@@ -235,15 +236,17 @@ function shouldCopyIntoRenderWorkspace(sourceRoot: string, candidate: string) {
 }
 
 const ANSI_ESCAPE_PATTERN = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g
-const ANNOUNCED_LOCAL_URL_PATTERN = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):(\d{1,5})\/?/i
+const ANNOUNCED_LOCAL_URL_PATTERN = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{1,5})\/?/i
 
 export function announcedLocalUrlFromOutput(output: string): string | undefined {
   const plain = output.replace(ANSI_ESCAPE_PATTERN, "")
   const match = plain.match(ANNOUNCED_LOCAL_URL_PATTERN)
   if (!match) return undefined
-  const port = Number(match[1])
+  const host = match[1]?.toLowerCase()
+  const port = Number(match[2])
   if (!Number.isInteger(port) || port <= 0 || port > 65_535) return undefined
-  return `http://127.0.0.1:${port}`
+  const connectHost = host === "0.0.0.0" ? "127.0.0.1" : host
+  return `http://${connectHost}:${port}`
 }
 
 /**
@@ -323,6 +326,7 @@ async function startProjectServer(
     cwd: launchRoot,
     stdio: ["ignore", "pipe", "pipe"],
     shell: process.platform === "win32",
+    detached: process.platform !== "win32",
   })
   const captured: string[] = []
   // Parse spawned launch script's stdout for the bound URL it advertises
@@ -345,7 +349,11 @@ async function startProjectServer(
   }
   child.stdout?.on("data", onChunk)
   child.stderr?.on("data", onChunk)
-  const closed = new Promise<void>((resolve) => child.once("exit", () => resolve()))
+  let exited = false
+  const closed = new Promise<void>((resolve) => child.once("exit", () => {
+    exited = true
+    resolve()
+  }))
 
   let cleaned = false
   const cleanupLaunchRoot = async () => {
@@ -359,13 +367,12 @@ async function startProjectServer(
       return
     }
     try {
-      child.kill("SIGTERM")
-      // Give it up to 2s to shut down cleanly; then SIGKILL.
+      await Shell.killTree(child, { exited: () => exited })
       const raced = await Promise.race([
         closed,
         new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 2_000)),
       ])
-      if (raced === "timeout") child.kill("SIGKILL")
+      if (raced === "timeout") await Shell.killTree(child, { exited: () => exited })
     } catch {
       /* ignore */
     }
