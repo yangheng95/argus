@@ -1,11 +1,14 @@
 import { spyOn } from "bun:test"
 import type {
-  LanguageModelV2,
-  LanguageModelV2CallOptions,
-  LanguageModelV2Prompt,
-  LanguageModelV2StreamPart,
-  LanguageModelV2ToolCall,
-  LanguageModelV2ToolResultPart,
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3GenerateResult,
+  LanguageModelV3Prompt,
+  LanguageModelV3StreamPart,
+  LanguageModelV3StreamResult,
+  LanguageModelV3ToolCall,
+  LanguageModelV3ToolResultPart,
+  LanguageModelV3Usage,
 } from "@ai-sdk/provider"
 import { Provider } from "../../src/provider/provider"
 
@@ -102,7 +105,21 @@ export function installControlModel() {
   return { language, model, provider }
 }
 
-function stream(input: LanguageModelV2CallOptions) {
+const emptyUsage: LanguageModelV3Usage = {
+  inputTokens: {
+    total: 0,
+    noCache: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+  },
+  outputTokens: {
+    total: 0,
+    text: 0,
+    reasoning: 0,
+  },
+}
+
+function stream(input: LanguageModelV3CallOptions) {
   const tool = lastToolResult(input.prompt, "panel")
   if (tool) {
     return streamCall("StructuredOutput", structured(tool))
@@ -114,7 +131,7 @@ function streamCall(toolName: string, value: Record<string, unknown>) {
   const callID = `call_${toolName.toLowerCase()}`
   const raw = JSON.stringify(value)
   return {
-    stream: new ReadableStream<LanguageModelV2StreamPart>({
+    stream: new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
         controller.enqueue({
           type: "stream-start",
@@ -139,23 +156,21 @@ function streamCall(toolName: string, value: Record<string, unknown>) {
           toolCallId: callID,
           toolName,
           input: raw,
-        } satisfies LanguageModelV2ToolCall)
+        } satisfies LanguageModelV3ToolCall)
         controller.enqueue({
           type: "finish",
-          finishReason: "tool-calls",
-          usage: {
-            inputTokens: 0,
-            outputTokens: 0,
-            totalTokens: 0,
+          finishReason: {
+            reason: "tool-calls",
           },
+          usage: emptyUsage,
         })
         controller.close()
       },
     }),
-  }
+  } satisfies LanguageModelV3StreamResult
 }
 
-function action(prompt: LanguageModelV2Prompt) {
+function action(prompt: LanguageModelV3Prompt) {
   const input = userInput(prompt)
   const meta = object(input.metadata) ?? {}
   const sessionID = text(meta.sessionID, input.sessionID)
@@ -279,7 +294,7 @@ function action(prompt: LanguageModelV2Prompt) {
   }
 }
 
-function structured(part: LanguageModelV2ToolResultPart) {
+function structured(part: LanguageModelV3ToolResultPart) {
   const raw = part.output.type.endsWith("json")
     ? part.output.value
     : typeof part.output.value === "string"
@@ -297,17 +312,15 @@ function structured(part: LanguageModelV2ToolResultPart) {
   }
 }
 
-function userInput(prompt: LanguageModelV2Prompt) {
+function userInput(prompt: LanguageModelV3Prompt) {
   const item = [...prompt]
     .reverse()
     .find((entry) => entry.role === "user")
   const parts = !item
     ? []
-    : typeof item.content === "string"
-      ? [item.content]
-      : item.content
-          .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
-          .map((part) => part.text)
+    : item.content
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
   const textValue = parts.length === 0
     ? ""
     : parts.join("\n")
@@ -319,7 +332,7 @@ function userInput(prompt: LanguageModelV2Prompt) {
   return object(parsed) ?? { text: textValue }
 }
 
-function lastToolResult(prompt: LanguageModelV2Prompt, name: string) {
+function lastToolResult(prompt: LanguageModelV3Prompt, name: string) {
   for (const entry of [...prompt].reverse()) {
     if (!Array.isArray(entry.content)) continue
     for (const part of [...entry.content].reverse()) {
@@ -357,15 +370,15 @@ function platform(surface?: string, source?: string) {
   return channelPlatforms.has(value) ? value : undefined
 }
 
-class TestLanguageModel implements LanguageModelV2 {
-  readonly specificationVersion = "v2" as const
+class TestLanguageModel implements LanguageModelV3 {
+  readonly specificationVersion = "v3" as const
   readonly supportedUrls = Promise.resolve({})
 
   constructor(
     readonly input: {
       provider: string
       modelId: string
-      doStream: LanguageModelV2["doStream"]
+      doStream: LanguageModelV3["doStream"]
     },
   ) {}
 
@@ -377,11 +390,11 @@ class TestLanguageModel implements LanguageModelV2 {
     return this.input.modelId
   }
 
-  async doGenerate(): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
+  async doGenerate(): Promise<LanguageModelV3GenerateResult> {
     throw new Error("TestLanguageModel.doGenerate is not implemented")
   }
 
-  async doStream(options: LanguageModelV2CallOptions) {
+  async doStream(options: LanguageModelV3CallOptions) {
     return this.input.doStream(options)
   }
 }
