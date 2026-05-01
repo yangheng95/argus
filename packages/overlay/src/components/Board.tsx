@@ -5,7 +5,7 @@
 // renderInteractions, statusIcon, statusLabel.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
-import { createMemo, For, Show, onMount } from "solid-js";
+import { createMemo, createSignal, For, Show, onMount } from "solid-js";
 import { boardStore } from "../store/board";
 import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
@@ -64,93 +64,255 @@ export function StatusBadge(props: StatusBadgeProps) {
 }
 
 // ── DeliveryPanel ──
+//
+// Surfaces every delivery activity reaching the board: deterministic gate
+// (build/test/lint/typecheck), runtime flows (preview / SSE / golden-path),
+// and per-reviewer specialist reviews — split into three collapsible groups
+// because they have categorically different remediation paths (compile-time
+// vs. running-server vs. LLM judgement). The panel's left-edge accent comes
+// from `verdictTone` so verdict — not lifecycle status — drives the visual.
+// CCE = canonical click-through event; emits `delivery:focus-changes` on the
+// `window` so ChangesPanel can scope its tab without prop drilling.
+//
+// Visual primitive `.verdict-pill` is shared with IntegrityCard.
 
-function deliveryStatusLabel(status: string): string {
-  if (status === "delivered") return t("delivery.status.delivered");
-  if (status === "publishing") return t("delivery.status.publishing");
-  if (status === "failed") return t("delivery.status.failed");
-  return t("delivery.status.candidate");
+type DeliveryEvidenceKind = "check" | "runtime" | "review";
+
+interface DeliveryEvidenceRow {
+  id: string;
+  label: string;
+  status: string;
+  goalRunID?: string;
 }
 
-function deliveryEvidenceRows(delivery: any): Array<{ id: string; label: string; status: string }> {
+type VerdictTone = "accepted" | "rejected" | "inflight" | "empty";
+
+function deriveVerdictTone(delivery: any): VerdictTone {
+  if (!delivery) return "empty";
+  if (delivery.verdict === "accepted") return "accepted";
+  if (delivery.verdict === "rejected") return "rejected";
+  return "inflight";
+}
+
+function verdictPillLabel(tone: VerdictTone): string {
+  return t(`delivery.verdict.${tone}`);
+}
+
+function deliveryEvidenceGroup(
+  delivery: any,
+  kind: DeliveryEvidenceKind,
+): DeliveryEvidenceRow[] {
   const manifest = delivery?.evidenceManifest;
   if (!manifest) return [];
-  const checks = Array.isArray(manifest.checkResults)
-    ? manifest.checkResults.map((item: any) => ({
-        id: String(item.id || item.name || "check"),
-        label: String(item.label || item.name || item.id || "check"),
-        status: String(item.status || "unknown"),
-      }))
-    : [];
-  const runtime = Array.isArray(manifest.runtimeFlows)
-    ? manifest.runtimeFlows.map((item: any) => ({
-        id: String(item.id || item.name || "runtime"),
-        label: String(item.name || item.id || "runtime"),
-        status: String(item.status || "unknown"),
-      }))
-    : [];
-  const reviews = Array.isArray(manifest.reviewEvidence)
-    ? manifest.reviewEvidence.map((item: any) => ({
-        id: String(item.id || item.name || "review"),
-        label: String(item.name || item.id || "review"),
-        status: String(item.status || "unknown"),
-      }))
-    : [];
-  return [...checks, ...runtime, ...reviews].slice(0, 12);
+  const source: any[] | undefined =
+    kind === "check"
+      ? manifest.checkResults
+      : kind === "runtime"
+        ? manifest.runtimeFlows
+        : manifest.reviewEvidence;
+  if (!Array.isArray(source)) return [];
+  // No `.slice(0, N)` cap — the operator must see every failed row, not the
+  // first 12. Per-group volume is naturally bounded by the manifest schema
+  // (≤ a few dozen each in practice); a runaway list signals a real bug
+  // upstream, not a UX problem to paper over.
+  return source.map((item, idx) => ({
+    id: String(item?.id || item?.name || `${kind}-${idx}`),
+    label: String(item?.label || item?.name || item?.reviewer || item?.id || kind),
+    status: String(item?.status || "unknown"),
+    goalRunID:
+      typeof item?.goalRunID === "string"
+        ? item.goalRunID
+        : typeof item?.goalRunId === "string"
+          ? item.goalRunId
+          : undefined,
+  }));
+}
+
+function groupSummary(rows: DeliveryEvidenceRow[]): {
+  total: number;
+  failed: number;
+  defaultOpen: boolean;
+} {
+  const total = rows.length;
+  const failed = rows.filter((row) =>
+    row.status === "failed" || row.status === "needs_correction" || row.status === "concerns",
+  ).length;
+  return { total, failed, defaultOpen: failed > 0 };
+}
+
+function rowVerdict(status: string): string {
+  if (status === "passed" || status === "pass") return "accepted";
+  if (status === "failed" || status === "needs_correction" || status === "concerns") return "rejected";
+  return "inflight";
+}
+
+function focusChangesPanel(goalRunID: string | undefined) {
+  // CCE — canonical click-through event. ChangesPanel listens and calls
+  // setSelectedGroupID(goalRunID) so the right tab opens. No prop drilling.
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("delivery:focus-changes", { detail: { goalRunID } }),
+  );
+}
+
+interface DeliveryEvidenceGroupProps {
+  label: string;
+  kind: DeliveryEvidenceKind;
+  rows: DeliveryEvidenceRow[];
+}
+
+export function DeliveryEvidenceGroup(props: DeliveryEvidenceGroupProps) {
+  return (
+    <Show when={props.rows.length > 0}>
+      {(() => {
+        const summary = groupSummary(props.rows);
+        return (
+          <details
+            class="delivery-evidence-group"
+            data-kind={props.kind}
+            open={summary.defaultOpen}
+          >
+            <summary class="delivery-evidence-group-head">
+              <span class="delivery-evidence-group-label">{props.label}</span>
+              <span class="delivery-evidence-group-count">
+                {summary.failed > 0
+                  ? tc("delivery.group_count_failing", summary.failed, {
+                      failed: summary.failed,
+                      total: summary.total,
+                    })
+                  : tc("delivery.group_count_all_pass", summary.total, {
+                      total: summary.total,
+                    })}
+              </span>
+            </summary>
+            <ul class="delivery-evidence-list">
+              <For each={props.rows}>
+                {(row) => (
+                  <li class="delivery-evidence-row" data-status={row.status}>
+                    <Show when={row.goalRunID}>
+                      <button
+                        class="delivery-evidence-goal-pill"
+                        type="button"
+                        title={t("delivery.row_goal_pill_title")}
+                        onClick={() => focusChangesPanel(row.goalRunID)}
+                      >
+                        {row.goalRunID ? row.goalRunID.slice(-6) : ""}
+                      </button>
+                    </Show>
+                    <span class="delivery-evidence-name">{row.label}</span>
+                    <span class="verdict-pill" data-verdict={rowVerdict(row.status)}>
+                      {row.status}
+                    </span>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </details>
+        );
+      })()}
+    </Show>
+  );
 }
 
 interface DeliveryPanelProps {
   delivery: any;
 }
 
+const DEFAULT_SUMMARY_LINES = 10;
+
 export function DeliveryPanel(props: DeliveryPanelProps) {
+  const [summaryExpanded, setSummaryExpanded] = createSignal(false);
+
+  const tone = createMemo<VerdictTone>(() => deriveVerdictTone(props.delivery));
+  const summaryText = createMemo(() => {
+    const d = props.delivery;
+    if (!d) return "";
+    return d.verdict === "rejected"
+      ? d.verdictSummary || d.summary || d.result?.summary || ""
+      : d.summary || d.result?.summary || "";
+  });
+  const summaryNeedsClamp = createMemo(
+    () => summaryText().split("\n").length > DEFAULT_SUMMARY_LINES,
+  );
+  const checks = createMemo(() => deliveryEvidenceGroup(props.delivery, "check"));
+  const runtime = createMemo(() => deliveryEvidenceGroup(props.delivery, "runtime"));
+  const reviews = createMemo(() => deliveryEvidenceGroup(props.delivery, "review"));
+  const filesChanged = createMemo(
+    () => (props.delivery?.result?.changedFiles?.length as number | undefined) ?? 0,
+  );
+  const iteration = createMemo<number>(
+    () => Number(props.delivery?.evidenceManifest?.iteration ?? 0),
+  );
+
   return (
     <Show
       when={props.delivery}
-      fallback={<p class="empty-hint">{t("empty.delivery")}</p>}
+      fallback={
+        <section class="delivery-panel" data-verdict="empty">
+          <header class="delivery-panel-header">
+            <span class="verdict-pill" data-verdict="empty">
+              {verdictPillLabel("empty")}
+            </span>
+          </header>
+          <p class="delivery-empty-hint">{t("delivery.empty.hint")}</p>
+        </section>
+      }
     >
-      <div class="delivery-card">
-        <div class="delivery-title">{deliveryStatusLabel(props.delivery?.status)}</div>
-        <div
-          class="delivery-summary md-content"
-          innerHTML={renderMarkdown(
-            // Single-source rule (CLAUDE.md 22): when the delivery agent
-            // rejected, the verdict summary names the actual cause (render
-            // failure, verification miss, …). Surfacing the candidate-delivery
-            // changelog instead would hide why the gate said no. Verdict-
-            // absent: fall back to the build-summary that produced the
-            // candidate so the panel still has content while in-flight.
-            props.delivery?.verdict === "rejected"
-              ? (props.delivery?.verdictSummary ||
-                 props.delivery?.summary ||
-                 props.delivery?.result?.summary || "")
-              : (props.delivery?.summary || props.delivery?.result?.summary || ""),
-          )}
+      <section class="delivery-panel" data-verdict={tone()}>
+        <header class="delivery-panel-header">
+          <span class="verdict-pill" data-verdict={tone()}>
+            {verdictPillLabel(tone())}
+          </span>
+          <Show when={iteration() > 0}>
+            <span class="delivery-iteration">
+              {t("delivery.iteration", { n: String(iteration()) })}
+            </span>
+          </Show>
+        </header>
+
+        <Show when={summaryText()}>
+          <div
+            class="delivery-summary md-content"
+            data-clamped={summaryNeedsClamp() && !summaryExpanded() ? "true" : "false"}
+            innerHTML={renderMarkdown(summaryText())}
+          />
+          <Show when={summaryNeedsClamp()}>
+            <button
+              class="delivery-summary-toggle"
+              type="button"
+              onClick={() => setSummaryExpanded((v) => !v)}
+            >
+              {summaryExpanded() ? t("delivery.show_less") : t("delivery.show_more")}
+            </button>
+          </Show>
+        </Show>
+
+        <DeliveryEvidenceGroup
+          label={t("delivery.checks")}
+          kind="check"
+          rows={checks()}
         />
-        <Show
-          when={
-            props.delivery?.result?.changedFiles?.length > 0
-          }
-        >
-          <div class="delivery-files">
-            {tc("delivery.files_changed", props.delivery.result.changedFiles.length, {
-              count: props.delivery.result.changedFiles.length,
-            })}
-          </div>
+        <DeliveryEvidenceGroup
+          label={t("delivery.runtime")}
+          kind="runtime"
+          rows={runtime()}
+        />
+        <DeliveryEvidenceGroup
+          label={t("delivery.reviews")}
+          kind="review"
+          rows={reviews()}
+        />
+
+        <Show when={filesChanged() > 0}>
+          <button
+            class="delivery-files-link"
+            type="button"
+            onClick={() => focusChangesPanel(undefined)}
+          >
+            {tc("delivery.files_changed", filesChanged(), { count: filesChanged() })}
+          </button>
         </Show>
-        <Show when={deliveryEvidenceRows(props.delivery).length > 0}>
-          <div class="delivery-evidence-list">
-            <For each={deliveryEvidenceRows(props.delivery)}>
-              {(item) => (
-                <div class="delivery-evidence-row">
-                  <span class="delivery-evidence-name">{item.label}</span>
-                  <span class="delivery-evidence-status" data-status={item.status}>{item.status}</span>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
-      </div>
+      </section>
     </Show>
   );
 }
@@ -592,7 +754,8 @@ export function Board(props: BoardProps) {
         badgeText={(() => {
           const gs = goalWorkflows();
           if (gs.length === 0) {
-            return delivery() ? deliveryStatusLabel(delivery()?.status) : "";
+            const d = delivery();
+            return d ? verdictPillLabel(deriveVerdictTone(d)) : "";
           }
           const progress = deliveryGoalProgress(gs);
           return `${progress.completed}/${progress.total}`;
@@ -601,11 +764,16 @@ export function Board(props: BoardProps) {
         badgeTone={(() => {
           const gs = goalWorkflows();
           if (gs.length === 0) {
-            return delivery()?.status === "delivered"
+            // Verdict drives the badge tone — same single source the panel
+            // uses. Lifecycle status (publishing / candidate) deliberately
+            // ignored here so a rejected verdict never paints the section
+            // header green.
+            const tone = deriveVerdictTone(delivery());
+            return tone === "accepted"
               ? "good"
-              : delivery()?.status === "failed"
+              : tone === "rejected"
                 ? "bad"
-                : delivery()
+                : tone === "inflight"
                   ? "accent"
                   : "";
           }

@@ -4,7 +4,7 @@
 // bridge (wired in main.tsx). The panel itself is read-only — it does not
 // render the diff inline any more.
 
-import { createEffect, createMemo, createResource, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { boardStore } from "../store/board";
 import {
   currentChangeGroups,
@@ -86,6 +86,28 @@ export function ChangesPanel(props: ChangesPanelProps) {
     }
     if (selectedID && currentGroups.some((group) => group.id === selectedID)) return;
     setSelectedGroupID(currentGroups[0]!.id);
+  });
+
+  // CCE = canonical click-through event from DeliveryPanel. When the
+  // operator clicks a goal-pill or files-changed footer in the delivery
+  // panel, we surface that goal's tab here without prop drilling. detail
+  // .goalRunID may be undefined (whole-task focus) — in that case we
+  // leave the existing selection alone and the parent <details> opens
+  // via the natural `[open]` attribute on FilesSection.
+  onMount(() => {
+    if (typeof window === "undefined") return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ goalRunID?: string }>).detail;
+      const requestedRunID = detail?.goalRunID;
+      if (!requestedRunID) return;
+      const candidates = groups();
+      const match = candidates.find((group) => group.goalRunID === requestedRunID);
+      if (match) setSelectedGroupID(match.id);
+    };
+    window.addEventListener("delivery:focus-changes", handler as EventListener);
+    onCleanup(() => {
+      window.removeEventListener("delivery:focus-changes", handler as EventListener);
+    });
   });
 
   async function handleRowClick(group: ChangeGroup, item: FileChange) {
