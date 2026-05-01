@@ -205,6 +205,8 @@ export namespace DeliveryService {
       throw new DeliveryFailureError(`visual hard gate crashed: ${msg}`, { cause: err })
     }
 
+    finalVerdict = withManifestChecks(finalVerdict, manifest)
+
     log.info("delivery service verify completed", {
       title: input.task.title,
       llmVerdict: llmVerdict.verdict,
@@ -214,6 +216,29 @@ export namespace DeliveryService {
       startupSuccess: finalVerdict.startup_verification.success,
     })
     return finalVerdict
+  }
+}
+
+function withManifestChecks(
+  verdict: DeliveryVerdictType,
+  manifest: DeliveryEvidenceManifest,
+): DeliveryVerdictType {
+  const projected = manifest.checkResults.map((item) => ({
+    name: item.id,
+    result: item.status,
+    evidence: [
+      item.command,
+      item.exitCode === undefined ? undefined : `exit_code=${item.exitCode}`,
+      item.failureSignature ? `failure_signature=${item.failureSignature.normalizedError}` : undefined,
+      item.outputExcerpt,
+    ].filter(Boolean).join("\n"),
+  }))
+  return {
+    ...verdict,
+    deferred_checks: [
+      ...verdict.deferred_checks,
+      ...projected,
+    ],
   }
 }
 

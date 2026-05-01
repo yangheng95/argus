@@ -391,3 +391,19 @@ type FailureSignature = {
 - P4：failure signature 与 rework scope。
 - P6：board/debug 查询显示 manifest。
 - P7：删除旧 prompt-only 验收话术和冗余 sink。
+
+### 2026-05-01 第二轮
+
+已完成：
+
+- P4 部分完成：每个失败 required check 生成 `failureSignature`，包含 check id、command digest、规范化错误和影响文件字段。
+- P6 部分完成：manifest 中的 required check 结果会投影到 delivery verdict 的 `deferred_checks`，使 accepted/rejected 都能进入现有 `criteria_results` 展示链路。
+- benchmark 覆盖：`test/benchmark`、delivery project gate、publisher delivery gate 再次通过。
+
+未完成，后续继续：
+
+- P2：requirement/goal coverage 还没有成为硬门禁。
+- P3：真实 runtime flow 还没有按任务类型结构化生成。
+- P4：rework retry budget 与重复 failure signature 升级尚未接入 orchestrator 调度。
+- P6：board 还未直接显示 manifest artifact 的完整详情。
+- P7：旧 delivery prompt 还未完成清理。

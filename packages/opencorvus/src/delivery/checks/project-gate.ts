@@ -12,6 +12,7 @@ import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
   digestCommand,
+  failureSignatureForCheck,
   validateDeliveryEvidenceManifest,
   type DeliveryCheckResult,
   type DeliveryEvidenceManifest,
@@ -97,6 +98,11 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
       startedAt,
       completedAt: Date.now(),
       failureReason: forbidden,
+      failureSignature: failureSignatureForCheck({
+        check,
+        output: forbidden,
+        affectedFiles: [],
+      }),
     }
   }
 
@@ -105,14 +111,23 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
     cwd: check.cwd ?? Instance.directory,
     timeoutMs: COMMAND_TIMEOUT_MS,
   })
+  const status = result.exitCode === 0 ? "passed" : "failed"
+  const outputExcerpt = clip([result.stdout, result.stderr].filter(Boolean).join("\n"), 4000)
   return {
     ...check,
-    status: result.exitCode === 0 ? "passed" : "failed",
+    status,
     exitCode: result.exitCode,
-    outputExcerpt: clip([result.stdout, result.stderr].filter(Boolean).join("\n"), 4000),
+    outputExcerpt,
     startedAt,
     completedAt: Date.now(),
     failureReason: result.exitCode === 0 ? undefined : `exit_code=${result.exitCode}`,
+    failureSignature: status === "failed"
+      ? failureSignatureForCheck({
+          check,
+          output: outputExcerpt,
+          affectedFiles: [],
+        })
+      : undefined,
   }
 }
 

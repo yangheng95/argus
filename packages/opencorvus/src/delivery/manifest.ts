@@ -22,6 +22,14 @@ export type DeliveryCheckResult = DeliveryRequiredCheck & {
   startedAt: number
   completedAt: number
   failureReason?: string
+  failureSignature?: FailureSignature
+}
+
+export type FailureSignature = {
+  checkId: string
+  commandDigest: string
+  normalizedError: string
+  affectedFiles: string[]
 }
 
 export type DeliveryGateVerdict = {
@@ -52,6 +60,30 @@ export function digestCommand(input: {
   return createHash("sha256")
     .update(JSON.stringify(input))
     .digest("hex")
+}
+
+export function failureSignatureForCheck(input: {
+  check: DeliveryRequiredCheck
+  output: string
+  affectedFiles: string[]
+}): FailureSignature {
+  return {
+    checkId: input.check.id,
+    commandDigest: input.check.commandDigest,
+    normalizedError: normalizeFailureOutput(input.output),
+    affectedFiles: input.affectedFiles,
+  }
+}
+
+function normalizeFailureOutput(output: string) {
+  const withoutAnsi = output.replace(/\x1b\[[0-9;]*m/g, "")
+  return withoutAnsi
+    .replace(/[A-Z]:\\[^\s)]+/g, "<path>")
+    .replace(/\/[^\s)]+/g, "<path>")
+    .replace(/\b\d{2,}\b/g, "<number>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 500)
 }
 
 export function validateDeliveryEvidenceManifest(
