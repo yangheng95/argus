@@ -120,22 +120,20 @@ const interleavedReasoning: NormalizeMessages = (msgs, model) => {
     if (msg.role === "assistant" && Array.isArray(msg.content)) {
       const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
       const reasoningText = reasoningParts.map((part: any) => part.text).join("")
+      const existingReasoningText = (msg.providerOptions as any)?.openaiCompatible?.[field]
       const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
 
-      if (reasoningText) {
-        return {
-          ...msg,
-          content: filteredContent,
-          providerOptions: {
-            ...msg.providerOptions,
-            openaiCompatible: {
-              ...(msg.providerOptions as any)?.openaiCompatible,
-              [field]: reasoningText,
-            },
+      return {
+        ...msg,
+        content: filteredContent,
+        providerOptions: {
+          ...msg.providerOptions,
+          openaiCompatible: {
+            ...(msg.providerOptions as any)?.openaiCompatible,
+            [field]: reasoningParts.length > 0 ? reasoningText : (existingReasoningText ?? ""),
           },
-        }
+        },
       }
-      return { ...msg, content: filteredContent }
     }
     return msg
   })
@@ -167,7 +165,10 @@ const TERMINAL_NORMALIZERS: NormalizerEntry[] = [
   },
   {
     tag: "interleaved-reasoning",
-    match: (m) => typeof m.capabilities.interleaved === "object" && !!m.capabilities.interleaved.field,
+    match: (m) =>
+      m.api.npm !== "@openrouter/ai-sdk-provider" &&
+      typeof m.capabilities.interleaved === "object" &&
+      !!m.capabilities.interleaved.field,
     normalize: interleavedReasoning,
   },
 ]
