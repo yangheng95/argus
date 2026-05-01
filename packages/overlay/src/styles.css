@@ -6519,6 +6519,40 @@ select.field-input option {
   font-family: var(--mono);
 }
 
+.delivery-evidence-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.delivery-evidence-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--ui-font-control);
+}
+
+.delivery-evidence-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delivery-evidence-status {
+  color: var(--text-soft);
+  font-family: var(--mono);
+}
+
+.delivery-evidence-status[data-status="failed"] {
+  color: var(--danger);
+}
+
+.delivery-evidence-status[data-status="passed"] {
+  color: var(--good);
+}
+
 /* -- Markdown in sections -- */
 .md-content {
   word-break: break-word;

@@ -394,7 +394,7 @@ function buildUserPrompt(
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs:**\n${g.criteria}\n\nPriority: ${g.priority}`,
+            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id only when this goal owns the rejection)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs:**\n${g.criteria}\n\nPriority: ${g.priority}`,
         )
         .join("\n\n---\n\n"),
   )

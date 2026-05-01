@@ -85,7 +85,7 @@ export const ToolCallEvidence = z.object({
 export type ToolCallEvidenceType = z.infer<typeof ToolCallEvidence>
 
 export const RejectionDetail = z.object({
-  goal_id: z.string().min(1).describe("The goal id (gol_...) this rejection is attributed to."),
+  goal_id: z.string().min(1).optional().describe("The goal id (gol_...) this rejection is attributed to. Omit for task-scope delivery failures that cannot be truthfully assigned to one goal."),
   category: z.enum(["build", "test", "lint", "runtime", "quality", "startup", "visual"]).describe("Category of the issue. Use 'visual' when the rejection traces back to a design_spec on task.design_specs."),
   file: z.string().optional().describe("Affected file path, if applicable"),
   error: z.string().min(8).describe("Description of the error or issue. Minimum 8 characters of reproducer-grade signal."),
@@ -124,7 +124,7 @@ export const RejectedVerdict = z.object({
   verdict: z.literal("rejected"),
   ...SharedVerdictFields,
   rejection_details: z.array(RejectionDetail).min(1).describe(
-    "Per-rejection attribution. Required (≥1 entry) when verdict='rejected'. The set of distinct goal_ids is the canonical 'which goals to re-open' list — there is no separate affected_goal_ids field.",
+    "Per-rejection attribution. Required (≥1 entry) when verdict='rejected'. Entries without goal_id are task-scope failures and MUST NOT reopen every goal.",
   ),
 })
 
@@ -143,7 +143,7 @@ export type DeliveryVerdictType = z.infer<typeof DeliveryVerdict>
 /** Distinct goal IDs the rejection blames. `[]` for accepted verdicts. */
 export function affectedGoalIDs(verdict: DeliveryVerdictType): string[] {
   if (verdict.verdict === "accepted") return []
-  return Array.from(new Set(verdict.rejection_details.map((d) => d.goal_id)))
+  return Array.from(new Set(verdict.rejection_details.map((d) => d.goal_id).filter((item): item is string => Boolean(item))))
 }
 
 /** Human-readable issue strings derived from rejection_details. `[]` for accepted. */

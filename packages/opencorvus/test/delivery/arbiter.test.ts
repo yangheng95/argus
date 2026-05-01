@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "../../src/delivery/arbiter"
 import type { DeliveryEvidenceManifest } from "../../src/delivery/manifest"
 import { createDeliverySpecialistReview } from "../../src/delivery/specialist-review"
-import type { DeliveryVerdictType } from "../../src/delivery/verdict"
+import { affectedGoalIDs, type DeliveryVerdictType } from "../../src/delivery/verdict"
 
 describe("delivery arbiter", () => {
   test("arbitrates manifest gate failures from evidence inputs", () => {
@@ -45,6 +45,23 @@ describe("delivery arbiter", () => {
       error: "specialist:security_data failed: blocking:security: auth bypass in middleware",
       suggestion: "Fix the Specialist Review: security_data failure and rerun specialist_review.",
     }])
+  })
+
+  test("keeps project check failures task-scoped instead of faning out to every goal", () => {
+    const decision = arbitrateDeliveryVerdict({
+      manifest: manifestWithFailedBuildCheck(),
+      goalIds: ["gol_auth", "gol_ui", "gol_data"],
+    })
+
+    expect(decision?.source).toBe("manifest")
+    expect(decision?.verdict.verdict).toBe("rejected")
+    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
+    expect(decision.verdict.rejection_details).toEqual([{
+      category: "build",
+      error: "check:build failed: tsc exited with code 1",
+      suggestion: "Fix the Build failure and rerun bun run build.",
+    }])
+    expect(affectedGoalIDs(decision.verdict)).toEqual([])
   })
 
   test("final arbiter appends manifest review evidence without changing accepted verdict artifact shape", () => {
@@ -109,11 +126,11 @@ describe("delivery arbiter", () => {
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
     expect(decision.verdict.rejection_details).toEqual([{
-      goal_id: "gol_ui",
       category: "visual",
       error: "ssim: layout mismatch",
       suggestion: "Rendered layout or visual structure diverges from the reference; realign the primary regions.",
     }])
+    expect(affectedGoalIDs(decision.verdict)).toEqual([])
   })
 })
 
@@ -172,6 +189,43 @@ function passedManifest(): DeliveryEvidenceManifest {
       status: "skipped",
       evidence: ["goal graph does not require integrity review"],
     }],
+  }
+}
+
+function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
+  return {
+    ...baseManifest(),
+    requiredChecks: [{
+      id: "check:build",
+      name: "build",
+      label: "Build",
+      family: "build",
+      command: "bun run build",
+      commandDigest: "digest:build",
+    }],
+    checkResults: [{
+      id: "check:build",
+      name: "build",
+      label: "Build",
+      family: "build",
+      command: "bun run build",
+      commandDigest: "digest:build",
+      status: "failed",
+      exitCode: 1,
+      executionCwd: ".",
+      outputExcerpt: "tsc exited with code 1",
+      failureReason: "tsc exited with code 1",
+      startedAt: 1,
+      completedAt: 2,
+    }],
+    finalGate: {
+      status: "failed",
+      summary: "Delivery evidence gate failed 1 required check(s), 0 coverage item(s), 0 runtime flow(s), and 0 review item(s).",
+      failedCheckIds: ["check:build"],
+      failedCoverageIds: [],
+      failedRuntimeFlowIds: [],
+      failedReviewIds: [],
+    },
   }
 }
 

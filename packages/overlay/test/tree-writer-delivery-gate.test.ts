@@ -65,3 +65,36 @@ test("delivery.gate.rejected upserts the same card on a second emission for the 
   expect(text?.text).toContain("render_failed");
   expect(text?.text).not.toContain("no_build_artifact");
 });
+
+test("delivery.evidence.updated materializes the manifest stage card", () => {
+  resetWriter();
+
+  applyEvent({
+    type: "delivery.evidence.updated",
+    emittedAt: 1700000000000,
+    properties: {
+      taskID: "tsk_manifest",
+      runID: "run_manifest",
+      deliveryID: "dlv_manifest",
+      manifestID: "artifact_manifest",
+      iteration: 2,
+      status: "failed",
+      summary: "Delivery evidence gate failed 1 required check(s).",
+      failedCheckCount: 1,
+      failedRuntimeFlowCount: 0,
+      failedReviewCount: 1,
+    },
+  });
+
+  const cardID = "delivery-evidence:tsk_manifest:2";
+  const card = cardTreeStore.cards[cardID];
+  expect(card).toBeDefined();
+  expect(card?.stage).toBe("delivery");
+  expect(card?.status).toBe("error");
+  expect(cardTreeStore.order.includes(cardID)).toBe(true);
+
+  const text = (card?.parts ?? []).find((p: any) => p?.type === "text") as any;
+  expect(text?.text).toContain("checks_failed=1");
+  expect(text?.text).toContain("reviews_failed=1");
+  expect(text?.text).toContain("manifest=artifact_manifest");
+});

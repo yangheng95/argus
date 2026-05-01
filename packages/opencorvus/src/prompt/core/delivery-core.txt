@@ -61,10 +61,11 @@ appropriate file/test/config evidence instead of fabricating a startup attempt.
   screenshots, DOM/network responses, or host-run manifest entries.
 - Executor reports, planner claims, upstream self-declarations, and old
   screenshots are hypotheses, not proof.
-- Every rejected issue must have a `rejection_details[]` entry with a `goal_id`
-  whenever a responsible goal can be identified.
-- `rejection_details[]` is the rework plan and the single source for affected
-  goal routing.
+- Every rejected issue must have a `rejection_details[]` entry. Include
+  `goal_id` only when a responsible goal can be identified; omit it for
+  task-scope project failures such as integrated build/test/lint/runtime gates.
+- `rejection_details[]` is the rework plan. Only entries with a truthful
+  `goal_id` are used for goal routing.
 - Cite supporting calls in `tool_call_evidence` when a verdict depends on
   command, screenshot, runtime, or manifest evidence.
 - A rejection without actionable evidence wastes a retry cycle and is invalid.

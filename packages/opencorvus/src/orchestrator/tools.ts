@@ -2768,15 +2768,14 @@ export function createOrchestratorTools(input: {
                 detail: `${renderFailure.kind}: ${renderFailure.detail}`,
               },
             ],
-            rejection_details: goals.map((g) => ({
-              goal_id: g.id,
+            rejection_details: [{
               category: "visual" as const,
               error: renderFailure!.detail,
               suggestion:
                 renderFailure!.kind === "no_index"
                   ? "Produce a runnable index.html under the project root (or a path findRenderedIndex can locate)."
                   : "Fix the build so puppeteer can load and render the merged worktree.",
-            })),
+            }],
           }
           Database.use((db) =>
             db
@@ -3245,9 +3244,8 @@ export function createOrchestratorTools(input: {
 
           // Schema invariant: at this point `verdict.verdict === "rejected"`,
           // so `rejection_details` is the discriminated-union branch with
-          // `.min(1)` non-empty. Derive the aggregate views from it (rule 22 —
-          // single source of truth: `rejection_details` is canonical, the
-          // older `affected_goal_ids` / `issues_found` shadow fields are gone).
+          // `.min(1)` non-empty. Entries with `goal_id` are goal-scope; entries
+          // without `goal_id` are task-scope and must not reopen every goal.
           const { affectedGoalIDs, issuesFound } = await import("@/delivery/verdict")
           const rejectionAffectedGoalIDs = affectedGoalIDs(verdict)
           const rejectionIssues = issuesFound(verdict)
@@ -3268,9 +3266,8 @@ export function createOrchestratorTools(input: {
             now: Date.now(),
           })
 
-          // Agent verdict is "rejected" — open a fresh attempt on every
-          // goal the delivery agent attributed the rejection to (the
-          // distinct `rejection_details[].goal_id` set). The orchestrator's
+          // Agent verdict is "rejected" — open a fresh attempt only for goals
+          // the delivery brain explicitly attributed the rejection to. The orchestrator's
           // next turn reads engine_iteration + the verdict artifact and
           // chooses strategy (modify_goal / re-run architect / fail_task);
           // the old deterministic "stalled/abort" branches were an FSM over
@@ -3284,17 +3281,9 @@ export function createOrchestratorTools(input: {
           // rejection wake note for the next orchestrator decision.
           // No task.metadata signal.
           const { startNewAttempt } = await import("@/engine/persist")
-          // Attribution is the delivery agent's job. The schema's
-          // discriminated-union `RejectedVerdict` makes `rejection_details`
-          // .min(1) required, so a rejection always carries ≥1 attributed
-          // goal. We open a fresh attempt on exactly those goals — no
-          // string-matching of rejection_details[].file vs owned_paths here,
-          // and no "if attribution is empty, reset every passed goal"
-          // blanket policy. That blanket reset was dressed up as
-          // "baseline correctness" but it reset goals the rejection never
-          // cited and wiped valid work on every ambiguous rejection —
-          // violating rule 1 (no fallback) and rule 23 (no hardcoded state
-          // machine; let the LLM — here, the delivery agent — decide).
+          // Attribution is the delivery brain's job. Task-scope rejections
+          // deliberately carry no `goal_id`; they wake the orchestrator with
+          // manifest evidence instead of falling back to blanket reset.
           const goalByID = new Map(goals.map((g) => [g.id, g]))
           const unknownAffected: string[] = []
           const toReset: typeof goals = []
@@ -3453,7 +3442,7 @@ export function createOrchestratorTools(input: {
             /* best effort */
           }
 
-          log.info("deliver: rejection opened new attempts", {
+          log.info("deliver: rejection processed", {
             taskID,
             iteration,
             issues: rejectionIssues.length,

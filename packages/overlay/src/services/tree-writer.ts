@@ -216,6 +216,9 @@ export function applyEvent(event: any): void {
   if (type === "delivery.gate.rejected") {
     return handleDeliveryGateRejected(event);
   }
+  if (type === "delivery.evidence.updated") {
+    return handleDeliveryEvidenceUpdated(event);
+  }
 
   // ── Session lifecycle (single source) ──
   // session.status from packages/opencorvus/src/session/status.ts is the
@@ -633,6 +636,49 @@ function handleInteraction(event: any): void {
 
 function deliveryGateCardID(taskID: string, iteration: number): string {
   return `delivery-gate:${taskID}:${iteration}`;
+}
+
+function deliveryEvidenceCardID(taskID: string, iteration: number): string {
+  return `delivery-evidence:${taskID}:${iteration}`;
+}
+
+function handleDeliveryEvidenceUpdated(event: any): void {
+  const props = propsOf(event);
+  const taskID = String(props.taskID || "");
+  if (!taskID) throw new Error("delivery.evidence.updated missing taskID");
+  const iteration = Number(props.iteration ?? 0);
+  const summary = String(props.summary || "");
+  const status = props.status === "passed" ? "completed" : "error";
+  const emittedAt = Number(event?.emittedAt || event?.emitted_at || 0);
+  if (!(emittedAt > 0)) {
+    throw new Error(`delivery.evidence.updated missing emittedAt (taskID=${taskID})`);
+  }
+
+  const cardID = deliveryEvidenceCardID(taskID, iteration);
+  const lines = [
+    summary,
+    `checks_failed=${Number(props.failedCheckCount ?? 0)}`,
+    `runtime_failed=${Number(props.failedRuntimeFlowCount ?? 0)}`,
+    `reviews_failed=${Number(props.failedReviewCount ?? 0)}`,
+    `manifest=${String(props.manifestID || "")}`,
+  ].filter(Boolean);
+  const existing = cardTreeStore.cards[cardID];
+  setCardTreeStore("cards", cardID, {
+    ...(existing ?? {}),
+    id: cardID,
+    kind: "agent",
+    stage: "delivery",
+    accent: stageAccent("delivery"),
+    status,
+    title: roleTitleKey("delivery"),
+    subtitle: summary,
+    parts: [
+      { type: "text", partID: `${cardID}:body`, text: lines.join("\n") },
+    ],
+    childIDs: [],
+    time: emittedAt,
+  } as any);
+  rebuildTopLevelOrder();
 }
 
 function handleDeliveryGateRejected(event: any): void {

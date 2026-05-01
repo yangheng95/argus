@@ -110,7 +110,7 @@ function synthesizeManifestRejection(
   manifest: DeliveryEvidenceManifest,
   goalIds: readonly string[],
 ): DeliveryVerdictType {
-  const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
+  void goalIds
   const failedResults = manifest.checkResults.filter((item) =>
     manifest.finalGate.failedCheckIds.includes(item.id)
   )
@@ -206,12 +206,7 @@ function synthesizeManifestRejection(
       },
     ],
     rejection_details: failed.flatMap((item) =>
-      ownerGoalIdsForFailure({ itemId: item.id, manifest, allGoalIds }).map((goalId) => ({
-        goal_id: goalId,
-        category: categoryForFailure(item),
-        error: `${item.id} failed: ${item.failureReason ?? item.outputExcerpt}`,
-        suggestion: `Fix the ${item.label ?? item.name} failure and rerun ${item.command}.`,
-      })),
+      rejectionDetailsForFailure({ item, manifest }),
     ),
   }
 }
@@ -220,23 +215,20 @@ function synthesizeRuntimeRejection(
   report: RuntimeEvidenceReport,
   goalIds: readonly string[],
 ): DeliveryVerdictType {
+  void goalIds
   const headline = `Runtime-evidence gate rejected delivery: ${report.violations.length} violation(s).`
-  const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
-  const detailsPerGoal: RejectionDetailType[] = allGoalIds.flatMap((gid) =>
-    report.violations.map((v) => ({
-      goal_id: gid,
-      category: "runtime" as const,
-      error: `${v.kind}: ${v.detail}`,
-      suggestion:
-        v.kind === "no_build_artifact"
-          ? "Goal must produce a real runnable frontend build artifact or start/preview command."
-          : v.kind === "empty_root_shell"
-            ? "Root mount did not hydrate; inspect the frontend entrypoint, router, and runtime errors."
-            : v.kind === "render_failed"
-              ? "Build artifact exists but rendering failed; inspect server startup, asset paths, and runtime errors."
-              : "Rendered DOM is too thin; ensure the primary UI content is actually rendered.",
-    })),
-  )
+  const details: RejectionDetailType[] = report.violations.map((v) => ({
+    category: "runtime" as const,
+    error: `${v.kind}: ${v.detail}`,
+    suggestion:
+      v.kind === "no_build_artifact"
+        ? "Produce a real runnable frontend build artifact or start/preview command for the integrated task."
+        : v.kind === "empty_root_shell"
+          ? "Root mount did not hydrate; inspect the frontend entrypoint, router, and runtime errors."
+          : v.kind === "render_failed"
+            ? "Build artifact exists but rendering failed; inspect server startup, asset paths, and runtime errors."
+            : "Rendered DOM is too thin; ensure the primary UI content is actually rendered.",
+  }))
   const buildArtifactDetail = report.evidence.buildArtifactPath
     ? `index.html=${report.evidence.buildArtifactPath} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
     : "no build artifact"
@@ -261,7 +253,7 @@ function synthesizeRuntimeRejection(
         detail: `${report.violations.length} violation(s): ${buildArtifactDetail}`,
       },
     ],
-    rejection_details: detailsPerGoal,
+    rejection_details: details,
   }
 }
 
@@ -275,15 +267,12 @@ function applyVisualMetricVerdict(
     `Numeric visual gate failed (score=${metric.score.toFixed(3)}). ` +
     `Rendered output missed ${failedGates.length} hard visual gate(s).`
 
-  const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
-  const gateRejections: RejectionDetailType[] = allGoalIds.flatMap((gid) =>
-    failedGates.map((g) => ({
-      goal_id: gid,
-      category: "visual" as const,
-      error: `${g.name}: ${g.note || `value=${g.value} threshold=${g.threshold}`}`,
-      suggestion: visualSuggestion(g.name),
-    })),
-  )
+  void goalIds
+  const gateRejections: RejectionDetailType[] = failedGates.map((g) => ({
+    category: "visual" as const,
+    error: `${g.name}: ${g.note || `value=${g.value} threshold=${g.threshold}`}`,
+    suggestion: visualSuggestion(g.name),
+  }))
 
   if (llmVerdict.verdict === "rejected") {
     return {
@@ -304,20 +293,42 @@ function applyVisualMetricVerdict(
   }
 }
 
+function rejectionDetailsForFailure(input: {
+  item: DeliveryCheckResult | {
+    id: string
+    name?: string
+    family?: string
+    label?: string
+    command?: string
+    failureReason?: string
+    outputExcerpt?: string
+  }
+  manifest: DeliveryEvidenceManifest
+}): RejectionDetailType[] {
+  const item = input.item
+  const ownerGoalIds = ownerGoalIdsForFailure({ itemId: item.id, manifest: input.manifest })
+  const base = {
+    category: categoryForFailure(item),
+    error: `${item.id} failed: ${item.failureReason ?? item.outputExcerpt}`,
+    suggestion: `Fix the ${item.label ?? item.name ?? item.id} failure and rerun ${item.command ?? "the delivery check"}.`,
+  }
+  if (ownerGoalIds.length === 0) return [base]
+  return ownerGoalIds.map((goalId) => ({ goal_id: goalId, ...base }))
+}
+
 function ownerGoalIdsForFailure(input: {
   itemId: string
   manifest: DeliveryEvidenceManifest
-  allGoalIds: string[]
-}) {
+}): string[] {
   if (input.itemId.startsWith("goal:")) {
     const goalId = input.itemId.slice("goal:".length)
-    return goalId ? [goalId] : input.allGoalIds
+    return goalId ? [goalId] : []
   }
 
   if (input.itemId.startsWith("requirement:")) {
     const requirementId = input.itemId.slice("requirement:".length)
     const coverage = input.manifest.requirementCoverage.find((item) => item.requirementId === requirementId)
-    return coverage?.goalIds.length ? coverage.goalIds : input.allGoalIds
+    return coverage?.goalIds.length ? coverage.goalIds : []
   }
 
   if (input.itemId.startsWith("specialist:")) {
@@ -340,7 +351,7 @@ function ownerGoalIdsForFailure(input: {
     if (mapped.length > 0) return [...new Set(mapped)].sort()
   }
 
-  return input.allGoalIds
+  return []
 }
 
 function categoryForFailure(item: DeliveryCheckResult | {
