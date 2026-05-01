@@ -322,8 +322,7 @@ accepted | rejected
 
 The target delivery stage is read-only over the deliverable. It may start
 servers, run commands, take screenshots, send HTTP requests, and inspect files.
-It does not patch project files. The current code still exposes delivery repair
-tools, so the first implementation phase must remove those tools before
+It does not patch project files. Phase 0 removed delivery repair tools before
 specialist reviews are enabled.
 
 ## Implementation Phases
@@ -370,11 +369,34 @@ Acceptance:
 
 Completed in Phase 0 implementation:
 
-- Delivery tool surface no longer exposes `write_file` or `edit_file`.
+- Delivery extra-tool surface no longer exposes `write_file` or `edit_file`.
+- Delivery agent registry tool exposure is now an explicit empty include list,
+  so global mutation tools such as `edit`, `write`, `apply_patch`, `bash`, and
+  recursive `task` dispatch cannot bypass the delivery-specific review tools.
 - Delivery prompt is review-only and routes repair through rejection details and
   orchestrator retry/replan.
 - Prompt and workflow comments no longer describe delivery as the fixer.
 - Regression tests cover tool-surface read-only behavior and prompt hygiene.
+
+Phase 0 implementation note:
+
+- Current delivery prompt context is assembled in
+  `packages/opencorvus/src/delivery/agent.ts` from
+  `packages/opencorvus/src/prompt/core/delivery-core.txt`, task context,
+  goal contracts, delivery diffs, executor reports, design specs, and operator
+  notes.
+- Current delivery review tools are injected by `DeliveryAgent.verify()` through
+  `createDeliveryTools()` plus `createDeliveryOutputTools()`. Registry tools
+  are intentionally suppressed at `Agent.Info.tools` for `delivery`.
+- Current deterministic delivery manifest is owned by
+  `packages/opencorvus/src/delivery/checks/project-gate.ts` and consumed by
+  `DeliveryService.verify()`.
+- Current final verdict write path remains
+  `packages/opencorvus/src/orchestrator/tools.ts`, which persists
+  `kind="verdict"` with `label="delivery-agent-verdict"`.
+- Current verdict readers include publish gating, workflow projection, task API
+  delivery history, workbench board, engine describe/retry context, and
+  delivery history lookups through `packages/opencorvus/src/engine/store.ts`.
 
 ### Phase 1: Surface Detector
 
