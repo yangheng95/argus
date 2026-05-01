@@ -174,6 +174,29 @@ describe("tool.write", () => {
   })
 
   describe("content types", () => {
+    test("writes a leading Byte Order Mark exactly when content contains one", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "marked.txt")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content: "\ufeffmarked",
+            },
+            ctx,
+          )
+
+          const buf = await fs.readFile(filepath)
+          expect([...buf.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf])
+          expect(buf.toString("utf-8")).toBe("\ufeffmarked")
+        },
+      })
+    })
+
     test("writes JSON content", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "data.json")

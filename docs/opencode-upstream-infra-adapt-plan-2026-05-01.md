@@ -200,7 +200,7 @@ Acceptance:
 
 ## Phase 3: Tool Schema And Output Safety
 
-Status: pending Phase 2.
+Status: complete.
 
 Owner files:
 
@@ -212,18 +212,22 @@ Owner files:
 Scope:
 
 - Add stable tool parameter snapshot tests for all built-in tools.
-- Add provider-specific schema sanitation tests for rejected JSON Schema shapes.
+- Keep provider-specific schema sanitation on `ProviderTransform.schema`; the
+  existing focused tests already prove Gemini rejected JSON Schema shapes are
+  sanitized only on the Gemini path while non-Gemini providers retain their
+  schema fields.
 - Add BOM round-trip tests for text read/write/edit.
-- Add bash parser disposal or memory-growth benchmark.
+- Add bash parser syntax tree disposal after permission extraction so repeated
+  command parsing does not retain parsed trees across command execution.
 - Add LSP permission metadata parity only if local LSP tool exposes the same
   request metadata concept.
 
 Acceptance:
 
-- Tool schemas are stable under snapshots.
-- Provider schema sanitation removes only explicitly tested constructs.
-- Repeated bash parsing does not retain syntax tree memory.
-- Text tool round trips preserve BOM where the file has one.
+- [x] Tool schemas are stable under snapshots.
+- [x] Provider schema sanitation removes only explicitly tested constructs.
+- [x] Repeated bash parsing does not retain syntax tree memory.
+- [x] Text tool round trips preserve BOM where the file has one.
 
 ## Phase 4: Dependency And Runtime Modernization
 

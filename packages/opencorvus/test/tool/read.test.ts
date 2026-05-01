@@ -196,6 +196,27 @@ describe("tool.read env file permissions", () => {
   })
 })
 
+describe("tool.read byte order mark handling", () => {
+  test("preserves a leading Byte Order Mark in text output metadata", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "marked.txt"), "\ufefffirst\nsecond")
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "marked.txt") }, ctx)
+
+        expect(result.metadata.preview.charCodeAt(0)).toBe(0xfeff)
+        expect(result.output).toContain("1: \ufefffirst")
+      },
+    })
+  })
+})
+
 describe("tool.read truncation", () => {
   test("truncates large file by bytes and sets truncated metadata", async () => {
     await using tmp = await tmpdir({

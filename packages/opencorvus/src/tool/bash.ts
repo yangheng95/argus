@@ -146,57 +146,61 @@ export const BashTool = Tool.define("bash", async () => {
         }
       }
 
-      const tree = await parser().then((p) => p.parse(params.command))
-      if (!tree) {
-        throw new Error("Failed to parse command")
-      }
       const directories = new Set<string>()
       if (!Instance.containsPath(cwd)) directories.add(cwd)
       const patterns = new Set<string>()
       const always = new Set<string>()
 
-      for (const node of tree.rootNode.descendantsOfType("command")) {
-        if (!node) continue
+      const tree = await parser().then((p) => p.parse(params.command))
+      if (!tree) {
+        throw new Error("Failed to parse command")
+      }
+      try {
+        for (const node of tree.rootNode.descendantsOfType("command")) {
+          if (!node) continue
 
-        // Get full command text including redirects if present
-        let commandText = node.parent?.type === "redirected_statement" ? node.parent.text : node.text
+          // Get full command text including redirects if present
+          let commandText = node.parent?.type === "redirected_statement" ? node.parent.text : node.text
 
-        const command: string[] = []
-        for (let i = 0; i < node.childCount; i++) {
-          const child = node.child(i)
-          if (!child) continue
-          if (
-            child.type !== "command_name" &&
-            child.type !== "word" &&
-            child.type !== "string" &&
-            child.type !== "raw_string" &&
-            child.type !== "concatenation"
-          ) {
-            continue
+          const command: string[] = []
+          for (let i = 0; i < node.childCount; i++) {
+            const child = node.child(i)
+            if (!child) continue
+            if (
+              child.type !== "command_name" &&
+              child.type !== "word" &&
+              child.type !== "string" &&
+              child.type !== "raw_string" &&
+              child.type !== "concatenation"
+            ) {
+              continue
+            }
+            command.push(child.text)
           }
-          command.push(child.text)
-        }
 
-        // not an exhaustive list, but covers most common cases
-        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
-          for (const arg of command.slice(1)) {
-            if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
-            const resolved = await resolveStaticPathArg(arg, cwd)
-            log.info("resolved path", { arg, resolved })
-            if (resolved) {
-              if (!Instance.containsPath(resolved)) {
-                const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
-                directories.add(dir)
+          // not an exhaustive list, but covers most common cases
+          if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
+            for (const arg of command.slice(1)) {
+              if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
+              const resolved = await resolveStaticPathArg(arg, cwd)
+              log.info("resolved path", { arg, resolved })
+              if (resolved) {
+                if (!Instance.containsPath(resolved)) {
+                  const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
+                  directories.add(dir)
+                }
               }
             }
           }
-        }
 
-        // cd covered by above check
-        if (command.length && command[0] !== "cd") {
-          patterns.add(commandText)
-          always.add(BashArity.prefix(command).join(" ") + " *")
+          // cd covered by above check
+          if (command.length && command[0] !== "cd") {
+            patterns.add(commandText)
+            always.add(BashArity.prefix(command).join(" ") + " *")
+          }
         }
+      } finally {
+        disposeSyntaxTree(tree)
       }
 
       if (directories.size > 0) {
@@ -330,3 +334,8 @@ export const BashTool = Tool.define("bash", async () => {
     },
   }
 })
+
+export function disposeSyntaxTree(tree: unknown): void {
+  const disposable = tree as { delete?: () => void }
+  disposable.delete?.()
+}
