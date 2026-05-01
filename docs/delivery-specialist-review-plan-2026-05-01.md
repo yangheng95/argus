@@ -435,6 +435,8 @@ Completed in Phase 1 implementation:
 
 ### Phase 2: Shared Specialist Review Contract
 
+Status: complete.
+
 Tasks:
 
 - Add shared review result schema.
@@ -452,6 +454,18 @@ Acceptance:
 - Existing delivery verdict format remains single-source.
 - Specialist `executionStatus`, findings, and proposed severities cannot by
   themselves publish an accepted or rejected final verdict.
+
+Completed in Phase 2 implementation:
+
+- Added `packages/opencorvus/src/delivery/specialist-review.ts` as the shared
+  specialist review payload owner.
+- Specialist review payloads carry `taskId`, `runId`, `deliveryId`, reviewer
+  identity, execution status, findings, evidence refs, and reviewed surfaces;
+  they do not carry a final delivery verdict.
+- Validation rejects findings without evidence, cross-surface specialist output,
+  empty evidence refs, and extra keys such as `verdict`.
+- Added `delivery_specialist_review` artifact kind and read/write helpers for
+  querying specialist evidence by task or delivery.
 
 ### Phase 3: Test And Integration Review
 
