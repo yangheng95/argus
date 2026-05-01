@@ -82,12 +82,14 @@ describe("delivery project evidence gate", () => {
       checkResults: [],
       goalCoverage: [],
       requirementCoverage: [],
+      runtimeFlows: [],
       changedFiles: ["src/app.ts"],
       finalGate: {
         status: "passed",
         summary: "stale caller verdict",
         failedCheckIds: [],
         failedCoverageIds: [],
+        failedRuntimeFlowIds: [],
       },
       timeCreated: Date.now(),
     }
@@ -97,6 +99,7 @@ describe("delivery project evidence gate", () => {
       summary: "Delivery evidence gate failed 1 required check(s).",
       failedCheckIds: ["lint#1"],
       failedCoverageIds: [],
+      failedRuntimeFlowIds: [],
     })
   })
 
@@ -173,6 +176,25 @@ describe("delivery project evidence gate", () => {
 
     expect(repeatedDeliveryFailureSignatures({ current, previous }).repeated).toBe(false)
   })
+
+  test("does not create runtime flows for non-frontend package metadata", async () => {
+    const dir = await packageFixture({
+      build: "bun -e \"console.log('build ok')\"",
+    })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_no_runtime",
+        runID: "run_no_runtime",
+        deliveryID: "dlv_no_runtime",
+        changedFiles: ["src/app.ts"],
+      }),
+    })
+
+    expect(manifest.runtimeFlows).toEqual([])
+    expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
+  })
 })
 
 async function packageFixture(scripts: Record<string, string>) {
@@ -234,6 +256,7 @@ function manifestWithFailures(input: {
       summary: "failed",
       failedCheckIds: ["lint#1"],
       failedCoverageIds: input.failedCoverageIds,
+      failedRuntimeFlowIds: [],
     },
     timeCreated: Date.now(),
   }

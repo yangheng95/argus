@@ -273,11 +273,23 @@ function synthesizeManifestRejection(
         outputExcerpt: item.evidence.join("; "),
       })),
   ]
+  const failedRuntimeFlows = manifest.runtimeFlows
+    .filter((item) => manifest.finalGate.failedRuntimeFlowIds.includes(item.id))
+    .map((item) => ({
+      id: item.id,
+      family: "runtime",
+      label: item.name,
+      command: "runtime_flow",
+      failureReason: item.evidence.join("; "),
+      outputExcerpt: item.evidence.join("; "),
+    }))
   const failed = failedResults.length > 0
     ? failedResults
     : failedCoverage.length > 0
       ? failedCoverage
-      : manifest.requiredChecks
+      : failedRuntimeFlows.length > 0
+        ? failedRuntimeFlows
+        : manifest.requiredChecks
         .filter((item) => manifest.finalGate.failedCheckIds.includes(item.id))
         .map((item) => ({
           ...item,
@@ -307,7 +319,7 @@ function synthesizeManifestRejection(
       {
         tool: "delivery_evidence_manifest",
         passed: false,
-        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s), ${manifest.finalGate.failedCoverageIds.length} failed coverage item(s) in manifest ${manifest.id}.`,
+        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s), ${manifest.finalGate.failedCoverageIds.length} failed coverage item(s), ${manifest.finalGate.failedRuntimeFlowIds.length} failed runtime flow(s) in manifest ${manifest.id}.`,
       },
     ],
     rejection_details: allGoalIds.flatMap((goalId) =>
