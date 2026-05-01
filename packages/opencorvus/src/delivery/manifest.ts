@@ -38,6 +38,7 @@ export type DeliveryGateVerdict = {
   failedCheckIds: string[]
   failedCoverageIds: string[]
   failedRuntimeFlowIds: string[]
+  failedReviewIds: string[]
 }
 
 export type DeliveryGoalCoverage = {
@@ -70,6 +71,16 @@ export type DeliveryRuntimeFlowResult = {
   }
 }
 
+export type DeliveryReviewEvidence = {
+  id: string
+  name: string
+  status: "passed" | "failed" | "skipped"
+  evidence: string[]
+  artifactId?: string
+  specSnapshotId?: string
+  verdict?: string
+}
+
 export type DeliveryEvidenceManifest = {
   id: string
   taskId?: string
@@ -82,6 +93,7 @@ export type DeliveryEvidenceManifest = {
   goalCoverage: DeliveryGoalCoverage[]
   requirementCoverage: DeliveryRequirementCoverage[]
   runtimeFlows: DeliveryRuntimeFlowResult[]
+  reviewEvidence: DeliveryReviewEvidence[]
   changedFiles: string[]
   finalGate: DeliveryGateVerdict
   timeCreated: number
@@ -147,6 +159,7 @@ export function validateDeliveryEvidenceManifest(
     failedCheckIds,
     failedCoverageIds: [],
     failedRuntimeFlowIds: [],
+    failedReviewIds: [],
     summary: failedCheckIds.length === 0
       ? `Delivery evidence gate passed ${manifest.requiredChecks.length} required check(s).`
       : `Delivery evidence gate failed ${failedCheckIds.length} required check(s).`,
@@ -172,9 +185,14 @@ export function mergeGateVerdicts(input: {
   checks: DeliveryGateVerdict
   failedCoverageIds: string[]
   failedRuntimeFlowIds?: string[]
+  failedReviewIds?: string[]
 }): DeliveryGateVerdict {
   const failedRuntimeFlowIds = input.failedRuntimeFlowIds ?? []
-  const status = input.checks.failedCheckIds.length === 0 && input.failedCoverageIds.length === 0 && failedRuntimeFlowIds.length === 0
+  const failedReviewIds = input.failedReviewIds ?? []
+  const status = input.checks.failedCheckIds.length === 0
+    && input.failedCoverageIds.length === 0
+    && failedRuntimeFlowIds.length === 0
+    && failedReviewIds.length === 0
     ? "passed"
     : "failed"
   return {
@@ -182,9 +200,10 @@ export function mergeGateVerdicts(input: {
     failedCheckIds: input.checks.failedCheckIds,
     failedCoverageIds: input.failedCoverageIds,
     failedRuntimeFlowIds,
+    failedReviewIds,
     summary: status === "passed"
       ? input.checks.summary
-      : `Delivery evidence gate failed ${input.checks.failedCheckIds.length} required check(s), ${input.failedCoverageIds.length} coverage item(s), and ${failedRuntimeFlowIds.length} runtime flow(s).`,
+      : `Delivery evidence gate failed ${input.checks.failedCheckIds.length} required check(s), ${input.failedCoverageIds.length} coverage item(s), ${failedRuntimeFlowIds.length} runtime flow(s), and ${failedReviewIds.length} review item(s).`,
   }
 }
 
@@ -251,7 +270,8 @@ export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest)
     )
   const coverageKeys = manifest.finalGate.failedCoverageIds.map((item) => `coverage:${item}`)
   const runtimeKeys = manifest.finalGate.failedRuntimeFlowIds.map((item) => `runtime:${item}`)
-  return [...new Set([...checkKeys, ...coverageKeys, ...runtimeKeys])].sort()
+  const reviewKeys = (manifest.finalGate.failedReviewIds ?? []).map((item) => `review:${item}`)
+  return [...new Set([...checkKeys, ...coverageKeys, ...runtimeKeys, ...reviewKeys])].sort()
 }
 
 export function repeatedDeliveryFailureSignatures(input: {

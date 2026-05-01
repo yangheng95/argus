@@ -1,6 +1,8 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { Instance } from "@/project/instance"
+import { Database, and, desc, eq, sql } from "@/storage/db"
+import { EngineArtifactTable } from "@/engine/engine.sql"
 import { clip } from "./types"
 import { computeRuntimeEvidence } from "./runtime-evidence"
 import {
@@ -22,6 +24,7 @@ import {
   type DeliveryGoalCoverage,
   type DeliveryRequirementCoverage,
   type DeliveryRequiredCheck,
+  type DeliveryReviewEvidence,
   type DeliveryRuntimeFlowResult,
 } from "../manifest"
 
@@ -31,6 +34,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   taskID?: string
   runID?: string
   deliveryID?: string
+  specSnapshotID?: string
   iteration?: number
   changedFiles: string[]
   metadata?: Record<string, unknown>
@@ -40,6 +44,9 @@ export async function buildDeliveryEvidenceManifest(input: {
     priority: "blocking" | "advisory"
     requirement_ids: string[]
     acceptance_spec_count?: number
+    depends_on?: string[]
+    imports?: string[]
+    exports?: string[]
   }>
 }): Promise<DeliveryEvidenceManifest> {
   const discovered = await discoverChecks(input.changedFiles)
@@ -53,6 +60,11 @@ export async function buildDeliveryEvidenceManifest(input: {
     checkResults.push(await runRequiredCheck(check))
   }
   const coverage = buildCoverage(input.goals ?? [])
+  const reviewEvidence = buildReviewEvidence({
+    taskID: input.taskID,
+    specSnapshotID: input.specSnapshotID,
+    goals: input.goals ?? [],
+  })
   const runtimeFlows = await runRuntimeFlows({
     taskID: input.taskID,
     iteration: input.iteration ?? 0,
@@ -72,6 +84,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     goalCoverage: coverage.goalCoverage,
     requirementCoverage: coverage.requirementCoverage,
     runtimeFlows,
+    reviewEvidence,
     changedFiles: input.changedFiles,
     finalGate: {
       status: "failed",
@@ -79,6 +92,7 @@ export async function buildDeliveryEvidenceManifest(input: {
       failedCheckIds: [],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
+      failedReviewIds: [],
     },
     timeCreated: Date.now(),
   }
@@ -87,8 +101,99 @@ export async function buildDeliveryEvidenceManifest(input: {
   const failedRuntimeFlowIds = runtimeFlows
     .filter((item) => item.status === "failed")
     .map((item) => item.id)
-  manifest.finalGate = mergeGateVerdicts({ checks, failedCoverageIds, failedRuntimeFlowIds })
+  const failedReviewIds = reviewEvidence
+    .filter((item) => item.status === "failed")
+    .map((item) => item.id)
+  manifest.finalGate = mergeGateVerdicts({ checks, failedCoverageIds, failedRuntimeFlowIds, failedReviewIds })
   return manifest
+}
+
+function buildReviewEvidence(input: {
+  taskID?: string
+  specSnapshotID?: string
+  goals: Array<{
+    depends_on?: string[]
+    imports?: string[]
+    exports?: string[]
+  }>
+}): DeliveryReviewEvidence[] {
+  const required = requiresIntegrityReview(input.goals)
+  const id = "review:integrity"
+  if (!required) {
+    return [{
+      id,
+      name: "Integrity Review",
+      status: "skipped",
+      evidence: ["goal graph does not require integrity review"],
+      specSnapshotId: input.specSnapshotID,
+    }]
+  }
+  if (!input.taskID || !input.specSnapshotID) {
+    return [{
+      id,
+      name: "Integrity Review",
+      status: "failed",
+      evidence: ["non-trivial goal graph requires integrity review, but task or spec snapshot identity is missing"],
+      specSnapshotId: input.specSnapshotID,
+    }]
+  }
+  const row = Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.task_id, input.taskID!),
+        eq(EngineArtifactTable.kind, "integrity_attempt"),
+        sql`json_extract(${EngineArtifactTable.payload}, '$.spec_snapshot_id') = ${input.specSnapshotID}`,
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
+  )
+  if (!row) {
+    return [{
+      id,
+      name: "Integrity Review",
+      status: "failed",
+      evidence: [`non-trivial goal graph requires integrity review for spec snapshot ${input.specSnapshotID}`],
+      specSnapshotId: input.specSnapshotID,
+    }]
+  }
+  const payload = (row.payload ?? {}) as {
+    verdict?: string
+    issues_count?: number
+    corrections_count?: number
+    missing_count?: number
+    reason?: string | null
+  }
+  const unresolved = payload.verdict === "needs_correction"
+    || (payload.corrections_count ?? 0) > 0
+    || (payload.missing_count ?? 0) > 0
+  return [{
+    id,
+    name: "Integrity Review",
+    status: unresolved ? "failed" : "passed",
+    artifactId: row.id,
+    specSnapshotId: input.specSnapshotID,
+    verdict: payload.verdict,
+    evidence: [
+      `verdict=${payload.verdict ?? "unknown"}`,
+      `issues_count=${payload.issues_count ?? 0}`,
+      `corrections_count=${payload.corrections_count ?? 0}`,
+      `missing_count=${payload.missing_count ?? 0}`,
+      payload.reason ? `reason=${payload.reason}` : undefined,
+    ].filter((item): item is string => Boolean(item)),
+  }]
+}
+
+function requiresIntegrityReview(goals: Array<{
+  depends_on?: string[]
+  imports?: string[]
+  exports?: string[]
+}>) {
+  return goals.length >= 3
+    || goals.some((goal) =>
+      (goal.depends_on?.length ?? 0) > 0
+      || (goal.imports?.length ?? 0) > 0
+      || (goal.exports?.length ?? 0) > 0
+    )
 }
 
 async function runRuntimeFlows(input: {

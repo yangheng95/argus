@@ -72,6 +72,7 @@ export namespace DeliveryService {
     parentSessionID?: string
     runID?: string
     deliveryID?: string
+    specSnapshotID?: string
   }): Promise<DeliveryVerdictType> {
     log.info("delivery service verify starting", {
       title: input.task.title,
@@ -89,6 +90,7 @@ export namespace DeliveryService {
         taskID: input.task.id,
         runID: input.runID,
         deliveryID: input.deliveryID,
+        specSnapshotID: input.specSnapshotID,
         iteration: input.iteration,
         changedFiles: input.delivery.changedFiles,
         metadata: input.task.metadata,
@@ -239,6 +241,11 @@ function withManifestChecks(
     deferred_checks: [
       ...verdict.deferred_checks,
       ...projected,
+      ...manifest.reviewEvidence.map((item) => ({
+        name: item.id,
+        result: item.status,
+        evidence: item.evidence.join("\n"),
+      })),
     ],
   }
 }
@@ -283,13 +290,26 @@ function synthesizeManifestRejection(
       failureReason: item.evidence.join("; "),
       outputExcerpt: item.evidence.join("; "),
     }))
+  const failedReviewEvidence = manifest.reviewEvidence
+    .filter((item) => (manifest.finalGate.failedReviewIds ?? []).includes(item.id))
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      family: "quality",
+      label: item.name,
+      command: "integrity_review",
+      failureReason: item.evidence.join("; "),
+      outputExcerpt: item.evidence.join("; "),
+    }))
   const failed = failedResults.length > 0
     ? failedResults
     : failedCoverage.length > 0
       ? failedCoverage
       : failedRuntimeFlows.length > 0
         ? failedRuntimeFlows
-        : manifest.requiredChecks
+        : failedReviewEvidence.length > 0
+          ? failedReviewEvidence
+          : manifest.requiredChecks
         .filter((item) => manifest.finalGate.failedCheckIds.includes(item.id))
         .map((item) => ({
           ...item,
@@ -319,7 +339,7 @@ function synthesizeManifestRejection(
       {
         tool: "delivery_evidence_manifest",
         passed: false,
-        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s), ${manifest.finalGate.failedCoverageIds.length} failed coverage item(s), ${manifest.finalGate.failedRuntimeFlowIds.length} failed runtime flow(s) in manifest ${manifest.id}.`,
+        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s), ${manifest.finalGate.failedCoverageIds.length} failed coverage item(s), ${manifest.finalGate.failedRuntimeFlowIds.length} failed runtime flow(s), ${(manifest.finalGate.failedReviewIds ?? []).length} failed review item(s) in manifest ${manifest.id}.`,
       },
     ],
     rejection_details: allGoalIds.flatMap((goalId) =>

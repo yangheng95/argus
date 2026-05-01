@@ -564,6 +564,7 @@ function viewBoardDelivery(
           goalCoverage: manifest.goalCoverage,
           requirementCoverage: manifest.requirementCoverage,
           runtimeFlows: manifest.runtimeFlows,
+          reviewEvidence: manifest.reviewEvidence,
           checkResults: manifest.checkResults.map((item) => ({
             id: item.id,
             name: item.name,

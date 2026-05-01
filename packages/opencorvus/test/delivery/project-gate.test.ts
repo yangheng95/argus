@@ -83,6 +83,7 @@ describe("delivery project evidence gate", () => {
       goalCoverage: [],
       requirementCoverage: [],
       runtimeFlows: [],
+      reviewEvidence: [],
       changedFiles: ["src/app.ts"],
       finalGate: {
         status: "passed",
@@ -90,6 +91,7 @@ describe("delivery project evidence gate", () => {
         failedCheckIds: [],
         failedCoverageIds: [],
         failedRuntimeFlowIds: [],
+        failedReviewIds: [],
       },
       timeCreated: Date.now(),
     }
@@ -100,6 +102,7 @@ describe("delivery project evidence gate", () => {
       failedCheckIds: ["lint#1"],
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
+      failedReviewIds: [],
     })
   })
 
@@ -195,6 +198,37 @@ describe("delivery project evidence gate", () => {
     expect(manifest.runtimeFlows).toEqual([])
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual([])
   })
+
+  test("fails non-trivial goal graph when integrity review evidence is missing", async () => {
+    const dir = await packageFixture({
+      build: "bun -e \"console.log('build ok')\"",
+    })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        runID: "run_review",
+        deliveryID: "dlv_review",
+        specSnapshotID: "spec_review",
+        changedFiles: ["src/app.ts"],
+        goals: [
+          goalInput("gol_one"),
+          goalInput("gol_two"),
+          goalInput("gol_three"),
+        ],
+      }),
+    })
+
+    expect(manifest.reviewEvidence).toEqual([{
+      id: "review:integrity",
+      name: "Integrity Review",
+      status: "failed",
+      evidence: ["non-trivial goal graph requires integrity review, but task or spec snapshot identity is missing"],
+      specSnapshotId: "spec_review",
+    }])
+    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.finalGate.failedReviewIds).toEqual(["review:integrity"])
+  })
 })
 
 async function packageFixture(scripts: Record<string, string>) {
@@ -250,6 +284,8 @@ function manifestWithFailures(input: {
     }],
     goalCoverage: [],
     requirementCoverage: [],
+    runtimeFlows: [],
+    reviewEvidence: [],
     changedFiles: ["src/app.ts"],
     finalGate: {
       status: "failed",
@@ -257,7 +293,18 @@ function manifestWithFailures(input: {
       failedCheckIds: ["lint#1"],
       failedCoverageIds: input.failedCoverageIds,
       failedRuntimeFlowIds: [],
+      failedReviewIds: [],
     },
     timeCreated: Date.now(),
+  }
+}
+
+function goalInput(id: string) {
+  return {
+    id,
+    title: id,
+    priority: "blocking" as const,
+    requirement_ids: [id.replace("gol", "REQ")],
+    acceptance_spec_count: 1,
   }
 }
