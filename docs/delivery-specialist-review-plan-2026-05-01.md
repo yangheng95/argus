@@ -65,6 +65,44 @@ findings are incorporated as hard design constraints:
    behind the arbiter as evidence producers, or the arbiter must be the sole
    function that converts their results into the final verdict.
 
+## AI SDK v6 Schema Audit Decision
+
+AI SDK v6 is not the primary fix for delivery `submit_verdict` reliability.
+It can improve a narrow failure class: when the active provider supports native
+strict tool calling and the specific tool schema is compatible, per-tool
+`strict: true` can make tool-call inputs match the declared schema more
+reliably.
+
+The current local issue is broader than provider-side JSON shape enforcement:
+
+- The repo is currently on `ai@5.0.124`; existing provider request-body
+  contract work already proved the v5 stack can serialize the local provider
+  matrix.
+- `submit_verdict` already uses one Zod `inputSchema` and execute-time
+  cross-field checks. The remaining failures include missing final calls,
+  repeated invalid retries, semantic contradictions, and weak evidence. An SDK
+  upgrade alone does not solve those.
+- Delivery sessions currently expose many tools and still include write/edit
+  repair capability. That raises context pressure and lets delivery mix
+  verification, repair, and final arbitration in one LLM context.
+
+Therefore the specialist review architecture remains the required root fix.
+It narrows each reviewer context, keeps specialists as evidence producers, and
+makes one arbiter responsible for the final `delivery-agent-verdict`.
+
+Add a separate, bounded AI SDK v6 spike only after Phase 0 removes delivery
+repair and records a replayable corpus of real `submit_verdict` failures. The
+spike acceptance bar is:
+
+- compare AI SDK v5 and v6 request bodies for `submit_verdict` and specialist
+  review tools;
+- prove `strict: true` is accepted by every supported target provider/model or
+  explicitly keep it off for incompatible tools without adding fallback logic;
+- measure invalid tool-call rate on the same replay corpus;
+- keep one runtime AI SDK major version in the repo;
+- land only if it reduces schema-invalid submit failures without changing the
+  final verdict artifact contract.
+
 ## Non-Goals
 
 - Do not add optional human-style reviewers that may or may not run by model
