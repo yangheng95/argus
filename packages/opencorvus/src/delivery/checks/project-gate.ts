@@ -44,6 +44,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     priority: "blocking" | "advisory"
     requirement_ids: string[]
     acceptance_spec_count?: number
+    runtime_scenario_count?: number
     depends_on?: string[]
     imports?: string[]
     exports?: string[]
@@ -70,6 +71,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     iteration: input.iteration ?? 0,
     requiredChecks,
     checkResults,
+    goals: input.goals,
   })
 
   const manifest: DeliveryEvidenceManifest = {
@@ -201,9 +203,12 @@ async function runRuntimeFlows(input: {
   iteration: number
   requiredChecks: DeliveryRequiredCheck[]
   checkResults: DeliveryCheckResult[]
+  goals?: Array<{ runtime_scenario_count?: number }>
 }): Promise<DeliveryRuntimeFlowResult[]> {
   const roots = [...new Set(input.requiredChecks.map((item) => item.cwd ?? Instance.directory))]
   const flows: DeliveryRuntimeFlowResult[] = []
+  const requireInteraction = (input.goals ?? [])
+    .some((goal) => (goal.runtime_scenario_count ?? 0) > 0)
   for (const root of roots.length > 0 ? roots : [Instance.directory]) {
     const frontend = await isFrontendPackage(root)
     if (!frontend) continue
@@ -230,18 +235,27 @@ async function runRuntimeFlows(input: {
         String(input.iteration),
       ),
       viewport: { width: 1440, height: 900 },
+      requireInteraction,
     })
     flows.push({
       id,
-      name: "Web Runtime Render",
+      name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
       status: report.passed ? "passed" : "failed",
       evidence: report.passed
         ? [
-            `rendered ${report.evidence.buildArtifactPath ?? "app"} text=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
+            [
+              `rendered ${report.evidence.buildArtifactPath ?? "app"}`,
+              `text=${report.evidence.dom?.textLength ?? "n/a"}`,
+              `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
+              report.evidence.interaction
+                ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
+                : undefined,
+            ].filter(Boolean).join(" "),
           ]
         : report.violations.map((item) => `${item.kind}: ${item.detail}`),
       screenshotPath: report.evidence.renderedPngPath,
       dom: report.evidence.dom,
+      interaction: report.evidence.interaction,
     })
   }
   return flows

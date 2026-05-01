@@ -2583,6 +2583,7 @@ export function createOrchestratorTools(input: {
             criteria: renderSpecsAsText(acceptanceSpecs),
             priority: g.priority as "blocking" | "advisory",
             acceptance_spec_count: acceptanceSpecs.length,
+            runtime_scenario_count: acceptanceSpecs.filter((spec) => !!spec.scenario).length,
             requirement_ids: Array.isArray(g.requirement_ids) ? g.requirement_ids as string[] : [],
             depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
             imports: Array.isArray(g.imports) ? g.imports as string[] : [],

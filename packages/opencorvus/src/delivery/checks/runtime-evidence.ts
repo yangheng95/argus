@@ -19,6 +19,8 @@ export type RuntimeEvidenceViolationKind =
   | "render_failed"
   | "empty_root_shell"
   | "dom_too_thin"
+  | "interaction_required_but_missing"
+  | "interaction_probe_failed"
 
 export interface RuntimeEvidenceViolation {
   kind: RuntimeEvidenceViolationKind
@@ -39,6 +41,16 @@ export interface RuntimeEvidenceReport {
       hasBodyChildren: boolean
       isEmptyRootShell: boolean
     }
+    interaction?: {
+      visibleControlCount: number
+      textInputCount: number
+      fileInputCount: number
+      attemptedInteractionCount: number
+      textChanged: boolean
+      htmlChanged: boolean
+      errorCount: number
+      errors: string[]
+    }
   }
 }
 
@@ -56,6 +68,7 @@ export async function computeRuntimeEvidence(input: {
   /** 供 SSIM / 硬门共享的视口；缺失时用 reference 自适应或默认 1440×900。 */
   referenceForViewport?: string
   viewport?: { width: number; height: number }
+  requireInteraction?: boolean
 }): Promise<RuntimeEvidenceReport> {
   const violations: RuntimeEvidenceViolation[] = []
   const report: RuntimeEvidenceReport = {
@@ -86,6 +99,7 @@ export async function computeRuntimeEvidence(input: {
       outDir: input.outDir,
       viewport: input.viewport ?? (input.referenceForViewport ? undefined : { width: 1440, height: 900 }),
       referenceForViewport: input.referenceForViewport,
+      probeInteractions: input.requireInteraction ?? false,
     })
   } catch (e) {
     violations.push({
@@ -97,6 +111,7 @@ export async function computeRuntimeEvidence(input: {
   report.evidence.renderedPngPath = render.renderedPath
   report.evidence.viewport = render.viewport
   report.evidence.dom = render.dom
+  report.evidence.interaction = render.interaction
 
   // 3. DOM 实证：空壳 or 过薄？
   if (render.dom.isEmptyRootShell) {
@@ -126,9 +141,42 @@ export async function computeRuntimeEvidence(input: {
         `这是 mirror/App.tsx 级脚手架产物，非实际可交互 UI。`,
     })
   }
+  if (input.requireInteraction) {
+    violations.push(...runtimeInteractionViolations(render.interaction))
+  }
 
   report.passed = violations.length === 0
   return report
+}
+
+export function runtimeInteractionViolations(
+  interaction: RuntimeEvidenceReport["evidence"]["interaction"] | undefined,
+): RuntimeEvidenceViolation[] {
+  const violations: RuntimeEvidenceViolation[] = []
+  if (!interaction || interaction.visibleControlCount === 0) {
+    violations.push({
+      kind: "interaction_required_but_missing",
+      detail:
+        `structured acceptance scenarios require a browser interaction flow, ` +
+        `but the rendered page exposed no visible controls.`,
+    })
+    return violations
+  }
+  if (interaction.attemptedInteractionCount === 0 || (!interaction.textChanged && !interaction.htmlChanged)) {
+    violations.push({
+      kind: "interaction_probe_failed",
+      detail:
+        `browser interaction probe found ${interaction.visibleControlCount} visible control(s) ` +
+        `but no observable page change after ${interaction.attemptedInteractionCount} interaction(s).`,
+    })
+  }
+  if (interaction.errorCount > 0) {
+    violations.push({
+      kind: "interaction_probe_failed",
+      detail: `browser interaction probe raised ${interaction.errorCount} error(s): ${interaction.errors.join("; ")}`,
+    })
+  }
+  return violations
 }
 
 export function summarizeRuntimeViolations(
