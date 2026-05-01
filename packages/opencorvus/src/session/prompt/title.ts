@@ -58,10 +58,10 @@ export async function ensureTitle(input: {
       },
       ...(hasOnlySubtaskParts
         ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-        : Message.toModelMessages(contextMessages, model)),
+        : await Message.toModelMessages(contextMessages, model)),
     ],
   })
-  const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
+  const text = await Promise.resolve(result.text).catch((err) => log.error("failed to generate title", { error: err }))
   if (text) {
     const cleaned = text
       .replace(/<think>[\s\S]*?<\/think>\s*/g, "")

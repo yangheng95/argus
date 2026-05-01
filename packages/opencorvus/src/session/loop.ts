@@ -6,7 +6,7 @@ import { Message } from "./message"
 import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
-import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
+import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema } from "ai"
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
@@ -984,7 +984,7 @@ export namespace SessionLoop {
         ].join("\n")
       : ""
 
-    const baseModelMessages = Message.toModelMessages(input.msgs, input.model)
+    const baseModelMessages = await Message.toModelMessages(input.msgs, input.model)
     if (dynamicContextText) {
       // Prepend to the LAST user message's text content so the live state sits
       // adjacent to the request the model is responding to. This keeps the
@@ -1532,7 +1532,7 @@ export namespace SessionLoop {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
 
-    const context = (args: any, options: ToolCallOptions): Tool.Context => ({
+    const context = (args: any, options: ToolExecutionOptions): Tool.Context => ({
       sessionID: input.session.id,
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
@@ -1630,7 +1630,7 @@ export namespace SessionLoop {
 
       const mcpTool = {
         ...(item as any),
-        async execute(args: any, opts: ToolCallOptions) {
+        async execute(args: any, opts: ToolExecutionOptions) {
           const ctx = context(args, opts)
 
           await Plugin.trigger(
@@ -1897,10 +1897,10 @@ export namespace SessionLoop {
         },
         ...(hasOnlySubtaskParts
           ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-          : Message.toModelMessages(contextMessages, model)),
+          : await Message.toModelMessages(contextMessages, model)),
       ],
     })
-    const text = await result.text.catch((err) => log.error("failed to generate title", { error: err }))
+    const text = await Promise.resolve(result.text).catch((err) => log.error("failed to generate title", { error: err }))
     if (text) {
       const cleaned = text
         .replace(/<think>[\s\S]*?<\/think>\s*/g, "")

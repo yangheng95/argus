@@ -2,7 +2,7 @@ import z from "zod"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
-import { APICallError, NoSuchModelError, type Provider as SDK } from "ai"
+import { APICallError, NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
 import { Plugin } from "../plugin"
 import { ModelsDev } from "./models"
@@ -25,7 +25,7 @@ import { createVertex } from "@ai-sdk/google-vertex"
 import { createVertexAnthropic } from "@ai-sdk/google-vertex/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
-import { createOpenRouter, type LanguageModelV2 } from "@openrouter/ai-sdk-provider"
+import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { createXai } from "@ai-sdk/xai"
 import { createMistral } from "@ai-sdk/mistral"
 import { createGroq } from "@ai-sdk/groq"
@@ -45,6 +45,10 @@ import { discoverHexinModels } from "./hexin-discovery"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
+
+  type LanguageModelProvider = {
+    languageModel(modelId: string): LanguageModel
+  }
 
   function googleVertexVars(options: Record<string, any>) {
     const project =
@@ -110,7 +114,7 @@ export namespace Provider {
     return key
   }
 
-  const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
+  const BUNDLED_PROVIDERS: Record<string, (options: any) => LanguageModelProvider> = {
     "@ai-sdk/amazon-bedrock": createAmazonBedrock,
     "@ai-sdk/anthropic": createAnthropic,
     "@ai-sdk/azure": createAzure,
@@ -313,11 +317,11 @@ export namespace Provider {
     }
 
     const providers: { [providerID: string]: Info } = {}
-    const languages = new Map<string, LanguageModelV2>()
+    const languages = new Map<string, LanguageModel>()
     const modelLoaders: {
       [providerID: string]: CustomModelLoader
     } = {}
-    const sdk = new Map<number, SDK>()
+    const sdk = new Map<number, LanguageModelProvider>()
 
     log.info("init")
 
@@ -826,7 +830,7 @@ export namespace Provider {
           ...options,
         })
         s.sdk.set(key, loaded)
-        return loaded as SDK
+        return loaded as LanguageModelProvider
       }
 
       let installedPath: string
@@ -842,7 +846,7 @@ export namespace Provider {
         ...options,
       })
       s.sdk.set(key, loaded)
-      return loaded as SDK
+      return loaded as LanguageModelProvider
     } catch (e) {
       throw new InitError({ providerID: model.providerID }, { cause: e })
     }
@@ -872,7 +876,7 @@ export namespace Provider {
     return info
   }
 
-  export async function getLanguage(model: Model): Promise<LanguageModelV2> {
+  export async function getLanguage(model: Model): Promise<LanguageModel> {
     const s = await state()
     const key = `${model.providerID}/${model.id}`
     if (s.models.has(key)) return s.models.get(key)!

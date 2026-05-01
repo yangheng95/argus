@@ -1,7 +1,7 @@
 import { Provider } from "@/provider/provider"
 import { ProviderLLM } from "@/provider/llm"
 import { Log } from "@/util/log"
-import type { ModelMessage, StreamTextResult, Tool, ToolSet } from "ai"
+import type { ModelMessage, Tool, ToolSet } from "ai"
 // Use the wrapped streamText from @/llm/api — its Proxy returns
 // `abortableIterable(fullStream, composed)`, which is the only thing that
 // rescues a Bun-fetch-backed reader.read() from parking forever when the
@@ -52,9 +52,9 @@ export namespace LLM {
     toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string }
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  export type StreamOutput = ReturnType<typeof streamText<ToolSet>>
 
-  export type StreamResult = StreamTextResult<ToolSet, unknown>
+  export type StreamResult = ReturnType<typeof streamText<ToolSet>>
 
   export async function stream(input: StreamInput): Promise<StreamResult> {
     const l = log
