@@ -81,12 +81,7 @@
       </div>
     </div>
     <div class="titlebar-utility">
-      <span class="brand-version" id="brandVersion">
-        <button type="button" class="brand-channel-group" data-no-drag="true" data-open-channels="true" title="Open channel settings" aria-label="Open channel settings" data-i18n-title="channel.open_settings" data-i18n-aria-label="channel.open_settings">
-          <span class="brand-channel-label" data-i18n="channel.channels">Channels</span>
-          <span class="brand-channel brand-channel-summary brand-channel-empty" data-i18n="channel.setup_needed">Setup needed</span>
-        </button>
-      </span>
+      <div id="solidTitlebarStatus"></div>
       <div class="titlebar-actions" data-no-drag="true">
         <div id="solidTitlebarMenu"></div>
         <div id="solidWindowControls"></div>
@@ -265,79 +260,6 @@
 
       </div>
 
-        <!-- Config (bottom of right column, pinned outside scroll) -->
-        <div class="config-area" id="configArea">
-          <details class="config-section config-section-llm" id="llmSection">
-            <summary class="config-section-head config-section-head-centered config-section-head-llm">
-              <span class="config-section-head-text" data-i18n="llm.title" data-i18n-title="llm.title_hint">Model &amp; Provider</span>
-              <span class="config-section-summary" id="llmSummary" data-i18n="llm.summary_empty">Not configured</span>
-            </summary>
-            <div class="config-section-body" id="llmConfigBody">
-              <form class="config-inline-form" id="llmForm">
-                <div class="field-row config-field-row">
-                  <label class="field">
-                    <span class="field-label" data-i18n="llm.provider_label">Provider</span>
-                    <select class="field-input custom-select" name="llmProvider" id="llmProvider"></select>
-                  </label>
-                  <div class="field">
-                    <span class="field-label" data-i18n="llm.available">Available</span>
-                    <div class="field-input config-status-box config-status-box-static" id="cfgAvailableProviders" data-i18n="llm.available_count_zero">0 providers</div>
-                  </div>
-                </div>
-                <div class="field-row config-field-row">
-                  <label class="field">
-                    <span class="field-label" data-i18n="llm.model_label">Model</span>
-                    <select class="field-input custom-select" name="llmModel" id="llmModel"></select>
-                  </label>
-                  <div class="field">
-                    <span class="field-label" data-i18n="common.status">Status</span>
-                    <div class="field-input config-status-box config-status-box-static" id="llmStatus" data-i18n="llm.status.unknown">Unknown</div>
-                  </div>
-                </div>
-                <details class="config-subsection llm-advanced" id="llmAdvanced">
-                  <summary class="config-subsection-head">
-                    <span data-i18n="llm.api_key_label">API Key</span>
-                    <span class="llm-advanced-meta">
-                      <span class="section-badge" id="llmApiKeySummary"></span>
-                      <button
-                        type="button"
-                        class="btn btn-ghost mini hidden"
-                        id="btnLlmAuthAction"
-                        data-i18n="llm.auth_connect"
-                        data-i18n-title="llm.auth_connect_title"
-                        data-i18n-aria-label="llm.auth_connect_title"
-                      >Connect</button>
-                    </span>
-                  </summary>
-                  <div class="config-subsection-body">
-                    <label class="field">
-                      <div class="field-input-group">
-                        <input class="field-input" name="llmApiKey" id="llmApiKey" type="password" placeholder="Optional" data-i18n-placeholder="common.optional">
-                        <div class="field-input-actions">
-                          <button type="button" class="field-input-icon" id="btnLlmApiKeyToggle" title="Show API key" aria-label="Show API key"></button>
-                          <button type="button" class="field-input-icon" id="btnLlmApiKeyCopy" title="Copy API key" aria-label="Copy API key"></button>
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </details>
-              </form>
-              <div class="config-inline-popup" id="llmNotice" role="status" aria-live="polite"></div>
-            </div>
-          </details>
-          <details class="config-section" id="extensionsSection">
-            <summary class="config-section-head config-section-head-centered config-section-head-llm">
-              <span class="config-section-head-text" data-i18n="extensions.title">Skill / Memory / MCP</span>
-              <span class="config-section-summary" id="extensionsSummary"></span>
-            </summary>
-            <div class="config-section-body" id="extensionsConfigBody"></div>
-          </details>
-          <div class="config-toggle" id="btnConfigToggle" role="button" tabindex="0" title="Open Config &amp; Settings" data-i18n-title="config.open">
-            <span class="config-toggle-label" data-i18n="config.title">Config &amp; Settings</span>
-            <span class="config-toggle-meta" id="configToggleMeta"></span>
-          </div>
-        </div>
-
       </div>
 
     </div>
@@ -426,29 +348,6 @@
        - ChannelsPanel.tsx (inline channel editing)
        - Board.tsx (goal management) -->
 
-  <!-- Server Dialog -->
-  <dialog class="dialog" id="settingsDialog">
-    <form class="dialog-form" id="settingsForm">
-      <h3 class="dialog-title" data-i18n="settings.title">Server Settings</h3>
-      <label class="field">
-        <span class="field-label" data-i18n="settings.server_url">Server URL</span>
-        <input class="field-input" name="serverUrl" id="serverUrl" placeholder="http://127.0.0.1:7878" data-i18n-placeholder="settings.server_url_placeholder">
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n="settings.password">Password</span>
-        <input class="field-input" name="password" id="serverPassword" type="password" placeholder="Optional" data-i18n-placeholder="common.optional">
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n="settings.username">Username</span>
-        <input class="field-input" name="username" id="serverUsername" value="opencorvus" placeholder="opencorvus" data-i18n-placeholder="settings.username_placeholder">
-      </label>
-      <div class="dialog-actions">
-        <button type="button" class="btn btn-ghost" id="btnCancelSettings" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" data-i18n="settings.save">Save Server</button>
-      </div>
-    </form>
-  </dialog>
-
   <dialog class="dialog dialog-wide" id="configDialog">
     <div class="dialog-form config-dialog-form">
       <div class="dialog-head config-dialog-head">
@@ -475,6 +374,10 @@
           <button class="config-nav-item" data-config-tab="channel">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M4 11a9 9 0 0 1 9-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M4 16a14 14 0 0 1 14-14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5" cy="19" r="2" stroke="currentColor" stroke-width="1.5"/></svg>
             <span data-i18n="channel.title">Channel</span>
+          </button>
+          <button class="config-nav-item" data-config-tab="tools">
+            <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1a6 6 0 0 1-7.9 7.9l-5.7 5.7a2.1 2.1 0 0 1-3-3l5.7-5.7a6 6 0 0 1 7.9-7.9l-3.1 3.1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-i18n="extensions.title">Tools</span>
           </button>
           <button class="config-nav-item" data-config-tab="memory">
             <svg class="config-nav-icon" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.2 6H8.2C6.3 13.7 5 11.5 5 9a7 7 0 0 1 7-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 18h6M10 21h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -542,6 +445,10 @@
                 <div class="empty-hint" data-i18n="channel.none">No channels available</div>
               </div>
             </div>
+          </div>
+
+          <div class="config-tab-panel" data-config-panel="tools">
+            <div class="config-section-body" id="toolsConfigBody"></div>
           </div>
 
           <div class="config-tab-panel" data-config-panel="memory">

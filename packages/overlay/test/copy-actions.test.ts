@@ -221,9 +221,9 @@ test("copying chat and logs does not open the dialog", async () => {
     expect(afterChat.writes.length).toBe(1)
     expect(afterChat.writes[0]).toContain("Transcript ready.")
 
-    await tab.click("#btnTitlebarMenu")
-    await tab.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === false)
-    await tab.click("#btnLog")
+    await tab.click('[data-menu-trigger="help"]')
+    await tab.waitForSelector('[data-testid="titlebar-help-logs"]')
+    await tab.click('[data-testid="titlebar-help-logs"]')
     await tab.waitForFunction(() => (document.querySelector("#logDialog") as HTMLDialogElement | null)?.open === true)
     await tab.waitForFunction(() => {
       const button = document.querySelector("#btnLogCopy")

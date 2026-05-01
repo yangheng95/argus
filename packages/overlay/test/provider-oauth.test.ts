@@ -232,37 +232,27 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     await tab.goto(`${base}/ui/index.html`, { waitUntil: "load" })
     await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
 
-    await tab.click("#btnConfigToggle")
+    await tab.click('[data-menu-trigger="model"]')
+    await tab.waitForSelector('[data-testid="titlebar-open-providers"]')
+    await tab.click('[data-testid="titlebar-open-providers"]')
     await tab.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
-    await tab.$eval("#llmAdvanced", (node) => {
-      ;(node as HTMLDetailsElement).open = true
-    })
-    await tab.waitForFunction(() => (document.querySelector("#llmAdvanced") as HTMLDetailsElement | null)?.open === true)
 
-    await tab.select("#llmProvider", "openai")
+    await tab.waitForSelector('[data-testid="provider-auth-openai"]')
+    await tab.click('[data-testid="provider-auth-openai"]')
     await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
     await tab.click("#btnAppDialogOk")
 
-    await tab.waitForFunction(() => {
-      const status = document.querySelector("#llmStatus")
-      return status?.getAttribute("data-status") === "active" && status?.getAttribute("title") === "Provider connected"
-    })
+    await tab.waitForFunction(() => document.body.textContent?.includes("Connected"))
 
     const result = await tab.evaluate(() => {
       const state = (window as typeof window & { __overlayTest: { open: string[] } }).__overlayTest
       return {
         opened: [...state.open],
-        provider: (document.querySelector("#llmProvider") as HTMLSelectElement | null)?.value,
-        model: (document.querySelector("#llmModel") as HTMLSelectElement | null)?.value,
-        status: document.querySelector("#llmStatus")?.getAttribute("data-status"),
-        title: document.querySelector("#llmStatus")?.getAttribute("title"),
+        connectedText: document.body.textContent || "",
       }
     })
 
-    expect(result.provider).toBe("openai")
-    expect(result.model).toBe("gpt-4o-mini")
-    expect(result.status).toBe("active")
-    expect(result.title).toBe("Provider connected")
+    expect(result.connectedText).toContain("Connected")
     expect(result.opened).toContain("https://auth.example.com/openai")
   } finally {
     await page.close()

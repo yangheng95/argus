@@ -73,8 +73,7 @@ export function resolvedTheme(): string {
 
 // ── applyTheme ──
 // Writes the effective (resolved) theme to document.body.dataset.theme.
-// Does NOT update brand logos or call renderTitlebarMenu (those belong to the
-// respective Solid components).
+// Does NOT update brand logos; those belong to the respective Solid components.
 
 export function applyTheme(theme: string): void {
   if (typeof document === "undefined") return;
@@ -97,8 +96,8 @@ export function applyOpacity(opacity: number): void {
 }
 
 // ── applyZoom ──
-// The full renderScale() also triggers pane layout, fitBrandVersion, sizeChat, etc.
-// Those are side-effects. This service function covers
+// The full renderScale() also triggers pane layout and chat sizing. Those are
+// side-effects. This service function covers
 // only the CSS write portion that is safe to call from Solid components:
 // document.documentElement.style.setProperty("--ui-scale", ...)
 // Callers that need the full layout recalc should trigger it .

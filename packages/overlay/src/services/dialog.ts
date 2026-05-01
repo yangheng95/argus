@@ -3,13 +3,11 @@
 // Uses direct imports.
 // imports as of Phase 4 cleanup.
 
-import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
+import { settingsStore } from "../store/settings";
 import { boardStore, loadTasks } from "../store/board";
 import { appStore } from "../store/app";
 import { loadConfigInfo } from "./init";
-import { checkConnection } from "./connection";
-import { reloadProjectScope } from "./config";
-import { apiJson, configure as configureApi } from "./api";
+import { apiJson } from "./api";
 import { getHostTransport } from "./host-transport";
 import { selectedTaskDirectory } from "../store/board";
 import { t } from "../utils/i18n";
@@ -45,32 +43,6 @@ function renderSessionToolChip(part: any): string {
  */
 export async function openChannelSettings(_channelID?: string): Promise<void> {
   openConfigDialog("channel");
-}
-
-/**
- * Open the server / connection settings dialog.
- * Pre-populates the URL, password, and username inputs from settingsStore,
- * then shows the dialog.
- */
-export function openServerSettings(): void {
-  const serverUrl = document.getElementById(
-    "serverUrl",
-  ) as HTMLInputElement | null;
-  const serverPassword = document.getElementById(
-    "serverPassword",
-  ) as HTMLInputElement | null;
-  const serverUsername = document.getElementById(
-    "serverUsername",
-  ) as HTMLInputElement | null;
-  const settingsDialog = document.getElementById(
-    "settingsDialog",
-  ) as HTMLDialogElement | null;
-
-  if (serverUrl) serverUrl.value = settingsStore.serverUrl;
-  if (serverPassword) serverPassword.value = settingsStore.password;
-  if (serverUsername) serverUsername.value = settingsStore.username;
-
-  settingsDialog?.showModal();
 }
 
 /**
@@ -156,59 +128,6 @@ export function renderAboutVersion(): void {
       : `${t("version.overlay", { version: OVERLAY_VERSION })} / ${t("version.core_unknown")}`;
     chatVersion.title = text;
   }
-
-  // Channel summary in titlebar
-  renderChannelSummary();
-}
-
-/**
- * Render channel status summary into #brandVersion and #configToggleMeta.
- */
-function renderChannelSummary(): void {
-  const channels: any[] = Array.isArray(appStore.channels) ? appStore.channels : [];
-  const configured = channels.filter((ch: any) => ch.status === "configured");
-  const partial = channels.filter((ch: any) => ch.status === "partial");
-  const missing = channels.filter((ch: any) => ch.status === "missing");
-  const disabled = channels.filter((ch: any) => ch.status === "disabled");
-
-  const summary =
-    configured.length === 0
-      ? t("channel.setup_needed")
-      : configured.length === 1
-        ? configured[0].name
-        : t("channel.summary_plus", { name: configured[0].name, count: configured.length - 1 });
-
-  const details = [
-    { tone: "configured", text: configured.length > 0 ? t("channel.configured", { names: configured.map((c: any) => c.name).join(", ") }) : t("channel.configured_none") },
-    { tone: "partial", text: partial.length > 0 ? t("channel.needs_setup", { names: partial.map((c: any) => c.name).join(", ") }) : "" },
-    { tone: "missing", text: missing.length > 0 ? t("channel.available", { names: missing.map((c: any) => c.name).join(", ") }) : "" },
-    { tone: "disabled", text: disabled.length > 0 ? t("channel.disabled", { names: disabled.map((c: any) => c.name).join(", ") }) : "" },
-  ].filter((d) => d.text);
-
-  const hint = [...details.map((d) => d.text), t("channel.open_settings")].join(" | ");
-
-  const brandVersion = document.getElementById("brandVersion");
-  if (brandVersion) {
-    const card = details
-      .map((d) => `<span class="brand-channel-tip-row" data-tone="${escapeAboutHtml(d.tone)}">${escapeAboutHtml(d.text)}</span>`)
-      .join("");
-    const tone = configured.length > 0
-      ? "brand-channel brand-channel-summary"
-      : "brand-channel brand-channel-summary brand-channel-empty";
-    brandVersion.innerHTML = [
-      `<button type="button" class="brand-channel-group" data-no-drag="true" data-open-channels="true" title="${escapeAboutHtml(hint)}" aria-label="${escapeAboutHtml(hint)}">`,
-      `<span class="brand-channel-label">${escapeAboutHtml(t("channel.channels"))}</span>`,
-      `<span class="${tone}">${escapeAboutHtml(summary)}</span>`,
-      `<span class="brand-channel-tip" aria-hidden="true">`,
-      `<span class="brand-channel-tip-title">${escapeAboutHtml(t("channel.channels"))}</span>`,
-      card,
-      `<span class="brand-channel-tip-footer">${escapeAboutHtml(t("channel.open_settings"))}</span>`,
-      `</span></button>`,
-    ].join("");
-  }
-
-  const configMeta = document.getElementById("configToggleMeta");
-  if (configMeta) configMeta.textContent = summary;
 }
 
 /**
@@ -233,39 +152,6 @@ export function openConfigDialog(section?: string): void {
   }
 }
 
-/**
- * Bind submit/cancel handlers to the server settings form (#settingsForm).
- * On submit: updates settingsStore, reconfigures API, saves, closes dialog.
- */
-export function installSettingsFormHandlers(): void {
-  const form = document.getElementById("settingsForm") as HTMLFormElement | null;
-  const dialog = document.getElementById("settingsDialog") as HTMLDialogElement | null;
-  const cancelBtn = document.getElementById("btnCancelSettings") as HTMLButtonElement | null;
-  if (!form || !dialog) return;
-  if ((form as any).__handlersBound) return;
-  (form as any).__handlersBound = true;
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const url = (document.getElementById("serverUrl") as HTMLInputElement | null)?.value || "";
-    const password = (document.getElementById("serverPassword") as HTMLInputElement | null)?.value || "";
-    const username = (document.getElementById("serverUsername") as HTMLInputElement | null)?.value || "opencorvus";
-
-    setSettingsStore({ serverUrl: url, password, username });
-    configureApi({ serverUrl: url, password, username });
-    saveSettings();
-    dialog.close();
-    try { await checkConnection(); await reloadProjectScope(); } catch { /* reconnect monitor will retry */ }
-  });
-
-  cancelBtn?.addEventListener("click", () => {
-    dialog.close();
-  });
-}
-
-/**
- * Attach a click-to-close handler to every `dialog.dialog` element.
- */
 /**
  * Open the Executor Session dialog, loading messages for a given session.
  * Shared by the sidebar Goals panel (GoalWorkflowGroup "Open session" button)

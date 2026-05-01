@@ -10,6 +10,7 @@
 import { Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { messageStore } from "../store/messages";
 import { appStore } from "../store/app";
+import { openConfigDialog } from "../services/dialog";
 import { t } from "../utils/i18n";
 
 const OFFLINE_GRACE_MS = 2500;
@@ -62,6 +63,15 @@ export function ConnectionBanner() {
         <span class="conn-banner__text">
           {t("connection.banner_text", { status: label() })}
         </span>
+        <button
+          type="button"
+          class="conn-banner__action"
+          onClick={() => openConfigDialog("general")}
+          title={t("titlebar.connection_diagnostics")}
+          data-testid="connection-banner-setup"
+        >
+          {t("titlebar.setup")}
+        </button>
         <button
           type="button"
           class="conn-banner__action"

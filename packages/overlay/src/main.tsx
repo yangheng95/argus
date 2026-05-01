@@ -12,7 +12,7 @@ import { TaskStatusHeader } from "./components/TaskStatusHeader";
 import { TaskDirContent, TaskWorkspaceLine } from "./components/TaskDirBar";
 import { ChatComposer } from "./components/ChatComposer";
 import { WindowControls } from "./components/WindowControls";
-import { TitlebarMenu } from "./components/TitlebarMenu";
+import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
 import { DeliveryPanel } from "./components/Board";
@@ -86,8 +86,7 @@ import {
   loadRecentDirectories,
   removeRecentDirectory,
 } from "./services/workspace";
-import { openConfigDialog, switchConfigTab, setupDialogBackdropClose, installSettingsFormHandlers, renderAboutVersion } from "./services/dialog";
-import { installInlineLlmConfig, refreshInlineLlmConfig } from "./services/llm-inline";
+import { openConfigDialog, switchConfigTab, setupDialogBackdropClose, renderAboutVersion } from "./services/dialog";
 import { loadConversation } from "./store/messages";
 import { cardTreeStore } from "./store/card-tree";
 
@@ -618,9 +617,7 @@ function installGoalFormHandlers(): void {
 }
 
 installGlobalBridges();
-installInlineLlmConfig();
 setupDialogBackdropClose();
-installSettingsFormHandlers();
 installGoalFormHandlers();
 
 // ── Mount: Conversation ──
@@ -839,25 +836,21 @@ if (windowControlsEl) {
   render(() => <WindowControls />, windowControlsEl);
 }
 
-// ── Mount: TitlebarMenu ──
+// ── Mount: TitlebarMenubar ──
 
 const titlebarMenuEl = document.getElementById("solidTitlebarMenu");
 if (titlebarMenuEl) {
   render(
     () => (
-      <TitlebarMenu
-        onLocaleChange={(locale) => {
-          setSettingsStore("locale", locale);
-          saveSettings();
-        }}
-        onOpenLog={() => setLogOpen(true)}
-        onOpenSettings={() => {
-          openConfigDialog();
-        }}
-      />
+      <TitlebarMenubar onOpenLog={() => setLogOpen(true)} />
     ),
     titlebarMenuEl,
   );
+}
+
+const titlebarStatusEl = document.getElementById("solidTitlebarStatus");
+if (titlebarStatusEl) {
+  render(() => <TitlebarStatusCluster onOpenLog={() => setLogOpen(true)} />, titlebarStatusEl);
 }
 
 // ── Mount: ConnectionBadge ──
@@ -965,10 +958,10 @@ if (channelConfigBody) {
   render(() => <ChannelsPanel />, channelConfigBody);
 }
 
-const extensionsConfigBody = document.getElementById("extensionsConfigBody");
-if (extensionsConfigBody) {
-  extensionsConfigBody.innerHTML = "";
-  render(() => <SkillMarketPanel />, extensionsConfigBody);
+const toolsConfigBody = document.getElementById("toolsConfigBody");
+if (toolsConfigBody) {
+  toolsConfigBody.innerHTML = "";
+  render(() => <SkillMarketPanel />, toolsConfigBody);
 }
 
 const memoryBody = document.getElementById("memoryBody");
@@ -995,14 +988,6 @@ if (providersConfigBody) {
 // Settings dialog (configDialog) close button — no longer handles it.
 
 document.addEventListener("DOMContentLoaded", () => {
-  const openSettings = () => openConfigDialog();
-  document.getElementById("btnConfigToggle")?.addEventListener("click", openSettings);
-  document.getElementById("btnConfigToggle")?.addEventListener("keydown", (event) => {
-    if (!(event instanceof KeyboardEvent)) return;
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    openSettings();
-  });
   document
     .getElementById("btnCloseConfigDialog")
     ?.addEventListener("click", () => {
@@ -1021,11 +1006,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn = (event.target as HTMLElement).closest<HTMLElement>(".config-nav-item");
     const tab = btn?.dataset.configTab;
     if (tab) switchConfigTab(tab);
-  });
-
- // ── Brand version → open channel config ──
-  document.getElementById("brandVersion")?.addEventListener("click", () => {
-    openConfigDialog("channel");
   });
 
  // ── Config sidebar resizer ──
@@ -1188,15 +1168,6 @@ disposers.push(createRoot((dispose) => {
 
   createEffect(() => {
     void setLocale(settingsStore.locale);
-  });
-
-  createEffect(() => {
-    settingsStore.locale;
-    appStore.config;
-    appStore.providerCatalog;
-    appStore.providerAuth;
-    appStore.providerTest;
-    refreshInlineLlmConfig();
   });
 
   createEffect(() => {

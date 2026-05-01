@@ -920,18 +920,7 @@ test("overlay controls trigger without runtime failures", async () => {
     const tap = async (selector: string) => {
       for (let i = 0; i < 5; i += 1) {
         await page.waitForFunction((value) => !!document.querySelector(value), {}, selector)
-        const inHiddenTitlebarMenu = await page.evaluate((value) => {
-          const node = document.querySelector(value)
-          if (!(node instanceof HTMLElement)) return null
-          const menu = node.closest("#titlebarMenu")
-          return menu instanceof HTMLElement && menu.hidden
-        }, selector)
-        if (inHiddenTitlebarMenu == null) continue
-        if (inHiddenTitlebarMenu) {
-          await page.waitForSelector("#btnTitlebarMenu", { visible: true })
-          await page.click("#btnTitlebarMenu")
-          await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === false)
-        }
+        if (!(await page.evaluate((value) => !!document.querySelector(value), selector))) continue
         await waitEnabled(selector)
         try {
           await page.locator(selector).click()
@@ -1012,28 +1001,28 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForSelector(".change-row")
     await page.waitForSelector("#interaction-modal")
 
-    expect(await page.$eval("#titlebarMenu", (node) => (node as HTMLElement).hidden)).toBe(true)
+    expect(await page.$("[data-testid^='titlebar-menu-']")).toBeNull()
     const menu = await page.evaluate(() => {
-      const btn = document.querySelector("#btnTitlebarMenu")
-      const panel = document.querySelector("#titlebarMenu")
-      if (!(btn instanceof HTMLButtonElement) || !(panel instanceof HTMLElement)) {
+      const btn = document.querySelector('[data-menu-trigger="help"]')
+      if (!(btn instanceof HTMLButtonElement)) {
         throw new Error("Missing titlebar menu controls")
       }
       btn.click()
-      const open = panel.hidden
+      const open = !!document.querySelector('[data-testid="titlebar-menu-help"]')
       btn.click()
-      const closed = panel.hidden
+      const closed = !document.querySelector('[data-testid="titlebar-menu-help"]')
       return { open, closed }
     })
-    expect(menu.open).toBe(false)
+    expect(menu.open).toBe(true)
     expect(menu.closed).toBe(true)
-    await page.$eval("#opacityRange", (node) => {
+    await page.click('[data-menu-trigger="view"]')
+    await page.waitForSelector('[data-testid="titlebar-opacity-range"]')
+    await page.$eval('[data-testid="titlebar-opacity-range"]', (node) => {
       const input = node as HTMLInputElement
-      input.value = "45"
+      input.value = "50"
       input.dispatchEvent(new Event("input", { bubbles: true }))
       input.dispatchEvent(new Event("change", { bubbles: true }))
     })
-    await page.waitForFunction(() => document.querySelector("#opacityValue")?.textContent === "50%")
     await page.waitForFunction(
       () => document.documentElement.style.getPropertyValue("--ui-window-opacity").trim() === "0.5",
     )
@@ -1066,13 +1055,19 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForFunction(() => !document.querySelector("#interaction-modal"))
 
     const theme = await page.$eval("body", (node) => node.dataset.theme)
-    seen.push("#btnTheme")
-    await tap("#btnTheme")
+    await page.click('[data-menu-trigger="view"]')
+    await page.waitForSelector('[data-testid="titlebar-theme-light"]')
+    seen.push('[data-testid="titlebar-theme-light"]')
+    await tap('[data-testid="titlebar-theme-light"]')
     await page.waitForFunction((value) => document.body.dataset.theme !== value, {}, theme)
 
     const lang = await page.$eval("html", (node) => node.lang)
-    seen.push("#btnLocale")
-    await tap("#btnLocale")
+    if (!(await page.$('[data-testid="titlebar-toggle-locale"]'))) {
+      await page.click('[data-menu-trigger="view"]')
+    }
+    await page.waitForSelector('[data-testid="titlebar-toggle-locale"]')
+    seen.push('[data-testid="titlebar-toggle-locale"]')
+    await tap('[data-testid="titlebar-toggle-locale"]')
     await page.waitForFunction((value) => document.documentElement.lang !== value, {}, lang)
 
     seen.push("#btnMinimize")
