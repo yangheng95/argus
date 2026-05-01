@@ -1,14 +1,13 @@
 /**
  * DeliveryAgent — An independent-context agent that performs end-to-end
  * verification of the delivered application, including starting the server/client,
- * checking frontend rendering, and fixing any bugs discovered during verification.
+ * checking frontend rendering, and reporting any bugs discovered during verification.
  *
- * Unlike the GoalJudge which is read-only, this agent can:
+ * The DeliveryAgent is review-only. It can:
  * 1. Start the application (server, client, or both)
  * 2. Verify frontend rendering and runtime behavior
- * 3. Fix bugs found during verification (write/edit code)
- * 4. Re-verify after fixes to confirm the application works
- * 5. Make a final acceptance decision before publishing
+ * 3. Produce concrete rejection evidence for orchestrator retry/replan
+ * 4. Make a final acceptance decision before publishing
  */
 import { createDeliveryTools } from "./tools"
 import { createDeliveryOutputTools } from "./output-tools"
@@ -98,7 +97,7 @@ export namespace DeliveryAgent {
 
     // Retry across attempts is owned by `runAgentSessionWithRetry` (rule 22 /
     // rule 24): each attempt mints a fresh tool kit + child session so the
-    // submit_verdict collector and stateful rework tools cannot bleed across
+    // submit_verdict collector and stateful review tools cannot bleed across
     // retries. The helper handles abort propagation, stream-error retry, and
     // exhausted-attempts surfacing — delivery only declares: how many
     // retries, how to mint a kit, and what counts as "complete".
@@ -114,9 +113,9 @@ export namespace DeliveryAgent {
       signal: input.signal,
       maxRetries: deliveryCfg.max_retries,
       toolKitFactory: () => {
-        const reworkTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
+        const reviewTools = createDeliveryTools({ sessionID: input.task.sessionID, taskID: input.task.id })
         const outputToolKit = createDeliveryOutputTools({ requiredTools: systemResolved.requiredTools })
-        const guard = toolGuard({ ...reworkTools, ...outputToolKit.tools })
+        const guard = toolGuard({ ...reviewTools, ...outputToolKit.tools })
         return {
           tools: guard.tools as any,
           getCollector: () => outputToolKit.getCollector(),
@@ -301,7 +300,7 @@ function buildUserPrompt(
       `Two-stage visual review, BOTH stages required before you may accept:\n\n` +
       `**Stage A — first-look discipline on the attachments.** Open the rendered.png and ` +
       `the reference side-by-side mentally. If any of the following is true on first ` +
-      `glance, REJECT immediately with category="visual" and do NOT waste repair budget ` +
+      `glance, REJECT immediately with category="visual" and do NOT spend more context ` +
       `pretending it's salvageable:\n` +
       `  - Rendered output is mostly white / mostly empty / a single error page.\n` +
       `  - Layout skeleton is unrecognizable vs reference (e.g. reference is a dense grid ` +
@@ -312,11 +311,10 @@ function buildUserPrompt(
       `A first-look reject costs one prompt; a charitable "let me list 30 micro-issues" ` +
       `on an obvious miss wastes an iteration.\n\n` +
       `**Stage B — your own screenshot (Phase 3 Runtime Verification).** The attached ` +
-      `rendered.png is the PIPELINE's shot of the worktree **before** your Phase 0 ` +
-      `stitching and Phase 5 repairs. After your runtime verification succeeds, take ` +
-      `your own screenshot via puppeteer-core + run_command (see Phase 3 step 4b for the ` +
-      `skeleton). Compare YOUR screenshot against the reference. If your screenshot ` +
-      `differs from the pipeline's rendered.png, trust yours — that is the post-repair ` +
+      `rendered.png is the PIPELINE's shot of the worktree before your review session. ` +
+      `After your runtime verification succeeds, take your own screenshot with the ` +
+      `screenshot tool or an equivalent runtime command. Compare YOUR screenshot ` +
+      `against the reference. If your screenshot differs from the pipeline's rendered.png, trust yours — that is the current ` +
       `truth.\n\n` +
       `For every concrete difference surfaced in either stage, write one ` +
       `\`rejection_details\` entry with enough specificity that an executor reading only ` +
@@ -340,7 +338,7 @@ function buildUserPrompt(
 
   // Deterministic delivery gates now run before the LLM and persist a
   // DeliveryEvidenceManifest. The prompt below treats acceptance specs as the
-  // semantic contract the agent reviews and repairs against; project command
+  // semantic contract the agent reviews against; project command
   // execution and structural coverage are not self-credited by prose.
 
   // Operator notes — user messages sent during task execution
@@ -368,9 +366,9 @@ function buildUserPrompt(
     `The host has already run the deterministic DeliveryEvidenceManifest gates ` +
     `before this session: project commands, forbidden shell-success coercion, ` +
     `blocking-goal acceptance coverage, and linked requirement coverage. If any ` +
-    `of those gates failed, you will receive a rejected verdict path instead of ` +
-    `being asked to self-credit them. Your job here is to repair semantic and ` +
-    `runtime issues that remain, verify user-visible behavior, and return ` +
+      `of those gates failed, you will receive a rejected verdict path instead of ` +
+      `being asked to self-credit them. Your job here is to verify semantic and ` +
+      `runtime issues that remain and return ` +
     `concrete residual findings.\n\n` +
     `Your verdict is a semantic judgment layered on top of the manifest, not a ` +
     `replacement for it. Use ` +
@@ -499,9 +497,9 @@ function buildUserPrompt(
       "1. Find the entry point (e.g., src/app.ts, src/index.ts, main.ts, package.json scripts)\n" +
       "2. Run build/compile if needed\n" +
       "3. Start the application with a short timeout to verify it doesn't crash\n" +
-      "4. If it crashes, investigate and fix the issue\n" +
-      "5. Re-verify after any fix\n" +
-      "6. Produce your final verdict",
+      "4. If it crashes, investigate enough to produce concrete rejection evidence and affected goal attribution\n" +
+      "5. Capture runtime output or screenshots for every user-visible surface\n" +
+      "6. Produce your final verdict without editing project files",
   )
 
   return sections.join("\n\n")

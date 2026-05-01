@@ -44,7 +44,7 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
       description:
         "Emit the FINAL delivery verdict. You MUST call this exactly once, as " +
         "the last action of the session, after you have finished Phase 0 adapt / " +
-        "Phase 1-4 checks / Phase 5 repairs. This is the ONLY way the verdict " +
+        "all required review checks. This is the ONLY way the verdict " +
         "leaves the agent — plain-text / markdown output is discarded. If " +
         "submit_verdict is not called before the step budget runs out, the run " +
         "is treated as a failed parse and retried.\n\n" +
