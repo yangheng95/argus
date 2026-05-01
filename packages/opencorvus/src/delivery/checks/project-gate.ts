@@ -8,10 +8,13 @@ import { clip } from "./types"
 import { computeRuntimeEvidence } from "./runtime-evidence"
 import {
   commandGroups,
+  discoverPackageRoot,
   discoverChecks,
   resolveConfig,
   resolvedChecks,
 } from "./discovery"
+import { detectDeliverySurfaces } from "../surface-detector"
+import type { DeliverySurfaceManifest } from "../surface-detector"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -49,6 +52,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   specSnapshotID?: string
   iteration?: number
   changedFiles: string[]
+  taskRequest?: string
   metadata?: Record<string, unknown>
   goals?: Array<{
     id: string
@@ -62,6 +66,16 @@ export async function buildDeliveryEvidenceManifest(input: {
     exports?: string[]
   }>
 }): Promise<DeliveryEvidenceManifest> {
+  const projectRoot = await discoverPackageRoot(input.changedFiles)
+  const surfaceManifest = await detectDeliverySurfaces({
+    taskID: input.taskID,
+    deliveryID: input.deliveryID,
+    projectRoot,
+    changedFiles: input.changedFiles,
+    taskRequest: input.taskRequest,
+    metadata: input.metadata,
+    goals: input.goals,
+  })
   const discovered = await discoverChecks(input.changedFiles)
   const config = await resolveConfig(input.metadata)
   const resolved = resolvedChecks(config, discovered)
@@ -81,6 +95,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   const runtimeFlows = await runRuntimeFlows({
     taskID: input.taskID,
     iteration: input.iteration ?? 0,
+    surfaceManifest,
     requiredChecks,
     checkResults,
     goals: input.goals,
@@ -99,6 +114,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     requirementCoverage: coverage.requirementCoverage,
     runtimeFlows,
     reviewEvidence,
+    surfaceManifest,
     changedFiles: input.changedFiles,
     finalGate: {
       status: "failed",
@@ -213,93 +229,64 @@ function requiresIntegrityReview(goals: Array<{
 async function runRuntimeFlows(input: {
   taskID?: string
   iteration: number
+  surfaceManifest: DeliverySurfaceManifest
   requiredChecks: DeliveryRequiredCheck[]
   checkResults: DeliveryCheckResult[]
   goals?: Array<{ runtime_scenario_count?: number }>
 }): Promise<DeliveryRuntimeFlowResult[]> {
-  const roots = [...new Set(input.requiredChecks.map((item) => item.cwd ?? Instance.directory))]
   const flows: DeliveryRuntimeFlowResult[] = []
+  if (!input.surfaceManifest.surfaces.includes("frontend")) {
+    return flows
+  }
+  const root = input.surfaceManifest.projectRoot
   const requireInteraction = (input.goals ?? [])
     .some((goal) => (goal.runtime_scenario_count ?? 0) > 0)
-  for (const root of roots.length > 0 ? roots : [Instance.directory]) {
-    const frontend = await isFrontendPackage(root)
-    if (!frontend) continue
-    const failedBuild = input.checkResults.some(
-      (item) => (item.cwd ?? Instance.directory) === root && item.name === "build" && item.status !== "passed",
-    )
-    const id = `runtime:web:${path.relative(Instance.directory, root).replaceAll("\\", "/") || "."}`
-    if (failedBuild) {
-      flows.push({
-        id,
-        name: "Web Runtime Render",
-        status: "failed",
-        evidence: ["build check failed; runtime render cannot be trusted until build passes"],
-      })
-      continue
-    }
-    const report = await computeRuntimeEvidence({
-      projectDir: root,
-      outDir: path.join(
-        root,
-        ".opencorvus",
-        "delivery-runtime-flow",
-        input.taskID ?? "no-task",
-        String(input.iteration),
-      ),
-      viewport: { width: 1440, height: 900 },
-      requireInteraction,
-    })
+  const failedBuild = input.checkResults.some(
+    (item) => (item.cwd ?? Instance.directory) === root && item.name === "build" && item.status !== "passed",
+  )
+  const id = `runtime:web:${path.relative(Instance.directory, root).replaceAll("\\", "/") || "."}`
+  if (failedBuild) {
     flows.push({
       id,
-      name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
-      status: report.passed ? "passed" : "failed",
-      evidence: report.passed
-        ? [
-            [
-              `rendered ${report.evidence.buildArtifactPath ?? "app"}`,
-              `text=${report.evidence.dom?.textLength ?? "n/a"}`,
-              `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
-              report.evidence.interaction
-                ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
-                : undefined,
-            ].filter(Boolean).join(" "),
-          ]
-        : report.violations.map((item) => `${item.kind}: ${item.detail}`),
-      screenshotPath: report.evidence.renderedPngPath,
-      dom: report.evidence.dom,
-      interaction: report.evidence.interaction,
+      name: "Web Runtime Render",
+      status: "failed",
+      evidence: ["build check failed; runtime render cannot be trusted until build passes"],
     })
+    return flows
   }
+  const report = await computeRuntimeEvidence({
+    projectDir: root,
+    outDir: path.join(
+      root,
+      ".opencorvus",
+      "delivery-runtime-flow",
+      input.taskID ?? "no-task",
+      String(input.iteration),
+    ),
+    viewport: { width: 1440, height: 900 },
+    requireInteraction,
+  })
+  flows.push({
+    id,
+    name: requireInteraction ? "Web Runtime Render and Interaction" : "Web Runtime Render",
+    status: report.passed ? "passed" : "failed",
+    evidence: report.passed
+      ? [
+          [
+            `rendered ${report.evidence.buildArtifactPath ?? "app"}`,
+            `text=${report.evidence.dom?.textLength ?? "n/a"}`,
+            `nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
+            report.evidence.interaction
+              ? `interactions=${report.evidence.interaction.attemptedInteractionCount}/${report.evidence.interaction.visibleControlCount}`
+              : undefined,
+          ].filter(Boolean).join(" "),
+        ]
+      : report.violations.map((item) => `${item.kind}: ${item.detail}`),
+    screenshotPath: report.evidence.renderedPngPath,
+    dom: report.evidence.dom,
+    interaction: report.evidence.interaction,
+  })
   return flows
-}
-
-async function isFrontendPackage(root: string) {
-  const raw = await fs.readFile(path.join(root, "package.json"), "utf8").catch(() => undefined)
-  if (!raw) return false
-  const pkg = JSON.parse(raw) as {
-    scripts?: Record<string, string>
-    dependencies?: Record<string, string>
-    devDependencies?: Record<string, string>
-  }
-  const deps = new Set([
-    ...Object.keys(pkg.dependencies ?? {}),
-    ...Object.keys(pkg.devDependencies ?? {}),
-  ])
-  const frontendDeps = [
-    "react",
-    "next",
-    "vue",
-    "svelte",
-    "solid-js",
-    "vite",
-    "@vitejs/plugin-react",
-    "@sveltejs/kit",
-    "astro",
-    "@solidjs/start",
-  ]
-  if (frontendDeps.some((dep) => deps.has(dep))) return true
-  const scriptText = Object.values(pkg.scripts ?? {}).join("\n")
-  return /\b(vite|next|astro|svelte-kit|solid-start)\b/.test(scriptText)
 }
 
 function buildCoverage(goals: Array<{

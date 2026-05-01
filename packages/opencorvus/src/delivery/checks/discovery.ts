@@ -332,7 +332,7 @@ async function classifyTests(files: string[], cwd: string) {
   }
 }
 
-async function discoverPackageRoot(changedFiles?: unknown) {
+export async function discoverPackageRoot(changedFiles?: unknown) {
   const root = Instance.directory
   const candidates = new Map<string, number>()
   const items = Array.isArray(changedFiles)

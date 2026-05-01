@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { and, Database, desc, eq } from "@/storage/db"
 import { EngineArtifactTable } from "@/engine/engine.sql"
 import { Identifier } from "@/id/id"
+import type { DeliverySurfaceManifest } from "./surface-detector"
 
 export type DeliveryCheckStatus = "passed" | "failed" | "skipped"
 
@@ -105,6 +106,7 @@ export type DeliveryEvidenceManifest = {
   requirementCoverage: DeliveryRequirementCoverage[]
   runtimeFlows: DeliveryRuntimeFlowResult[]
   reviewEvidence: DeliveryReviewEvidence[]
+  surfaceManifest?: DeliverySurfaceManifest
   changedFiles: string[]
   finalGate: DeliveryGateVerdict
   timeCreated: number
@@ -224,7 +226,20 @@ export function persistDeliveryEvidenceManifest(input: {
   if (!input.manifest.taskId || !input.manifest.runId || !input.manifest.deliveryId) {
     return
   }
-  Database.use((db) =>
+  Database.use((db) => {
+    if (input.manifest.surfaceManifest) {
+      db.insert(EngineArtifactTable).values({
+        id: input.manifest.surfaceManifest.id,
+        task_id: input.manifest.taskId!,
+        run_id: input.manifest.runId!,
+        delivery_id: input.manifest.deliveryId!,
+        kind: "delivery_surface_manifest",
+        label: "delivery-surface-manifest",
+        payload: input.manifest.surfaceManifest,
+        time_created: input.manifest.surfaceManifest.timeCreated,
+        time_updated: input.manifest.surfaceManifest.timeCreated,
+      }).run()
+    }
     db.insert(EngineArtifactTable).values({
       id: input.manifest.id,
       task_id: input.manifest.taskId!,
@@ -235,8 +250,23 @@ export function persistDeliveryEvidenceManifest(input: {
       payload: input.manifest,
       time_created: input.manifest.timeCreated,
       time_updated: input.manifest.timeCreated,
-    }).run(),
+    }).run()
+  })
+}
+
+export function findLatestDeliverySurfaceManifest(input: {
+  deliveryID: string
+}): DeliverySurfaceManifest | undefined {
+  const row = Database.use((db) =>
+    db.select().from(EngineArtifactTable)
+      .where(and(
+        eq(EngineArtifactTable.delivery_id, input.deliveryID),
+        eq(EngineArtifactTable.kind, "delivery_surface_manifest"),
+      ))
+      .orderBy(desc(EngineArtifactTable.time_created))
+      .get(),
   )
+  return row?.payload as DeliverySurfaceManifest | undefined
 }
 
 export function findLatestDeliveryEvidenceManifest(input: {
