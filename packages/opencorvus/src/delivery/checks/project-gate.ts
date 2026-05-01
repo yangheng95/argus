@@ -15,6 +15,7 @@ import {
 } from "./discovery"
 import { detectDeliverySurfaces } from "../surface-detector"
 import type { DeliverySurfaceManifest } from "../surface-detector"
+import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runFrontendReview, runVisualRuntimeReview } from "../specialists/frontend-visual"
 import { runTestIntegrationReview } from "../specialists/test-integration"
 import type { EvaluatorCommand } from "./types"
@@ -172,6 +173,10 @@ async function runSpecialistReviews(input: {
   }>
 }): Promise<DeliverySpecialistReview[]> {
   const reviews: DeliverySpecialistReview[] = []
+  const backendReview = await runBackendApiReview(input)
+  if (backendReview) reviews.push(backendReview)
+  const clientReview = await runClientContractReview(input)
+  if (clientReview) reviews.push(clientReview)
   const frontendReview = await runFrontendReview(input)
   if (frontendReview) reviews.push(frontendReview)
   const visualReview = await runVisualRuntimeReview(input)
