@@ -345,6 +345,103 @@ register_challenge_seed({
 
 Skip seeds entirely for low-risk tasks. Seeds do NOT replace metrics.
 
+### Phase 8: WORKED EXAMPLE — feature-rich frontend (chat-app)
+
+A concrete decomposition for a "Claude chat web app" brief (Google mock login, conversation history CRUD, resumable SSE, file attachments, markdown render, example prompts, BYO-API-key). Use this as a reference shape when the user request is a feature-rich SPA with several independent UI/data slices.
+
+**Final goal set — 10 goals (9 feature + 1 verification):**
+
+```text
+goal_bootstrap          (kind: bootstrap, blocking)
+  └─ React + Vite + TypeScript + Tailwind scaffold; owns root tsconfig.json,
+     vite.config.ts, tailwind.config.ts, postcss.config.js, package.json scripts,
+     src/main.tsx, src/App.tsx, src/index.css, public/index.html. Lands the
+     first runnable shell so every later goal merges into a working tree.
+goal_shared_types       (kind: implementation, blocking, depends_on=goal_bootstrap)
+  └─ src/shared/types.ts: ChatMessage, ChatSession, Attachment, User,
+     ExamplePrompt, ResumeState. Pure type module — no runtime.
+goal_storage            (depends_on=goal_shared_types)
+  └─ src/storage/indexeddb.ts + index.ts: ChatStorage interface, session
+     CRUD, resume-state save/load. Owns the IndexedDB schema.
+goal_auth               (depends_on=goal_shared_types)
+  └─ src/auth/mockAuth.ts + AuthContext.tsx: mockGoogleLogin (delayed
+     promise), AuthContext + useAuth, saveApiKey/getApiKey/validateApiKey.
+goal_sse_manager        (depends_on=goal_shared_types)
+  └─ src/chat/sseManager.ts: SSEManager class — connect / disconnect /
+     resume(sessionId, lastMessageId, …). Owns the byte-cursor reconnect
+     logic (no fallback; one canonical path).
+goal_claude_api         (depends_on=goal_shared_types, goal_sse_manager)
+  └─ src/chat/claudeApi.ts: streamClaudeMessage wrapper that uses the SSE
+     manager + handles vision attachments via prepareAttachments.
+goal_chat_components    (depends_on=goal_shared_types)
+  └─ src/components/{MessageList,ChatInput,Sidebar,HistoryItem,
+     MarkdownRenderer,AttachmentPreview,ExampleCard,WelcomeHeader,
+     LoginButton,ApiKeyInput}.tsx. Each component owns its own *.test.tsx.
+goal_hooks              (depends_on=goal_storage, goal_claude_api)
+  └─ src/hooks/{useChat,useSessions}.ts: glue layer. useChat returns
+     {messages, isStreaming, sendMessage, stopStreaming, error}; useSessions
+     returns {sessions, activeSession, createSession, selectSession,
+     deleteSession, renameSession}.
+goal_pages              (depends_on=goal_chat_components, goal_hooks, goal_auth)
+  └─ src/pages/{NewChat,ChatPage,Layout}.tsx + src/router.tsx +
+     src/data/examplePrompts.ts. Wires routes; NewChat shows example cards,
+     ChatPage drives the live conversation, Layout owns Sidebar shell.
+goal_tests              (kind: verification, blocking, depends_on=ALL above)
+  └─ tests/integration/{chat-flow,sse-resume,history-management}.test.ts +
+     tests/e2e/full-user-journey.test.ts. Single shell scorer:
+     `bun test tests/integration tests/e2e` exit 0.
+```
+
+**One register_goal entry from this set (the trickiest one — SSE manager):**
+
+```
+register_goal({
+  id: "goal_sse_manager",
+  title: "SSE manager with resume",
+  objective: "Own the SSE connection lifecycle for streaming Claude responses. Provide connect / disconnect / resume(sessionId, lastMessageId, …). On reconnect after a refresh, replay from the saved byte cursor — no duplicate text rendering, no dropped tokens. See user request §3 (断点续传) for the resume scenarios. Other goals never instantiate raw EventSource — they always go through this manager.",
+  acceptance_specs: [
+    { id: "acc-sse-manager-build", source_requirement_id: "REQ-3", goal_id: "goal_sse_manager",
+      title: "SSE manager compiles and unit tests pass", severity: "essential",
+      scorers: [
+        { type: "heuristic", name: "build-and-test",
+          spec: { kind: "shell", cmd: "bun run typecheck && bun test src/chat/sseManager.test.ts" },
+          expect: { exit_code: 0 } }
+      ] }
+  ],
+  owned_paths: ["src/chat/sseManager.ts", "src/chat/sseManager.test.ts"],
+  depends_on: ["goal_shared_types"],
+  exports: [
+    "class SSEManager { connect(url, opts): void; disconnect(): void; resume(sessionId, lastMessageId, opts): void; get isConnected: boolean }",
+    "type SSEMessage = { id: string; content: string; type: 'content' | 'error' | 'done' }",
+    "type SSECallback = (m: SSEMessage) => void"
+  ],
+  imports: ["ResumeState from goal_shared_types"],
+  priority: "blocking",
+  kind: "implementation",
+  requirement_ids: ["REQ-3"]
+})
+```
+
+**One register_contract entry from this set (the cross-goal type the storage / hooks / sse goals all consume):**
+
+```
+register_contract({
+  category: "shared_type",
+  title: "Chat session and resume-state shape",
+  spec: "```ts\n// src/shared/types.ts\nexport interface ChatMessage { id: string; role: 'user' | 'assistant'; content: string; timestamp: number; attachments?: Attachment[] }\nexport interface ChatSession { id: string; title: string; messages: ChatMessage[]; createdAt: number; updatedAt: number }\nexport interface ResumeState { sessionId: string; lastMessageId: string; timestamp: number }\n```",
+  goal_ids: ["goal_shared_types", "goal_storage", "goal_sse_manager", "goal_claude_api", "goal_hooks", "goal_chat_components"]
+})
+```
+
+**What this example illustrates (don't just copy — internalize):**
+
+- Bootstrap goal lands the runnable shell FIRST. Every later goal merges into a tree that already builds.
+- A single thin types goal feeds every consumer (`goal_shared_types`). Without it, six goals would race to define `ChatMessage` differently.
+- Each feature slice is a single goal — `goal_storage`, `goal_auth`, `goal_sse_manager`, `goal_claude_api` — owned by ONE module path, no overlap.
+- UI components are folded into ONE `goal_chat_components` goal (10 sibling components share infra, identical test toolchain — splitting them would multiply the build/merge surface 10×).
+- Hooks bridge storage + claude_api → UI. Pages bridge components + hooks + auth → routes. The dependency chain is bottom-up; no goal depends on something later in the chain.
+- The verification goal at the end is the SINGLE place `tests/integration` and `tests/e2e` live. Per-component unit tests stay in `goal_chat_components`'s `owned_paths`.
+
 ### Phase 8: TRACEABILITY
 
 Map every REQ-N to the goals that cover it. One call per requirement:
