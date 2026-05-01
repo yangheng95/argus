@@ -5,7 +5,7 @@
 // renderInteractions, statusIcon, statusLabel.
 // Data is read from boardStore (store/board.ts); no direct DOM manipulation.
 
-import { createMemo, createSignal, For, Show, onMount } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show, onMount } from "solid-js";
 import { boardStore } from "../store/board";
 import { cardTreeStore, type CardNode } from "../store/card-tree";
 import { t, tc } from "../utils/i18n";
@@ -413,12 +413,23 @@ const SECTION_ICONS: Record<string, string> = {
 
 function SectionFrame(props: SectionFrameProps) {
   let detailsEl: HTMLDetailsElement | undefined;
+  // First mount: open the section so the operator sees the data that just
+  // became available (the section only renders when taskScopeSections marks
+  // it visible — i.e. it has concrete state or data). Without this, the
+  // pre-bug behaviour was "section appears collapsed after the agent already
+  // ran" and operators had to click to see what the agent produced.
   onMount(() => {
     if (!detailsEl) return;
-    // Apply defaultOpen once at mount; afterwards user toggle is preserved.
-    if (props.defaultOpen ?? props.phaseState === "active") {
-      detailsEl.open = true;
-    }
+    if (props.defaultOpen ?? true) detailsEl.open = true;
+  });
+  // Re-open whenever the section transitions back to "active" (e.g. requirements
+  // running again after a rewind, or architect being re-entered). The effect
+  // never force-closes — once the user manually collapses, it stays collapsed
+  // until phaseState flips away and back, matching the spirit of the original
+  // "user toggle is preserved" comment.
+  createEffect(() => {
+    if (!detailsEl) return;
+    if (props.phaseState === "active") detailsEl.open = true;
   });
   return (
     <details
