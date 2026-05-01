@@ -57,6 +57,7 @@ describe("core prompt hygiene", () => {
     expect(text).not.toContain("Nothing has been scored yet. YOU run every spec")
     expect(text).not.toContain('category="missing_requirement"')
     expect(text).toContain("DeliveryEvidenceManifest")
+    expect(text).toContain("host arbiter is the only owner")
     expect(text).toContain("\\`tool_call_evidence\\`")
     expect(text).toContain("\\`rejection_details[]\\` is the rework plan and the single source")
   })
