@@ -64,6 +64,36 @@ describe("delivery arbiter", () => {
     expect(affectedGoalIDs(decision.verdict)).toEqual([])
   })
 
+  test("keeps delivery agent rejection text when manifest gate also fails", () => {
+    const rejected: DeliveryVerdictType = {
+      verdict: "rejected",
+      summary: "Agent inspected the failure and found the build script imports a missing module.",
+      startup_verification: { attempted: true, success: false, output: "build failed" },
+      frontend_check: { attempted: false },
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected src/main.ts" }],
+      rejection_details: [{
+        category: "build",
+        error: "src/main.ts imports ./missing which does not exist",
+        suggestion: "Restore the missing module or correct the import.",
+      }],
+    }
+
+    const decision = arbitrateDeliveryVerdict({
+      manifest: manifestWithFailedBuildCheck(),
+      goalIds: ["gol_auth", "gol_ui", "gol_data"],
+      llmVerdict: rejected,
+    })
+
+    expect(decision?.source).toBe("manifest")
+    expect(decision?.verdict.verdict).toBe("rejected")
+    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
+    expect(decision.verdict.summary).toContain("Agent inspected the failure")
+    expect(decision.verdict.summary).toContain("Host gate:")
+    expect(decision.verdict.rejection_details.some((item) => item.error.includes("./missing"))).toBe(true)
+    expect(decision.verdict.rejection_details.some((item) => item.error.includes("tsc exited"))).toBe(true)
+  })
+
   test("formats manifest failures with enough detail for orchestrator routing", () => {
     expect(formatDeliveryManifestFailureDetails(manifestWithFailedBuildCheck())).toEqual([
       "[check] check:build Build status=failed exit=1 command=bun run build: tsc exited with code 1",

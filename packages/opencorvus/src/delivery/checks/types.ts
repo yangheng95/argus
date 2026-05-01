@@ -90,6 +90,8 @@ export interface DeliveryInfo {
   summary: string
   changedFiles: string[]
   diffs?: Array<{ file: string; diff?: string }>
+  manifestFailures?: string[]
+  runtimeEvidenceFailures?: string[]
   /**
    * Structured per-goal implementation reports emitted by goal executors via
    * the `goal_report` tool call. One entry per delivered goal. Length 1 for

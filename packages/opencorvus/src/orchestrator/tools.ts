@@ -2591,7 +2591,7 @@ export function createOrchestratorTools(input: {
             owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
           }
         })
-        const deliveryInfo = {
+        const deliveryInfo: import("@/delivery/checks").DeliveryInfo = {
           summary: summaries.join("\n"),
           changedFiles: allDiffs.map(d => d.file),
           diffs: allDiffs.map(d => ({ file: d.file, diff: d.diff })),
@@ -2710,163 +2710,13 @@ export function createOrchestratorTools(input: {
           }
         }
 
-        // P0-0.B — short-circuit on render failure. Constructs a rejected
-        // verdict locally (no LLM call), opens a fresh attempt on every goal
-        // (visual failures cross-cut), and returns. Goes through the SAME
-        // engine_iteration / startNewAttempt / yieldResult plumbing the
-        // normal rejected path uses, so the orchestrator's next turn reads
-        // identical signals — the only difference is `summary` cites the
-        // render failure instead of LLM-authored issues.
         if (renderFailure) {
-          await trackStepComplete("deliver", undefined, true)
-          const { computeIterationSnapshot } = await import("@/metrics/score")
-          const {
-            readCounterexamplesForTask,
-            readIterationHistory,
-            readPreviousAggregateScore,
-            readResultsForIteration,
-            readSpecsForTask,
-            writeIterationSnapshot,
-          } = await import("@/metrics/store")
-          const priorIterations = readIterationHistory(taskID)
-          const iteration = priorIterations.length
-          const snapshot = computeIterationSnapshot({
-            task_id: taskID,
-            iteration,
-            specs: readSpecsForTask(taskID),
-            currentResults: readResultsForIteration(taskID, iteration),
-            previousResults: iteration > 0 ? readResultsForIteration(taskID, iteration - 1) : [],
-            counterexamples: readCounterexamplesForTask(taskID),
-            previousAggregateScore: readPreviousAggregateScore(taskID, iteration),
-          })
-          writeIterationSnapshot({ ...snapshot, arbiter_verdict: "continue" as const })
-
-          const summary =
-            renderFailure.kind === "no_index"
-              ? `Delivery rejected: ${renderFailure.detail}. Build a runnable index.html in the merged worktree before re-attempting delivery.`
-              : `Delivery rejected: render of merged worktree failed (${renderFailure.detail}). Visual deliverables require a working puppeteer render before the delivery agent can see what was built.`
-
-          const { EngineArtifactTable } = await import("@/engine/engine.sql")
-          const verdictArtifactId = Identifier.ascending("artifact")
-          // Synthetic short-circuit verdict: render preconditions failed
-          // before the delivery agent ran. Conforms to the new RejectedVerdict
-          // schema (rule 22 — single source of truth: rejection_details
-          // carries every per-goal attribution; no shadow `issues_found` /
-          // `affected_goal_ids` fields). `tool_call_evidence` records the
-          // synthetic gate that produced this verdict so downstream readers
-          // see the same audit shape as an LLM-emitted rejection.
-          const renderRejectVerdict: import("@/delivery/agent").DeliveryVerdictType = {
-            verdict: "rejected",
-            summary,
-            startup_verification: { attempted: false, success: false, output: renderFailure.detail },
-            frontend_check: { attempted: false, renders_correctly: false, issues: [renderFailure.detail] },
-            deferred_checks: [],
-            tool_call_evidence: [
-              {
-                tool: "render_prerequisite_gate",
-                passed: false,
-                detail: `${renderFailure.kind}: ${renderFailure.detail}`,
-              },
-            ],
-            rejection_details: [{
-              category: "visual" as const,
-              error: renderFailure!.detail,
-              suggestion:
-                renderFailure!.kind === "no_index"
-                  ? "Produce a runnable index.html under the project root (or a path findRenderedIndex can locate)."
-                  : "Fix the build so puppeteer can load and render the merged worktree.",
-            }],
-          }
-          Database.use((db) =>
-            db
-              .insert(EngineArtifactTable)
-              .values({
-                id: verdictArtifactId,
-                task_id: taskID,
-                run_id: run?.id ?? null,
-                delivery_id: deliveryID,
-                kind: "verdict",
-                label: "delivery-agent-verdict",
-                payload: renderRejectVerdict,
-                time_created: Date.now(),
-                time_updated: Date.now(),
-              })
-              .run(),
-          )
-
-          updateEvaluationFromDeliveryVerdict({
-            deliveryID,
-            verdict: "rejected",
-            summary,
-            checks: [
-              {
-                name: "render_prerequisite",
-                status: "failed" as const,
-                evidence: renderFailure.detail,
-                scorer_kind: "delivery_verdict" as const,
-              },
-            ],
-            now: Date.now(),
-          })
-          void EngineProtocol.emit(
-            EngineEvent.DeliveryGateRejected,
-            {
-              taskID,
-              iteration,
-              summary,
-              violations: [
-                {
-                  kind: renderFailure.kind,
-                  detail: renderFailure.detail,
-                },
-              ],
-            },
-            { source: "orchestrator.render_prerequisite" },
-          )
-
-          try {
-            const { createDecisionLog } = await import("@/decision-log")
-            createDecisionLog(taskID).append({
-              phase: "delivery",
-              key: `delivery_render_rejected_${iteration}`,
-              value: summary,
-              reason: renderFailure.kind,
-            })
-          } catch {
-            /* best effort */
-          }
-
-          log.info("deliver: render prerequisite failed — short-circuit reject", {
-            taskID, iteration, kind: renderFailure.kind,
-            reset_goals: 0,
-          })
-
-          requestStopAfterCurrentStep("delivery_render_rejected")
-          // Wake the orchestrator-loop after the deferred stop finalizes —
-          // without this, the loop exits and pending goals never get
-          // re-dispatched (see project_orchestrator_wake_wedge memory).
-          {
-            const { dispatchTaskLoop } = await import("@/engine/queue")
-            void dispatchTaskLoop({
-              taskID,
-              event: {
-                note: OrchestratorEventNote.deliveryRework({
-                  reason: `render_prerequisite_failed:${renderFailure.kind}`,
-                  iteration,
-                  summary,
-                  affectedGoalCount: 0,
-                }),
-              },
-            })
-          }
-          return SubAgentProtocol.yieldResult({
-            headline: `Delivery rejected — render prerequisite failed (${renderFailure.kind})`,
-            fields: [
-              ["render_failure_kind", renderFailure.kind],
-              ["iteration", String(iteration)],
-              ["affected_goals", "0"],
-            ],
-            pointer: `verdict artifact ${verdictArtifactId}; render must succeed before next deliver`,
+          deliveryInfo.runtimeEvidenceFailures = [
+            `[render] ${renderFailure.kind}: ${renderFailure.detail}`,
+          ]
+          log.warn("deliver: render prerequisite failed — routing through delivery agent", {
+            taskID,
+            kind: renderFailure.kind,
           })
         }
 

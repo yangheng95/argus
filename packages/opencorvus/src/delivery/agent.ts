@@ -414,6 +414,26 @@ function buildUserPrompt(
       filesShown.map((f) => `- ${f}`).join("\n"),
   )
 
+  if (input.delivery.manifestFailures && input.delivery.manifestFailures.length > 0) {
+    sections.push(
+      `# DeliveryEvidenceManifest Failures\n\n` +
+      `The host-run manifest is blocking this delivery. You are still the delivery brain: ` +
+      `read these failures, inspect any needed code context, then reject through submit_verdict ` +
+      `with concrete, actionable rejection_details. Do not accept while any blocking manifest ` +
+      `failure remains.\n\n` +
+      input.delivery.manifestFailures.map((item) => `- ${item}`).join("\n"),
+    )
+  }
+
+  if (input.delivery.runtimeEvidenceFailures && input.delivery.runtimeEvidenceFailures.length > 0) {
+    sections.push(
+      `# Runtime Evidence Failures\n\n` +
+      `The host runtime probe found blocking runtime failures. Analyze them as delivery evidence ` +
+      `and reject with concrete reproduction details unless you can prove the probe is invalid.\n\n` +
+      input.delivery.runtimeEvidenceFailures.map((item) => `- ${item}`).join("\n"),
+    )
+  }
+
   // Structured per-goal reports — the executor's first-person implementation
   // claims. Rendered verbatim for adversarial cross-check against the diff.
   if (input.delivery.goalReports && input.delivery.goalReports.length > 0) {

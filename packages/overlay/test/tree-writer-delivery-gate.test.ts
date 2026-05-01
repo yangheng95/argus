@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { applyEvent, resetWriter } from "../src/services/tree-writer";
 import { cardTreeStore } from "../src/store/card-tree";
 
-test("delivery.gate.rejected materializes a top-level card with violations", () => {
+test("delivery.gate.rejected does not materialize a separate agent card", () => {
   resetWriter();
 
   applyEvent({
@@ -21,21 +21,11 @@ test("delivery.gate.rejected materializes a top-level card with violations", () 
     },
   });
 
-  const cardID = "delivery-gate:tsk_abc:0";
-  const card = cardTreeStore.cards[cardID];
-  expect(card).toBeDefined();
-  expect(card?.kind).toBe("agent");
-  expect(card?.stage).toBe("delivery");
-  expect(card?.status).toBe("error");
-  expect(card?.subtitle).toContain("Runtime-evidence gate rejected");
-  expect(cardTreeStore.order.includes(cardID)).toBe(true);
-
-  const text = (card?.parts ?? []).find((p: any) => p?.type === "text") as any;
-  expect(text?.text).toContain("empty_root_shell");
-  expect(text?.text).toContain("rendered DOM 只有空");
+  expect(cardTreeStore.cards["delivery-gate:tsk_abc:0"]).toBeUndefined();
+  expect(cardTreeStore.order.includes("delivery-gate:tsk_abc:0")).toBe(false);
 });
 
-test("delivery.gate.rejected upserts the same card on a second emission for the same iteration", () => {
+test("delivery.gate.rejected remains pass-through on repeated emissions", () => {
   resetWriter();
 
   const base = {
@@ -55,18 +45,11 @@ test("delivery.gate.rejected upserts the same card on a second emission for the 
     properties: { ...base.properties, summary: "second", violations: [{ kind: "render_failed", detail: "404 chunk" }] },
   });
 
-  const cardID = "delivery-gate:tsk_xyz:1";
   const cards = Object.keys(cardTreeStore.cards).filter((id) => id.startsWith("delivery-gate:tsk_xyz:"));
-  expect(cards).toEqual([cardID]);
-
-  const card = cardTreeStore.cards[cardID];
-  expect(card?.subtitle).toBe("second");
-  const text = (card?.parts ?? []).find((p: any) => p?.type === "text") as any;
-  expect(text?.text).toContain("render_failed");
-  expect(text?.text).not.toContain("no_build_artifact");
+  expect(cards).toEqual([]);
 });
 
-test("delivery.evidence.updated materializes the manifest stage card", () => {
+test("delivery.evidence.updated does not materialize a separate agent card", () => {
   resetWriter();
 
   applyEvent({
@@ -97,16 +80,6 @@ test("delivery.evidence.updated materializes the manifest stage card", () => {
     },
   });
 
-  const cardID = "delivery-evidence:tsk_manifest:2";
-  const card = cardTreeStore.cards[cardID];
-  expect(card).toBeDefined();
-  expect(card?.stage).toBe("delivery");
-  expect(card?.status).toBe("error");
-  expect(cardTreeStore.order.includes(cardID)).toBe(true);
-
-  const text = (card?.parts ?? []).find((p: any) => p?.type === "text") as any;
-  expect(text?.text).toContain("checks_failed=1");
-  expect(text?.text).toContain("[check] check:build Build status=failed exit=1 command=bun run build: tsc exited with code 1");
-  expect(text?.text).toContain("reviews_failed=1");
-  expect(text?.text).toContain("manifest=artifact_manifest");
+  expect(cardTreeStore.cards["delivery-evidence:tsk_manifest:2"]).toBeUndefined();
+  expect(cardTreeStore.order.includes("delivery-evidence:tsk_manifest:2")).toBe(false);
 });
