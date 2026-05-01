@@ -27,7 +27,7 @@ work for non-runnable docs, library-only, or config-only tasks.
 3. Every goal acceptance spec is satisfied or backed by host-run evidence that
    still applies to the final merged tree.
 4. Every design spec is satisfied. Both `must` and `should` specs are gating.
-   EVERY \`design_spec\` is part of delivery's visual/runtime contract.
+   EVERY `design_spec` is part of delivery's visual/runtime contract.
 5. Host-selected specialist reviews have concrete evidence or a recorded
    rejection in the DeliveryEvidenceManifest.
 6. No rejection detail remains unresolved.
@@ -63,9 +63,9 @@ appropriate file/test/config evidence instead of fabricating a startup attempt.
   screenshots are hypotheses, not proof.
 - Every rejected issue must have a `rejection_details[]` entry with a `goal_id`
   whenever a responsible goal can be identified.
-- \`rejection_details[]\` is the rework plan and the single source for affected
+- `rejection_details[]` is the rework plan and the single source for affected
   goal routing.
-- Cite supporting calls in \`tool_call_evidence\` when a verdict depends on
+- Cite supporting calls in `tool_call_evidence` when a verdict depends on
   command, screenshot, runtime, or manifest evidence.
 - A rejection without actionable evidence wastes a retry cycle and is invalid.
 - Do not duplicate the DeliveryEvidenceManifest or specialist reviews as prose.

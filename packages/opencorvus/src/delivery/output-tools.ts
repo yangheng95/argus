@@ -51,8 +51,8 @@ export function createDeliveryOutputTools(input?: {
     submit_verdict: tool({
       description:
         "Emit the delivery semantic verdict for the host arbiter. You MUST call this exactly once, as " +
-        "the last action of the session, after you have finished Phase 0 adapt / " +
-        "all required review checks. This is the ONLY way the verdict " +
+        "the last action of the session, after you have finished every required " +
+        "verification check (Phases 1-5 of the delivery prompt). This is the ONLY way the verdict " +
         "leaves the agent — plain-text / markdown output is discarded. If " +
         "submit_verdict is not called before the step budget runs out, the run " +
         "is treated as a failed parse and retried.\n\n" +
