@@ -299,6 +299,37 @@ console.log("lint scope ok", cwd())
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
   })
 
+  test("runs security data review for security-sensitive files and blocks concrete flaws", async () => {
+    const dir = await packageFixture(
+      {},
+      {
+        files: {
+          "src/auth/session.ts": "const JWT_SECRET = '12345678901234567890'\n",
+        },
+      },
+    )
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_security_gate",
+        runID: "run_security_gate",
+        deliveryID: "dlv_security_gate",
+        changedFiles: ["src/auth/session.ts"],
+      }),
+    })
+
+    expect(manifest.surfaceManifest?.surfaces).toContain("security_data")
+    expect(manifest.specialistReviews?.map((item) => item.reviewer)).toContain("security_data")
+    expect(manifest.specialistReviews?.find((item) => item.reviewer === "security_data")?.findings[0]).toMatchObject({
+      proposedSeverity: "blocking",
+      category: "security",
+      claim: expect.stringContaining("hardcoded secret-like value"),
+    })
+    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.finalGate.failedReviewIds).toContain("specialist:security_data")
+  })
+
   test("fails non-trivial goal graph when integrity review evidence is missing", async () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",

@@ -562,6 +562,8 @@ Completed in Phase 5 implementation:
 
 ### Phase 6: Security And Data Review
 
+Status: complete.
+
 Scope:
 
 - Auth bypass.
@@ -575,6 +577,23 @@ Acceptance:
 - Security-sensitive fixtures with concrete flaws are rejected.
 - Non-security projects do not run this reviewer unless detector evidence
   selects it.
+
+Completed in Phase 6 implementation:
+
+- Added `packages/opencorvus/src/delivery/specialists/security-data.ts`
+  as the `security_data` specialist evidence producer.
+- The reviewer runs only when the surface detector selects `security_data`, and
+  consumes detector-selected file and dependency evidence.
+- It emits blocking findings for hardcoded secret-like values, upload/file path
+  handling that uses user-controlled filenames without basename normalization,
+  and unconditional destructive data operations.
+- `buildDeliveryEvidenceManifest()` runs the reviewer through the same
+  specialist collection path and converts blocking findings into failed review
+  evidence for the existing delivery gate.
+- Tests cover absent-surface skip behavior, missing security evidence,
+  hardcoded secrets, unsafe upload paths, destructive data operations, clean
+  security-sensitive files, and project-gate rejection for a detected security
+  flaw.
 
 ### Phase 7: Arbiter Integration And Retry Guidance
 
