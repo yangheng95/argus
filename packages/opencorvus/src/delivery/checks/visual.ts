@@ -25,9 +25,12 @@ import fs from "node:fs/promises"
 import http from "node:http"
 import path from "node:path"
 import { Shell } from "@/shell/shell"
+import { Log } from "@/util/log"
 import puppeteer, { type Page } from "puppeteer-core"
 import { PNG } from "pngjs"
 import ssim from "ssim.js"
+
+const log = Log.create({ service: "delivery.visual" })
 
 export interface VisualDiffOptions {
   /** Either an absolute file path to an html file, or http(s)/file URL. */
@@ -194,13 +197,80 @@ export async function createIsolatedRenderWorkspace(
   try {
     await copyTreeIntoRenderWorkspace(projectRoot, directory, projectRoot)
   } catch (err) {
-    await fs.rm(scratchRoot, { recursive: true, force: true })
+    await cleanupIsolatedRenderWorkspace(scratchRoot)
     throw err
   }
   return {
     directory,
-    cleanup: () => fs.rm(scratchRoot, { recursive: true, force: true }),
+    cleanup: () => cleanupIsolatedRenderWorkspace(scratchRoot),
   }
+}
+
+export async function cleanupIsolatedRenderWorkspace(scratchRoot: string): Promise<void> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await fs.rm(scratchRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 200,
+      })
+      return
+    } catch (err) {
+      lastError = err
+      if (process.platform === "win32" && isWindowsLockedPathError(err)) {
+        await killWindowsProcessesReferencingPath(scratchRoot)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
+    }
+  }
+  log.warn("delivery render workspace cleanup failed", {
+    scratchRoot,
+    err: lastError,
+  })
+}
+
+function isWindowsLockedPathError(err: unknown): boolean {
+  const lockedPathCodes = new Set(["EACCES", "EBUSY", "EPERM"])
+  return typeof err === "object"
+    && err !== null
+    && "code" in err
+    && lockedPathCodes.has(String((err as { code?: unknown }).code))
+}
+
+async function killWindowsProcessesReferencingPath(targetDir: string): Promise<void> {
+  const target = path.resolve(targetDir).toLowerCase()
+  const targetBase64 = Buffer.from(target, "utf8").toString("base64")
+  const script = [
+    `$needle = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${targetBase64}'))`,
+    "$own = $PID",
+    "Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $own -and $_.CommandLine -and $_.CommandLine.ToLowerInvariant().Contains($needle) } | ForEach-Object { & taskkill.exe /PID ([string]$_.ProcessId) /F /T | Out-Null }",
+  ].join("\n")
+  const encoded = Buffer.from(script, "utf16le").toString("base64")
+  await new Promise<void>((resolve) => {
+    const proc = spawn("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      encoded,
+    ], {
+      stdio: "ignore",
+      windowsHide: true,
+    })
+    const timer = setTimeout(() => {
+      proc.kill("SIGKILL")
+      resolve()
+    }, 5_000)
+    proc.once("exit", () => {
+      clearTimeout(timer)
+      resolve()
+    })
+    proc.once("error", () => {
+      clearTimeout(timer)
+      resolve()
+    })
+  })
 }
 
 async function copyTreeIntoRenderWorkspace(source: string, destination: string, sourceRoot: string): Promise<void> {
