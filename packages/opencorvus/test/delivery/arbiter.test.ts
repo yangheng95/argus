@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "../../src/delivery/arbiter"
-import type { DeliveryEvidenceManifest } from "../../src/delivery/manifest"
+import { formatDeliveryManifestFailureDetails, type DeliveryEvidenceManifest } from "../../src/delivery/manifest"
 import { createDeliverySpecialistReview } from "../../src/delivery/specialist-review"
 import { affectedGoalIDs, type DeliveryVerdictType } from "../../src/delivery/verdict"
 
@@ -62,6 +62,12 @@ describe("delivery arbiter", () => {
       suggestion: "Fix the Build failure and rerun bun run build.",
     }])
     expect(affectedGoalIDs(decision.verdict)).toEqual([])
+  })
+
+  test("formats manifest failures with enough detail for orchestrator routing", () => {
+    expect(formatDeliveryManifestFailureDetails(manifestWithFailedBuildCheck())).toEqual([
+      "[check] check:build Build status=failed exit=1 command=bun run build: tsc exited with code 1",
+    ])
   })
 
   test("final arbiter appends manifest review evidence without changing accepted verdict artifact shape", () => {

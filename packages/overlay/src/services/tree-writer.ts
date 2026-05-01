@@ -655,11 +655,23 @@ function handleDeliveryEvidenceUpdated(event: any): void {
   }
 
   const cardID = deliveryEvidenceCardID(taskID, iteration);
+  const failureDetails = Array.isArray(props.failureDetails) ? props.failureDetails : [];
+  const detailLines = failureDetails.map((item: any) => {
+    const kind = String(item?.kind || "unknown");
+    const id = String(item?.id || "");
+    const name = String(item?.name || id || "failure");
+    const statusText = item?.status ? ` status=${String(item.status)}` : "";
+    const commandText = item?.command ? ` command=${String(item.command)}` : "";
+    const exitText = Number.isFinite(Number(item?.exitCode)) ? ` exit=${Number(item.exitCode)}` : "";
+    const evidence = String(item?.evidence || "No evidence captured.");
+    return `[${kind}] ${id} ${name}${statusText}${exitText}${commandText}: ${evidence}`;
+  });
   const lines = [
     summary,
     `checks_failed=${Number(props.failedCheckCount ?? 0)}`,
     `runtime_failed=${Number(props.failedRuntimeFlowCount ?? 0)}`,
     `reviews_failed=${Number(props.failedReviewCount ?? 0)}`,
+    ...detailLines,
     `manifest=${String(props.manifestID || "")}`,
   ].filter(Boolean);
   const existing = cardTreeStore.cards[cardID];

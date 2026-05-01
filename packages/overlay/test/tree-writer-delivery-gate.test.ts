@@ -83,6 +83,17 @@ test("delivery.evidence.updated materializes the manifest stage card", () => {
       failedCheckCount: 1,
       failedRuntimeFlowCount: 0,
       failedReviewCount: 1,
+      failureDetails: [
+        {
+          kind: "check",
+          id: "check:build",
+          name: "Build",
+          status: "failed",
+          command: "bun run build",
+          exitCode: 1,
+          evidence: "tsc exited with code 1",
+        },
+      ],
     },
   });
 
@@ -95,6 +106,7 @@ test("delivery.evidence.updated materializes the manifest stage card", () => {
 
   const text = (card?.parts ?? []).find((p: any) => p?.type === "text") as any;
   expect(text?.text).toContain("checks_failed=1");
+  expect(text?.text).toContain("[check] check:build Build status=failed exit=1 command=bun run build: tsc exited with code 1");
   expect(text?.text).toContain("reviews_failed=1");
   expect(text?.text).toContain("manifest=artifact_manifest");
 });
