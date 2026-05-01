@@ -47,7 +47,7 @@ describe("delivery arbiter", () => {
     }])
   })
 
-  test("keeps project check failures task-scoped instead of faning out to every goal", () => {
+  test("keeps project check failures task-scoped instead of fanning out to every goal", () => {
     const decision = arbitrateDeliveryVerdict({
       manifest: manifestWithFailedBuildCheck(),
       goalIds: ["gol_auth", "gol_ui", "gol_data"],
