@@ -19,6 +19,7 @@
  *     images all produce explicit failures.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process"
+import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import fs from "node:fs/promises"
 import http from "node:http"
@@ -153,17 +154,6 @@ interface ProjectLaunchScript {
   buildScript?: string
 }
 
-async function hasPreferredBuildArtifact(projectRoot: string): Promise<boolean> {
-  for (const rel of PREFERRED_DIST_DIRS) {
-    const indexPath = path.join(projectRoot, ...rel.split("/"), "index.html")
-    try {
-      const stat = await fs.stat(indexPath)
-      if (stat.isFile()) return true
-    } catch {}
-  }
-  return false
-}
-
 export async function resolveProjectLaunchScript(projectRoot: string): Promise<ProjectLaunchScript | undefined> {
   let pkg: { scripts?: Record<string, string> }
   try {
@@ -174,18 +164,74 @@ export async function resolveProjectLaunchScript(projectRoot: string): Promise<P
   const scripts = pkg.scripts ?? {}
   const buildCommand = scripts.build
   const canBuild = typeof buildCommand === "string" && buildCommand.trim().length > 0
-  const hasBuiltArtifact = await hasPreferredBuildArtifact(projectRoot)
   for (const name of ["server", "start", "preview", "dev"] as const) {
     const command = scripts[name]
     if (typeof command === "string" && command.trim().length > 0) {
       return {
         script: name,
         command,
-        buildScript: name === "preview" && canBuild && !hasBuiltArtifact ? "build" : undefined,
+        buildScript: name !== "dev" && canBuild ? "build" : undefined,
       }
     }
   }
   return undefined
+}
+
+const RENDER_WORKSPACE_EXCLUDED_NAMES = new Set([
+  ".git",
+  ".opencorvus",
+  "node_modules",
+])
+
+export async function createIsolatedRenderWorkspace(
+  projectRoot: string,
+): Promise<{ directory: string; cleanup: () => Promise<void> }> {
+  const scratchParent = path.join(projectRoot, ".opencorvus", "delivery-render-workspaces")
+  await fs.mkdir(scratchParent, { recursive: true })
+  const scratchRoot = await fs.mkdtemp(path.join(scratchParent, `${randomUUID()}-`))
+  const directory = path.join(scratchRoot, "workspace")
+  try {
+    await copyTreeIntoRenderWorkspace(projectRoot, directory, projectRoot)
+  } catch (err) {
+    await fs.rm(scratchRoot, { recursive: true, force: true })
+    throw err
+  }
+  return {
+    directory,
+    cleanup: () => fs.rm(scratchRoot, { recursive: true, force: true }),
+  }
+}
+
+async function copyTreeIntoRenderWorkspace(source: string, destination: string, sourceRoot: string): Promise<void> {
+  if (!shouldCopyIntoRenderWorkspace(sourceRoot, source)) return
+  const stat = await fs.lstat(source)
+  if (stat.isDirectory()) {
+    await fs.mkdir(destination, { recursive: true })
+    const entries = await fs.readdir(source)
+    for (const entry of entries) {
+      await copyTreeIntoRenderWorkspace(
+        path.join(source, entry),
+        path.join(destination, entry),
+        sourceRoot,
+      )
+    }
+    return
+  }
+  if (stat.isSymbolicLink()) {
+    const target = await fs.readlink(source)
+    await fs.symlink(target, destination)
+    return
+  }
+  if (stat.isFile()) {
+    await fs.mkdir(path.dirname(destination), { recursive: true })
+    await fs.copyFile(source, destination)
+  }
+}
+
+function shouldCopyIntoRenderWorkspace(sourceRoot: string, candidate: string) {
+  const relative = path.relative(sourceRoot, candidate)
+  if (!relative) return true
+  return relative.split(path.sep).every((part) => !RENDER_WORKSPACE_EXCLUDED_NAMES.has(part))
 }
 
 /**
@@ -206,36 +252,33 @@ async function startProjectServer(
   opts: { timeoutMs?: number } = {},
 ): Promise<{ url: string; close: () => Promise<void> }> {
   const timeoutMs = opts.timeoutMs ?? 90_000
+  const isolated = await createIsolatedRenderWorkspace(projectRoot)
+  const launchRoot = isolated.directory
 
-  // Cold merged worktree: `node_modules/` is gitignored, so even though the
-  // build agent ran `bun install` in its isolated build worktree the merge
-  // back to primary carried only tracked files (package.json, bun.lock,
-  // src/**). Without this prelude the spawned `bun run preview` / `vite
-  // preview` immediately exits code=1 with "Cannot find module 'vite'" and
-  // the LLM-driven fix loop has no way out — fix-build agents run in their
-  // own worktrees so they cannot install into primary. Run `bun install`
-  // synchronously here when the lockfile is present but node_modules is
-  // absent. We deliberately don't auto-install when node_modules already
-  // exists (warm path) so repeat renders during a single benchmark stay
-  // fast.
-  const hasPackageJson = existsSync(`${projectRoot}/package.json`)
-  const hasNodeModules = existsSync(`${projectRoot}/node_modules`)
+  // Render launches run from an isolated copy of the merged primary tree.
+  // Build agents publish only tracked files back to primary, so dependencies
+  // and compiled output are absent in the copy by design. Install/build here
+  // to make preview/start faithful without mutating the primary worktree.
+  const hasPackageJson = existsSync(`${launchRoot}/package.json`)
+  const hasNodeModules = existsSync(`${launchRoot}/node_modules`)
   if (hasPackageJson && !hasNodeModules) {
     const install = spawnSync("bun", ["install"], {
-      cwd: projectRoot,
+      cwd: launchRoot,
       stdio: ["ignore", "pipe", "pipe"],
       shell: process.platform === "win32",
       timeout: 180_000,
     })
     if (install.error) {
+      await isolated.cleanup()
       throw new Error(
-        `bun install pre-launch failed in ${projectRoot}: ${install.error.message}`,
+        `bun install pre-launch failed in isolated render workspace for ${projectRoot}: ${install.error.message}`,
       )
     }
     if (install.status !== 0) {
+      await isolated.cleanup()
       const stderr = install.stderr?.toString().slice(-800) ?? "<no stderr>"
       throw new Error(
-        `bun install pre-launch exited code=${install.status} in ${projectRoot}: ${stderr}`,
+        `bun install pre-launch exited code=${install.status} in isolated render workspace for ${projectRoot}: ${stderr}`,
       )
     }
   }
@@ -243,27 +286,29 @@ async function startProjectServer(
     // `vite preview` serves compiled output; in the cold merged worktree that
     // output is not tracked, so delivery must materialize it before launch.
     const build = spawnSync("bun", ["run", script.buildScript], {
-      cwd: projectRoot,
+      cwd: launchRoot,
       stdio: ["ignore", "pipe", "pipe"],
       shell: process.platform === "win32",
       timeout: 180_000,
     })
     if (build.error) {
+      await isolated.cleanup()
       throw new Error(
-        `bun run ${script.buildScript} pre-launch failed in ${projectRoot}: ${build.error.message}`,
+        `bun run ${script.buildScript} pre-launch failed in isolated render workspace for ${projectRoot}: ${build.error.message}`,
       )
     }
     if (build.status !== 0) {
+      await isolated.cleanup()
       const output = `${build.stdout?.toString() ?? ""}${build.stderr?.toString() ?? ""}`.slice(-1200) || "<no output>"
       throw new Error(
-        `bun run ${script.buildScript} pre-launch exited code=${build.status} in ${projectRoot}: ${output}`,
+        `bun run ${script.buildScript} pre-launch exited code=${build.status} in isolated render workspace for ${projectRoot}: ${output}`,
       )
     }
   }
 
   // Run via `bun run`; inherits PATH so npx/vite/tsx on the project lockfile resolve.
   const child: ChildProcess = spawn("bun", ["run", script.script], {
-    cwd: projectRoot,
+    cwd: launchRoot,
     stdio: ["ignore", "pipe", "pipe"],
     shell: process.platform === "win32",
   })
@@ -293,8 +338,17 @@ async function startProjectServer(
   child.stderr?.on("data", onChunk)
   const closed = new Promise<void>((resolve) => child.once("exit", () => resolve()))
 
+  let cleaned = false
+  const cleanupLaunchRoot = async () => {
+    if (cleaned) return
+    cleaned = true
+    await isolated.cleanup()
+  }
   const close = async () => {
-    if (child.exitCode !== null) return
+    if (child.exitCode !== null) {
+      await cleanupLaunchRoot()
+      return
+    }
     try {
       child.kill("SIGTERM")
       // Give it up to 2s to shut down cleanly; then SIGKILL.
@@ -307,6 +361,7 @@ async function startProjectServer(
       /* ignore */
     }
     await closed.catch(() => {})
+    await cleanupLaunchRoot()
   }
 
   const deadline = Date.now() + timeoutMs
