@@ -17,8 +17,8 @@ const issues: string[] = []
 const catalogAI = rootPackage.workspaces?.catalog?.ai
 if (!catalogAI) {
   issues.push("root workspace catalog must own the ai version")
-} else if (major(catalogAI) !== 5) {
-  issues.push(`root workspace catalog ai must stay on major 5 for this runtime, got ${catalogAI}`)
+} else if (major(catalogAI) !== 6) {
+  issues.push(`root workspace catalog ai must stay on major 6 for this runtime, got ${catalogAI}`)
 }
 
 if (opencorvusPackage.dependencies?.ai !== "catalog:") {
@@ -28,16 +28,16 @@ if (opencorvusPackage.dependencies?.ai !== "catalog:") {
 const openRouterVersion = opencorvusPackage.dependencies?.["@openrouter/ai-sdk-provider"]
 if (!openRouterVersion) {
   issues.push("packages/opencorvus must declare @openrouter/ai-sdk-provider")
-} else if (major(openRouterVersion) !== 1) {
+} else if (major(openRouterVersion) !== 2) {
   issues.push(
-    `@openrouter/ai-sdk-provider must stay on major 1 while the runtime is ai v5, got ${openRouterVersion}`,
+    `@openrouter/ai-sdk-provider must stay on major 2 while the runtime is ai v6, got ${openRouterVersion}`,
   )
 }
 
 const openRouterPatch = Object.keys(rootPackage.patchedDependencies ?? {}).find((item) =>
   item.startsWith("@openrouter/ai-sdk-provider@"),
 )
-if (openRouterVersion && openRouterPatch !== `@openrouter/ai-sdk-provider@${openRouterVersion}`) {
+if (openRouterVersion && openRouterPatch && openRouterPatch !== `@openrouter/ai-sdk-provider@${openRouterVersion}`) {
   issues.push(
     `patched @openrouter/ai-sdk-provider must match package dependency ${openRouterVersion}, got ${
       openRouterPatch ?? "<missing>"
@@ -46,25 +46,25 @@ if (openRouterVersion && openRouterPatch !== `@openrouter/ai-sdk-provider@${open
 }
 
 for (const version of matchVersions(lock, /"ai": \["ai@([^"]+)"/g)) {
-  if (major(version) !== 5) issues.push(`bun.lock contains ai major ${major(version)} (${version})`)
+  if (major(version) !== 6) issues.push(`bun.lock contains ai major ${major(version)} (${version})`)
 }
 
 for (const version of matchVersions(lock, /"ai": "\^([^"]+)"/g)) {
-  if (major(version) !== 5) issues.push(`bun.lock contains ai peer major ${major(version)} (${version})`)
+  if (major(version) !== 6) issues.push(`bun.lock contains ai peer major ${major(version)} (${version})`)
 }
 
 for (const version of matchVersions(lock, /"@ai-sdk\/provider": \["@ai-sdk\/provider@([^"]+)"/g)) {
-  if (major(version) !== 2) issues.push(`bun.lock contains @ai-sdk/provider major ${major(version)} (${version})`)
+  if (major(version) !== 3) issues.push(`bun.lock contains @ai-sdk/provider major ${major(version)} (${version})`)
 }
 
 for (const version of matchVersions(lock, /"@ai-sdk\/provider-utils": \["@ai-sdk\/provider-utils@([^"]+)"/g)) {
-  if (major(version) !== 3) {
+  if (major(version) !== 4) {
     issues.push(`bun.lock contains @ai-sdk/provider-utils major ${major(version)} (${version})`)
   }
 }
 
-if (!lock.includes('"@openrouter/ai-sdk-provider": ["@openrouter/ai-sdk-provider@1.5.4"')) {
-  issues.push("bun.lock must resolve @openrouter/ai-sdk-provider to the ai v5-compatible 1.5.4 package")
+if (!lock.includes('"@openrouter/ai-sdk-provider": ["@openrouter/ai-sdk-provider@2.9.0"')) {
+  issues.push("bun.lock must resolve @openrouter/ai-sdk-provider to the ai v6-compatible 2.9.0 package")
 }
 
 if (issues.length > 0) {
@@ -73,7 +73,7 @@ if (issues.length > 0) {
   process.exit(1)
 }
 
-console.log("ai runtime check passed (ai v5, provider v2, provider-utils v3, OpenRouter v1)")
+console.log("ai runtime check passed (ai v6, provider v3, provider-utils v4, OpenRouter v2)")
 
 async function readPackage(file: string): Promise<PackageJson> {
   return JSON.parse(await Bun.file(file).text()) as PackageJson
