@@ -37,6 +37,8 @@ describe("BuildAgent external coding system prompt", () => {
   test("does not materialize external assistant narration as card text", () => {
     expect(externalEventPartText({ type: "text_delta", text: "Let me inspect the repo." }, "claude-code")).toBeUndefined()
     expect(externalEventPartText({ type: "reasoning_delta", text: "thinking aloud" }, "claude-code")).toBeUndefined()
+    expect(externalEventPartText({ type: "plan_delta", summary: "1. inspect files\n2. write code" }, "codex")).toBeUndefined()
+    expect(externalEventPartText({ type: "diff_delta", summary: "updated src/app.ts" }, "codex")).toBeUndefined()
     expect(externalEventPartText({ type: "error", message: "Claude Code process aborted by user" }, "claude-code")).toContain(
       "Claude Code process aborted by user",
     )
