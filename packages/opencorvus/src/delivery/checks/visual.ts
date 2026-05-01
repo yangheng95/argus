@@ -150,9 +150,21 @@ async function findProjectRoot(startDir: string): Promise<string | undefined> {
 interface ProjectLaunchScript {
   script: string
   command: string
+  buildScript?: string
 }
 
-async function pickProjectLaunchScript(projectRoot: string): Promise<ProjectLaunchScript | undefined> {
+async function hasPreferredBuildArtifact(projectRoot: string): Promise<boolean> {
+  for (const rel of PREFERRED_DIST_DIRS) {
+    const indexPath = path.join(projectRoot, ...rel.split("/"), "index.html")
+    try {
+      const stat = await fs.stat(indexPath)
+      if (stat.isFile()) return true
+    } catch {}
+  }
+  return false
+}
+
+export async function resolveProjectLaunchScript(projectRoot: string): Promise<ProjectLaunchScript | undefined> {
   let pkg: { scripts?: Record<string, string> }
   try {
     pkg = JSON.parse(await fs.readFile(path.join(projectRoot, "package.json"), "utf8"))
@@ -160,10 +172,17 @@ async function pickProjectLaunchScript(projectRoot: string): Promise<ProjectLaun
     return undefined
   }
   const scripts = pkg.scripts ?? {}
+  const buildCommand = scripts.build
+  const canBuild = typeof buildCommand === "string" && buildCommand.trim().length > 0
+  const hasBuiltArtifact = await hasPreferredBuildArtifact(projectRoot)
   for (const name of ["server", "start", "preview", "dev"] as const) {
     const command = scripts[name]
     if (typeof command === "string" && command.trim().length > 0) {
-      return { script: name, command }
+      return {
+        script: name,
+        command,
+        buildScript: name === "preview" && canBuild && !hasBuiltArtifact ? "build" : undefined,
+      }
     }
   }
   return undefined
@@ -217,6 +236,27 @@ async function startProjectServer(
       const stderr = install.stderr?.toString().slice(-800) ?? "<no stderr>"
       throw new Error(
         `bun install pre-launch exited code=${install.status} in ${projectRoot}: ${stderr}`,
+      )
+    }
+  }
+  if (script.buildScript) {
+    // `vite preview` serves compiled output; in the cold merged worktree that
+    // output is not tracked, so delivery must materialize it before launch.
+    const build = spawnSync("bun", ["run", script.buildScript], {
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: process.platform === "win32",
+      timeout: 180_000,
+    })
+    if (build.error) {
+      throw new Error(
+        `bun run ${script.buildScript} pre-launch failed in ${projectRoot}: ${build.error.message}`,
+      )
+    }
+    if (build.status !== 0) {
+      const output = `${build.stdout?.toString() ?? ""}${build.stderr?.toString() ?? ""}`.slice(-1200) || "<no output>"
+      throw new Error(
+        `bun run ${script.buildScript} pre-launch exited code=${build.status} in ${projectRoot}: ${output}`,
       )
     }
   }
@@ -548,7 +588,7 @@ export async function renderPage(opts: {
     // hangs on. The static server is only used when the project does not
     // declare any of `server` / `start` / `preview`.
     const projectRoot = await findProjectRoot(serveRoot)
-    const launchScript = projectRoot ? await pickProjectLaunchScript(projectRoot) : undefined
+    const launchScript = projectRoot ? await resolveProjectLaunchScript(projectRoot) : undefined
     if (projectRoot && launchScript) {
       staticServer = await startProjectServer(projectRoot, launchScript)
       target = `${staticServer.url}/`
