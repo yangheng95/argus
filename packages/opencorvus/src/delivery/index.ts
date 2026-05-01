@@ -23,6 +23,7 @@ export {
 } from "./specialist-review"
 export { runBackendApiReview, runClientContractReview } from "./specialists/backend-client"
 export { runFrontendReview, runVisualRuntimeReview } from "./specialists/frontend-visual"
+export { runSecurityDataReview } from "./specialists/security-data"
 export { runTestIntegrationReview } from "./specialists/test-integration"
 export type {
   DeliveryReviewFinding,
