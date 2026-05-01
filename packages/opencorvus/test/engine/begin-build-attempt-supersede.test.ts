@@ -63,7 +63,7 @@ function seedBaseline() {
       payload: {
         plan_version_id: null,
         session_id: null,
-        executor: "opencode",
+        executor: "mirrorcode",
         status: "running",
         phase: "execute",
         blocking_reason: null,

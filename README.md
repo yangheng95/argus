@@ -117,7 +117,7 @@ export OPENCORVUS_AUTO_DISCOVER_EXECUTORS=1
 
 Supported executor display names today:
 
-- MirrorCode (`opencode` executor id)
+- MirrorCode (`mirrorcode` executor id)
 - Codex (`codex` executor id)
 - Claude Code (`claude-code` executor id)
 

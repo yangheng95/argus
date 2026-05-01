@@ -1098,7 +1098,7 @@ export class Channel extends HeyApiClient {
       user_id?: string
       request_id?: string
       source?: string
-      executor?: "opencode" | "codex" | "claude-code"
+      executor?: "mirrorcode" | "codex" | "claude-code"
       allow_create?: boolean
       allow_session_mutation?: boolean
       bind?: boolean
@@ -3571,7 +3571,7 @@ export class Message extends HeyApiClient {
       text?: string
       taskID?: string
       sessionID?: string
-      executor?: "opencode" | "codex" | "claude-code"
+      executor?: "mirrorcode" | "codex" | "claude-code"
       channel?: string
       thread?: string
       user_id?: string
@@ -3834,7 +3834,7 @@ export class Panel extends HeyApiClient {
       text?: string
       taskID?: string
       sessionID?: string
-      executor?: "opencode" | "codex" | "claude-code"
+      executor?: "mirrorcode" | "codex" | "claude-code"
       channel?: string
       thread?: string
       user_id?: string
@@ -4050,7 +4050,7 @@ export class Control2 extends HeyApiClient {
       text?: string
       taskID?: string
       sessionID?: string
-      executor?: "opencode" | "codex" | "claude-code"
+      executor?: "mirrorcode" | "codex" | "claude-code"
       channel?: string
       thread?: string
       user_id?: string
@@ -4128,7 +4128,7 @@ export class Control2 extends HeyApiClient {
             action: "create_task"
             request: string
             request_id?: string
-            executor?: "opencode" | "codex" | "claude-code"
+            executor?: "mirrorcode" | "codex" | "claude-code"
             checks?: {
               build?: Array<string> | false
               test?: Array<string> | false
@@ -4396,7 +4396,7 @@ export class Control2 extends HeyApiClient {
           }
         | {
             action: "set_executor"
-            executor: "opencode" | "codex" | "claude-code"
+            executor: "mirrorcode" | "codex" | "claude-code"
           }
         | {
             action: "select_task"
@@ -4471,7 +4471,7 @@ export class Channel2 extends HeyApiClient {
       user_id?: string
       request_id?: string
       source?: string
-      executor?: "opencode" | "codex" | "claude-code"
+      executor?: "mirrorcode" | "codex" | "claude-code"
       allow_create?: boolean
       allow_session_mutation?: boolean
       bind?: boolean
@@ -4914,7 +4914,7 @@ export class Task extends HeyApiClient {
       project?: string
       requestID?: string
       source?: string
-      executor?: "opencode" | "codex" | "claude-code"
+      executor?: "mirrorcode" | "codex" | "claude-code"
       title?: string
       request?: string
       attachments?: Array<{

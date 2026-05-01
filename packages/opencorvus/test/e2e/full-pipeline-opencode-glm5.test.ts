@@ -1,4 +1,4 @@
 await import("./full-pipeline-coding-plan-env.ts")
-process.env["OPENCORVUS_E2E_EXECUTOR"] ??= "opencode"
+process.env["OPENCORVUS_E2E_EXECUTOR"] ??= "mirrorcode"
 
 await import("./full-pipeline.test.ts")

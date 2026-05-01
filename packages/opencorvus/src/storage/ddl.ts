@@ -362,7 +362,7 @@ CREATE TABLE IF NOT EXISTS engine_task (
   attachments            text,
   system_artifacts       text NOT NULL DEFAULT '[]',
   design_specs           text NOT NULL DEFAULT '[]',
-  executor               text NOT NULL DEFAULT 'opencode',
+  executor               text NOT NULL DEFAULT 'mirrorcode',
   architect_challenge_seeds text,
   criteria_results       text NOT NULL DEFAULT '[]',
   kind                   text NOT NULL DEFAULT 'workflow',

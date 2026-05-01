@@ -295,7 +295,7 @@ test("overlay oauth auth handles prompt-driven authorize flow and pasted redirec
     },
     executors: [
       {
-        id: "opencode",
+        id: "mirrorcode",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",
@@ -495,7 +495,7 @@ test("overlay executes prompt-driven api auth methods without relying on tui", a
     },
     executors: [
       {
-        id: "opencode",
+        id: "mirrorcode",
         label: "OpenCorvus",
         detail: "Bundled",
         version: "0.0.1-alpha",

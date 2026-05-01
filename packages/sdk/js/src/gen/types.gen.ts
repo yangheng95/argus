@@ -3755,7 +3755,7 @@ export type ChannelMessageData = {
     user_id?: string
     request_id?: string
     source?: string
-    executor?: "opencode" | "codex" | "claude-code"
+    executor?: "mirrorcode" | "codex" | "claude-code"
     allow_create?: boolean
     allow_session_mutation?: boolean
     bind?: boolean
@@ -3789,7 +3789,7 @@ export type ChannelMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "opencode" | "codex" | "claude-code"
+          executor: "mirrorcode" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -3875,7 +3875,7 @@ export type ExecutorListResponses = {
    * Executor status
    */
   200: Array<{
-    id: "opencode" | "codex" | "claude-code"
+    id: "mirrorcode" | "codex" | "claude-code"
     label: string
     registered: boolean
     discovered: boolean
@@ -6246,7 +6246,7 @@ export type PanelMessageData = {
     text: string
     taskID?: string
     sessionID?: string
-    executor?: "opencode" | "codex" | "claude-code"
+    executor?: "mirrorcode" | "codex" | "claude-code"
     channel?: string
     thread?: string
     user_id?: string
@@ -6282,7 +6282,7 @@ export type PanelMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "opencode" | "codex" | "claude-code"
+          executor: "mirrorcode" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -6328,7 +6328,7 @@ export type PanelMessageStreamData = {
     text: string
     taskID?: string
     sessionID?: string
-    executor?: "opencode" | "codex" | "claude-code"
+    executor?: "mirrorcode" | "codex" | "claude-code"
     channel?: string
     thread?: string
     user_id?: string
@@ -6364,7 +6364,7 @@ export type PanelMessageStreamResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "opencode" | "codex" | "claude-code"
+          executor: "mirrorcode" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -6758,7 +6758,7 @@ export type GatewayControlMessageData = {
     text: string
     taskID?: string
     sessionID?: string
-    executor?: "opencode" | "codex" | "claude-code"
+    executor?: "mirrorcode" | "codex" | "claude-code"
     channel?: string
     thread?: string
     user_id?: string
@@ -6795,7 +6795,7 @@ export type GatewayControlMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "opencode" | "codex" | "claude-code"
+          executor: "mirrorcode" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -6836,7 +6836,7 @@ export type GatewayControlActionData = {
         action: "create_task"
         request: string
         request_id?: string
-        executor?: "opencode" | "codex" | "claude-code"
+        executor?: "mirrorcode" | "codex" | "claude-code"
         checks?: {
           build?: Array<string> | false
           test?: Array<string> | false
@@ -7104,7 +7104,7 @@ export type GatewayControlActionData = {
       }
     | {
         action: "set_executor"
-        executor: "opencode" | "codex" | "claude-code"
+        executor: "mirrorcode" | "codex" | "claude-code"
       }
     | {
         action: "select_task"
@@ -7166,7 +7166,7 @@ export type GatewayChannelMessageData = {
     user_id?: string
     request_id?: string
     source?: string
-    executor?: "opencode" | "codex" | "claude-code"
+    executor?: "mirrorcode" | "codex" | "claude-code"
     allow_create?: boolean
     allow_session_mutation?: boolean
     bind?: boolean
@@ -7217,7 +7217,7 @@ export type GatewayChannelMessageResponses = {
     local_action?:
       | {
           type: "set_executor"
-          executor: "opencode" | "codex" | "claude-code"
+          executor: "mirrorcode" | "codex" | "claude-code"
         }
       | {
           type: "select_task"
@@ -7286,7 +7286,7 @@ export type TaskCreateData = {
     project?: string
     requestID?: string
     source?: string
-    executor?: "opencode" | "codex" | "claude-code"
+    executor?: "mirrorcode" | "codex" | "claude-code"
     title?: string
     request: string
     attachments?: Array<{
@@ -7776,7 +7776,7 @@ export type TaskListResponses = {
         taskID: string
         planVersionID?: string | null
         sessionID?: string | null
-        executor: "opencode" | "codex" | "claude-code"
+        executor: "mirrorcode" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
         phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
         blockingReason?: string
@@ -7923,7 +7923,7 @@ export type TaskGlobalListResponses = {
         taskID: string
         planVersionID?: string | null
         sessionID?: string | null
-        executor: "opencode" | "codex" | "claude-code"
+        executor: "mirrorcode" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
         phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
         blockingReason?: string
@@ -8253,7 +8253,7 @@ export type TaskProgressResponses = {
       taskID: string
       planVersionID?: string | null
       sessionID?: string | null
-      executor: "opencode" | "codex" | "claude-code"
+      executor: "mirrorcode" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
       phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
       blockingReason?: string
@@ -8500,7 +8500,7 @@ export type TaskConversationResponses = {
         taskID: string
         planVersionID?: string | null
         sessionID?: string | null
-        executor: "opencode" | "codex" | "claude-code"
+        executor: "mirrorcode" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
         phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
         blockingReason?: string
@@ -9039,7 +9039,7 @@ export type TaskBoardResponses = {
       taskID: string
       planVersionID?: string | null
       sessionID?: string | null
-      executor: "opencode" | "codex" | "claude-code"
+      executor: "mirrorcode" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
       phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
       blockingReason?: string
@@ -9409,7 +9409,7 @@ export type TaskRunsResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "opencode" | "codex" | "claude-code"
+    executor: "mirrorcode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -9791,7 +9791,7 @@ export type TaskRetryResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "opencode" | "codex" | "claude-code"
+    executor: "mirrorcode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -9844,7 +9844,7 @@ export type TaskReplanResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "opencode" | "codex" | "claude-code"
+    executor: "mirrorcode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -9928,7 +9928,7 @@ export type RunGetResponses = {
     taskID: string
     planVersionID?: string | null
     sessionID?: string | null
-    executor: "opencode" | "codex" | "claude-code"
+    executor: "mirrorcode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
     phase: "plan" | "execute" | "evaluate" | "deliver" | "dispatch" | "retry"
     blockingReason?: string
@@ -9980,7 +9980,7 @@ export type RunExecutorSessionResponses = {
     id: string
     taskID: string
     runID: string
-    provider: "opencode" | "codex" | "claude-code"
+    provider: "mirrorcode" | "codex" | "claude-code"
     protocol: string
     protocolVersion: string
     transport: "inproc" | "stdio" | "ws" | "http"

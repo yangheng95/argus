@@ -115,7 +115,7 @@ export const BuildResultSchema = z.discriminatedUnion("status", [
 export type BuildResult = z.infer<typeof BuildResultSchema>
 
 /**
- * Typed contract violation thrown by BuildAgent.run when an opencode build
+ * Typed contract violation thrown by BuildAgent.run when a MirrorCode build
  * session ends without honouring its terminal-tool contract. Two shapes:
  *
  *   - missing_terminal_report — session ended without a `report_build_result`
@@ -131,7 +131,7 @@ export type BuildResult = z.infer<typeof BuildResultSchema>
  *     BuildAgent.run (rule-7 fallback); v3 P2 replaces that synthesis with
  *     a typed throw the orchestrator catches and converts.
  *
- * Scope: opencode executor only. External executors (codex / claude-code)
+ * Scope: MirrorCode executor only. External executors (codex / claude-code)
  * host-synthesise the BuildResult after the provider finishes — there is
  * no in-session report_build_result tool call to be missing.
  */

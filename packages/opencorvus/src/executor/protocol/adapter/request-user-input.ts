@@ -33,7 +33,7 @@ export const RequestUserInputToolAdapter: ToolAdapter = {
   },
   projectCall(call) {
     return [{
-      provider: call.metadata?.provider as "opencode" | "codex" | "claude-code",
+      provider: call.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
       kind: "input_request",
       summary: "User input requested",
       refs: call.refs,
@@ -47,7 +47,7 @@ export const RequestUserInputToolAdapter: ToolAdapter = {
   },
   projectResult(result) {
     return [{
-      provider: result.metadata?.provider as "opencode" | "codex" | "claude-code",
+      provider: result.metadata?.provider as "mirrorcode" | "codex" | "claude-code",
       kind: "input_response",
       summary: result.summary ?? "User input received",
       refs: result.refs,

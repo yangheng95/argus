@@ -139,7 +139,7 @@ export function panelRequestBody(
   metadata: Record<string, unknown> = {},
   requestID: string = "",
   attachments: Attachment[] = [],
-  executor: string = "opencode",
+  executor: string = "mirrorcode",
 ): Record<string, unknown> {
   const taskID = boardStore.selectedTaskID || undefined;
   const body: Record<string, unknown> = {
@@ -323,7 +323,7 @@ export async function submitMessage(
   const controller = new AbortController();
   const cleanupRelay = relayAbort(options.signal, controller);
   const executor =
-    settingsStore.executor ?? "opencode";
+    settingsStore.executor ?? "mirrorcode";
   let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
   const markActivity = () => {
@@ -445,7 +445,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
   const { text, attachments = [], metadata = {}, signal, budget } = options;
   if (!text) throw new Error("createTask: text is required");
   const requestID = crypto.randomUUID();
-  const executor = settingsStore.executor ?? "opencode";
+  const executor = settingsStore.executor ?? "mirrorcode";
   const body = JSON.stringify({
     request: text,
     executor,

@@ -1578,7 +1578,7 @@ function artifactRowToRunRow(row: typeof EngineArtifactTable.$inferSelect): RunR
     task_id: row.task_id,
     plan_version_id: payload.plan_version_id ?? null,
     session_id: payload.session_id ?? null,
-    executor: payload.executor ?? "opencode",
+    executor: payload.executor ?? "mirrorcode",
     status: payload.status ?? "queued",
     phase: payload.phase ?? "dispatch",
     blocking_reason: payload.blocking_reason ?? null,

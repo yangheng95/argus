@@ -69,7 +69,7 @@ async function resolveModel() {
 
 const MODEL = await resolveModel()
 const MODEL_PROVIDER_ID = MODEL.split("/")[0] ?? "openai"
-const EXECUTOR = (process.env.OPENCORVUS_E2E_EXECUTOR ?? "opencode") as "opencode" | "codex" | "claude-code"
+const EXECUTOR = (process.env.OPENCORVUS_E2E_EXECUTOR ?? "mirrorcode") as "mirrorcode" | "codex" | "claude-code"
 
 async function hasLiveModel(model: string) {
   try {

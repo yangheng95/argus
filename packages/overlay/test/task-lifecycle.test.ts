@@ -137,7 +137,7 @@ describe("busy signal (chatRequest || isTaskInterruptable)", () => {
 describe("direct API call contracts", () => {
   test("createTask builds correct request body shape", () => {
     const text = "Build a login page"
-    const executor = "opencode"
+    const executor = "mirrorcode"
     const requestID = "req-123"
     const metadata = { key: "value" }
 
@@ -150,7 +150,7 @@ describe("direct API call contracts", () => {
     }
 
     expect(body.request).toBe(text)
-    expect(body.executor).toBe("opencode")
+    expect(body.executor).toBe("mirrorcode")
     expect(body.requestID).toBe(requestID)
     expect(body.source).toBe("panel")
     expect(body.metadata).toEqual({ key: "value" })

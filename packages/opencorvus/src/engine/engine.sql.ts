@@ -27,7 +27,7 @@ export type EngineTaskStatus =
   | "cancelled"
 
 export type EngineTaskPriority = "critical" | "high" | "normal" | "low"
-export type EngineExecutor = "opencode" | "codex" | "claude-code"
+export type EngineExecutor = "mirrorcode" | "codex" | "claude-code"
 export type EnginePlanStatus = "active" | "superseded"
 export type EngineGoalPriority = "blocking" | "advisory"
 // engine_goal.status was retired in the LLM-autonomous redesign: it was a
@@ -219,11 +219,11 @@ export const EngineTaskTable = sqliteTable(
      *  shape. Written by the orchestrator `design_analysis` tool, consumed by
      *  delivery prompt rendering. */
     design_specs: text({ mode: "json" }).$type<import("@/design-analyst/types").VisualSpec[]>().notNull().default([]),
-    /** Executor that runs this task's goal runs — "opencode" / "codex" /
+    /** Executor that runs this task's goal runs — "mirrorcode" / "codex" /
      *  "claude-code". Promoted from task.metadata._pipeline.executor (which
      *  carried several other fields that turned out to be dead). Read by the
      *  dispatch tool when creating runs. */
-    executor: text().notNull().$type<EngineExecutor>().default("opencode"),
+    executor: text().notNull().$type<EngineExecutor>().default("mirrorcode"),
     /** Architect-produced challenge seeds for the Prosecutor. Promoted from
      *  task.metadata._architect_challenge_seeds. Written once by the
      *  architect tool in orchestrator/tools.ts, read on each delivery

@@ -184,7 +184,7 @@ async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: str
     sessionID: run.session_id,
     message,
   })
-  if (run.executor !== "opencode") {
+  if (run.executor !== "mirrorcode") {
     await appendTaskSessionMessage(task, message)
   }
   if (submission.queueTaskID !== run.executor_ref?.queue_task_id) {
@@ -447,8 +447,8 @@ export namespace EngineService {
       if (existing) return existing.id
     }
     const title = input.title?.trim() || deriveTitle(input.request)
-    const executor = input.executor ?? "opencode"
-    if (executor !== "opencode" && !ExecutorRegistry.has(executor)) {
+    const executor = input.executor ?? "mirrorcode"
+    if (executor !== "mirrorcode" && !ExecutorRegistry.has(executor)) {
       await ExecutorBootstrap.autoRegister(true).catch((err) => {
         log.warn("executor autoRegister failed", { executor, error: String(err) })
       })

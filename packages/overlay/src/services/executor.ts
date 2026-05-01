@@ -40,12 +40,12 @@ export function executorInfo(value: string): ExecutorDescriptor | undefined {
 /**
  * Returns true when the executor can be selected (i.e. it was discovered and
  * is marked as selectable, or falls back to the MirrorCode default
- * executor id ("opencode").
+ * executor id ("mirrorcode").
  */
 export function executorSelectable(value: string): boolean {
   const item = executorInfo(value);
   if (item) return !!item.selectable;
-  return value === "opencode";
+  return value === "mirrorcode";
 }
 
 /**
@@ -138,7 +138,7 @@ export function executorProcessKindTag(kind: string): string {
 /**
  * Fetches the executor list from the server and updates the app store.
  * If the currently active executor is no longer selectable, falls back to
- * the first selectable executor or the MirrorCode default id ("opencode").
+ * the first selectable executor or the MirrorCode default id ("mirrorcode").
  * NOTE: `renderExecutor()` / `persistOverlaySettings()` calls are
  * omitted here because they belong to 's DOM world. Callers that need
  * to persist settings after loading should do so explicitly.
