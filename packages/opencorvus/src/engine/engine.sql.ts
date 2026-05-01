@@ -111,6 +111,7 @@ export type EngineArtifactKind =
   | "verification-evidence"
   | "delivery_evidence_manifest"
   | "delivery_surface_manifest"
+  | "delivery_specialist_review"
   | "delivery"
   | "goal_run_attempt"
   | "integrity_attempt"

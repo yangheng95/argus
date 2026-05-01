@@ -14,3 +14,17 @@
  */
 export { DeliveryAgent, DELIVERY_AGENT_SYSTEM } from "./agent"
 export type { DeliveryVerdictType } from "./verdict"
+export {
+  createDeliverySpecialistReview,
+  findDeliverySpecialistReviews,
+  persistDeliverySpecialistReview,
+  requiredReviewersForSurfaces,
+  validateDeliverySpecialistReview,
+}
+  from "./specialist-review"
+export type {
+  DeliveryReviewFinding,
+  DeliverySpecialistReview,
+  DeliverySpecialistReviewer,
+}
+  from "./specialist-review"
