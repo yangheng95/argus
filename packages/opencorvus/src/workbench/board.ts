@@ -7,6 +7,7 @@ import {
   findActiveRunForTask,
   findActiveSpecForTask,
   findLatestTipGoalRun,
+  findLatestDeliveredGoalRun,
   findDeliveriesForTask,
   findEvaluationsByTask,
   findDeliveryByGoalRun,
@@ -833,9 +834,18 @@ function buildWorkflowFields(
     // has never dispatched (no goal_run yet) — overlay treats that as
     // the "pre-attempt" bucket under a stable pseudo-id.
     const tipRun = findLatestTipGoalRun(goal.id)
+    // goalRunID surfaces the run the overlay's per-row diff click fetches
+    // via /goal-run/<id>/delivery. After a delivery-rejection reset the tip
+    // is a fresh pending row with no delivery, so click would resolve to an
+    // empty diff. The Files panel displays whatever is currently merged on
+    // master — which corresponds to the latest delivered run, not the
+    // pending tip — so anchor to that run when one exists. Falls back to
+    // the tip when the goal has never produced a delivery (initial run
+    // still in flight).
+    const deliveredRun = findLatestDeliveredGoalRun(goal.id)
     return {
       goalID: goal.id,
-      goalRunID: tipRun?.id,
+      goalRunID: deliveredRun?.id ?? tipRun?.id,
       goalTitle: goal.title,
       // Architect writes the goal's `objective` as a 1–2 sentence execution
       // directive for the per-goal executor. Surface it on the overlay goal
@@ -947,9 +957,17 @@ function buildStepSummary(step: MiniWorkflowStep, goalID: string, status?: strin
   if (step.scope !== "goal") return undefined
   if (!step.phases || step.phases.length === 0) return undefined
 
-  const goalRun = currentGoalRun(goalID)
-  if (goalRun) {
-    const delivery = findDeliveryByGoalRun(goalRun.id)
+  // Use the latest *delivered* goal_run, not the tip. After a delivery
+  // rejection, resetTaskGoalsToPending supersedes every goal's tip with a
+  // fresh pending row that has no delivery yet — but the prior delivery's
+  // files are still merged into master and remain the canonical "built"
+  // surface. Falling through to currentGoalRun() here would silently zero
+  // out the file count for every previously-passed goal until the next
+  // dispatch cycle re-merges, which made post-rejection overlay summaries
+  // misleadingly show "0 files" for goals whose code is still on disk.
+  const deliveredRun = findLatestDeliveredGoalRun(goalID)
+  if (deliveredRun) {
+    const delivery = findDeliveryByGoalRun(deliveredRun.id)
     if (delivery) {
       const result = delivery.result as { changed_files?: string[]; diffs?: unknown[] } | null
       const fileCount = result?.changed_files?.length ?? result?.diffs?.length ?? 0
@@ -1011,10 +1029,18 @@ function buildStepPayload(step: MiniWorkflowStep, goalID: string, status?: strin
   let changedFiles: string[] | undefined
   let changedFileDiffs: GoalStepPayload["changedFileDiffs"]
   let diffStats: { files?: number; additions?: number; deletions?: number } | undefined
+  // buildSessionID / workspaceDir describe the live attempt — read from the
+  // tip. changedFiles / changedFileDiffs / diffStats describe what's been
+  // merged into master — read from the most-recently-delivered run, which
+  // can differ from the tip after a delivery-rejection reset (see
+  // findLatestDeliveredGoalRun for the full rationale).
   if (goalRun) {
     buildSessionID = goalRun.session_id ?? undefined
     workspaceDir = goalRun.workspace_dir ?? undefined
-    const delivery = findDeliveryByGoalRun(goalRun.id)
+  }
+  const deliveredRun = findLatestDeliveredGoalRun(goalID)
+  if (deliveredRun) {
+    const delivery = findDeliveryByGoalRun(deliveredRun.id)
     const result = delivery?.result as {
       changed_files?: string[]
       diffs?: { file?: string; additions?: unknown; deletions?: unknown; before?: unknown; after?: unknown; status?: string }[]
