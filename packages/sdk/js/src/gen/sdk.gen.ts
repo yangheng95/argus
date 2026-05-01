@@ -1919,7 +1919,6 @@ export class Session extends HeyApiClient {
         | "intent-analysis"
         | "requirements"
         | "design-analyst"
-        | "planner"
         | "goal"
         | "architect"
         | "integrity"

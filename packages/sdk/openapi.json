@@ -3311,7 +3311,6 @@
                       "intent-analysis",
                       "requirements",
                       "design-analyst",
-                      "planner",
                       "goal",
                       "architect",
                       "integrity",
@@ -26788,6 +26787,115 @@
           "properties"
         ]
       },
+      "Event.delivery.evidence.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "delivery.evidence.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "deliveryID": {
+                "type": "string",
+                "pattern": "^dlv.*"
+              },
+              "manifestID": {
+                "type": "string",
+                "pattern": "^art.*"
+              },
+              "iteration": {
+                "type": "number"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "failedCheckCount": {
+                "type": "number"
+              },
+              "failedRuntimeFlowCount": {
+                "type": "number"
+              },
+              "failedReviewCount": {
+                "type": "number"
+              },
+              "failureDetails": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "check",
+                        "coverage",
+                        "runtime",
+                        "review"
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "exitCode": {
+                      "type": "number"
+                    },
+                    "evidence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "id",
+                    "name",
+                    "evidence"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "taskID",
+              "deliveryID",
+              "manifestID",
+              "iteration",
+              "status",
+              "summary",
+              "failedCheckCount",
+              "failedRuntimeFlowCount",
+              "failedReviewCount",
+              "failureDetails"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.integrity.review.completed": {
         "type": "object",
         "properties": {
@@ -27782,7 +27890,6 @@
               "user",
               "system",
               "evaluator",
-              "planner",
               "goal_gate",
               "task_tool"
             ]
@@ -29616,6 +29723,44 @@
           "properties"
         ]
       },
+      "Event.command.executed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "command.executed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "arguments": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string",
+                "pattern": "^msg.*"
+              }
+            },
+            "required": [
+              "name",
+              "sessionID",
+              "arguments",
+              "messageID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.session.compacted": {
         "type": "object",
         "properties": {
@@ -29895,44 +30040,6 @@
           "properties"
         ]
       },
-      "Event.command.executed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "command.executed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "arguments": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string",
-                "pattern": "^msg.*"
-              }
-            },
-            "required": [
-              "name",
-              "sessionID",
-              "arguments",
-              "messageID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "PermissionAction": {
         "type": "string",
         "enum": [
@@ -30032,7 +30139,6 @@
               "intent-analysis",
               "requirements",
               "design-analyst",
-              "planner",
               "goal",
               "architect",
               "integrity",
@@ -30578,6 +30684,9 @@
             "$ref": "#/components/schemas/Event.delivery.gate.rejected"
           },
           {
+            "$ref": "#/components/schemas/Event.delivery.evidence.updated"
+          },
+          {
             "$ref": "#/components/schemas/Event.integrity.review.completed"
           },
           {
@@ -30677,6 +30786,9 @@
             "$ref": "#/components/schemas/Event.worktree.failed"
           },
           {
+            "$ref": "#/components/schemas/Event.command.executed"
+          },
+          {
             "$ref": "#/components/schemas/Event.session.compacted"
           },
           {
@@ -30690,9 +30802,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.goal.report"
-          },
-          {
-            "$ref": "#/components/schemas/Event.command.executed"
           },
           {
             "$ref": "#/components/schemas/Event.session.created"
@@ -32181,7 +32290,7 @@
             }
           },
           "assistant": {
-            "description": "Assistant agent configuration — controls requirements, planner, evaluator, and delivery agent behavior",
+            "description": "Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior",
             "type": "object",
             "properties": {
               "requirements": {
@@ -32215,25 +32324,6 @@
                   },
                   "skills": {
                     "description": "Additional skill paths for architect agent",
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                }
-              },
-              "planner": {
-                "description": "Planner agent configuration",
-                "type": "object",
-                "properties": {
-                  "max_steps": {
-                    "description": "Maximum agentic steps for planner agent",
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 9007199254740991
-                  },
-                  "skills": {
-                    "description": "Additional skill paths for planner agent",
                     "type": "array",
                     "items": {
                       "type": "string"
@@ -33288,7 +33378,6 @@
               "intent-analysis",
               "requirements",
               "design-analyst",
-              "planner",
               "goal",
               "architect",
               "integrity",
@@ -33384,7 +33473,6 @@
               "user",
               "system",
               "evaluator",
-              "planner",
               "goal_gate",
               "task_tool"
             ]

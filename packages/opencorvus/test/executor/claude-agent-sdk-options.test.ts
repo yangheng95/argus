@@ -71,15 +71,13 @@ describe("claude agent sdk options", () => {
     await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "build", cwd }))
 
     const options = calls[0]?.options as Record<string, unknown> | undefined
-    const servers = options?.mcpServers as
-      | Record<string, { type?: string; command?: string; args?: string[]; env?: Record<string, string> }>
-      | undefined
+    const servers = options?.mcpServers as Record<string, { type?: string; command?: string; args?: string[] }> | undefined
     expect(servers?.opencorvus?.type).toBe("stdio")
     expect(servers?.opencorvus?.command).toBe(process.execPath)
     expect(servers?.opencorvus?.args?.[0]).toEndWith("stdio.ts")
     expect(servers?.opencorvus?.args).toContain("--cwd")
     expect(servers?.opencorvus?.args).toContain(cwd)
-    expect(Object.keys(servers?.opencorvus?.env ?? {}).length).toBeGreaterThan(0)
+    expect("env" in (servers?.opencorvus ?? {})).toBe(false)
   })
 
   test("teaches Claude Code the MCP-prefixed OpenCorvus tool names", async () => {

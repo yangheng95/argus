@@ -9,13 +9,40 @@ describe("mcp.serve", () => {
     mock.restore()
   })
 
-  test("builds a stdio command for the executor toolset", () => {
-    const config = MCPServe.command("/repo")
+  test("builds a Bun source stdio command for the executor toolset", () => {
+    const config = MCPServe.command("/repo", {
+      execPath: "C:\\tools\\bun.exe",
+      moduleDir: "D:\\repo\\packages\\opencorvus\\src\\mcp",
+    })
     expect(config.name).toBe("opencorvus")
-    expect(config.command).toBe(process.execPath)
+    expect(config.command).toBe("C:\\tools\\bun.exe")
     expect(config.args[0]).toEndWith("stdio.ts")
     expect(config.args.slice(-4)).toEqual(["--cwd", "/repo", "--toolset", "executor"])
-    expect(config.env.PATH || config.env.Path).toBeTruthy()
+    expect("env" in config).toBe(false)
+  })
+
+  test("builds a packaged Windows command without Bun virtual source paths", () => {
+    const config = MCPServe.command("D:\\repo\\worktree", {
+      execPath: "C:\\Users\\me\\AppData\\Local\\OpenCorvus\\opencorvus.exe",
+      moduleDir: "B:\\~BUN\\root\\src\\mcp",
+    })
+    expect(config.name).toBe("opencorvus")
+    expect(config.command).toBe("C:\\Users\\me\\AppData\\Local\\OpenCorvus\\opencorvus.exe")
+    expect(config.args).toEqual(["mcp", "serve", "--cwd", "D:\\repo\\worktree", "--toolset", "executor"])
+    expect(config.args.join(" ")).not.toContain("B:\\~BUN")
+    expect("env" in config).toBe(false)
+  })
+
+  test("builds a packaged POSIX command without Bun virtual source paths", () => {
+    const config = MCPServe.command("/repo/worktree", {
+      execPath: "/usr/local/bin/opencorvus",
+      moduleDir: "/$bunfs/root/src/mcp",
+    })
+    expect(config.name).toBe("opencorvus")
+    expect(config.command).toBe("/usr/local/bin/opencorvus")
+    expect(config.args).toEqual(["mcp", "serve", "--cwd", "/repo/worktree", "--toolset", "executor"])
+    expect(config.args.join(" ")).not.toContain("$bunfs")
+    expect("env" in config).toBe(false)
   })
 
   test("exposes the executor MCP toolset", async () => {

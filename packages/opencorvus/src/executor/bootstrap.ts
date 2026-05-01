@@ -129,7 +129,7 @@ function codexProvider(command: string[]) {
         "--disable",
         "guardian_approval",
         "-c",
-        `mcp_servers.${MCPServe.ServerName}.command="${mcp.command}"`,
+        `mcp_servers.${MCPServe.ServerName}.command=${JSON.stringify(mcp.command)}`,
         "-c",
         `mcp_servers.${MCPServe.ServerName}.args=${JSON.stringify(mcp.args)}`,
         // The canonical codex-blessed way to silence per-tool approval

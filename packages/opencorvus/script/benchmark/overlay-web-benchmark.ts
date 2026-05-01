@@ -204,7 +204,7 @@ const DEFAULT_TASK_TITLE = "Overlay Web Benchmark"
 // passes `--reference-images <path>`; otherwise the run completes without an
 // SSIM gate.
 const referenceImages = rawReferenceImages
-const DEFAULT_TASK_REQUEST = `帮我写一个调用Claude 模型的chat项目，支持用户Google一键登录（先用mock模拟延时登录），chat历史记录（删除、修改title等），以及会话中支持断点续传（用户刷新后继续获取sse对话）。input输入框支持添加附件（文档/图片）等，并支持md格式的渲染。new chat页面支持示例展示，UI截图仿照主流产品。提供API key填写功能实现真实对话`
+const DEFAULT_TASK_REQUEST = `帮我写一个调用Deepseek模型的chat项目，支持用户Google一键登录（先用mock模拟延时登录），chat历史记录（删除、修改title等），以及会话中支持断点续传（用户刷新后继续获取sse对话）。input输入框支持添加附件（文档/图片）等，并支持md格式的渲染。new chat页面支持示例展示，UI截图仿照主流产品。提供Deepseek API key填写功能实现真实对话`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
 const TASK_ATTACHMENTS: Array<{ mime: string; data: string; filename: string }> = []
