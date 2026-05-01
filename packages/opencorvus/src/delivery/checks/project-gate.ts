@@ -15,6 +15,7 @@ import {
 } from "./discovery"
 import { detectDeliverySurfaces } from "../surface-detector"
 import type { DeliverySurfaceManifest } from "../surface-detector"
+import { runTestIntegrationReview } from "../specialists/test-integration"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -31,6 +32,7 @@ import {
   type DeliveryReviewEvidence,
   type DeliveryRuntimeFlowResult,
 } from "../manifest"
+import type { DeliverySpecialistReview } from "../specialist-review"
 
 const COMMAND_TIMEOUT_MS = 180_000
 const CHECK_WORKSPACE_EXCLUDED_NAMES = new Set([
@@ -87,11 +89,6 @@ export async function buildDeliveryEvidenceManifest(input: {
     checkResults.push(await runRequiredCheck(check))
   }
   const coverage = buildCoverage(input.goals ?? [])
-  const reviewEvidence = buildReviewEvidence({
-    taskID: input.taskID,
-    specSnapshotID: input.specSnapshotID,
-    goals: input.goals ?? [],
-  })
   const runtimeFlows = await runRuntimeFlows({
     taskID: input.taskID,
     iteration: input.iteration ?? 0,
@@ -100,6 +97,24 @@ export async function buildDeliveryEvidenceManifest(input: {
     checkResults,
     goals: input.goals,
   })
+  const specialistReviews = await runSpecialistReviews({
+    taskID: input.taskID,
+    runID: input.runID,
+    deliveryID: input.deliveryID,
+    projectRoot,
+    surfaceManifest,
+    requiredChecks,
+    checkResults,
+    goals: input.goals ?? [],
+  })
+  const reviewEvidence = [
+    ...buildReviewEvidence({
+      taskID: input.taskID,
+      specSnapshotID: input.specSnapshotID,
+      goals: input.goals ?? [],
+    }),
+    ...specialistReviews.map(specialistReviewEvidence),
+  ]
 
   const manifest: DeliveryEvidenceManifest = {
     id: createManifestId(),
@@ -115,6 +130,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     runtimeFlows,
     reviewEvidence,
     surfaceManifest,
+    specialistReviews,
     changedFiles: input.changedFiles,
     finalGate: {
       status: "failed",
@@ -136,6 +152,42 @@ export async function buildDeliveryEvidenceManifest(input: {
     .map((item) => item.id)
   manifest.finalGate = mergeGateVerdicts({ checks, failedCoverageIds, failedRuntimeFlowIds, failedReviewIds })
   return manifest
+}
+
+async function runSpecialistReviews(input: {
+  taskID?: string
+  runID?: string
+  deliveryID?: string
+  projectRoot: string
+  surfaceManifest: DeliverySurfaceManifest
+  requiredChecks: DeliveryRequiredCheck[]
+  checkResults: DeliveryCheckResult[]
+  goals: Array<{
+    id: string
+    requirement_ids: string[]
+    acceptance_spec_count?: number
+  }>
+}): Promise<DeliverySpecialistReview[]> {
+  const reviews: DeliverySpecialistReview[] = []
+  const testReview = await runTestIntegrationReview(input)
+  if (testReview) reviews.push(testReview)
+  return reviews
+}
+
+function specialistReviewEvidence(review: DeliverySpecialistReview): DeliveryReviewEvidence {
+  const blocking = review.findings.filter((finding) => finding.proposedSeverity === "blocking")
+  return {
+    id: `specialist:${review.reviewer}`,
+    name: `Specialist Review: ${review.reviewer}`,
+    status: review.executionStatus === "completed" && blocking.length === 0 ? "passed" : "failed",
+    artifactId: review.id,
+    evidence: [
+      review.summary,
+      ...review.findings.map((finding) =>
+        `${finding.proposedSeverity}:${finding.category}: ${finding.claim}`,
+      ),
+    ],
+  }
 }
 
 function buildReviewEvidence(input: {

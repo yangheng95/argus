@@ -178,13 +178,6 @@ export async function detectDeliverySurfaces(input: {
       ref: scripts.test,
     })
   }
-  if ((input.goals ?? []).some((goal) => (goal.acceptance_spec_count ?? 0) > 0)) {
-    addEvidence(evidence, surfaces, "test_integration", "goal acceptance specs require verification", {
-      kind: "runtime_probe",
-      ref: "goal acceptance_spec_count > 0",
-    })
-  }
-
   if (
     surfaces.has("frontend") &&
     (
