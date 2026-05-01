@@ -491,11 +491,19 @@ export const OrchestratorEventNote = {
     return `User requested retry.${task.error ? ` Previous error: ${task.error}` : ""}\nDecide how to proceed.`
   },
 
-  deliveryRework(input: { reason: string; iteration: number; summary?: string }): string {
+  deliveryRework(input: { reason: string; iteration: number; summary?: string; affectedGoalCount?: number }): string {
     const lines = [
       `Delivery iteration ${input.iteration} rejected (reason=${input.reason}).`,
-      "Affected goals were reset to pending; dispatch them again or escalate.",
     ]
+    if (typeof input.affectedGoalCount === "number") {
+      lines.push(
+        input.affectedGoalCount > 0
+          ? `${input.affectedGoalCount} affected goal(s) were reset to pending; dispatch them again or escalate.`
+          : "No goals were reset automatically; inspect the delivery gate failure and choose the next repair strategy.",
+      )
+    } else {
+      lines.push("Affected goals were reset to pending; dispatch them again or escalate.")
+    }
     if (input.summary) lines.push("", `Detail: ${input.summary}`)
     return lines.join("\n")
   },

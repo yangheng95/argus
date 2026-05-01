@@ -2825,18 +2825,6 @@ export function createOrchestratorTools(input: {
             { source: "orchestrator.render_prerequisite" },
           )
 
-          const { startNewAttempt } = await import("@/engine/persist")
-          for (const g of goals) {
-            startNewAttempt({
-              goalID: g.id,
-              reason: "delivery_rework",
-              feedback: {
-                value: `Delivery rejected before agent run (iteration ${iteration}): ${summary}`,
-                reason: `render_prerequisite_failed:${renderFailure.kind}`,
-              },
-            })
-          }
-
           try {
             const { createDecisionLog } = await import("@/decision-log")
             createDecisionLog(taskID).append({
@@ -2851,7 +2839,7 @@ export function createOrchestratorTools(input: {
 
           log.info("deliver: render prerequisite failed — short-circuit reject", {
             taskID, iteration, kind: renderFailure.kind,
-            reset_goals: goals.length,
+            reset_goals: 0,
           })
 
           requestStopAfterCurrentStep("delivery_render_rejected")
@@ -2867,6 +2855,7 @@ export function createOrchestratorTools(input: {
                   reason: `render_prerequisite_failed:${renderFailure.kind}`,
                   iteration,
                   summary,
+                  affectedGoalCount: 0,
                 }),
               },
             })
@@ -2876,7 +2865,7 @@ export function createOrchestratorTools(input: {
             fields: [
               ["render_failure_kind", renderFailure.kind],
               ["iteration", String(iteration)],
-              ["affected_goals", String(goals.length)],
+              ["affected_goals", "0"],
             ],
             pointer: `verdict artifact ${verdictArtifactId}; render must succeed before next deliver`,
           })
@@ -3482,6 +3471,7 @@ export function createOrchestratorTools(input: {
                   reason: "agent_verdict_rejected",
                   iteration,
                   summary: verdict.summary,
+                  affectedGoalCount: toReset.length,
                 }),
               },
             })

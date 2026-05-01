@@ -33,10 +33,23 @@ test("deliveryRework wake note carries iteration + reason + summary so re-dispat
     reason: "render_prerequisite_failed:bun_install",
     iteration: 0,
     summary: "bun install pre-launch exited code=1 in merged worktree",
+    affectedGoalCount: 0,
   })
 
   expect(note).toContain("iteration 0")
   expect(note).toContain("render_prerequisite_failed:bun_install")
-  expect(note).toContain("Affected goals were reset to pending")
+  expect(note).toContain("No goals were reset automatically")
   expect(note).toContain("bun install pre-launch exited code=1 in merged worktree")
+})
+
+test("deliveryRework wake note reports exact affected goal count for agent-attributed rework", () => {
+  const note = OrchestratorEventNote.deliveryRework({
+    reason: "agent_verdict_rejected",
+    iteration: 2,
+    summary: "two scoped issues",
+    affectedGoalCount: 2,
+  })
+
+  expect(note).toContain("2 affected goal(s) were reset to pending")
+  expect(note).toContain("two scoped issues")
 })
