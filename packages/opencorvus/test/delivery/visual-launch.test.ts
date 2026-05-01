@@ -1,9 +1,11 @@
 import { afterEach, expect, test } from "bun:test"
+import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import {
   announcedLocalUrlFromOutput,
+  cleanupIsolatedRenderWorkspace,
   createIsolatedRenderWorkspace,
   resolveProjectLaunchScript,
 } from "../../src/delivery/checks/visual"
@@ -105,3 +107,41 @@ test("announcedLocalUrlFromOutput only normalizes wildcard host", () => {
   expect(announcedLocalUrlFromOutput("Local: http://0.0.0.0:4180/")).toBe("http://127.0.0.1:4180")
   expect(announcedLocalUrlFromOutput("Local: http://127.0.0.1:4180/")).toBe("http://127.0.0.1:4180")
 })
+
+test("isolated render cleanup kills Windows processes referencing the workspace", async () => {
+  if (process.platform !== "win32") return
+
+  const scratchRoot = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-render-cleanup-"))
+  const workspace = path.join(scratchRoot, "workspace")
+  tempDirs.push(scratchRoot)
+  await fs.mkdir(workspace, { recursive: true })
+  const scriptPath = path.join(workspace, "hold.ts")
+  await fs.writeFile(scriptPath, "setInterval(() => {}, 1000)\n")
+
+  const child = spawn("bun", [scriptPath], {
+    cwd: workspace,
+    stdio: "ignore",
+    shell: true,
+  })
+  try {
+    await waitForProcessStart(child)
+    await cleanupIsolatedRenderWorkspace(scratchRoot)
+    await expect(fs.access(scratchRoot)).rejects.toThrow()
+  } finally {
+    child.kill("SIGKILL")
+  }
+})
+
+function waitForProcessStart(child: ChildProcess): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, 500)
+    child.once("error", (err) => {
+      clearTimeout(timer)
+      reject(err)
+    })
+    child.once("exit", (code) => {
+      clearTimeout(timer)
+      reject(new Error(`process exited before cleanup test could run: ${code}`))
+    })
+  })
+}
