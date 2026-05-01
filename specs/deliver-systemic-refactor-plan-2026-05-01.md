@@ -505,3 +505,17 @@ type FailureSignature = {
 - P3：仍需要完整 live pipeline benchmark 证明 chat/auth/upload 任务会被结构化 scenario 驱动，而不是只靠通用 render。
 - P4：重复签名 gate 目前基于相邻 manifest；后续可扩展历史窗口。
 - benchmark：还需要跑完整 deliver benchmark / live pipeline 复核，不只跑单元和 benchmark 子集。
+
+### 2026-05-01 第九轮
+
+已完成：
+
+- P4 完成：重复 failure signature gate 从相邻 manifest 扩展为最近 5 个 manifest 的历史窗口，隔轮重复失败不会再打开同质 `delivery_rework`。
+- P4 回归覆盖：新增历史窗口测试，当前失败集合匹配更早 manifest、但不匹配相邻 manifest 时仍会被识别为 repeated。
+- P3 benchmark 完成：新增 `test/benchmark/delivery-runtime-flow-benchmark.test.ts`，创建真实前端构建产物并通过 puppeteer 执行 runtime render + interaction probe。
+- P3 benchmark 覆盖正反两例：结构化 runtime scenario 的交互页面必须 passed；无可见控件页面必须 failed，且失败写入 `failedRuntimeFlowIds`。
+- benchmark 覆盖：`test/benchmark`、delivery project gate、publisher delivery gate 通过；`packages/opencorvus` typecheck 通过。
+
+剩余外部限制：
+
+- live pipeline benchmark 仍依赖实际 LLM 模型环境变量；当前本机未配置 `OPENCORVUS_BENCHMARK_MODEL` / `OPENCORVUS_E2E_MODEL` / provider key。代码侧已补上不依赖 LLM 的 deliver manifest benchmark，覆盖本次 deliver gate 的真实浏览器路径。
