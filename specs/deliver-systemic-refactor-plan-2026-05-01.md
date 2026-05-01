@@ -489,3 +489,19 @@ type FailureSignature = {
 - P3：chat/auth/upload 这类领域级 runtime workflow 还没有专门步骤；当前完成的是前端型 package 的通用真实 render flow。
 - P4：重复签名 gate 目前基于相邻 manifest；后续可扩展历史窗口。
 - benchmark：还需要跑完整 deliver benchmark / live pipeline 复核，不只跑单元和 benchmark 子集。
+
+### 2026-05-01 第八轮
+
+已完成：
+
+- P3 部分完成：结构化 `acceptance_specs[].scenario` 会触发浏览器交互探针，不依赖 chat/auth/upload 等关键词分类。
+- P3 硬门禁：前端项目如果声明 runtime scenario，`computeRuntimeEvidence` 会在同一 puppeteer 页面内执行输入和点击，并要求页面发生可观测 text/html 变化。
+- P3 可观测性：runtime flow evidence 新增 visible controls、text inputs、file inputs、attempted interactions、page mutation 和 probe errors。
+- P3 回归覆盖：`runtimeInteractionViolations` 覆盖无可见控件、交互无变化、交互有变化三类结果。
+- benchmark 覆盖：delivery project gate、publisher delivery gate 通过；`packages/opencorvus` typecheck 通过。
+
+未完成，后续继续：
+
+- P3：仍需要完整 live pipeline benchmark 证明 chat/auth/upload 任务会被结构化 scenario 驱动，而不是只靠通用 render。
+- P4：重复签名 gate 目前基于相邻 manifest；后续可扩展历史窗口。
+- benchmark：还需要跑完整 deliver benchmark / live pipeline 复核，不只跑单元和 benchmark 子集。

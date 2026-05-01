@@ -69,6 +69,16 @@ export type DeliveryRuntimeFlowResult = {
     hasBodyChildren: boolean
     isEmptyRootShell: boolean
   }
+  interaction?: {
+    visibleControlCount: number
+    textInputCount: number
+    fileInputCount: number
+    attemptedInteractionCount: number
+    textChanged: boolean
+    htmlChanged: boolean
+    errorCount: number
+    errors: string[]
+  }
 }
 
 export type DeliveryReviewEvidence = {

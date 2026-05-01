@@ -492,6 +492,8 @@ export async function renderPage(opts: {
   browserExecutable?: string
   /** Override puppeteer page.goto navigation timeout. Default: 90_000ms. */
   navigationTimeoutMs?: number
+  /** Run a generic user-interaction probe in the same browser page after first paint. */
+  probeInteractions?: boolean
 }): Promise<{
   renderedPath: string
   viewport: { width: number; height: number }
@@ -505,6 +507,7 @@ export async function renderPage(opts: {
     /** React 根「<div id=\"root\"></div>」空壳（未 hydrate / hydrate 了空 App）。 */
     isEmptyRootShell: boolean
   }
+  interaction?: RuntimeInteractionProbe
 }> {
   let viewport = opts.viewport
   if (!viewport) {
@@ -570,6 +573,7 @@ export async function renderPage(opts: {
     hasBodyChildren: boolean
     isEmptyRootShell: boolean
   }
+  let interaction: RuntimeInteractionProbe | undefined
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: viewport.width, height: viewport.height, deviceScaleFactor: 1 })
@@ -621,6 +625,68 @@ export async function renderPage(opts: {
         isEmptyRootShell,
       }
     })
+    if (opts.probeInteractions) {
+      interaction = await page.evaluate(async () => {
+        const visible = (el: Element) => {
+          const rect = el.getBoundingClientRect()
+          const style = window.getComputedStyle(el)
+          return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"
+        }
+        const textBefore = document.body?.innerText ?? ""
+        const htmlBefore = document.body?.innerHTML ?? ""
+        const controls = Array.from(document.querySelectorAll(
+          "button,a[href],input,textarea,select,[role='button'],[contenteditable='true']",
+        )).filter((el) => visible(el))
+        const textInputs = controls.filter((el) => {
+          if (el instanceof HTMLTextAreaElement) return true
+          if (!(el instanceof HTMLInputElement)) return false
+          const type = (el.type || "text").toLowerCase()
+          return ["email", "password", "search", "text", "url"].includes(type)
+        })
+        const fileInputs = controls.filter((el) =>
+          el instanceof HTMLInputElement && (el.type || "").toLowerCase() === "file"
+        )
+        let attempted = 0
+        const errors: string[] = []
+        for (const el of textInputs.slice(0, 3)) {
+          try {
+            if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+              el.focus()
+              el.value = "opencorvus runtime probe"
+              el.dispatchEvent(new Event("input", { bubbles: true }))
+              el.dispatchEvent(new Event("change", { bubbles: true }))
+              attempted++
+            }
+          } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error))
+          }
+        }
+        for (const el of controls.filter((item) => !(item instanceof HTMLInputElement && item.type === "file")).slice(0, 5)) {
+          try {
+            if (el instanceof HTMLElement) {
+              el.focus()
+              el.click()
+              attempted++
+            }
+          } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error))
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
+        const textAfter = document.body?.innerText ?? ""
+        const htmlAfter = document.body?.innerHTML ?? ""
+        return {
+          visibleControlCount: controls.length,
+          textInputCount: textInputs.length,
+          fileInputCount: fileInputs.length,
+          attemptedInteractionCount: attempted,
+          textChanged: textBefore !== textAfter,
+          htmlChanged: htmlBefore !== htmlAfter,
+          errorCount: errors.length,
+          errors: errors.slice(0, 5),
+        }
+      })
+    }
   } finally {
     await browser.close()
     if (staticServer) await staticServer.close()
@@ -631,7 +697,19 @@ export async function renderPage(opts: {
     viewport,
     size: { width: rendered.width, height: rendered.height },
     dom,
+    interaction,
   }
+}
+
+export type RuntimeInteractionProbe = {
+  visibleControlCount: number
+  textInputCount: number
+  fileInputCount: number
+  attemptedInteractionCount: number
+  textChanged: boolean
+  htmlChanged: boolean
+  errorCount: number
+  errors: string[]
 }
 
 /** SSIM visual diff — retained for the external benchmark CLI and operator

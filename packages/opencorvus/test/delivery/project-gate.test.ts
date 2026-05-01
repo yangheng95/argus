@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
+import { runtimeInteractionViolations } from "../../src/delivery/checks/runtime-evidence"
 import {
   repeatedDeliveryFailureSignatures,
   validateDeliveryEvidenceManifest,
@@ -228,6 +229,32 @@ describe("delivery project evidence gate", () => {
     }])
     expect(manifest.finalGate.status).toBe("failed")
     expect(manifest.finalGate.failedReviewIds).toEqual(["review:integrity"])
+  })
+
+  test("requires observable browser interaction for structured runtime scenarios", () => {
+    expect(runtimeInteractionViolations(undefined).map((item) => item.kind)).toEqual([
+      "interaction_required_but_missing",
+    ])
+    expect(runtimeInteractionViolations({
+      visibleControlCount: 2,
+      textInputCount: 1,
+      fileInputCount: 0,
+      attemptedInteractionCount: 2,
+      textChanged: false,
+      htmlChanged: false,
+      errorCount: 0,
+      errors: [],
+    }).map((item) => item.kind)).toEqual(["interaction_probe_failed"])
+    expect(runtimeInteractionViolations({
+      visibleControlCount: 2,
+      textInputCount: 1,
+      fileInputCount: 0,
+      attemptedInteractionCount: 2,
+      textChanged: true,
+      htmlChanged: false,
+      errorCount: 0,
+      errors: [],
+    })).toEqual([])
   })
 })
 
