@@ -105,6 +105,19 @@ export const GoalContractFieldsSchema = z.object({
  */
 export type GoalContractFieldsParsed = z.infer<typeof GoalContractFieldsSchema>
 
+export function normalizeGoalContractFields(
+  input: z.input<typeof GoalContractFieldsSchema>,
+): GoalContractFieldsParsed {
+  const withDefaults = { ...input }
+  if (withDefaults.depends_on === undefined) withDefaults.depends_on = []
+  if (withDefaults.exports === undefined) withDefaults.exports = []
+  if (withDefaults.imports === undefined) withDefaults.imports = []
+  if (withDefaults.priority === undefined) withDefaults.priority = "blocking"
+  if (withDefaults.kind === undefined) withDefaults.kind = "feature"
+  if (withDefaults.requirement_ids === undefined) withDefaults.requirement_ids = []
+  return GoalContractFieldsSchema.parse(withDefaults)
+}
+
 /**
  * Schema for `modify_goal.updates` — every field optional, id excluded
  * (never re-keyed), and constraints still enforced on whichever fields are
@@ -115,3 +128,12 @@ export const GoalContractUpdateSchema = GoalContractFieldsSchema.omit({
 }).partial()
 
 export type GoalContractUpdate = z.infer<typeof GoalContractUpdateSchema>
+
+export function normalizeGoalContractUpdate(
+  input: z.input<typeof GoalContractUpdateSchema>,
+): GoalContractUpdate {
+  const parsed = GoalContractUpdateSchema.parse(input)
+  return Object.fromEntries(
+    Object.entries(parsed).filter(([, value]) => value !== undefined),
+  ) as GoalContractUpdate
+}

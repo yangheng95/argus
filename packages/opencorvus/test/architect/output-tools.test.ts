@@ -35,7 +35,7 @@ function acceptance(goalID: string, requirementID: string) {
 const FEATURE_GOAL = {
   id: "goal_feature",
   title: "Feature",
-  objective: "Implement the requested change with focused verification.",
+  objective: "Implement the requested feature change with focused verification, clear ownership boundaries, and deterministic local tests.",
   acceptance_specs: [acceptance("goal_feature", "REQ-1")],
   owned_paths: ["src/index.ts"],
   depends_on: [],
@@ -49,7 +49,7 @@ const FEATURE_GOAL = {
 const VERIFY_GOAL = {
   id: "goal_verify",
   title: "Verification",
-  objective: "Run integration tests over the feature goal.",
+  objective: "Write and run integration regression coverage over the feature goal so delivery can trust the merged worktree.",
   acceptance_specs: [acceptance("goal_verify", "REQ-2")],
   owned_paths: ["tests/integration/router.test.ts"],
   depends_on: ["goal_feature"],
@@ -235,6 +235,45 @@ test("register_global_metric_spec overwrites prior name instead of erroring", as
   const dups = c.global_metric_specs.filter((m) => m.name === "user_intent_fidelity")
   expect(dups.length).toBe(1)
   expect(dups[0].gate_class).toBe("blocking")
+})
+
+test("goal contract defaults are applied before architect validation", async () => {
+  const rawFeatureGoal = { ...FEATURE_GOAL } as any
+  delete rawFeatureGoal.depends_on
+  delete rawFeatureGoal.exports
+  delete rawFeatureGoal.imports
+  delete rawFeatureGoal.requirement_ids
+
+  const kit = createArchitectOutputTools({
+    existingGoals: [rawFeatureGoal],
+    workDir: freshWorkDir(),
+  } as any)
+
+  expect(kit.getCollector().goals[0].depends_on).toEqual([])
+  expect(kit.getCollector().goals[0].exports).toEqual([])
+  expect(kit.getCollector().goals[0].imports).toEqual([])
+  expect(kit.getCollector().goals[0].requirement_ids).toEqual([])
+  expect(architectValidationIssues(kit.getCollector()).join("\n")).toContain(
+    "feature goal must declare at least one export",
+  )
+
+  kit.reset()
+  expect(kit.getCollector().goals[0].depends_on).toEqual([])
+
+  const registered = createArchitectOutputTools({ existingGoals: [], workDir: freshWorkDir() })
+  const { tools } = registered
+  const rawVerificationGoal = { ...VERIFY_GOAL } as any
+  delete rawVerificationGoal.depends_on
+  delete rawVerificationGoal.imports
+  await tools.register_goal.execute!(rawVerificationGoal, {} as any)
+
+  expect(registered.getCollector().goals[0].depends_on).toEqual([])
+  expect(registered.getCollector().goals[0].imports).toEqual([])
+  const submit = await tools.submit_architect.execute!(
+    { summary: "Omitted relationship arrays should validate as empty arrays." } as any,
+    {} as any,
+  )
+  expect(submit).toMatch(/^ISSUES \(/)
 })
 
 test("remove_goal followed by submit_architect finalizes — no orphan-metric deadlock", async () => {
