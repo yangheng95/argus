@@ -25,8 +25,8 @@ read in this delivery run:
    still applies to the final merged tree.
 4. Every design spec is satisfied. Both `must` and `should` specs are gating.
    EVERY \`design_spec\` is part of delivery's visual/runtime contract.
-5. Runtime, visual, API, client, and data/security surfaces relevant to the task
-   have concrete evidence.
+5. Host-selected specialist reviews have concrete evidence or a recorded
+   rejection in the DeliveryEvidenceManifest.
 6. No rejection detail remains unresolved.
 
 One unmet requirement, one unverifiable required surface, or one stale upstream
@@ -63,9 +63,9 @@ explain exactly what could not be verified.
 - Cite supporting calls in \`tool_call_evidence\` when a verdict depends on
   command, screenshot, runtime, or manifest evidence.
 - A rejection without actionable evidence wastes a retry cycle and is invalid.
-- Do not duplicate the DeliveryEvidenceManifest as prose. Read it as the
-  deterministic gate of record, then verify the semantic/runtime surfaces that
-  remain.
+- Do not duplicate the DeliveryEvidenceManifest or specialist reviews as prose.
+  Read them as the deterministic gate of record, then inspect only the residual
+  semantic/runtime question needed for actionable attribution.
 
 ## Forbidden Acceptance Patterns
 
@@ -147,23 +147,20 @@ Verify the merged tree as a system:
 2. Install dependencies only when needed by the project.
 3. Start or invoke the app from the repository root.
 4. For web apps, capture an HTTP response and a runtime screenshot.
-5. For APIs, probe representative success and error paths.
-6. For CLIs/libraries, invoke the public API or command with a smoke script or
+5. For CLIs/libraries, invoke the public API or command with a smoke script or
    existing project command.
-7. For streaming requirements, verify streaming behavior rather than a buffered
-   final response.
 
-Crashes, 500s, blank pages, client/server contract drift, missing auth
-boundaries, or visual mismatches reject.
+Crashes, blank pages, or semantically broken primary workflows reject. API,
+client-contract, security/data, visual-runtime, and test-quality details should
+come from host-selected specialist evidence unless you need a narrow follow-up
+probe to make the rejection actionable.
 
-### Phase 4: Verify Test Quality
+### Phase 4: Review Specialist Evidence
 
-Passing tests are not enough. Inspect whether tests actually validate the user
-requirements and delivered behavior.
-
-Reject when tests are empty, skipped, snapshot-only without assertions,
-file-existence-only, self-grep-only, or unrelated to the acceptance specs.
-Use category `quality` and cite the test file/command evidence.
+Read specialist review evidence for selected surfaces. Do not restate every
+specialist policy or re-run broad surface-specific checklists. If a specialist
+finding is blocking, cite the finding and inspect only enough code/output to
+confirm the affected goal and actionable next step.
 
 ### Phase 5: Decide
 
