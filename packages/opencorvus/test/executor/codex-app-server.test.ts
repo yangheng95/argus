@@ -161,6 +161,50 @@ describe("codex app server executor", () => {
     expect(started?.["sandbox"] as string | undefined).toBe("danger-full-access")
   })
 
+  test("maps structured Codex plan updates to update_plan todo tool events", async () => {
+    const provider = CodexAppServerExecutor.create(client([
+      {
+        type: "notification",
+        method: "turn/plan/updated",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          explanation: "working plan",
+          plan: [
+            { step: "Inspect executor plan payload", status: "completed" },
+            { step: "Normalize Codex plan into checklist state", status: "inProgress" },
+            { step: "Verify overlay summary", status: "pending" },
+          ],
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/completed",
+        params: {
+          threadId: "thr_1",
+          turn: { id: "turn_1", items: [], status: "completed", error: null },
+        },
+      },
+    ]))
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    const toolCall = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
+    const toolResult = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+
+    expect(result.find((item) => item.type === "plan_delta")).toBeUndefined()
+    expect(toolCall?.name).toBe("update_plan")
+    expect(toolResult?.name).toBe("update_plan")
+    expect(toolResult?.id).toBe(toolCall?.id)
+    expect(toolCall?.input).toEqual({
+      todos: [
+        { content: "Inspect executor plan payload", status: "completed" },
+        { content: "Normalize Codex plan into checklist state", status: "in_progress" },
+        { content: "Verify overlay summary", status: "pending" },
+      ],
+    })
+    expect(toolResult?.meta?.["todos"]).toEqual((toolCall?.input as { todos: unknown[] }).todos)
+  })
+
   test("honors read-only sandbox overrides for planning runs", async () => {
     let started: Record<string, unknown> | null = null
     let turn: Record<string, unknown> | null = null

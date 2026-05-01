@@ -233,6 +233,17 @@ function* notification(threadID: string, turnID: string, method: string, params?
   }
 
   if (method === "turn/plan/updated" || method === "item/plan/delta") {
+    const todos = codexPlanTodos(data.plan)
+    if (todos) {
+      yield* codexPlanToolEvents({
+        threadID: currentThread,
+        turnID: currentTurn,
+        itemID: typeof data.itemId === "string" ? data.itemId : undefined,
+        todos,
+        raw: data,
+      })
+      return
+    }
     yield {
       type: "plan_delta",
       summary: text(data.delta || data.text || data.plan || "Plan updated"),
@@ -463,6 +474,17 @@ function* notification(threadID: string, turnID: string, method: string, params?
       return
     }
     if (type === "plan") {
+      const todos = codexPlanTodos(item.plan)
+      if (todos) {
+        yield* codexPlanToolEvents({
+          threadID: currentThread,
+          turnID: currentTurn,
+          itemID: typeof item.id === "string" ? item.id : undefined,
+          todos,
+          raw: item,
+        })
+        return
+      }
       yield {
         type: "plan_delta",
         summary: text(item.text),
@@ -589,6 +611,86 @@ async function* request(
     requestID: item.id,
     params: data,
   })
+}
+
+type NormalizedTodo = {
+  content: string
+  status: string
+  priority?: string
+}
+
+function codexPlanTodos(plan: unknown): NormalizedTodo[] | null {
+  if (!Array.isArray(plan)) return null
+  const todos = plan.flatMap((entry) => {
+    const item = record(entry)
+    const content = typeof item?.step === "string" ? item.step.trim() : ""
+    if (!content) return []
+    const priority = typeof item?.priority === "string" && item.priority.trim()
+      ? item.priority.trim()
+      : undefined
+    return [{
+      content,
+      status: codexPlanStatus(item?.status),
+      ...(priority ? { priority } : {}),
+    }]
+  })
+  return todos.length > 0 ? todos : null
+}
+
+function codexPlanStatus(input: unknown): string {
+  const key = String(input || "pending").replace(/[-_\s]/g, "").toLowerCase()
+  const values: Record<string, string> = {
+    pending: "pending",
+    inprogress: "in_progress",
+    completed: "completed",
+  }
+  return values[key] ?? "pending"
+}
+
+function* codexPlanToolEvents(input: {
+  threadID: string
+  turnID: string
+  itemID?: string
+  todos: NormalizedTodo[]
+  raw: Record<string, unknown>
+}): Generator<CodingEventInfo> {
+  const callID = input.itemID ?? codexPlanCallID(input.turnID, input.todos)
+  const toolInput = { todos: input.todos }
+  const meta = {
+    thread_id: input.threadID,
+    turn_id: input.turnID,
+    item_id: input.itemID,
+    adapter: "codex_plan",
+    tool_kind: "plan",
+    raw: input.raw,
+  }
+  yield {
+    type: "tool_call",
+    id: callID,
+    name: "update_plan",
+    input: toolInput,
+    meta,
+  }
+  yield {
+    type: "tool_result",
+    id: callID,
+    name: "update_plan",
+    input: toolInput,
+    output: JSON.stringify(input.todos, null, 2),
+    meta: {
+      ...meta,
+      todos: input.todos,
+    },
+  }
+}
+
+function codexPlanCallID(turnID: string, todos: NormalizedTodo[]): string {
+  const raw = JSON.stringify(todos)
+  let hash = 0
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash * 31) + raw.charCodeAt(i)) >>> 0
+  }
+  return `${turnID}:codex-plan:${hash.toString(36)}`
 }
 
 function threadStart(input: z.input<typeof CodingRunInput>) {
