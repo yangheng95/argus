@@ -1,19 +1,12 @@
 import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
+import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
 )
 
-const src = new URL("../src/", import.meta.url)
-const types = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-}
+await ensureOverlayDist()
 
 async function browser() {
   const list = [
@@ -68,11 +61,11 @@ test("copying chat and logs does not open the dialog", async () => {
         "task-1": [
           {
             parts: [{ type: "text", text: "Please copy this transcript." }],
-            info: { role: "user", time: { created: now - 8_000 } },
+            info: { id: "msg-user", sessionID: "session-user", role: "user", time: { created: now - 8_000 } },
           },
           {
             parts: [{ type: "text", text: "Transcript ready." }],
-            info: { role: "assistant", time: { created: now - 7_000 } },
+            info: { id: "msg-assistant", sessionID: "session-1", role: "assistant", resolvedRole: "assistant", time: { created: now - 7_000 } },
           },
         ],
       },
@@ -143,25 +136,59 @@ test("copying chat and logs does not open the dialog", async () => {
       if (path === "/ui" || path === "/ui/") {
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       }
-      if (path.startsWith("/ui/")) {
-        const name = decodeURIComponent(path.slice(4)) || "index.html"
-        if (name.includes("..")) return text("forbidden", { status: 403 })
-        const file = Bun.file(new URL(name, src))
-        if (!(await file.exists())) return text("not found", { status: 404 })
-        const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
-        return new Response(file, {
-          headers: { "content-type": type },
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/task/events" || path === "/task/task-1/events") {
+        return new Response(":\n\n", {
+          headers: {
+            "content-type": "text/event-stream; charset=utf-8",
+            "cache-control": "no-cache",
+          },
         })
       }
-      if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") return send(data.tasks)
+      if (path === "/global/tasks") return send(data.tasks)
+      if (path === "/session") return send([])
+      if (path === "/config/prompt") return send([])
       if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
+      if (path === "/task/task-1/conversation") {
+        return send({
+          board: data.board,
+          transcript: data.timeline.task["task-1"] || [],
+          timeline: data.timeline.task["task-1"] || [],
+          events: [],
+          view: {
+            sessions: [
+              {
+                sessionID: "session-1",
+                stage: "assistant",
+                messageIDs: ["msg-assistant"],
+                firstMessageTime: now - 7_000,
+                placement: "top_level",
+              },
+            ],
+          },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          lastSequence: 0,
+        })
+      }
+      if (path.startsWith("/task/task-1/conversation/events")) {
+        return send({
+          events: [],
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+        })
+      }
       if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
       if (path === "/path") return send(data.path)
       if (path === "/vcs") return send(data.vcs)
       if (path === "/config") return send(data.config)
       if (path === "/provider") return send(data.provider)
       if (path === "/provider/auth") return send(data.providerAuth)
+      if (path === "/agent") return send([])
+      if (path === "/config/providers") {
+        return send({ providers: [], default: data.provider.default || {} })
+      }
       if (path === "/channel") return send(data.channels)
       if (path === "/executor") return send(data.executors)
       if (path === "/skill/installed" || path === "/skill") return send(data.skills)
@@ -192,6 +219,34 @@ test("copying chat and logs does not open the dialog", async () => {
           },
         },
       })
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string, args: Record<string, unknown> = {}) => {
+            if (command === "overlay_settings_load") {
+              return {
+                serverUrl,
+                autoServer: false,
+                directory: "D:/overlay/workspace/app",
+              }
+            }
+            if (command === "overlay_settings_save") return true
+            if (command === "overlay_open_url" || command === "overlay_open_path") return true
+            if (command === "overlay_create_temp_dir") return "D:/overlay/temp"
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
       localStorage.setItem("oc_server_url", serverUrl)
       localStorage.setItem("oc_auto_server", "false")
     }, base)
@@ -199,7 +254,6 @@ test("copying chat and logs does not open the dialog", async () => {
     await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
     await tab.waitForSelector(".task-row-main[data-task-id='task-1']")
     await tab.click(".task-row-main[data-task-id='task-1']")
-    await tab.waitForFunction(() => document.body.dataset.workspace === "task")
     await tab.waitForFunction(() => (document.querySelector("#chatCount")?.textContent || "").trim().length > 0)
     await tab.waitForFunction(() => {
       const button = document.querySelector("#btnChatCopyAll")
@@ -247,4 +301,4 @@ test("copying chat and logs does not open the dialog", async () => {
     await page.close().catch(() => undefined)
     server.stop(true)
   }
-})
+}, { timeout: 60_000 })

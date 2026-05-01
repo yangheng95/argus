@@ -214,6 +214,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
             <>
               <button
                 class="btn btn-primary"
+                data-action="answer"
                 disabled={busy()}
                 title={t("interaction.answer_title")}
                 aria-label={t("interaction.answer_title")}
@@ -223,6 +224,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
               </button>
               <button
                 class="btn btn-ghost"
+                data-action="skip"
                 disabled={busy()}
                 title={t("interaction.skip_title")}
                 aria-label={t("interaction.skip_title")}
@@ -235,6 +237,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
         >
           <button
             class="btn btn-primary"
+            data-action="always"
             disabled={busy()}
             title={t("interaction.always_allow_title")}
             aria-label={t("interaction.always_allow_title")}
@@ -244,6 +247,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
           </button>
           <button
             class="btn btn-ghost"
+            data-action="once"
             disabled={busy()}
             title={t("interaction.allow_once_title")}
             aria-label={t("interaction.allow_once_title")}
@@ -253,6 +257,7 @@ export function InteractionCard(props: { interaction: InteractionData }) {
           </button>
           <button
             class="btn btn-ghost"
+            data-action="reject"
             disabled={busy()}
             title={t("interaction.reject_title")}
             aria-label={t("interaction.reject_title")}
