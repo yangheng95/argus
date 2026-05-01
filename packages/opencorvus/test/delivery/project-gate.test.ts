@@ -6,6 +6,7 @@ import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
 import {
+  repeatedDeliveryFailureSignatures,
   validateDeliveryEvidenceManifest,
   type DeliveryEvidenceManifest,
 } from "../../src/delivery/manifest"
@@ -136,6 +137,42 @@ describe("delivery project evidence gate", () => {
       "requirement:REQ-1",
     ])
   })
+
+  test("detects repeated manifest failure signature sets", () => {
+    const previous = manifestWithFailures({
+      id: "artifact_previous",
+      normalizedError: "exit_code=<number>",
+      failedCoverageIds: ["goal:gol_a"],
+    })
+    const current = manifestWithFailures({
+      id: "artifact_current",
+      normalizedError: "exit_code=<number>",
+      failedCoverageIds: ["goal:gol_a"],
+    })
+
+    expect(repeatedDeliveryFailureSignatures({ current, previous })).toEqual({
+      repeated: true,
+      signatures: [
+        "check:lint#1:digest-a:exit_code=<number>",
+        "coverage:goal:gol_a",
+      ],
+    })
+  })
+
+  test("does not classify a new failure signature as repeated", () => {
+    const previous = manifestWithFailures({
+      id: "artifact_previous",
+      normalizedError: "exit_code=<number>",
+      failedCoverageIds: ["goal:gol_a"],
+    })
+    const current = manifestWithFailures({
+      id: "artifact_current",
+      normalizedError: "different failure",
+      failedCoverageIds: ["goal:gol_a"],
+    })
+
+    expect(repeatedDeliveryFailureSignatures({ current, previous }).repeated).toBe(false)
+  })
 })
 
 async function packageFixture(scripts: Record<string, string>) {
@@ -148,4 +185,56 @@ async function packageFixture(scripts: Record<string, string>) {
     scripts,
   }, null, 2))
   return dir
+}
+
+function manifestWithFailures(input: {
+  id: string
+  normalizedError: string
+  failedCoverageIds: string[]
+}): DeliveryEvidenceManifest {
+  return {
+    id: input.id,
+    taskId: "tsk_repeat",
+    runId: "run_repeat",
+    deliveryId: `dlv_${input.id}`,
+    iteration: 0,
+    requiredChecks: [{
+      id: "lint#1",
+      name: "lint",
+      family: "lint",
+      command: "bun run lint",
+      cwd: "/tmp/project",
+      commandDigest: "digest-a",
+    }],
+    checkResults: [{
+      id: "lint#1",
+      name: "lint",
+      family: "lint",
+      command: "bun run lint",
+      cwd: "/tmp/project",
+      commandDigest: "digest-a",
+      status: "failed",
+      exitCode: 1,
+      outputExcerpt: input.normalizedError,
+      startedAt: 1,
+      completedAt: 2,
+      failureReason: "exit_code=1",
+      failureSignature: {
+        checkId: "lint#1",
+        commandDigest: "digest-a",
+        normalizedError: input.normalizedError,
+        affectedFiles: [],
+      },
+    }],
+    goalCoverage: [],
+    requirementCoverage: [],
+    changedFiles: ["src/app.ts"],
+    finalGate: {
+      status: "failed",
+      summary: "failed",
+      failedCheckIds: ["lint#1"],
+      failedCoverageIds: input.failedCoverageIds,
+    },
+    timeCreated: Date.now(),
+  }
 }
