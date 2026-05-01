@@ -2809,6 +2809,21 @@ export function createOrchestratorTools(input: {
             ],
             now: Date.now(),
           })
+          void EngineProtocol.emit(
+            EngineEvent.DeliveryGateRejected,
+            {
+              taskID,
+              iteration,
+              summary,
+              violations: [
+                {
+                  kind: renderFailure.kind,
+                  detail: renderFailure.detail,
+                },
+              ],
+            },
+            { source: "orchestrator.render_prerequisite" },
+          )
 
           const { startNewAttempt } = await import("@/engine/persist")
           for (const g of goals) {
