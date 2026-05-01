@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
+import fs from "fs/promises"
 import { SessionCompaction } from "../../src/session/compaction"
 import { Token } from "../../src/util/token"
 import { Instance } from "../../src/project/instance"
@@ -172,8 +173,10 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when compaction.auto is disabled", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        const configDir = path.join(dir, ".opencorvus")
+        await fs.mkdir(configDir, { recursive: true })
         await Bun.write(
-          path.join(dir, "opencorvus.json"),
+          path.join(configDir, "opencorvus.json"),
           JSON.stringify({
             compaction: { auto: false },
           }),

@@ -132,10 +132,11 @@ Work queue:
 
 ## Phase 1: Session Compaction And Retry Reliability
 
-Status: pending Phase 0.
+Status: complete.
 
 Owner files:
 
+- `packages/opencorvus/src/config/paths.ts`
 - `packages/opencorvus/src/session/compaction.ts`
 - `packages/opencorvus/src/session/loop.ts`
 - `packages/opencorvus/src/session/message.ts`
@@ -145,20 +146,26 @@ Owner files:
 
 Scope:
 
-- Map upstream compaction tail concepts to local session metadata; delete the
-  task if no local equivalent exists.
+- Map upstream compaction tail concepts to local session metadata. Local code
+  has no `tail_start_id` equivalent; fork safety is owned by cloned message
+  `parentID` links.
 - Add recent-turn preservation tests around compaction summaries.
-- Add long-session tests with large tool outputs and tool adjacency.
-- Add retry metadata checks only if local assistant entries lack enough
-  diagnostic context after `withLLMActivity`.
-- Keep `withLLMActivity` as the single LLM retry and timeout owner.
+- Keep the existing compacted-tool placeholder path as the single tool
+  adjacency owner.
+- Keep `withLLMActivity` as the single LLM retry and timeout owner; existing
+  tests already prove successful, failed, and aborted calls emit one terminal.
+- Fix non-git `.opencorvus` directory search so parent temp/user directories do
+  not override the active project's local config.
 
 Acceptance:
 
-- Long-session compaction continues without invalid tool adjacency.
-- Failed, aborted, and successful LLM calls each emit exactly one terminal
+- [x] Long-session compaction continues without invalid tool adjacency.
+- [x] Failed, aborted, and successful LLM calls each emit exactly one terminal
   activity event.
-- Fork tests prove cloned message parent links remain valid after compaction.
+- [x] Fork tests prove cloned message parent links remain valid after
+  compaction.
+- [x] Compaction disable config cannot be overridden by unrelated parent
+  `.opencorvus` directories in non-git projects.
 
 ## Phase 2: API And SDK Contract Parity
 

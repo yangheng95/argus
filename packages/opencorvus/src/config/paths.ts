@@ -8,6 +8,10 @@ import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 
 export namespace ConfigPaths {
+  function boundary(directory: string, worktree: string) {
+    return worktree === "/" ? directory : worktree
+  }
+
   export async function projectFiles(name: string, directory: string, worktree: string) {
     const files: string[] = []
     for (const file of [`${name}.jsonc`, `${name}.json`]) {
@@ -20,17 +24,19 @@ export namespace ConfigPaths {
   }
 
   export async function directories(directory: string, worktree: string) {
+    const projectDirectories = !Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
+      ? await Array.fromAsync(
+          Filesystem.up({
+            targets: [".opencorvus"],
+            start: directory,
+            stop: boundary(directory, worktree),
+          }),
+        )
+      : []
+
     return [
       Global.Path.config,
-      ...(!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
-        ? await Array.fromAsync(
-            Filesystem.up({
-              targets: [".opencorvus"],
-              start: directory,
-              stop: worktree,
-            }),
-          )
-        : []),
+      ...projectDirectories.toReversed(),
       ...(Flag.OPENCORVUS_CONFIG_DIR ? [Flag.OPENCORVUS_CONFIG_DIR] : []),
     ]
   }

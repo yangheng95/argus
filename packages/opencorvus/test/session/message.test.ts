@@ -1020,6 +1020,59 @@ describe("session.message.toModelMessage", () => {
   })
 })
 
+describe("session.message.filterCompacted", () => {
+  async function* stream(messages: Message.WithParts[]) {
+    for (const message of messages) yield message
+  }
+
+  test("keeps the completed compaction summary and all newer turns", async () => {
+    const compactionUser = "m-compaction-user"
+    const compactionSummary = "m-compaction-summary"
+    const recentUser = "m-recent-user"
+    const recentAssistant = "m-recent-assistant"
+
+    const newestFirst: Message.WithParts[] = [
+      {
+        info: assistantInfo(recentAssistant, recentUser),
+        parts: [{ ...basePart(recentAssistant, "p-recent-assistant"), type: "text", text: "recent answer" }],
+      },
+      {
+        info: userInfo(recentUser),
+        parts: [{ ...basePart(recentUser, "p-recent-user"), type: "text", text: "recent question" }],
+      },
+      {
+        info: {
+          ...assistantInfo(compactionSummary, compactionUser),
+          summary: true,
+          finish: "stop",
+        },
+        parts: [{ ...basePart(compactionSummary, "p-summary"), type: "text", text: "summary" }],
+      },
+      {
+        info: userInfo(compactionUser),
+        parts: [{ ...basePart(compactionUser, "p-compaction"), type: "compaction", auto: true }],
+      },
+      {
+        info: assistantInfo("m-old-assistant", "m-old-user"),
+        parts: [{ ...basePart("m-old-assistant", "p-old-assistant"), type: "text", text: "old answer" }],
+      },
+      {
+        info: userInfo("m-old-user"),
+        parts: [{ ...basePart("m-old-user", "p-old-user"), type: "text", text: "old question" }],
+      },
+    ] as Message.WithParts[]
+
+    const result = await Message.filterCompacted(stream(newestFirst))
+
+    expect(result.map((message) => message.info.id)).toEqual([
+      compactionUser,
+      compactionSummary,
+      recentUser,
+      recentAssistant,
+    ])
+  })
+})
+
 describe("session.message.fromError", () => {
   test("serializes context_length_exceeded as ContextOverflowError", () => {
     const input = {
