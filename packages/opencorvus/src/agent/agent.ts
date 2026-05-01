@@ -196,7 +196,7 @@ export namespace Agent {
       },
       delivery: {
         name: "delivery",
-        description: "Delivery verification agent. Verifies runtime behavior, fixes bugs, and makes final acceptance decisions.",
+        description: "Delivery verification agent. Verifies runtime behavior and makes final acceptance decisions without editing deliverables.",
         // Hard step budget. Mirrors EngineConfig.delivery.max_steps (default
         // 160); SessionLoop reads this value directly. Operators that tune
         // EngineConfig.delivery.max_steps should also update this — an
@@ -204,15 +204,14 @@ export namespace Agent {
         // registry to runtime state (CLAUDE.md rule 26), so we keep both
         // in sync by convention.
         steps: 1000,
-        // `task` is INTENTIONALLY not excluded: delivery dispatches per-goal
-        // review subagents (Phase 2.5 in DELIVERY_AGENT_SYSTEM) to deepen its
-        // otherwise thin per-goal verification. Adversarial review across 3+
-        // goals in one delivery context dilutes attention; parallel general
-        // / explore subagents get a goal each with clean context.
-        tools: { exclude: ["planner", "panel", "task_report", "goal_report", "analytics"] },
-        // Inherit the shared `defaults` ruleset (task: "allow" included) so
-        // delivery's own review subagent dispatch follows the same debug
-        // accept-by-default permission policy as build sessions.
+        // Delivery is review-only. Registry tools include mutation-capable
+        // surfaces (`edit`, `write`, `apply_patch`, `bash`, `task`) that bypass
+        // the delivery-specific read-only contract, so this stage exposes no
+        // registry tools. Its review and output tools are injected by
+        // DeliveryAgent.verify via SessionLoop extra tools.
+        tools: { include: [] as string[] },
+        // Permission remains merged for consistency with the shared Agent.Info
+        // shape, but registry tool exposure above is the delivery authority.
         permission: PermissionNext.merge(defaults, user),
         options: {},
         prompt: DELIVERY_AGENT_SYSTEM,

@@ -114,8 +114,8 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
               `Error: verdict='accepted' requires deferred_checks to contain no ` +
               `result='failed' entries. You reported ${failedDeferred.length} failed ` +
               `deferred check(s): ${failedDeferred.map((c) => c.name).join(", ")}. A ` +
-              `failed check means the spec was not met — reject (with rejection_details ` +
-              `attributing each failure to a goal) or fix and re-run the check.`
+              `failed check means the spec was not met — reject with rejection_details ` +
+              `attributing each failure to a goal.`
             )
           }
           const passedEvidenceCount = obj.tool_call_evidence.filter((e) => e.passed).length

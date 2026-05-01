@@ -4,6 +4,7 @@ import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { createDeliveryTools } from "../../src/delivery/tools"
+import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
@@ -39,5 +40,22 @@ describe("delivery review-only tool surface", () => {
     expect(prompt).not.toContain("write_file")
     expect(prompt).not.toContain("edit_file")
     expect(prompt).not.toContain("Fix aggressively")
+    expect(prompt).not.toContain(" or criteria")
+  })
+
+  test("delivery agent exposes no registry tools", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "opencorvus-delivery-agent-readonly-"))
+    try {
+      await Instance.provide({
+        directory: dir,
+        fn: async () => {
+          const agent = await Agent.get("delivery")
+          expect(agent?.description).toContain("without editing deliverables")
+          expect(agent?.tools).toEqual({ include: [] })
+        },
+      })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
   })
 })

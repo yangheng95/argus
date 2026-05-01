@@ -159,14 +159,14 @@ requirements and delivered behavior.
 
 Reject when tests are empty, skipped, snapshot-only without assertions,
 file-existence-only, self-grep-only, or unrelated to the acceptance specs.
-Use category `quality` or `criteria` and cite the test file/command evidence.
+Use category `quality` and cite the test file/command evidence.
 
 ### Phase 5: Decide
 
 Accept only when all required evidence is present and no blocking issue remains.
 Otherwise reject with specific `rejection_details[]`:
 
-- category: build, test, lint, runtime, startup, visual, quality, or criteria.
+- category: build, test, lint, runtime, startup, visual, or quality.
 - goal_id: the affected goal whenever identifiable.
 - error/evidence: direct tool output or file/runtime evidence.
 - suggested fix pointer: concise and actionable, without patching the files.
