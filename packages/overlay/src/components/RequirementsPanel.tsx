@@ -44,18 +44,20 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
   return (
     <div class="req-panel">
       {/* State 1: Generating — show streaming messages */}
-      <Show when={props.isGenerating && hasStream() && !hasData()}>
+      <Show when={props.isGenerating && !hasData()}>
         <div class="req-streaming">
           <div class="req-streaming-indicator">
             <span class="card__spinner" />
             <span class="req-streaming-label">{t("workflow.requirements_generating")}</span>
           </div>
-          <div class="req-streaming-messages">
-            {/* Index over For: SSE stream is append-only, never reorders. */}
-            <Index each={props.streamingMessages}>
-              {(msg) => <CardParts parts={orderedMessageParts(msg())} depth={1} />}
-            </Index>
-          </div>
+          <Show when={hasStream()}>
+            <div class="req-streaming-messages">
+              {/* Index over For: SSE stream is append-only, never reorders. */}
+              <Index each={props.streamingMessages}>
+                {(msg) => <CardParts parts={orderedMessageParts(msg())} depth={1} />}
+              </Index>
+            </div>
+          </Show>
         </div>
       </Show>
 

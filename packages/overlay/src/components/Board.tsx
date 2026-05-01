@@ -17,6 +17,7 @@ import { ArchitectPanel } from "./ArchitectPanel";
 import { EvaluationCriteriaPanel } from "./EvaluationCriteriaPanel";
 import { InteractionCardList, type InteractionData } from "./InteractionCard";
 import { BoardIntro } from "./BoardIntro";
+import { taskScopeSectionVisibility } from "../utils/task-scope-sections";
 
 // ── Status utilities ──
 
@@ -284,6 +285,13 @@ export function Board(props: BoardProps) {
     const archStep = wf.steps.find((s: any) => s.id === "architect");
     return archStep?.status === "running";
   });
+  const taskScopeSections = createMemo(() =>
+    taskScopeSectionVisibility({
+      workflow: workflow(),
+      requirements: requirements(),
+      architect: architect(),
+    }),
+  );
 
   // ── Active section tracking ──
   // Map the workflow's current (running) step to a right-pane section id so
@@ -378,11 +386,11 @@ export function Board(props: BoardProps) {
     return matched.sort((a, b) => (a.time ?? 0) - (b.time ?? 0));
   }
 
-  // Requirements surface merges the spec + goal stage sessions — both are
-  // produced by the requirements pipeline before any goal-group appears.
+  // Requirements surface reads the actual requirements stage plus legacy
+  // spec/goal cards created by older task snapshots.
   const requirementsMessages = createMemo(() => {
     const out: any[] = [];
-    for (const stage of ["spec", "goal"]) {
+    for (const stage of ["requirements", "spec", "goal"]) {
       for (const card of agentCardsForStage(stage)) {
         out.push(...cardToMessageSegments(card));
       }
@@ -421,55 +429,53 @@ export function Board(props: BoardProps) {
           context now use the per-session 📋 Copy button on each TracePanel
           to dump the JSON dump into a log viewer or LLM. */}
 
-      {/* TODO(2026-04-20): 需求分析 / 架构检查 / 评估指标 / 交付 / interactions
-          五个板块整体下线等重做。当前仅保留 workflow 进度条 + goals + ChangesPanel
-          (独立挂载点不受影响)。重做时重新评估：每个板块是否承载与 goals 正交的
-          信息、还是该 inline 到 goal step 卡。不要无脑恢复。 */}
-      <Show when={false}>
-      <SectionFrame
-        id="requirementsSection"
-        title={t("workflow.requirements")}
-        icon={SECTION_ICONS.spec}
-        bodyId="requirementsBody"
-        badgeId="requirementsBadge"
-        phaseState={phaseFor("requirements")}
-        badgeText={(() => {
-          const rs = requirements() ?? [];
-          if (rs.length > 0) {
+      <Show when={taskScopeSections().requirements}>
+        <SectionFrame
+          id="requirementsSection"
+          title={t("workflow.requirements")}
+          icon={SECTION_ICONS.spec}
+          bodyId="requirementsBody"
+          badgeId="requirementsBadge"
+          phaseState={phaseFor("requirements")}
+          badgeText={(() => {
+            const rs = requirements() ?? [];
+            if (rs.length > 0) {
+              const passed = rs.filter((r: any) => r.status === "passed").length;
+              return `${passed}/${rs.length}`;
+            }
+            if (isRequirementsGenerating()) return t("common.active");
+            return goalWorkflows().length > 0 ? "—" : "";
+          })()}
+          badgeTone={(() => {
+            const rs = requirements() ?? [];
+            if (rs.length === 0) return isRequirementsGenerating() ? "accent" : "";
             const passed = rs.filter((r: any) => r.status === "passed").length;
-            return `${passed}/${rs.length}`;
-          }
-          if (isRequirementsGenerating()) return t("common.active");
-          return goalWorkflows().length > 0 ? "—" : "";
-        })()}
-        badgeTone={(() => {
-          const rs = requirements() ?? [];
-          if (rs.length === 0) return isRequirementsGenerating() ? "accent" : "";
-          const passed = rs.filter((r: any) => r.status === "passed").length;
-          const failed = rs.filter((r: any) => r.status === "failed").length;
-          return failed > 0 ? "bad" : passed === rs.length ? "good" : "accent";
-        })()}
-      >
-        <RequirementsPanel
-          requirements={requirements()}
-          specContent={spec()?.content}
-          isGenerating={isRequirementsGenerating()}
-          streamingMessages={requirementsMessages()}
-        />
-      </SectionFrame>
+            const failed = rs.filter((r: any) => r.status === "failed").length;
+            return failed > 0 ? "bad" : passed === rs.length ? "good" : "accent";
+          })()}
+        >
+          <RequirementsPanel
+            requirements={requirements()}
+            specContent={spec()?.content}
+            isGenerating={isRequirementsGenerating()}
+            streamingMessages={requirementsMessages()}
+          />
+        </SectionFrame>
+      </Show>
 
-      <SectionFrame
-        id="architectSection"
-        title={t("workflow.architect")}
-        icon={SECTION_ICONS.plan}
-        bodyId="architectBody"
-        badgeId="architectBadge"
-        phaseState={phaseFor("architect")}
-        badgeText={architect() ? String(architect()!.contractCount) : ""}
-        badgeTone={architect() ? "accent" : ""}
-      >
-        <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
-      </SectionFrame>
+      <Show when={taskScopeSections().architect}>
+        <SectionFrame
+          id="architectSection"
+          title={t("workflow.architect")}
+          icon={SECTION_ICONS.plan}
+          bodyId="architectBody"
+          badgeId="architectBadge"
+          phaseState={phaseFor("architect")}
+          badgeText={architect() ? String(architect()!.contractCount) : ""}
+          badgeTone={architect() ? "accent" : ""}
+        >
+          <ArchitectPanel architect={architect()} isGenerating={isArchitectGenerating()} />
+        </SectionFrame>
       </Show>
 
       <SectionFrame
