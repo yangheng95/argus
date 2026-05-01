@@ -231,23 +231,28 @@ Acceptance:
 
 ## Phase 4: Dependency And Runtime Modernization
 
-Status: pending explicit spike.
+Status: complete.
 
 Scope:
 
-- Spike OpenRouter provider upgrade in isolation.
-- Spike AI SDK v6 only if upstream parity requires it and current v5 cannot
-  express the required request contract.
+- Spike OpenRouter provider upgrade in isolation. Current npm metadata checked
+  on 2026-05-01 shows `@openrouter/ai-sdk-provider@2.9.0` requires `ai ^6.0.0`,
+  while `@openrouter/ai-sdk-provider@1.5.4` is the latest `1.x` line and
+  requires `ai ^5.0.0`.
+- Do not upgrade AI SDK v6 in this plan: Phase 0 request-body contracts prove
+  the current `ai@5.0.124` stack expresses the target request bodies.
 - Evaluate upstream core package consolidation only after duplicated local
   runtime code is measured.
+- Add an AI runtime dependency gate to the same pre-push quality path as
+  typecheck by wiring `check:ai-runtime` into `typecheck`.
 - Add oxlint correctness gates only after existing violations are known and
-  fixed.
+  fixed; no oxlint gate is added in this phase.
 
 Acceptance:
 
-- No mixed AI SDK major versions remain.
-- No duplicate runtime owner remains.
-- New lint gates run in the same quality path as typecheck and route checks.
+- [x] No mixed AI SDK major versions remain.
+- [x] No duplicate runtime owner remains.
+- [x] New runtime dependency gate runs in the same quality path as typecheck.
 
 ## Immediate Implementation Decision
 
