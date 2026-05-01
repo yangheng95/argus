@@ -763,7 +763,19 @@ export namespace ProviderTransform {
       return result
     }
 
-    const key = sdkKey(model.api.npm) ?? model.providerID
+    // Some Artificial Intelligence Software Development Kit providers derive
+    // providerOptionsName by splitting the configured provider name on ".".
+    // Mirror that only for packages known to use this convention; other
+    // providers use fixed names or their exact provider id.
+    const usesDotSplitOptions =
+      model.api.npm === "@ai-sdk/openai-compatible" ||
+      model.api.npm === "@ai-sdk/openai" ||
+      model.api.npm === "@ai-sdk/anthropic"
+    const key =
+      sdkKey(model.api.npm) ?? (usesDotSplitOptions ? model.providerID.split(".")[0] : model.providerID)
+    if (model.api.npm === "@ai-sdk/azure") {
+      return { [key]: options, azure: options }
+    }
     return { [key]: options }
   }
 
