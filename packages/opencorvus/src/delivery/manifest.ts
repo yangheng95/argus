@@ -37,6 +37,7 @@ export type DeliveryGateVerdict = {
   summary: string
   failedCheckIds: string[]
   failedCoverageIds: string[]
+  failedRuntimeFlowIds: string[]
 }
 
 export type DeliveryGoalCoverage = {
@@ -55,6 +56,20 @@ export type DeliveryRequirementCoverage = {
   evidence: string[]
 }
 
+export type DeliveryRuntimeFlowResult = {
+  id: string
+  name: string
+  status: "passed" | "failed" | "skipped"
+  evidence: string[]
+  screenshotPath?: string
+  dom?: {
+    textLength: number
+    nodeCount: number
+    hasBodyChildren: boolean
+    isEmptyRootShell: boolean
+  }
+}
+
 export type DeliveryEvidenceManifest = {
   id: string
   taskId?: string
@@ -66,6 +81,7 @@ export type DeliveryEvidenceManifest = {
   checkResults: DeliveryCheckResult[]
   goalCoverage: DeliveryGoalCoverage[]
   requirementCoverage: DeliveryRequirementCoverage[]
+  runtimeFlows: DeliveryRuntimeFlowResult[]
   changedFiles: string[]
   finalGate: DeliveryGateVerdict
   timeCreated: number
@@ -130,6 +146,7 @@ export function validateDeliveryEvidenceManifest(
     status: failedCheckIds.length === 0 ? "passed" : "failed",
     failedCheckIds,
     failedCoverageIds: [],
+    failedRuntimeFlowIds: [],
     summary: failedCheckIds.length === 0
       ? `Delivery evidence gate passed ${manifest.requiredChecks.length} required check(s).`
       : `Delivery evidence gate failed ${failedCheckIds.length} required check(s).`,
@@ -154,17 +171,20 @@ export function validateDeliveryCoverage(input: {
 export function mergeGateVerdicts(input: {
   checks: DeliveryGateVerdict
   failedCoverageIds: string[]
+  failedRuntimeFlowIds?: string[]
 }): DeliveryGateVerdict {
-  const status = input.checks.failedCheckIds.length === 0 && input.failedCoverageIds.length === 0
+  const failedRuntimeFlowIds = input.failedRuntimeFlowIds ?? []
+  const status = input.checks.failedCheckIds.length === 0 && input.failedCoverageIds.length === 0 && failedRuntimeFlowIds.length === 0
     ? "passed"
     : "failed"
   return {
     status,
     failedCheckIds: input.checks.failedCheckIds,
     failedCoverageIds: input.failedCoverageIds,
+    failedRuntimeFlowIds,
     summary: status === "passed"
       ? input.checks.summary
-      : `Delivery evidence gate failed ${input.checks.failedCheckIds.length} required check(s) and ${input.failedCoverageIds.length} coverage item(s).`,
+      : `Delivery evidence gate failed ${input.checks.failedCheckIds.length} required check(s), ${input.failedCoverageIds.length} coverage item(s), and ${failedRuntimeFlowIds.length} runtime flow(s).`,
   }
 }
 
@@ -230,7 +250,8 @@ export function deliveryFailureSignatureKeys(manifest: DeliveryEvidenceManifest)
         : `check:${item.id}:${item.commandDigest}:${item.failureReason ?? item.outputExcerpt}`,
     )
   const coverageKeys = manifest.finalGate.failedCoverageIds.map((item) => `coverage:${item}`)
-  return [...new Set([...checkKeys, ...coverageKeys])].sort()
+  const runtimeKeys = manifest.finalGate.failedRuntimeFlowIds.map((item) => `runtime:${item}`)
+  return [...new Set([...checkKeys, ...coverageKeys, ...runtimeKeys])].sort()
 }
 
 export function repeatedDeliveryFailureSignatures(input: {

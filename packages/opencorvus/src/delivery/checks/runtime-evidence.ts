@@ -84,7 +84,7 @@ export async function computeRuntimeEvidence(input: {
     render = await renderPage({
       rendered: indexHtml,
       outDir: input.outDir,
-      viewport: input.viewport,
+      viewport: input.viewport ?? (input.referenceForViewport ? undefined : { width: 1440, height: 900 }),
       referenceForViewport: input.referenceForViewport,
     })
   } catch (e) {

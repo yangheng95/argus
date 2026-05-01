@@ -2,6 +2,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { Instance } from "@/project/instance"
 import { clip } from "./types"
+import { computeRuntimeEvidence } from "./runtime-evidence"
 import {
   commandGroups,
   discoverChecks,
@@ -21,6 +22,7 @@ import {
   type DeliveryGoalCoverage,
   type DeliveryRequirementCoverage,
   type DeliveryRequiredCheck,
+  type DeliveryRuntimeFlowResult,
 } from "../manifest"
 
 const COMMAND_TIMEOUT_MS = 180_000
@@ -51,6 +53,12 @@ export async function buildDeliveryEvidenceManifest(input: {
     checkResults.push(await runRequiredCheck(check))
   }
   const coverage = buildCoverage(input.goals ?? [])
+  const runtimeFlows = await runRuntimeFlows({
+    taskID: input.taskID,
+    iteration: input.iteration ?? 0,
+    requiredChecks,
+    checkResults,
+  })
 
   const manifest: DeliveryEvidenceManifest = {
     id: createManifestId(),
@@ -63,19 +71,104 @@ export async function buildDeliveryEvidenceManifest(input: {
     checkResults,
     goalCoverage: coverage.goalCoverage,
     requirementCoverage: coverage.requirementCoverage,
+    runtimeFlows,
     changedFiles: input.changedFiles,
     finalGate: {
       status: "failed",
       summary: "Delivery evidence gate not evaluated.",
       failedCheckIds: [],
       failedCoverageIds: [],
+      failedRuntimeFlowIds: [],
     },
     timeCreated: Date.now(),
   }
   const checks = validateDeliveryEvidenceManifest(manifest)
   const failedCoverageIds = validateDeliveryCoverage(coverage)
-  manifest.finalGate = mergeGateVerdicts({ checks, failedCoverageIds })
+  const failedRuntimeFlowIds = runtimeFlows
+    .filter((item) => item.status === "failed")
+    .map((item) => item.id)
+  manifest.finalGate = mergeGateVerdicts({ checks, failedCoverageIds, failedRuntimeFlowIds })
   return manifest
+}
+
+async function runRuntimeFlows(input: {
+  taskID?: string
+  iteration: number
+  requiredChecks: DeliveryRequiredCheck[]
+  checkResults: DeliveryCheckResult[]
+}): Promise<DeliveryRuntimeFlowResult[]> {
+  const roots = [...new Set(input.requiredChecks.map((item) => item.cwd ?? Instance.directory))]
+  const flows: DeliveryRuntimeFlowResult[] = []
+  for (const root of roots.length > 0 ? roots : [Instance.directory]) {
+    const frontend = await isFrontendPackage(root)
+    if (!frontend) continue
+    const failedBuild = input.checkResults.some(
+      (item) => (item.cwd ?? Instance.directory) === root && item.name === "build" && item.status !== "passed",
+    )
+    const id = `runtime:web:${path.relative(Instance.directory, root).replaceAll("\\", "/") || "."}`
+    if (failedBuild) {
+      flows.push({
+        id,
+        name: "Web Runtime Render",
+        status: "failed",
+        evidence: ["build check failed; runtime render cannot be trusted until build passes"],
+      })
+      continue
+    }
+    const report = await computeRuntimeEvidence({
+      projectDir: root,
+      outDir: path.join(
+        root,
+        ".opencorvus",
+        "delivery-runtime-flow",
+        input.taskID ?? "no-task",
+        String(input.iteration),
+      ),
+      viewport: { width: 1440, height: 900 },
+    })
+    flows.push({
+      id,
+      name: "Web Runtime Render",
+      status: report.passed ? "passed" : "failed",
+      evidence: report.passed
+        ? [
+            `rendered ${report.evidence.buildArtifactPath ?? "app"} text=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`,
+          ]
+        : report.violations.map((item) => `${item.kind}: ${item.detail}`),
+      screenshotPath: report.evidence.renderedPngPath,
+      dom: report.evidence.dom,
+    })
+  }
+  return flows
+}
+
+async function isFrontendPackage(root: string) {
+  const raw = await fs.readFile(path.join(root, "package.json"), "utf8").catch(() => undefined)
+  if (!raw) return false
+  const pkg = JSON.parse(raw) as {
+    scripts?: Record<string, string>
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  }
+  const deps = new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+  ])
+  const frontendDeps = [
+    "react",
+    "next",
+    "vue",
+    "svelte",
+    "solid-js",
+    "vite",
+    "@vitejs/plugin-react",
+    "@sveltejs/kit",
+    "astro",
+    "@solidjs/start",
+  ]
+  if (frontendDeps.some((dep) => deps.has(dep))) return true
+  const scriptText = Object.values(pkg.scripts ?? {}).join("\n")
+  return /\b(vite|next|astro|svelte-kit|solid-start)\b/.test(scriptText)
 }
 
 function buildCoverage(goals: Array<{

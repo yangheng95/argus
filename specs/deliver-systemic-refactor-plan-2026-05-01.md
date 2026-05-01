@@ -456,3 +456,19 @@ type FailureSignature = {
 - P3：真实 runtime flow 还没有按任务类型结构化生成。
 - P4：重复签名 gate 目前基于相邻 manifest；后续可把更长历史窗口纳入 manifest helper。
 - P7：Phase 2.5 review artifact 硬门禁仍未接入。
+
+### 2026-05-01 第六轮
+
+已完成：
+
+- P3 部分完成：`DeliveryEvidenceManifest` 新增 `runtimeFlows`。
+- P3 硬门禁：检测到前端型 package metadata 后，manifest 会运行真实 `computeRuntimeEvidence` / puppeteer render flow；失败写入 `failedRuntimeFlowIds` 并阻止 delivery accept。
+- P3 可观测性：runtime flow 记录 evidence、screenshot path、DOM text/node metrics，并通过 board delivery payload 暴露。
+- P3 回归覆盖：非前端 package metadata 不生成 runtime flow，避免把库/CLI 项目误判成 Web runtime。
+- benchmark 覆盖：`test/benchmark` 与 delivery project gate 通过。
+
+未完成，后续继续：
+
+- P3：chat/auth/upload 这类领域级 runtime workflow 还没有专门步骤；当前完成的是前端型 package 的通用真实 render flow。
+- P4：重复签名 gate 目前基于相邻 manifest；后续可扩展历史窗口。
+- P7：Phase 2.5 review artifact 硬门禁仍未接入。
