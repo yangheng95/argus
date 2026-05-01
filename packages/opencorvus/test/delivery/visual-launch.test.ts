@@ -2,7 +2,11 @@ import { afterEach, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { createIsolatedRenderWorkspace, resolveProjectLaunchScript } from "../../src/delivery/checks/visual"
+import {
+  announcedLocalUrlFromOutput,
+  createIsolatedRenderWorkspace,
+  resolveProjectLaunchScript,
+} from "../../src/delivery/checks/visual"
 
 const tempDirs: string[] = []
 
@@ -81,4 +85,18 @@ test("isolated render workspace copies project files without mutating source scr
   await isolated.cleanup()
   await expect(fs.access(isolated.directory)).rejects.toThrow()
   await expect(fs.readFile(path.join(dir, ".opencorvus", "cache.txt"), "utf8")).resolves.toContain("internal scratch")
+})
+
+test("announcedLocalUrlFromOutput parses ANSI-colored vite preview port", () => {
+  const output = [
+    "$ vite preview",
+    "Port 4179 is in use, trying another one...",
+    "\x1b[32m➜\x1b[39m \x1b[1mLocal\x1b[22m: \x1b[36mhttp://localhost:\x1b[1m4180\x1b[22m/\x1b[39m",
+  ].join("\n")
+
+  expect(announcedLocalUrlFromOutput(output)).toBe("http://127.0.0.1:4180")
+})
+
+test("announcedLocalUrlFromOutput refuses localhost URLs without an explicit port", () => {
+  expect(announcedLocalUrlFromOutput("Local: http://localhost/")).toBeUndefined()
 })
