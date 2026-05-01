@@ -27,8 +27,10 @@ Latest checked upstream branch:
 
 Local evidence:
 
-- Local provider stack is already on `ai@5.0.124`.
-- Local `@openrouter/ai-sdk-provider` is pinned to `1.5.4` and patched.
+- Historical baseline before the AI SDK v6 migration: local provider stack was
+  on `ai@5.0.124`.
+- Historical baseline before the AI SDK v6 migration: local
+  `@openrouter/ai-sdk-provider` was pinned to `1.5.4` and patched.
 - Local provider transform tests already cover DeepSeek `reasoning_content`,
   OpenRouter `reasoning_details`, Azure reasoning variants, Bedrock cachePoint,
   providerOptions remapping, and tool-choice behavior for reasoning models.
@@ -74,7 +76,7 @@ Local evidence:
 ### Explicit Non-Goals
 
 - Do not migrate to upstream Effect HttpApi in this plan.
-- Do not introduce mixed AI SDK v5/v6 runtime paths.
+- Do not introduce mixed AI SDK runtime major versions.
 - Do not wholesale merge upstream commits.
 - Do not add fallback serializers, compatibility branches, or keyword-only
   acceptance checks.
@@ -239,8 +241,9 @@ Scope:
   on 2026-05-01 shows `@openrouter/ai-sdk-provider@2.9.0` requires `ai ^6.0.0`,
   while `@openrouter/ai-sdk-provider@1.5.4` is the latest `1.x` line and
   requires `ai ^5.0.0`.
-- Do not upgrade AI SDK v6 in this plan: Phase 0 request-body contracts prove
-  the current `ai@5.0.124` stack expresses the target request bodies.
+- This plan did not upgrade AI SDK v6. That decision is superseded by
+  `docs/ai-sdk-v6-complete-migration-plan-2026-05-01.md`, which owns the
+  complete v6 migration.
 - Evaluate upstream core package consolidation only after duplicated local
   runtime code is measured.
 - Add an AI runtime dependency gate to the same pre-push quality path as

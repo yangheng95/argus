@@ -75,9 +75,11 @@ reliably.
 
 The current local issue is broader than provider-side JSON shape enforcement:
 
-- The repo is currently on `ai@5.0.124`; existing provider request-body
-  contract work already proved the v5 stack can serialize the local provider
-  matrix.
+- Historical context: when this plan was written, the repo was on
+  `ai@5.0.124`; existing provider request-body contract work had already
+  proved that stack could serialize the local provider matrix. The current AI
+  SDK v6 migration replaces that runtime baseline and keeps this conclusion:
+  the delivery architecture still needs specialist evidence and one arbiter.
 - `submit_verdict` already uses one Zod `inputSchema` and execute-time
   cross-field checks. The remaining failures include missing final calls,
   repeated invalid retries, semantic contradictions, and weak evidence. An SDK
@@ -90,9 +92,9 @@ Therefore the specialist review architecture remains the required root fix.
 It narrows each reviewer context, keeps specialists as evidence producers, and
 makes one arbiter responsible for the final `delivery-agent-verdict`.
 
-Add a separate, bounded AI SDK v6 spike only after Phase 0 removes delivery
-repair and records a replayable corpus of real `submit_verdict` failures. The
-spike acceptance bar is:
+The AI SDK v6 migration is now implemented separately from this delivery plan.
+Further delivery-specific schema work still needs a replayable corpus of real
+`submit_verdict` failures. The acceptance bar is:
 
 - compare AI SDK v5 and v6 request bodies for `submit_verdict` and specialist
   review tools;

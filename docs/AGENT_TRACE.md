@@ -231,7 +231,7 @@ export OPENCORVUS_AGENT_TRACE_REDACT_ATTACHMENTS=1
   - `src/session/llm.ts` — 唯一 LLM 入口
   - `src/agent/runner.ts` — runAgentSession + runAgentSessionWithRetry
   - `src/orchestrator/agent.ts` — Orchestrator.processTask
-  - `src/agent/agent.ts` + `src/task-api/index.ts` — 两个旁路 streamObject
+  - `src/agent/agent.ts` + `src/task-api/index.ts` — 两个旁路结构化 LLM helper 调用
 - 失败 fail-soft：append 失败仅 `log.warn`，不 throw（不能让 trace 自身阻塞 agent 跑）
 - session 文件由 OS 文件锁保护原子写（`fs.appendFileSync` 单调用单 line）
 - 无 in-memory 缓冲；事件落盘即可见，调试时可 `tail -f`
