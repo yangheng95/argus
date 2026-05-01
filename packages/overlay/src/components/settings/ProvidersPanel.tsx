@@ -375,6 +375,14 @@ export default function ProvidersPanel() {
           </div>
         </Show>
 
+        <Show when={formError() && !showAdd()}>
+          {(msg) => (
+            <div class="provider-form-error" role="alert" aria-live="polite">
+              {msg()}
+            </div>
+          )}
+        </Show>
+
         <For each={providerEntries()}>
           {([id, provider]) => (
             <div class="config-panel-card provider-card-row">

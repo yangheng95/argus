@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs"
+import { mkdtempSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -8,15 +8,27 @@ export const { default: puppeteer } = await import(
 
 let browserQueue: Promise<void> = Promise.resolve()
 const browserLockDir = join(tmpdir(), "pptr-overlay-browser-lock")
+const STALE_BROWSER_LOCK_MS = 120_000
 
 async function acquireBrowserLock() {
   while (true) {
     try {
       mkdirSync(browserLockDir)
+      writeFileSync(join(browserLockDir, "owner"), `${process.pid}\n${Date.now()}\n`)
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException | undefined)?.code
       if (code !== "EEXIST") throw error
+      try {
+        const age = Date.now() - statSync(browserLockDir).mtimeMs
+        if (age > STALE_BROWSER_LOCK_MS) {
+          rmSync(browserLockDir, { recursive: true, force: true })
+          continue
+        }
+      } catch {
+        rmSync(browserLockDir, { recursive: true, force: true })
+        continue
+      }
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
   }

@@ -1,19 +1,12 @@
 import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
+import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
 )
 
-const src = new URL("../src/", import.meta.url)
-const types = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-}
+await ensureOverlayDist()
 
 async function browser() {
   const list = [
@@ -34,10 +27,10 @@ test("closed titlebar menus do not block inspector interactions", async () => {
     port: 0,
     fetch(req) {
       const url = new URL(req.url)
-      const name = url.pathname === "/" ? "index.html" : url.pathname.slice(1)
-      const file = Bun.file(new URL(name, src))
-      const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
-      return file.exists().then((ok) => ok ? new Response(file, { headers: { "content-type": type } }) : new Response("not found", { status: 404 }))
+      if (url.pathname === "/" || url.pathname === "/ui" || url.pathname === "/ui/") {
+        return Response.redirect(`${url.origin}/ui/index.html`, 302)
+      }
+      return overlayStaticResponse(url.pathname).then((res) => res || new Response("not found", { status: 404 }))
     },
   })
   const app = `http://127.0.0.1:${server.port}`
@@ -45,9 +38,13 @@ test("closed titlebar menus do not block inspector interactions", async () => {
 
   try {
     const tab = await page.newPage()
-    await tab.goto(app, { waitUntil: "domcontentloaded" })
+    await tab.goto(`${app}/ui/index.html`, { waitUntil: "domcontentloaded" })
 
     expect(await tab.$("[data-testid^='titlebar-menu-']")).toBeNull()
+    await tab.click('[data-menu-trigger="help"]')
+    await tab.waitForSelector('[data-testid="titlebar-menu-help"]')
+    await tab.keyboard.press("Escape")
+    await tab.waitForFunction(() => !document.querySelector('[data-testid^="titlebar-menu-"]'))
     expect(
       await tab.$eval(".sections-header", (node) => {
         const rect = node.getBoundingClientRect()

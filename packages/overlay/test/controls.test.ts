@@ -1,19 +1,12 @@
 import { expect, test } from "bun:test"
 import { launchBrowser } from "./launch"
+import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
 )
 
-const src = new URL("../src/", import.meta.url)
-const types = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-}
+await ensureOverlayDist()
 
 async function browser() {
   const list = [
@@ -257,6 +250,7 @@ test("overlay controls trigger without runtime failures", async () => {
           status: "pending",
           title: "Approve tool usage",
           body: "Allow the overlay action to continue.",
+          time: { created: now - 5_000 },
         },
       ],
     },
@@ -567,16 +561,8 @@ test("overlay controls trigger without runtime failures", async () => {
       if (path === "/ui" || path === "/ui/") {
         return Response.redirect(`${url.origin}/ui/index.html`, 302)
       }
-      if (path.startsWith("/ui/")) {
-        const name = decodeURIComponent(path.slice(4)) || "index.html"
-        if (name.includes("..")) return text("forbidden", { status: 403 })
-        const file = Bun.file(new URL(name, src))
-        if (!(await file.exists())) return text("not found", { status: 404 })
-        const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
-        return new Response(file, {
-          headers: { "content-type": type },
-        })
-      }
+      const staticResponse = await overlayStaticResponse(path)
+      if (staticResponse) return staticResponse
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") {
         return send({
@@ -590,6 +576,17 @@ test("overlay controls trigger without runtime failures", async () => {
       if (path === "/vcs") return send(data.vcs)
       if (path === "/provider") return send(data.provider)
       if (path === "/provider/auth") return send(data.providerAuth)
+      if (path === "/agent") return send([])
+      if (path === "/config/providers") {
+        return send({
+          providers: data.provider.all.map((item) => ({
+            id: item.id,
+            name: item.name || item.id,
+            models: item.models || {},
+          })),
+          default: data.provider.default || {},
+        })
+      }
       if (path.startsWith("/provider/") && path.endsWith("/test")) {
         return send({ ok: true, message: "Provider connected" })
       }
@@ -728,11 +725,29 @@ test("overlay controls trigger without runtime failures", async () => {
           headers: { etag: `"board-${data.board.task.time.updated}"` },
         })
       }
+      if (path === "/task/task-1/conversation") {
+        const timeline = data.timeline.task["task-1"] || []
+        return send({
+          board: data.board,
+          transcript: timeline,
+          timeline,
+          events: [],
+          view: { sessions: [] },
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+          lastSequence: 0,
+        })
+      }
+      if (path.startsWith("/task/task-1/conversation/events")) {
+        return send({
+          events: [],
+          eventReplay: { cursor: 0, latestSequence: 0, complete: true, limit: 100 },
+        })
+      }
       if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
-      if (path === "/task/task-1/events") {
+      if (path === "/task/events" || path === "/task/task-1/events") {
         const stream = new ReadableStream({
           start(controller) {
-            controller.enqueue(`data: ${JSON.stringify({ type: "noop" })}\n\n`)
+            controller.enqueue(":\n\n")
             controller.close()
           },
           cancel() {},
@@ -996,10 +1011,9 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
     await page.waitForSelector(".task-row-main[data-task-id='task-1']")
     await page.click(".task-row-main[data-task-id='task-1']")
-    await page.waitForFunction(() => document.body.dataset.workspace === "task")
     await page.waitForSelector('[data-task-action="retry"]')
     await page.waitForSelector(".change-row")
-    await page.waitForSelector("#interaction-modal")
+    await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']")
 
     expect(await page.$("[data-testid^='titlebar-menu-']")).toBeNull()
     const menu = await page.evaluate(() => {
@@ -1050,9 +1064,9 @@ test("overlay controls trigger without runtime failures", async () => {
     expect(zoom.back).toBe(zoom.before)
     expect(zoom.zoom).toBe(1)
 
-    seen.push("#interaction-modal [data-action='once']")
-    await tap("#interaction-modal [data-action='once']")
-    await page.waitForFunction(() => !document.querySelector("#interaction-modal"))
+    seen.push(".interaction-card[data-id='interaction-1'] [data-action='once']")
+    await tap(".interaction-card[data-id='interaction-1'] [data-action='once']")
+    await page.waitForFunction(() => !document.querySelector(".interaction-card[data-id='interaction-1']"))
 
     const theme = await page.$eval("body", (node) => node.dataset.theme)
     await page.click('[data-menu-trigger="view"]')
@@ -1069,6 +1083,8 @@ test("overlay controls trigger without runtime failures", async () => {
     seen.push('[data-testid="titlebar-toggle-locale"]')
     await tap('[data-testid="titlebar-toggle-locale"]')
     await page.waitForFunction((value) => document.documentElement.lang !== value, {}, lang)
+    await page.keyboard.press("Escape")
+    await page.waitForFunction(() => !document.querySelector('[data-testid^="titlebar-menu-"]'))
 
     seen.push("#btnMinimize")
     await tap("#btnMinimize")

@@ -7,6 +7,7 @@
 // All CRUD operations are self-contained — no dependency on static HTML dialogs.
 
 import {
+  createEffect,
   createSignal,
   createMemo,
   For,
