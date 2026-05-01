@@ -49,7 +49,7 @@ export function IntegrityBody(props: { integrity: Integrity }) {
     <div class="integrity" data-verdict={props.integrity.verdict}>
       <div class="integrity__header">
         <span
-          class="integrity__verdict"
+          class="verdict-pill"
           data-verdict={props.integrity.verdict}
         >
           {verdictLabel(props.integrity.verdict)}
@@ -74,7 +74,7 @@ export function IntegrityBody(props: { integrity: Integrity }) {
             <For each={props.integrity.dimensions}>
               {(d) => (
                 <li class="integrity__dimension" data-verdict={d.verdict}>
-                  <span class="integrity__verdict" data-verdict={d.verdict}>
+                  <span class="verdict-pill" data-verdict={d.verdict}>
                     {verdictLabel(d.verdict)}
                   </span>
                   <span class="integrity__dimension-name">{dimensionLabel(d.id)}</span>

@@ -6490,20 +6490,52 @@ select.field-input option {
    never-rendered `.interaction-modal-*`, `.interaction-auto-*` blocks were
    removed during the unified card-system migration. */
 
-/* ── Delivery summary ── */
-.delivery-card {
-  padding: 6px 8px;
+/* ── Delivery panel ── single source for the right-column delivery card.
+   Verdict drives the left-edge accent via a single `data-verdict` attribute
+   on `.delivery-panel`; lifecycle status (publishing) is folded in via a
+   subtle pulsing border later if needed. Row + group styling pulls on the
+   shared `.verdict-pill` primitive — no per-row color rules here. */
+.delivery-panel {
+  padding: 12px;
   border-radius: var(--radius);
-  background: var(--good-dim);
-  border: 1px solid rgba(52, 211, 153, 0.20);
+  background: var(--surface, var(--surface-inset));
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-muted);
   margin-top: 4px;
+  display: grid;
+  gap: 10px;
+}
+.delivery-panel[data-verdict="accepted"] {
+  border-left-color: var(--good);
+}
+.delivery-panel[data-verdict="rejected"] {
+  border-left-color: var(--bad);
+}
+.delivery-panel[data-verdict="inflight"] {
+  border-left-color: var(--accent, #63a2ff);
+}
+.delivery-panel[data-verdict="empty"] {
+  border-left-color: var(--border);
+  background: transparent;
+  border-color: transparent;
 }
 
-.delivery-title {
-  font-size: var(--ui-font-heading);
-  font-weight: 600;
-  color: var(--good);
-  margin-bottom: 4px;
+.delivery-panel-header {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.delivery-iteration {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.delivery-empty-hint {
+  margin: 0;
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
 }
 
 .delivery-summary {
@@ -6511,26 +6543,114 @@ select.field-input option {
   color: var(--text);
   line-height: 1.65;
 }
+.delivery-summary[data-clamped="true"] {
+  display: -webkit-box;
+  -webkit-line-clamp: 10;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
-.delivery-files {
-  margin-top: 6px;
+.delivery-summary-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: var(--ui-font-tiny);
+  color: var(--accent, #63a2ff);
+  cursor: pointer;
+}
+.delivery-summary-toggle:hover {
+  text-decoration: underline;
+}
+
+.delivery-files-link {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 10px;
   font-size: var(--ui-font-control);
   color: var(--text-soft);
   font-family: var(--mono);
+  cursor: pointer;
+}
+.delivery-files-link:hover {
+  border-color: var(--accent, #63a2ff);
+  color: var(--text);
+}
+
+.delivery-evidence-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+}
+.delivery-evidence-group[open] {
+  background: transparent;
+}
+.delivery-evidence-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--ui-font-control);
+  list-style: none;
+}
+.delivery-evidence-group-head::-webkit-details-marker {
+  display: none;
+}
+.delivery-evidence-group-head::before {
+  content: "▸";
+  margin-right: 6px;
+  color: var(--text-muted);
+  transition: transform 120ms ease;
+}
+.delivery-evidence-group[open] > .delivery-evidence-group-head::before {
+  transform: rotate(90deg);
+  display: inline-block;
+}
+.delivery-evidence-group-label {
+  font-weight: 600;
+  color: var(--text);
+}
+.delivery-evidence-group-count {
+  font-size: var(--ui-font-tiny);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .delivery-evidence-list {
   display: grid;
   gap: 4px;
-  margin-top: 8px;
+  margin: 0;
+  padding: 0 10px 10px;
+  list-style: none;
 }
 
 .delivery-evidence-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) max-content;
   gap: 8px;
   align-items: center;
   font-size: var(--ui-font-control);
+}
+.delivery-evidence-row:not([data-has-pill]) {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.delivery-evidence-goal-pill {
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: var(--ui-font-tiny);
+  font-family: var(--mono);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.delivery-evidence-goal-pill:hover {
+  border-color: var(--accent, #63a2ff);
+  color: var(--text);
 }
 
 .delivery-evidence-name {
@@ -6538,19 +6658,6 @@ select.field-input option {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.delivery-evidence-status {
-  color: var(--text-soft);
-  font-family: var(--mono);
-}
-
-.delivery-evidence-status[data-status="failed"] {
-  color: var(--danger);
-}
-
-.delivery-evidence-status[data-status="passed"] {
-  color: var(--good);
 }
 
 /* -- Markdown in sections -- */
@@ -9819,7 +9926,7 @@ body[data-resizing="true"] * {
 .goal-item,
 .criteria-group,
 .eval-error,
-.delivery-card,
+.delivery-panel,
 .extension-row,
 .channel-doc-card,
 .detail-card,
@@ -9833,7 +9940,7 @@ body[data-resizing="true"] * {
 .eval-summary,
 .eval-error-detail,
 .delivery-summary,
-.delivery-files,
+.delivery-files-link,
 .msg-text,
 .msg-tool,
 .msg-tool-output,
@@ -9843,6 +9950,11 @@ body[data-resizing="true"] * {
   max-width: 100%;
 }
 
+/* `.sections .delivery-summary` deliberately omitted from this height-clamp
+   block — the panel's own `[data-clamped="true"]` Solid-driven toggle is
+   the single source of truth for "show more/less" on the agent summary
+   text. Letting both rules apply would race (CSS scroll vs. line-clamp)
+   and re-introduce the rule 8 dual-source the redesign just collapsed. */
 .sections .plan-summary,
 .sections .overview-summary,
 .sections .overview-next-step,
@@ -9850,9 +9962,7 @@ body[data-resizing="true"] * {
 .sections .goal-criteria,
 .sections .change-path,
 .sections .eval-summary,
-.sections .eval-error-detail,
-.sections .delivery-summary,
-.sections .delivery-files {
+.sections .eval-error-detail {
   max-height: calc(112px * var(--ui-scale));
   overflow: auto;
   overscroll-behavior: contain;
@@ -10743,7 +10853,12 @@ body[data-resizing="true"] * {
   align-items: center;
   gap: var(--ui-gap-sm);
 }
-.integrity__verdict {
+/* ── verdict-pill ── shared verdict pill primitive used by IntegrityCard,
+   DeliveryPanel, and any future verdict surface. Single source of shape
+   (radius, padding, font, casing) + all `[data-verdict]` color variants
+   in one place — replaced the per-component `.integrity__verdict` block
+   so both surfaces stay in lockstep without copy-paste. */
+.verdict-pill {
   align-self: flex-start;
   padding: 3px var(--ui-gap-md);
   border-radius: 999px;
@@ -10753,20 +10868,32 @@ body[data-resizing="true"] * {
   letter-spacing: 0.1em;
   line-height: 1.4;
 }
-.integrity__verdict[data-verdict="pass"] {
+.verdict-pill[data-verdict="pass"],
+.verdict-pill[data-verdict="accepted"] {
   background: var(--good-dim);
   color: var(--good);
   box-shadow: 0 0 0 1px rgba(95, 173, 86, 0.35) inset;
 }
-.integrity__verdict[data-verdict="concerns"] {
+.verdict-pill[data-verdict="concerns"] {
   background: var(--warn-dim);
   color: var(--warn);
   box-shadow: 0 0 0 1px rgba(217, 158, 79, 0.35) inset;
 }
-.integrity__verdict[data-verdict="needs_correction"] {
+.verdict-pill[data-verdict="needs_correction"],
+.verdict-pill[data-verdict="rejected"] {
   background: var(--bad-dim);
   color: var(--bad);
   box-shadow: 0 0 0 1px rgba(247, 84, 100, 0.35) inset;
+}
+.verdict-pill[data-verdict="inflight"] {
+  background: rgba(99, 162, 255, 0.16);
+  color: var(--accent, #63a2ff);
+  box-shadow: 0 0 0 1px rgba(99, 162, 255, 0.35) inset;
+}
+.verdict-pill[data-verdict="empty"] {
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--border) inset;
 }
 .integrity__attempts {
   font-size: var(--ui-font-tiny);
@@ -11887,7 +12014,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 
 .section,
 .gwg,
-.delivery-card,
+.delivery-panel,
 .criteria-group,
 .eval-error,
 .extension-row,
@@ -12625,7 +12752,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 
 .section,
 .gwg,
-.delivery-card,
+.delivery-panel,
 .criteria-group,
 .eval-error,
 .extension-row,

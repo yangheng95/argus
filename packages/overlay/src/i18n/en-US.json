@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "03deef36d9c0002e"
+    "panel_revision": "4786cd5285b3f637"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -284,14 +284,30 @@
   "cwd.set_failed": "Failed to set directory",
   "cwd.title": "Working Directory",
   "cwd.unavailable": "Working directory unavailable",
+  "delivery.checks": "Required checks",
+  "delivery.empty.hint": "No delivery has been queued for this task yet. The panel will populate once the orchestrator builds a candidate.",
   "delivery.files_changed": {
     "one": "{{count}} file changed",
     "other": "{{count}} files changed"
   },
-  "delivery.status.candidate": "Pending Acceptance",
-  "delivery.status.delivered": "Delivered",
-  "delivery.status.failed": "Delivery Failed",
-  "delivery.status.publishing": "Publishing",
+  "delivery.group_count_all_pass": {
+    "one": "{{total}} all passed",
+    "other": "{{total}} all passed"
+  },
+  "delivery.group_count_failing": {
+    "one": "{{failed}} of {{total}} failing",
+    "other": "{{failed}} of {{total}} failing"
+  },
+  "delivery.iteration": "Delivery #{{n}}",
+  "delivery.reviews": "Specialist reviews",
+  "delivery.row_goal_pill_title": "Open this goal in the file changes panel",
+  "delivery.runtime": "Runtime flows",
+  "delivery.show_less": "Show less",
+  "delivery.show_more": "Show more",
+  "delivery.verdict.accepted": "Accepted",
+  "delivery.verdict.empty": "Empty",
+  "delivery.verdict.inflight": "In flight",
+  "delivery.verdict.rejected": "Rejected",
   "detail.pending_interactions": "Pending Interactions",
   "dialog.input": "Input",
   "dialog.notice": "Notice",
@@ -307,7 +323,6 @@
     "one": "{{count}} unchanged line hidden",
     "other": "{{count}} unchanged lines hidden"
   },
-  "empty.delivery": "No delivery yet",
   "evaluation.context.checks": "**Checks**",
   "evaluation.context.classification": "Classification: {{value}}",
   "evaluation.context.error": "Evaluator error: {{value}}",

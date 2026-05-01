@@ -254,13 +254,14 @@
         <div id="solidBoardMount"></div>
         <div id="solidInteractionMount"></div>
 
+        <!-- Delivery (rendered by Solid <DeliveryPanel/>; mounts the DeliveryEvidenceManifest
+             card group — checks (build/test/lint), runtime flows (preview/SSE/golden-path),
+             specialist reviews (per-reviewer LLM judgement). Sits above Files because the
+             verdict is the lead context — the file changelog is a consequence of the verdict. -->
+        <div id="solidDeliveryMount"></div>
+
         <!-- Files (rendered by Solid <FilesSection/>; visibility owned by its memo) -->
         <div id="solidFilesSectionMount"></div>
-
-        <!-- Delivery (rendered by Solid <DeliveryPanel/>; mounts the DeliveryEvidenceManifest
-             card group — required-checks, runtime flows, specialist reviews — so
-             every delivery activity is visible. Empty-state hint owned by the panel. -->
-        <div id="solidDeliveryMount"></div>
 
       </div>
 
