@@ -338,10 +338,10 @@ function buildUserPrompt(
     )
   }
 
-  // No pre-computed Core Check Results (2026-04-20 per-goal evaluator removal).
-  // The prompt no longer injects deterministic scorer outcomes — the delivery
-  // agent reads acceptance_specs as INFORMATION further below and verifies
-  // them itself via run_command + parallel per-goal subagents.
+  // Deterministic delivery gates now run before the LLM and persist a
+  // DeliveryEvidenceManifest. The prompt below treats acceptance specs as the
+  // semantic contract the agent reviews and repairs against; project command
+  // execution and structural coverage are not self-credited by prose.
 
   // Operator notes — user messages sent during task execution
   if (input.task.id) {
@@ -363,13 +363,17 @@ function buildUserPrompt(
   }
 
   sections.push(
-    `# Goals — Acceptance Specs (INFORMATION, not pre-scored)\n\n` +
+    `# Goals — Acceptance Specs (semantic contract)\n\n` +
     `Each goal below carries its \`acceptance_specs\` rendered as text. ` +
-    `Nobody has run them yet — no deterministic evaluator gate exists anymore. ` +
-    `YOU execute every heuristic scorer with \`run_command\`, judge every rubric / ` +
-    `llm_judge scorer by reading + reasoning, and record PASS or FAIL with concrete ` +
-    `evidence.\n\n` +
-    `Your verdict is authoritative for this delivery pass. Use ` +
+    `The host has already run the deterministic DeliveryEvidenceManifest gates ` +
+    `before this session: project commands, forbidden shell-success coercion, ` +
+    `blocking-goal acceptance coverage, and linked requirement coverage. If any ` +
+    `of those gates failed, you will receive a rejected verdict path instead of ` +
+    `being asked to self-credit them. Your job here is to repair semantic and ` +
+    `runtime issues that remain, verify user-visible behavior, and return ` +
+    `concrete residual findings.\n\n` +
+    `Your verdict is a semantic judgment layered on top of the manifest, not a ` +
+    `replacement for it. Use ` +
     `\`query_metric_trajectory\` to ground yourself in prior iterations and current ` +
     `metric results, but do NOT outsource the acceptance decision to the trajectory. ` +
     `What matters is that your \`rejection_details\` are concrete and evidence-backed: ` +
@@ -377,12 +381,13 @@ function buildUserPrompt(
     `Cross-check every linked requirement (see "Linked requirements" under each ` +
     `goal): the acceptance_specs MUST collectively satisfy the REQ acceptance ` +
     `criteria. A goal whose acceptance_specs all PASS but whose linked REQ ` +
-    `acceptance is unmet = reject (category="missing_requirement", cite the ` +
-    `REQ id in rejection_details[].requirement_id).\n\n` +
+    `acceptance is unmet = reject with category="quality" and cite the REQ id ` +
+    `inside the error text; do not invent fields or category values outside the ` +
+    `submit_verdict schema.\n\n` +
       input.goals
         .map(
           (g, i) =>
-            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs (information — verify yourself):**\n${g.criteria}\n\nPriority: ${g.priority}`,
+            `## Goal ${i + 1}: ${g.title}\n\n**Goal ID**: \`${g.id}\` (cite this in rejection_details[].goal_id when you reject)\n\n**Objective:** ${g.description}${renderGoalContractDetails(g, requirementsByID)}\n\n**Acceptance specs:**\n${g.criteria}\n\nPriority: ${g.priority}`,
         )
         .join("\n\n---\n\n"),
   )
