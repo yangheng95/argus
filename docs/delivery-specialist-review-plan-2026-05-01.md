@@ -597,6 +597,8 @@ Completed in Phase 6 implementation:
 
 ### Phase 7: Arbiter Integration And Retry Guidance
 
+Status: complete.
+
 Tasks:
 
 - Aggregate specialist findings into final delivery verdict.
@@ -614,6 +616,25 @@ Acceptance:
 - Rejected delivery contains specialist evidence and owner mapping.
 - Existing orchestrator retry/replan loop receives actionable root cause.
 - No code path writes or reads a parallel final verdict artifact.
+
+Completed in Phase 7 implementation:
+
+- Added `packages/opencorvus/src/delivery/arbiter.ts` as the single owner that
+  converts delivery evidence into gate outcomes and final delivery verdicts.
+- `project-gate.ts` now produces deterministic evidence and delegates final
+  gate synthesis to `arbitrateDeliveryGate()`.
+- `DeliveryService.verify()` now passes manifest, runtime evidence, LLM verdict,
+  and visual metric evidence into `arbitrateDeliveryVerdict()` instead of
+  locally synthesizing manifest/runtime/visual verdicts.
+- Runtime-evidence rejection and visual hard-gate override conversion moved out
+  of `delivery/verdict.ts`; that file now only owns the verdict schema and
+  derived views.
+- Specialist review failures map back to suggested owner goals or requirement
+  coverage when available, so rejected delivery carries actionable retry
+  attribution.
+- Final persistence still writes only the existing `kind="verdict"` artifact
+  with `label="delivery-agent-verdict"`; no `delivery_arbiter_verdict` path was
+  added.
 
 ## Benchmark Plan
 

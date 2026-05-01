@@ -1,12 +1,9 @@
 /**
  * DeliveryService — orchestrator-facing delivery verification stage.
  *
- * 责任（从外到内的判决层级）：
- *   1. **Runtime-evidence 前置闸（P1-A）** — 先于 LLM 采集真 build 产物 + DOM 快照。
- *      缺 build / 空 root shell / DOM 过薄 ⇒ 直接合成 rejected verdict，不召唤 LLM。
- *   2. **LLM verdict（DeliveryAgent.verify）** — 只有 runtime-evidence 通过才跑；只审查不改交付物。
- *   3. **视觉硬门（P0-B）** — 复用 runtime-evidence 同轮产出的 rendered.png，
- *      避免双重渲染（rule 22）；任一硬门 fail ⇒ finalizeVerdict 把 accepted 翻为 rejected。
+ * 责任：
+ *   1. 采集 project manifest、runtime evidence、LLM semantic verdict、visual metric。
+ *   2. 把所有 evidence 交给 delivery arbiter，只有 arbiter 生成最终 verdict。
  *
  * 所有意外升级为 DeliveryFailureError 让上游区分类型处理。
  */
@@ -23,7 +20,8 @@ import {
   summarizeVisualMetric,
   type VisualMetricResult,
 } from "./visual-metric"
-import { finalizeVerdict, issuesFound, synthesizeRuntimeRejection } from "./verdict"
+import { issuesFound } from "./verdict"
+import { arbitrateDeliveryVerdict } from "./arbiter"
 import {
   computeRuntimeEvidence,
   summarizeRuntimeViolations,
@@ -108,7 +106,9 @@ export namespace DeliveryService {
         title: input.task.title,
         failedCheckIds: manifest.finalGate.failedCheckIds,
       })
-      return synthesizeManifestRejection(manifest, goalIds)
+      const decision = arbitrateDeliveryVerdict({ manifest, goalIds })
+      if (!decision) throw new DeliveryFailureError("delivery arbiter did not decide manifest rejection")
+      return decision.verdict
     }
 
     // 2. Runtime-evidence 前置闸（P1-A）
@@ -135,7 +135,8 @@ export namespace DeliveryService {
           title: input.task.title,
           violations: summarizeRuntimeViolations(runtimeReport.violations),
         })
-        const synth = synthesizeRuntimeRejection(runtimeReport, goalIds)
+        const decision = arbitrateDeliveryVerdict({ manifest, goalIds, runtimeReport })
+        if (!decision) throw new DeliveryFailureError("delivery arbiter did not decide runtime rejection")
         // Surface the deterministic rejection as a card in the overlay. The
         // pre-gate path never starts an LLM agent session, so without this
         // event the operator sees verdict=rejected with no visible reason
@@ -146,7 +147,7 @@ export namespace DeliveryService {
             {
               taskID: input.task.id,
               iteration: input.iteration ?? 0,
-              summary: synth.summary,
+              summary: decision.verdict.summary,
               violations: runtimeReport.violations.map((v) => ({
                 kind: v.kind,
                 detail: v.detail,
@@ -155,7 +156,7 @@ export namespace DeliveryService {
             { source: "delivery-service" },
           )
         }
-        return synth
+        return decision.verdict
       }
       log.info("runtime-evidence gate passed", {
         title: input.task.title,
@@ -185,20 +186,19 @@ export namespace DeliveryService {
     }
 
     // 4. P0-B 视觉硬门——复用 runtime-evidence 的 rendered.png
-    let finalVerdict = llmVerdict
+    let visualMetric: VisualMetricResult | null = null
     try {
-      const metric = await runVisualHardGate({
+      visualMetric = await runVisualHardGate({
         referencePath,
         preRenderedPath: runtimeReport?.evidence.renderedPngPath,
       })
-      if (metric) {
+      if (visualMetric) {
         log.info("delivery visual hard gate", {
           title: input.task.title,
-          summary: summarizeVisualMetric(metric),
-          passed: metric.passed,
-          score: metric.score,
+          summary: summarizeVisualMetric(visualMetric),
+          passed: visualMetric.passed,
+          score: visualMetric.score,
         })
-        finalVerdict = finalizeVerdict(llmVerdict, metric, goalIds)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -209,154 +209,20 @@ export namespace DeliveryService {
       throw new DeliveryFailureError(`visual hard gate crashed: ${msg}`, { cause: err })
     }
 
-    finalVerdict = withManifestChecks(finalVerdict, manifest)
+    const decision = arbitrateDeliveryVerdict({ manifest, goalIds, llmVerdict, runtimeReport, visualMetric })
+    if (!decision) throw new DeliveryFailureError("delivery arbiter did not decide final verdict")
+    const finalVerdict = decision.verdict
 
     log.info("delivery service verify completed", {
       title: input.task.title,
       llmVerdict: llmVerdict.verdict,
       finalVerdict: finalVerdict.verdict,
       overridden: llmVerdict.verdict !== finalVerdict.verdict,
+      arbiterSource: decision.source,
       issuesFound: issuesFound(finalVerdict).length,
       startupSuccess: finalVerdict.startup_verification.success,
     })
     return finalVerdict
-  }
-}
-
-function withManifestChecks(
-  verdict: DeliveryVerdictType,
-  manifest: DeliveryEvidenceManifest,
-): DeliveryVerdictType {
-  const projected = manifest.checkResults.map((item) => ({
-    name: item.id,
-    result: item.status,
-    evidence: [
-      item.command,
-      item.exitCode === undefined ? undefined : `exit_code=${item.exitCode}`,
-      item.failureSignature ? `failure_signature=${item.failureSignature.normalizedError}` : undefined,
-      item.outputExcerpt,
-    ].filter(Boolean).join("\n"),
-  }))
-  return {
-    ...verdict,
-    deferred_checks: [
-      ...verdict.deferred_checks,
-      ...projected,
-      ...manifest.reviewEvidence.map((item) => ({
-        name: item.id,
-        result: item.status,
-        evidence: item.evidence.join("\n"),
-      })),
-    ],
-  }
-}
-
-function synthesizeManifestRejection(
-  manifest: DeliveryEvidenceManifest,
-  goalIds: readonly string[],
-): DeliveryVerdictType {
-  const allGoalIds = goalIds.length > 0 ? [...goalIds] : ["unknown-goal"]
-  const failedResults = manifest.checkResults.filter((item) =>
-    manifest.finalGate.failedCheckIds.includes(item.id)
-  )
-  const failedCoverage = [
-    ...manifest.goalCoverage
-      .filter((item) => manifest.finalGate.failedCoverageIds.includes(`goal:${item.goalId}`))
-      .map((item) => ({
-        id: `goal:${item.goalId}`,
-        family: "quality",
-        label: item.title,
-        command: "acceptance_specs",
-        failureReason: item.evidence.join("; "),
-        outputExcerpt: item.evidence.join("; "),
-      })),
-    ...manifest.requirementCoverage
-      .filter((item) => manifest.finalGate.failedCoverageIds.includes(`requirement:${item.requirementId}`))
-      .map((item) => ({
-        id: `requirement:${item.requirementId}`,
-        family: "quality",
-        label: item.requirementId,
-        command: "requirement_coverage",
-        failureReason: item.evidence.join("; "),
-        outputExcerpt: item.evidence.join("; "),
-      })),
-  ]
-  const failedRuntimeFlows = manifest.runtimeFlows
-    .filter((item) => manifest.finalGate.failedRuntimeFlowIds.includes(item.id))
-    .map((item) => ({
-      id: item.id,
-      family: "runtime",
-      label: item.name,
-      command: "runtime_flow",
-      failureReason: item.evidence.join("; "),
-      outputExcerpt: item.evidence.join("; "),
-    }))
-  const failedReviewEvidence = manifest.reviewEvidence
-    .filter((item) => (manifest.finalGate.failedReviewIds ?? []).includes(item.id))
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      family: "quality",
-      label: item.name,
-      command: "integrity_review",
-      failureReason: item.evidence.join("; "),
-      outputExcerpt: item.evidence.join("; "),
-    }))
-  const failed = failedResults.length > 0
-    ? failedResults
-    : failedCoverage.length > 0
-      ? failedCoverage
-      : failedRuntimeFlows.length > 0
-        ? failedRuntimeFlows
-        : failedReviewEvidence.length > 0
-          ? failedReviewEvidence
-          : manifest.requiredChecks
-        .filter((item) => manifest.finalGate.failedCheckIds.includes(item.id))
-        .map((item) => ({
-          ...item,
-          status: "failed" as const,
-          outputExcerpt: "Required check did not produce a result.",
-          startedAt: manifest.timeCreated,
-          completedAt: manifest.timeCreated,
-        }))
-  return {
-    verdict: "rejected",
-    summary: manifest.finalGate.summary,
-    startup_verification: {
-      attempted: true,
-      success: false,
-      output: manifest.finalGate.summary,
-    },
-    frontend_check: {
-      attempted: false,
-      issues: failed.map((item) => `${item.name}: ${item.failureReason ?? item.outputExcerpt}`).slice(0, 10),
-    },
-    deferred_checks: manifest.checkResults.map((item) => ({
-      name: item.id,
-      result: item.status,
-      evidence: item.outputExcerpt || item.failureReason || "No output captured.",
-    })),
-    tool_call_evidence: [
-      {
-        tool: "delivery_evidence_manifest",
-        passed: false,
-        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s), ${manifest.finalGate.failedCoverageIds.length} failed coverage item(s), ${manifest.finalGate.failedRuntimeFlowIds.length} failed runtime flow(s), ${(manifest.finalGate.failedReviewIds ?? []).length} failed review item(s) in manifest ${manifest.id}.`,
-      },
-    ],
-    rejection_details: allGoalIds.flatMap((goalId) =>
-      failed.map((item) => ({
-        goal_id: goalId,
-        category: item.family === "test"
-          ? "test" as const
-          : item.family === "lint"
-            ? "lint" as const
-            : item.family === "build"
-              ? "build" as const
-              : "quality" as const,
-        error: `${item.id} failed: ${item.failureReason ?? item.outputExcerpt}`,
-        suggestion: `Fix the ${item.label ?? item.name} failure and rerun ${item.command}.`,
-      })),
-    ),
   }
 }
 

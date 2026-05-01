@@ -15,6 +15,7 @@ import {
 } from "./discovery"
 import { detectDeliverySurfaces } from "../surface-detector"
 import type { DeliverySurfaceManifest } from "../surface-detector"
+import { arbitrateDeliveryGate } from "../arbiter"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
 import { runFrontendReview, runVisualRuntimeReview } from "../specialists/frontend-visual"
 import { runSecurityDataReview } from "../specialists/security-data"
@@ -24,7 +25,6 @@ import {
   createManifestId,
   digestCommand,
   failureSignatureForCheck,
-  mergeGateVerdicts,
   validateDeliveryEvidenceManifest,
   validateDeliveryCoverage,
   type DeliveryCheckResult,
@@ -154,7 +154,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   const failedReviewIds = reviewEvidence
     .filter((item) => item.status === "failed")
     .map((item) => item.id)
-  manifest.finalGate = mergeGateVerdicts({ checks, failedCoverageIds, failedRuntimeFlowIds, failedReviewIds })
+  manifest.finalGate = arbitrateDeliveryGate({ checks, failedCoverageIds, failedRuntimeFlowIds, failedReviewIds })
   return manifest
 }
 

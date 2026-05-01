@@ -196,32 +196,6 @@ export function validateDeliveryCoverage(input: {
   return failedCoverageIds
 }
 
-export function mergeGateVerdicts(input: {
-  checks: DeliveryGateVerdict
-  failedCoverageIds: string[]
-  failedRuntimeFlowIds?: string[]
-  failedReviewIds?: string[]
-}): DeliveryGateVerdict {
-  const failedRuntimeFlowIds = input.failedRuntimeFlowIds ?? []
-  const failedReviewIds = input.failedReviewIds ?? []
-  const status = input.checks.failedCheckIds.length === 0
-    && input.failedCoverageIds.length === 0
-    && failedRuntimeFlowIds.length === 0
-    && failedReviewIds.length === 0
-    ? "passed"
-    : "failed"
-  return {
-    status,
-    failedCheckIds: input.checks.failedCheckIds,
-    failedCoverageIds: input.failedCoverageIds,
-    failedRuntimeFlowIds,
-    failedReviewIds,
-    summary: status === "passed"
-      ? input.checks.summary
-      : `Delivery evidence gate failed ${input.checks.failedCheckIds.length} required check(s), ${input.failedCoverageIds.length} coverage item(s), ${failedRuntimeFlowIds.length} runtime flow(s), and ${failedReviewIds.length} review item(s).`,
-  }
-}
-
 export function persistDeliveryEvidenceManifest(input: {
   manifest: DeliveryEvidenceManifest
 }) {

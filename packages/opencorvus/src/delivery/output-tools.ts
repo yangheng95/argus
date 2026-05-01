@@ -1,12 +1,14 @@
 /**
  * Structured output tool for the DeliveryAgent.
  *
- * The agent MUST finalize its verdict by calling `submit_verdict` — a single
- * Zod-validated tool call that writes into a collector the outer verify()
- * loop reads. There is no free-text / markdown / ```json fence parsing path;
- * eliminating free-text output makes verdict emission robust against fence
- * pollution (zero-width chars, code-fence drift) that previously masqueraded
- * as "empty verdict" failures.
+ * The agent MUST finalize its semantic verdict by calling `submit_verdict` —
+ * a single Zod-validated tool call that writes into a collector the outer
+ * verify() loop reads. The host delivery arbiter is the only owner that
+ * converts deterministic gates, specialist reviews, visual metrics, and this
+ * semantic verdict into the final persisted verdict. There is no free-text /
+ * markdown / ```json fence parsing path; eliminating free-text output makes
+ * verdict emission robust against fence pollution (zero-width chars,
+ * code-fence drift) that previously masqueraded as "empty verdict" failures.
  *
  * The `inputSchema` (`DeliveryVerdict`) carries every structural invariant
  * — non-empty arrays, ≥8-char details, discriminated accept/reject shapes.
@@ -42,7 +44,7 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
   const tools = {
     submit_verdict: tool({
       description:
-        "Emit the FINAL delivery verdict. You MUST call this exactly once, as " +
+        "Emit the delivery semantic verdict for the host arbiter. You MUST call this exactly once, as " +
         "the last action of the session, after you have finished Phase 0 adapt / " +
         "all required review checks. This is the ONLY way the verdict " +
         "leaves the agent — plain-text / markdown output is discarded. If " +

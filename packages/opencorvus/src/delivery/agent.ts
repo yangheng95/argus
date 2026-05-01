@@ -499,7 +499,7 @@ function buildUserPrompt(
       "3. Start the application with a short timeout to verify it doesn't crash\n" +
       "4. If it crashes, investigate enough to produce concrete rejection evidence and affected goal attribution\n" +
       "5. Capture runtime output or screenshots for every user-visible surface\n" +
-      "6. Produce your final verdict without editing project files",
+      "6. Produce your semantic verdict for the host delivery arbiter without editing project files",
   )
 
   return sections.join("\n\n")
