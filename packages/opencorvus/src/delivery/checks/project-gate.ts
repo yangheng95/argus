@@ -15,6 +15,7 @@ import {
 } from "./discovery"
 import { detectDeliverySurfaces } from "../surface-detector"
 import type { DeliverySurfaceManifest } from "../surface-detector"
+import { runFrontendReview, runVisualRuntimeReview } from "../specialists/frontend-visual"
 import { runTestIntegrationReview } from "../specialists/test-integration"
 import type { EvaluatorCommand } from "./types"
 import {
@@ -105,6 +106,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     surfaceManifest,
     requiredChecks,
     checkResults,
+    runtimeFlows,
     goals: input.goals ?? [],
   })
   const reviewEvidence = [
@@ -162,6 +164,7 @@ async function runSpecialistReviews(input: {
   surfaceManifest: DeliverySurfaceManifest
   requiredChecks: DeliveryRequiredCheck[]
   checkResults: DeliveryCheckResult[]
+  runtimeFlows: DeliveryRuntimeFlowResult[]
   goals: Array<{
     id: string
     requirement_ids: string[]
@@ -169,6 +172,10 @@ async function runSpecialistReviews(input: {
   }>
 }): Promise<DeliverySpecialistReview[]> {
   const reviews: DeliverySpecialistReview[] = []
+  const frontendReview = await runFrontendReview(input)
+  if (frontendReview) reviews.push(frontendReview)
+  const visualReview = await runVisualRuntimeReview(input)
+  if (visualReview) reviews.push(visualReview)
   const testReview = await runTestIntegrationReview(input)
   if (testReview) reviews.push(testReview)
   return reviews

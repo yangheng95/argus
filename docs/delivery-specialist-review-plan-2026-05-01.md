@@ -506,6 +506,8 @@ Completed in Phase 3 implementation:
 
 ### Phase 4: Frontend And Visual Runtime Reviews
 
+Status: complete.
+
 Scope:
 
 - `frontend_review` inspects component structure, route behavior, client state,
@@ -518,6 +520,18 @@ Acceptance:
 - UI project without meaningful interaction evidence is rejected.
 - Auth-gated UI is judged after real interaction, not only login shell DOM.
 - Visual review requires rendered artifacts, not source-only claims.
+
+Completed in Phase 4 implementation:
+
+- Added `packages/opencorvus/src/delivery/specialists/frontend-visual.ts`
+  with separate `frontend` and `visual_runtime` specialist evidence producers.
+- Frontend review consumes structural surface evidence and runtime flow failures
+  without re-running browser probes.
+- Visual runtime review requires existing rendered runtime flow evidence and
+  blocks missing screenshot or DOM artifacts.
+- `buildDeliveryEvidenceManifest()` runs the selected frontend and visual
+  specialists through the same specialist review collection used by
+  `test_integration`.
 
 ### Phase 5: Backend API And Client Contract Reviews
 
