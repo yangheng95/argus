@@ -34,6 +34,31 @@ The right inspector must stop owning global configuration. It should only inspec
 4. No right-column global chrome: the inspector is for task evidence, not app configuration.
 5. Stable dimensions: titlebar menus must use fixed menu widths, ellipsis, and scrollable long panels so Chinese labels and model names cannot resize the titlebar.
 
+## Glossary
+
+- API: Application Programming Interface; overlay reads/writes backend data through the OpenCorvus HTTP API.
+- CTA: Call To Action; an explicit button or link that routes the user to the one owning settings surface.
+- DOM: Document Object Model; browser node tree currently targeted by old imperative selectors.
+- ID: Identifier; in this plan it usually means a DOM `id` selector such as `#llmProvider`.
+- IDE: Integrated Development Environment; PyCharm and VS Code are the interaction reference for titlebar menus.
+- LLM: Large Language Model; provider/model configuration controls which model the agents call.
+- MCP: Model Context Protocol; tool-server integrations listed with Skills in the overlay.
+- SSE: Server-Sent Events; the streaming connection that keeps the overlay live.
+- UI: User Interface.
+- UX: User Experience.
+- VS Code: Visual Studio Code.
+- Tauri: the native desktop host used by the overlay.
+
+## Review Corrections Before Implementation
+
+The first implementation phase must resolve the P1 review findings before runtime code changes land:
+
+1. Tools tab first, then right-column deletion. `SkillMarketPanel` currently mounts only under `#extensionsConfigBody`, so `#extensionsSection` cannot be deleted until the full config dialog has a real `tools` tab that mounts `SkillMarketPanel`.
+2. No `llm-inline` double writer. The first implementation does not copy the old inline model/provider form into the titlebar. `ModelMenu` shows status and opens the existing Providers and Agent Models panels. The old `llm-inline.ts` path is deleted together with `#llmSection`; model/provider writes stay in the config dialog panels.
+3. View owns appearance writes. Theme, locale, zoom, and opacity move to `ViewMenu`. `GeneralPanel` keeps connection and behavior settings only, so there is one writable surface for appearance.
+4. First-run and offline CTAs stay visible. When provider/server setup blocks use, titlebar/status/banner CTAs route to `Model` or `General` settings. They are navigation affordances only and do not create another settings store.
+5. Implementation follows the call-site inventory below. Any affected selector/function not listed there must be added before editing code.
+
 ## Information Architecture
 
 ### OpenCorvus Menu
@@ -103,7 +128,7 @@ Remove from old surfaces:
 
 ### Run Menu
 
-Purpose: execution behavior for the next task or active task.
+Purpose: execution defaults for the next task. Active-task commands stay in task/composer context so the menu does not blur whether an action affects the selected task or future tasks.
 
 - Executor selector
 - Per-executor model quick switch
@@ -111,7 +136,6 @@ Purpose: execution behavior for the next task or active task.
 - Parallel goal limit
 - Auto-question behavior
 - Default permission profile shortcut
-- Stop / cancel active task when a task is running
 
 Source of truth:
 
@@ -126,7 +150,7 @@ Source of truth:
 Current titlebar contents to keep but regroup:
 
 - `TitlebarMenu.tsx` already has max runs, max executor groups, and auto-question. These should move into the Run menu.
-- `ExecutorSelector.tsx` currently lives in the composer. Keep it there for immediate send-context visibility, but also expose the same selector in Run. Both must write to `settingsStore.executor` and backend executor model APIs.
+- `ExecutorSelector.tsx` currently lives in the composer. Keep it there for immediate send-context visibility. The first implementation leaves executor selection there and gives Run a read-only executor summary plus an action to focus the composer selector, avoiding a second writable executor surface.
 
 ### Tools Menu
 
@@ -150,7 +174,7 @@ Source of truth:
 
 Remove from old surfaces:
 
-- Delete `#extensionsSection` from the right inspector.
+- Add a real `tools` tab to `#configDialog`, mount `SkillMarketPanel` there, then delete `#extensionsSection` from the right inspector.
 - Stop using `brandVersion` as the channel settings button. Channel status can become a small Tools menu badge.
 
 ### View Menu
@@ -178,6 +202,7 @@ Source of truth:
 Current titlebar contents to keep but regroup:
 
 - Language, theme, and opacity currently live in `TitlebarMenu.tsx`; move them into View.
+- Remove the matching appearance controls from `GeneralPanel` in the same implementation step. `GeneralPanel` keeps server connection and desktop-notification behavior only.
 
 ### Help Menu
 
@@ -195,6 +220,8 @@ Source of truth:
 - `LogViewer`
 - `ConnectionBadge`
 - `CommandPalette`
+
+Diagnostics owner: Help owns About, Logs, Runtime Info, Connection Diagnostics, and Keyboard Shortcuts. The OpenCorvus menu owns app/window/project commands only.
 
 ## Component Plan
 
@@ -240,12 +267,13 @@ These components should import the existing stores/services directly. Avoid a ce
 - Opening agent models from Model calls `openConfigDialog("agent-models")`.
 - Opening permissions from Tools calls `openConfigDialog("permissions")`.
 - Opening channels from Tools calls `openConfigDialog("channel")`.
+- Opening skills or MCP from Tools calls `openConfigDialog("tools")`.
 
 The old `#settingsDialog` should be removed. Server URL, username, and password already exist in `GeneralPanel`, so the second server dialog is a duplicate.
 
 ### 4. Remove Right Inspector Global Config
 
-Delete these from `packages/overlay/src/index.html` after menu replacements exist:
+Delete these from `packages/overlay/src/index.html` after menu replacements exist and their owning config-dialog/menu targets are live:
 
 - `#configArea`
 - `#llmSection`
@@ -271,6 +299,27 @@ Replace `brandVersion` mutation with a Solid component:
 - Clicking channel badge opens `Tools -> Channels` or `openConfigDialog("channel")`.
 
 `renderChannelSummary()` should stop writing `brandVersion.innerHTML`. Channel data belongs in Solid state rendering, not imperative HTML string assembly.
+
+The static `#brandVersion` element in `index.html`, the `brandVersion` click handler in `main.tsx`, and `fitBrandVersion()` in `services/window.ts` must be removed or replaced with a Solid-owned titlebar status mount in the same commit.
+
+## Call-site Inventory
+
+| Current selector / function | Current owner | Replacement decision |
+| --- | --- | --- |
+| `TitlebarMenu.tsx` | `main.tsx` mounts it at `#solidTitlebarMenu` | Delete after `TitlebarMenubar` replaces it. |
+| `#btnTitlebarMenu`, `#titlebarMenu` | `TitlebarMenu.tsx`, `dom.ts`, `controls.test.ts`, `copy-actions.test.ts`, `menu-collapse.test.ts` | Replace with role-based menubar/menu targets plus stable `data-testid` values for tests. |
+| `#btnLog` | `TitlebarMenu.tsx`, `copy-actions.test.ts` | Replace with Help menu "Logs" action; tests click the Help action and then `LogViewer` buttons. |
+| `#llmSection`, `#llmProvider`, `#llmModel`, `#llmApiKey`, `#llmStatus`, `#llmNotice`, `#llmSummary`, `#cfgAvailableProviders` | `index.html`, `dom.ts`, `services/llm-inline.ts`, provider auth tests | Delete with `services/llm-inline.ts` import/install/refresh calls. Model writes stay in Providers and Agent Models config tabs. |
+| `installInlineLlmConfig()`, `refreshInlineLlmConfig()` | `main.tsx`, `services/llm-inline.ts` | Delete calls and then delete `services/llm-inline.ts` if no imports remain. |
+| `#extensionsSection`, `#extensionsConfigBody` | `index.html`, `main.tsx`, `styles.css` | Add `tools` tab in config dialog, mount `SkillMarketPanel` there, then delete old section and style. |
+| `#btnConfigToggle`, `#configToggleMeta`, `#configArea` | `index.html`, `main.tsx`, `dom.ts`, provider tests, `services/dialog.ts` | Delete. Open config dialog only from titlebar menu actions and first-run/offline CTAs. |
+| `#settingsDialog`, `#settingsForm`, server input IDs | `index.html`, `services/dialog.ts`, `dom.ts`, `main.tsx` | Delete duplicate server dialog and `installSettingsFormHandlers()`. GeneralPanel remains the only server settings editor. |
+| `openServerSettings()` | `services/dialog.ts` | Delete if no imports remain; server settings route to `openConfigDialog("general")`. |
+| `brandVersion`, `renderChannelSummary()`, `configToggleMeta` | `index.html`, `services/dialog.ts`, `main.tsx`, `dom.ts` | Replace with Solid titlebar status cluster; no `innerHTML` writes. |
+| `fitBrandVersion()` | `services/window.ts`, indirect theme/window sizing comments | Delete if unused after `brandVersion` removal; titlebar status uses CSS ellipsis. |
+| `GeneralPanel` appearance controls | `components/settings/GeneralPanel.tsx` | Remove theme/locale/opacity controls; ViewMenu is the sole writer for those settings. |
+| Provider auth tests using old selectors | `provider-oauth.test.ts`, `provider-auth-panel.test.ts` | Rewrite to open Model/Providers and assert the new owning controls. |
+| Hidden menu click tests | `menu-collapse.test.ts`, `controls.test.ts` | Rewrite to assert hidden menubar panels do not intercept inspector clicks. |
 
 ## Visual Specification
 
@@ -316,18 +365,22 @@ When width is tight:
 - Keep `OpenCorvus`, active menu label, and window controls.
 - Collapse the full menu bar behind a single menu icon only below the breakpoint.
 - The collapsed menu still uses the same menu components and source of truth.
+- Priority order from most important to most disposable: window controls, active menu trigger, connection state, brand mark, menu labels, channel badge, model chip, long brand text.
+- Test viewports: 320px, 480px, 600px, 760px, and 1440px in both `en-US` and `zh-CN`, with a long provider/model name.
 
 ## Migration Steps
 
 1. Add titlebar menu shell primitives and `TitlebarMenubar` with no behavior changes except rendering the current titlebar menu items under grouped headings.
 2. Move current `TitlebarMenu` controls into `ViewMenu` and `RunMenu`.
 3. Move channel entry from `brandVersion` into `ToolsMenu`, then replace `renderChannelSummary()` with Solid status rendering.
-4. Port `#llmSection` behavior into `ModelMenu`; delete the inline LLM section and related imperative DOM selectors.
-5. Move `#extensionsSection` entry into `ToolsMenu`; delete the right-column extensions section.
+4. Replace `#llmSection` with `ModelMenu` status/actions that open the single writable Providers and Agent Models tabs; delete the inline LLM section and related imperative DOM selectors.
+5. Add a config-dialog `tools` tab, mount `SkillMarketPanel` there, then delete the right-column `#extensionsSection`.
 6. Replace `#btnConfigToggle` with menu actions; delete `configArea`.
 7. Remove `#settingsDialog`; route server settings to `openConfigDialog("general")`.
-8. Clean `dom.ts`, `main.tsx`, `styles.css`, and i18n keys for removed IDs/classes.
-9. Run focused tests and visual verification.
+8. Remove `GeneralPanel` appearance controls after `ViewMenu` owns theme/locale/zoom/opacity.
+9. Clean `dom.ts`, `main.tsx`, `styles.css`, and i18n keys for removed IDs/classes.
+10. Run focused tests and visual verification.
+11. Commit and push without bypassing hooks. Required gates: `bun run --cwd packages/overlay check:i18n`, focused overlay tests, `bun run --cwd packages/overlay build:vite`, root `bun run typecheck`, `bun run api:routes-check`, and `bun run docs:check`.
 
 ## Tests and Acceptance
 
@@ -340,6 +393,8 @@ Add or update tests:
   - Tools menu opens Permissions, Channels, Skills, Memory, and Prompts tabs.
   - View menu changes theme, locale, zoom, and opacity through existing stores.
   - Run menu changes assistant budget through `patchConfig`.
+  - Tools menu opens the real config-dialog `tools` tab before `#extensionsSection` is removed.
+  - Menubar uses `role="menubar"`, menu triggers expose `aria-expanded` / `aria-controls`, focus returns to the trigger after close, Escape closes, Tab exits the menu, disabled controls announce disabled state, sliders and toggles have accessible labels.
 
 - Update existing tests:
   - `menu-collapse.test.ts`: target the new menu panel IDs.
@@ -350,10 +405,12 @@ Visual acceptance:
 
 - At 1440 px width, titlebar reads like an IDE menu bar and all global config starts from the left.
 - At 760 px width, menu labels collapse without overlapping status badges or window controls.
+- At 320/480/600/760 px widths, there is still draggable titlebar space and no overlap in both `en-US` and `zh-CN`.
 - The right inspector no longer shows global config sections at its bottom.
 - Provider/model setup is reachable in two clicks from the top-left titlebar.
+- First-run or offline states show a visible CTA to Model or General settings.
 - A new user can find theme/language/opacity under View without opening the full settings dialog.
-- A running-task user can find executor and run budget under Run without scanning the right inspector.
+- A user preparing the next task can find run budget under Run without scanning the right inspector; active stop/cancel remains task-local.
 
 ## Non-goals
 
