@@ -1,10 +1,11 @@
 /**
- * Rule-7 self-review helper for the Ainvest benchmark deliverable.
+ * Rule-7 self-review helper for the overlay-web-benchmark deliverable.
  *
  * Boots an isolated puppeteer-core, screenshots `http://localhost:3000`
  * (the running Vite dev), and writes the result to
- * `<deliverable>/review-rendered.png`. Returns a summary string for the
- * operator to compare side-by-side with `assets/ainvest.png`.
+ * `<deliverable>/review-rendered.png`. Returns a summary string the
+ * operator can compare side-by-side with whatever reference image the
+ * caller chose (or just sanity-check the rendered output on its own).
  */
 import path from "node:path"
 import fs from "node:fs/promises"

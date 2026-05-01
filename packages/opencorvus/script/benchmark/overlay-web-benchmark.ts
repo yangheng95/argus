@@ -199,19 +199,11 @@ const noBrowser = process.argv.includes("--no-browser")
 const maxExecutorGroups = flag("--max-executor-groups") ? Number(flag("--max-executor-groups")) : undefined
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark"
-const DEFAULT_REFERENCE = path.join(import.meta.dir, "assets", "ainvest.png")
-// When the caller runs with no custom request/attachment/reference, the
-// default brief drives the visual-diff gate against the committed fixture at
-// script/benchmark/assets/ainvest.png. Drop a screenshot at that path before
-// running the default case; otherwise the benchmark still kicks off but the
-// visual-diff gate has no reference to score against.
-const defaultRefExists = await fs.stat(DEFAULT_REFERENCE).then(() => true).catch(() => false)
-if (!defaultRefExists && rawReferenceImages.length === 0 && !requestFile && !requestAttachment) {
-  console.warn(`[overlay-benchmark] default reference missing: ${DEFAULT_REFERENCE} — pass --reference-images <path> or --request-file <brief> to provide one, or drop a screenshot at that path.`)
-}
-const referenceImages = rawReferenceImages.length > 0
-  ? rawReferenceImages
-  : (!requestFile && !requestAttachment && defaultRefExists ? [DEFAULT_REFERENCE] : [])
+// The default brief is a text-only chat-app spec — there is no canonical
+// visual reference for it. Visual-diff gating only activates when the caller
+// passes `--reference-images <path>`; otherwise the run completes without an
+// SSIM gate.
+const referenceImages = rawReferenceImages
 const DEFAULT_TASK_REQUEST = `帮我写一个调用Claude 模型的chat项目，支持用户Google一键登录（先用mock模拟延时登录），chat历史记录（删除、修改title等），以及会话中支持断点续传（用户刷新后继续获取sse对话）。input输入框支持添加附件（文档/图片）等，并支持md格式的渲染。new chat页面支持示例展示，UI截图仿照主流产品。提供API key填写功能实现真实对话`
 let TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 // Build base64 attachments from reference images (sent as multimodal vision content)
@@ -247,16 +239,16 @@ if (requestAttachment) {
 }
 // Reference images are NOT injected as task attachments — the agent owns its
 // visual capture path (e.g. url_screenshot tool against the URL in the
-// request). The local file at DEFAULT_REFERENCE is still used for the
-// visual-diff gate and copied into the worktree's references/ dir below.
+// request). When `--reference-images` is supplied, each file is copied into
+// the worktree's references/ dir and feeds the visual-diff gate below.
 const TASK_TITLE = flag("--title")?.trim()
   || (requestFile ? path.parse(requestFile).name : undefined)
   || (requestAttachment ? path.parse(requestAttachment).name : undefined)
   || DEFAULT_TASK_TITLE
 // DELIVERY_VERIFY_CMD is assigned after temp.dir is initialized (see below).
 // Auto-registration rules when no explicit --delivery-verify-cmd is supplied:
-//   1. reference-images provided (default: the bundled Baidu fixture) → visual-diff SSIM gate
-//   2. external --request-file with no reference images → no auto-verify
+//   1. --reference-images provided → visual-diff SSIM gate against that file
+//   2. no reference images (default chat-app brief, or external --request-file) → no auto-verify
 // Fig2code SSIM thresholds (mean 0.85, worst-5% 0.55) come from visual-diff defaults.
 let DELIVERY_VERIFY_CMD = ""
 
