@@ -1,6 +1,18 @@
-import { expect, test } from "bun:test"
-import { currentGoalRunFromRows } from "../../src/workbench/board"
+import { afterEach, expect, test } from "bun:test"
+import { currentGoalRunFromRows, compileBoard } from "../../src/workbench/board"
 import { latestDeliveredGoalRunFromRows } from "../../src/engine/store"
+import { Database } from "../../src/storage/db"
+import { ProjectTable } from "../../src/project/project.sql"
+import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { Event } from "../../src/engine/model"
+import { EngineProtocol } from "../../src/engine/protocol"
+import { Instance } from "../../src/project/instance"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
+
+afterEach(async () => {
+  await resetDatabase()
+})
 
 test("currentGoalRunFromRows selects the supersede-chain tip", () => {
   const rows = [
@@ -54,4 +66,55 @@ test("latestDeliveredGoalRunFromRows prefers a newer delivered run over an older
   expect(latestDeliveredGoalRunFromRows(rows, (id) => deliveries.has(id))?.id).toBe(
     "run_v3_passed",
   )
+})
+
+test("compileBoard cache and task-scope status include workflow step protocol events", async () => {
+  await resetDatabase()
+  await using tmp = await tmpdir()
+  const now = Date.now()
+  const projectID = `project_board_${now}`
+  const taskID = `tsk_${now.toString(16)}BoardProtocol`
+
+  Database.use((db) =>
+    db.insert(ProjectTable).values({
+      id: projectID,
+      worktree: tmp.path,
+      name: "Board protocol projection",
+      sandboxes: "[]",
+      time_created: now,
+      time_updated: now,
+    }).run(),
+  )
+  Database.use((db) =>
+    db.insert(EngineTaskTable).values({
+      id: taskID,
+      project_id: projectID,
+      source: "test",
+      title: "Board protocol projection",
+      request: "Show running task-scope steps from protocol events",
+      priority: "normal",
+      time_created: now,
+      time_updated: now,
+    }).run(),
+  )
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = compileBoard({ taskID })
+      expect(before.lastSequence).toBe(0)
+      expect(before.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("pending")
+
+      await EngineProtocol.emit(Event.WorkflowStepUpdated, {
+        taskID,
+        stepID: "architect",
+        status: "running",
+        summary: "Step \"Architect\" started",
+      }, { source: "test.board" })
+
+      const after = compileBoard({ taskID })
+      expect(after.lastSequence).toBe(1)
+      expect(after.workflow?.steps.find((step) => step.id === "architect")?.status).toBe("running")
+    },
+  })
 })
