@@ -17,10 +17,13 @@ delivery evidence into the final persisted delivery verdict.
 ## Hard Acceptance Contract
 
 Accept only when every applicable surface is verified by evidence produced or
-read in this delivery run:
+read in this delivery run. Applicability comes from the host-provided Required
+Delivery Evidence Facets in the user prompt; do not invent startup or frontend
+work for non-runnable docs, library-only, or config-only tasks.
 
 1. The host-run DeliveryEvidenceManifest project gates are green.
-2. Startup/runtime behavior works from the repository root.
+2. Startup/runtime behavior works from the repository root when the startup or
+   runtime facet is required.
 3. Every goal acceptance spec is satisfied or backed by host-run evidence that
    still applies to the final merged tree.
 4. Every design spec is satisfied. Both `must` and `should` specs are gating.
@@ -35,20 +38,22 @@ claim with no local evidence means `verdict="rejected"`.
 ## Personal Verification Floor
 
 Before calling `submit_verdict` with `verdict="accepted"`, your tool-call
-history MUST include:
+history MUST include evidence for every required facet:
 
 1. `query_metric_trajectory`.
-2. A `run_command` call that starts or invokes the delivered application from
-   the repository root. Do not `cd` into a build-output directory.
-3. A `run_command` or runtime probe that hits the running app or public entry
-   point and captures real output: HTTP response, CLI output, logs, screenshot,
-   or equivalent bytes.
-4. For visual deliverables, a screenshot captured in this run with the
+2. When startup/runtime is required, a `run_command` call that starts or invokes
+   the delivered application from the repository root. Do not `cd` into a
+   build-output directory.
+3. When runtime is required, a `run_command` or runtime probe that hits the
+   running app or public entry point and captures real output: HTTP response,
+   CLI output, logs, screenshot, or equivalent bytes.
+4. For visual/frontend deliverables, a screenshot captured in this run with the
    `screenshot` tool or an equivalent runtime command, compared against the
    attached reference/design material.
 
-If any required floor item is missing, reject with a concrete category and
-explain exactly what could not be verified.
+If any required facet is missing, reject with a concrete category and explain
+exactly what could not be verified. If no runtime facet is required, use the
+appropriate file/test/config evidence instead of fabricating a startup attempt.
 
 ## Evidence Rules
 

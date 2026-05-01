@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
-  MANDATORY_GLOBAL_BLOCKING_METRICS,
-  MANDATORY_GOAL_BLOCKING_METRICS,
+  RECOMMENDED_GLOBAL_METRICS,
+  RECOMMENDED_GOAL_METRICS,
   createArchitectOutputTools,
 } from "../../src/architect/output-tools"
 
@@ -74,12 +74,12 @@ function registerBaselineVerificationGoal(tools: any) {
   })
 }
 
-async function registerMandatoryPerGoalMetrics(tools: any, goalID: string) {
-  for (const name of MANDATORY_GOAL_BLOCKING_METRICS) {
+async function registerRecommendedPerGoalMetrics(tools: any, goalID: string) {
+  for (const name of RECOMMENDED_GOAL_METRICS) {
     await exec(tools.register_goal_metric_spec, {
       goal_id: goalID,
       name,
-      description: `mandatory ${name}`,
+      description: `recommended ${name}`,
       unit: "ratio",
       direction: "higher_better",
       target: 1.0,
@@ -93,11 +93,11 @@ async function registerMandatoryPerGoalMetrics(tools: any, goalID: string) {
   }
 }
 
-async function registerMandatoryGlobalMetrics(tools: any) {
-  for (const name of MANDATORY_GLOBAL_BLOCKING_METRICS) {
+async function registerRecommendedGlobalMetrics(tools: any) {
+  for (const name of RECOMMENDED_GLOBAL_METRICS) {
     await exec(tools.register_global_metric_spec, {
       name,
-      description: `mandatory ${name}`,
+      description: `recommended ${name}`,
       unit: "ratio",
       direction: "higher_better",
       target: 1.0,
@@ -223,72 +223,8 @@ describe("architect output-tools — metric registration", () => {
   })
 })
 
-describe("submit_architect — mandatory blocking coverage", () => {
-  test("REJECTS when per-goal mandatory blocking metric is missing", async () => {
-    const kit = createArchitectOutputTools({ workDir: process.cwd() })
-    await registerBaselineGoal(kit.tools)
-    await exec(kit.tools.register_traceability, {
-      requirement_id: "REQ-1",
-      goal_ids: ["goal_api"],
-    })
-    await registerMandatoryGlobalMetrics(kit.tools)
-    // Register 3 of the 4 mandatory per-goal metrics — missing regression_count.
-    for (const name of MANDATORY_GOAL_BLOCKING_METRICS.slice(0, 3)) {
-      await exec(kit.tools.register_goal_metric_spec, {
-        goal_id: "goal_api",
-        name,
-        description: `x ${name}`,
-        unit: "ratio",
-        direction: "higher_better",
-        target: 1.0,
-        floor: 0.5,
-        weight: 1.0,
-        gate_class: "blocking",
-        evaluator_kind: "shell",
-        evaluator_config: { cmd: "bun test" },
-        source_requirement_ids: ["REQ-1"],
-      })
-    }
-    const msg = await exec(kit.tools.submit_architect, {
-      summary: "Test task decomposition",
-    })
-    expect(msg).toContain("ISSUES")
-    expect(msg).toContain("regression_count")
-    expect(kit.getCollector().finalized).toBe(false)
-  })
-
-  test("REJECTS when any global mandatory blocking metric is missing", async () => {
-    const kit = createArchitectOutputTools({ workDir: process.cwd() })
-    await registerBaselineGoal(kit.tools)
-    await exec(kit.tools.register_traceability, {
-      requirement_id: "REQ-1",
-      goal_ids: ["goal_api"],
-    })
-    await registerMandatoryPerGoalMetrics(kit.tools, "goal_api")
-    // Register 3 of the 4 mandatory globals — missing architecture_integrity.
-    for (const name of MANDATORY_GLOBAL_BLOCKING_METRICS.slice(0, 3)) {
-      await exec(kit.tools.register_global_metric_spec, {
-        name,
-        description: `x ${name}`,
-        unit: "ratio",
-        direction: "higher_better",
-        target: 1.0,
-        floor: 0.5,
-        weight: 1.0,
-        gate_class: "blocking",
-        evaluator_kind: "judge",
-        evaluator_config: { criteria: name },
-        source_requirement_ids: [],
-      })
-    }
-    const msg = await exec(kit.tools.submit_architect, {
-      summary: "Test task decomposition",
-    })
-    expect(msg).toContain("ISSUES")
-    expect(msg).toContain("user_intent_fidelity")
-  })
-
-  test("PASSES when every mandatory blocking metric is present", async () => {
+describe("submit_architect — optional metric coverage", () => {
+  test("PASSES when recommended metrics are present", async () => {
     const kit = createArchitectOutputTools({ workDir: process.cwd() })
     await registerBaselineGoal(kit.tools)
     await registerBaselineVerificationGoal(kit.tools)
@@ -296,9 +232,9 @@ describe("submit_architect — mandatory blocking coverage", () => {
       requirement_id: "REQ-1",
       goal_ids: ["goal_api", "goal_tests"],
     })
-    await registerMandatoryPerGoalMetrics(kit.tools, "goal_api")
-    await registerMandatoryPerGoalMetrics(kit.tools, "goal_tests")
-    await registerMandatoryGlobalMetrics(kit.tools)
+    await registerRecommendedPerGoalMetrics(kit.tools, "goal_api")
+    await registerRecommendedPerGoalMetrics(kit.tools, "goal_tests")
+    await registerRecommendedGlobalMetrics(kit.tools)
     await exec(kit.tools.register_contract, {
       category: "interface_contract",
       title: "API contract",

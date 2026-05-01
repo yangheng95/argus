@@ -14,7 +14,7 @@
  * — non-empty arrays, ≥8-char details, discriminated accept/reject shapes.
  * This `execute()` body only enforces CROSS-FIELD SEMANTIC invariants that
  * a Zod schema cannot express:
- *   - accepted requires startup_verification.success=true
+ *   - accepted requires startup_verification.success=true when startup is applicable
  *   - accepted requires frontend_check.attempted=true ⇒ renders_correctly!=false
  *   - accepted requires no result='failed' deferred_check
  *   - accepted requires ≥1 tool_call_evidence with passed=true
@@ -25,6 +25,7 @@
 import { tool } from "ai"
 import {
   DeliveryVerdict,
+  type DeliveryEvidenceFacetType,
   type DeliveryVerdictType,
 } from "./verdict"
 
@@ -37,9 +38,14 @@ function emptyCollector(): DeliveryCollector {
   return { finalized: false }
 }
 
-export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) {
+export function createDeliveryOutputTools(input?: {
+  requiredTools?: string[]
+  requiredEvidenceFacets?: DeliveryEvidenceFacetType[]
+}) {
   let collector: DeliveryCollector = emptyCollector()
   const requiredTools = Array.from(new Set(input?.requiredTools ?? []))
+  const requiredEvidenceFacets = Array.from(new Set(input?.requiredEvidenceFacets ?? []))
+  const requires = (facet: DeliveryEvidenceFacetType) => requiredEvidenceFacets.includes(facet)
 
   const tools = {
     submit_verdict: tool({
@@ -51,12 +57,16 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
         "submit_verdict is not called before the step budget runs out, the run " +
         "is treated as a failed parse and retried.\n\n" +
         "Schema shape (discriminated by `verdict`):\n" +
-        "- verdict='accepted' — provide summary, startup_verification, frontend_check, deferred_checks, tool_call_evidence (≥1 entry). NO rejection_details.\n" +
-        "- verdict='rejected' — provide summary, startup_verification, frontend_check, deferred_checks, tool_call_evidence (≥1 entry), AND rejection_details (≥1 entry, every entry attributes to a goal_id).\n" +
+        "- verdict='accepted' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), plus only the task-applicable evidence facets listed below. NO rejection_details.\n" +
+        "- verdict='rejected' — provide summary, deferred_checks, tool_call_evidence (≥1 entry), any evidence facets you actually probed, AND rejection_details (≥1 entry, every entry attributes to a goal_id).\n" +
         "There is NO separate affected_goal_ids or issues_found field — the orchestrator derives those from rejection_details.\n" +
+        (requiredEvidenceFacets.length > 0
+          ? `\nHost-required evidence facets for verdict='accepted': [${requiredEvidenceFacets.join(", ")}].\n`
+          : "\nHost-required evidence facets for verdict='accepted': none. Do not fabricate startup/frontend evidence for non-runnable work.\n") +
         "\nCross-field rules for verdict='accepted' (enforced here — payload is rejected and you re-submit if any fails):\n" +
-        "- startup_verification.attempted MUST be true AND .success MUST be true.\n" +
-        "- frontend_check.attempted=true with renders_correctly=false is forbidden — that's a visual rejection.\n" +
+        "- If startup is host-required, startup_verification.attempted MUST be true AND .success MUST be true.\n" +
+        "- If frontend or visual is host-required, frontend_check.attempted MUST be true and renders_correctly MUST NOT be false.\n" +
+        "- Any supplied failed startup/frontend evidence contradicts acceptance even when that facet was not required.\n" +
         "- deferred_checks MUST carry no result='failed' entries.\n" +
         "- tool_call_evidence MUST contain ≥1 entry with passed=true.\n" +
         (requiredTools.length > 0
@@ -81,16 +91,16 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
           // emit something positive" failure mode where the agent fills
           // `success`/`renders_correctly` with truthy bits while the
           // narrative fields contradict them.
-          if (!obj.startup_verification.attempted) {
+          if (requires("startup") && !obj.startup_verification?.attempted) {
             return (
               `Error: verdict='accepted' requires startup_verification.attempted=true. ` +
-              `You cannot accept a delivery whose startup you never tried to verify. ` +
-              `Either attempt startup (install → build → start → probe) and report the ` +
-              `outcome honestly, or set verdict='rejected' with rejection_details ` +
-              `including one entry with category='startup' naming the unverifiable surface.`
+              `The host marked startup as applicable to this task. Either attempt startup ` +
+              `(install → build → start → probe) and report the outcome honestly, or set ` +
+              `verdict='rejected' with rejection_details including one entry with ` +
+              `category='startup' naming the unverifiable surface.`
             )
           }
-          if (!obj.startup_verification.success) {
+          if (obj.startup_verification && !obj.startup_verification.success) {
             return (
               `Error: verdict='accepted' requires startup_verification.success=true. ` +
               `You reported startup failed (success=false) and still tried to accept. ` +
@@ -100,7 +110,15 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
               `error / non-zero exit / hung probe, and which goal owns the entry point).`
             )
           }
-          if (obj.frontend_check.attempted && obj.frontend_check.renders_correctly === false) {
+          if ((requires("frontend") || requires("visual")) && !obj.frontend_check?.attempted) {
+            return (
+              `Error: verdict='accepted' requires frontend_check.attempted=true. ` +
+              `The host marked frontend/visual evidence as applicable to this task. ` +
+              `Run an appropriate render probe or screenshot and report the outcome, ` +
+              `or reject with category='visual' or category='runtime'.`
+            )
+          }
+          if (obj.frontend_check?.attempted && obj.frontend_check.renders_correctly === false) {
             return (
               `Error: verdict='accepted' requires frontend_check to not carry a recorded ` +
               `render failure. You set frontend_check.attempted=true and ` +
@@ -157,7 +175,7 @@ export function createDeliveryOutputTools(input?: { requiredTools?: string[] }) 
           `PASS: verdict=${obj.verdict} submitted.`,
           `  ${rejections} rejection_details across ${distinctGoals} goal(s),`,
           `  ${obj.tool_call_evidence.length} tool_call_evidence entries,`,
-          `  startup=${obj.startup_verification.success ? "ok" : "fail"}`,
+          `  startup=${obj.startup_verification ? (obj.startup_verification.success ? "ok" : "fail") : "n/a"}`,
         ].join("\n")
       },
     }),

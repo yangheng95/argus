@@ -8,8 +8,7 @@
  *
  * Authority:
  * ✓ Produces the final goal set (add / modify / split / remove)
- * ✓ Registers per-goal and global metric specs
- * ✓ Registers challenge seeds for the Prosecutor
+ * ✓ Optionally registers diagnostic metric specs and challenge seeds
  * ✓ Records REQ-N → goal traceability
  * ✓ Resolves cross-goal interfaces into binding Decision Log contracts
  *
@@ -167,7 +166,7 @@ export namespace ArchitectAgent {
       })
       throw new Error(
         "Architect agent did not call submit_architect. " +
-        "The model must register goals, metrics, seeds, traceability, and " +
+        "The model must register goals, traceability, and " +
         "contracts via tools, then call submit_architect to validate. " +
         "Check the prompt and model behaviour.",
       )
@@ -347,7 +346,7 @@ function buildUserPrompt(input: ArchitectAgent.CoordinateInput): string {
 
   sections.push(
     "Explore the codebase, then register (or refine) the final goal set — " +
-    "including metric specs, challenge seeds, traceability, and cross-goal " +
+    "including optional diagnostics, traceability, and cross-goal " +
     "contracts. Call submit_architect when done; the validator will list " +
     "anything still missing.",
   )

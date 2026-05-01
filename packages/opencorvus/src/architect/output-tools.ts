@@ -2,9 +2,9 @@
  * Zod-validated tool calls for the Architect Agent.
  *
  * The Architect is the authoritative goal decomposer: it registers goals,
- * metric specs, challenge seeds, traceability, and cross-goal contracts — and
- * can also refine (modify/remove) goals during re-runs triggered by delivery
- * feedback. Every registration path writes into a single collector; the
+ * traceability, and cross-goal contracts. It may attach optional metric specs
+ * or challenge seeds as diagnostic hints, but those are not a parallel
+ * acceptance contract. Every registration path writes into a single collector; the
  * orchestrator tool reads the finalized collector after the agent session
  * ends and performs DB upsert + event emission in one place.
  *
@@ -34,19 +34,18 @@ import type {
 } from "./types"
 
 /**
- * Mandatory blocking metric coverage. Architect must register a spec with each
- * of these names in order to finalize — these are the gates Arbiter reads when
- * deciding accept/stalled/abort. Gate class must be 'blocking'; diagnostic and
- * efficiency classes are additive signals that do not substitute for these.
+ * Recommended diagnostic metric names. Acceptance gating is owned by
+ * acceptance_specs plus DeliveryEvidenceManifest, not a parallel Architect
+ * metric ruler.
  */
-export const MANDATORY_GOAL_BLOCKING_METRICS = [
+export const RECOMMENDED_GOAL_METRICS = [
   "functional_correctness",
   "scenario_coverage",
   "contract_compliance",
   "regression_count",
 ] as const
 
-export const MANDATORY_GLOBAL_BLOCKING_METRICS = [
+export const RECOMMENDED_GLOBAL_METRICS = [
   "cross_goal_contract_consistency",
   "non_regression_surface",
   "architecture_integrity",
@@ -174,20 +173,6 @@ export function architectValidationIssues(collector: ArchitectCollector): string
       }
     }
 
-    const goalMetrics = collector.goal_metric_specs.filter(
-      (m) => m.goal_id === g.id,
-    )
-    const blockingNames = new Set(
-      goalMetrics.filter((m) => m.gate_class === "blocking").map((m) => m.name),
-    )
-    const missingBlocking = MANDATORY_GOAL_BLOCKING_METRICS.filter(
-      (n) => !blockingNames.has(n),
-    )
-    if (missingBlocking.length > 0) {
-      issues.push(
-        `Goal ${g.id}: missing mandatory BLOCKING metrics: ${missingBlocking.join(", ")} - register each via register_goal_metric_spec with gate_class="blocking"`,
-      )
-    }
   }
 
   const verificationGoals = collector.goals.filter((g) => g.kind === "verification")
@@ -254,20 +239,6 @@ export function architectValidationIssues(collector: ArchitectCollector): string
         `Traceability ${requirementID}: missing goal mappings ${missingGoalIDs.join(", ")}`,
       )
     }
-  }
-
-  const globalBlockingNames = new Set(
-    collector.global_metric_specs
-      .filter((m) => m.gate_class === "blocking")
-      .map((m) => m.name),
-  )
-  const missingGlobal = MANDATORY_GLOBAL_BLOCKING_METRICS.filter(
-    (n) => !globalBlockingNames.has(n),
-  )
-  if (missingGlobal.length > 0) {
-    issues.push(
-      `Missing mandatory GLOBAL BLOCKING metrics: ${missingGlobal.join(", ")} - register each via register_global_metric_spec with gate_class="blocking"`,
-    )
   }
 
   const categories = new Set(collector.contracts.map((c) => c.category))
@@ -482,13 +453,9 @@ export function createArchitectOutputTools(input: {
       description:
         "Register or overwrite ONE per-goal metric, keyed by (goal_id, name). " +
         "Calling again with the same key replaces the prior spec — this is the " +
-        "single correction path for gate_class / target / floor mistakes during " +
-        "the architect iteration. Every goal MUST end with all four mandatory " +
-        "BLOCKING metrics: functional_correctness, scenario_coverage, " +
-        "contract_compliance, regression_count. Diagnostic metrics " +
-        "(rubric_judge_score, reproducibility, defect_density) are recommended. " +
-        "Specs become immutable only after submit_architect succeeds; the " +
-        "Prosecutor cannot edit them post-finalize.",
+        "single correction path for target / floor mistakes during the " +
+        "architect iteration. Metrics are optional diagnostic hints; they do " +
+        "not replace acceptance_specs or DeliveryEvidenceManifest gates.",
       inputSchema: z.object({
         goal_id: z
           .string()
@@ -538,10 +505,9 @@ export function createArchitectOutputTools(input: {
     register_global_metric_spec: tool({
       description:
         "Register or overwrite ONE global (task-scoped) metric, keyed by name. " +
-        "Calling again with the same name replaces the prior spec. Mandatory " +
-        "BLOCKING set: cross_goal_contract_consistency, non_regression_surface, " +
-        "architecture_integrity, user_intent_fidelity. Global blocking metrics " +
-        "can VETO acceptance even when every per-goal metric is green.",
+        "Calling again with the same name replaces the prior spec. Global " +
+        "metrics are optional diagnostic hints; acceptance gating remains in " +
+        "acceptance_specs and host delivery evidence.",
       inputSchema: z.object(metricCommonFields()),
       execute: async (input) => {
         if (
@@ -563,9 +529,9 @@ export function createArchitectOutputTools(input: {
 
     register_challenge_seed: tool({
       description:
-        "Register a Prosecutor challenge seed — a candidate reproducer or risk " +
-        "area worth probing. Phase-4 Prosecutor reads these as priors when it " +
-        "opens the adversarial session. Seeds are optional; register 0–6 based " +
+        "Register a challenge seed — a candidate reproducer or risk " +
+        "area worth probing. Downstream reviewers may read these as priors. " +
+        "Seeds are optional; register 0–6 based " +
         "on how risk-heavy the task feels.",
       inputSchema: z.object({
         id: z
@@ -684,8 +650,8 @@ export function createArchitectOutputTools(input: {
 
     submit_architect: tool({
       description:
-        "Validate the full Architect output (goals + metric specs + seeds + " +
-        "traceability + contracts) and finalize. Call AFTER every register/modify " +
+        "Validate the full Architect output (goals + traceability + contracts, " +
+        "plus any optional metrics/seeds) and finalize. Call AFTER every register/modify " +
         "tool. Returns a list of issues if any — fix them and call again.",
       inputSchema: z.object({
         summary: z
@@ -740,9 +706,7 @@ function metricCommonFields() {
     name: z
       .string()
       .min(1)
-      .describe(
-        "Canonical metric name. Use the spec's mandatory names where applicable (e.g. 'functional_correctness').",
-      ),
+      .describe("Metric name. Prefer a concrete name tied to the diagnostic signal being measured."),
     description: z
       .string()
       .min(5)
@@ -752,14 +716,12 @@ function metricCommonFields() {
     target: z.number().describe("Aspirational threshold."),
     floor: z
       .number()
-      .describe(
-        "Veto threshold for blocking metrics — below this rejects acceptance.",
-      ),
-    weight: z.number().min(0).describe("Weight in S_k aggregation."),
+      .describe("Lower bound for interpreting this diagnostic metric."),
+    weight: z.number().min(0).describe("Relative weight when a downstream diagnostic aggregator consumes this metric."),
     gate_class: z.enum(["blocking", "diagnostic", "efficiency"]),
     evaluator_kind: z
       .enum(["shell", "judge", "query", "aggregator"])
-      .describe("How the Executor computes raw_value every iteration."),
+      .describe("How the diagnostic raw_value is computed."),
     evaluator_config: z
       .record(z.string(), z.unknown())
       .default({})
