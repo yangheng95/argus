@@ -15,6 +15,7 @@ import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenu } from "./components/TitlebarMenu";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
+import { DeliveryPanel } from "./components/Board";
 import { LogViewer } from "./components/LogViewer";
 import {
   WorkspacePanel,
@@ -895,6 +896,32 @@ if (taskStatusMountEl) {
 const filesSectionMountEl = document.getElementById("solidFilesSectionMount");
 if (filesSectionMountEl) {
   render(() => <FilesSection />, filesSectionMountEl);
+}
+
+// ── Mount: DeliveryPanel ──
+// Surfaces every delivery activity: deterministic gate checks, runtime flows,
+// specialist reviews, agent verdict. Without this mount the DeliveryPanel
+// component existed in components/Board.tsx but never reached the DOM, so the
+// overlay rendered nothing for any delivery state — even though the bench
+// emitted delivery.ready / delivery.evidence.updated and the board hydrated
+// candidateDelivery.evidenceManifest. Reactive on boardStore.board so each
+// snapshot refresh re-renders the rows.
+
+const deliveryMountEl = document.getElementById("solidDeliveryMount");
+if (deliveryMountEl) {
+  render(
+    () => (
+      <DeliveryPanel
+        delivery={
+          (boardStore.board as any)?.candidateDelivery ||
+          (boardStore.board as any)?.acceptedDelivery ||
+          (boardStore.board as any)?.delivery ||
+          null
+        }
+      />
+    ),
+    deliveryMountEl,
+  );
 }
 
 // ── Mount: LogViewer (renders its own <dialog id="logDialog">) ──
