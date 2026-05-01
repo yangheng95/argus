@@ -425,3 +425,19 @@ type FailureSignature = {
 - P3：真实 runtime flow 还没有按任务类型结构化生成。
 - P4：重复 failure signature 的 retry budget 升级尚未接入 orchestrator 调度。
 - P7：旧 delivery prompt 还未完成清理。
+
+### 2026-05-01 第四轮
+
+已完成：
+
+- P7 部分完成：delivery core prompt 不再宣称“没有 deterministic evaluator / 没有人跑过检查 / YOU run every spec”。
+- P7 部分完成：DeliveryAgent user prompt 改为说明 host 已经先运行 `DeliveryEvidenceManifest`，LLM verdict 是 manifest 之上的语义/运行时判断，不是项目检查事实源。
+- P7 修正 schema 偏差：删除非法 `category="missing_requirement"` 指令，要求 linked requirement 缺口用 schema 已支持的 `category="quality"` 并在 error 中引用 REQ id。
+- P7 回归覆盖：core prompt hygiene 测试禁止旧 evaluator 文案和非法 category 重新出现，并要求 prompt 明确引用 `DeliveryEvidenceManifest`。
+- benchmark 覆盖：agent prompt hygiene、visible brief hygiene、`test/benchmark`、delivery project gate 通过。
+
+未完成，后续继续：
+
+- P3：真实 runtime flow 还没有按任务类型结构化生成。
+- P4：重复 failure signature 的 retry budget 升级尚未接入 orchestrator 调度。
+- P7：delivery prompt 中的 Phase 2.5 subagent review 仍需进一步与 manifest/review artifact 硬门禁对齐。
