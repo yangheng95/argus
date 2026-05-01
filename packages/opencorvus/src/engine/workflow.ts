@@ -47,7 +47,7 @@ export interface MiniWorkflowStep {
   after: string[]
   /** Optional sub-phases within this step — only populated for goal-scope
    *  steps whose single-tool-call invocation internally spawns multiple
-   *  sub-agents (e.g. pipeline.build dispatches planner → build worker →
+   *  sub-agents (e.g. pipeline.build dispatches build worker →
    *  evaluator as plan/build/evaluate phases). Task-scope steps map 1:1
    *  to an orchestrator tool call and have no phases. When present, the
    *  overlay renders phase rows inside the step card and claims child

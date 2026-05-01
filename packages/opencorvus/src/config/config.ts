@@ -1212,13 +1212,6 @@ export namespace Config {
             })
             .optional()
             .describe("Architect agent configuration — cross-goal coordination, interface contracts. Model is configured via agent.architect.model."),
-          planner: z
-            .object({
-              max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for planner agent"),
-              skills: z.array(z.string()).optional().describe("Additional skill paths for planner agent"),
-            })
-            .optional()
-            .describe("Planner agent configuration"),
           delivery: z
             .object({
               max_steps: z.number().int().min(1).optional().describe("Maximum agentic steps for delivery agent"),
@@ -1303,7 +1296,7 @@ export namespace Config {
             .describe("Custom workflow definitions. Override built-in workflows by matching ID."),
         })
         .optional()
-        .describe("Assistant agent configuration — controls requirements, planner, evaluator, and delivery agent behavior"),
+        .describe("Assistant agent configuration — controls requirements, architect, build, design-analysis, intent-analysis, and delivery agent behavior"),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),

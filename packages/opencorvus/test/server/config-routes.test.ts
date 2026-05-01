@@ -28,8 +28,8 @@ describe("config prompt routes", () => {
           explore: {
             prompt: "Custom explore prompt",
           },
-          planner: {
-            prompt: "Custom planner prompt",
+          "intent-analysis": {
+            prompt: "Custom intent prompt",
           },
         },
       },
@@ -56,13 +56,13 @@ describe("config prompt routes", () => {
           inherits_core?: boolean
         }>
         // System-scope slots: core_header + agent_generate (legacy spec/goal/
-        // planner/delivery _system slots were dropped when per-agent scope
+        // delivery _system slots were dropped when per-agent scope
         // became the single source of truth).
         expect(body.some((item) => item.key === "core_header" && item.scope === "system" && item.prompt === "Custom core header")).toBe(true)
         expect(body.some((item) => item.key === "agent_generate" && item.scope === "system")).toBe(true)
         // Agent-scope: user override on an agent surfaces as configured_prompt.
         expect(body.some((item) => item.key === "explore" && item.scope === "agent" && item.prompt === "Custom explore prompt" && item.configured_prompt === "Custom explore prompt")).toBe(true)
-        expect(body.some((item) => item.key === "planner" && item.scope === "agent" && item.prompt === "Custom planner prompt" && item.configured_prompt === "Custom planner prompt")).toBe(true)
+        expect(body.some((item) => item.key === "intent-analysis" && item.scope === "agent" && item.prompt === "Custom intent prompt" && item.configured_prompt === "Custom intent prompt")).toBe(true)
         // Previously-masked native agents (architect / requirements / design-analyst)
         // now each have a distinct default prompt — none collapse to empty.
         const architect = body.find((item) => item.key === "architect" && item.scope === "agent")

@@ -1,12 +1,12 @@
 // ── IntentBundle ──
 //
 // Materializes the user's task request as a stable, on-disk bundle that
-// downstream agents (planner / architect / build executor / integrity) can
+// downstream agents (architect / build executor / integrity) can
 // reference by path.
 //
 // Why this exists:
 //
-// Several stage prompts (planner-core.txt, architect-core.txt, session
+// Several stage prompts (architect-core.txt, session
 // system.txt) tell the LLM that the executor "has the intent bundle at
 // `.opencorvus/intent/`" and explicitly point at `.opencorvus/intent/request.md`
 // as the canonical source for the user's original request. Architect-generated
@@ -23,7 +23,7 @@
 // agree on the location.
 //
 // Bundle is written before `persistQueuedTask` runs so it is on disk by the
-// time the orchestrator wakes the planner. The contents are deterministic
+// time the orchestrator wakes the pipeline agents. The contents are deterministic
 // from {request, attachments}; rerunning is idempotent.
 
 import * as fs from "node:fs/promises"

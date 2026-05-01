@@ -16,7 +16,7 @@
  * specs + multimodal attachments) and the output tool kit.
  */
 import { runAgentSession } from "@/agent/runner"
-import { createPlannerTools, prefetchContext } from "@/planner/tools"
+import { createAgentContextTools, prefetchContext } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { clarificationTranscriptSection, operatorNotesSection } from "@/engine"
@@ -84,9 +84,9 @@ export namespace RequirementsAgent {
   export async function run(input: RunInput): Promise<RequirementsResult & { sessionID: string }> {
     // Rule 11 / rule 25: the working directory is a structural fact
     // (`Instance.directory`), not something to keyword-regex out of the
-    // user's free-form request. `createPlannerTools()` resolves to the
+    // user's free-form request. `createAgentContextTools()` resolves to the
     // correct root via Instance.directory by default.
-    const plannerTools = await filterAgentTools(createPlannerTools(), "requirements")
+    const contextTools = await filterAgentTools(createAgentContextTools(), "requirements")
     const outputToolKit = createRequirementsOutputTools()
 
     const context = prefetchContext(input.title, input.request)
@@ -104,7 +104,7 @@ export namespace RequirementsAgent {
         ? (session) => { input.onSessionCreated!(session.id) }
         : undefined,
       toolKit: {
-        tools: { ...plannerTools, ...outputToolKit.tools },
+        tools: { ...contextTools, ...outputToolKit.tools },
         getCollector: () => outputToolKit.getCollector(),
       },
       buildUserPrompt: () => buildUserPrompt(input, context),

@@ -8,7 +8,6 @@ test("projectConversationView classifies top-level, hidden, and goal-phase sessi
         {
           id: "build",
           phases: [
-            { id: "plan", sessionKind: "planner" },
             { id: "build", sessionKind: "build" },
           ],
         },

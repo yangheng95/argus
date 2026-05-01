@@ -27,7 +27,7 @@
  * stream-error capture, and abort signal propagation.
  */
 import { runAgentSession } from "@/agent/runner"
-import { createPlannerTools } from "@/planner/tools"
+import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import type { VisualSpec } from "@/design-analyst/types"
@@ -112,7 +112,7 @@ export namespace ArchitectAgent {
       requirement_ids: g.requirement_ids,
     }))
     const outputToolKit = createArchitectOutputTools({ existingGoals: seedGoals })
-    const plannerTools = await filterAgentTools(createPlannerTools(), "architect")
+    const contextTools = await filterAgentTools(createAgentContextTools(), "architect")
 
     log.info("architect agent starting", {
       seedGoals: input.goals.length,
@@ -134,7 +134,7 @@ export namespace ArchitectAgent {
         ? (session) => { input.onSessionCreated!(session.id) }
         : undefined,
       toolKit: {
-        tools: { ...plannerTools, ...outputToolKit.tools },
+        tools: { ...contextTools, ...outputToolKit.tools },
         getCollector: () => outputToolKit.getCollector(),
       },
       buildUserPrompt: () => buildUserPrompt(input),

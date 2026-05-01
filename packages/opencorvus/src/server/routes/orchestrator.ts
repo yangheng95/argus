@@ -54,7 +54,6 @@ const DIRECT_REPLY_AGENT_KINDS = new Set([
   "intent-analysis",
   "requirements",
   "design-analyst",
-  "planner",
   "goal",
   "architect",
   "integrity",

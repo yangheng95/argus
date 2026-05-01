@@ -150,7 +150,6 @@ export namespace Session {
         "intent-analysis",
         "requirements",
         "design-analyst",
-        "planner",
         "goal",
         "architect",
         "integrity",
@@ -160,7 +159,7 @@ export namespace Session {
         "evaluator",
         "system",
       ]),
-      /** Goal this session belongs to (planner / executor container / build
+      /** Goal this session belongs to (executor container / build
        *  worker / evaluator only); drives overlay card nesting. Fixed at
        *  creation. */
       goalID: Identifier.schema("goal").optional(),
@@ -320,7 +319,7 @@ export namespace Session {
      *  Authoritative for UI channel routing. There is NO default: every
      *  caller must state what the session is for. */
     kind: SessionKind
-    /** Goal this session belongs to (planner/executor/build only). Pass it
+    /** Goal this session belongs to (executor/build only). Pass it
      *  at creation so sessionGoalID() is a pure DB lookup — never inferred
      *  from parent chains or registry state. */
     goalID?: string

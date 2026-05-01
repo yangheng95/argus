@@ -1,10 +1,10 @@
 /**
- * Enhanced tool set for the PlannerAgent.
+ * Shared context tools for stage agents.
  *
  * Extends basic codebase tools (read_file, find_files, search_code, list_directory)
  * with project knowledge tools (memory) and external research (web search).
  *
- * This gives the planner access to:
+ * This gives requirements / architect / design-analysis style agents access to:
  * - Prior work and known patterns via memory
  * - External documentation via web search
  * - Full codebase exploration via codebase tools
@@ -16,12 +16,12 @@ import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 
-const log = Log.create({ service: "planner-tools" })
+const log = Log.create({ service: "agent-context-tools" })
 
 const EXA_BASE_URL = "https://mcp.exa.ai"
 
 /**
- * Creates the full tool set for the PlannerAgent.
+ * Creates the full shared context tool set for read-only stage agents.
  *
  * @param taskWorkDir — If provided, overrides Instance.directory for codebase tools.
  *   Critical for eval tasks where the workspace is in a subdirectory.
@@ -31,14 +31,14 @@ const EXA_BASE_URL = "https://mcp.exa.ai"
  * - 2 memory tools: memory_search, memory_get
  * - 1 web search tool: web_search
  */
-export function createPlannerTools(taskWorkDir?: string) {
+export function createAgentContextTools(taskWorkDir?: string) {
   const codebase = createCodebaseTools(taskWorkDir)
   let projectId: string
   try {
     projectId = Instance.project.id
   } catch {
     projectId = "default"
-    log.warn("planner tools: Instance.project.id unavailable, using 'default'")
+    log.warn("context tools: Instance.project.id unavailable, using 'default'")
   }
 
   return {
@@ -73,7 +73,7 @@ export function createPlannerTools(taskWorkDir?: string) {
             )
             .join("\n\n---\n\n")
         } catch (err) {
-          log.warn("memory search failed in planner", { query, err })
+          log.warn("memory search failed in context tools", { query, err })
           return "Memory search unavailable."
         }
       },
@@ -94,7 +94,7 @@ export function createPlannerTools(taskWorkDir?: string) {
           const text = chunks.map((c) => c.content).join("\n\n")
           return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
         } catch (err) {
-          log.warn("memory get failed in planner", { file_id, err })
+          log.warn("memory get failed in context tools", { file_id, err })
           return "Failed to read memory file."
         }
       },
@@ -165,7 +165,7 @@ export function createPlannerTools(taskWorkDir?: string) {
 // ---------------------------------------------------------------------------
 
 /**
- * Pre-fetch project context for injection into the planner prompt.
+ * Pre-fetch project context for injection into a stage-agent prompt.
  * Auto-recalls relevant memory so the LLM doesn't waste tool calls
  * on things we can provide upfront.
  */

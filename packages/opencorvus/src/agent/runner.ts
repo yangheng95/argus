@@ -112,7 +112,6 @@ export interface AgentToolKit<C> {
 export type SkillStage =
   | "requirements"
   | "architect"
-  | "planner"
   | "delivery"
   | "design_analyst"
   | "intent_analysis"

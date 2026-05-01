@@ -1005,7 +1005,7 @@ export const RunMetrics = z.object({
   delivery_focus_score: z.number(),
 })
 
-export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "planner" | "evaluator" | "delivery"
+export type AgentStageType = "assistant" | "requirements" | "spec" | "goal" | "architect" | "evaluator" | "delivery"
 
 export const Event = {
   TaskCreated: BusEvent.define("task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),

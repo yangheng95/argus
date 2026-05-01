@@ -22,7 +22,7 @@
  */
 import z from "zod"
 import { runAgentSession } from "@/agent/runner"
-import { createPlannerTools } from "@/planner/tools"
+import { createAgentContextTools } from "@/agent/context-tools"
 import { filterAgentTools } from "@/agent/filter-tools"
 import { Log } from "@/util/log"
 import { AttachmentStore } from "@/storage/attachment-store"
@@ -65,7 +65,7 @@ export namespace DesignAnalystAgent {
   }
 
   export async function analyze(input: AnalyzeInput): Promise<Result & { sessionID: string }> {
-    const plannerTools = await filterAgentTools(createPlannerTools(), "design-analyst")
+    const contextTools = await filterAgentTools(createAgentContextTools(), "design-analyst")
     const screenshotToolKit = createUrlScreenshotTool()
     const outputToolKit = createDesignOutputTools()
     const projectID = (() => {
@@ -97,7 +97,7 @@ export namespace DesignAnalystAgent {
         : undefined,
       toolKit: {
         tools: {
-          ...plannerTools,
+          ...contextTools,
           ...screenshotToolKit,
           ...readAttachmentToolKit,
           ...outputToolKit.tools,
