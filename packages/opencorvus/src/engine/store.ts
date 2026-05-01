@@ -511,6 +511,46 @@ export function findLatestTipGoalRun(goalID: string): GoalRunRow | undefined {
   return rows.find((r) => !supersededIDs.has(r.id))
 }
 
+/**
+ * Most recent goal_run that produced a delivery artifact for the goal,
+ * regardless of supersede status.
+ *
+ * Distinct semantic from {@link findLatestTipGoalRun}: the tip is "what is
+ * the live attempt right now" (could be a fresh pending row created by
+ * resetTaskGoalsToPending after a delivery rejection). This helper answers
+ * "what files have been merged / accepted into master for this goal so far"
+ * — i.e. the most recent goal_run row whose delivery row is non-null. The
+ * tip and the latest-delivered run can diverge: a delivery rejection
+ * supersedes the previous tip with a new pending row; that new pending row
+ * has no delivery yet, but the prior superseded row's delivery (and the
+ * files it merged) are still the canonical "built" state.
+ *
+ * Overlay panels that show "files changed for this goal" must use this
+ * helper, not findLatestTipGoalRun — otherwise post-rejection workflow
+ * cards drop their changedFiles list and the overlay's Files panel
+ * silently hides the goal even though the merge_back commit is still on
+ * master.
+ */
+export function findLatestDeliveredGoalRun(goalID: string): GoalRunRow | undefined {
+  return latestDeliveredGoalRunFromRows(listGoalRunsByGoal(goalID), (id) => findDeliveryByGoalRun(id) !== undefined)
+}
+
+/**
+ * Pure-function variant of {@link findLatestDeliveredGoalRun} for unit tests.
+ * `rows` MUST be ordered newest-first (the same shape `listGoalRunsByGoal`
+ * returns). `hasDelivery` is invoked at most once per row, in newest-first
+ * order, so callers can stub a small lookup map without a DB.
+ */
+export function latestDeliveredGoalRunFromRows<T extends { id: string }>(
+  rows: T[],
+  hasDelivery: (goalRunID: string) => boolean,
+): T | undefined {
+  for (const row of rows) {
+    if (hasDelivery(row.id)) return row
+  }
+  return undefined
+}
+
 export function findEvaluationByRun(runID: string): EvaluationRow | undefined {
   const row = Database.use((db) =>
     db
