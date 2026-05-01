@@ -116,6 +116,28 @@ describe("core prompt hygiene", () => {
     expect(text).toContain("never violate the task-kind contract")
   })
 
+  test("orchestrator prompt forbids `deliver` while non-terminal goals remain", async () => {
+    const text = await readPrompt("orchestrator")
+    // Strengthened post-r23: bench observed orchestrator calling deliver
+    // after only 1/7 goals passed, then the rejection's reset wiped the
+    // passed work. The pre-deliver audit ritual must enumerate every goal
+    // explicitly and the verification-goal blanket exception must be gone.
+    expect(text).toContain("Mandatory pre-`deliver` audit ritual")
+    expect(text).toContain("enumerate every goal id with its current status")
+    // The buggy old "verification-only as terminal for this gate" exception
+    // must be removed — it was the documentation mistake that authorised
+    // premature deliver calls.
+    expect(text).not.toContain("treat verification-only as terminal for")
+    // The strengthened rule explicitly calls verification a non-exception.
+    expect(text).toContain("Verification goals are NOT an")
+    // The premature-deliver patterns list must call out the exact bench-
+    // observed antipattern (one passed goal triggering a deliver). Accept
+    // soft wraps in the prose so a future re-flow doesn't trip the assert.
+    expect(text.replace(/\s+/g, " ")).toContain("A single passed goal is not a delivery")
+    // Cost-of-premature-deliver is part of the rationale.
+    expect(text).toContain("blanket-reset path then wipes the goals that ALREADY")
+  })
+
   test("prosecutor prompt references current delivery rejection surface", async () => {
     const text = await readPrompt("prosecutor")
     expect(text).not.toContain("Defender's own issues_found")
