@@ -4,6 +4,7 @@ import type {
   DeliveryCheckResult,
   DeliveryEvidenceManifest,
   DeliveryGateVerdict,
+  DeliveryManifestFunctionalAssessment,
   DeliveryReviewEvidence,
 } from "./manifest"
 import type {
@@ -21,6 +22,7 @@ export function arbitrateDeliveryGate(input: {
   failedCoverageIds: string[]
   failedRuntimeFlowIds?: string[]
   failedReviewIds?: string[]
+  functionalAssessment?: DeliveryManifestFunctionalAssessment
 }): DeliveryGateVerdict {
   const failedRuntimeFlowIds = input.failedRuntimeFlowIds ?? []
   const failedReviewIds = input.failedReviewIds ?? []
@@ -36,10 +38,40 @@ export function arbitrateDeliveryGate(input: {
     failedCoverageIds: input.failedCoverageIds,
     failedRuntimeFlowIds,
     failedReviewIds,
-    summary: status === "passed"
-      ? input.checks.summary
-      : `Delivery evidence gate failed ${input.checks.failedCheckIds.length} required check(s), ${input.failedCoverageIds.length} coverage item(s), ${failedRuntimeFlowIds.length} runtime flow(s), and ${failedReviewIds.length} review item(s).`,
+    functionalAssessment: input.functionalAssessment,
+    summary: deliveryGateSummary({
+      status,
+      checks: input.checks.failedCheckIds.length,
+      coverage: input.failedCoverageIds.length,
+      runtime: failedRuntimeFlowIds.length,
+      reviews: failedReviewIds.length,
+      functionalAssessment: input.functionalAssessment,
+      fallbackPassedSummary: input.checks.summary,
+    }),
   }
+}
+
+function deliveryGateSummary(input: {
+  status: "passed" | "failed"
+  checks: number
+  coverage: number
+  runtime: number
+  reviews: number
+  functionalAssessment?: DeliveryManifestFunctionalAssessment
+  fallbackPassedSummary: string
+}) {
+  if (input.status === "passed") {
+    return input.functionalAssessment?.summary ?? input.fallbackPassedSummary
+  }
+  const counts =
+    `${input.checks} required check(s), ${input.coverage} coverage item(s), ` +
+    `${input.runtime} runtime flow(s), and ${input.reviews} review item(s)`
+  if (!input.functionalAssessment) {
+    return `Delivery evidence gate failed ${counts}.`
+  }
+  const primary = input.functionalAssessment.primaryFailureIds.join(", ") || "none"
+  const auxiliary = input.functionalAssessment.auxiliaryFailureIds.join(", ") || "none"
+  return `${input.functionalAssessment.summary} Evidence gate failed ${counts}. Primary: ${primary}. Auxiliary: ${auxiliary}.`
 }
 
 export function arbitrateDeliveryVerdict(input: {
@@ -220,15 +252,7 @@ function synthesizeManifestRejection(
       failureReason: item.evidence.join("; "),
       outputExcerpt: item.evidence.join("; "),
     }))
-  const failed = failedResults.length > 0
-    ? failedResults
-    : failedCoverage.length > 0
-      ? failedCoverage
-      : failedRuntimeFlows.length > 0
-        ? failedRuntimeFlows
-        : failedReviewEvidence.length > 0
-          ? failedReviewEvidence
-          : manifest.requiredChecks
+  const missingCheckResults = manifest.requiredChecks
         .filter((item) => manifest.finalGate.failedCheckIds.includes(item.id))
         .map((item) => ({
           ...item,
@@ -237,6 +261,17 @@ function synthesizeManifestRejection(
           startedAt: manifest.timeCreated,
           completedAt: manifest.timeCreated,
         }))
+        .filter((item) => !failedResults.some((result) => result.id === item.id))
+  const failed = sortManifestFailuresByFunctionalPriority({
+    manifest,
+    failures: [
+      ...failedCoverage,
+      ...failedRuntimeFlows,
+      ...failedReviewEvidence,
+      ...failedResults,
+      ...missingCheckResults,
+    ],
+  })
   return {
     verdict: "rejected",
     summary: manifest.finalGate.summary,
@@ -247,7 +282,7 @@ function synthesizeManifestRejection(
     },
     frontend_check: {
       attempted: false,
-      issues: failed.map((item) => `${item.name}: ${item.failureReason ?? item.outputExcerpt}`).slice(0, 10),
+      issues: failed.map((item) => `${item.name ?? item.label ?? item.id}: ${item.failureReason ?? item.outputExcerpt}`).slice(0, 10),
     },
     deferred_checks: [
       ...manifest.checkResults.map((item) => ({
@@ -272,6 +307,31 @@ function synthesizeManifestRejection(
       rejectionDetailsForFailure({ item, manifest }),
     ),
   }
+}
+
+type ManifestFailureItem = DeliveryCheckResult | {
+  id: string
+  name?: string
+  family?: string
+  label?: string
+  command?: string
+  failureReason?: string
+  outputExcerpt?: string
+}
+
+function sortManifestFailuresByFunctionalPriority(input: {
+  manifest: DeliveryEvidenceManifest
+  failures: ManifestFailureItem[]
+}) {
+  const primary = new Set(input.manifest.functionalAssessment?.primaryFailureIds ?? [])
+  const auxiliary = new Set(input.manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
+  const rank = (id: string) =>
+    primary.has(id) ? 0 :
+    auxiliary.has(id) ? 1 :
+    2
+  return [...input.failures].sort((a, b) =>
+    rank(a.id) - rank(b.id) || a.id.localeCompare(b.id)
+  )
 }
 
 function synthesizeRuntimeRejection(
@@ -402,16 +462,6 @@ function ownerGoalIdsForFailure(input: {
       .map((finding) => finding.suggestedOwnerGoalID)
       .filter((item): item is string => Boolean(item)) ?? []
     if (suggestedGoalIds.length > 0) return [...new Set(suggestedGoalIds)].sort()
-
-    const requirementIds = new Set(
-      review?.findings
-        .filter((finding) => finding.proposedSeverity === "blocking")
-        .flatMap((finding) => finding.affectedRequirementIDs ?? []) ?? [],
-    )
-    const mapped = input.manifest.requirementCoverage
-      .filter((item) => requirementIds.has(item.requirementId))
-      .flatMap((item) => item.goalIds)
-    if (mapped.length > 0) return [...new Set(mapped)].sort()
   }
 
   return []

@@ -110,10 +110,10 @@ export namespace DeliveryService {
       ? formatDeliveryManifestFailureDetails(manifest)
       : []
 
-    // 2. Runtime-evidence 前置闸（P1-A）
+    // 2. Runtime-evidence front gate for visual-reference deliveries.
     let runtimeReport: RuntimeEvidenceReport | undefined
     let runtimeEvidenceFailures: string[] = [...(input.delivery.runtimeEvidenceFailures ?? [])]
-    if (referencePath) {
+    if (referencePath && manifest.finalGate.status === "passed") {
       try {
         runtimeReport = await computeRuntimeEvidence({
           projectDir: Filesystem.resolve(Instance.directory),
@@ -149,37 +149,48 @@ export namespace DeliveryService {
       }
     }
 
-    // 3. LLM verdict
-    let llmVerdict: DeliveryVerdictType
-    try {
-      llmVerdict = await DeliveryAgent.verify({
-        task: input.task,
-        goals: input.goals,
-        delivery: {
-          ...input.delivery,
-          manifestFailures,
-          runtimeEvidenceFailures,
-        },
-        attachments: input.attachments,
-        signal: input.signal,
-      })
-    } catch (error) {
-      log.error("delivery service verify failed", {
+    // 3. LLM semantic verdict. The manifest is the single delivery outlet:
+    // when host-run functional evidence already fails, do not add a second
+    // decision brain that can merge, dilute, or contradict the manifest report.
+    let llmVerdict: DeliveryVerdictType | undefined
+    if (manifest.finalGate.status === "passed") {
+      try {
+        llmVerdict = await DeliveryAgent.verify({
+          task: input.task,
+          goals: input.goals,
+          delivery: {
+            ...input.delivery,
+            manifestFailures,
+            runtimeEvidenceFailures,
+          },
+          attachments: input.attachments,
+          signal: input.signal,
+        })
+      } catch (error) {
+        log.error("delivery service verify failed", {
+          title: input.task.title,
+          error: String(error),
+          cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
+        })
+        if (error instanceof DeliveryFailureError) throw error
+        throw new DeliveryFailureError("delivery agent failed", { cause: error })
+      }
+    } else {
+      log.info("delivery semantic agent skipped because manifest gate failed", {
         title: input.task.title,
-        error: String(error),
-        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
+        summary: manifest.finalGate.summary,
       })
-      if (error instanceof DeliveryFailureError) throw error
-      throw new DeliveryFailureError("delivery agent failed", { cause: error })
     }
 
     // 4. P0-B 视觉硬门——复用 runtime-evidence 的 rendered.png
     let visualMetric: VisualMetricResult | null = null
     try {
-      visualMetric = await runVisualHardGate({
-        referencePath,
-        preRenderedPath: runtimeReport?.evidence.renderedPngPath,
-      })
+      visualMetric = manifest.finalGate.status === "passed"
+        ? await runVisualHardGate({
+            referencePath,
+            preRenderedPath: runtimeReport?.evidence.renderedPngPath,
+          })
+        : null
       if (visualMetric) {
         log.info("delivery visual hard gate", {
           title: input.task.title,
@@ -203,9 +214,9 @@ export namespace DeliveryService {
 
     log.info("delivery service verify completed", {
       title: input.task.title,
-      llmVerdict: llmVerdict.verdict,
+      llmVerdict: llmVerdict?.verdict ?? "skipped",
       finalVerdict: finalVerdict.verdict,
-      overridden: llmVerdict.verdict !== finalVerdict.verdict,
+      overridden: llmVerdict ? llmVerdict.verdict !== finalVerdict.verdict : false,
       arbiterSource: decision.source,
       issuesFound: issuesFound(finalVerdict).length,
       startupSuccess: finalVerdict.startup_verification?.success,

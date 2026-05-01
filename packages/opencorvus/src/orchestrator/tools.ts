@@ -3254,6 +3254,43 @@ export function createOrchestratorTools(input: {
               pointer: `verdict artifact ${verdictArtifactId}; repeated manifest failures require strategy change`,
             })
           }
+          if (toReset.length === 0) {
+            try {
+              const { createDecisionLog } = await import("@/decision-log")
+              createDecisionLog(taskID).append({
+                phase: "delivery",
+                key: `delivery_task_scope_rejection_${iteration}`,
+                value: verdict.summary,
+                reason:
+                  "Delivery rejected at task scope: no rejection_details entry carried a concrete goal_id, " +
+                  "so no goal attempt was reopened. The orchestrator must fix the integrated deliverable " +
+                  "with build({ request }) or change strategy before calling deliver again.",
+              })
+            } catch {
+              /* best effort */
+            }
+            log.info("deliver: task-scope rejection processed without goal reset", {
+              taskID,
+              iteration,
+              issues: rejectionIssues.length,
+              affected_goal_ids: rejectionAffectedGoalIDs,
+            })
+            await trackStepComplete("deliver", undefined, true)
+            return SubAgentProtocol.yieldResult({
+              headline:
+                `Delivery rejected at task scope — iteration ${iteration}; no goal attempts were reopened. ` +
+                `Assistant must fix the integrated deliverable with build({ request }) or change strategy before re-deliver.`,
+              fields: [
+                ["issues_found", rejectionIssues],
+                ["manifest_failures", manifestFailureDetails],
+                ["iteration", String(iteration)],
+                ["agent_summary", verdict.summary],
+              ],
+              pointer: currentManifest
+                ? `verdict artifact ${verdictArtifactId}; manifest ${currentManifest.id}; task-scope failures require integrated rework before another deliver`
+                : `verdict artifact ${verdictArtifactId}; task-scope failures require integrated rework before another deliver`,
+            })
+          }
           // Per-goal rejection slice: the delivery agent already attributed
           // each rejection_details[] entry to a specific goal_id; feed that
           // subset (plus the task-level summary) into startNewAttempt so the

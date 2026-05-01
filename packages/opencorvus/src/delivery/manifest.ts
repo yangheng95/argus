@@ -44,6 +44,14 @@ export type DeliveryGateVerdict = {
   failedCoverageIds: string[]
   failedRuntimeFlowIds: string[]
   failedReviewIds: string[]
+  functionalAssessment?: DeliveryManifestFunctionalAssessment
+}
+
+export type DeliveryManifestFunctionalAssessment = {
+  status: "complete" | "incomplete"
+  primaryFailureIds: string[]
+  auxiliaryFailureIds: string[]
+  summary: string
 }
 
 export type DeliveryGoalCoverage = {
@@ -111,6 +119,7 @@ export type DeliveryEvidenceManifest = {
   reviewEvidence: DeliveryReviewEvidence[]
   surfaceManifest?: DeliverySurfaceManifest
   specialistReviews?: DeliverySpecialistReview[]
+  functionalAssessment?: DeliveryManifestFunctionalAssessment
   changedFiles: string[]
   finalGate: DeliveryGateVerdict
   timeCreated: number
@@ -290,14 +299,29 @@ export function deliveryManifestFailureDetails(
       evidence: firstEvidence(item.evidence),
     }))
 
-  return [
+  return sortFailureDetailsByFunctionalPriority(manifest, [
     ...checkDetails,
     ...missingCheckDetails,
     ...goalCoverageDetails,
     ...requirementCoverageDetails,
     ...runtimeDetails,
     ...reviewDetails,
-  ]
+  ])
+}
+
+function sortFailureDetailsByFunctionalPriority(
+  manifest: DeliveryEvidenceManifest,
+  details: DeliveryManifestFailureDetail[],
+) {
+  const primary = new Set(manifest.functionalAssessment?.primaryFailureIds ?? [])
+  const auxiliary = new Set(manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
+  const rank = (id: string) =>
+    primary.has(id) ? 0 :
+    auxiliary.has(id) ? 1 :
+    2
+  return [...details].sort((a, b) =>
+    rank(a.id) - rank(b.id) || a.id.localeCompare(b.id)
+  )
 }
 
 export function formatDeliveryManifestFailureDetails(
