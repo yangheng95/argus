@@ -2573,6 +2573,7 @@ export function createOrchestratorTools(input: {
 
         // Run DeliveryAgent to verify build/test/startup
         const allGoals = listGoals(taskID)
+        const activeSpecSnapshot = findActiveSpecForTask(taskID)
         const goalInfos = allGoals.map(g => {
           const acceptanceSpecs = (g.acceptance_specs ?? []) as AcceptanceSpec[]
           return {
@@ -2918,6 +2919,7 @@ export function createOrchestratorTools(input: {
               parentSessionID: input.agentSessionID,
               runID: run?.id,
               deliveryID,
+              specSnapshotID: activeSpecSnapshot?.id,
             })
 
           // Persist verdict as artifact

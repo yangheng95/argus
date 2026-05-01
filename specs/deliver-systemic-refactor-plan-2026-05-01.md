@@ -472,3 +472,20 @@ type FailureSignature = {
 - P3：chat/auth/upload 这类领域级 runtime workflow 还没有专门步骤；当前完成的是前端型 package 的通用真实 render flow。
 - P4：重复签名 gate 目前基于相邻 manifest；后续可扩展历史窗口。
 - P7：Phase 2.5 review artifact 硬门禁仍未接入。
+
+### 2026-05-01 第七轮
+
+已完成：
+
+- P7 / Phase 2.5 部分完成：`DeliveryEvidenceManifest` 新增 `reviewEvidence`，`finalGate` 新增 `failedReviewIds`。
+- P7 硬门禁：非平凡 goal graph（至少 3 个 goal，或存在结构化 depends/import/export 合约）必须有当前 spec snapshot 对应的 `integrity_attempt` artifact。
+- P7 硬门禁：`integrity_attempt` 为 `needs_correction`、存在 corrections，或存在 missing goals 时，manifest gate failed 并阻止 delivery accept/publish。
+- P6 同步：board delivery payload 暴露 `reviewEvidence`。
+- P4 同步：重复 failure signature 会包含 review gate failure，避免缺少 review 时无限 delivery rework。
+- benchmark 覆盖：delivery project gate、publisher delivery gate 通过；`packages/opencorvus` typecheck 通过。
+
+未完成，后续继续：
+
+- P3：chat/auth/upload 这类领域级 runtime workflow 还没有专门步骤；当前完成的是前端型 package 的通用真实 render flow。
+- P4：重复签名 gate 目前基于相邻 manifest；后续可扩展历史窗口。
+- benchmark：还需要跑完整 deliver benchmark / live pipeline 复核，不只跑单元和 benchmark 子集。
