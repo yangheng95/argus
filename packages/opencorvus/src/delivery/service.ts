@@ -92,6 +92,7 @@ export namespace DeliveryService {
         iteration: input.iteration,
         changedFiles: input.delivery.changedFiles,
         metadata: input.task.metadata,
+        goals: input.goals,
       })
       persistDeliveryEvidenceManifest({ manifest })
     } catch (err) {
@@ -250,9 +251,33 @@ function synthesizeManifestRejection(
   const failedResults = manifest.checkResults.filter((item) =>
     manifest.finalGate.failedCheckIds.includes(item.id)
   )
+  const failedCoverage = [
+    ...manifest.goalCoverage
+      .filter((item) => manifest.finalGate.failedCoverageIds.includes(`goal:${item.goalId}`))
+      .map((item) => ({
+        id: `goal:${item.goalId}`,
+        family: "quality",
+        label: item.title,
+        command: "acceptance_specs",
+        failureReason: item.evidence.join("; "),
+        outputExcerpt: item.evidence.join("; "),
+      })),
+    ...manifest.requirementCoverage
+      .filter((item) => manifest.finalGate.failedCoverageIds.includes(`requirement:${item.requirementId}`))
+      .map((item) => ({
+        id: `requirement:${item.requirementId}`,
+        family: "quality",
+        label: item.requirementId,
+        command: "requirement_coverage",
+        failureReason: item.evidence.join("; "),
+        outputExcerpt: item.evidence.join("; "),
+      })),
+  ]
   const failed = failedResults.length > 0
     ? failedResults
-    : manifest.requiredChecks
+    : failedCoverage.length > 0
+      ? failedCoverage
+      : manifest.requiredChecks
         .filter((item) => manifest.finalGate.failedCheckIds.includes(item.id))
         .map((item) => ({
           ...item,
@@ -282,7 +307,7 @@ function synthesizeManifestRejection(
       {
         tool: "delivery_evidence_manifest",
         passed: false,
-        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s) in manifest ${manifest.id}.`,
+        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s), ${manifest.finalGate.failedCoverageIds.length} failed coverage item(s) in manifest ${manifest.id}.`,
       },
     ],
     rejection_details: allGoalIds.flatMap((goalId) =>

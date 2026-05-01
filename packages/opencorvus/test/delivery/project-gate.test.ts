@@ -79,11 +79,14 @@ describe("delivery project evidence gate", () => {
         commandDigest: "digest-a",
       }],
       checkResults: [],
+      goalCoverage: [],
+      requirementCoverage: [],
       changedFiles: ["src/app.ts"],
       finalGate: {
         status: "passed",
         summary: "stale caller verdict",
         failedCheckIds: [],
+        failedCoverageIds: [],
       },
       timeCreated: Date.now(),
     }
@@ -92,7 +95,46 @@ describe("delivery project evidence gate", () => {
       status: "failed",
       summary: "Delivery evidence gate failed 1 required check(s).",
       failedCheckIds: ["lint#1"],
+      failedCoverageIds: [],
     })
+  })
+
+  test("fails blocking goals that have no structured acceptance specs", async () => {
+    const dir = await packageFixture({
+      build: "bun -e \"console.log('build ok')\"",
+    })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_coverage",
+        runID: "run_coverage",
+        deliveryID: "dlv_coverage",
+        changedFiles: ["src/app.ts"],
+        goals: [{
+          id: "gol_missing_acceptance",
+          title: "Missing acceptance specs",
+          priority: "blocking",
+          requirement_ids: ["REQ-1"],
+          acceptance_spec_count: 0,
+        }],
+      }),
+    })
+
+    expect(manifest.goalCoverage).toEqual([{
+      goalId: "gol_missing_acceptance",
+      title: "Missing acceptance specs",
+      priority: "blocking",
+      status: "uncovered",
+      acceptanceSpecCount: 0,
+      evidence: ["blocking goal has no structured acceptance_specs"],
+    }])
+    expect(manifest.requirementCoverage[0]?.status).toBe("uncovered")
+    expect(manifest.finalGate.status).toBe("failed")
+    expect(manifest.finalGate.failedCoverageIds).toEqual([
+      "goal:gol_missing_acceptance",
+      "requirement:REQ-1",
+    ])
   })
 })
 

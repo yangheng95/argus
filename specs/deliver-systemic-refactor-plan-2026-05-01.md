@@ -408,3 +408,20 @@ type FailureSignature = {
 - P4：rework retry budget 与重复 failure signature 升级尚未接入 orchestrator 调度。
 - P6：overlay 视觉组件还未为 manifest 增加专门 UI，目前通过 board delivery payload 和 artifacts 可观测。
 - P7：旧 delivery prompt 还未完成清理。
+
+### 2026-05-01 第三轮
+
+已完成：
+
+- P2 部分完成：`DeliveryEvidenceManifest` 新增 `goalCoverage` 和 `requirementCoverage`。
+- P2 硬门禁：blocking goal 必须携带结构化 `acceptance_specs`；只有 linked goal covered 时，requirement 才算 covered。
+- P2 回归覆盖：blocking goal 的 `acceptance_spec_count=0` 时，manifest gate failed，并同时标记 goal 与 requirement coverage failed。
+- P6 同步：board delivery payload 暴露 `goalCoverage` 和 `requirementCoverage`。
+- benchmark 覆盖：`test/benchmark`、delivery project gate、publisher delivery gate 通过。
+
+未完成，后续继续：
+
+- P2：尚未执行 delivery-triggered acceptance scorers，仅完成结构化覆盖硬门禁。
+- P3：真实 runtime flow 还没有按任务类型结构化生成。
+- P4：重复 failure signature 的 retry budget 升级尚未接入 orchestrator 调度。
+- P7：旧 delivery prompt 还未完成清理。
