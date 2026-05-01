@@ -143,4 +143,4 @@ Plugin 不直接替换 Provider 或 Executor，但可通过：
 - `evaluation.analysis` — 完整接管评估
 - `delivery.ready` — 交付后触发部署
 
-Executor 选择（`opencode` / `codex` / `claude-code`）由 Orchestrator 控制，Plugin 不干预。
+Executor 选择（MirrorCode / Codex / Claude Code）由 Orchestrator 控制，Plugin 不干预。

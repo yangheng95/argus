@@ -17,7 +17,7 @@ Without a harness, you get a single attempt with no structured verification. Wit
 - **Spec agent** — researches the codebase and turns a vague request into a precise, testable specification
 - **Goal agent** — decomposes the spec into independent, verifiable implementation goals
 - **Planner agent** — expands goals into an execution plan with subtasks, risks, and assumptions
-- **Executor** — dispatches to coding CLIs (`opencode`, `codex`, `claude-code`) against the real repo
+- **Executor** — dispatches to MirrorCode, Codex, or Claude Code against the real repo
 - **Evaluator agent** — runs `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks and the default-on `spec check` acceptance gate; classifies failures and generates replan guidance
 - **Delivery agent** — performs end-to-end verification before publishing
 
@@ -109,17 +109,17 @@ What the Slack gateway does today:
 
 ### Executors
 
-OpenCorvus always has the built-in `opencode` executor. It can also dispatch to external coding CLIs when they are installed and auto-discovery is enabled.
+OpenCorvus always has the built-in MirrorCode executor. It can also dispatch to external coding CLIs when they are installed and auto-discovery is enabled.
 
 ```bash
 export OPENCORVUS_AUTO_DISCOVER_EXECUTORS=1
 ```
 
-Supported executor names today:
+Supported executor display names today:
 
-- `opencode`
-- `codex`
-- `claude-code`
+- MirrorCode (`opencode` executor id)
+- Codex (`codex` executor id)
+- Claude Code (`claude-code` executor id)
 
 If `codex` or `claude-code` are not discovered, task creation with that executor is rejected instead of silently falling back.
 
@@ -183,4 +183,3 @@ OpenCorvus is built on the idea that coding agents need structured harnesses —
 ### License
 
 [MIT](./LICENSE)
-

@@ -32,12 +32,12 @@ Each tool-call returned by the LLM is routed by `SessionToolResolver` (`src/sess
 
 ## Outer loop wiring
 
-`runTaskLoop` (`src/orchestrator/task-loop.ts:59`) injects prompts through `OpencodeExecutor.submit` (`src/executor/opencode.ts:48`):
+`runTaskLoop` (`src/orchestrator/task-loop.ts:59`) injects prompts through the MirrorCode executor (`OpencodeExecutor.submit`, `src/executor/opencode.ts:48`):
 
 ```
 Orchestrator.runTaskLoop
   └─ TaskAgent.processTask      (LLM decision)
-      └─ OpencodeExecutor.submit (inject prompt)
+      └─ MirrorCode executor (inject prompt)
           └─ TaskQueueService.runNow
               └─ SessionLoop     (inner agentic loop)
 ```
