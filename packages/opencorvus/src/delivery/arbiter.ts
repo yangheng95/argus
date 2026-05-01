@@ -50,16 +50,38 @@ export function arbitrateDeliveryVerdict(input: {
   visualMetric?: VisualMetricResult | null
 }): DeliveryArbiterDecision | undefined {
   if (input.manifest.finalGate.status !== "passed") {
+    const manifestVerdict = synthesizeManifestRejection(input.manifest, input.goalIds)
+    if (input.llmVerdict) {
+      return {
+        source: "manifest",
+        verdict: forceRejectedByGate({
+          verdict: input.llmVerdict,
+          gateVerdict: manifestVerdict,
+          gateSummary: input.manifest.finalGate.summary,
+        }),
+      }
+    }
     return {
       source: "manifest",
-      verdict: synthesizeManifestRejection(input.manifest, input.goalIds),
+      verdict: manifestVerdict,
     }
   }
 
   if (input.runtimeReport && !input.runtimeReport.passed) {
+    const runtimeVerdict = synthesizeRuntimeRejection(input.runtimeReport, input.goalIds)
+    if (input.llmVerdict) {
+      return {
+        source: "runtime_evidence",
+        verdict: forceRejectedByGate({
+          verdict: input.llmVerdict,
+          gateVerdict: runtimeVerdict,
+          gateSummary: runtimeVerdict.summary,
+        }),
+      }
+    }
     return {
       source: "runtime_evidence",
-      verdict: synthesizeRuntimeRejection(input.runtimeReport, input.goalIds),
+      verdict: runtimeVerdict,
     }
   }
 
@@ -75,6 +97,47 @@ export function arbitrateDeliveryVerdict(input: {
   return {
     source,
     verdict: appendManifestEvidence(verdict, input.manifest),
+  }
+}
+
+function forceRejectedByGate(input: {
+  verdict: DeliveryVerdictType
+  gateVerdict: DeliveryVerdictType
+  gateSummary: string
+}): DeliveryVerdictType {
+  if (input.gateVerdict.verdict !== "rejected") return input.verdict
+  if (input.verdict.verdict === "rejected") {
+    return {
+      ...input.verdict,
+      summary: `${input.verdict.summary}\n\nHost gate: ${input.gateSummary}`,
+      deferred_checks: [
+        ...input.verdict.deferred_checks,
+        ...input.gateVerdict.deferred_checks,
+      ],
+      tool_call_evidence: [
+        ...input.verdict.tool_call_evidence,
+        ...input.gateVerdict.tool_call_evidence,
+      ],
+      rejection_details: [
+        ...input.verdict.rejection_details,
+        ...input.gateVerdict.rejection_details,
+      ],
+    }
+  }
+  return {
+    verdict: "rejected",
+    summary: `Host gate rejected delivery after semantic verdict attempted accepted: ${input.gateSummary}`,
+    startup_verification: input.verdict.startup_verification,
+    frontend_check: input.verdict.frontend_check,
+    deferred_checks: [
+      ...input.verdict.deferred_checks,
+      ...input.gateVerdict.deferred_checks,
+    ],
+    tool_call_evidence: [
+      ...input.verdict.tool_call_evidence,
+      ...input.gateVerdict.tool_call_evidence,
+    ],
+    rejection_details: input.gateVerdict.rejection_details,
   }
 }
 

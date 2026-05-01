@@ -29,11 +29,10 @@ import {
 } from "./checks/runtime-evidence"
 import { buildDeliveryEvidenceManifest } from "./checks/project-gate"
 import {
+  formatDeliveryManifestFailureDetails,
   persistDeliveryEvidenceManifest,
   type DeliveryEvidenceManifest,
 } from "./manifest"
-import { EngineProtocol } from "@/engine/protocol"
-import { Event as EngineEvent } from "@/engine/model"
 
 const log = Log.create({ service: "delivery-service" })
 
@@ -106,13 +105,14 @@ export namespace DeliveryService {
         title: input.task.title,
         failedCheckIds: manifest.finalGate.failedCheckIds,
       })
-      const decision = arbitrateDeliveryVerdict({ manifest, goalIds })
-      if (!decision) throw new DeliveryFailureError("delivery arbiter did not decide manifest rejection")
-      return decision.verdict
     }
+    const manifestFailures = manifest.finalGate.status === "failed"
+      ? formatDeliveryManifestFailureDetails(manifest)
+      : []
 
     // 2. Runtime-evidence 前置闸（P1-A）
     let runtimeReport: RuntimeEvidenceReport | undefined
+    let runtimeEvidenceFailures: string[] = [...(input.delivery.runtimeEvidenceFailures ?? [])]
     if (referencePath) {
       try {
         runtimeReport = await computeRuntimeEvidence({
@@ -135,34 +135,18 @@ export namespace DeliveryService {
           title: input.task.title,
           violations: summarizeRuntimeViolations(runtimeReport.violations),
         })
-        const decision = arbitrateDeliveryVerdict({ manifest, goalIds, runtimeReport })
-        if (!decision) throw new DeliveryFailureError("delivery arbiter did not decide runtime rejection")
-        // Surface the deterministic rejection as a card in the overlay. The
-        // pre-gate path never starts an LLM agent session, so without this
-        // event the operator sees verdict=rejected with no visible reason
-        // (rule 27 — root-cause visibility, not a synthetic chat message).
-        if (input.task.id) {
-          void EngineProtocol.emit(
-            EngineEvent.DeliveryGateRejected,
-            {
-              taskID: input.task.id,
-              iteration: input.iteration ?? 0,
-              summary: decision.verdict.summary,
-              violations: runtimeReport.violations.map((v) => ({
-                kind: v.kind,
-                detail: v.detail,
-              })),
-            },
-            { source: "delivery-service" },
-          )
-        }
-        return decision.verdict
+        runtimeEvidenceFailures = [
+          ...runtimeEvidenceFailures,
+          ...runtimeReport.violations.map((v) => `[runtime] ${v.kind}: ${v.detail}`),
+        ]
       }
-      log.info("runtime-evidence gate passed", {
-        title: input.task.title,
-        domTextLength: runtimeReport.evidence.dom?.textLength,
-        domNodeCount: runtimeReport.evidence.dom?.nodeCount,
-      })
+      if (runtimeReport.passed) {
+        log.info("runtime-evidence gate passed", {
+          title: input.task.title,
+          domTextLength: runtimeReport.evidence.dom?.textLength,
+          domNodeCount: runtimeReport.evidence.dom?.nodeCount,
+        })
+      }
     }
 
     // 3. LLM verdict
@@ -171,7 +155,11 @@ export namespace DeliveryService {
       llmVerdict = await DeliveryAgent.verify({
         task: input.task,
         goals: input.goals,
-        delivery: input.delivery,
+        delivery: {
+          ...input.delivery,
+          manifestFailures,
+          runtimeEvidenceFailures,
+        },
         attachments: input.attachments,
         signal: input.signal,
       })
