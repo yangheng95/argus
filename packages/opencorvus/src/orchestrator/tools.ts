@@ -2573,18 +2573,22 @@ export function createOrchestratorTools(input: {
 
         // Run DeliveryAgent to verify build/test/startup
         const allGoals = listGoals(taskID)
-        const goalInfos = allGoals.map(g => ({
-          id: g.id,
-          title: g.title,
-          description: g.objective,
-          criteria: renderSpecsAsText((g.acceptance_specs ?? []) as AcceptanceSpec[]),
-          priority: g.priority as "blocking" | "advisory",
-          requirement_ids: Array.isArray(g.requirement_ids) ? g.requirement_ids as string[] : [],
-          depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
-          imports: Array.isArray(g.imports) ? g.imports as string[] : [],
-          exports: Array.isArray(g.exports) ? g.exports as string[] : [],
-          owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
-        }))
+        const goalInfos = allGoals.map(g => {
+          const acceptanceSpecs = (g.acceptance_specs ?? []) as AcceptanceSpec[]
+          return {
+            id: g.id,
+            title: g.title,
+            description: g.objective,
+            criteria: renderSpecsAsText(acceptanceSpecs),
+            priority: g.priority as "blocking" | "advisory",
+            acceptance_spec_count: acceptanceSpecs.length,
+            requirement_ids: Array.isArray(g.requirement_ids) ? g.requirement_ids as string[] : [],
+            depends_on: Array.isArray(g.depends_on) ? g.depends_on as string[] : [],
+            imports: Array.isArray(g.imports) ? g.imports as string[] : [],
+            exports: Array.isArray(g.exports) ? g.exports as string[] : [],
+            owned_paths: Array.isArray(g.owned_paths) ? g.owned_paths as string[] : [],
+          }
+        })
         const deliveryInfo = {
           summary: summaries.join("\n"),
           changedFiles: allDiffs.map(d => d.file),

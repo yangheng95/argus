@@ -36,6 +36,23 @@ export type DeliveryGateVerdict = {
   status: "passed" | "failed"
   summary: string
   failedCheckIds: string[]
+  failedCoverageIds: string[]
+}
+
+export type DeliveryGoalCoverage = {
+  goalId: string
+  title: string
+  priority: "blocking" | "advisory"
+  status: "covered" | "uncovered"
+  acceptanceSpecCount: number
+  evidence: string[]
+}
+
+export type DeliveryRequirementCoverage = {
+  requirementId: string
+  status: "covered" | "uncovered"
+  goalIds: string[]
+  evidence: string[]
 }
 
 export type DeliveryEvidenceManifest = {
@@ -47,6 +64,8 @@ export type DeliveryEvidenceManifest = {
   headRef?: string
   requiredChecks: DeliveryRequiredCheck[]
   checkResults: DeliveryCheckResult[]
+  goalCoverage: DeliveryGoalCoverage[]
+  requirementCoverage: DeliveryRequirementCoverage[]
   changedFiles: string[]
   finalGate: DeliveryGateVerdict
   timeCreated: number
@@ -110,9 +129,42 @@ export function validateDeliveryEvidenceManifest(
   return {
     status: failedCheckIds.length === 0 ? "passed" : "failed",
     failedCheckIds,
+    failedCoverageIds: [],
     summary: failedCheckIds.length === 0
       ? `Delivery evidence gate passed ${manifest.requiredChecks.length} required check(s).`
       : `Delivery evidence gate failed ${failedCheckIds.length} required check(s).`,
+  }
+}
+
+export function validateDeliveryCoverage(input: {
+  goalCoverage: DeliveryGoalCoverage[]
+  requirementCoverage: DeliveryRequirementCoverage[]
+}) {
+  const failedCoverageIds = [
+    ...input.goalCoverage
+      .filter((item) => item.priority === "blocking" && item.status !== "covered")
+      .map((item) => `goal:${item.goalId}`),
+    ...input.requirementCoverage
+      .filter((item) => item.status !== "covered")
+      .map((item) => `requirement:${item.requirementId}`),
+  ]
+  return failedCoverageIds
+}
+
+export function mergeGateVerdicts(input: {
+  checks: DeliveryGateVerdict
+  failedCoverageIds: string[]
+}): DeliveryGateVerdict {
+  const status = input.checks.failedCheckIds.length === 0 && input.failedCoverageIds.length === 0
+    ? "passed"
+    : "failed"
+  return {
+    status,
+    failedCheckIds: input.checks.failedCheckIds,
+    failedCoverageIds: input.failedCoverageIds,
+    summary: status === "passed"
+      ? input.checks.summary
+      : `Delivery evidence gate failed ${input.checks.failedCheckIds.length} required check(s) and ${input.failedCoverageIds.length} coverage item(s).`,
   }
 }
 

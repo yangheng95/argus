@@ -13,9 +13,13 @@ import {
   createManifestId,
   digestCommand,
   failureSignatureForCheck,
+  mergeGateVerdicts,
   validateDeliveryEvidenceManifest,
+  validateDeliveryCoverage,
   type DeliveryCheckResult,
   type DeliveryEvidenceManifest,
+  type DeliveryGoalCoverage,
+  type DeliveryRequirementCoverage,
   type DeliveryRequiredCheck,
 } from "../manifest"
 
@@ -28,6 +32,13 @@ export async function buildDeliveryEvidenceManifest(input: {
   iteration?: number
   changedFiles: string[]
   metadata?: Record<string, unknown>
+  goals?: Array<{
+    id: string
+    title: string
+    priority: "blocking" | "advisory"
+    requirement_ids: string[]
+    acceptance_spec_count?: number
+  }>
 }): Promise<DeliveryEvidenceManifest> {
   const discovered = await discoverChecks(input.changedFiles)
   const config = await resolveConfig(input.metadata)
@@ -39,6 +50,7 @@ export async function buildDeliveryEvidenceManifest(input: {
   for (const check of requiredChecks) {
     checkResults.push(await runRequiredCheck(check))
   }
+  const coverage = buildCoverage(input.goals ?? [])
 
   const manifest: DeliveryEvidenceManifest = {
     id: createManifestId(),
@@ -49,16 +61,73 @@ export async function buildDeliveryEvidenceManifest(input: {
     headRef: await currentHeadRef(Instance.directory),
     requiredChecks,
     checkResults,
+    goalCoverage: coverage.goalCoverage,
+    requirementCoverage: coverage.requirementCoverage,
     changedFiles: input.changedFiles,
     finalGate: {
       status: "failed",
       summary: "Delivery evidence gate not evaluated.",
       failedCheckIds: [],
+      failedCoverageIds: [],
     },
     timeCreated: Date.now(),
   }
-  manifest.finalGate = validateDeliveryEvidenceManifest(manifest)
+  const checks = validateDeliveryEvidenceManifest(manifest)
+  const failedCoverageIds = validateDeliveryCoverage(coverage)
+  manifest.finalGate = mergeGateVerdicts({ checks, failedCoverageIds })
   return manifest
+}
+
+function buildCoverage(goals: Array<{
+  id: string
+  title: string
+  priority: "blocking" | "advisory"
+  requirement_ids: string[]
+  acceptance_spec_count?: number
+}>): {
+  goalCoverage: DeliveryGoalCoverage[]
+  requirementCoverage: DeliveryRequirementCoverage[]
+} {
+  const goalCoverage = goals.map((goal) => {
+    const acceptanceSpecCount = goal.acceptance_spec_count ?? 0
+    const covered = goal.priority === "advisory" || acceptanceSpecCount > 0
+    return {
+      goalId: goal.id,
+      title: goal.title,
+      priority: goal.priority,
+      status: covered ? "covered" as const : "uncovered" as const,
+      acceptanceSpecCount,
+      evidence: covered
+        ? [`acceptance_spec_count=${acceptanceSpecCount}`]
+        : ["blocking goal has no structured acceptance_specs"],
+    }
+  })
+  const requirementToGoals = new Map<string, string[]>()
+  for (const goal of goals) {
+    for (const requirementId of goal.requirement_ids) {
+      const list = requirementToGoals.get(requirementId) ?? []
+      list.push(goal.id)
+      requirementToGoals.set(requirementId, list)
+    }
+  }
+  const coveredGoals = new Set(
+    goalCoverage
+      .filter((item) => item.status === "covered")
+      .map((item) => item.goalId),
+  )
+  const requirementCoverage: DeliveryRequirementCoverage[] = [...requirementToGoals.entries()]
+    .map(([requirementId, goalIds]) => {
+      const covered = goalIds.some((goalId) => coveredGoals.has(goalId))
+      return {
+        requirementId,
+        status: covered ? "covered" as const : "uncovered" as const,
+        goalIds,
+        evidence: covered
+          ? [`covered_by=${goalIds.filter((goalId) => coveredGoals.has(goalId)).join(",")}`]
+          : ["linked goals have no structured acceptance_specs"],
+      }
+    })
+  return { goalCoverage, requirementCoverage }
 }
 
 async function requiredChecksFromGroups(

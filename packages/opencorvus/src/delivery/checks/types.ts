@@ -68,6 +68,7 @@ export interface GoalInfo {
   description: string
   criteria: string
   priority: "blocking" | "advisory"
+  acceptance_spec_count?: number
   check_selector?: string[]
   requirement_ids: string[]
   depends_on: string[]
@@ -311,4 +312,3 @@ export function normalizeArtifacts(input?: Array<{ kind: string; label: string; 
     payload: item.payload,
   }))
 }
-
