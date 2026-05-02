@@ -175,17 +175,11 @@ export namespace Orchestrator {
       })
       if (!model) return
 
-      // 2. Create child session. Each processTask invocation uses a fresh
-      //    child session. LLM context is reconstructed from DB state (goals,
-      //    runs, deliveries, decision log) via buildSystemParts on each
-      //    invocation — the session is only for UI / audit persistence, not
-      //    for LLM context accumulation.
-      const agentSession = await Session.createNext({
-        kind: "orchestrator",
-        parentID: task.session_id,
-        title: `Agent: ${task.title}`,
-        directory: Instance.directory,
-      })
+      // 2. Resolve the task's single orchestrator child session. LLM context
+      //    is still reconstructed from DB state (goals, runs, deliveries,
+      //    decision log) via buildSystemParts on each invocation; the session
+      //    is the durable task-level conversation/audit surface for every wake.
+      const agentSession = await orchestratorSessionForTask(task)
       agentSessionID = agentSession.id
 
 
@@ -212,14 +206,14 @@ export namespace Orchestrator {
       const system = await buildSystemParts(task, event, workflow, workflowState)
       const userText = orchestratorUserText(task, event)
       // Build multimodal content when task has file attachments. We re-inline
-      // image/pdf bytes on EVERY wake, not just the first. Each
-      // processTask invocation creates a fresh child session via
-      // Session.createNext (see line above), so the assumption that "bytes
-      // live in the conversation history afterwards" was wrong — the
-      // history of prior wakes is not in this wake's prompt. A first-wake-
-      // only gate left every subsequent wake with only the textual
-      // inventory, encouraging the model to either silently ignore visual
-      // context or confabulate references to images it could not see.
+      // image/pdf bytes on EVERY wake, not just the first. The orchestrator
+      // session is persistent, but compaction and per-wake prompt reduction
+      // are allowed to trim prior turns; every wake must therefore carry the
+      // concrete multimodal bytes it needs instead of relying on historical
+      // transcript retention. A first-wake-only gate left subsequent wakes
+      // with only textual inventory, encouraging the model to either silently
+      // ignore visual context or confabulate references to images it could
+      // not see.
       // AttachmentStore.partition routes image/audio/video/pdf to inline
       // file parts and text/* / json to a URL-only reference list; see
       // helper comments for the silent-rejection rationale. Inline parts
@@ -438,6 +432,36 @@ export namespace Orchestrator {
       running.delete(taskID)
     }
   }
+}
+
+async function orchestratorSessionForTask(task: TaskRow): Promise<Session.Info> {
+  if (!task.session_id) {
+    throw new Error(`Task ${task.id} has no root session`)
+  }
+  const existing = (await Session.children(task.session_id))
+    .filter((session) => session.kind === "orchestrator")
+    .sort((left, right) => left.time.created - right.time.created)
+
+  const primary = existing[0]
+  if (primary) {
+    if (existing.length > 1) {
+      log.warn("task has multiple orchestrator sessions; reusing earliest", {
+        taskID: task.id,
+        rootSessionID: task.session_id,
+        primarySessionID: primary.id,
+        duplicateSessionIDs: existing.slice(1).map((session) => session.id),
+      })
+    }
+    await Session.touch(primary.id)
+    return primary
+  }
+
+  return Session.createNext({
+    kind: "orchestrator",
+    parentID: task.session_id,
+    title: `Agent: ${task.title}`,
+    directory: Instance.directory,
+  })
 }
 
 // ---------------------------------------------------------------------------
