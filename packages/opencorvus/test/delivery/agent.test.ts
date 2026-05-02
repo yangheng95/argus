@@ -35,7 +35,7 @@ test("DeliveryAgent budgets large auxiliary evidence while preserving hard gates
         collector.verdict = {
           verdict: "rejected",
           summary: "Manifest gate failed.",
-          startup_verification: { attempted: false },
+          startup_verification: { attempted: false, success: false },
           frontend_check: { attempted: false },
           deferred_checks: [],
           tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected manifest evidence" }],
@@ -254,7 +254,7 @@ test("DeliveryAgent keeps visual images out of startup prompt and exposes explor
         collector.verdict = {
           verdict: "rejected",
           summary: "Visual review pending.",
-          startup_verification: { attempted: false },
+          startup_verification: { attempted: false, success: false },
           frontend_check: { attempted: false },
           deferred_checks: [],
           tool_call_evidence: [{ tool: "compare_visual_artifacts", passed: false, detail: "visual pair not inspected in test" }],
@@ -319,6 +319,47 @@ test("DeliveryAgent keeps visual images out of startup prompt and exposes explor
   expect(capturedParts.every((part) => part.type === "text")).toBe(true)
   expect(toolNames).toContain("compare_visual_artifacts")
   expect(toolNames).toContain("inspect_delivery_context")
+})
+
+test("DeliveryAgent parses collector verdict before returning to the arbiter", async () => {
+  await using tmp = await tmpdir({ git: true, config: { model: "test/mock" } })
+  spyOn(Provider, "getModel").mockResolvedValue(testDeliveryModel())
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      runnerImpl = async (input: any) => {
+        const kit = input.toolKitFactory()
+        const collector = kit.getCollector()
+        collector.verdict = {
+          verdict: "rejected",
+          summary: "Delivery is missing required behavior.",
+          tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected delivery evidence" }],
+          rejection_details: [{
+            category: "quality",
+            error: "Required behavior is not implemented in the delivered artifact.",
+          }],
+        }
+        collector.finalized = true
+        return { collector, attempts: 1 }
+      }
+
+      const verdict = await DeliveryAgent.verify({
+        task: {
+          id: "tsk_collector_parse",
+          title: "Parse collector",
+          request: "Verify the delivered artifact.",
+        },
+        goals: [],
+        delivery: {
+          summary: "Merged changes.",
+          changedFiles: ["src/app.ts"],
+        },
+      })
+
+      expect(verdict.deferred_checks).toEqual([])
+    },
+  })
 })
 
 function testDeliveryModel(input?: { id?: string; providerID?: string; context?: number }) {
