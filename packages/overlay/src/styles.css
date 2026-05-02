@@ -9835,18 +9835,13 @@ body[data-resizing="true"] * {
   min-height: calc(48px * var(--ui-scale));
 }
 
-.task-row-mini[data-draggable="true"] {
-  cursor: grab;
-}
-
-.task-row-mini[data-dragging="true"] {
-  opacity: 0.58;
-}
-
-.task-row-mini[data-drag-over="true"] {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 72%, transparent);
-}
+/* iter27: the dead `.task-row-mini[data-draggable="true"]`,
+   `[data-dragging="true"]`, and `[data-drag-over="true"]`
+   rules that lived here were either exact duplicates of the
+   late-tail blocks (~12418 / ~12422) or specificity-shadowed
+   versions of them (~12426 wins via !important). Removed;
+   the late-tail siblings are now the single source for each
+   drag-state pseudo. */
 
 .task-row-drag-handle {
   width: calc(16px * var(--ui-scale));
