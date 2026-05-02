@@ -33,6 +33,7 @@ import {
   settingsStore,
   setSettingsStore,
   saveSettings,
+  sanitizeExecutor,
   workspaceRestoreDirectory,
 } from "../store/settings";
 import { appStore, setAppStore } from "../store/app";
@@ -147,7 +148,7 @@ export function panelRequestBody(
     text,
     time_created: Date.now(),
     taskID,
-    executor,
+    executor: sanitizeExecutor(executor),
     request_id: requestID || undefined,
     allow_create: true,
     allow_session_mutation: false,
@@ -322,8 +323,7 @@ export async function submitMessage(
   const timeoutMs = chatRequestTimeoutMs();
   const controller = new AbortController();
   const cleanupRelay = relayAbort(options.signal, controller);
-  const executor =
-    settingsStore.executor ?? "mirrorcode";
+  const executor = sanitizeExecutor(settingsStore.executor);
   let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
   const markActivity = () => {
@@ -445,7 +445,7 @@ export async function createTask(options: CreateTaskOptions): Promise<string> {
   const { text, attachments = [], metadata = {}, signal, budget } = options;
   if (!text) throw new Error("createTask: text is required");
   const requestID = crypto.randomUUID();
-  const executor = settingsStore.executor ?? "mirrorcode";
+  const executor = sanitizeExecutor(settingsStore.executor);
   const body = JSON.stringify({
     request: text,
     executor,

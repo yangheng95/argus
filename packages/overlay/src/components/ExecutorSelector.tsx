@@ -15,7 +15,7 @@
 
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { appStore } from "../store/app";
-import { settingsStore, setSettingsStore, saveSettings } from "../store/settings";
+import { settingsStore, setSettingsStore, saveSettings, sanitizeExecutor } from "../store/settings";
 import {
   executorCurrentModel,
   executorHasModelChoice,
@@ -31,12 +31,10 @@ import { t } from "../utils/i18n";
 export function ExecutorSelector() {
   const [open, setOpen] = createSignal(false);
 
-  // Chip renders from settingsStore (always present) + executorLabel
-  // (which already maps the three known ids to display strings). The menu
-  // iterates `appStore.executors` directly — whatever the backend reported.
-  // No frontend canonical list (rule 22 single source — backend's
-  // /executor route at server/routes/executor.ts owns the membership).
-  const activeID = createMemo(() => settingsStore.executor || "mirrorcode");
+  // Chip renders from settingsStore after the same executor-id validation
+  // used by task submission. The menu still iterates appStore.executors
+  // directly — whatever the backend reported from /executor.
+  const activeID = createMemo(() => sanitizeExecutor(settingsStore.executor));
   const executors = createMemo(() => appStore.executors as ExecutorDescriptor[]);
   const activeLabel = createMemo(() => executorLabel(activeID()));
   const activeModel = createMemo(() => executorCurrentModel(activeID()));
@@ -64,7 +62,7 @@ export function ExecutorSelector() {
   function pickExecutor(id: string) {
     if (!executorSelectable(id)) return;
     if (id !== activeID()) {
-      setSettingsStore("executor", id);
+      setSettingsStore("executor", sanitizeExecutor(id));
       saveSettings();
     }
     if (!executorHasModelChoice(id)) setOpen(false);
@@ -73,7 +71,7 @@ export function ExecutorSelector() {
   async function pickModel(executorID: string, model: string) {
     setOpen(false);
     if (executorID !== activeID()) {
-      setSettingsStore("executor", executorID);
+      setSettingsStore("executor", sanitizeExecutor(executorID));
       saveSettings();
     }
     await setExecutorModel(executorID, model);
