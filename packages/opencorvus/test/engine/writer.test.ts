@@ -24,7 +24,7 @@ describe("engine writer goal workspace cleanup", () => {
     await tmp?.[Symbol.asyncDispose]?.()
   })
 
-  test("cleanupGoalWorkspaceForGoal removes the worktree and clears goal workspace fields", async () => {
+  test("cleanupGoalWorkspaceForGoal removes a completed goal worktree and clears workspace fields", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -70,7 +70,7 @@ describe("engine writer goal workspace cleanup", () => {
             requirement_ids: [],
             priority: "blocking",
             source: "test",
-            status: "failed",
+            status: "completed",
             retry_count: 0,
             order_index: 0,
             time_created: now,
