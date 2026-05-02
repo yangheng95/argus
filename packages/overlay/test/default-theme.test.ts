@@ -5,14 +5,14 @@ import { DEFAULT_SETTINGS, DEFAULT_THEME } from "../src/store/settings";
 import { sanitizeTheme } from "../src/services/theme";
 
 describe("overlay default theme", () => {
-  test("settings and sanitizers default to Nova light", () => {
+  test("settings and sanitizers default to reference light style", () => {
     expect(DEFAULT_THEME).toBe("light");
     expect(DEFAULT_SETTINGS.theme).toBe(DEFAULT_THEME);
     expect(sanitizeTheme(undefined)).toBe(DEFAULT_THEME);
     expect(sanitizeTheme("not-a-theme")).toBe(DEFAULT_THEME);
   });
 
-  test("pre-render theme bootstrap defaults cold starts to Nova light", async () => {
+  test("pre-render theme bootstrap defaults cold starts to reference light style", async () => {
     const html = await fs.readFile(
       path.join(import.meta.dir, "..", "src", "index.html"),
       "utf8",
