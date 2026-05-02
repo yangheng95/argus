@@ -139,6 +139,9 @@ Progress log:
   shared header markup. `SkillMarketPanel` no longer hand-writes
   `oc-surface-header` title/action structure; it renders three
   `SurfaceHeader` instances with the `settings-group` surface variant.
+- 2026-05-03: Migrated `GeneralPanel` section headings to
+  `SurfaceHeader`, removing two remaining `.config-panel-group-title`
+  call sites from the runtime component tree.
 
 Trigger: user feedback (2026-05-03):
 

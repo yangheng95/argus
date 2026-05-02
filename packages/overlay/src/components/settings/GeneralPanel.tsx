@@ -7,6 +7,7 @@ import { reloadProjectScope } from "../../services/config";
 import { requestNotificationPermission, notificationPermissionState } from "../../services/notify";
 import { nativeMessage } from "../../services/app-dialog";
 import { Button } from "../ui/Button";
+import { SurfaceHeader } from "../ui/SurfaceHeader";
 
 export default function GeneralPanel() {
   const [saved, setSaved] = createSignal(false);
@@ -45,7 +46,7 @@ export default function GeneralPanel() {
     <div class="general-panel">
       {/* ── Connection ── */}
       <div class="config-panel-group">
-        <h4 class="config-panel-group-title">{t("settings.section.connection")}</h4>
+        <SurfaceHeader variant="settings-group" title={t("settings.section.connection")} />
         <div class="config-panel-card">
           <label class="field">
             <span class="field-label">{t("settings.server_url")}</span>
@@ -94,7 +95,7 @@ export default function GeneralPanel() {
 
       {/* ── Behaviour ── */}
       <div class="config-panel-group">
-        <h4 class="config-panel-group-title">{t("settings.section.behaviour")}</h4>
+        <SurfaceHeader variant="settings-group" title={t("settings.section.behaviour")} />
         <div class="config-panel-card">
           <div class="config-toggle-list">
             <label class="config-toggle-list-item">
