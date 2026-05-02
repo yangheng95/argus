@@ -31,6 +31,7 @@ import { PNG } from "pngjs"
 import ssim from "ssim.js"
 
 const log = Log.create({ service: "delivery.visual" })
+const RENDER_COMMAND_OUTPUT_TAIL_BYTES = 2_000
 
 export interface VisualDiffOptions {
   /** Either an absolute file path to an html file, or http(s)/file URL. */
@@ -319,6 +320,42 @@ export function announcedLocalUrlFromOutput(output: string): string | undefined 
   return `http://${connectHost}:${port}`
 }
 
+export function renderWorkspaceCommandFailureMessage(input: {
+  command: string
+  projectRoot: string
+  status?: number | null
+  error?: Error
+  stdout?: Buffer | string | null
+  stderr?: Buffer | string | null
+}) {
+  const status = input.status === undefined || input.status === null
+    ? "spawn_error"
+    : `exit code=${input.status}`
+  const outputTail = renderCommandOutputTail(input)
+  return `${input.command} pre-launch failed (${status}) in isolated render workspace for ${input.projectRoot}: ${outputTail}`
+}
+
+function renderCommandOutputTail(input: {
+  error?: Error
+  stdout?: Buffer | string | null
+  stderr?: Buffer | string | null
+}) {
+  const stdout = bufferText(input.stdout)
+  const stderr = bufferText(input.stderr)
+  const sections = [
+    stdout ? `stdout:\n${stdout.slice(-RENDER_COMMAND_OUTPUT_TAIL_BYTES)}` : "",
+    stderr ? `stderr:\n${stderr.slice(-RENDER_COMMAND_OUTPUT_TAIL_BYTES)}` : "",
+  ].filter(Boolean)
+  const text = sections.join("\n\n").trim()
+  const tail = text.length > 0 ? text : "<no output>"
+  return input.error ? `error: ${input.error.message}\n${tail}` : tail
+}
+
+function bufferText(value: Buffer | string | null | undefined) {
+  if (!value) return ""
+  return typeof value === "string" ? value : value.toString()
+}
+
 /**
  * Spawn `bun run <script>` from `projectRoot`, then poll every 500ms up to
  * `timeoutMs` for an HTTP listener on the returned URL candidates (app
@@ -355,16 +392,23 @@ async function startProjectServer(
     })
     if (install.error) {
       await isolated.cleanup()
-      throw new Error(
-        `bun install pre-launch failed in isolated render workspace for ${projectRoot}: ${install.error.message}`,
-      )
+      throw new Error(renderWorkspaceCommandFailureMessage({
+        command: "bun install",
+        projectRoot,
+        error: install.error,
+        stdout: install.stdout,
+        stderr: install.stderr,
+      }))
     }
     if (install.status !== 0) {
       await isolated.cleanup()
-      const stderr = install.stderr?.toString().slice(-800) ?? "<no stderr>"
-      throw new Error(
-        `bun install pre-launch exited code=${install.status} in isolated render workspace for ${projectRoot}: ${stderr}`,
-      )
+      throw new Error(renderWorkspaceCommandFailureMessage({
+        command: "bun install",
+        projectRoot,
+        status: install.status,
+        stdout: install.stdout,
+        stderr: install.stderr,
+      }))
     }
   }
   if (script.buildScript) {

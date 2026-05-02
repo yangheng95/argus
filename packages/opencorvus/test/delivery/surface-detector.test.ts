@@ -146,6 +146,26 @@ describe("delivery surface detector", () => {
     expect(manifest.surfaces).toEqual([])
     expect(manifest.evidence).toEqual([])
   })
+
+  test("does not classify goal imports or exports as client contract evidence", async () => {
+    const dir = await packageFixture({
+      dependencies: { react: "latest", vite: "latest" },
+      files: {
+        "src/components/Calculator.tsx": "export function Calculator() { return <button>1</button> }\n",
+      },
+    })
+
+    const manifest = await detectDeliverySurfaces({
+      taskID: "tsk_frontend_contract_words",
+      deliveryID: "dlv_frontend_contract_words",
+      projectRoot: dir,
+      changedFiles: ["src/components/Calculator.tsx"],
+      goals: [{ imports: ["calc-state"], exports: ["calculator-ui"] }],
+    })
+
+    expect(manifest.surfaces).toEqual(["frontend", "visual_runtime"])
+    expect(evidenceRefs(manifest, "client_contract")).toEqual([])
+  })
 })
 
 async function packageFixture(input: {

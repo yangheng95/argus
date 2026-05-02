@@ -61,6 +61,7 @@ import { Question } from "@/question"
 import { renderSpecsAsText, type AcceptanceSpec } from "@/acceptance/types"
 import { isLiveRunStatus, isRunReadyForGoalDispatch, restartStagePlan } from "./scheduler"
 import { OrchestratorEventNote } from "./agent"
+import { composeDeliveryRetryFeedback } from "./delivery-retry-feedback"
 
 const log = Log.create({ service: "task-tools" })
 
@@ -3331,19 +3332,13 @@ export function createOrchestratorTools(input: {
             const ownDetails = verdict.rejection_details.filter(
               (d) => d.goal_id === g.id,
             )
-            const detailLines = ownDetails.map((d) => {
-              const parts: string[] = [`[${d.category}] ${d.error}`]
-              if (d.file) parts.push(`(file: ${d.file})`)
-              if (d.suggestion) parts.push(`suggestion: ${d.suggestion}`)
-              if (d.visual_spec_id) parts.push(`visual_spec: ${d.visual_spec_id}`)
-              return `- ${parts.join(" ")}`
+            const value = composeDeliveryRetryFeedback({
+              iteration,
+              verdict: verdict.verdict,
+              summary: verdict.summary,
+              manifestFailureDetails,
+              ownDetails,
             })
-            const value = [
-              `Delivery agent rejected the integrated deliverable (iteration ${iteration}, agent_verdict=${verdict.verdict}).`,
-              `Task-level summary: ${verdict.summary}`,
-              `Issues attributed to this goal:`,
-              ...detailLines,
-            ].join("\n")
             const reason = `Delivery rejection; ${rejectionIssues.length} issue(s): ${rejectionIssues.slice(0, 3).join("; ")}`
             startNewAttempt({
               goalID: g.id,
