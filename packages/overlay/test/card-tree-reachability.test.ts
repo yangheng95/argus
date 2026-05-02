@@ -52,3 +52,10 @@ test("Board stage-message discovery does not enumerate cardTreeStore.cards keys"
   expect(source).toContain("orderedReachableCardIDs()");
   expect(source).not.toContain("Object.keys(cardTreeStore.cards)");
 });
+
+test("tree-writer appends live message parts by replacing the parts array", async () => {
+  const source = await Bun.file("packages/overlay/src/services/tree-writer.ts").text();
+  expect(source).toContain("function appendSessionPart");
+  expect(source).toContain("const next = [...current, part]");
+  expect(source).not.toContain("produce((parts: any[]) => {\n      parts.push");
+});
