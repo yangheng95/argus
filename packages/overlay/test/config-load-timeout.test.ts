@@ -125,4 +125,50 @@ describe("loadConfigInfo", () => {
     expect(appStore.promptEntries).toEqual([{ id: "fresh-prompt" }]);
     expect(appStore.configLoadErrors.provider).toContain("provider request aborted");
   });
+
+  test("older config refresh cannot overwrite a newer completed refresh", async () => {
+    let configCalls = 0;
+    let releaseFirstConfig: (() => void) | undefined;
+    __setHostTransportForTest(
+      fakeTransport((req) => {
+        if (req.path === "config") {
+          configCalls += 1;
+          if (configCalls === 1) {
+            return new Promise((resolve) => {
+              releaseFirstConfig = () => resolve({
+                status: 200,
+                ok: true,
+                headers: {},
+                body: { model: "openai/old" },
+              });
+            });
+          }
+          return { status: 200, ok: true, headers: {}, body: { model: "openai/new" } };
+        }
+        if (req.path === "provider") {
+          return { status: 200, ok: true, headers: {}, body: { all: [] } };
+        }
+        if (req.path === "provider/auth") {
+          return { status: 200, ok: true, headers: {}, body: {} };
+        }
+        if (req.path === "channel") {
+          return { status: 200, ok: true, headers: {}, body: [] };
+        }
+        if (req.path === "config/prompt") {
+          return { status: 200, ok: true, headers: {}, body: [] };
+        }
+        throw new Error(`unexpected route ${req.path}`);
+      }),
+    );
+
+    const first = loadConfigInfo(1_000);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await loadConfigInfo(1_000);
+    expect(appStore.config).toEqual({ model: "openai/new" });
+
+    releaseFirstConfig?.();
+    await first;
+
+    expect(appStore.config).toEqual({ model: "openai/new" });
+  });
 });

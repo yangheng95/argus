@@ -153,6 +153,9 @@ Progress log:
   `updateConfig` now writes the PATCH response into `appStore.config`, so
   Provider/Channel settings no longer issue a second manual `GET /config`
   after local writes. `config.changed` remains the cross-client refresh path.
+- 2026-05-03: Hardened `loadConfigInfo` against overlapping SSE refreshes.
+  A monotonic load sequence now prevents an older, slower config refresh from
+  overwriting a newer completed refresh.
 
 Trigger: user feedback (2026-05-03):
 
