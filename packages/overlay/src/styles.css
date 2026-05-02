@@ -3391,6 +3391,112 @@ body[data-theme="light"] .section-badge {
   margin: calc(4px * var(--ui-scale)) 0 calc(6px * var(--ui-scale));
 }
 
+/* iter49: custom Goal-grouping dropdown that replaces the
+   previous vertical `.changes-tabs` list. No native <select>
+   chrome — fully styled to match the overlay's calm/flat
+   chip vocabulary. The trigger reads as a single chip; the
+   menu pops below as a borderless list of selectable rows. */
+.changes-goal-picker {
+  position: relative;
+  margin: calc(4px * var(--ui-scale)) 0 calc(6px * var(--ui-scale));
+}
+.changes-goal-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  width: 100%;
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--ui-font-meta);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.changes-goal-picker-trigger:hover,
+.changes-goal-picker-trigger:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  outline: none;
+}
+.changes-goal-picker[data-open="true"] .changes-goal-picker-trigger {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-inset));
+}
+.changes-goal-picker-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.changes-goal-picker-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.changes-goal-picker-caret {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--text-muted);
+  transition: transform 140ms ease;
+}
+.changes-goal-picker[data-open="true"] .changes-goal-picker-caret {
+  transform: rotate(180deg);
+}
+.changes-goal-picker-menu {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + calc(2px * var(--ui-scale)));
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(280px * var(--ui-scale));
+  overflow-y: auto;
+  padding: calc(2px * var(--ui-scale));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 10px 22px rgba(6, 10, 16, 0.18);
+}
+.changes-goal-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  border: 0;
+  border-radius: calc(var(--radius) * 0.7);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: var(--ui-font-meta);
+  text-align: left;
+}
+.changes-goal-picker-row:hover {
+  background: color-mix(in srgb, var(--surface-hover) 80%, transparent);
+}
+.changes-goal-picker-row[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text-strong);
+}
+.changes-goal-picker-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.changes-goal-picker-row-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .changes-tab {
   display: flex;
   align-items: center;
