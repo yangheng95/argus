@@ -13550,12 +13550,19 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-title {
   font-weight: 760;
 }
 
+/* iter19: dark-mode primary buttons. User feedback flagged the
+   blue→violet multi-hue gradient as "weird" on the dark
+   surface. Switched to a solid `var(--accent)` so the button
+   reads as a single accent block instead of a saturated
+   retro candy bar. Light mode keeps its gradient — the
+   complaint was scoped to dark and the lighter background
+   carries a gradient gracefully. */
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-btn-primary,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-send,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .btn-primary,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__cta-action {
   border: 0 !important;
-  background: var(--accent-gradient) !important;
+  background: var(--accent) !important;
   color: #ffffff !important;
   box-shadow: none !important;
 }
@@ -13564,7 +13571,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-btn-primary:ho
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-send:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .btn-primary:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__cta-action:hover {
-  background: var(--accent-gradient-hover) !important;
+  background: var(--accent-hover) !important;
   box-shadow: none !important;
 }
 
@@ -14534,15 +14541,27 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   background-image: none !important;
 }
 
-body[data-theme="light"] :is(.sidebar-btn-primary, .chat-send, .btn-primary, .board-intro__cta-action),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-btn-primary, .chat-send, .btn-primary, .board-intro__cta-action) {
+/* iter19: split the unified gradient cluster into per-theme
+   blocks. Light keeps the gradient (calm/flat plays nicely on
+   the light surface). Dark + vscode-dark switch to a solid
+   `var(--accent)` so the buttons stop reading as saturated
+   retro candy bars on the dark surface. */
+body[data-theme="light"] :is(.sidebar-btn-primary, .chat-send, .btn-primary, .board-intro__cta-action) {
   background: var(--accent-gradient) !important;
   color: #ffffff !important;
 }
 
-body[data-theme="light"] :is(.sidebar-btn-primary:hover, .chat-send:hover, .btn-primary:hover, .board-intro__cta-action:hover),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-btn-primary:hover, .chat-send:hover, .btn-primary:hover, .board-intro__cta-action:hover) {
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-btn-primary, .chat-send, .btn-primary, .board-intro__cta-action) {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="light"] :is(.sidebar-btn-primary:hover, .chat-send:hover, .btn-primary:hover, .board-intro__cta-action:hover) {
   background: var(--accent-gradient-hover) !important;
+}
+
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-btn-primary:hover, .chat-send:hover, .btn-primary:hover, .board-intro__cta-action:hover) {
+  background: var(--accent-hover) !important;
   color: #ffffff !important;
 }
 
