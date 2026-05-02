@@ -318,3 +318,9 @@ All endpoints are protected by `OPENCORVUS_SERVER_PASSWORD`. When set, clients m
 | GET | `/experimental/worktree` | List worktrees | `worktree.list` |
 | POST | `/experimental/worktree` | Create worktree | `worktree.create` |
 | POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
+
+### Preview
+
+| Method | Path | Summary | operationId |
+|---|---|---|---|
+| GET | `/preview/frontend` | Resolve live frontend preview URL | `preview.frontend` |
