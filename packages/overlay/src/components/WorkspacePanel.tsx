@@ -18,8 +18,6 @@ export interface WorkspacePanelProps {
   view: WorkspaceView;
   /** Called when the user clicks a tab to change views. */
   onSelectView: (view: WorkspaceView) => void;
-  /** Called when the user clicks the close (×) button. */
-  onClose: () => void;
 }
 
 export function WorkspacePanel(props: WorkspacePanelProps) {
@@ -84,15 +82,6 @@ export function WorkspacePanel(props: WorkspacePanelProps) {
             </span>
           </button>
         </div>
-        <button
-          type="button"
-          class="workspace-close"
-          title={t("workspace.close")}
-          aria-label={t("workspace.close")}
-          onClick={props.onClose}
-        >
-          ×
-        </button>
       </header>
       <div class="workspace-body">
         {/* Diff view — always mounted so resource cache is retained.

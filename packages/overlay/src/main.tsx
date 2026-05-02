@@ -120,7 +120,7 @@ const listenerOpts = { signal: moduleTeardown.signal } as const;
 // ── Application-level signals (shared across mount points) ──
 
 const [logOpen, setLogOpen] = createSignal(false);
-const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>("inspector");
+const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>("evaluation");
 const [rightPanelManualKey, setRightPanelManualKey] = createSignal("");
 const [frontendPreviewResolution, setFrontendPreviewResolution] =
   createSignal<FrontendPreviewResolution | null>(null);
@@ -128,10 +128,7 @@ const [frontendPreviewLoading, setFrontendPreviewLoading] = createSignal(false);
 const [frontendPreviewError, setFrontendPreviewError] = createSignal("");
 let frontendPreviewRequest = 0;
 
-// ── Workspace (secondary panel, stacked above composer) state ──
-// workspaceOpen drives layout visibility; workspaceView is remembered across
-// open/close cycles so reopening restores the last active view.
-const [workspaceOpen, setWorkspaceOpen] = createSignal(false);
+// ── Workspace (Diff / File view inside the Changes tab) state ──
 const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
   target: { filePath: "" },
@@ -373,34 +370,20 @@ function buildTaskDebugBlob(board: any): string {
   return lines.join("\n");
 }
 
-/**
- * Open the workspace panel, optionally with a specific view. If no view is
- * supplied, the last-used view is restored.
- */
-function openWorkspace(view?: WorkspaceView): void {
-  if (view) setWorkspaceView(view);
-  setWorkspaceOpen(true);
-}
-
-/** Close the workspace panel. */
-function closeWorkspace(): void {
-  setWorkspaceOpen(false);
-}
-
-/** Toggle the workspace open/closed, restoring the remembered view. */
-function toggleWorkspace(): void {
-  if (workspaceOpen()) closeWorkspace();
-  else openWorkspace();
+function focusChangesWorkspace(view: WorkspaceView): void {
+  setWorkspaceView(view);
+  setRightPanelManualKey(currentPreviewKey());
+  setRightPanelTab("changes");
 }
 
 /** Open (or switch to) a diff file in the workspace. */
 function openWorkspaceDiff(target: DiffTarget): void {
-  openWorkspace({ kind: "diff", target });
+  focusChangesWorkspace({ kind: "diff", target });
 }
 
 /** Open (or switch to) a file preview in the workspace. */
 function openWorkspaceFile(filePath: string): void {
-  openWorkspace({ kind: "file", filePath });
+  focusChangesWorkspace({ kind: "file", filePath });
 }
 
 // Exposed for services and window-level bridges that need to trigger the
@@ -695,7 +678,6 @@ if (workspaceMountEl) {
       <WorkspacePanel
         view={workspaceView()}
         onSelectView={setWorkspaceView}
-        onClose={closeWorkspace}
       />
     ),
     workspaceMountEl,
@@ -941,7 +923,7 @@ if (taskStatusMountEl) {
   render(() => <TaskStatusHeader />, taskStatusMountEl);
 }
 
-// ── Mount: Right panel Inspector / Preview tabs ──
+// ── Mount: Right panel Plan / Evaluation / Changes / Preview tabs ──
 
 const rightPanelTabsEl = document.getElementById("solidRightPanelTabs");
 if (rightPanelTabsEl) {
@@ -952,21 +934,31 @@ if (rightPanelTabsEl) {
           type="button"
           class="right-panel-tab"
           role="tab"
-          aria-selected={rightPanelTab() === "workflow"}
-          data-active={rightPanelTab() === "workflow" ? "true" : "false"}
-          onClick={() => selectRightPanelTab("workflow")}
+          aria-selected={rightPanelTab() === "plan"}
+          data-active={rightPanelTab() === "plan" ? "true" : "false"}
+          onClick={() => selectRightPanelTab("plan")}
         >
-          {t("right_panel.workflow")}
+          {t("right_panel.plan")}
         </button>
         <button
           type="button"
           class="right-panel-tab"
           role="tab"
-          aria-selected={rightPanelTab() === "inspector"}
-          data-active={rightPanelTab() === "inspector" ? "true" : "false"}
-          onClick={() => selectRightPanelTab("inspector")}
+          aria-selected={rightPanelTab() === "evaluation"}
+          data-active={rightPanelTab() === "evaluation" ? "true" : "false"}
+          onClick={() => selectRightPanelTab("evaluation")}
         >
-          {t("right_panel.inspector")}
+          {t("right_panel.evaluation")}
+        </button>
+        <button
+          type="button"
+          class="right-panel-tab"
+          role="tab"
+          aria-selected={rightPanelTab() === "changes"}
+          data-active={rightPanelTab() === "changes" ? "true" : "false"}
+          onClick={() => selectRightPanelTab("changes")}
+        >
+          {t("right_panel.changes")}
         </button>
         <button
           type="button"
@@ -1001,11 +993,13 @@ if (frontendPreviewMountEl) {
 
 createEffect(() => {
   const active = rightPanelTab();
-  const workflow = document.getElementById("rightPanelWorkflow");
-  const inspector = document.getElementById("rightPanelInspector");
+  const plan = document.getElementById("rightPanelPlan");
+  const evaluation = document.getElementById("rightPanelEvaluation");
+  const changes = document.getElementById("rightPanelChanges");
   const preview = document.getElementById("rightPanelPreview");
-  workflow?.setAttribute("data-active", active === "workflow" ? "true" : "false");
-  inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false");
+  plan?.setAttribute("data-active", active === "plan" ? "true" : "false");
+  evaluation?.setAttribute("data-active", active === "evaluation" ? "true" : "false");
+  changes?.setAttribute("data-active", active === "changes" ? "true" : "false");
   preview?.setAttribute("data-active", active === "preview" ? "true" : "false");
 });
 
@@ -1183,76 +1177,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
- // ── Workspace panel resizer ──
- // Drag the horizontal divider above the workspace to adjust its height.
- // Height is persisted to settings.workspacePanelHeight and applied as an
- // inline style on #solidWorkspaceMount. The workspace is stacked inside
- // #chatSection between #chatScroll and #solidChatComposer.
-  {
-    const resizer = document.getElementById("workspaceResizer");
-    const mount = document.getElementById("solidWorkspaceMount");
-    const applyHeight = (px: number) => {
-      if (!mount) return;
-      mount.style.height = px + "px";
-      mount.style.minHeight = px + "px";
-      mount.style.maxHeight = px + "px";
-    };
-    // Restore persisted height on startup.
-    if (settingsStore.workspacePanelHeight != null) {
-      applyHeight(settingsStore.workspacePanelHeight);
-    }
-    resizer?.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || !mount) return;
-      resizer.dataset.active = "true";
-      // "row" — use row-resize cursor globally during the drag, distinct
-      // from column resizers which set data-resizing="true".
-      document.body.dataset.resizing = "row";
-      e.preventDefault();
-      const chatSection = document.getElementById("chatSection");
-      const composer = document.getElementById("solidChatComposer");
-      function onMove(ev: PointerEvent) {
-        if (!chatSection) return;
-        const rect = chatSection.getBoundingClientRect();
-        const scale = currentUIScale();
-        // Leave room for chat-scroll (minimum) and the composer above/below.
-        const composerH = composer?.getBoundingClientRect().height ?? 0;
-        const chatScrollMin = 160 * scale;
-        const min = 160 * scale;
-        const max = Math.max(
-          min + 40,
-          rect.height - chatScrollMin - composerH,
-        );
-        // Workspace is directly above the composer — its height is measured
-        // from the top edge of the composer upward to the pointer.
-        const composerTop = composer
-          ? composer.getBoundingClientRect().top
-          : rect.bottom;
-        const next = Math.round(
-          Math.min(max, Math.max(min, composerTop - ev.clientY)),
-        );
-        applyHeight(next);
-      }
-      function onUp() {
-        delete resizer!.dataset.active;
-        delete document.body.dataset.resizing;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onUp);
-        // Persist the final height.
-        const height = mount && mount.style.height
-          ? parseInt(mount.style.height, 10)
-          : null;
-        if (Number.isFinite(height) && height! > 0) {
-          setSettingsStore("workspacePanelHeight", height);
-          saveSettings();
-        }
-      }
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onUp);
-    });
-  }
-
  // ── Sidebar buttons ──
   document.getElementById("btnRefreshTasks")?.addEventListener("click", () => {
     void loadTasks();
@@ -1281,9 +1205,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── Initialise application ──
 
-document.getElementById("btnWorkspaceToggle")?.addEventListener("click", () => {
-  toggleWorkspace();
-});
 document.getElementById("btnChatCopyAll")?.addEventListener("click", () => {
   void copyChatConversation();
 });
@@ -1373,21 +1294,6 @@ disposers.push(createRoot((dispose) => {
     if (!bar) return;
     bar.setAttribute("data-active", active ? "true" : "false");
     bar.setAttribute("aria-busy", active ? "true" : "false");
-  });
-
-  // ── Workspace visibility ──
-  // Drives the show/hide of the workspace mount + resizer.
-  createEffect(() => {
-    const open = workspaceOpen();
-
-    const mount = document.getElementById("solidWorkspaceMount");
-    const resizer = document.getElementById("workspaceResizer");
-    if (mount) (mount as HTMLElement).hidden = !open;
-    if (resizer) (resizer as HTMLElement).hidden = !open;
-
-    // Reflect open state on the toggle button for visual/a11y feedback.
-    const toggleBtn = document.getElementById("btnWorkspaceToggle");
-    if (toggleBtn) toggleBtn.setAttribute("aria-pressed", open ? "true" : "false");
   });
 
   // Task status header + elapsed timer moved to <TaskStatusHeader/> component

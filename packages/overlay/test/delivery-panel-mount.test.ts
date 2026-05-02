@@ -26,23 +26,33 @@ test("index.html declares the #solidDeliveryMount node so DeliveryPanel has a pl
   expect(html).toContain('id="solidDeliveryMount"');
 });
 
-test("index.html declares the right-panel Preview tab mount beside Inspector", async () => {
+test("index.html declares persistent right-panel tab mounts", async () => {
   const html = await readSrc("src/index.html");
   expect(html).toContain('id="solidRightPanelTabs"');
-  expect(html).toContain('id="rightPanelWorkflow"');
+  expect(html).toContain('id="rightPanelPlan"');
   expect(html).toContain('id="solidAgentWorkflowMount"');
-  expect(html).toContain('id="rightPanelInspector"');
+  expect(html).toContain('id="rightPanelEvaluation"');
+  expect(html).toContain('id="rightPanelChanges"');
   expect(html).toContain('id="rightPanelPreview"');
   expect(html).toContain('id="solidFrontendPreviewMount"');
 });
 
-test("index.html mounts the delivery panel BEFORE the files panel — verdict is the lead context", async () => {
+test("index.html keeps delivery in Evaluation and files in Changes", async () => {
   const html = await readSrc("src/index.html");
+  const evaluationAt = html.indexOf('id="rightPanelEvaluation"');
+  const changesAt = html.indexOf('id="rightPanelChanges"');
   const deliveryAt = html.indexOf('id="solidDeliveryMount"');
   const filesAt = html.indexOf('id="solidFilesSectionMount"');
+  const workspaceAt = html.indexOf('id="solidWorkspaceMount"');
+  expect(evaluationAt).toBeGreaterThan(-1);
+  expect(changesAt).toBeGreaterThan(-1);
   expect(deliveryAt).toBeGreaterThan(-1);
   expect(filesAt).toBeGreaterThan(-1);
-  expect(deliveryAt).toBeLessThan(filesAt);
+  expect(workspaceAt).toBeGreaterThan(-1);
+  expect(evaluationAt).toBeLessThan(deliveryAt);
+  expect(deliveryAt).toBeLessThan(changesAt);
+  expect(changesAt).toBeLessThan(filesAt);
+  expect(filesAt).toBeLessThan(workspaceAt);
 });
 
 test("main.tsx imports DeliveryPanel and mounts it at #solidDeliveryMount", async () => {
@@ -52,12 +62,12 @@ test("main.tsx imports DeliveryPanel and mounts it at #solidDeliveryMount", asyn
   expect(main).toContain("<DeliveryPanel");
 });
 
-test("main.tsx mounts AgentWorkflowPanel as a root right-panel tab", async () => {
+test("main.tsx mounts AgentWorkflowPanel as the Plan right-panel tab", async () => {
   const main = await readSrc("src/main.tsx");
   const frontendPreview = await readSrc("src/services/frontend-preview.ts");
-  expect(frontendPreview).toContain('export type RightPanelTab = "workflow" | "inspector" | "preview"');
+  expect(frontendPreview).toContain('export type RightPanelTab = "plan" | "evaluation" | "changes" | "preview"');
   expect(main).toContain('import { AgentWorkflowPanel } from "./components/AgentWorkflowPanel"');
-  expect(main).toContain('onClick={() => selectRightPanelTab("workflow")}');
+  expect(main).toContain('onClick={() => selectRightPanelTab("plan")}');
   expect(main).toContain('document.getElementById("solidAgentWorkflowMount")');
   expect(main).toContain("<AgentWorkflowPanel");
 });
@@ -164,7 +174,9 @@ test("redesign-required i18n keys exist in both locales; the legacy lifecycle ke
     "delivery.show_less",
     "delivery.empty.hint",
     "delivery.inflight.hint",
-    "right_panel.workflow",
+    "right_panel.plan",
+    "right_panel.evaluation",
+    "right_panel.changes",
     "agent_workflow.title",
     "agent_workflow.output_report",
   ];

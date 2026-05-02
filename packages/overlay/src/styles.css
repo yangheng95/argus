@@ -1056,8 +1056,14 @@ a { color: inherit; text-decoration: none; }
 /* ── Panel Body (horizontal split) ── */
 .panel-body {
   flex: 1;
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns:
+    var(--ui-sidebar-width)
+    var(--ui-resizer-width)
+    minmax(0, 1fr)
+    var(--ui-resizer-width)
+    var(--ui-sections-width);
+  grid-template-areas: "sidebar left-resizer chat right-resizer sections";
   min-height: 0;
   overflow: hidden;
   gap: calc(8px * var(--ui-scale));
@@ -1999,6 +2005,7 @@ body[data-theme="light"] .section-badge {
 
 /* ── Sections Container (right column) ── */
 .sections {
+  grid-area: sections;
   width: var(--ui-sections-width);
   min-width: min(100%, var(--ui-rail-min-width));
   max-width: var(--ui-sections-width);
@@ -2129,16 +2136,18 @@ body[data-theme="light"] .section-badge {
   display: none;
 }
 
-.sections-tab-body[data-panel-tab="inspector"] {
+.sections-tab-body[data-panel-tab="evaluation"],
+.sections-tab-body[data-panel-tab="changes"] {
   display: flex;
   min-height: 0;
 }
 
-.sections-tab-body[data-panel-tab="inspector"][data-active="false"] {
+.sections-tab-body[data-panel-tab="evaluation"][data-active="false"],
+.sections-tab-body[data-panel-tab="changes"][data-active="false"] {
   display: none;
 }
 
-.sections-tab-body[data-panel-tab="workflow"] {
+.sections-tab-body[data-panel-tab="plan"] {
   min-height: 0;
 }
 
@@ -3641,6 +3650,7 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 
 /* ── Chat (left column) ── */
 .chat {
+  grid-area: chat;
   flex: 999 1 var(--ui-chat-priority-width);
   display: flex;
   flex-direction: column;
@@ -3737,21 +3747,6 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   letter-spacing: var(--title-track);
 }
 
-.workspace-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  color: var(--text-soft);
-}
-.workspace-toggle:hover {
-  color: var(--text-strong);
-}
-.workspace-toggle[aria-pressed="true"] {
-  color: var(--accent);
-  background: var(--accent-dim);
-  border-color: var(--accent);
-}
 
 .chat-header-status {
   display: flex;
@@ -3879,66 +3874,14 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   font-size: var(--ui-font-control);
 }
 
-/* ── Workspace (secondary panel, stacked above composer) ──
-   Contains Build + Diff views behind a shared tab bar. Hidden by default;
-   revealed by toggling [hidden] on #solidWorkspaceMount + #workspaceResizer.
-   Lives inside #chatSection, directly above #solidChatComposer. The height
-   is driven by inline style set from main.tsx and persisted to settings
-   so it survives reloads. */
+/* ── Workspace (Diff / File panel inside the Changes tab) ── */
 .workspace-mount {
   display: flex;
   flex-direction: column;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  height: clamp(calc(200px * var(--ui-scale)), 40vh, calc(560px * var(--ui-scale)));
-}
-.workspace-mount[hidden] {
-  display: none;
-}
-
-/* Row-resize variant — chained selectors (.pane-resizer.pane-resizer-workspace)
-   bump specificity above the generic .pane-resizer rules further down in the
-   stylesheet, so row-resize cursor + horizontal bar override col-resize. */
-.pane-resizer.pane-resizer-workspace {
-  flex: 0 0 var(--ui-resizer-width);
-  align-self: stretch;
-  width: 100%;
-  min-width: 0;
-  cursor: row-resize;
-  background: transparent;
-  position: relative;
-}
-.pane-resizer.pane-resizer-workspace[hidden] {
-  display: none;
-}
-.pane-resizer.pane-resizer-workspace::before {
-  content: "";
-  position: absolute;
-  left: calc(14px * var(--ui-scale));
-  right: calc(14px * var(--ui-scale));
-  top: 50%;
-  bottom: auto;
-  width: auto;
-  transform: translateY(-50%);
-  height: 1px;
-  background: color-mix(in srgb, var(--border) 42%, transparent);
-  border-radius: 999px;
-  transition: background 80ms ease, box-shadow 80ms ease;
-}
-.pane-resizer.pane-resizer-workspace:hover::before,
-.pane-resizer.pane-resizer-workspace[data-active="true"]::before {
-  background: var(--accent);
-  height: 2px;
-  box-shadow: none;
-}
-
-body[data-resizing="row"] {
-  cursor: row-resize;
-  user-select: none;
-}
-body[data-resizing="row"] * {
-  cursor: row-resize !important;
+  height: 100%;
 }
 
 .workspace {
@@ -4010,27 +3953,6 @@ body[data-resizing="row"] * {
   font-size: var(--ui-font-small);
 }
 
-.workspace-close {
-  align-self: center;
-  width: calc(22px * var(--ui-scale));
-  height: calc(22px * var(--ui-scale));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: calc(4px * var(--ui-scale));
-  color: var(--text-muted);
-  font-size: var(--ui-font-heading);
-  line-height: 1;
-  cursor: pointer;
-  transition: color 120ms, background 120ms, border-color 120ms;
-}
-.workspace-close:hover {
-  color: var(--bad);
-  background: rgba(248, 113, 113, 0.12);
-  border-color: rgba(248, 113, 113, 0.3);
-}
 
 .workspace-body {
   flex: 1;
@@ -9179,14 +9101,11 @@ body[data-theme="light"] .config-close-btn:hover {
 
 /* Sidebar workspace layout */
 .workspace-main {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  overflow: hidden;
+  display: contents;
 }
 
 .sidebar {
+  grid-area: sidebar;
   width: var(--ui-sidebar-width);
   min-width: min(100%, var(--ui-rail-min-width));
   max-width: var(--ui-sidebar-width);
@@ -9231,6 +9150,14 @@ body[data-theme="light"] .config-close-btn:hover {
   user-select: none;
   pointer-events: auto;
   z-index: 10;
+}
+
+.pane-resizer-left {
+  grid-area: left-resizer;
+}
+
+.pane-resizer-right {
+  grid-area: right-resizer;
 }
 
 /* Persistent visible rail centered inside the hit area. The hit area
@@ -11520,37 +11447,9 @@ body[data-resizing="true"] * {
   box-shadow: none;
 }
 
-.chat-header-meta .workspace-toggle {
-  min-width: calc(26px * var(--ui-scale));
-  width: calc(26px * var(--ui-scale));
-  height: calc(26px * var(--ui-scale));
-  min-height: calc(26px * var(--ui-scale));
-  padding: 0;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
-  color: var(--text-muted);
-  opacity: 0.76;
-}
 
-.chat-header-meta .workspace-toggle:hover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  color: var(--accent);
-  opacity: 1;
-}
 
-.chat-header-meta .workspace-toggle[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-  opacity: 1;
-}
 
-.chat-header-meta .workspace-toggle:focus-visible {
-  outline: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-  outline-offset: 2px;
-  box-shadow: none;
-}
 
 .config-content .btn.mini,
 .config-dialog-sections .btn.mini,
@@ -12401,11 +12300,11 @@ body[data-theme="light"] .btn-primary {
 
 @media (max-width: 1120px) {
   .panel-body {
-    flex-direction: column;
-  }
-
-  .workspace-main {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "sidebar"
+      "chat"
+      "sections";
   }
 
   .sidebar,
@@ -13179,7 +13078,6 @@ body[data-theme="light"] .sidebar-tool,
 body[data-theme="light"] .sidebar-toolset,
 body[data-theme="light"] .task-dir-shell,
 body[data-theme="light"] .task-cwd-dropdown,
-body[data-theme="light"] .workspace-toggle,
 body[data-theme="light"] .btn.mini,
 body[data-theme="light"] .executor-chip {
   background: rgba(255, 255, 255, 0.7);
@@ -13458,7 +13356,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-tool,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-toolset,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-dir-shell,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-cwd-dropdown,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-toggle,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .btn.mini,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .executor-chip {
   background: color-mix(in srgb, var(--surface-strong) 70%, transparent);
@@ -13615,7 +13512,6 @@ body[data-theme="vscode-dark"] .sidebar-tool,
 body[data-theme="vscode-dark"] .sidebar-toolset,
 body[data-theme="vscode-dark"] .task-dir-shell,
 body[data-theme="vscode-dark"] .task-cwd-dropdown,
-body[data-theme="vscode-dark"] .workspace-toggle,
 body[data-theme="vscode-dark"] .btn.mini,
 body[data-theme="vscode-dark"] .executor-chip {
   background: #2d2d30;
@@ -13663,7 +13559,6 @@ body[data-theme="light"] :is(
   .task-status,
   .task-dir-shell,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-primary,
@@ -13697,7 +13592,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .task-status,
   .task-dir-shell,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-primary,
@@ -13761,7 +13655,6 @@ body[data-theme="light"] :is(
   .sidebar-tool,
   .task-status,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-primary,
@@ -13782,7 +13675,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .sidebar-tool,
   .task-status,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-primary,
@@ -13850,7 +13742,6 @@ body[data-theme="light"] :is(
   .task-status,
   .task-dir-shell,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-primary,
@@ -13883,7 +13774,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .task-status,
   .task-dir-shell,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-primary,
@@ -13917,8 +13807,6 @@ body[data-theme="light"] :is(
   .sidebar-tool:hover,
   .task-cwd-dropdown:hover,
   .task-cwd-dropdown:focus-visible,
-  .workspace-toggle:hover,
-  .workspace-toggle[aria-pressed="true"],
   .btn:hover,
   .btn-ghost:hover,
   .executor-chip:hover,
@@ -13947,8 +13835,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .sidebar-tool:hover,
   .task-cwd-dropdown:hover,
   .task-cwd-dropdown:focus-visible,
-  .workspace-toggle:hover,
-  .workspace-toggle[aria-pressed="true"],
   .btn:hover,
   .btn-ghost:hover,
   .executor-chip:hover,
@@ -14319,7 +14205,6 @@ body[data-theme="light"] :is(
   .task-status,
   .task-dir-shell,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-ghost,
@@ -14350,7 +14235,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .task-status,
   .task-dir-shell,
   .task-cwd-dropdown,
-  .workspace-toggle,
   .btn,
   .btn.mini,
   .btn-ghost,
@@ -14388,8 +14272,6 @@ body[data-theme="light"] :is(
   .task-cwd-dropdown:hover,
   .task-cwd-dropdown:focus-visible,
   .task-cwd-dropdown[data-open="true"],
-  .workspace-toggle:hover,
-  .workspace-toggle[aria-pressed="true"],
   .btn:hover,
   .btn-ghost:hover,
   .btn-terminate:hover,
@@ -14425,8 +14307,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .task-cwd-dropdown:hover,
   .task-cwd-dropdown:focus-visible,
   .task-cwd-dropdown[data-open="true"],
-  .workspace-toggle:hover,
-  .workspace-toggle[aria-pressed="true"],
   .btn:hover,
   .btn-ghost:hover,
   .btn-terminate:hover,

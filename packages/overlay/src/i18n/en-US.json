@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "031d7b08da5d3882"
+    "panel_revision": "5a45bd266f0486dd"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -538,9 +538,10 @@
   "section.delivery": "Delivery",
   "section.criteria": "Evaluation Criteria",
   "section.files": "Files",
-  "right_panel.tabs": "Workspace and preview tabs",
-  "right_panel.workflow": "Workflow",
-  "right_panel.inspector": "Workspace",
+  "right_panel.tabs": "Plan, evaluation, changes, and preview tabs",
+  "right_panel.plan": "Plan",
+  "right_panel.evaluation": "Evaluation",
+  "right_panel.changes": "Changes",
   "right_panel.preview": "Preview",
   "agent_workflow.title": "Agent Workflow",
   "agent_workflow.count": "{{count}} agents",
@@ -689,14 +690,12 @@
   "transcript.tool": "[Tool:{{status}}] {{tool}}",
   "version.core_unknown": "Core unavailable",
   "version.overlay": "Overlay v{{version}}",
-  "workspace.close": "Close workspace",
   "workspace.diff": "Diff",
   "workspace.file": "File",
   "workspace.file_empty": "Click a file link in the timeline to preview it here.",
   "workspace.file_loading": "Loading file…",
   "workspace.file_binary": "Binary file — preview not supported.",
   "workspace.file_error": "Failed to load file: {{message}}",
-  "workspace.toggle": "Toggle workspace",
   "workflow.architect": "Architect",
   "workflow.architect_empty": "No architect decisions have been recorded yet.",
   "workflow.architect_contracts": "contracts",

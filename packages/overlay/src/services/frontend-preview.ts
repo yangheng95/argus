@@ -1,6 +1,6 @@
 import { apiJson, getServerUrl } from "./api";
 
-export type RightPanelTab = "workflow" | "inspector" | "preview";
+export type RightPanelTab = "plan" | "evaluation" | "changes" | "preview";
 
 export type FrontendPreviewSource = "delivery" | "port_probe";
 
@@ -25,7 +25,7 @@ export function previewRequestKey(taskID: string | undefined, snapshotVersion: s
 
 export function nextTabForPreviewResolution(input: PreviewAutoActivationInput): RightPanelTab {
   if (input.manualKey === input.requestKey) return input.activeTab;
-  if (input.activeTab === "inspector" && input.resolution?.url) return "preview";
+  if (input.activeTab === "evaluation" && input.resolution?.url) return "preview";
   return input.activeTab;
 }
 

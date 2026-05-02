@@ -138,6 +138,8 @@ type CardRole = "user" | "system" | "execution" | "review";
 
 ### Phase B - 右栏 IA 收敛为持久三列
 
+状态：已实施。代码提交范围包括右栏 `plan / evaluation / changes / preview` 持久 tab、workspace 迁移到 `changes`、删除 chat workspace toggle/resizer 与 `workspacePanelHeight` 设置、`frontend-preview` 自动切换改为 `evaluation -> preview`，以及 `layout-shell.test.ts` / `frontend-preview.test.ts` / `delivery-panel-mount.test.ts` 回归测试。
+
 文件：
 
 - `packages/overlay/src/index.html`
@@ -150,6 +152,7 @@ type CardRole = "user" | "system" | "execution" | "review";
 - `packages/overlay/src/i18n/zh-CN.json`
 - `packages/overlay/test/frontend-preview.test.ts`
 - `packages/overlay/test/delivery-panel-mount.test.ts`
+- `packages/overlay/test/layout-shell.test.ts`
 
 动作：
 
@@ -161,7 +164,7 @@ type CardRole = "user" | "system" | "execution" | "review";
 6. `nextTabForPreviewResolution()` 从 `evaluation` 自动切 `preview`，不再引用 `inspector`。
 7. Board/Interaction/Delivery 挂入 `evaluation`。
 8. FilesSection/ChangesPanel 和 WorkspacePanel 挂入 `changes`。
-9. `workflow` / `inspector` 字面量全仓 grep 归零，除历史文档外不保留。
+9. `workflow` / `inspector` 的右栏 tab 字面量归零；业务域名里的 workflow 文案和类型保持不误删。
 
 测试：
 
@@ -342,15 +345,15 @@ A token/role -> B IA/layout -> C task status -> D cards -> E composer -> F panel
 
 - [x] 不存在 `--card-stage-*` / inline `--card-stage`。
 - [x] `!important` <= 30。
-- [ ] 不存在 `workspace-mount[hidden]`。
-- [ ] `solidWorkspaceMount` 不在 `chatSection` 内。
-- [ ] `RightPanelTab` 只包含 `plan / evaluation / changes / preview`。
-- [ ] 代码中无 `inspector` / `workflow` UI tab 字面量。
+- [x] 不存在 `workspace-mount[hidden]`。
+- [x] `solidWorkspaceMount` 不在 `chatSection` 内。
+- [x] `RightPanelTab` 只包含 `plan / evaluation / changes / preview`。
+- [x] 代码中无 `inspector` / `workflow` UI tab 字面量。
 - [ ] TaskStatusHeader 只有一个挂载点，且不在 chat header。
 - [ ] 无 `.chat-compose-meta` / `.chat-icon-col`。
 - [ ] ChangesPanel tab 切换不销毁 group chunk。
 - [ ] MemoryPanel / LogViewer 不在本方案中误删。
-- [x] Phase A 新增/修改行为有测试。
+- [x] Phase A / Phase B 新增和修改行为有测试。
 
 ## 5. 风险与拦截
 

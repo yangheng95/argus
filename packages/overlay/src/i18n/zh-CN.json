@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "031d7b08da5d3882"
+    "panel_revision": "5a45bd266f0486dd"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -538,9 +538,10 @@
   "section.delivery": "交付",
   "section.criteria": "评估标准",
   "section.files": "文件变更",
-  "right_panel.tabs": "工作区和预览标签",
-  "right_panel.workflow": "工作流",
-  "right_panel.inspector": "工作区",
+  "right_panel.tabs": "计划、评估、变更和预览标签",
+  "right_panel.plan": "计划",
+  "right_panel.evaluation": "评估",
+  "right_panel.changes": "变更",
   "right_panel.preview": "预览",
   "agent_workflow.title": "Agent 工作流",
   "agent_workflow.count": "{{count}} 个 Agent",
@@ -689,14 +690,12 @@
   "transcript.tool": "[工具:{{status}}] {{tool}}",
   "version.core_unknown": "Core 不可用",
   "version.overlay": "Overlay v{{version}}",
-  "workspace.close": "关闭工作区",
   "workspace.diff": "差异",
   "workspace.file": "文件",
   "workspace.file_empty": "点击时间线中的文件链接后，可在此处预览。",
   "workspace.file_loading": "加载文件中…",
   "workspace.file_binary": "二进制文件，无法预览。",
   "workspace.file_error": "加载文件失败：{{message}}",
-  "workspace.toggle": "切换工作区",
   "workflow.architect": "架构协同",
   "workflow.architect_empty": "尚未记录架构决策。",
   "workflow.architect_contracts": "契约",

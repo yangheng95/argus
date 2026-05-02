@@ -38,19 +38,19 @@ test("structured preview URL rejects non-loopback URLs", () => {
   })).toBeNull();
 });
 
-test("auto activation only moves inspector to preview for the current unmodified key", () => {
+test("auto activation only moves evaluation to preview for the current unmodified key", () => {
   expect(nextTabForPreviewResolution({
-    activeTab: "inspector",
+    activeTab: "evaluation",
     manualKey: "",
     requestKey: "task:1",
     resolution: { url: "http://127.0.0.1:5173/", source: "port_probe", port: 5173 },
   })).toBe("preview");
   expect(nextTabForPreviewResolution({
-    activeTab: "inspector",
+    activeTab: "evaluation",
     manualKey: "task:1",
     requestKey: "task:1",
     resolution: { url: "http://127.0.0.1:5173/", source: "port_probe", port: 5173 },
-  })).toBe("inspector");
+  })).toBe("evaluation");
   expect(nextTabForPreviewResolution({
     activeTab: "preview",
     manualKey: "",

@@ -272,13 +272,20 @@ function resizePane(
   }
 
  // side === "right"
-  const workspaceMain = document.getElementById("workspaceMain");
-  const rect = workspaceMain?.getBoundingClientRect();
+  const panelBody = document.getElementById("panelBody");
+  const rect = panelBody?.getBoundingClientRect();
   if (!rect) return;
+  const { sidebar } = resolvedPaneWidths(state);
+  const leftHandle = state.sidebarCollapsed
+    ? 0
+    : paneHandleWidth(document.getElementById("leftPaneResizer"));
   const rightHandle = paneHandleWidth(
     document.getElementById("rightPaneResizer"),
   );
-  const max = Math.max(railMin, rect.width - rightHandle - chatMin);
+  const max = Math.max(
+    railMin,
+    rect.width - sidebar - leftHandle - rightHandle - chatMin,
+  );
   const newSectionsWidth = Math.round(
     clampNumber(rect.right - clientX, railMin, max),
   );

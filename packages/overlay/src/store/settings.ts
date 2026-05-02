@@ -29,7 +29,6 @@ export interface OverlaySettings {
   sidebarCollapsed: boolean;
   sidebarWidth: number | null;
   sectionsWidth: number | null;
-  workspacePanelHeight: number | null;
   opacity: number;
   zoom: number;
   theme: string;
@@ -125,7 +124,6 @@ export const DEFAULT_SETTINGS: OverlaySettings = {
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
-  workspacePanelHeight: null,
   opacity: 0.99,
   zoom: 1,
   theme: DEFAULT_THEME,
@@ -179,7 +177,6 @@ export function applySettings(input: Partial<OverlaySettings>): void {
     sidebarCollapsed: input?.sidebarCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
     sectionsWidth: sanitizePaneWidth(input?.sectionsWidth),
-    workspacePanelHeight: sanitizePaneWidth(input?.workspacePanelHeight),
     opacity: sanitizeOpacity(input?.opacity),
     zoom: sanitizeZoom(input?.zoom),
     theme: sanitizeTheme(input?.theme),
@@ -220,11 +217,7 @@ export function saveSettings(): void {
   } else {
     localStorage.removeItem("oc_sections_width");
   }
-  if (s.workspacePanelHeight != null) {
-    localStorage.setItem("oc_workspace_height", String(s.workspacePanelHeight));
-  } else {
-    localStorage.removeItem("oc_workspace_height");
-  }
+  localStorage.removeItem("oc_workspace_height");
   localStorage.setItem("oc_opacity", String(s.opacity));
   localStorage.setItem("oc_zoom", String(s.zoom));
   localStorage.setItem("oc_theme", s.theme || DEFAULT_SETTINGS.theme);
@@ -287,9 +280,6 @@ export function loadSettings(): void {
     sectionsWidth: sanitizePaneWidth(
       localStorage.getItem("oc_sections_width"),
     ),
-    workspacePanelHeight: sanitizePaneWidth(
-      localStorage.getItem("oc_workspace_height"),
-    ),
     opacity: sanitizeOpacity(localStorage.getItem("oc_opacity")),
     zoom: sanitizeZoom(localStorage.getItem("oc_zoom")),
     theme: sanitizeTheme(localStorage.getItem("oc_theme")),
@@ -339,11 +329,10 @@ export function settingsDirectory(settings: Partial<OverlaySettings> | null | un
 
 export function bootstrapOverlaySettings(
   input: Partial<OverlaySettings> = settingsStore,
-): Omit<OverlaySettings, "savedDirectory" | "workspaceEpoch" | "directoryEpoch" | "workspacePanelHeight"> & {
+): Omit<OverlaySettings, "savedDirectory" | "workspaceEpoch" | "directoryEpoch"> & {
   directory?: string;
   sidebarWidth?: number;
   sectionsWidth?: number;
-  workspacePanelHeight?: number;
   workspaceTaskID?: string;
   workspaceDirectory?: string;
 } {
@@ -357,7 +346,6 @@ export function bootstrapOverlaySettings(
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,
     sectionsWidth: input.sectionsWidth || undefined,
-    workspacePanelHeight: input.workspacePanelHeight || undefined,
     opacity: input.opacity ?? DEFAULT_SETTINGS.opacity,
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
     theme: input.theme ?? DEFAULT_SETTINGS.theme,
