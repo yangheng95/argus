@@ -18,7 +18,7 @@
   flex-shrink: 0;
 }
 
-.ext-group-head.oc-surface-header {
+.oc-surface-header[data-surface="settings-group"] {
   width: 100%;
 }
 

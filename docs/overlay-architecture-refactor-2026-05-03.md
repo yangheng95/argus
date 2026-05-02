@@ -135,6 +135,10 @@ Progress log:
   `oc-surface-header` / `oc-surface-header__title` /
   `oc-surface-header__actions` instead of keeping separate
   `.ext-group-head*` typography and action-cluster CSS in God CSS.
+- 2026-05-03: Added `SurfaceHeader` as the component-level owner for
+  shared header markup. `SkillMarketPanel` no longer hand-writes
+  `oc-surface-header` title/action structure; it renders three
+  `SurfaceHeader` instances with the `settings-group` surface variant.
 
 Trigger: user feedback (2026-05-03):
 
