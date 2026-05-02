@@ -58,6 +58,11 @@ Progress log:
   `styles/primitives/button.css` are on the runtime path, and the
   `titlebar-btn` TSX caller budget dropped from 3 to 0
   (aggregate legacy button budget 78 to 75).
+- 2026-05-03: Titlebar menu triggers and the logs icon now render
+  through `Button`, with `styles/surfaces/titlebar.css` owning only
+  the titlebar-specific compact/status behavior. This removes the
+  final `titlebar-menubar-trigger` and `titlebar-status-icon` TSX
+  callers and drops the aggregate legacy button budget from 75 to 73.
 
 Trigger: user feedback (2026-05-03):
 

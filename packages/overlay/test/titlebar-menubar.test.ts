@@ -125,7 +125,7 @@ test(
               "[data-menu-trigger]",
               ".titlebar-status-chip",
               ".titlebar-setup-cta",
-              ".titlebar-status-icon",
+              '[data-ui="titlebar-status-icon"]',
               ".titlebar-window-controls button",
             ]
             const nodes = selectors
@@ -508,7 +508,7 @@ test(
       const controlsWithMargins = await page.evaluate(() => {
         const selectors = [
           ".brand-guide",
-          ".titlebar-menubar-trigger",
+          '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".sidebar-btn-primary",
           ".sidebar-tool",
@@ -544,7 +544,7 @@ test(
           { selector: ".chat-header", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".sections-header", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".brand-guide", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
-          { selector: ".titlebar-menubar-trigger", props: ["paddingLeft", "paddingRight"], max: 8 },
+          { selector: '[data-ui="titlebar-menubar-trigger"]', props: ["paddingLeft", "paddingRight"], max: 8 },
           { selector: ".sidebar-btn-primary", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".sidebar-tool", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
           { selector: ".task-dir-shell", props: ["columnGap", "paddingLeft", "paddingRight"], max: 4 },
@@ -580,7 +580,7 @@ test(
       const controlsWithBorders = await page.evaluate(() => {
         const selectors = [
           ".brand-guide",
-          ".titlebar-menubar-trigger",
+          '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".sidebar-btn-primary",
           ".sidebar-tool",
@@ -701,7 +701,7 @@ test(
       const nonPrimaryControlsWithBackgrounds = await page.evaluate(() => {
         const selectors = [
           ".brand-guide",
-          ".titlebar-menubar-trigger",
+          '[data-ui="titlebar-menubar-trigger"]',
           ".titlebar-btn",
           ".sidebar-tool",
           ".sidebar-toolset",
