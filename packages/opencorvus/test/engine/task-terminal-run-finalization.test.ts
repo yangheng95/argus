@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { EngineArtifactTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { findRun, findTask } from "../../src/engine/store"
 import { updateTask } from "../../src/engine/state"
+import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 
@@ -13,11 +14,22 @@ function seedRunningTaskRun(input?: { taskCompleted?: number }) {
   const now = Date.now()
   const taskID = `task_terminal_run_${now}_${Math.random().toString(36).slice(2)}`
   const runID = `run_terminal_${now}_${Math.random().toString(36).slice(2)}`
+  const projectID = `project_terminal_${now}_${Math.random().toString(36).slice(2)}`
   Database.transaction((db) => {
+    db.insert(ProjectTable)
+      .values({
+        id: projectID,
+        worktree: process.cwd(),
+        name: "terminal run test",
+        sandboxes: "[]",
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
     db.insert(EngineTaskTable)
       .values({
         id: taskID,
-        project_id: "project_terminal_run_test",
+        project_id: projectID,
         source: "test",
         title: "terminal task run convergence",
         request: "close the active run when the task reaches terminal facts",

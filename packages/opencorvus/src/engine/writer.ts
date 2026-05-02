@@ -37,6 +37,7 @@ import {
   listGoalWorkspacesForProject,
   listGoalRunsForTask,
   listLiveExecutorSessionsForProject,
+  listLiveExecutorSessionsForTask,
   listLiveGoalRunsForProject,
   listLiveRunsForProject,
   type ExecutorSessionRow,
@@ -251,9 +252,7 @@ export interface AbortLiveResult {
  * implementation used:
  *   - goal_runs with a resettable status (skips completed/aborted/failed)
  *   - runs in any live status (LIVE_RUN_STATUSES)
- *   - executor_sessions transitively aborted by goal_run/run termination
- *     are NOT handled here — callers that need to also abort the
- *     coordinator run's executor_session should pass `abortRunSession=true`.
+ *   - executor_sessions attached to the task
  *
  * Goal workspaces are goal-scoped, not goal_run-scoped. By default terminal
  * task-level aborts clean the owning goals' workspaces.
@@ -273,13 +272,15 @@ export async function abortLiveExecutionForTask(input: {
   const runRows = input.includeRuns === false
     ? []
     : findRuns(input.taskID).filter((row) => LIVE_RUN_STATUSES.includes(row.status))
+  const sessionRows = listLiveExecutorSessionsForTask(input.taskID)
+  const executorSessions = abortExecutorSessions(sessionRows)
   const goalRuns = await abortGoalRuns(goalRunRows, { reason: input.reason })
   const cleanupGoals = input.cleanupGoalWorkspaces ?? true
     ? listGoals(input.taskID).map((goal) => goal.id)
     : []
   await cleanupGoalWorkspaces(cleanupGoals)
   const runs = await abortRuns(runRows, input.reason)
-  return { goalRuns, runs, executorSessions: 0 }
+  return { goalRuns, runs, executorSessions }
 }
 
 /**

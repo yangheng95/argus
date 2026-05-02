@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
+import { EngineExecutorSessionTable, EngineTaskTable } from "../../src/engine/engine.sql"
 import { Event } from "../../src/engine/model"
 import { EngineProtocol } from "../../src/engine/protocol"
 import { Identifier } from "../../src/id/id"
@@ -8,7 +8,7 @@ import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { SessionStatus } from "../../src/session/status"
 import { Message } from "../../src/session/message"
-import { Database } from "../../src/storage/db"
+import { Database, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -379,6 +379,86 @@ describe("task conversation routes", () => {
         // (loop.ts:587). Update the assertion to match the abort
         // path's actual state.
         expect(SessionStatus.get(build.id).type).toBe("terminal")
+      },
+    })
+  })
+
+  test("POST /task/:taskID/cancel aborts the task session tree and live executor sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const executorSessionID = Identifier.ascending("exec")
+        const now = Date.now()
+        const root = await Session.create({
+          kind: "root",
+          title: "task root",
+        })
+        const requirements = await Session.create({
+          kind: "requirements",
+          parentID: root.id,
+          title: "requirements",
+        })
+        const build = await Session.create({
+          kind: "build",
+          parentID: requirements.id,
+          title: "build",
+        })
+
+        Database.use((db) => {
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: root.id,
+            source: "panel",
+            title: "cancel task",
+            request: "cancel task",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+          }).run()
+          db.insert(EngineExecutorSessionTable).values({
+            id: executorSessionID,
+            task_id: taskID,
+            run_id: runID,
+            provider: "mirrorcode",
+            protocol: "session-prompt",
+            protocol_version: "v1",
+            transport: "inproc",
+            status: "active",
+            time_created: now,
+            time_updated: now,
+          }).run()
+        })
+        SessionStatus.set(root.id, { type: "streaming" })
+        SessionStatus.set(requirements.id, { type: "streaming" })
+        SessionStatus.set(build.id, { type: "streaming" })
+
+        const response = await app.request(`/task/${taskID}/cancel`, {
+          method: "POST",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toBe(true)
+        expect(SessionStatus.get(root.id)).toEqual({ type: "terminal", reason: "aborted" })
+        expect(SessionStatus.get(requirements.id)).toEqual({ type: "terminal", reason: "aborted" })
+        expect(SessionStatus.get(build.id)).toEqual({ type: "terminal", reason: "aborted" })
+
+        const executorSession = Database.use((db) =>
+          db.select().from(EngineExecutorSessionTable)
+            .where(eq(EngineExecutorSessionTable.id, executorSessionID))
+            .get(),
+        )
+        expect(executorSession?.status).toBe("aborted")
+        expect(executorSession?.time_completed).toBeNumber()
       },
     })
   })
