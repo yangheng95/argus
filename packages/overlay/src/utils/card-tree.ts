@@ -13,6 +13,7 @@
 import { cardTreeStore } from "../store/card-tree";
 import type { CardNode, CardKind, CardStatus, BoundaryPart, StepPayload } from "../store/card-tree";
 import { toolNameKey, displayToolIcon, displayToolDetail } from "./tool";
+import { extractTodos } from "./todos";
 
 export type { CardNode, CardKind, CardStatus, StepPayload, BoundaryPart } from "../store/card-tree";
 
@@ -339,21 +340,7 @@ function extractTodoList(part: any): any[] | null {
   if (!part || part.type !== "tool") return null;
   const key = toolNameKey(part.tool || "");
   if (!TODO_TOOLS.has(key)) return null;
-  const state = part.state || {};
-  const inputTodos = state.input && Array.isArray(state.input.todos) ? state.input.todos : null;
-  if (inputTodos) return inputTodos;
-  const metaTodos = state.metadata && Array.isArray(state.metadata.todos) ? state.metadata.todos : null;
-  if (metaTodos) return metaTodos;
-  const out = typeof state.output === "string" ? state.output.trim() : "";
-  if (out.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(out);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      // streaming / truncated — ignore
-    }
-  }
-  return null;
+  return extractTodos(part.state || {});
 }
 
 interface TodoHit { time: number; index: number; todos: any[] }

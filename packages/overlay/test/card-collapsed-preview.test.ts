@@ -359,4 +359,38 @@ describe("collectTodoSummary", () => {
     expect(s.completed).toBe(1);
     expect(s.current).toBe("read2");
   });
+
+  test("uses committed todo metadata instead of stale input snapshot", () => {
+    const node: any = {
+      id: "a",
+      kind: "agent",
+      title: "Requirements",
+      time: 1,
+      parts: [
+        {
+          type: "tool",
+          tool: "TodoWrite",
+          state: {
+            input: {
+              todos: [
+                { content: "req 1", status: "pending" },
+                { content: "req 2", status: "pending" },
+              ],
+            },
+            metadata: {
+              todos: [
+                { content: "req 1", status: "completed" },
+                { content: "req 2", status: "in_progress", activeForm: "Checking req 2" },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const s = collectTodoSummary(node)!;
+    expect(s.total).toBe(2);
+    expect(s.completed).toBe(1);
+    expect(s.inProgress).toBe(1);
+    expect(s.current).toBe("Checking req 2");
+  });
 });

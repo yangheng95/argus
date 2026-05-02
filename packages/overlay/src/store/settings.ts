@@ -362,6 +362,7 @@ export function bootstrapOverlaySettings(
     zoom: input.zoom ?? DEFAULT_SETTINGS.zoom,
     theme: input.theme ?? DEFAULT_SETTINGS.theme,
     locale: input.locale ?? DEFAULT_SETTINGS.locale,
+    desktopNotifications: input.desktopNotifications ?? DEFAULT_SETTINGS.desktopNotifications,
     directory: input.savedDirectory || undefined,
     workspaceTaskID: input.workspaceTaskID || undefined,
     workspaceDirectory: input.workspaceDirectory || undefined,
