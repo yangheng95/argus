@@ -4038,11 +4038,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 .chat-task-status .status-copy {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: baseline;
   justify-content: center;
-  gap: calc(1px * var(--ui-scale));
-  line-height: 1.05;
+  gap: calc(6px * var(--ui-scale));
+  line-height: 1.2;
 }
 
 .chat-task-status .status-label {
@@ -9680,7 +9680,7 @@ body[data-resizing="true"] * {
   min-width: 0;
   flex: 1 1 auto;
   font-size: calc(var(--title-size) + 0.5px);
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text-strong);
   letter-spacing: 0.02em;
   line-height: 1.2;
@@ -10625,17 +10625,23 @@ body[data-resizing="true"] * {
   color: var(--text-strong);
 }
 
+/* iter37: deleted the lying pill-chrome canonical that lived
+   here (font-tiny + uppercase + 999px radius + warn-dim bg
+   + 8px pill padding). The late-tail multi-selector at
+   line ~11958 — shared with .extension-status / .llm-status
+   — REWRITES `.gwg-priority-badge` to a dot-prefix status
+   row (border: none, border-radius: 0, background:
+   transparent, padding-left: 10px, ::before 5px dot). The
+   pill chrome never rendered. The actual warn-tone color
+   lives in the solo rule near line ~12053; the shared
+   dot-prefix layout is the single source for layout. */
 .gwg-priority-badge {
+  flex-shrink: 0;
+  text-transform: uppercase;
   font-size: var(--ui-font-tiny);
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--warn-dim) 88%, transparent);
   color: var(--warn);
-  flex-shrink: 0;
-  line-height: 1.4;
 }
 
 .gwg-revision {
@@ -12050,9 +12056,11 @@ body[data-resizing="true"] * {
   background: color-mix(in srgb, var(--warn) 82%, transparent);
 }
 
-.gwg-priority-badge {
-  color: var(--warn);
-}
+/* iter37: `.gwg-priority-badge` warn-tone color folded into
+   the canonical near line ~10628 alongside the typography
+   bits (font-size / weight / uppercase / letter-spacing).
+   The shared dot-prefix layout still lives in the
+   multi-selector partner at ~11958. */
 
 /* ==========================================================================
    Overlay Workbench Redesign
@@ -12124,9 +12132,9 @@ body[data-theme="dark"] {
   --card-fill-hover: var(--surface-hover);
   --font: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
   --mono: "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
-  --title-weight: 650;
+  --title-weight: 700;
   --title-track: 0;
-  --subhead-weight: 650;
+  --subhead-weight: 700;
   --subhead-track: 0;
   --ui-font-display: calc(14px * var(--ui-scale));
   --ui-font-heading: calc(13px * var(--ui-scale));
