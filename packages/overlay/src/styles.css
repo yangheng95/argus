@@ -6335,21 +6335,29 @@ select.field-input option {
   width: 100%;
 }
 
-/* ── Buttons ── */
+/* ── Buttons ──
+   Action labels are Title Case (the i18n strings already are: "Copy
+   All", "Set up", "Refresh", …). The primitive used to force-uppercase
+   them with `text-transform: uppercase` + `letter-spacing: 0.05em`,
+   which clashed with every section title / tab / field label across
+   the overlay (all Title Case) and contradicted the calm/flat design
+   direction of recent commits. Tier-3 status pills (verdict-pill,
+   req-type, req-status, gwg-step-status, …) keep their own uppercase
+   styling — those are color-coded short-word chips where the pill
+   convention reads as a status tag, not as a screaming action. */
 .btn {
   padding: var(--ui-btn-padding-y) var(--ui-btn-padding-x);
   min-height: calc(32px * var(--ui-scale));
   border-radius: 999px;
   font-size: var(--ui-font-control);
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--border);
   transition: all 80ms;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   background: var(--card-fill);
   color: var(--text-strong);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 .btn-ghost {
