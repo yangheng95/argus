@@ -648,7 +648,7 @@
   "task.status.planning": "Planning",
   "task.status.queued": "Queued",
   "task.status.running": "Running",
-  "time.duration.hour_minute": "{{hours}}h {{minutes}}m",
+  "time.duration.hour_minute_second": "{{hours}}h {{minutes}}m {{seconds}}s",
   "time.duration.minute_second": "{{minutes}}m {{seconds}}s",
   "time.duration.second": "{{seconds}}s",
   "time.relative.just_now": "just now",
