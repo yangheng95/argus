@@ -59,6 +59,8 @@
 
 **15.** 禁止任何合成消息、伪消息、隐藏消息或只给模型/只给界面看的消息分叉。所有对话都必须走自然角色间对话：用户、编排器、agent、tool/result 等真实参与者各自发真实消息；消息流必须显示所有消息，禁止用 visibility/audience/synthetic/ignored 等标记制造双路消息。
 
+**15a.** 用户消息是任务继续推进的真实事件，不是状态机输入。任何任务生命周期展示状态（active/cancelled/completed/failed 等）都只能作为界面和调度提示，禁止作为消息可达性 gate；收到用户消息时必须保留原 conversation history、decision-log、goal/run/artifact 上下文，并让同一任务继续被编排器读取和决策，禁止清空 context 或要求用户先手动 retry。
+
 ---
 
 ## 三、代码质量与技术债

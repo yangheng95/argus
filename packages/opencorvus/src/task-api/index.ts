@@ -58,6 +58,7 @@ import {
 import { orchestratorState } from "@/engine/orchestrator-state"
 import { mergeTaskChecks, writeTaskChecks } from "@/engine/checks"
 import { dispatchTaskLoop, reorderQueuedTasksForCwd } from "@/engine/queue"
+import { openTaskForOperatorMessage } from "@/engine/task-message-open"
 import { OrchestratorEventNote } from "@/orchestrator/agent"
 import { updateGoal as updateGoalRow, deleteGoal as deleteGoalRow } from "@/engine/persist"
 import { EngineInteraction } from "@/engine/interaction"
@@ -267,6 +268,7 @@ async function continueTaskMessage(
         ...attachments.map((ref) => `- ${ref.filename ?? ref.sha} — ${ref.mime} — url: ${ref.url}`),
       ].join("\n")
     : undefined
+  const openedTask = await openTaskForOperatorMessage(task)
 
   // User messages must re-enter the task lifecycle shell. Calling the
   // Orchestrator directly bypasses loop/pool coordination and can strand the
@@ -283,7 +285,7 @@ async function continueTaskMessage(
   return {
     mode: "scheduler" as const,
     resumed: true,
-    status: deriveTaskStatus(task) as string,
+    status: deriveTaskStatus(openedTask) as string,
     user_message: persisted,
   }
 }
@@ -1370,33 +1372,18 @@ export namespace EngineService {
     if (!run) {
       return { resumed: false, status: deriveTaskStatus(task) }
     }
-    if (isTaskCompleted(task) || isTaskCancelled(task)) {
-      return { resumed: false, status: deriveTaskStatus(task) }
-    }
+    const openedTask = await openTaskForOperatorMessage(task, "Operator note opened task")
     if (["accepted", "running"].includes(run.status)) {
       return { resumed: false, status: run.status }
     }
-    const nextRunID = await EngineRuntime.createOperatorRun(task, run, note)
+    const nextRunID = await EngineRuntime.createOperatorRun(openedTask, run, note)
     void dispatchTaskLoop({ taskID: task.id, event: { note: OrchestratorEventNote.retry(task) } })
     return { resumed: true, status: "active" as const }
   }
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
-    const task = requireTask(taskID)
-
-    if (isTaskFailed(task) || isTaskCancelled(task)) {
-      // Symmetric guard for both terminal-error states. Without the cancelled
-      // branch the message would persist via continueTaskMessage and trigger
-      // dispatchTaskLoop, but the loop has already torn down — the message
-      // strands in DB with no listener (the audit's Q1 finding).
-      const reason = isTaskCancelled(task) ? "cancelled" : "failed"
-      return {
-        kind: "note" as const,
-        message: `Task is ${reason}. Retry the task before sending more guidance. This message was not recorded.`,
-        should_resume: false,
-      }
-    }
+    requireTask(taskID)
 
     // Decode base64 attachments once, write bytes to AttachmentStore, and carry
     // references downstream. Mirrors createTask so that follow-up messages and
@@ -1468,11 +1455,11 @@ export namespace EngineService {
   export async function injectMessage(taskID: string, message: string) {
     const task = requireTask(taskID)
     const run = findActiveRunForTask(task.id)
-    if (!run) throw new Error(`No active run for task ${taskID}`)
-    const resumed = await injectRunningTaskMessage(task, run, message)
+    const resumed = run ? await injectRunningTaskMessage(task, run, message) : false
     if (!resumed) {
       await appendTaskSessionMessage(task, message)
     }
+    await openTaskForOperatorMessage(requireTask(taskID))
     void dispatchTaskLoop({
       taskID,
       event: {

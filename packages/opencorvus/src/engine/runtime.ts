@@ -299,18 +299,13 @@ export namespace EngineRuntime {
   }
 
   export async function createOperatorRun(task: TaskRow, run: RunRow, note: string) {
-    // Phase-6-f-2: operator notes are allowed on failed tasks (they revive
-    // the task via a new run) but not on completed / cancelled tasks.
-    const { isTaskCompleted, isTaskCancelled, deriveTaskStatus } = await import("./task-status")
-    if (isTaskCompleted(task) || isTaskCancelled(task)) {
-      throw new Error(`Cannot create operator run: task ${task.id} is in terminal state "${deriveTaskStatus(task)}"`)
-    }
+    const { openTaskForOperatorMessage } = await import("./task-message-open")
+    const openedTask = await openTaskForOperatorMessage(task, "Operator note opened task")
     const { createRun } = await import("./writer")
-    const { updateTask } = await import("./state")
     const { findActivePlanForTask } = await import("./store")
     const created = createRun({
-      taskID: task.id,
-      planVersionID: findActivePlanForTask(task.id)?.id ?? null,
+      taskID: openedTask.id,
+      planVersionID: findActivePlanForTask(openedTask.id)?.id ?? null,
       sessionID: run.session_id ?? null,
       executor: run.executor,
       status: "queued",
@@ -322,15 +317,6 @@ export namespace EngineRuntime {
       },
       summary: "Run queued from operator note",
     })
-    await updateTask(
-      task,
-      {
-        status: "active",
-        error: null,
-        time_completed: null,
-      },
-      "Operator note queued a follow-up run",
-    )
     return created.id
   }
 
