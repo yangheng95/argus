@@ -134,6 +134,26 @@ describe("extras execute-return normalisation (integration via resolveTools)", (
     expect(Object.keys(extras).sort()).toEqual(["full", "partial", "plain"])
     SessionLoop.setExtraTools(sessionID, undefined)
   })
+
+  test("normalizes multimodal extra-tool results without stringifying attachments into output", () => {
+    const dataUrl = "data:image/png;base64," + "a".repeat(1024)
+    const normalized = SessionLoop.normalizeExtraToolResult({
+      text: "{\"ok\":true,\"path\":\"shot.png\"}",
+      attachments: [{ type: "file", mime: "image/png", url: dataUrl }],
+    })
+
+    expect(normalized.output).toBe("{\"ok\":true,\"path\":\"shot.png\"}")
+    expect(normalized.output).not.toContain("data:image/png;base64")
+    expect(normalized.attachments).toEqual([{ type: "file", mime: "image/png", url: dataUrl }])
+  })
+
+  test("rejects attachment-only extra-tool results instead of serializing bytes as text", () => {
+    expect(() =>
+      SessionLoop.normalizeExtraToolResult({
+        attachments: [{ type: "file", mime: "image/png", url: "data:image/png;base64,UE5H" }],
+      }),
+    ).toThrow("attachments without string output/text")
+  })
 })
 
 describe("extra tool provider schema preparation", () => {
@@ -196,6 +216,43 @@ describe("extra tool provider schema preparation", () => {
         tool: { description: "broken" } as any,
       }),
     ).toThrow("missing inputSchema")
+  })
+})
+
+describe("SessionLoop.summarizeModelMessagePayloads", () => {
+  test("reports the largest model-message parts without logging payload bytes", () => {
+    const rows = SessionLoop.summarizeModelMessagePayloads([
+      { role: "user", content: [{ type: "text", text: "small" }] },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolName: "verify_page_integrity",
+            toolCallId: "call-1",
+            output: { type: "text", value: "x".repeat(500) },
+          },
+          { type: "text", text: "tiny" },
+        ],
+      },
+      {
+        role: "user",
+        content: [{ type: "file", mediaType: "image/png", data: "y".repeat(300) }],
+      },
+    ] as any)
+
+    expect(rows[0]).toMatchObject({
+      role: "tool",
+      type: "tool-result",
+      toolName: "verify_page_integrity",
+      toolCallId: "call-1",
+    })
+    expect(rows[1]).toMatchObject({
+      role: "user",
+      type: "file",
+      mediaType: "image/png",
+    })
+    expect(JSON.stringify(rows)).not.toContain("yyyyyyyyyyyyyyyy")
   })
 })
 
