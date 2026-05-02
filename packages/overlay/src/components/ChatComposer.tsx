@@ -13,6 +13,7 @@ import {
   wouldExceedAggregateLimit,
 } from "../services/chat-attach-limits";
 import { fileToDataUrl } from "../services/file-to-data-url";
+import { Button } from "./ui/Button";
 
 // ── Types ──
 
@@ -470,10 +471,13 @@ export function ChatComposer(props: ChatComposerProps) {
 
         {/* Icon column: attach / web search / expand */}
         <div class="chat-icon-col" data-disabled={!props.enabled ? "true" : undefined}>
-          <button
+          <Button
             type="button"
             id="btnChatAttach"
-            class="chat-toolbar-btn"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-ui="chat-toolbar-button"
             title={t("chat.attach_title")}
             aria-label={t("chat.attach_title")}
             onClick={() => fileInputRef?.click()}
@@ -487,11 +491,14 @@ export function ChatComposer(props: ChatComposerProps) {
                 stroke-linejoin="round"
               />
             </svg>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             id="btnWebSearch"
-            class="chat-toolbar-btn"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-ui="chat-toolbar-button"
             data-active={webSearch() ? "true" : undefined}
             title={t("chat.web_search_title")}
             aria-label={t("chat.web_search_title")}
@@ -509,10 +516,13 @@ export function ChatComposer(props: ChatComposerProps) {
               />
               <path d="M1.5 8h13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
             </svg>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            class="chat-toolbar-btn"
+            variant="ghost"
+            size="icon"
+            tone="neutral"
+            data-ui="chat-toolbar-button"
             data-active={expanded() ? "true" : undefined}
             title={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
             aria-label={expanded() ? t("chat.collapse_title") : t("chat.expand_title")}
@@ -531,7 +541,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </Show>
-          </button>
+          </Button>
         </div>
 
         {/* Send / Stop button */}
