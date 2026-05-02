@@ -54,3 +54,18 @@ test("Button primitive TypeScript API and CSS data variants stay in lockstep", (
   expect(cssDataValues(css, "size")).toEqual(sourceArray(source, "BUTTON_SIZES").sort());
   expect(cssDataValues(css, "tone")).toEqual(sourceArray(source, "BUTTON_TONES").sort());
 });
+
+test("Button solid tones keep readable foreground and dedicated hover chrome", () => {
+  const css = readFileSync(BUTTON_CSS, "utf8");
+
+  for (const tone of ["neutral", "accent", "danger"]) {
+    expect(css).toContain(`.oc-button[data-variant="solid"][data-tone="${tone}"]`);
+  }
+  expect(css).toMatch(
+    /\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]\s*\{[^}]*--oc-button-color:\s*var\(--surface\);/s,
+  );
+  expect(css).toMatch(
+    /\.oc-button\[data-variant="solid"\]\[data-tone="accent"\]:hover,[^}]*--oc-button-bg:\s*var\(--accent-hover\);/s,
+  );
+  expect(css).toContain(".oc-button:not([data-tone=\"danger\"]):not([data-variant=\"solid\"]):hover");
+});

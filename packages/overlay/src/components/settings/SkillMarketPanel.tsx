@@ -24,6 +24,7 @@ import {
   loadExtensions,
   loadSkillMarket,
 } from "../../services/extensions";
+import { Button } from "../ui/Button";
 
 // ── Types ──
 
@@ -314,13 +315,15 @@ export default function SkillMarketPanel() {
       <Show when={notice()}>
         <div class="config-status-box" data-status="error">
           {notice()}
-          <button
+          <Button
             type="button"
-            class="btn btn-ghost mini"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
             onClick={() => setNotice("")}
           >
             {t("common.dismiss")}
-          </button>
+          </Button>
         </div>
       </Show>
 
@@ -329,27 +332,31 @@ export default function SkillMarketPanel() {
         <header class="ext-group-head">
           <span class="ext-group-head-title">{t("skill.title")}</span>
           <span class="ext-group-head-actions">
-            <button type="button" class="btn btn-ghost mini" onClick={handleReloadSkills}>
+            <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleReloadSkills}>
               {t("common.reload")}
-            </button>
-            <button type="button" class="btn btn-ghost mini" onClick={handleOpenSkillDir}>
+            </Button>
+            <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleOpenSkillDir}>
               {t("skill.open_dir")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              class="btn btn-ghost mini"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               onClick={() => setShowAddSkill(!showAddSkill())}
             >
               {t("skill.add")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              class="btn btn-ghost mini danger"
+              variant="ghost"
+              size="sm"
+              tone="danger"
               disabled={removableSkills().length === 0}
               onClick={handleDeleteAllSkills}
             >
               {t("skill.delete_all")}
-            </button>
+            </Button>
           </span>
         </header>
         <div class="ext-group-body">
@@ -380,9 +387,9 @@ export default function SkillMarketPanel() {
                   onInput={(e) => setSkillForm("value", e.currentTarget.value)}
                 />
                 <Show when={skillForm.type === "path"}>
-                  <button type="button" class="btn btn-ghost mini" onClick={handleBrowseFolder}>
+                  <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleBrowseFolder}>
                     {t("skill.browse_folder")}
-                  </button>
+                  </Button>
                 </Show>
               </div>
             </label>
@@ -399,17 +406,19 @@ export default function SkillMarketPanel() {
               </select>
             </label>
             <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost" onClick={() => setShowAddSkill(false)}>
+              <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={() => setShowAddSkill(false)}>
                 {t("common.cancel")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                class="btn btn-primary"
+                variant="solid"
+                size="sm"
+                tone="accent"
                 disabled={!skillForm.value.trim()}
                 onClick={handleAddSkill}
               >
                 {t("skill.install")}
-              </button>
+              </Button>
             </div>
           </div>
         </Show>
@@ -428,9 +437,11 @@ export default function SkillMarketPanel() {
                     </div>
                     <div class="extension-row-actions">
                       <Show when={skillRemovable(item)}>
-                        <button
+                        <Button
                           type="button"
-                          class="btn btn-ghost mini danger"
+                          variant="ghost"
+                          size="sm"
+                          tone="danger"
                           title={t("skill.delete_button_title")}
                           aria-label={t("skill.delete_button_title")}
                           onClick={() =>
@@ -442,18 +453,20 @@ export default function SkillMarketPanel() {
                           }
                         >
                           {t("common.delete")}
-                        </button>
+                        </Button>
                       </Show>
                       <Show when={item.location && item.location !== "builtin"}>
-                        <button
+                        <Button
                           type="button"
-                          class="btn btn-ghost mini"
+                          variant="ghost"
+                          size="sm"
+                          tone="neutral"
                           title={t("skill.open_button_title")}
                           aria-label={t("skill.open_button_title")}
                           onClick={() => handleOpenSkill(item.location!)}
                         >
                           {t("common.open")}
-                        </button>
+                        </Button>
                       </Show>
                       <span class="extension-status" data-state="connected">
                         {item.builtin ? t("skill.builtin") : t("common.loaded")}
@@ -472,21 +485,25 @@ export default function SkillMarketPanel() {
         <header class="ext-group-head">
           <span class="ext-group-head-title">{t("mcp.title")}</span>
           <span class="ext-group-head-actions">
-            <button
+            <Button
               type="button"
-              class="btn btn-ghost mini"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               onClick={() => setShowAddMcp(!showAddMcp())}
             >
               {t("mcp.add_action")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              class="btn btn-ghost mini danger"
+              variant="ghost"
+              size="sm"
+              tone="danger"
               disabled={mcpEntries().length === 0}
               onClick={handleDeleteAllMcp}
             >
               {t("mcp.delete_all")}
-            </button>
+            </Button>
           </span>
         </header>
         <div class="ext-group-body">
@@ -549,17 +566,19 @@ export default function SkillMarketPanel() {
               </label>
             </Show>
             <div class="dialog-actions compact">
-              <button type="button" class="btn btn-ghost" onClick={() => setShowAddMcp(false)}>
+              <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={() => setShowAddMcp(false)}>
                 {t("common.cancel")}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                class="btn btn-primary"
+                variant="solid"
+                size="sm"
+                tone="accent"
                 disabled={!mcpForm.name.trim() || (mcpForm.type === "remote" ? !mcpForm.url.trim() : !mcpForm.command.trim())}
                 onClick={handleAddMcp}
               >
                 {t("mcp.add_action")}
-              </button>
+              </Button>
             </div>
           </div>
         </Show>
@@ -623,26 +642,30 @@ export default function SkillMarketPanel() {
                         <Show
                           when={installable}
                           fallback={
-                            <button
+                            <Button
                               type="button"
-                              class="btn btn-ghost mini"
+                              variant="ghost"
+                              size="sm"
+                              tone="neutral"
                               title={t("skill.market.open_site_title")}
                               aria-label={t("skill.market.open_site_title")}
                               onClick={() => handleOpenHomepage(item.homepage)}
                             >
                               {t("skill.market.open_site")}
-                            </button>
+                            </Button>
                           }
                         >
-                          <button
+                          <Button
                             type="button"
-                            class="btn btn-primary mini"
+                            variant="solid"
+                            size="sm"
+                            tone="accent"
                             title={t("skill.market.install_button_title")}
                             aria-label={t("skill.market.install_button_title")}
                             onClick={() => handleInstall(item)}
                           >
                             {t("skill.install")}
-                          </button>
+                          </Button>
                         </Show>
                       </div>
                     </div>
