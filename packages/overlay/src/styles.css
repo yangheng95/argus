@@ -5232,37 +5232,37 @@ code .file-link:hover {
   font-family: var(--mono);
 }
 
-/* ── Chat Input ── */
+/* ── Chat Input ──
+   Single source after iter17. User feedback (2026-05-02):
+   "把输入框的圆角也去掉" — also drop the chat input rounded
+   corners. The composer container used to be defined three
+   times — a chromed canonical here (16px radius via
+   `calc(20px * --ui-scale * 0.8)`, gradient bg, drop shadow,
+   ::before radial overlay), then a `.chat-input { … !important }`
+   override around line ~12476 that flipped scale to 1 and
+   set `border-radius: var(--panel-radius)` (= 10px), then a
+   third override around line ~12963 that re-set background +
+   margin/padding with !important. Same dual-source-with-late-
+   override anti-pattern collapsed for the shell containers in
+   iter14 / iter15 / iter16.
+
+   Folded into one block. Flat: `border-radius: 0`, no
+   gradient, no shadow, no decorative ::before overlay. The
+   focus-within ring stays as the only chrome — it's the
+   active-state affordance the user needs to see when typing. */
 .chat-input {
-  --chat-compose-scale: 0.8;
+  --chat-compose-scale: 1;
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  margin: calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale) * var(--chat-compose-scale));
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(20px * var(--ui-scale) * var(--chat-compose-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(84, 138, 247, 0.015) 58%, transparent),
-    color-mix(in srgb, var(--surface) 94%, transparent);
+  gap: calc(6px * var(--ui-scale));
+  margin: calc(8px * var(--ui-scale));
+  padding: calc(8px * var(--ui-scale));
+  border: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: var(--surface-inset);
   flex-shrink: 0;
   container-type: inline-size;
-  box-shadow:
-    0 10px 20px rgba(0, 0, 0, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.chat-input::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 14% 0%, rgba(84, 138, 247, 0.08), transparent 26%),
-    radial-gradient(circle at 86% 100%, rgba(255, 255, 255, 0.03), transparent 24%);
-  opacity: 0.8;
 }
 
 /* ── Chat Attachments ── */
@@ -12473,20 +12473,10 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   border-bottom: 1px solid var(--border);
 }
 
-.chat-input {
-  --chat-compose-scale: 1;
-  margin: calc(8px * var(--ui-scale));
-  padding: calc(8px * var(--ui-scale));
-  gap: calc(6px * var(--ui-scale));
-  border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
-  background: var(--surface-strong) !important;
-  box-shadow: none !important;
-}
-
-.chat-input::before {
-  display: none !important;
-}
+/* iter17: `.chat-input` and `.chat-input::before` overrides
+   folded into the canonical block near line ~5236. The
+   canonical now matches the rendered visual directly (flat,
+   no decorative gradient overlay). */
 
 .chat-compose-row {
   gap: calc(8px * var(--ui-scale));
@@ -12960,13 +12950,10 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   color: color-mix(in srgb, var(--accent) 72%, var(--text-soft));
 }
 
-.chat-input {
-  margin: calc(7px * var(--ui-scale));
-  padding: calc(7px * var(--ui-scale));
-  background: var(--surface-inset) !important;
-  border-color: var(--border-strong);
-}
-
+/* iter17: `.chat-input` body declarations folded into the
+   canonical block near line ~5253. The :focus-within ring
+   stays — that's the only chrome the flat input keeps so
+   the user can see when it's active. */
 .chat-input:focus-within {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border-strong));
 }
