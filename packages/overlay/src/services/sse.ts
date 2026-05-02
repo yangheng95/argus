@@ -202,6 +202,15 @@ export function startTaskListSSE() {
           startTaskListSSE()
         }, 3000)
       },
+      onError: () => {
+        // Keep the global task-list stream on the same business reconnect
+        // contract as the selected-task stream. If the transport surfaces an
+        // error without a close, the sidebar refresh stream would otherwise
+        // stay pinned to a dead handle and non-selected task changes would
+        // only appear after a manual reload.
+        if (handle !== taskListHandle) return
+        handle.close()
+      },
     },
   )
   taskListHandle = handle
