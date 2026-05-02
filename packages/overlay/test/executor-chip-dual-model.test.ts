@@ -47,8 +47,21 @@ describe("ExecutorSelector chip surfaces orchestrator + external executor models
     expect(SRC).toMatch(/activeID\(\)\s*!==\s*INTERNAL_EXECUTOR_ID/)
   })
 
-  test("renders the orchestrator model unconditionally when present (Show when={orchestratorModel()})", () => {
+  test("renders the orchestrator model span ALWAYS (iter41: empty state shows `— not set —` placeholder)", () => {
+    // iter35 wrapped this span in `<Show when={orchestratorModel()}>`,
+    // which hid the whole thing when the project default model was
+    // empty — the user couldn't tell iter35 ever shipped because
+    // `MirrorCode · ` collapsed to just `MirrorCode`. iter41 unwraps
+    // the Show and falls back to t("agent_models.option_not_set") when
+    // the model is empty, plus a [data-empty="true"] hook for CSS.
     expect(SRC).toMatch(
+      /data-empty=\{orchestratorModel\(\) \? "false" : "true"\}/,
+    )
+    expect(SRC).toMatch(
+      /\{orchestratorModel\(\) \|\| t\("agent_models\.option_not_set"\)\}/,
+    )
+    // No Show wrap on the orchestrator model span:
+    expect(SRC).not.toMatch(
       /<Show when=\{orchestratorModel\(\)\}>[\s\S]*?data-source="orchestrator"/,
     )
   })

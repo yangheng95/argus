@@ -62,24 +62,27 @@ export function ExecutorSelector() {
     isExternalExecutor() ? activeModel() : "",
   )
 
-  // Multi-line tooltip explaining the role of each model. Single line when
-  // the active executor is internal; two lines when external so the user
-  // can see "MirrorCode does planning, this thing does editing".
+  // Multi-line tooltip explaining the role of each model. iter41
+  // follow-up: always include the explainer (was previously gated on
+  // the model being non-empty, which collapsed the title down to just
+  // the executor's auth/version line and gave the user no help when
+  // the project default model was unset — exactly when the explainer
+  // is most useful).
   const chipTitle = createMemo(() => {
-    const orch = orchestratorModel()
+    const orch = orchestratorModel() || t("agent_models.option_not_set")
     if (!isExternalExecutor()) {
-      // Pure MirrorCode mode: keep the existing executorTitle (auth /
-      // version / setup hints) plus the model explainer.
-      const lines = [executorTitle(activeID())]
-      if (orch) lines.push(t("executor.model_explainer_internal"))
-      return lines.filter(Boolean).join("\n")
+      // Pure MirrorCode mode: executorTitle (auth / version / setup
+      // hints) + the orchestrator-model explainer.
+      return [executorTitle(activeID()), t("executor.model_explainer_internal")]
+        .filter(Boolean)
+        .join("\n")
     }
     // External executor: pair explainer with both model values populated.
-    const ext = externalExecutorModel()
+    const ext = externalExecutorModel() || t("agent_models.option_not_set")
     const pair = t("executor.model_explainer_pair", {
-      orchestrator: orch || "—",
+      orchestrator: orch,
       executor: activeLabel(),
-      external: ext || "—",
+      external: ext,
     })
     return [executorTitle(activeID()), pair].filter(Boolean).join("\n")
   })
@@ -148,20 +151,25 @@ export function ExecutorSelector() {
           }}
         >
           <span class="executor-chip-label">{activeLabel()}</span>
-          {/* Orchestrator (MirrorCode) model — always rendered when the
-              project has a default model. Shown for both internal and
-              external executor selection because the orchestrator-side
-              model drives planning regardless. */}
-          <Show when={orchestratorModel()}>
-            <span class="executor-chip-sep" aria-hidden="true">·</span>
-            <span
-              class="executor-chip-model"
-              data-source="orchestrator"
-              title={t("executor.model_explainer_internal")}
-            >
-              {orchestratorModel()}
-            </span>
-          </Show>
+          {/* Orchestrator (MirrorCode) model — ALWAYS rendered.
+              iter41 unwrapped the iter35 conditional that gated this
+              span on a non-empty orchestratorModel value: when the
+              project default was unset the chip collapsed to bare
+              "MirrorCode" and the user couldn't tell iter35 had ever
+              shipped. The empty case now renders the i18n placeholder
+              ("— not set —", same vocabulary AgentModelsPanel uses)
+              plus a `[data-empty="true"]` attribute so CSS + regression
+              tests can pin the empty state without re-introducing a
+              gating wrap. */}
+          <span class="executor-chip-sep" aria-hidden="true">·</span>
+          <span
+            class="executor-chip-model"
+            data-source="orchestrator"
+            data-empty={orchestratorModel() ? "false" : "true"}
+            title={t("executor.model_explainer_internal")}
+          >
+            {orchestratorModel() || t("agent_models.option_not_set")}
+          </span>
           {/* External executor model — only rendered when the active
               executor is external (codex / claude-code). The arrow
               communicates the orchestrator → executor handoff. */}
