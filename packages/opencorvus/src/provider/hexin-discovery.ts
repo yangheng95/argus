@@ -1,12 +1,12 @@
 /**
- * Hexin OpenAI Gateway — dynamic model discovery with 24h cache.
+ * Hexin OpenAI Gateway — explicit model discovery with cache.
  *
  * Flow:
  *   - Read cache at Global.Path.cache/hexin-models.json
- *   - If fresh (<24h) → use cache
- *   - Otherwise → GET /v1/models, write cache
- *   - On fetch failure with existing (stale) cache → use stale + warn
- *   - On fetch failure with no cache → throw (caller decides whether to skip hexin)
+ *   - Normal provider-list reads always use that cache, even when stale
+ *   - No cache on normal reads → register hexin with an empty model list
+ *   - Only force:true, used by the UI refresh button, calls /v1/models
+ *   - Forced fetch writes cache; forced fetch failure with cache uses stale
  *
  * Gateway only exposes {id, object, created, owned_by}. Capability shape
  * is assigned by hexin-profiles.ts.
@@ -21,7 +21,6 @@ import { profileFor } from "./hexin-profiles"
 const log = Log.create({ service: "hexin-discovery" })
 
 export const HEXIN_GATEWAY_URL = "https://arsenal-openai.10jqka.com.cn:8443/ai-gateway/v1"
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const CACHE_FILE = "hexin-models.json"
 
 type Model = ProviderNS.Model
@@ -119,40 +118,37 @@ export interface DiscoveryOptions {
 /**
  * Returns { modelID → Model } for the hexin provider.
  *
- * Honors cache unless force:true. On network failure with a cache present,
- * returns the cached set with a warn log. Throws only if there is no cache
- * AND the gateway is unreachable.
+ * Normal provider-list reads never touch the network. On force:true, fetches
+ * live IDs and refreshes the cache; if that forced fetch fails and a cache is
+ * present, returns the cached IDs with a warning.
  */
 export async function discoverHexinModels(
   opts: DiscoveryOptions = {},
 ): Promise<Record<string, Model>> {
   const cached = await readCache()
   const now = Date.now()
-  const fresh = cached && now - cached.fetched < CACHE_TTL_MS
 
-  if (!opts.force && fresh) {
-    log.info("using fresh hexin model cache", { count: cached!.ids.length, age_ms: now - cached!.fetched })
-    return toModelMap(cached!.ids)
+  if (!opts.force) {
+    if (cached) {
+      log.info("using cached hexin model list", { count: cached.ids.length, age_ms: now - cached.fetched })
+      return toModelMap(cached.ids)
+    }
+    log.warn("hexin model cache missing — registering hexin with empty model list until explicit refresh")
+    return {}
   }
 
   // Operator must supply HEXIN_API_KEY explicitly. The previously-embedded
   // builtin key was removed (rule 10: no hardcoded credentials).
-  // BUT we still want the hexin provider to appear in the catalog so the
-  // operator can configure it via the UI — so when the env var is unset,
-  // fall back to the stale cache (if any) for the model list and let the
-  // provider register with no key. Empty model list when there's also no
-  // cache: the provider stays in the catalog as "needs configuration".
   const apiKey = process.env.HEXIN_API_KEY?.trim()
   if (!apiKey) {
     if (cached) {
-      log.info("HEXIN_API_KEY unset — using cached model list (operator must configure key in UI)", {
+      log.info("HEXIN_API_KEY unset — using cached model list", {
         count: cached.ids.length,
         age_ms: now - cached.fetched,
       })
       return toModelMap(cached.ids)
     }
-    log.warn("HEXIN_API_KEY unset and no model cache — registering hexin with empty model list")
-    return {}
+    throw new Error("HEXIN_API_KEY unset and no model cache present")
   }
 
   try {
