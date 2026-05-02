@@ -48,19 +48,7 @@ import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
 import { sessionGoalID, sessionRole, taskIDForSession, taskSession } from "@/orchestrator/task-event"
 import { ensureTaskMessageProtocolBridge, overlayMeta } from "@/orchestrator/protocol/message-bridge"
-
-const DIRECT_REPLY_AGENT_KINDS = new Set([
-  "assistant",
-  "intent-analysis",
-  "requirements",
-  "design-analyst",
-  "goal",
-  "architect",
-  "integrity",
-  "delivery",
-  "build",
-  "evaluator",
-])
+import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
 const log = Log.create({ service: "server.routes.orchestrator" })
 const CONVERSATION_EVENT_PAGE_LIMIT = 500
 
@@ -723,73 +711,7 @@ export const EngineRoutes = lazy(() =>
       async (c) => {
         const params = c.req.valid("param")
         const input = c.req.valid("json")
-        const target = await resolveDirectReplyTarget(params.taskID, params.sessionID)
-        const messageID = Identifier.ascending("message")
-        const message: Message.User = {
-          id: messageID,
-          sessionID: target.session.id,
-          role: "user",
-          time: { created: Date.now() },
-          agent: target.agent,
-          model: target.model,
-          ...(target.variant ? { variant: target.variant } : {}),
-          extra: {
-            overlay_direct_reply: true,
-            source: "overlay_direct_reply",
-            taskID: params.taskID,
-            targetSessionID: target.session.id,
-          },
-        }
-        await Session.updateMessage(message)
-        await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID,
-          sessionID: target.session.id,
-          type: "text",
-          text: input.message,
-          kind: "user_content",
-          source: "user",
-          metadata: {
-            overlay_direct_reply: true,
-            source: "overlay_direct_reply",
-            taskID: params.taskID,
-            targetSessionID: target.session.id,
-          },
-        })
-        for (const attachment of input.attachments) {
-          await Session.updatePart({
-            id: Identifier.ascending("part"),
-            messageID,
-            sessionID: target.session.id,
-            type: "file",
-            mime: attachment.mime,
-            url: attachment.url,
-            ...(attachment.filename ? { filename: attachment.filename } : {}),
-          })
-        }
-        await Session.touch(target.session.id)
-        // Always call SessionPrompt.loop unconditionally — its internal
-        // `start()` returns undefined when state already exists, so a busy
-        // session's existing loop just joins this caller into its callback
-        // queue while the running iteration finishes; the next iteration's
-        // top-of-loop Message.stream() then picks up the message we just
-        // appended. Gating on `SessionStatus === "idle"` was a status/loop
-        // double source (rule 22) that stranded the reply when status was
-        // briefly "busy" but the loop was already exiting — the cancel()
-        // tail in loop.ts then cleared state, leaving the message in DB
-        // with no listener. (rule 23: no FSM gate; loop owns the lifecycle.)
-        void SessionPrompt.loop({ sessionID: target.session.id }).catch((error) => {
-          log.error("direct agent session reply loop failed", {
-            sessionID: target.session.id,
-            taskID: params.taskID,
-            error,
-          })
-        })
-        return c.json({
-          task_id: params.taskID,
-          session_id: target.session.id,
-          message_id: messageID,
-        }, 202)
+        return c.json(await EngineService.replyAgentSession(params.taskID, params.sessionID, input), 202)
       },
     )
     .post(
@@ -1340,40 +1262,6 @@ async function assertDirectAgentSession(taskID: string, sessionID: string) {
     })
   }
   return Session.get(sessionID)
-}
-
-async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
-  const session = await assertDirectAgentSession(taskID, sessionID)
-  const messages = await Session.messages({ sessionID })
-  const latest = messages
-    .map((message) => message.info)
-    .filter((info) => info.role === "user" || info.role === "assistant")
-    .sort((left, right) => (right.time?.created ?? 0) - (left.time?.created ?? 0))[0]
-
-  if (!latest) {
-    throw new HTTPException(400, {
-      message: `Session ${sessionID} has no prior model identity to continue`,
-    })
-  }
-
-  if (latest.role === "user") {
-    return {
-      session,
-      agent: latest.agent,
-      model: latest.model,
-      variant: latest.variant,
-    }
-  }
-
-  return {
-    session,
-    agent: latest.agent,
-    model: {
-      providerID: latest.providerID,
-      modelID: latest.modelID,
-    },
-    variant: latest.variant,
-  }
 }
 
 function taskEvent(taskID: string, event: { type: string; properties: Record<string, unknown> }, sequence?: number) {

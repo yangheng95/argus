@@ -1,5 +1,5 @@
 // ── AgentSessionReplyBox ──
-// Inline textarea + send button rendered at the END of every agent
+// Inline textarea + steer button rendered at the END of every agent
 // session card. The user can reply directly to a sub-agent session
 // without going through the main composer at the bottom of the overlay.
 //
@@ -63,7 +63,7 @@ export function AgentSessionReplyBox(props: AgentSessionReplyBoxProps) {
         disabled={sending()}
         onInput={(event) => setText(event.currentTarget.value)}
         onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             void submit(event);
           }

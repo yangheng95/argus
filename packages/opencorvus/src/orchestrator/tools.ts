@@ -2336,6 +2336,21 @@ export function createOrchestratorTools(input: {
       },
     }),
 
+    steer_subagent: tool({
+      description:
+        "Send a scoped steering message to a child agent session and wake that session. " +
+        "Use this before retrying a sub-agent that appears idle/timed out: ask for current status, partial findings, and whether it can continue.",
+      inputSchema: z.object({
+        session_id: z.string().min(1).describe("Child agent session id to steer"),
+        message: z.string().min(1).describe("Natural-language steering/status-check message for that sub-agent"),
+        reason: z.string().describe("Why this sub-agent must be contacted before retrying"),
+      }),
+      execute: async ({ session_id, message, reason }) => {
+        const result = await EngineService.replyAgentSession(taskID, session_id, { message })
+        return `Steered sub-agent session ${result.session_id}. message=${result.message_id}. Reason: ${reason}`
+      },
+    }),
+
     restart_from_stage: tool({
       description: "Restart the task from a specific stage. Use when the current approach is fundamentally wrong, the user requests a restart, or you need to redo requirements/plan from scratch. `plan` fully regenerates the goal decomposition while keeping requirements intact — use it after repeated per-goal retry has failed to converge.",
       inputSchema: z.object({

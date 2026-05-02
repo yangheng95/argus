@@ -337,8 +337,12 @@ wastes budget and clouds the trace.
 - **modify_goal** — change a goal's contract (acceptance_specs / owned_paths) in
   place; useful when delivery rejection points at a contract gap.
 
-- **cancel_task / retry_task / inject_operator_message** — operator-message controls.
+- **cancel_task / retry_task / inject_operator_message / steer_subagent** — operator-message controls.
   Use when the user asks to stop, continue with new guidance, or resume a stopped task.
+  When a child/sub-agent appears idle or timed out, call **steer_subagent** first
+  to ask for current status and partial findings. Do not retry the same sub-agent
+  until its session has been contacted or you have evidence that the session cannot
+  answer.
 
 - **query_failed_goals / read_context** — observation; call before any retry decision.
 
