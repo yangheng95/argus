@@ -17,35 +17,15 @@
 // and collapsed prompt cache.
 
 import { createSignal, createMemo, createResource, For, Show } from "solid-js";
-import { apiJson } from "../../services/api";
 import { patchConfig } from "../../services/config";
 import { appStore } from "../../store/app";
 import { t } from "../../utils/i18n";
-
-interface AgentInfo {
-  name: string;
-  description?: string;
-  mode: "subagent" | "primary" | "all";
-  hidden?: boolean;
-  native?: boolean;
-  model?: { providerID: string; modelID: string };
-}
-
-interface ProviderModel {
-  id: string;
-  name?: string;
-}
-
-interface ProviderInfo {
-  id: string;
-  name: string;
-  models: Record<string, ProviderModel>;
-}
-
-interface ProvidersPayload {
-  providers: ProviderInfo[];
-  default: Record<string, string>;
-}
+import {
+  apiJsonWithTimeout,
+  HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
+  loadAgentModelsData,
+  type ProvidersPayload,
+} from "./agent-models-data";
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
@@ -86,16 +66,7 @@ export default function AgentModelsPanel() {
   // subsequent re-render reading stale createResource data) snapped it back.
   const [refreshToken, setRefreshToken] = createSignal(0);
 
-  const [data] = createResource(refreshToken, async () => {
-    const [agents, providers] = await Promise.all([
-      apiJson("agent") as Promise<AgentInfo[]>,
-      apiJson("config/providers") as Promise<ProvidersPayload>,
-    ]);
-    return {
-      agents: agents ?? [],
-      providers: providers ?? { providers: [], default: {} },
-    };
-  });
+  const [data] = createResource(refreshToken, () => loadAgentModelsData());
 
   // Single source of truth for the currently-persisted project default model.
   // Reads directly from appStore.config.model — the same value SSE
@@ -173,10 +144,14 @@ export default function AgentModelsPanel() {
     setRefreshing(true);
     setRefreshMsg("");
     try {
-      const result = (await apiJson("provider/hexin/refresh", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      })) as { ok: boolean; count: number; error?: string };
+      const result = (await apiJsonWithTimeout(
+        "provider/hexin/refresh",
+        HEXIN_REFRESH_TIMEOUT_MILLISECONDS,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      )) as { ok: boolean; count: number; error?: string };
       if (result.ok) {
         setRefreshMsg(`Refreshed: ${result.count} hexin models`);
         setRefreshToken((x) => x + 1);
@@ -284,10 +259,12 @@ export default function AgentModelsPanel() {
             const grouped = groupedAgents(payload.agents);
             // projectModel() is a memo over appStore.config.model — re-reads
             // each render, so UI stays in sync with the canonical store.
-            const currentModel = projectModel();
-            const projectModelMissing = !currentModel;
-            const projectModelUnavailable =
-              !!currentModel && !available.has(currentModel);
+            const currentProjectModel = () => projectModel();
+            const projectModelMissing = () => !currentProjectModel();
+            const projectModelUnavailable = () => {
+              const current = currentProjectModel();
+              return !!current && !available.has(current);
+            };
             return (
               <>
                 <div class="agent-model-project-default">
@@ -296,7 +273,7 @@ export default function AgentModelsPanel() {
                     <select
                       class="field-input agent-model-select"
                       data-testid="agent-model-select-project"
-                      value={currentModel}
+                      value={currentProjectModel()}
                       disabled={savingDefault()}
                       onChange={(e) =>
                         onSelectProjectDefault(
@@ -305,8 +282,10 @@ export default function AgentModelsPanel() {
                       }
                     >
                       <option value="">{t("agent_models.option_not_set")}</option>
-                      <Show when={projectModelUnavailable}>
-                        <option value={currentModel}>{t("agent_models.option_unavailable", { model: currentModel })}</option>
+                      <Show when={projectModelUnavailable()}>
+                        <option value={currentProjectModel()}>
+                          {t("agent_models.option_unavailable", { model: currentProjectModel() })}
+                        </option>
                       </Show>
                       <For each={groups}>
                         {(g) => (
@@ -324,7 +303,7 @@ export default function AgentModelsPanel() {
                       <Show when={savingDefault()}>{t("agent_models.saving")}</Show>
                     </span>
                   </div>
-                  <Show when={projectModelMissing}>
+                  <Show when={projectModelMissing()}>
                     <div class="config-panel-card agent-models-warning">
                       {t("agent_models.warning_no_default_prefix")}
                       <code> MissingModelConfigError </code>
@@ -339,15 +318,18 @@ export default function AgentModelsPanel() {
                         <div class="agent-model-tier-label">{TIER_LABEL[tier]}</div>
                         <For each={grouped[tier]}>
                           {(agent) => {
-                            const current = configAgentModel(agent.name);
-                            const missing = current !== "" && !available.has(current);
+                            const current = () => configAgentModel(agent.name);
+                            const missing = () => {
+                              const selected = current();
+                              return selected !== "" && !available.has(selected);
+                            };
                             return (
                               <div class="agent-model-row" title={agent.description || ""}>
                                 <span class="agent-model-name">{agent.name}</span>
                                 <select
                                   class="field-input agent-model-select"
                                   data-testid={`agent-model-select-${agent.name}`}
-                                  value={current}
+                                  value={current()}
                                   disabled={savingAgents().has(agent.name)}
                                   onChange={(e) =>
                                     onSelect(
@@ -357,8 +339,8 @@ export default function AgentModelsPanel() {
                                   }
                                 >
                                   <option value="">— inherit project default —</option>
-                                  <Show when={missing}>
-                                    <option value={current}>{current} (unavailable)</option>
+                                  <Show when={missing()}>
+                                    <option value={current()}>{current()} (unavailable)</option>
                                   </Show>
                                   <For each={groups}>
                                     {(g) => (
