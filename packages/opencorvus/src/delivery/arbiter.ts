@@ -5,10 +5,7 @@ import type {
   DeliveryGateVerdict,
   DeliveryManifestFunctionalAssessment,
 } from "./manifest"
-import type {
-  DeliveryVerdictType,
-  RejectionDetailType,
-} from "./verdict"
+import type { DeliveryVerdictType } from "./verdict"
 
 export type DeliveryArbiterDecision = {
   verdict: DeliveryVerdictType
@@ -79,88 +76,23 @@ export function arbitrateDeliveryVerdict(input: {
   runtimeReport?: RuntimeEvidenceReport
   visualMetric?: VisualMetricResult | null
 }): DeliveryArbiterDecision | undefined {
-  if (input.manifest.finalGate.status !== "passed") {
+  const hostGateSource = hostGateFailureSource(input)
+  if (hostGateSource) {
     if (!input.llmVerdict || input.llmVerdict.verdict !== "rejected") return undefined
     return {
-      source: "manifest",
-      verdict: appendManifestEvidence({
+      source: hostGateSource,
+      verdict: appendHostGateEvidence({
         ...input.llmVerdict,
-        summary: `${input.llmVerdict.summary}\n\nHost gate: ${input.manifest.finalGate.summary}`,
-      }, input.manifest),
-    }
-  }
-
-  if (input.runtimeReport && !input.runtimeReport.passed) {
-    const runtimeVerdict = synthesizeRuntimeRejection(input.runtimeReport, input.goalIds)
-    if (input.llmVerdict) {
-      return {
-        source: "runtime_evidence",
-        verdict: forceRejectedByGate({
-          verdict: input.llmVerdict,
-          gateVerdict: runtimeVerdict,
-          gateSummary: runtimeVerdict.summary,
-        }),
-      }
-    }
-    return {
-      source: "runtime_evidence",
-      verdict: runtimeVerdict,
+        summary: `${input.llmVerdict.summary}\n\nHost gate: ${hostGateSummary(input)}`,
+      }, input),
     }
   }
 
   if (!input.llmVerdict) return undefined
 
-  let source: DeliveryArbiterDecision["source"] = "llm"
-  let verdict = input.llmVerdict
-  if (input.visualMetric && !input.visualMetric.passed) {
-    source = "visual_hard_gate"
-    verdict = applyVisualMetricVerdict(verdict, input.visualMetric, input.goalIds)
-  }
-
   return {
-    source,
-    verdict: appendManifestEvidence(verdict, input.manifest),
-  }
-}
-
-function forceRejectedByGate(input: {
-  verdict: DeliveryVerdictType
-  gateVerdict: DeliveryVerdictType
-  gateSummary: string
-}): DeliveryVerdictType {
-  if (input.gateVerdict.verdict !== "rejected") return input.verdict
-  if (input.verdict.verdict === "rejected") {
-    return {
-      ...input.verdict,
-      summary: `${input.verdict.summary}\n\nHost gate: ${input.gateSummary}`,
-      deferred_checks: [
-        ...input.verdict.deferred_checks,
-        ...input.gateVerdict.deferred_checks,
-      ],
-      tool_call_evidence: [
-        ...input.verdict.tool_call_evidence,
-        ...input.gateVerdict.tool_call_evidence,
-      ],
-      rejection_details: [
-        ...input.verdict.rejection_details,
-        ...input.gateVerdict.rejection_details,
-      ],
-    }
-  }
-  return {
-    verdict: "rejected",
-    summary: `Host gate rejected delivery after semantic verdict attempted accepted: ${input.gateSummary}`,
-    startup_verification: input.verdict.startup_verification,
-    frontend_check: input.verdict.frontend_check,
-    deferred_checks: [
-      ...input.verdict.deferred_checks,
-      ...input.gateVerdict.deferred_checks,
-    ],
-    tool_call_evidence: [
-      ...input.verdict.tool_call_evidence,
-      ...input.gateVerdict.tool_call_evidence,
-    ],
-    rejection_details: input.gateVerdict.rejection_details,
+    source: "llm",
+    verdict: appendHostGateEvidence(input.llmVerdict, input),
   }
 }
 
@@ -192,92 +124,111 @@ function appendManifestEvidence(
   }
 }
 
-function synthesizeRuntimeRejection(
-  report: RuntimeEvidenceReport,
-  goalIds: readonly string[],
+function hostGateFailureSource(input: {
+  manifest: DeliveryEvidenceManifest
+  runtimeReport?: RuntimeEvidenceReport
+  visualMetric?: VisualMetricResult | null
+}): DeliveryArbiterDecision["source"] | undefined {
+  if (input.manifest.finalGate.status !== "passed") return "manifest"
+  if (input.runtimeReport && !input.runtimeReport.passed) return "runtime_evidence"
+  if (input.visualMetric && !input.visualMetric.passed) return "visual_hard_gate"
+  return undefined
+}
+
+function hostGateSummary(input: {
+  manifest: DeliveryEvidenceManifest
+  runtimeReport?: RuntimeEvidenceReport
+  visualMetric?: VisualMetricResult | null
+}): string {
+  const summaries: string[] = []
+  if (input.manifest.finalGate.status !== "passed") summaries.push(input.manifest.finalGate.summary)
+  if (input.runtimeReport && !input.runtimeReport.passed) {
+    summaries.push(`Runtime-evidence gate failed ${input.runtimeReport.violations.length} violation(s).`)
+  }
+  if (input.visualMetric && !input.visualMetric.passed) {
+    const failedGates = input.visualMetric.gates.filter((gate) => !gate.passed)
+    summaries.push(
+      `Visual metric gate failed score=${input.visualMetric.score.toFixed(3)} with ${failedGates.length} failed gate(s).`,
+    )
+  }
+  return summaries.join("\n")
+}
+
+function appendHostGateEvidence(
+  verdict: DeliveryVerdictType,
+  input: {
+    manifest: DeliveryEvidenceManifest
+    runtimeReport?: RuntimeEvidenceReport
+    visualMetric?: VisualMetricResult | null
+  },
 ): DeliveryVerdictType {
-  void goalIds
-  const headline = `Runtime-evidence gate rejected delivery: ${report.violations.length} violation(s).`
-  const details: RejectionDetailType[] = report.violations.map((v) => ({
-    category: "runtime" as const,
-    error: `${v.kind}: ${v.detail}`,
-    suggestion:
-      v.kind === "no_build_artifact"
-        ? "Produce a real runnable frontend build artifact or start/preview command for the integrated task."
-        : v.kind === "empty_root_shell"
-          ? "Root mount did not hydrate; inspect the frontend entrypoint, router, and runtime errors."
-          : v.kind === "render_failed"
-            ? "Build artifact exists but rendering failed; inspect server startup, asset paths, and runtime errors."
-            : "Rendered DOM is too thin; ensure the primary UI content is actually rendered.",
-  }))
+  let next = appendManifestEvidence(verdict, input.manifest)
+  if (input.runtimeReport) next = appendRuntimeEvidence(next, input.runtimeReport)
+  if (input.visualMetric) next = appendVisualMetricEvidence(next, input.visualMetric)
+  return next
+}
+
+function appendRuntimeEvidence(
+  verdict: DeliveryVerdictType,
+  report: RuntimeEvidenceReport,
+): DeliveryVerdictType {
   const buildArtifactDetail = report.evidence.buildArtifactPath
     ? `index.html=${report.evidence.buildArtifactPath} dom.textLength=${report.evidence.dom?.textLength ?? "n/a"} nodes=${report.evidence.dom?.nodeCount ?? "n/a"}`
     : "no build artifact"
+  const violations = report.violations.map((v) => `${v.kind}: ${v.detail}`)
   return {
-    verdict: "rejected",
-    summary: headline,
-    startup_verification: {
-      attempted: true,
-      success: false,
-      output: buildArtifactDetail,
-    },
-    frontend_check: {
-      attempted: true,
-      renders_correctly: false,
-      issues: report.violations.map((v) => `[runtime/${v.kind}] ${v.detail}`).slice(0, 10),
-    },
-    deferred_checks: [],
-    tool_call_evidence: [
+    ...verdict,
+    deferred_checks: [
+      ...verdict.deferred_checks,
       {
-        tool: "delivery_arbiter",
-        passed: false,
+        name: "runtime_evidence",
+        result: report.passed ? "passed" : "failed",
+        evidence: [
+          buildArtifactDetail,
+          ...violations,
+        ].join("\n"),
+      },
+    ],
+    tool_call_evidence: [
+      ...verdict.tool_call_evidence,
+      {
+        tool: "runtime_evidence",
+        passed: report.passed,
         detail: `${report.violations.length} violation(s): ${buildArtifactDetail}`,
       },
     ],
-    rejection_details: details,
   }
 }
 
-function applyVisualMetricVerdict(
-  llmVerdict: DeliveryVerdictType,
+function appendVisualMetricEvidence(
+  verdict: DeliveryVerdictType,
   metric: VisualMetricResult,
-  goalIds: readonly string[],
 ): DeliveryVerdictType {
-  const failedGates = metric.gates.filter((g) => !g.passed)
-  const headline =
-    `Numeric visual gate failed (score=${metric.score.toFixed(3)}). ` +
-    `Rendered output missed ${failedGates.length} hard visual gate(s).`
-
-  void goalIds
-  const gateRejections: RejectionDetailType[] = failedGates.map((g) => ({
-    category: "visual" as const,
-    error: `${g.name}: ${g.note || `value=${g.value} threshold=${g.threshold}`}`,
-    suggestion: visualSuggestion(g.name),
-  }))
-
-  if (llmVerdict.verdict === "rejected") {
-    return {
-      ...llmVerdict,
-      summary: `${llmVerdict.summary}\n\n${headline}`,
-      rejection_details: [...llmVerdict.rejection_details, ...gateRejections],
-    }
-  }
-
+  const gateLines = metric.gates.map((gate) =>
+    `${gate.name}: ${gate.passed ? "passed" : "failed"} value=${gate.value} threshold=${gate.threshold} ${gate.note}`,
+  )
   return {
-    verdict: "rejected",
-    summary: `${headline}\n\nLLM summary: ${llmVerdict.summary}`,
-    startup_verification: llmVerdict.startup_verification,
-    frontend_check: llmVerdict.frontend_check,
-    deferred_checks: llmVerdict.deferred_checks,
-    tool_call_evidence: llmVerdict.tool_call_evidence,
-    rejection_details: gateRejections,
+    ...verdict,
+    deferred_checks: [
+      ...verdict.deferred_checks,
+      {
+        name: "visual_metric",
+        result: metric.passed ? "passed" : "failed",
+        evidence: [
+          `score=${metric.score.toFixed(3)}`,
+          `rendered=${metric.renderedPath}`,
+          `reference=${metric.referencePath}`,
+          ...gateLines,
+        ].join("\n"),
+      },
+    ],
+    tool_call_evidence: [
+      ...verdict.tool_call_evidence,
+      {
+        tool: "visual_metric",
+        passed: metric.passed,
+        detail: `score=${metric.score.toFixed(3)} failed_gates=${metric.gates.filter((gate) => !gate.passed).length}`,
+      },
+    ],
   }
-}
-
-function visualSuggestion(gateName: string) {
-  return gateName === "chart_region_density" || gateName === "unique_color_ratio"
-    ? "Rendered output is too close to an empty shell; verify real data is rendered into DOM or canvas."
-    : gateName === "phash_hamming" || gateName === "ssim"
-      ? "Rendered layout or visual structure diverges from the reference; realign the primary regions."
-      : "Compare rendered text against reference strings and restore the missing visible copy."
 }

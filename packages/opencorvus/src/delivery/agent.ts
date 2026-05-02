@@ -121,6 +121,7 @@ export namespace DeliveryAgent {
           requiredTools: systemResolved.requiredTools,
           requiredEvidenceFacets,
           manifestGate: input.delivery.manifestGate,
+          hostGateFailures: input.delivery.hostGateFailures,
         })
         const guard = toolGuard({ ...reviewTools, ...outputToolKit.tools })
         return {
@@ -446,12 +447,42 @@ function buildUserPrompt(
     )
   }
 
+  if (input.delivery.hostGateFailures && input.delivery.hostGateFailures.length > 0) {
+    const lines: string[] = []
+    for (const failure of input.delivery.hostGateFailures) {
+      lines.push(`## ${failure.kind}:${failure.id}`)
+      lines.push(`Summary: ${failure.summary}`)
+      if (failure.evidence.length > 0) {
+        lines.push("Evidence:")
+        for (const item of failure.evidence) lines.push(`- ${item}`)
+      }
+      lines.push("")
+    }
+    sections.push(
+      `# Host Hard Gate Failures\n\n` +
+      `These are deterministic host observations, not synthetic verdicts. They block acceptance, ` +
+      `but attribution still belongs to your submit_verdict rejection_details. Do not drop any ` +
+      `runtime or visual gate evidence when writing the rejected verdict.\n\n` +
+      lines.join("\n").trim(),
+    )
+  }
+
   if (input.delivery.runtimeEvidenceFailures && input.delivery.runtimeEvidenceFailures.length > 0) {
     sections.push(
       `# Runtime Evidence Failures\n\n` +
       `The host runtime probe found blocking runtime failures. Analyze them as delivery evidence ` +
       `and reject with concrete reproduction details unless you can prove the probe is invalid.\n\n` +
       input.delivery.runtimeEvidenceFailures.map((item) => `- ${item}`).join("\n"),
+    )
+  }
+
+  if (input.delivery.visualMetricFailures && input.delivery.visualMetricFailures.length > 0) {
+    sections.push(
+      `# Visual Metric Failures\n\n` +
+      `The host visual metric found blocking visual failures. Use these as evidence, inspect the ` +
+      `rendered output and reference yourself, and reject with concrete visual rejection_details ` +
+      `unless you can prove the metric is invalid.\n\n` +
+      input.delivery.visualMetricFailures.map((item) => `- ${item}`).join("\n"),
     )
   }
 

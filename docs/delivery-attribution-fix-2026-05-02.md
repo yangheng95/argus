@@ -23,7 +23,7 @@
 - `goal_id` 只在责任 goal 可识别时填写；项目级 failure 保持 task-scope，不强迫瞎归因。
 - arbiter 删除 manifest 合成 verdict 和 owner 归因函数。没有合法 LLM rejected verdict 时 fail loud，不制造替代 verdict。
 
-runtime evidence gate 和 visual metric gate 仍保留现有 arbiter 逻辑；它们是后续单独清理面，本次不声称完成全 delivery 单源化。
+2026-05-02 追加原则：**全 agent 操作，信息不丢失**。runtime evidence gate 和 visual metric gate 也必须在 agent verdict 之前完成，并作为真实 host evidence 注入 prompt；arbiter 只追加审计证据，不再合成 `rejection_details`。
 
 ## 3. 实施内容
 
@@ -41,13 +41,13 @@ runtime evidence gate 和 visual metric gate 仍保留现有 arbiter 逻辑；�
    - output tool kit 接收 `manifestGate`。
 
 4. `packages/opencorvus/src/delivery/output-tools.ts`
-   - 当 `manifestGate.status === "failed"` 时，`submit_verdict` 拒绝 `accepted`，要求重新提交 rejected verdict。
+   - 当任一 host hard gate 失败时，`submit_verdict` 拒绝 `accepted`，要求重新提交 rejected verdict。
 
 5. `packages/opencorvus/src/delivery/arbiter.ts`
    - 删除 `synthesizeManifestRejection`。
    - 删除 `ownerGoalIdsForFailure`。
-   - manifest failed 时只接受 LLM rejected verdict，并追加 manifest evidence 到 `deferred_checks` 供审计。
-   - manifest failed 且没有 LLM rejected verdict 时返回 `undefined`，由 service 抛错。
+   - manifest/runtime/visual host gate failed 时只接受 LLM rejected verdict，并追加 host evidence 到 `deferred_checks` / `tool_call_evidence` 供审计。
+   - host gate failed 且没有 LLM rejected verdict 时返回 `undefined`，由 service 抛错。
 
 ## 4. 边界行为
 
@@ -55,7 +55,8 @@ runtime evidence gate 和 visual metric gate 仍保留现有 arbiter 逻辑；�
 |---|---|
 | manifest failed，Agent 提交 rejected 且含 `goal_id` | 原样保留归因，orchestrator 打开对应 goal rework |
 | manifest failed，Agent 提交 rejected 但无 `goal_id` | 按 task-scope rejection 处理，不 blanket reset |
-| manifest failed，Agent 尝试 accepted | `submit_verdict` 拒绝；若绕过 tool 进入 arbiter，则 arbiter fail loud |
+| 任一 host gate failed，Agent 尝试 accepted | `submit_verdict` 拒绝；若绕过 tool 进入 arbiter，则 arbiter fail loud |
+| runtime / visual gate failed | evidence 进入 agent prompt；最终 `rejection_details` 只来自 agent |
 | Agent 调用失败 / 超时 | `DeliveryFailureError` 抛上游 |
 | 直流 task 无 goals | task-scope rejection 是合法语义 |
 
@@ -64,7 +65,7 @@ runtime evidence gate 和 visual metric gate 仍保留现有 arbiter 逻辑；�
 - `delivery/output-tools.test.ts`：manifest failed 时 accepted payload 被拒绝。
 - `delivery/agent.test.ts`：DeliveryAgent prompt 包含 `finalGate.status=failed`、failed IDs、`owned_paths`、executor `files_changed`，并把 manifest gate 传给 output tool。
 - `delivery/service.test.ts`：manifest failed 时仍调用 DeliveryAgent，并把 agent 返回的 `goal_id` 归因保留到最终 verdict。
-- `delivery/arbiter.test.ts`：manifest failed 不再合成归因；只保留 agent rejection，并追加 manifest evidence。
+- `delivery/arbiter.test.ts`：manifest/runtime/visual failed 不再合成归因；只保留 agent rejection，并追加 host gate evidence。
 
 ## 6. 验证命令
 

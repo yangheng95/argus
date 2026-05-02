@@ -98,6 +98,12 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
             exitCode: 1,
             evidence: "Cannot find module './missing'",
           }],
+          hostGateFailures: [{
+            kind: "manifest",
+            id: "artifact_manifest_test",
+            summary: "Delivery evidence gate failed 1 required check(s).",
+            evidence: ["[check] check:build Build status=failed exit=1 command=bun run build: Cannot find module './missing'"],
+          }],
           goalReports: [{
             goalTitle: "UI shell",
             report: {
@@ -114,10 +120,11 @@ test("DeliveryAgent prompt includes manifest gate, ownership, and executor chang
   })
 
   expect(capturedPrompt).toContain("# DeliveryEvidenceManifest Gate")
+  expect(capturedPrompt).toContain("# Host Hard Gate Failures")
   expect(capturedPrompt).toContain("finalGate.status=failed")
   expect(capturedPrompt).toContain("failedCheckIds=check:build")
   expect(capturedPrompt).toContain("Cannot find module './missing'")
   expect(capturedPrompt).toContain("Owned paths: src/App.tsx, package.json")
   expect(capturedPrompt).toContain("`src/App.tsx`")
-  expect(acceptedBlocked).toContain("finalGate.status=failed")
+  expect(acceptedBlocked).toContain("host hard gate")
 })

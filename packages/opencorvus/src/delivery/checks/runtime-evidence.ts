@@ -9,8 +9,9 @@
  *   3. 产出的 rendered.png 与 dom metrics 向下游（P0-B 硬门 / 调试 artifact）复用
  *      单次 render（rule 22：禁双源）
  *
- * 失败 ⇒ delivery 直接 rejected；不经过 LLM verdict。符合 rule 1（no fallback）
- * 与 rule 12（视觉 benchmark 以视觉呈现）。
+ * 失败 ⇒ 作为 host hard gate evidence 注入 DeliveryAgent，由 agent 产出
+ * rejected verdict 和 goal attribution；host 只负责阻止 accepted，不合成
+ * rejection_details。
  */
 import { findRenderedIndex, renderPage } from "./visual"
 

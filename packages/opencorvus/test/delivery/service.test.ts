@@ -55,6 +55,7 @@ test("DeliveryService still runs DeliveryAgent when manifest gate failed", async
   const deliveryInput = verify.mock.calls[0]?.[0].delivery
   expect(deliveryInput.manifestGate?.status).toBe("failed")
   expect(deliveryInput.manifestFailureDetails?.[0]?.id).toBe("check:build")
+  expect(deliveryInput.hostGateFailures?.[0]?.kind).toBe("manifest")
 })
 
 function agentRejected(): DeliveryVerdictType {

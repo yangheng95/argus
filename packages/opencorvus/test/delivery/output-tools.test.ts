@@ -61,7 +61,22 @@ describe("delivery output tools", () => {
 
     const rejected = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
 
-    expect(rejected).toContain("finalGate.status=failed")
+    expect(rejected).toContain("host hard gate")
+    expect(kit.getCollector().finalized).toBe(false)
+  })
+
+  test("rejects accepted verdict while runtime or visual host gate failed", async () => {
+    const kit = createDeliveryOutputTools({
+      hostGateFailures: [{
+        kind: "runtime",
+        id: "runtime-evidence",
+        summary: "Runtime-evidence gate rejected delivery: 1 violation(s).",
+      }],
+    })
+
+    const rejected = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
+
+    expect(rejected).toContain("runtime:runtime-evidence")
     expect(kit.getCollector().finalized).toBe(false)
   })
 
