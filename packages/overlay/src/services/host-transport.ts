@@ -20,6 +20,8 @@
 
 export type HostKind = "tauri" | "vscode"
 
+export const DEFAULT_REQUEST_TIMEOUT_MILLISECONDS = 15_000
+
 // ── Request / Response (HTTP) ──
 
 export type RequestBody =

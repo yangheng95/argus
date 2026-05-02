@@ -25,6 +25,7 @@ import {
   selectTask,
   createTask,
 } from "./task";
+import { applyEvent as applyTreeWriterEvent } from "./tree-writer";
 
 // ── Types ──
 
@@ -357,6 +358,22 @@ export function mergeMessages(left: any[], right: any[]): any[] {
   return mergeLoadedConversationMessages(left, right);
 }
 
+export function ingestPersistedConversationMessage(input: { info: any; parts: any[] }): void {
+  if (!input?.info?.id) return;
+  applyTreeWriterEvent({
+    type: "message.updated",
+    properties: { info: input.info },
+  });
+  for (const part of input.parts ?? []) {
+    if (!part) continue;
+    applyTreeWriterEvent({
+      type: "message.part.updated",
+      properties: { part },
+    });
+  }
+  ingestPersistedMessage(input);
+}
+
 function ensureTaskListEntry(
   taskID: string,
   requestID: string,
@@ -484,7 +501,7 @@ export async function panelMessage(text: string, attachmentsOrMeta: any[] | Reco
     // follow, so the by-id merge in applyMessageEvent idempotently no-ops
     // when the matching `message.updated` arrives over the bus.
     if (result?.user_message?.info?.id) {
-      ingestPersistedMessage(result.user_message);
+      ingestPersistedConversationMessage(result.user_message);
     }
     await loadBoard();
     // The server may return a control-plane acknowledgement here
