@@ -6,7 +6,7 @@ import { Message } from "./message"
 import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
-import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema } from "ai"
+import { type Tool as AITool, tool, jsonSchema, type ToolExecutionOptions, asSchema, type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
@@ -620,6 +620,69 @@ export namespace SessionLoop {
     return prepared
   }
 
+  export function summarizeModelMessagePayloads(messages: ModelMessage[], limit = 8) {
+    const rows: Array<{
+      messageIndex: number
+      partIndex: number
+      role: string
+      type: string
+      chars: number
+      toolName?: string
+      toolCallId?: string
+      mediaType?: string
+    }> = []
+    messages.forEach((message, messageIndex) => {
+      const content = Array.isArray(message.content)
+        ? message.content
+        : [{ type: "text", text: message.content }]
+      content.forEach((part, partIndex) => {
+        const p = part as Record<string, unknown>
+        rows.push({
+          messageIndex,
+          partIndex,
+          role: message.role,
+          type: typeof p.type === "string" ? p.type : "unknown",
+          chars: JSON.stringify(part).length,
+          toolName: typeof p.toolName === "string" ? p.toolName : undefined,
+          toolCallId: typeof p.toolCallId === "string" ? p.toolCallId : undefined,
+          mediaType: typeof p.mediaType === "string" ? p.mediaType : undefined,
+        })
+      })
+    })
+    return rows.sort((a, b) => b.chars - a.chars).slice(0, limit)
+  }
+
+  export function normalizeExtraToolResult(input: unknown): {
+    output: string
+    title: string
+    metadata: object
+    attachments?: unknown
+  } {
+    if (typeof input === "string") return { output: input, title: "", metadata: {} }
+
+    if (input && typeof input === "object") {
+      const r = input as Record<string, unknown>
+      const output = (() => {
+        if (typeof r.output === "string") return r.output
+        if (typeof r.text === "string") return r.text
+        if (r.output !== undefined) return JSON.stringify(r.output)
+        if (r.attachments !== undefined) {
+          throw new Error("Extra tool returned attachments without string output/text")
+        }
+        return JSON.stringify(r)
+      })()
+      return {
+        ...r,
+        output,
+        title: typeof r.title === "string" ? r.title : "",
+        metadata: r.metadata && typeof r.metadata === "object" ? r.metadata : {},
+        ...(r.attachments !== undefined ? { attachments: r.attachments } : {}),
+      }
+    }
+
+    return { output: String(input ?? ""), title: "", metadata: {} }
+  }
+
   function collectLoopState(msgs: Message.WithParts[]) {
     let lastUser: Message.User | undefined
     let lastAssistant: Message.Assistant | undefined
@@ -1157,6 +1220,7 @@ export namespace SessionLoop {
       }
       if (decision.kind === "fail-prompt-budget") {
         const nonCompressiblePromptChars = systemChars + toolSchemaChars
+        const topPayloadParts = summarizeModelMessagePayloads(modelMessages)
         log.error("predictive-compaction-fail-prompt-budget", {
           step: input.step,
           reason: decision.reason,
@@ -1166,6 +1230,7 @@ export namespace SessionLoop {
           systemTokensEst,
           toolSchemaChars,
           messagePayloadChars,
+          topPayloadParts,
           nonCompressiblePromptChars,
           toolNames,
         })
@@ -1187,12 +1252,15 @@ export namespace SessionLoop {
         })
       }
       if (decision.kind === "compact") {
+        const topPayloadParts = summarizeModelMessagePayloads(modelMessages)
         log.warn("predictive-compaction-triggered", {
           step: input.step,
           totalTokensEst,
           limit,
           threshold,
           usableBudget,
+          messagePayloadChars,
+          topPayloadParts,
         })
         await SessionCompaction.create({
           sessionID: input.sessionID,
@@ -1798,22 +1866,13 @@ export namespace SessionLoop {
       ...(raw as any),
       async execute(args: unknown, options: unknown) {
         const result = await execute(args, options)
-        if (typeof result === "string") {
-          return { output: result, title: "", metadata: {} }
+        const normalized = normalizeExtraToolResult(result)
+        return {
+          ...normalized,
+          ...(normalized.attachments !== undefined
+            ? { attachments: stampAttachments(normalized.attachments) }
+            : {}),
         }
-        if (result && typeof result === "object") {
-          const r = result as Record<string, unknown>
-          return {
-            ...r,
-            output: typeof r.output === "string" ? r.output : JSON.stringify(r.output ?? r),
-            title: typeof r.title === "string" ? r.title : "",
-            metadata: r.metadata && typeof r.metadata === "object" ? r.metadata : {},
-            ...(r.attachments !== undefined
-              ? { attachments: stampAttachments(r.attachments) }
-              : {}),
-          }
-        }
-        return { output: String(result ?? ""), title: "", metadata: {} }
       },
     } as AITool
   }
