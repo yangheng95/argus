@@ -13365,11 +13365,16 @@ body[data-theme="light"] .workspace-mount {
   border-color: rgba(116, 133, 184, 0.14) !important;
 }
 
+/* iter17 follow-up (CRON self-audit): the light-theme chat-input
+   override used to re-introduce an 18px border-radius which
+   directly defeated iter17's flat-corner intent (commit msg
+   said `border-radius: 0`, rendered visual still showed 18px).
+   Border-radius removed; theme palette (lighter accent border
+   + white background) stays. */
 body[data-theme="light"] .chat-input {
   margin: calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(12px * var(--ui-scale));
   padding: calc(9px * var(--ui-scale));
   border: 1px solid rgba(91, 95, 240, 0.28);
-  border-radius: calc(18px * var(--ui-scale));
   background: rgba(255, 255, 255, 0.9) !important;
   box-shadow: none !important;
 }
@@ -13640,11 +13645,13 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-mount {
   border-color: color-mix(in srgb, var(--border) 84%, transparent) !important;
 }
 
+/* iter17 follow-up (CRON self-audit): same fix as the light
+   override above — drop the 18px border-radius that defeated
+   iter17's flat-corner intent in dark mode. */
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input {
   margin: calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(12px * var(--ui-scale));
   padding: calc(9px * var(--ui-scale));
   border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
   background: color-mix(in srgb, var(--surface) 94%, transparent) !important;
   box-shadow: none !important;
 }

@@ -80,4 +80,22 @@ describe(".chat-input is a single flat source", () => {
     // along with the shell.
     expect(STYLES).not.toMatch(/\n\.chat-input::before\s*\{/)
   })
+
+  test("no theme override re-introduces a non-zero border-radius on .chat-input", () => {
+    // CRON self-audit on iter17 caught two theme overrides
+    // (`body[data-theme="light"] .chat-input` and the
+    // dark-theme equivalent) that quietly forced
+    // `border-radius: calc(18px * --ui-scale)` back onto
+    // .chat-input — so the rendered visual stayed rounded
+    // even though the canonical was flat. Walk every theme-
+    // scoped `.chat-input` rule body and assert none of them
+    // carry a non-zero border-radius declaration.
+    const headRe = /(^|\n)body[^{]*?\.chat-input(?![-\w])(?::focus-within)?\s*\{/g
+    for (const match of STYLES.matchAll(headRe)) {
+      const open = match.index + match[0].length - 1
+      const close = STYLES.indexOf("}", open)
+      const body = STYLES.slice(open + 1, close)
+      expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
+    }
+  })
 })
