@@ -68,6 +68,10 @@ Progress log:
   `styles/surfaces/composer.css` owning only composer-specific icon
   sizing and active state. This removes all `chat-toolbar-btn` TSX
   callers and drops the aggregate legacy button budget from 73 to 70.
+- 2026-05-03: The composer executor chip shell now renders through
+  `Button`; `TitlebarMenubar` focuses it via `data-ui="executor-chip"`
+  instead of the legacy class. This removes the final `executor-chip`
+  TSX caller and drops the aggregate legacy button budget from 70 to 69.
 
 Trigger: user feedback (2026-05-03):
 

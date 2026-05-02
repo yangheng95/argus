@@ -242,7 +242,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
   function focusExecutorSelector() {
     closeMenu();
-    const button = document.querySelector<HTMLButtonElement>(".executor-chip");
+    const button = document.querySelector<HTMLButtonElement>('[data-ui="executor-chip"]');
     button?.focus();
   }
 

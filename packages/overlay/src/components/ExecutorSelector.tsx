@@ -27,6 +27,7 @@ import {
   type ExecutorDescriptor,
 } from "../services/executor";
 import { t } from "../utils/i18n";
+import { Button } from "./ui/Button";
 
 // MirrorCode is the internal/orchestrator executor — its "model" is the
 // project default LLM (appStore.config.model) which drives planning +
@@ -134,9 +135,12 @@ export function ExecutorSelector() {
       data-open={open() ? "true" : "false"}
       ref={(el) => (rootRef = el)}
     >
-        <button
+        <Button
           type="button"
-          class="executor-chip"
+          variant="outline"
+          size="sm"
+          tone="neutral"
+          data-ui="executor-chip"
           data-active="true"
           data-has-external="true"
           aria-haspopup="listbox"
@@ -186,7 +190,7 @@ export function ExecutorSelector() {
               />
             </svg>
           </span>
-        </button>
+        </Button>
 
         <Show when={open()}>
           <div class="executor-menu" role="listbox" aria-label={t("executor.group")}>
