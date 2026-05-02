@@ -294,7 +294,7 @@ test("workspace intro owns first-run directory setup when no directory is set", 
       localStorage.removeItem("oc_directory")
       window.__TAURI__ = {
         core: {
-          invoke: async (command: string) => {
+          invoke: async (command: string, args?: Record<string, unknown>) => {
             if (command === "overlay_settings_load") {
               return {
                 serverUrl: `http://127.0.0.1:${portValue}`,
@@ -304,6 +304,10 @@ test("workspace intro owns first-run directory setup when no directory is set", 
               }
             }
             if (command === "overlay_settings_save") return true
+            if (command === "overlay_pick_dir") {
+              ;(window as any).__pickedDirectoryStart = args?.start || ""
+              return ""
+            }
             return null
           },
         },
@@ -323,23 +327,30 @@ test("workspace intro owns first-run directory setup when no directory is set", 
     }, server.port)
 
     await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
+    await page.waitForSelector('[data-testid="titlebar-open-folder"]', { visible: true })
     await page.waitForSelector('[data-testid="board-intro-open-folder"]', { visible: true })
     const intro = await page.evaluate(() => {
       const startup = document.querySelector<HTMLElement>('[data-testid="startup-workspace-dialog"]')
       const openFolder = document.querySelector<HTMLElement>('[data-testid="board-intro-open-folder"]')
+      const titlebarOpenFolder = document.querySelector<HTMLElement>('[data-testid="titlebar-open-folder"] .titlebar-status-value')
       const title = document.querySelector<HTMLElement>(".board-intro__title")
       const sections = document.querySelector<HTMLElement>(".sections-title")
       return {
         hasStartup: !!startup,
         openFolderText: openFolder?.textContent || "",
+        titlebarOpenFolderText: titlebarOpenFolder?.textContent || "",
         title: title?.textContent || "",
         sections: sections?.textContent || "",
       }
     })
     expect(intro.hasStartup).toBe(false)
     expect(intro.openFolderText).toBe("Open Folder")
+    expect(intro.titlebarOpenFolderText).toBe("Open Folder")
     expect(intro.title).toBe("OpenCorvus workspace")
     expect(intro.sections).toBe("Workspace")
+    await page.click('[data-testid="titlebar-open-folder"]')
+    const pickedStart = await page.evaluate(() => (window as any).__pickedDirectoryStart ?? null)
+    expect(pickedStart).toBe("")
     await page.close()
   } finally {
     await browser.close().catch(() => undefined)

@@ -55,6 +55,13 @@ function providerLabel(): string {
   return model;
 }
 
+function projectDirectoryLabel(): string {
+  const directory = settingsStore.directory.trim();
+  if (!directory) return t("startup.open_folder");
+  const normalized = directory.replace(/[\\/]+$/g, "").replace(/\\/g, "/");
+  return normalized.split("/").filter(Boolean).at(-1) || directory;
+}
+
 function configuredChannelCount(): number {
   return Array.isArray(appStore.channels)
     ? appStore.channels.filter((channel: any) => channel?.status === "configured").length
@@ -155,6 +162,16 @@ export function TitlebarStatusCluster(props: { onOpenLog: () => void }) {
   });
   return (
     <div class="titlebar-status-cluster" data-no-drag="true">
+      <button
+        type="button"
+        class="titlebar-status-chip titlebar-project-chip"
+        title={settingsStore.directory || t("intro.directory_required_title")}
+        onClick={() => void browseDirectory()}
+        data-testid="titlebar-open-folder"
+      >
+        <span class="titlebar-status-label">{t("cwd.title")}</span>
+        <span class="titlebar-status-value">{projectDirectoryLabel()}</span>
+      </button>
       <button
         type="button"
         class="titlebar-status-chip"
@@ -356,7 +373,7 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                     <div class="titlebar-menubar-note" title={settingsStore.directory}>
                       {settingsStore.directory || t("intro.directory_required_title")}
                     </div>
-                    <MenuItem onClick={() => void browseDirectory().finally(closeMenu)}>{t("cwd.browse")}</MenuItem>
+                    <MenuItem onClick={() => void browseDirectory().finally(closeMenu)} testid="titlebar-menu-open-folder">{t("startup.open_folder")}</MenuItem>
                     <MenuItem onClick={() => void createDirectory().finally(closeMenu)}>{t("cwd.create")}</MenuItem>
                     <MenuItem onClick={() => void openDirectory().finally(closeMenu)} disabled={!settingsStore.directory}>{t("cwd.open")}</MenuItem>
                   </MenuGroup>
