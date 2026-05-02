@@ -472,6 +472,45 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     })
     expect(controlsWithMargins).toEqual([])
 
+    const looseControlSpacing = await page.evaluate(() => {
+      const checks = [
+        { selector: ".titlebar", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".titlebar-left", props: ["columnGap"], max: 4 },
+        { selector: ".titlebar-utility", props: ["columnGap"], max: 4 },
+        { selector: ".titlebar-actions", props: ["columnGap"], max: 4 },
+        { selector: ".titlebar-window-controls", props: ["columnGap"], max: 4 },
+        { selector: ".task-bar", props: ["paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".sidebar-header", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".chat-header", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".sections-header", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".brand-guide", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".titlebar-menubar-trigger", props: ["paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".sidebar-btn-primary", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".sidebar-tool", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".task-dir-shell", props: ["columnGap", "paddingLeft", "paddingRight"], max: 4 },
+        { selector: ".task-cwd-dropdown", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".workspace-toggle", props: ["paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".btn.mini", props: ["paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".executor-chip", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+        { selector: ".chat-input", props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 8 },
+        { selector: ".chat-icon-col", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 4 },
+        { selector: ".chat-send", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
+      ]
+      return checks.flatMap(({ selector, props, max }) => {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) return []
+        const style = getComputedStyle(node)
+        return props.flatMap((prop) => {
+          const valueText = style[prop as keyof CSSStyleDeclaration] as string
+          const value = Number.parseFloat(valueText)
+          return Number.isFinite(value) && value <= max
+            ? []
+            : [{ selector, prop, value: valueText, max }]
+        })
+      })
+    })
+    expect(looseControlSpacing).toEqual([])
+
     const rightDrag = await page.evaluate(() => {
       const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
       const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
