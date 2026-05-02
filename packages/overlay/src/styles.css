@@ -9232,26 +9232,6 @@ body[data-theme="light"] .config-close-btn:hover {
   padding-top: calc(10px * var(--ui-scale));
   border-top: 1px solid var(--border);
 }
-.ext-group-head {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale));
-  flex-wrap: wrap;
-}
-.ext-group-head-title {
-  font-size: var(--subhead-size);
-  font-weight: 600;
-  letter-spacing: var(--subhead-track);
-  color: var(--text-strong);
-}
-.ext-group-head-actions {
-  display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
-  margin-left: auto;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
 .ext-group-body {
   display: flex;
   flex-direction: column;

@@ -329,9 +329,9 @@ export default function SkillMarketPanel() {
 
       {/* ── Installed Skills ── */}
       <section class="ext-group">
-        <header class="ext-group-head">
-          <span class="ext-group-head-title">{t("skill.title")}</span>
-          <span class="ext-group-head-actions">
+        <header class="ext-group-head oc-surface-header">
+          <span class="ext-group-head-title oc-surface-header__title">{t("skill.title")}</span>
+          <span class="ext-group-head-actions oc-surface-header__actions">
             <Button type="button" variant="ghost" size="sm" tone="neutral" onClick={handleReloadSkills}>
               {t("common.reload")}
             </Button>
@@ -482,9 +482,9 @@ export default function SkillMarketPanel() {
 
       {/* ── MCP Servers ── */}
       <section class="ext-group">
-        <header class="ext-group-head">
-          <span class="ext-group-head-title">{t("mcp.title")}</span>
-          <span class="ext-group-head-actions">
+        <header class="ext-group-head oc-surface-header">
+          <span class="ext-group-head-title oc-surface-header__title">{t("mcp.title")}</span>
+          <span class="ext-group-head-actions oc-surface-header__actions">
             <Button
               type="button"
               variant="ghost"
@@ -612,8 +612,8 @@ export default function SkillMarketPanel() {
       {/* ── Skill Market ── hidden when empty to avoid a standalone header bar */}
       <Show when={market().length > 0}>
         <section class="ext-group">
-          <header class="ext-group-head">
-            <span class="ext-group-head-title">{t("skill.market.title")}</span>
+          <header class="ext-group-head oc-surface-header">
+            <span class="ext-group-head-title oc-surface-header__title">{t("skill.market.title")}</span>
           </header>
           <div class="ext-group-body">
             <div class="extension-list" id="skillMarketList">
