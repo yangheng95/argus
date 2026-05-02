@@ -183,7 +183,82 @@ describe("delivery arbiter", () => {
     ])
   })
 
-  test("visual hard-gate failures are converted by the arbiter", () => {
+  test("runtime evidence failure requires rejected LLM verdict and preserves runtime audit evidence", () => {
+    const rejected: DeliveryVerdictType = {
+      verdict: "rejected",
+      summary: "Agent traced the empty DOM to the UI goal hydration code.",
+      startup_verification: { attempted: true, success: false, output: "DOM did not hydrate" },
+      frontend_check: { attempted: true, renders_correctly: false, issues: ["empty root"] },
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected src/App.tsx" }],
+      rejection_details: [{
+        goal_id: "gol_ui",
+        category: "runtime",
+        error: "UI root never hydrates in the integrated runtime",
+        suggestion: "Fix the UI entrypoint hydration path.",
+      }],
+    }
+    const accepted: DeliveryVerdictType = {
+      verdict: "accepted",
+      summary: "accepted by reviewer",
+      startup_verification: { attempted: true, success: true },
+      frontend_check: { attempted: false },
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
+    }
+    const runtimeReport = {
+      passed: false,
+      violations: [{ kind: "empty_root_shell" as const, detail: "root contains no hydrated children" }],
+      evidence: {
+        projectDir: ".",
+        buildArtifactPath: "dist/index.html",
+        renderedPngPath: "rendered.png",
+        dom: {
+          textLength: 0,
+          nodeCount: 1,
+          hasBodyChildren: true,
+          isEmptyRootShell: true,
+        },
+      },
+    }
+
+    expect(arbitrateDeliveryVerdict({
+      manifest: baseManifest(),
+      goalIds: ["gol_ui"],
+      llmVerdict: accepted,
+      runtimeReport,
+    })).toBeUndefined()
+
+    const decision = arbitrateDeliveryVerdict({
+      manifest: baseManifest(),
+      goalIds: ["gol_ui"],
+      llmVerdict: rejected,
+      runtimeReport,
+    })
+
+    expect(decision?.source).toBe("runtime_evidence")
+    expect(decision?.verdict.verdict).toBe("rejected")
+    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
+    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
+    expect(decision.verdict.deferred_checks.some((item) => item.name === "runtime_evidence")).toBe(true)
+    expect(decision.verdict.tool_call_evidence.some((item) => item.tool === "runtime_evidence")).toBe(true)
+  })
+
+  test("visual hard-gate failures require rejected LLM verdict and preserve visual audit evidence", () => {
+    const rejected: DeliveryVerdictType = {
+      verdict: "rejected",
+      summary: "Agent attributed the visual mismatch to the UI shell layout.",
+      startup_verification: { attempted: true, success: true },
+      frontend_check: { attempted: true, renders_correctly: false, issues: ["layout mismatch"] },
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "screenshot", passed: true, detail: "runtime screenshot" }],
+      rejection_details: [{
+        goal_id: "gol_ui",
+        category: "visual",
+        error: "UI shell layout does not match the reference screenshot",
+        suggestion: "Realign the primary layout regions to the reference.",
+      }],
+    }
     const accepted: DeliveryVerdictType = {
       verdict: "accepted",
       summary: "accepted by reviewer",
@@ -192,36 +267,42 @@ describe("delivery arbiter", () => {
       deferred_checks: [],
       tool_call_evidence: [{ tool: "screenshot", passed: true, detail: "runtime screenshot" }],
     }
+    const visualMetric = {
+      passed: false,
+      score: 0.24,
+      gates: [{
+        name: "ssim" as const,
+        passed: false,
+        threshold: 0.9,
+        value: 0.24,
+        note: "layout mismatch",
+      }],
+      renderedPath: "rendered.png",
+      referencePath: "reference.png",
+      capturedAt: 1,
+    }
+
+    expect(arbitrateDeliveryVerdict({
+      manifest: baseManifest(),
+      goalIds: ["gol_ui"],
+      llmVerdict: accepted,
+      visualMetric,
+    })).toBeUndefined()
 
     const decision = arbitrateDeliveryVerdict({
       manifest: baseManifest(),
       goalIds: ["gol_ui"],
-      llmVerdict: accepted,
-      visualMetric: {
-        passed: false,
-        score: 0.24,
-        gates: [{
-          name: "ssim",
-          passed: false,
-          threshold: 0.9,
-          value: 0.24,
-          note: "layout mismatch",
-        }],
-        renderedPath: "rendered.png",
-        referencePath: "reference.png",
-        capturedAt: 1,
-      },
+      llmVerdict: rejected,
+      visualMetric,
     })
 
     expect(decision?.source).toBe("visual_hard_gate")
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.rejection_details).toEqual([{
-      category: "visual",
-      error: "ssim: layout mismatch",
-      suggestion: "Rendered layout or visual structure diverges from the reference; realign the primary regions.",
-    }])
-    expect(affectedGoalIDs(decision.verdict)).toEqual([])
+    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
+    expect(decision.verdict.deferred_checks.some((item) => item.name === "visual_metric")).toBe(true)
+    expect(decision.verdict.tool_call_evidence.some((item) => item.tool === "visual_metric")).toBe(true)
+    expect(affectedGoalIDs(decision.verdict)).toEqual(["gol_ui"])
   })
 })
 

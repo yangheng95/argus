@@ -113,6 +113,15 @@ export namespace DeliveryService {
     const manifestFailures = manifest.finalGate.status === "failed"
       ? formatDeliveryManifestFailureDetails(manifest)
       : []
+    const hostGateFailures: NonNullable<DeliveryInfo["hostGateFailures"]> = []
+    if (manifest.finalGate.status === "failed") {
+      hostGateFailures.push({
+        kind: "manifest",
+        id: manifest.id,
+        summary: manifest.finalGate.summary,
+        evidence: manifestFailures,
+      })
+    }
 
     // 2. Runtime-evidence front gate for visual-reference deliveries.
     let runtimeReport: RuntimeEvidenceReport | undefined
@@ -135,14 +144,21 @@ export namespace DeliveryService {
         throw new DeliveryFailureError(`runtime-evidence crashed: ${msg}`, { cause: err })
       }
       if (!runtimeReport.passed) {
+        const runtimeFailureLines = runtimeReport.violations.map((v) => `[runtime] ${v.kind}: ${v.detail}`)
         log.warn("runtime-evidence gate rejected delivery", {
           title: input.task.title,
           violations: summarizeRuntimeViolations(runtimeReport.violations),
         })
         runtimeEvidenceFailures = [
           ...runtimeEvidenceFailures,
-          ...runtimeReport.violations.map((v) => `[runtime] ${v.kind}: ${v.detail}`),
+          ...runtimeFailureLines,
         ]
+        hostGateFailures.push({
+          kind: "runtime",
+          id: "runtime-evidence",
+          summary: `Runtime-evidence gate rejected delivery: ${runtimeReport.violations.length} violation(s).`,
+          evidence: runtimeFailureLines,
+        })
       }
       if (runtimeReport.passed) {
         log.info("runtime-evidence gate passed", {
@@ -153,37 +169,27 @@ export namespace DeliveryService {
       }
     }
 
-    // 3. LLM semantic verdict. Manifest failures are hard gates, but the
-    // delivery agent still owns semantic attribution into rejection_details.
-    let llmVerdict: DeliveryVerdictType | undefined
-    try {
-      llmVerdict = await DeliveryAgent.verify({
-        task: input.task,
-        goals: input.goals,
-        delivery: {
-          ...input.delivery,
-          manifestGate: manifest.finalGate,
-          manifestFailureDetails,
-          manifestFailures,
-          runtimeEvidenceFailures,
-        },
-        attachments: input.attachments,
-        signal: input.signal,
-      })
-    } catch (error) {
-      log.error("delivery service verify failed", {
-        title: input.task.title,
-        error: String(error),
-        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
-      })
-      if (error instanceof DeliveryFailureError) throw error
-      throw new DeliveryFailureError("delivery agent failed", { cause: error })
-    }
-
-    // 4. P0-B 视觉硬门——复用 runtime-evidence 的 rendered.png
+    // 3. Visual metric hard gate. It runs before the agent so numeric visual
+    // evidence is visible to the same agent-authored verdict; arbiter never
+    // fabricates visual rejection_details after the fact.
     let visualMetric: VisualMetricResult | null = null
+    let visualMetricFailures: string[] = []
     try {
-      visualMetric = manifest.finalGate.status === "passed"
+      if (
+        manifest.finalGate.status === "passed" &&
+        referencePath &&
+        runtimeReport?.passed &&
+        !runtimeReport.evidence.renderedPngPath
+      ) {
+        throw new Error(
+          "visual hard gate: runtime-evidence passed but did not provide a rendered PNG — " +
+            "this indicates runtime-evidence lost visual evidence.",
+        )
+      }
+      const canRunVisualMetric = manifest.finalGate.status === "passed"
+        && !!referencePath
+        && !!runtimeReport?.evidence.renderedPngPath
+      visualMetric = canRunVisualMetric
         ? await runVisualHardGate({
             referencePath,
             preRenderedPath: runtimeReport?.evidence.renderedPngPath,
@@ -196,6 +202,17 @@ export namespace DeliveryService {
           passed: visualMetric.passed,
           score: visualMetric.score,
         })
+        if (!visualMetric.passed) {
+          visualMetricFailures = visualMetric.gates
+            .filter((gate) => !gate.passed)
+            .map((gate) => `[visual] ${gate.name}: ${gate.note || `value=${gate.value} threshold=${gate.threshold}`}`)
+          hostGateFailures.push({
+            kind: "visual",
+            id: "visual-metric",
+            summary: summarizeVisualMetric(visualMetric),
+            evidence: visualMetricFailures,
+          })
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -204,6 +221,35 @@ export namespace DeliveryService {
         error: msg,
       })
       throw new DeliveryFailureError(`visual hard gate crashed: ${msg}`, { cause: err })
+    }
+
+    // 4. LLM semantic verdict. Host gate failures are hard gates, but the
+    // delivery agent still owns semantic attribution into rejection_details.
+    let llmVerdict: DeliveryVerdictType | undefined
+    try {
+      llmVerdict = await DeliveryAgent.verify({
+        task: input.task,
+        goals: input.goals,
+        delivery: {
+          ...input.delivery,
+          manifestGate: manifest.finalGate,
+          manifestFailureDetails,
+          manifestFailures,
+          hostGateFailures,
+          runtimeEvidenceFailures,
+          visualMetricFailures,
+        },
+        attachments: input.attachments,
+        signal: input.signal,
+      })
+    } catch (error) {
+      log.error("delivery service verify failed", {
+        title: input.task.title,
+        error: String(error),
+        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
+      })
+      if (error instanceof DeliveryFailureError) throw error
+      throw new DeliveryFailureError("delivery agent failed", { cause: error })
     }
 
     const decision = arbitrateDeliveryVerdict({ manifest, goalIds, llmVerdict, runtimeReport, visualMetric })
