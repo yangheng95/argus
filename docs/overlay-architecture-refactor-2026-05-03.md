@@ -97,6 +97,11 @@ Progress log:
   now render through `Button`, preserving stable ids for copy/log tests.
   This drops `.btn` callers from 38 to 33 and the aggregate legacy
   button budget from 49 to 44.
+- 2026-05-03: Central task action buttons in `Board` and
+  permission/question actions in `InteractionCard` now render through
+  `Button`, while preserving `data-task-action` / `data-action` hooks.
+  This drops `.btn` callers from 33 to 26, `.btn-primary` callers from
+  8 to 5, and the aggregate legacy button budget from 44 to 34.
 
 Trigger: user feedback (2026-05-03):
 
