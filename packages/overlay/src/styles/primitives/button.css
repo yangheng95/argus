@@ -70,6 +70,24 @@
   --oc-button-color: var(--bad);
 }
 
+.oc-button[data-variant="solid"][data-tone="neutral"] {
+  --oc-button-bg: var(--text-strong);
+  --oc-button-border: var(--oc-border-width) solid var(--text-strong);
+  --oc-button-color: var(--surface);
+}
+
+.oc-button[data-variant="solid"][data-tone="accent"] {
+  --oc-button-bg: var(--accent);
+  --oc-button-border: var(--oc-border-width) solid var(--accent);
+  --oc-button-color: var(--surface);
+}
+
+.oc-button[data-variant="solid"][data-tone="danger"] {
+  --oc-button-bg: var(--bad);
+  --oc-button-border: var(--oc-border-width) solid var(--bad);
+  --oc-button-color: var(--surface);
+}
+
 .oc-button[data-tone="danger"]:hover,
 .oc-button[data-tone="danger"]:focus-visible {
   --oc-button-bg: var(--bad-dim);
@@ -83,10 +101,34 @@
   flex: 0 0 auto;
 }
 
-.oc-button:hover,
-.oc-button:focus-visible {
+.oc-button:not([data-tone="danger"]):not([data-variant="solid"]):hover,
+.oc-button:not([data-tone="danger"]):not([data-variant="solid"]):focus-visible {
   --oc-button-bg: var(--surface-hover);
   --oc-button-border: var(--oc-border-width) solid var(--border-hover);
+  outline: none;
+}
+
+.oc-button[data-variant="solid"][data-tone="neutral"]:hover,
+.oc-button[data-variant="solid"][data-tone="neutral"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--text-strong) 86%, var(--surface));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--text-strong) 86%, var(--surface));
+  --oc-button-color: var(--surface);
+  outline: none;
+}
+
+.oc-button[data-variant="solid"][data-tone="accent"]:hover,
+.oc-button[data-variant="solid"][data-tone="accent"]:focus-visible {
+  --oc-button-bg: var(--accent-hover);
+  --oc-button-border: var(--oc-border-width) solid var(--accent-hover);
+  --oc-button-color: var(--surface);
+  outline: none;
+}
+
+.oc-button[data-variant="solid"][data-tone="danger"]:hover,
+.oc-button[data-variant="solid"][data-tone="danger"]:focus-visible {
+  --oc-button-bg: color-mix(in srgb, var(--bad) 86%, var(--surface));
+  --oc-button-border: var(--oc-border-width) solid color-mix(in srgb, var(--bad) 86%, var(--surface));
+  --oc-button-color: var(--surface);
   outline: none;
 }
 

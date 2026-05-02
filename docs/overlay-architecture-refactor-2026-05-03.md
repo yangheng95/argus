@@ -107,6 +107,12 @@ Progress log:
   preserving provider auth test ids. This drops `.btn` callers from 26
   to 16, `.btn-primary` callers from 5 to 3, and the aggregate legacy
   button budget from 34 to 22.
+- 2026-05-03: `SkillMarketPanel` skill, MCP, and marketplace actions
+  now render through `Button`. The primitive now defines solid tone
+  foreground and hover chrome explicitly so primary actions do not inherit
+  low-contrast accent text. This drops `.btn` callers from 16 to 0,
+  `.btn-primary` callers from 3 to 0, and the aggregate legacy button
+  budget from 22 to 3.
 
 Trigger: user feedback (2026-05-03):
 
