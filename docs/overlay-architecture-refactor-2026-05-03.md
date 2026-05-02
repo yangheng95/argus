@@ -113,6 +113,11 @@ Progress log:
   low-contrast accent text. This drops `.btn` callers from 16 to 0,
   `.btn-primary` callers from 3 to 0, and the aggregate legacy button
   budget from 22 to 3.
+- 2026-05-03: The right-panel workflow / inspector / preview tabs now
+  render through the new `Tabs` / `Tab` primitive. The runtime nodes no
+  longer use `.right-panel-tab` classes; tab shape is governed by
+  `styles/primitives/tabs.css` and the legacy button-class budget drops
+  from 3 to 0.
 
 Trigger: user feedback (2026-05-03):
 

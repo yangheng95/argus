@@ -70,6 +70,7 @@ import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
+import { Tab, Tabs } from "./components/ui/Tabs";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
@@ -947,38 +948,40 @@ const rightPanelTabsEl = document.getElementById("solidRightPanelTabs");
 if (rightPanelTabsEl) {
   render(
     () => (
-      <div class="right-panel-tablist" role="tablist" aria-label={t("right_panel.tabs")}>
-        <button
-          type="button"
-          class="right-panel-tab"
-          role="tab"
-          aria-selected={rightPanelTab() === "workflow"}
-          data-active={rightPanelTab() === "workflow" ? "true" : "false"}
+      <Tabs
+        size="sm"
+        tone="neutral"
+        aria-label={t("right_panel.tabs")}
+        data-ui="right-tabs"
+      >
+        <Tab
+          active={rightPanelTab() === "workflow"}
+          size="sm"
+          tone="neutral"
           onClick={() => selectRightPanelTab("workflow")}
+          data-ui="right-tab"
         >
           {t("right_panel.workflow")}
-        </button>
-        <button
-          type="button"
-          class="right-panel-tab"
-          role="tab"
-          aria-selected={rightPanelTab() === "inspector"}
-          data-active={rightPanelTab() === "inspector" ? "true" : "false"}
+        </Tab>
+        <Tab
+          active={rightPanelTab() === "inspector"}
+          size="sm"
+          tone="neutral"
           onClick={() => selectRightPanelTab("inspector")}
+          data-ui="right-tab"
         >
           {t("right_panel.inspector")}
-        </button>
-        <button
-          type="button"
-          class="right-panel-tab"
-          role="tab"
-          aria-selected={rightPanelTab() === "preview"}
-          data-active={rightPanelTab() === "preview" ? "true" : "false"}
+        </Tab>
+        <Tab
+          active={rightPanelTab() === "preview"}
+          size="sm"
+          tone="neutral"
           onClick={() => selectRightPanelTab("preview")}
+          data-ui="right-tab"
         >
           {t("right_panel.preview")}
-        </button>
-      </div>
+        </Tab>
+      </Tabs>
     ),
     rightPanelTabsEl,
   );
