@@ -573,6 +573,35 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     })
     expect(looseRightPanelSpacing).toEqual([])
 
+    const rightPanelDecorativeBorders = await page.evaluate(() => {
+      const selectors = [
+        ".sections",
+        ".sections-header",
+        ".right-panel-tablist",
+        ".right-panel-tab",
+        ".board-intro",
+        ".board-intro__section",
+        ".board-intro__mode",
+        ".board-intro__agent",
+        ".section",
+        ".section-head",
+        ".section-body > .empty-hint",
+        ".delivery-panel",
+        ".criteria-group",
+      ]
+      const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
+      return selectors.flatMap((selector) => {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) return []
+        const style = getComputedStyle(node)
+        return props.flatMap((prop) => {
+          const value = Number.parseFloat(style[prop])
+          return Number.isFinite(value) && value === 0 ? [] : [{ selector, prop, value: style[prop] }]
+        })
+      })
+    })
+    expect(rightPanelDecorativeBorders).toEqual([])
+
     const rightDrag = await page.evaluate(() => {
       const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
       const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
