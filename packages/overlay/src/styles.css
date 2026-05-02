@@ -13131,17 +13131,15 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
  * rule via var(--accent) / var(--accent-hover); no per-theme override
  * needed. */
 
-.section,
-.gwg,
-.delivery-panel,
-.criteria-group,
-.eval-error,
-/* iter28/30/36 fully retired this !important border-color
-   reset — every former segment (.config-subsection /
-   .extension-row / .channel-doc-card / .detail-card) now
-   declares `border: 1px solid var(--border)` directly in
-   its canonical block, so the override has no remaining
-   target. Rule deleted. */
+/* iter28/30/36 retired the !important border-color reset
+   rule body but left these five selectors dangling without
+   a closing `{ … }`. CSS treated the trailing `,` as
+   "list continues" and fused them with the next rule
+   (`.board-intro`), accidentally applying board-intro's
+   `display: flex; flex-direction: column; padding:
+   var(--ui-gap-lg); …` to .section / .gwg /
+   .delivery-panel / .criteria-group / .eval-error too.
+   Caught by iter39's 5-prefix grep. Selectors deleted. */
 
 /* ── BoardIntro ──
    Right-panel empty state shown when no task is selected. Previously
