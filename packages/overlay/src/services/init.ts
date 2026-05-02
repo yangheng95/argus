@@ -215,6 +215,7 @@ export function persistAndSyncSettings(): void {
 // ── Config loading ──
 
 const CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS = 20_000;
+let configInfoLoadSequence = 0;
 
 function loadErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -240,6 +241,7 @@ function settledValue<T>(
 export async function loadConfigInfo(
   timeoutMilliseconds = CONFIG_INFO_LOAD_TIMEOUT_MILLISECONDS,
 ): Promise<void> {
+  const loadSequence = ++configInfoLoadSequence;
   try {
     const [configResult, catalogResult, authResult, channelsResult, promptsResult] = await Promise.allSettled([
       apiJsonWithTimeout("config", timeoutMilliseconds),
@@ -268,6 +270,8 @@ export async function loadConfigInfo(
       console.warn("[init] loadConfigInfo partial failure", errors);
     }
 
+    if (loadSequence !== configInfoLoadSequence) return;
+
     // Push into appStore
     setAppStore({
       config: config ?? null,
@@ -293,6 +297,7 @@ export async function loadConfigInfo(
       setSettingsStore("toolPermissions", merged);
     }
   } catch (e) {
+    if (loadSequence !== configInfoLoadSequence) return;
     console.warn("[init] loadConfigInfo failed", e);
     setAppStore("configLoadErrors", { loadConfigInfo: loadErrorMessage(e) });
   }
