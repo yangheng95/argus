@@ -93,7 +93,7 @@ export function IntegrityBody(props: { integrity: Integrity }) {
       </Show>
 
       <Show when={nothing()}>
-        <p class="integrity__empty">{t("integrity.no_findings")}</p>
+        <p class="empty-hint empty-hint--card">{t("integrity.no_findings")}</p>
       </Show>
 
       <Show when={hasIssues()}>

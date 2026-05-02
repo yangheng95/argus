@@ -97,7 +97,7 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
 
       {/* State 3: Pending — no data and not generating */}
       <Show when={!hasData() && !props.isGenerating}>
-        <p class="req-empty">{t("workflow.requirements_pending")}</p>
+        <p class="empty-hint empty-hint--card">{t("workflow.requirements_pending")}</p>
       </Show>
 
       {/* Spec content — always available as collapsible detail when present */}
