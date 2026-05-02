@@ -3827,20 +3827,25 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
   line-height: 1.4;
 }
 
-/* ── Chat (left column) ── */
+/* ── Chat (middle column) ──
+   Single source after iter16. Used to be a chromed canonical
+   (border + shadow + transition) plus three !important reset
+   chains near the file tail (.sidebar, .chat { … } at ~12249,
+   .chat { background: var(--chat-canvas) … } at ~12787, and
+   another .sidebar, .chat { border: 0; … } at ~12795) that
+   knocked it back to flat with the chat-canvas background.
+   Folded into one flat block. Theme-scoped overrides
+   (`body[data-theme="..."] .chat { … }`) stay legitimate.
+   The hover transition is gone with the chrome (no border to
+   color, no shadow to lift). */
 .chat {
   flex: 999 1 var(--ui-chat-priority-width);
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: min(100%, var(--ui-chat-min-width));
-  border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
-  background:
-    var(--surface);
-  box-shadow: var(--shadow);
+  background: var(--chat-canvas);
   overflow: hidden;
-  transition: border-color 120ms, background 120ms, box-shadow 120ms;
 }
 
 .chat:hover,
@@ -9395,6 +9400,11 @@ body[data-theme="light"] .config-close-btn:hover {
   overflow: hidden;
 }
 
+/* iter16: Sidebar (left column) — single source. Was chromed
+   canonical + three !important resets at the file tail; now
+   flat with the rail-surface background baked in. Width
+   transition stays because the sidebar collapses on user
+   action and that animation is part of the layout, not chrome. */
 .sidebar {
   width: var(--ui-sidebar-width);
   min-width: min(100%, var(--ui-rail-min-width));
@@ -9402,25 +9412,15 @@ body[data-theme="light"] .config-close-btn:hover {
   flex: 0 1 var(--ui-sidebar-width);
   display: flex;
   flex-direction: column;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: var(--panel-radius);
-  background:
-    var(--surface);
-  transition: width 140ms ease, min-width 140ms ease, background 140ms ease, border-color 120ms, box-shadow 120ms;
+  background: var(--rail-surface);
+  transition: width 140ms ease, min-width 140ms ease;
   overflow: hidden;
-  box-shadow: var(--shadow);
 }
 
-.sidebar:hover,
-.sidebar:focus-within {
-  border-color: var(--hover-accent-border);
-  background:
-    linear-gradient(180deg, rgba(91, 141, 239, 0.08), rgba(91, 141, 239, 0.02) 62%, transparent),
-    var(--surface);
-  box-shadow:
-    0 0 0 1px rgba(91, 141, 239, 0.06),
-    var(--hover-accent-shadow);
-}
+/* iter16: hover/focus chrome dropped — calm/flat sidebar has
+   no border to color and no shadow to lift, so the hover
+   state was a no-op once the !important resets at the file
+   tail clobbered it. Now the canonical is honest about that. */
 
 .sidebar[data-collapsed="true"] {
   width: calc(62px * var(--ui-scale));
@@ -12242,28 +12242,13 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   box-shadow: none !important;
 }
 
-/* iter15: `.sections` no longer rides on this multi-selector
-   flat reset because its canonical block is already flat.
-   `.sidebar` + `.chat` keep the !important reset until they
-   get the same single-source treatment. */
-.sidebar,
-.chat {
-  background: var(--surface) !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
-
-.sidebar:hover,
-.sidebar:focus-within,
-.chat:hover,
-.chat:focus-within,
-.sections:hover,
-.sections:focus-within {
-  background: var(--surface) !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
+/* iter16: `.sidebar`, `.chat`, `.sections` all carry their
+   own flat canonicals now (rail-surface / chat-canvas /
+   inspector-surface backgrounds, no border, no shadow). The
+   multi-selector !important resets that used to live here
+   are gone. Theme-scoped overrides
+   (`body[data-theme="..."] .sidebar { … }`) stay legitimate
+   per-context tweaks. */
 
 .sidebar-header,
 .chat-header,
@@ -12780,23 +12765,10 @@ body[data-theme="light"] .btn-primary {
   gap: 0;
 }
 
-.sidebar {
-  background: var(--rail-surface) !important;
-}
-
-.chat {
-  background: var(--chat-canvas) !important;
-}
-
-/* iter15: `.sections` background + chrome resets folded into
-   the canonical block near line ~1995. `.sidebar` + `.chat` keep
-   their flat reset here (no inspector-surface background — they
-   stay on `--surface` from the earlier reset). */
-.sidebar,
-.chat {
-  border: 0 !important;
-  border-radius: 0 !important;
-}
+/* iter16: per-column background tokens (--rail-surface for
+   sidebar, --chat-canvas for chat, --inspector-surface for
+   sections) are baked into each column's canonical block now,
+   so the !important overrides that used to live here are gone. */
 
 .sidebar-header,
 .chat-header,
