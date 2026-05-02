@@ -994,6 +994,7 @@ function buildRequirements(taskID: string) {
   const rows = Database.use((db) =>
     db.select().from(EngineRequirementTable)
       .where(eq(EngineRequirementTable.task_id, taskID))
+      .orderBy(EngineRequirementTable.order_index, EngineRequirementTable.id)
       .all(),
   )
   if (rows.length === 0) return undefined
@@ -1188,5 +1189,11 @@ function buildArchitectSummary(taskID: string) {
     summary: `${entries.length} architect decisions across ${categories.length} categories`,
     contractCount: entries.length,
     categories,
+    decisions: entries.map((e) => ({
+      key: e.key,
+      value: e.value,
+      reason: e.reason,
+      goalID: e.goalID,
+    })),
   }
 }

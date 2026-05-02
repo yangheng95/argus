@@ -16,6 +16,7 @@ interface Requirement {
   description: string;
   type: "explicit" | "inferred" | "system";
   priority: "blocking" | "advisory";
+  status?: string;
 }
 
 interface RequirementsPanelProps {
@@ -34,6 +35,14 @@ function typeBadgeClass(type: string): string {
     case "inferred": return "req-type--inferred";
     case "system": return "req-type--system";
     default: return "";
+  }
+}
+
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "passed": return "req-status--passed";
+    case "failed": return "req-status--failed";
+    default: return "req-status--pending";
   }
 }
 
@@ -65,14 +74,21 @@ export function RequirementsPanel(props: RequirementsPanelProps) {
       <Show when={hasData()}>
         <div class="req-list">
           <For each={props.requirements}>
-            {(req) => (
+            {(req, index) => (
               <div class="req-item">
-                <span class="req-id">{req.id}</span>
-                <span class={`req-type ${typeBadgeClass(req.type)}`}>{req.type}</span>
-                <span class="req-desc">{req.description}</span>
-                <Show when={req.priority === "advisory"}>
-                  <span class="req-priority">advisory</span>
-                </Show>
+                <div class="req-item-main">
+                  <span class="req-index" title={req.id}>REQ {String(index() + 1).padStart(2, "0")}</span>
+                  <span class="req-desc">{req.description}</span>
+                </div>
+                <div class="req-item-meta">
+                  <span class={`req-type ${typeBadgeClass(req.type)}`}>{req.type}</span>
+                  <span class={`req-status ${statusBadgeClass(req.status || "pending")}`}>
+                    {req.status || "pending"}
+                  </span>
+                  <Show when={req.priority === "advisory"}>
+                    <span class="req-priority">advisory</span>
+                  </Show>
+                </div>
               </div>
             )}
           </For>

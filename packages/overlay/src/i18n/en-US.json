@@ -675,6 +675,7 @@
   "workspace.file_error": "Failed to load file: {{message}}",
   "workspace.toggle": "Toggle workspace",
   "workflow.architect": "Architect",
+  "workflow.architect_empty": "No architect decisions have been recorded yet.",
   "workflow.architect_contracts": "contracts",
   "workflow.architect_generating": "Coordinating cross-goal contracts...",
   "workflow.goals": "Goals",

@@ -675,6 +675,7 @@
   "workspace.file_error": "加载文件失败：{{message}}",
   "workspace.toggle": "切换工作区",
   "workflow.architect": "架构协同",
+  "workflow.architect_empty": "尚未记录架构决策。",
   "workflow.architect_contracts": "契约",
   "workflow.architect_generating": "正在整理跨目标契约…",
   "workflow.goals": "目标",
