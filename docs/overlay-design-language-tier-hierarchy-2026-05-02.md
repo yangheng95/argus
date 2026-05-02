@@ -108,6 +108,64 @@ quietly stripping the legitimate pill styling.
 - test/content-tier2-typography.test.ts            (iter10)
 - test/menu-group-typography.test.ts               (iter11)
 - test/content-subtitles-typography.test.ts        (iter12)
+- test/titlebar-single-source.test.ts              (iter14)
+- test/sections-single-source.test.ts              (iter15)
+- test/sidebar-chat-single-source.test.ts          (iter16)
+- test/chat-input-flat.test.ts                     (iter17)
+- test/right-panel-tabs-flat.test.ts               (iter18)
+- test/dark-mode-primary-button.test.ts            (iter19)
+- test/chat-textarea-single-source.test.ts         (iter20)
+
+## Single-source folding checklist
+
+The shell-container collapse iters (iter5 / iter8 / iter14 /
+iter15 / iter16 / iter17 / iter20) hit the same rule-35
+("穷举调用点") gap three times in a row. Each time the
+post-commit CRON self-audit caught a leftover override that
+the canonical-only grep had missed. The fixes added "iter X
+follow-up" commits, but the lesson belongs at the planning
+stage — before the canonical edit goes out.
+
+When folding a CSS selector to a single-source flat
+canonical, the all-of-the-following grep MUST run before the
+edit, not after:
+
+1. **Solo top-level rules** — `^\.foo\s*\{` / multi-line
+   selector lists where `.foo` appears as ANY member, top-
+   level only (no leading whitespace).
+
+2. **Pseudo-class siblings** — `\.foo:hover`, `\.foo:focus`,
+   `\.foo:focus-within`, `\.foo:active`, `\.foo:disabled`.
+   Iter16 missed `.chat:hover` chrome that would have
+   re-introduced gradient + shadow on hover the moment the
+   !important resets were removed.
+
+3. **Theme-scoped overrides** — `body\[data-theme=` chains
+   that re-style `.foo` for light / dark / vscode-dark.
+   Iter17 missed two theme overrides that quietly forced
+   `border-radius: 18px` back onto the chat input even though
+   the canonical declared 0. The rendered visual was the
+   opposite of what the commit message claimed.
+
+4. **Multi-selector partners** — when collapsing
+   `.foo-wrap, .foo { … }` to `.foo { … }`, the cleanup
+   MUST also confirm `.foo-wrap` either inherits the same
+   value from its own canonical or has a matching update.
+   Iter20 missed that the wrap kept declaring 72px while the
+   textarea collapsed to 62px — the wrap rendered ~10px
+   taller than its own child.
+
+5. **`@media` nested rules** — narrow-width / print /
+   prefers-reduced-motion overrides that re-set the same
+   property at a different breakpoint. Iter14 caught and
+   merged three `@media (max-width: 760px) .titlebar { … }`
+   blocks scattered across styles.css; the canonical alone
+   would have lied about the narrow-width visual.
+
+If any of the five comes up empty, write the grep command
+into the commit message. Future contributors and the CRON
+self-audit can verify the gap was checked, not just
+overlooked.
 
 ## Empty-state primitive (iter3 companion)
 
