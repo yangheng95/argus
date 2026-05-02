@@ -318,3 +318,9 @@
 | GET | `/experimental/worktree` | List worktrees | `worktree.list` |
 | POST | `/experimental/worktree` | Create worktree | `worktree.create` |
 | POST | `/experimental/worktree/reset` | Reset worktree | `worktree.reset` |
+
+### Preview
+
+| Method | 路径 | 说明 | operationId |
+|---|---|---|---|
+| GET | `/preview/frontend` | Resolve live frontend preview URL | `preview.frontend` |
