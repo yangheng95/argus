@@ -90,6 +90,23 @@ export interface DeliveryInfo {
   summary: string
   changedFiles: string[]
   diffs?: Array<{ file: string; diff?: string }>
+  manifestGate?: {
+    status: "passed" | "failed"
+    summary: string
+    failedCheckIds: string[]
+    failedCoverageIds: string[]
+    failedRuntimeFlowIds: string[]
+    failedReviewIds: string[]
+  }
+  manifestFailureDetails?: Array<{
+    kind: "check" | "coverage" | "runtime" | "review"
+    id: string
+    name: string
+    status?: string
+    command?: string
+    exitCode?: number
+    evidence: string
+  }>
   manifestFailures?: string[]
   runtimeEvidenceFailures?: string[]
   /**

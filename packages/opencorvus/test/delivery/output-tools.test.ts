@@ -51,6 +51,20 @@ describe("delivery output tools", () => {
     expect(kit.getCollector().verdict?.verdict).toBe("accepted")
   })
 
+  test("rejects accepted verdict while manifest gate is failed", async () => {
+    const kit = createDeliveryOutputTools({
+      manifestGate: {
+        status: "failed",
+        summary: "Delivery evidence gate failed 1 required check(s).",
+      },
+    })
+
+    const rejected = await kit.tools.submit_verdict.execute!(acceptedBase, {} as any)
+
+    expect(rejected).toContain("finalGate.status=failed")
+    expect(kit.getCollector().finalized).toBe(false)
+  })
+
   test("derives no runtime facets for docs-only delivery", () => {
     expect(deriveRequiredEvidenceFacets({
       task: {},

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "../../src/delivery/arbiter"
 import { formatDeliveryManifestFailureDetails, type DeliveryEvidenceManifest } from "../../src/delivery/manifest"
-import { createDeliverySpecialistReview } from "../../src/delivery/specialist-review"
 import { affectedGoalIDs, type DeliveryVerdictType } from "../../src/delivery/verdict"
 
 describe("delivery arbiter", () => {
@@ -31,75 +30,92 @@ describe("delivery arbiter", () => {
     expect(verdict.summary).toContain("1 review item(s)")
   })
 
-  test("maps blocking specialist findings to suggested owner goals", () => {
-    const decision = arbitrateDeliveryVerdict({
-      manifest: manifestWithSpecialistFinding(),
+  test("manifest failure requires a rejected LLM verdict instead of synthesized attribution", () => {
+    const accepted: DeliveryVerdictType = {
+      verdict: "accepted",
+      summary: "accepted by reviewer",
+      startup_verification: { attempted: true, success: true },
+      frontend_check: { attempted: false },
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "run_command", passed: true, detail: "build passed" }],
+    }
+
+    expect(arbitrateDeliveryVerdict({
+      manifest: manifestWithFailedBuildCheck(),
       goalIds: ["gol_auth", "gol_ui"],
+    })).toBeUndefined()
+    expect(arbitrateDeliveryVerdict({
+      manifest: manifestWithFailedBuildCheck(),
+      goalIds: ["gol_auth", "gol_ui"],
+      llmVerdict: accepted,
+    })).toBeUndefined()
+  })
+
+  test("preserves delivery agent goal attribution when manifest gate fails", () => {
+    const rejected: DeliveryVerdictType = {
+      verdict: "rejected",
+      summary: "Agent traced the build failure to the UI goal package wiring.",
+      startup_verification: { attempted: true, success: false, output: "build failed" },
+      frontend_check: { attempted: false },
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "read_file", passed: true, detail: "inspected package.json" }],
+      rejection_details: [{
+        goal_id: "gol_ui",
+        category: "build",
+        error: "package.json script references a missing UI entry module",
+        suggestion: "Restore the UI entry module or correct the package script.",
+      }],
+    }
+
+    const decision = arbitrateDeliveryVerdict({
+      manifest: manifestWithFailedBuildCheck(),
+      goalIds: ["gol_auth", "gol_ui"],
+      llmVerdict: rejected,
     })
 
     expect(decision?.source).toBe("manifest")
     expect(decision?.verdict.verdict).toBe("rejected")
-    expect(decision?.verdict.rejection_details).toEqual([{
-      goal_id: "gol_auth",
-      category: "quality",
-      error: "specialist:security_data failed: blocking:security: auth bypass in middleware",
-      suggestion: "Fix the Specialist Review: security_data failure and rerun specialist_review.",
-    }])
+    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
+    expect(affectedGoalIDs(decision.verdict)).toEqual(["gol_ui"])
+    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
+    expect(decision.verdict.deferred_checks.some((item) => item.name === "check:build")).toBe(true)
+    expect(decision.verdict.summary).toContain("Host gate:")
   })
 
-  test("keeps project check failures task-scoped instead of fanning out to every goal", () => {
+  test("keeps task-scope agent rejection task-scoped when manifest gate fails", () => {
+    const rejected: DeliveryVerdictType = {
+      verdict: "rejected",
+      summary: "Agent found the merged project has no runnable build output.",
+      startup_verification: { attempted: true, success: false, output: "build failed" },
+      frontend_check: { attempted: false },
+      deferred_checks: [],
+      tool_call_evidence: [{ tool: "run_command", passed: false, detail: "bun run build failed" }],
+      rejection_details: [{
+        category: "build",
+        error: "merged worktree build fails before a responsible goal can be isolated",
+        suggestion: "Inspect the integrated build output and adjust the plan or task-level wiring.",
+      }],
+    }
+
     const decision = arbitrateDeliveryVerdict({
       manifest: manifestWithFailedBuildCheck(),
       goalIds: ["gol_auth", "gol_ui", "gol_data"],
+      llmVerdict: rejected,
     })
 
     expect(decision?.source).toBe("manifest")
     expect(decision?.verdict.verdict).toBe("rejected")
     if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.rejection_details).toEqual([{
-      category: "build",
-      error: "check:build failed: tsc exited with code 1",
-      suggestion: "Fix the Build failure and rerun bun run build.",
-    }])
+    expect(decision.verdict.rejection_details).toEqual(rejected.rejection_details)
     expect(affectedGoalIDs(decision.verdict)).toEqual([])
   })
 
-  test("manifest rejection reports every failure family with functional blockers first", () => {
-    const decision = arbitrateDeliveryVerdict({
-      manifest: manifestWithMixedFunctionalAndAuxiliaryFailures(),
-      goalIds: ["gol_ui"],
-    })
-
-    expect(decision?.source).toBe("manifest")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.summary).toContain("Functional completion failed")
-    const errors = decision.verdict.rejection_details.map((item) => item.error)
-    expect(errors.some((item) => item.includes("goal:gol_ui failed"))).toBe(true)
-    expect(errors.some((item) => item.includes("runtime:web:. failed"))).toBe(true)
-    expect(errors.some((item) => item.includes("specialist:frontend failed"))).toBe(true)
-    expect(errors.some((item) => item.includes("check:build failed"))).toBe(true)
-    expect(errors.at(-1)).toContain("check:build failed")
+  test("manifest failure formatting reports every failure family with functional blockers first", () => {
     const formatted = formatDeliveryManifestFailureDetails(manifestWithMixedFunctionalAndAuxiliaryFailures())
     expect(formatted[0]).toContain("[coverage] goal:gol_ui")
+    expect(formatted.some((item) => item.includes("[runtime] runtime:web:."))).toBe(true)
+    expect(formatted.some((item) => item.includes("[review] specialist:frontend"))).toBe(true)
     expect(formatted.at(-1)).toContain("[check] check:build")
-  })
-
-  test("keeps broad specialist requirement mappings task-scoped without suggested owner", () => {
-    const decision = arbitrateDeliveryVerdict({
-      manifest: manifestWithBroadSpecialistFinding(),
-      goalIds: ["gol_auth", "gol_ui"],
-    })
-
-    expect(decision?.source).toBe("manifest")
-    expect(decision?.verdict.verdict).toBe("rejected")
-    if (decision?.verdict.verdict !== "rejected") throw new Error("expected rejected verdict")
-    expect(decision.verdict.rejection_details).toEqual([{
-      category: "quality",
-      error: "specialist:test_integration failed: blocking:test_quality: Required test command failed",
-      suggestion: "Fix the Specialist Review: test_integration failure and rerun specialist_review.",
-    }])
-    expect(affectedGoalIDs(decision.verdict)).toEqual([])
   })
 
   test("keeps delivery agent rejection text when manifest gate also fails", () => {
@@ -129,7 +145,8 @@ describe("delivery arbiter", () => {
     expect(decision.verdict.summary).toContain("Agent inspected the failure")
     expect(decision.verdict.summary).toContain("Host gate:")
     expect(decision.verdict.rejection_details.some((item) => item.error.includes("./missing"))).toBe(true)
-    expect(decision.verdict.rejection_details.some((item) => item.error.includes("tsc exited"))).toBe(true)
+    expect(decision.verdict.rejection_details.some((item) => item.error.includes("tsc exited"))).toBe(false)
+    expect(decision.verdict.deferred_checks.some((item) => item.evidence.includes("tsc exited"))).toBe(true)
   })
 
   test("formats manifest failures with enough detail for orchestrator routing", () => {
@@ -208,52 +225,6 @@ describe("delivery arbiter", () => {
   })
 })
 
-function manifestWithSpecialistFinding(): DeliveryEvidenceManifest {
-  const specialist = createDeliverySpecialistReview({
-    taskId: "tsk_arbiter",
-    runId: "run_arbiter",
-    deliveryId: "dlv_arbiter",
-    reviewer: "security_data",
-    executionStatus: "completed",
-    summary: "Security/data review found 1 issue.",
-    findings: [{
-      proposedSeverity: "blocking",
-      category: "security",
-      claim: "auth bypass in middleware",
-      evidence: [{ kind: "file", ref: "src/auth/middleware.ts" }],
-      affectedRequirementIDs: ["REQ-AUTH"],
-      suggestedOwnerGoalID: "gol_auth",
-    }],
-    evidenceRefs: ["file:src/auth/middleware.ts"],
-    reviewedSurfaces: ["security_data"],
-  })
-  return {
-    ...baseManifest(),
-    reviewEvidence: [{
-      id: "specialist:security_data",
-      name: "Specialist Review: security_data",
-      status: "failed",
-      artifactId: specialist.id,
-      evidence: ["blocking:security: auth bypass in middleware"],
-    }],
-    specialistReviews: [specialist],
-    requirementCoverage: [{
-      requirementId: "REQ-AUTH",
-      status: "covered",
-      goalIds: ["gol_auth"],
-      evidence: ["mapped"],
-    }],
-    finalGate: {
-      status: "failed",
-      summary: "Delivery evidence gate failed 0 required check(s), 0 coverage item(s), 0 runtime flow(s), and 1 review item(s).",
-      failedCheckIds: [],
-      failedCoverageIds: [],
-      failedRuntimeFlowIds: [],
-      failedReviewIds: ["specialist:security_data"],
-    },
-  }
-}
-
 function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceManifest {
   return {
     ...manifestWithFailedBuildCheck(),
@@ -295,61 +266,6 @@ function manifestWithMixedFunctionalAndAuxiliaryFailures(): DeliveryEvidenceMani
         primaryFailureIds: ["goal:gol_ui", "runtime:web:.", "specialist:frontend"],
         auxiliaryFailureIds: ["check:build"],
         summary: "Functional completion failed with 3 primary blocker(s) and 1 auxiliary blocker(s).",
-      },
-    },
-  }
-}
-
-function manifestWithBroadSpecialistFinding(): DeliveryEvidenceManifest {
-  const specialist = createDeliverySpecialistReview({
-    taskId: "tsk_arbiter",
-    runId: "run_arbiter",
-    deliveryId: "dlv_arbiter",
-    reviewer: "test_integration",
-    executionStatus: "completed",
-    summary: "Test integration review found 1 issue.",
-    findings: [{
-      proposedSeverity: "blocking",
-      category: "test_quality",
-      claim: "Required test command failed",
-      evidence: [{ kind: "command", ref: "bun test" }],
-      affectedRequirementIDs: ["REQ-AUTH", "REQ-UI"],
-    }],
-    evidenceRefs: ["command:bun test"],
-    reviewedSurfaces: ["test_integration"],
-  })
-  return {
-    ...baseManifest(),
-    reviewEvidence: [{
-      id: "specialist:test_integration",
-      name: "Specialist Review: test_integration",
-      status: "failed",
-      artifactId: specialist.id,
-      evidence: ["blocking:test_quality: Required test command failed"],
-    }],
-    specialistReviews: [specialist],
-    requirementCoverage: [
-      { requirementId: "REQ-AUTH", status: "covered", goalIds: ["gol_auth"], evidence: ["mapped"] },
-      { requirementId: "REQ-UI", status: "covered", goalIds: ["gol_ui"], evidence: ["mapped"] },
-    ],
-    functionalAssessment: {
-      status: "complete",
-      primaryFailureIds: [],
-      auxiliaryFailureIds: ["specialist:test_integration"],
-      summary: "Functional completion passed, but 1 auxiliary quality gate(s) failed.",
-    },
-    finalGate: {
-      status: "failed",
-      summary: "Functional completion passed, but 1 auxiliary quality gate(s) failed.",
-      failedCheckIds: [],
-      failedCoverageIds: [],
-      failedRuntimeFlowIds: [],
-      failedReviewIds: ["specialist:test_integration"],
-      functionalAssessment: {
-        status: "complete",
-        primaryFailureIds: [],
-        auxiliaryFailureIds: ["specialist:test_integration"],
-        summary: "Functional completion passed, but 1 auxiliary quality gate(s) failed.",
       },
     },
   }

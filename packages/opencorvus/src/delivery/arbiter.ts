@@ -1,11 +1,9 @@
 import type { VisualMetricResult } from "./visual-metric"
 import type { RuntimeEvidenceReport } from "./checks/runtime-evidence"
 import type {
-  DeliveryCheckResult,
   DeliveryEvidenceManifest,
   DeliveryGateVerdict,
   DeliveryManifestFunctionalAssessment,
-  DeliveryReviewEvidence,
 } from "./manifest"
 import type {
   DeliveryVerdictType,
@@ -82,20 +80,13 @@ export function arbitrateDeliveryVerdict(input: {
   visualMetric?: VisualMetricResult | null
 }): DeliveryArbiterDecision | undefined {
   if (input.manifest.finalGate.status !== "passed") {
-    const manifestVerdict = synthesizeManifestRejection(input.manifest, input.goalIds)
-    if (input.llmVerdict) {
-      return {
-        source: "manifest",
-        verdict: forceRejectedByGate({
-          verdict: input.llmVerdict,
-          gateVerdict: manifestVerdict,
-          gateSummary: input.manifest.finalGate.summary,
-        }),
-      }
-    }
+    if (!input.llmVerdict || input.llmVerdict.verdict !== "rejected") return undefined
     return {
       source: "manifest",
-      verdict: manifestVerdict,
+      verdict: appendManifestEvidence({
+        ...input.llmVerdict,
+        summary: `${input.llmVerdict.summary}\n\nHost gate: ${input.manifest.finalGate.summary}`,
+      }, input.manifest),
     }
   }
 
@@ -201,139 +192,6 @@ function appendManifestEvidence(
   }
 }
 
-function synthesizeManifestRejection(
-  manifest: DeliveryEvidenceManifest,
-  goalIds: readonly string[],
-): DeliveryVerdictType {
-  void goalIds
-  const failedResults = manifest.checkResults.filter((item) =>
-    manifest.finalGate.failedCheckIds.includes(item.id)
-  )
-  const failedCoverage = [
-    ...manifest.goalCoverage
-      .filter((item) => manifest.finalGate.failedCoverageIds.includes(`goal:${item.goalId}`))
-      .map((item) => ({
-        id: `goal:${item.goalId}`,
-        family: "quality",
-        label: item.title,
-        command: "acceptance_specs",
-        failureReason: item.evidence.join("; "),
-        outputExcerpt: item.evidence.join("; "),
-      })),
-    ...manifest.requirementCoverage
-      .filter((item) => manifest.finalGate.failedCoverageIds.includes(`requirement:${item.requirementId}`))
-      .map((item) => ({
-        id: `requirement:${item.requirementId}`,
-        family: "quality",
-        label: item.requirementId,
-        command: "requirement_coverage",
-        failureReason: item.evidence.join("; "),
-        outputExcerpt: item.evidence.join("; "),
-      })),
-  ]
-  const failedRuntimeFlows = manifest.runtimeFlows
-    .filter((item) => manifest.finalGate.failedRuntimeFlowIds.includes(item.id))
-    .map((item) => ({
-      id: item.id,
-      family: "runtime",
-      label: item.name,
-      command: "runtime_flow",
-      failureReason: item.evidence.join("; "),
-      outputExcerpt: item.evidence.join("; "),
-    }))
-  const failedReviewEvidence = manifest.reviewEvidence
-    .filter((item) => (manifest.finalGate.failedReviewIds ?? []).includes(item.id))
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      family: "quality",
-      label: item.name,
-      command: "specialist_review",
-      failureReason: item.evidence.join("; "),
-      outputExcerpt: item.evidence.join("; "),
-    }))
-  const missingCheckResults = manifest.requiredChecks
-        .filter((item) => manifest.finalGate.failedCheckIds.includes(item.id))
-        .map((item) => ({
-          ...item,
-          status: "failed" as const,
-          outputExcerpt: "Required check did not produce a result.",
-          startedAt: manifest.timeCreated,
-          completedAt: manifest.timeCreated,
-        }))
-        .filter((item) => !failedResults.some((result) => result.id === item.id))
-  const failed = sortManifestFailuresByFunctionalPriority({
-    manifest,
-    failures: [
-      ...failedCoverage,
-      ...failedRuntimeFlows,
-      ...failedReviewEvidence,
-      ...failedResults,
-      ...missingCheckResults,
-    ],
-  })
-  return {
-    verdict: "rejected",
-    summary: manifest.finalGate.summary,
-    startup_verification: {
-      attempted: true,
-      success: false,
-      output: manifest.finalGate.summary,
-    },
-    frontend_check: {
-      attempted: false,
-      issues: failed.map((item) => `${item.name ?? item.label ?? item.id}: ${item.failureReason ?? item.outputExcerpt}`).slice(0, 10),
-    },
-    deferred_checks: [
-      ...manifest.checkResults.map((item) => ({
-        name: item.id,
-        result: item.status,
-        evidence: item.outputExcerpt || item.failureReason || "No output captured.",
-      })),
-      ...manifest.reviewEvidence.map((item) => ({
-        name: item.id,
-        result: item.status,
-        evidence: item.evidence.join("\n"),
-      })),
-    ],
-    tool_call_evidence: [
-      {
-        tool: "delivery_arbiter",
-        passed: false,
-        detail: `${manifest.finalGate.failedCheckIds.length} failed required check(s), ${manifest.finalGate.failedCoverageIds.length} failed coverage item(s), ${manifest.finalGate.failedRuntimeFlowIds.length} failed runtime flow(s), ${(manifest.finalGate.failedReviewIds ?? []).length} failed review item(s) in manifest ${manifest.id}.`,
-      },
-    ],
-    rejection_details: failed.flatMap((item) =>
-      rejectionDetailsForFailure({ item, manifest }),
-    ),
-  }
-}
-
-type ManifestFailureItem = DeliveryCheckResult | {
-  id: string
-  name?: string
-  family?: string
-  label?: string
-  command?: string
-  failureReason?: string
-  outputExcerpt?: string
-}
-
-function sortManifestFailuresByFunctionalPriority(input: {
-  manifest: DeliveryEvidenceManifest
-  failures: ManifestFailureItem[]
-}) {
-  const primary = new Set(input.manifest.functionalAssessment?.primaryFailureIds ?? [])
-  const auxiliary = new Set(input.manifest.functionalAssessment?.auxiliaryFailureIds ?? [])
-  const rank = (id: string) =>
-    primary.has(id) ? 0 :
-    auxiliary.has(id) ? 1 :
-    2
-  return [...input.failures].sort((a, b) =>
-    rank(a.id) - rank(b.id) || a.id.localeCompare(b.id)
-  )
-}
-
 function synthesizeRuntimeRejection(
   report: RuntimeEvidenceReport,
   goalIds: readonly string[],
@@ -414,72 +272,6 @@ function applyVisualMetricVerdict(
     tool_call_evidence: llmVerdict.tool_call_evidence,
     rejection_details: gateRejections,
   }
-}
-
-function rejectionDetailsForFailure(input: {
-  item: DeliveryCheckResult | {
-    id: string
-    name?: string
-    family?: string
-    label?: string
-    command?: string
-    failureReason?: string
-    outputExcerpt?: string
-  }
-  manifest: DeliveryEvidenceManifest
-}): RejectionDetailType[] {
-  const item = input.item
-  const ownerGoalIds = ownerGoalIdsForFailure({ itemId: item.id, manifest: input.manifest })
-  const base = {
-    category: categoryForFailure(item),
-    error: `${item.id} failed: ${item.failureReason ?? item.outputExcerpt}`,
-    suggestion: `Fix the ${item.label ?? item.name ?? item.id} failure and rerun ${item.command ?? "the delivery check"}.`,
-  }
-  if (ownerGoalIds.length === 0) return [base]
-  return ownerGoalIds.map((goalId) => ({ goal_id: goalId, ...base }))
-}
-
-function ownerGoalIdsForFailure(input: {
-  itemId: string
-  manifest: DeliveryEvidenceManifest
-}): string[] {
-  if (input.itemId.startsWith("goal:")) {
-    const goalId = input.itemId.slice("goal:".length)
-    return goalId ? [goalId] : []
-  }
-
-  if (input.itemId.startsWith("requirement:")) {
-    const requirementId = input.itemId.slice("requirement:".length)
-    const coverage = input.manifest.requirementCoverage.find((item) => item.requirementId === requirementId)
-    return coverage?.goalIds.length ? coverage.goalIds : []
-  }
-
-  if (input.itemId.startsWith("specialist:")) {
-    const reviewer = input.itemId.slice("specialist:".length)
-    const review = input.manifest.specialistReviews?.find((item) => item.reviewer === reviewer)
-    const suggestedGoalIds = review?.findings
-      .filter((finding) => finding.proposedSeverity === "blocking")
-      .map((finding) => finding.suggestedOwnerGoalID)
-      .filter((item): item is string => Boolean(item)) ?? []
-    if (suggestedGoalIds.length > 0) return [...new Set(suggestedGoalIds)].sort()
-  }
-
-  return []
-}
-
-function categoryForFailure(item: DeliveryCheckResult | {
-  id: string
-  family?: string
-}) {
-  return item.family === "test"
-    ? "test" as const
-    : item.family === "lint"
-      ? "lint" as const
-      : item.family === "build"
-        ? "build" as const
-        : item.family === "runtime"
-          ? "runtime" as const
-          : "quality" as const
 }
 
 function visualSuggestion(gateName: string) {
