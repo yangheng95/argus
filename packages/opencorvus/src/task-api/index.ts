@@ -22,6 +22,7 @@ import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
 import { Message } from "@/session/message"
+import { SessionPrompt } from "@/session/prompt"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { compileBoard, boardTag } from "@/workbench/board"
@@ -1094,6 +1095,10 @@ export namespace EngineService {
     // Abort Orchestrator and any in-progress pipeline stage
     Orchestrator.abort(taskID)
     abortTaskPipeline(taskID)
+    const sessionIDs = task.session_id ? await sessionTree(task.session_id) : []
+    for (const sessionID of sessionIDs.reverse()) {
+      SessionPrompt.cancel(sessionID)
+    }
     const liveGoalRuns = listGoalRunsForTask(taskID).filter((row) =>
       !["completed", "failed", "aborted"].includes(row.status),
     )

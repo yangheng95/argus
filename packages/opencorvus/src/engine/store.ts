@@ -981,6 +981,22 @@ export function listLiveExecutorSessionsForProject(projectID: string) {
   )
 }
 
+export function listLiveExecutorSessionsForTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(EngineExecutorSessionTable)
+      .where(
+        and(
+          eq(EngineExecutorSessionTable.task_id, taskID),
+          inArray(EngineExecutorSessionTable.status, LIVE_EXECUTOR_SESSION_STATUSES),
+        ),
+      )
+      .orderBy(desc(EngineExecutorSessionTable.time_created))
+      .all(),
+  )
+}
+
 function taskRows(rows: TaskRow[]) {
   const sessionIDs = [...new Set(rows.map((row) => row.session_id).filter((item): item is string => !!item))]
   const projectIDs = [...new Set(rows.map((row) => row.project_id))]
