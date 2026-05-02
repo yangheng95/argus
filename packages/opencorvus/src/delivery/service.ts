@@ -29,6 +29,7 @@ import {
 } from "./checks/runtime-evidence"
 import { buildDeliveryEvidenceManifest } from "./checks/project-gate"
 import {
+  deliveryManifestFailureDetails,
   formatDeliveryManifestFailureDetails,
   persistDeliveryEvidenceManifest,
   type DeliveryEvidenceManifest,
@@ -106,6 +107,9 @@ export namespace DeliveryService {
         failedCheckIds: manifest.finalGate.failedCheckIds,
       })
     }
+    const manifestFailureDetails = manifest.finalGate.status === "failed"
+      ? deliveryManifestFailureDetails(manifest)
+      : []
     const manifestFailures = manifest.finalGate.status === "failed"
       ? formatDeliveryManifestFailureDetails(manifest)
       : []
@@ -149,37 +153,31 @@ export namespace DeliveryService {
       }
     }
 
-    // 3. LLM semantic verdict. The manifest is the single delivery outlet:
-    // when host-run functional evidence already fails, do not add a second
-    // decision brain that can merge, dilute, or contradict the manifest report.
+    // 3. LLM semantic verdict. Manifest failures are hard gates, but the
+    // delivery agent still owns semantic attribution into rejection_details.
     let llmVerdict: DeliveryVerdictType | undefined
-    if (manifest.finalGate.status === "passed") {
-      try {
-        llmVerdict = await DeliveryAgent.verify({
-          task: input.task,
-          goals: input.goals,
-          delivery: {
-            ...input.delivery,
-            manifestFailures,
-            runtimeEvidenceFailures,
-          },
-          attachments: input.attachments,
-          signal: input.signal,
-        })
-      } catch (error) {
-        log.error("delivery service verify failed", {
-          title: input.task.title,
-          error: String(error),
-          cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
-        })
-        if (error instanceof DeliveryFailureError) throw error
-        throw new DeliveryFailureError("delivery agent failed", { cause: error })
-      }
-    } else {
-      log.info("delivery semantic agent skipped because manifest gate failed", {
-        title: input.task.title,
-        summary: manifest.finalGate.summary,
+    try {
+      llmVerdict = await DeliveryAgent.verify({
+        task: input.task,
+        goals: input.goals,
+        delivery: {
+          ...input.delivery,
+          manifestGate: manifest.finalGate,
+          manifestFailureDetails,
+          manifestFailures,
+          runtimeEvidenceFailures,
+        },
+        attachments: input.attachments,
+        signal: input.signal,
       })
+    } catch (error) {
+      log.error("delivery service verify failed", {
+        title: input.task.title,
+        error: String(error),
+        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
+      })
+      if (error instanceof DeliveryFailureError) throw error
+      throw new DeliveryFailureError("delivery agent failed", { cause: error })
     }
 
     // 4. P0-B 视觉硬门——复用 runtime-evidence 的 rendered.png

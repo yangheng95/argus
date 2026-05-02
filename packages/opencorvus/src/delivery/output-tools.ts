@@ -41,10 +41,15 @@ function emptyCollector(): DeliveryCollector {
 export function createDeliveryOutputTools(input?: {
   requiredTools?: string[]
   requiredEvidenceFacets?: DeliveryEvidenceFacetType[]
+  manifestGate?: {
+    status: "passed" | "failed"
+    summary: string
+  }
 }) {
   let collector: DeliveryCollector = emptyCollector()
   const requiredTools = Array.from(new Set(input?.requiredTools ?? []))
   const requiredEvidenceFacets = Array.from(new Set(input?.requiredEvidenceFacets ?? []))
+  const manifestGate = input?.manifestGate
   const requires = (facet: DeliveryEvidenceFacetType) => requiredEvidenceFacets.includes(facet)
 
   const tools = {
@@ -66,6 +71,7 @@ export function createDeliveryOutputTools(input?: {
         "\nCross-field rules for verdict='accepted' (enforced here — payload is rejected and you re-submit if any fails):\n" +
         "- If startup is host-required, startup_verification.attempted MUST be true AND .success MUST be true.\n" +
         "- If frontend or visual is host-required, frontend_check.attempted MUST be true and renders_correctly MUST NOT be false.\n" +
+        "- If DeliveryEvidenceManifest finalGate.status='failed', verdict='accepted' is rejected; submit a rejected verdict with evidence-backed rejection_details.\n" +
         "- Any supplied failed startup/frontend evidence contradicts acceptance even when that facet was not required.\n" +
         "- deferred_checks MUST carry no result='failed' entries.\n" +
         "- tool_call_evidence MUST contain ≥1 entry with passed=true.\n" +
@@ -84,6 +90,15 @@ export function createDeliveryOutputTools(input?: {
           if (typeof obj.launch_command === "string") {
             const trimmed = obj.launch_command.trim().replace(/^`+|`+$/g, "").trim()
             obj.launch_command = trimmed.length > 0 ? trimmed : undefined
+          }
+
+          if (manifestGate?.status === "failed") {
+            return (
+              `Error: verdict='accepted' is forbidden because DeliveryEvidenceManifest ` +
+              `finalGate.status=failed: ${manifestGate.summary}. Submit ` +
+              `verdict='rejected' with rejection_details. Include goal_id only when ` +
+              `a responsible goal is identifiable; otherwise leave the entry task-scoped.`
+            )
           }
 
           // Cross-field semantic checks — Zod cannot express "field A=true

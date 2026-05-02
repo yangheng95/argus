@@ -120,6 +120,7 @@ export namespace DeliveryAgent {
         const outputToolKit = createDeliveryOutputTools({
           requiredTools: systemResolved.requiredTools,
           requiredEvidenceFacets,
+          manifestGate: input.delivery.manifestGate,
         })
         const guard = toolGuard({ ...reviewTools, ...outputToolKit.tools })
         return {
@@ -375,9 +376,9 @@ function buildUserPrompt(
     `The host has already run the deterministic DeliveryEvidenceManifest gates ` +
     `before this session: project commands, forbidden shell-success coercion, ` +
     `blocking-goal acceptance coverage, and linked requirement coverage. If any ` +
-      `of those gates failed, you will receive a rejected verdict path instead of ` +
-      `being asked to self-credit them. Your job here is to verify semantic and ` +
-      `runtime issues that remain and return ` +
+    `of those gates failed, their structured evidence is included below; your ` +
+    `submit_verdict tool will reject verdict='accepted' until the gate is clean. ` +
+    `Your job here is to inspect the evidence and return ` +
     `concrete residual findings.\n\n` +
     `Your verdict is a semantic judgment layered on top of the manifest, not a ` +
     `replacement for it. Use ` +
@@ -414,14 +415,34 @@ function buildUserPrompt(
       filesShown.map((f) => `- ${f}`).join("\n"),
   )
 
-  if (input.delivery.manifestFailures && input.delivery.manifestFailures.length > 0) {
+  if (input.delivery.manifestGate) {
+    const gate = input.delivery.manifestGate
+    const gateLines = [
+      `finalGate.status=${gate.status}`,
+      `summary=${gate.summary}`,
+      `failedCheckIds=${gate.failedCheckIds.join(", ") || "(none)"}`,
+      `failedCoverageIds=${gate.failedCoverageIds.join(", ") || "(none)"}`,
+      `failedRuntimeFlowIds=${gate.failedRuntimeFlowIds.join(", ") || "(none)"}`,
+      `failedReviewIds=${gate.failedReviewIds.join(", ") || "(none)"}`,
+    ]
+    const detailLines = (input.delivery.manifestFailureDetails ?? []).map((item) => {
+      const status = item.status ? ` status=${item.status}` : ""
+      const exitCode = item.exitCode === undefined ? "" : ` exit=${item.exitCode}`
+      const command = item.command ? ` command=${item.command}` : ""
+      return `- [${item.kind}] ${item.id} ${item.name}${status}${exitCode}${command}: ${item.evidence}`
+    })
     sections.push(
-      `# DeliveryEvidenceManifest Failures\n\n` +
-      `The host-run manifest is blocking this delivery. You are still the delivery brain: ` +
-      `read these failures, inspect any needed code context, then reject through submit_verdict ` +
-      `with concrete, actionable rejection_details. Do not accept while any blocking manifest ` +
-      `failure remains.\n\n` +
-      input.delivery.manifestFailures.map((item) => `- ${item}`).join("\n"),
+      `# DeliveryEvidenceManifest Gate\n\n` +
+      gateLines.join("\n") +
+      (detailLines.length > 0
+        ? `\n\nFailure details:\n${detailLines.join("\n")}`
+        : "") +
+      (gate.status === "failed"
+        ? `\n\nThe host manifest is blocking this delivery. You must submit verdict='rejected'. ` +
+          `For each rejection_details entry, include goal_id only when the listed goal's ` +
+          `owned_paths, files_changed, or report evidence identify it as responsible; otherwise ` +
+          `leave the entry task-scoped and explain the project-level blocker.`
+        : ""),
     )
   }
 
