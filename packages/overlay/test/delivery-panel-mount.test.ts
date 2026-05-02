@@ -62,16 +62,18 @@ test("main.tsx mounts AgentWorkflowPanel as a root right-panel tab", async () =>
   expect(main).toContain("<AgentWorkflowPanel");
 });
 
-test("AgentWorkflowPanel renders animated workflow stage primitives, not a flat card list", async () => {
+test("AgentWorkflowPanel renders a calm workflow map without high-energy effects", async () => {
   const component = await readSrc("src/components/AgentWorkflowPanel.tsx");
   const css = await readSrc("src/styles.css");
   expect(component).toContain('class="agent-workflow-orb"');
   expect(component).toContain('class="agent-workflow-beam"');
-  expect(component).toContain('class="agent-workflow-card-aura"');
-  expect(css).toContain("@keyframes workflow-flow");
-  expect(css).toContain("@keyframes workflow-pulse");
-  expect(css).toContain("@keyframes workflow-sheen");
-  expect(css).toContain("prefers-reduced-motion");
+  expect(component).not.toContain("agent-workflow-card-aura");
+  expect(css).toContain("/* Calm workflow map */");
+  const workflowCss = css.slice(css.indexOf("/* Calm workflow map */"));
+  expect(workflowCss).not.toContain("@keyframes workflow-");
+  expect(workflowCss).not.toContain("agent-workflow-card-aura");
+  expect(workflowCss).not.toContain("drop-shadow");
+  expect(workflowCss).not.toContain("backdrop-filter");
 });
 
 test("DeliveryPanel and DeliveryEvidenceGroup are exported from components/Board.tsx", async () => {

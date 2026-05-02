@@ -157,7 +157,6 @@ export function AgentWorkflowPanel() {
                       }}
                       onClick={() => setSelected(record)}
                     >
-                      <span class="agent-workflow-card-aura" aria-hidden="true" />
                       <span class="agent-workflow-card-head">
                         <span class="agent-workflow-agent-wrap">
                           <span class="agent-workflow-status-dot" aria-hidden="true">
