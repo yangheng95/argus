@@ -422,8 +422,10 @@ export function ChatComposer(props: ChatComposerProps) {
         onChange={handleFileChange}
       />
 
-      {/* Compose row: textarea + icon column + send */}
+      {/* Compose row: executor + textarea + actions + send */}
       <div class="chat-compose-row">
+        <ExecutorSelector />
+
         <div class="chat-textarea-wrap" data-expanded={expanded() ? "true" : undefined}>
           <textarea
             ref={textareaRef}
@@ -450,8 +452,8 @@ export function ChatComposer(props: ChatComposerProps) {
           </Show>
         </div>
 
-        {/* Icon column: attach / web search / expand */}
-        <div class="chat-icon-col" data-disabled={!props.enabled ? "true" : undefined}>
+        {/* Actions: attach / web search / expand */}
+        <div class="chat-actions-row" data-disabled={!props.enabled ? "true" : undefined}>
           <button
             type="button"
             id="btnChatAttach"
@@ -555,16 +557,6 @@ export function ChatComposer(props: ChatComposerProps) {
           </span>
           <span class="chat-send-label">{sendLabel()}</span>
         </button>
-      </div>
-
-      {/* Compose meta (executor selector + tip) */}
-      <div class="chat-compose-meta">
-        <div class="chat-compose-meta-left">
-          <ExecutorSelector />
-        </div>
-        <div class="chat-compose-meta-right">
-          <div class="chat-compose-tip">{t("chat.tip")}</div>
-        </div>
       </div>
     </form>
   );

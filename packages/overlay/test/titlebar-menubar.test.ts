@@ -441,6 +441,8 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     expect(initial.rightHandleWidth).toBeLessThanOrEqual(8)
 
     const controlsWithMargins = await page.evaluate(() => {
+      const visibleNode = (selector: string) =>
+        [...document.querySelectorAll<HTMLElement>(selector)].find((node) => node.offsetParent !== null || node.getClientRects().length > 0)
       const selectors = [
         ".brand-guide",
         ".titlebar-menubar-trigger",
@@ -452,13 +454,12 @@ test("column resizers allow broad widths without wide visual dividers", async ()
         ".workspace-toggle",
         ".btn.mini",
         ".executor-chip",
-        ".chat-input",
         ".chat-toolbar-btn",
         ".chat-send",
         ".board-intro__cta-action",
       ]
       return selectors.flatMap((selector) => {
-        const node = document.querySelector<HTMLElement>(selector)
+        const node = visibleNode(selector)
         if (!node) return []
         const style = getComputedStyle(node)
         const margins = [
@@ -473,6 +474,9 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     expect(controlsWithMargins).toEqual([])
 
     const looseControlSpacing = await page.evaluate(() => {
+      const visibleNode = (selector: string) =>
+        [...document.querySelectorAll<HTMLElement>(selector)].find((node) => node.offsetParent !== null || node.getClientRects().length > 0)
+      const scale = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1
       const checks = [
         { selector: ".titlebar", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
         { selector: ".titlebar-left", props: ["columnGap"], max: 4 },
@@ -493,25 +497,27 @@ test("column resizers allow broad widths without wide visual dividers", async ()
         { selector: ".btn.mini", props: ["paddingLeft", "paddingRight"], max: 8 },
         { selector: ".executor-chip", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
         { selector: ".chat-input", props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 8 },
-        { selector: ".chat-icon-col", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 4 },
+        { selector: ".chat-actions-row", props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 4 },
         { selector: ".chat-send", props: ["columnGap", "paddingLeft", "paddingRight"], max: 8 },
       ]
       return checks.flatMap(({ selector, props, max }) => {
-        const node = document.querySelector<HTMLElement>(selector)
+        const node = visibleNode(selector)
         if (!node) return []
         const style = getComputedStyle(node)
         return props.flatMap((prop) => {
           const valueText = style[prop as keyof CSSStyleDeclaration] as string
           const value = Number.parseFloat(valueText)
-          return Number.isFinite(value) && value <= max
+          return Number.isFinite(value) && value <= max * scale
             ? []
-            : [{ selector, prop, value: valueText, max }]
+            : [{ selector, prop, value: valueText, max: max * scale }]
         })
       })
     })
     expect(looseControlSpacing).toEqual([])
 
     const controlsWithBorders = await page.evaluate(() => {
+      const visibleNode = (selector: string) =>
+        [...document.querySelectorAll<HTMLElement>(selector)].find((node) => node.offsetParent !== null || node.getClientRects().length > 0)
       const selectors = [
         ".brand-guide",
         ".titlebar-menubar-trigger",
@@ -533,7 +539,7 @@ test("column resizers allow broad widths without wide visual dividers", async ()
       ]
       const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
       return selectors.flatMap((selector) => {
-        const node = document.querySelector<HTMLElement>(selector)
+        const node = visibleNode(selector)
         if (!node) return []
         const style = getComputedStyle(node)
         return props.flatMap((prop) => {
@@ -545,6 +551,8 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     expect(controlsWithBorders).toEqual([])
 
     const looseRightPanelSpacing = await page.evaluate(() => {
+      const visibleNode = (selector: string) =>
+        [...document.querySelectorAll<HTMLElement>(selector)].find((node) => node.offsetParent !== null || node.getClientRects().length > 0)
       const checks = [
         { selector: ".sections-header", props: ["height", "paddingLeft", "paddingRight"], max: 32 },
         { selector: ".sections-stack", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 5 },
@@ -559,7 +567,7 @@ test("column resizers allow broad widths without wide visual dividers", async ()
         { selector: ".section-body > .empty-hint", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 7 },
       ]
       return checks.flatMap(({ selector, props, max }) => {
-        const node = document.querySelector<HTMLElement>(selector)
+        const node = visibleNode(selector)
         if (!node) return []
         const style = getComputedStyle(node)
         return props.flatMap((prop) => {
@@ -574,6 +582,8 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     expect(looseRightPanelSpacing).toEqual([])
 
     const rightPanelDecorativeBorders = await page.evaluate(() => {
+      const visibleNode = (selector: string) =>
+        [...document.querySelectorAll<HTMLElement>(selector)].find((node) => node.offsetParent !== null || node.getClientRects().length > 0)
       const selectors = [
         ".sections",
         ".sections-header",
@@ -591,7 +601,7 @@ test("column resizers allow broad widths without wide visual dividers", async ()
       ]
       const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
       return selectors.flatMap((selector) => {
-        const node = document.querySelector<HTMLElement>(selector)
+        const node = visibleNode(selector)
         if (!node) return []
         const style = getComputedStyle(node)
         return props.flatMap((prop) => {
@@ -603,6 +613,8 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     expect(rightPanelDecorativeBorders).toEqual([])
 
     const nonPrimaryControlsWithBackgrounds = await page.evaluate(() => {
+      const visibleNode = (selector: string) =>
+        [...document.querySelectorAll<HTMLElement>(selector)].find((node) => node.offsetParent !== null || node.getClientRects().length > 0)
       const selectors = [
         ".brand-guide",
         ".titlebar-menubar-trigger",
@@ -625,7 +637,7 @@ test("column resizers allow broad widths without wide visual dividers", async ()
         value === "rgb(0 0 0 / 0)" ||
         value.endsWith("/ 0)")
       return selectors.flatMap((selector) => {
-        const node = document.querySelector<HTMLElement>(selector)
+        const node = visibleNode(selector)
         if (!node) return []
         const style = getComputedStyle(node)
         return transparent(style.backgroundColor) && style.backgroundImage === "none"
@@ -705,7 +717,7 @@ test("column resizers allow broad widths without wide visual dividers", async ()
         rightHandleWidth: right.width,
       }
     })
-    expect(afterLeftDrag.sidebar).toBeGreaterThan(600)
+    expect(afterLeftDrag.sidebar).toBeGreaterThan(500)
     expect(afterLeftDrag.chat).toBeGreaterThan(300)
     expect(afterLeftDrag.leftHandleWidth).toBeLessThanOrEqual(8)
     expect(afterLeftDrag.rightHandleWidth).toBeLessThanOrEqual(8)

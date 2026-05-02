@@ -1,6 +1,6 @@
 // ── ExecutorSelector ──
-// Compact executor + per-executor model picker that lives at the bottom-left
-// of the chat composer (chat-compose-meta-left). Replaces the imperative
+// Compact executor + per-executor model picker that lives in the leading slot
+// of the chat composer row. Replaces the imperative
 // engine-bar + #codexModelPanel/#claudeCodeModelPanel block in index.html
 // + main.tsx's getElementById click delegation.
 //

@@ -231,7 +231,6 @@
   "chat.stop_label": "停止",
   "chat.stop_title": "中止当前生成并停止任务执行。",
   "chat.thinking": "思考中…",
-  "chat.tip": "Enter 发送 · Shift+Enter 换行",
   "chat.title": "会话",
   "chat.web_search_title": "联网搜索",
   "checks.pending": "等待中",

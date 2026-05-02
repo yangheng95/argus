@@ -1198,8 +1198,8 @@ document.addEventListener("DOMContentLoaded", () => {
     textarea?.focus();
   });
 
-  // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer
-  // (chat-compose-meta-left). The component owns its own dropdown, click-out
+  // Executor selection moved to <ExecutorSelector/> mounted inside ChatComposer.
+  // The component owns its own dropdown, click-out
   // dismissal and Escape handling — Solid lifecycle disposes both on unmount.
 });
 

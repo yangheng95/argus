@@ -354,7 +354,7 @@ A token/role -> B IA/layout -> C task status -> D cards -> E composer -> F panel
 - [x] `RightPanelTab` 只包含 `plan / evaluation / changes / preview`。
 - [x] 代码中无 `inspector` / `workflow` UI tab 字面量。
 - [x] TaskStatusHeader 只有一个挂载点，且不在 chat header。
-- [ ] 无 `.chat-compose-meta` / `.chat-icon-col`。
+- [x] 无 `.chat-compose-meta` / `.chat-icon-col`。
 - [ ] ChangesPanel tab 切换不销毁 group chunk。
 - [ ] MemoryPanel / LogViewer 不在本方案中误删。
 - [x] Phase A / Phase B 新增和修改行为有测试。

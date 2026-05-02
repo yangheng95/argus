@@ -231,7 +231,6 @@
   "chat.stop_label": "Stop",
   "chat.stop_title": "Stop generation and halt task execution.",
   "chat.thinking": "Thinking…",
-  "chat.tip": "Enter to send · Shift+Enter for newline",
   "chat.title": "Conversation",
   "chat.web_search_title": "Web search",
   "checks.pending": "Pending",

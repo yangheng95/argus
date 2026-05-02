@@ -118,6 +118,7 @@
   --ui-dialog-diff-width: calc(1040px * var(--ui-scale));
   --ui-status-dot: calc(7px * var(--ui-scale));
   --ui-chat-send-size: calc(32px * var(--ui-scale));
+  --ui-icon-btn-size: calc(30px * var(--ui-scale));
   --ui-chat-min-height: calc(58px * var(--ui-scale));
   --ui-chat-max-height: calc(140px * var(--ui-scale));
   --ui-select-padding-right: calc(28px * var(--ui-scale));
@@ -1726,7 +1727,7 @@ a { color: inherit; text-decoration: none; }
    Bottom-left of the chat composer. Replaces the previous titlebar
    `.engine-bar` block + #codexModelPanel/#claudeCodeModelPanel
    imperative wiring. Dropdown opens UPWARD via `bottom: 100%` since
-   the chip sits near the viewport bottom inside .chat-compose-meta. */
+   the chip sits near the viewport bottom inside .chat-compose-row. */
 
 .executor-selector {
   position: relative;
@@ -4940,27 +4941,11 @@ code .file-link:hover {
   margin: calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
   padding: calc(8px * var(--ui-scale) * var(--chat-compose-scale));
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: calc(20px * var(--ui-scale) * var(--chat-compose-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(84, 138, 247, 0.015) 58%, transparent),
-    color-mix(in srgb, var(--surface) 94%, transparent);
+  border-radius: var(--panel-radius);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
   flex-shrink: 0;
   container-type: inline-size;
-  box-shadow:
-    0 10px 20px rgba(0, 0, 0, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.chat-input::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    radial-gradient(circle at 14% 0%, rgba(84, 138, 247, 0.08), transparent 26%),
-    radial-gradient(circle at 86% 100%, rgba(255, 255, 255, 0.03), transparent 24%);
-  opacity: 0.8;
+  box-shadow: var(--shadow-float);
 }
 
 /* ── Chat Attachments ── */
@@ -5021,29 +5006,29 @@ code .file-link:hover {
 }
 .chat-attachment-remove:hover { color: var(--text-strong); }
 
-/* ── Chat icon column + toolbar buttons ── */
+/* ── Chat actions row + toolbar buttons ── */
 
-.chat-icon-col {
+.chat-actions-row {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  align-self: stretch;
+  align-self: center;
   gap: calc(2px * var(--ui-scale) * var(--chat-compose-scale));
   flex-shrink: 0;
   padding: calc(4px * var(--ui-scale) * var(--chat-compose-scale)) calc(3px * var(--ui-scale) * var(--chat-compose-scale));
-  border: 1px solid color-mix(in srgb, var(--subtle-4) 88%, transparent);
-  border-radius: calc(16px * var(--ui-scale) * var(--chat-compose-scale));
+  border: 0;
+  border-radius: var(--panel-radius);
   background: color-mix(in srgb, var(--surface-inset) 76%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  box-shadow: none;
 }
 
 .chat-toolbar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: calc(26px * var(--ui-scale) * var(--chat-compose-scale));
-  height: calc(26px * var(--ui-scale) * var(--chat-compose-scale));
+  width: calc(var(--ui-icon-btn-size) * var(--chat-compose-scale));
+  height: calc(var(--ui-icon-btn-size) * var(--chat-compose-scale));
   border: none;
   border-radius: calc(9px * var(--ui-scale) * var(--chat-compose-scale));
   background: transparent;
@@ -5052,12 +5037,12 @@ code .file-link:hover {
   padding: 0;
   transition: color 120ms, background 120ms, transform 120ms;
 }
-/* When the textarea is disabled, the entire icon column (attach / web
+/* When the textarea is disabled, the actions row (attach / web
    search / expand) should follow — otherwise the buttons look clickable
    but click does nothing or worse: they intercept focus and the operator
-   thinks the composer is broken. data-disabled on the column flips
+   thinks the composer is broken. data-disabled on the row flips
    pointer-events + opacity so the visual matches the textarea. */
-.chat-icon-col[data-disabled="true"] {
+.chat-actions-row[data-disabled="true"] {
   opacity: 0.4;
   pointer-events: none;
 }
@@ -5104,8 +5089,8 @@ code .file-link:hover {
 
 .chat-compose-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: stretch;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
   min-width: 0;
 }
@@ -5158,34 +5143,24 @@ code .file-link:hover {
   min-width: 0;
   min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
   resize: none;
-  border: 1px solid color-mix(in srgb, var(--subtle-4) 92%, transparent);
-  border-radius: calc(16px * var(--ui-scale) * var(--chat-compose-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 64%),
-    color-mix(in srgb, var(--surface-inset) 84%, transparent);
+  border: 0;
+  border-radius: var(--panel-radius);
+  background: color-mix(in srgb, var(--surface-inset) 84%, transparent);
   color: var(--text-strong);
   padding: calc(10px * var(--ui-scale) * var(--chat-compose-scale)) calc(12px * var(--ui-scale) * var(--chat-compose-scale));
   font-size: var(--ui-font-body);
   line-height: 1.45;
   overflow-y: auto;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.025),
-    0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: min-height 0.2s ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  box-shadow: none;
+  transition: min-height 0.2s ease, box-shadow 120ms ease, background 120ms ease;
 }
 .chat-textarea[data-expanded="true"] {
   min-height: calc(220px * var(--ui-scale) * var(--chat-compose-scale));
 }
 .chat-textarea:focus {
   outline: none;
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--subtle-4));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(91, 141, 239, 0.025) 68%, transparent),
-    color-mix(in srgb, var(--surface-inset) 88%, transparent);
-  box-shadow:
-    0 0 0 3px rgba(91, 141, 239, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 8px 18px rgba(20, 30, 49, 0.16);
+  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 .chat-textarea::placeholder { color: var(--text-muted); }
 
@@ -5257,41 +5232,6 @@ body[data-theme="light"] .chat-send { color: #ffffff; }
   white-space: nowrap;
 }
 
-.chat-compose-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  flex-wrap: wrap;
-  min-width: 0;
-  padding-top: calc(2px * var(--ui-scale) * var(--chat-compose-scale));
-  border-top: none;
-}
-.chat-compose-meta-left {
-  display: flex;
-  align-items: center;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-}
-.chat-compose-meta-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: calc(6px * var(--ui-scale) * var(--chat-compose-scale));
-  flex: 1 1 auto;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-.chat-compose-meta-left a {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-.chat-compose-meta-left a:hover {
-  color: var(--text-soft);
-  text-decoration: underline;
-}
-
 .chat-build {
   display: flex;
   flex: 1 1 calc(220px * var(--ui-scale));
@@ -5342,20 +5282,6 @@ body[data-theme="light"] .chat-send { color: #ffffff; }
   opacity: 1;
 }
 
-.chat-compose-tip {
-  display: inline-flex;
-  align-items: center;
-  min-height: auto;
-  padding: 0;
-  text-align: right;
-  font-size: var(--ui-font-tiny);
-  color: var(--text-muted);
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  white-space: nowrap;
-}
-
 @container (max-width: 520px) {
   .chat-send {
     padding: 0 calc(10px * var(--ui-scale));
@@ -5365,17 +5291,7 @@ body[data-theme="light"] .chat-send { color: #ffffff; }
     display: none;
   }
 
-  .chat-compose-meta {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .chat-compose-meta-right {
-    justify-content: flex-start;
-  }
-
-  .chat-version,
-  .chat-compose-tip {
+  .chat-version {
     margin-left: 0;
     text-align: left;
     white-space: normal;
@@ -11374,7 +11290,7 @@ body[data-resizing="true"] * {
 
 .chat-header-meta #btnChatCopyAll {
   min-height: auto;
-  padding: 0 0 0 calc(10px * var(--ui-scale));
+  padding: 0 0 0 calc(6px * var(--ui-scale));
   border: none;
   border-radius: 0;
   background: transparent;
@@ -11416,7 +11332,7 @@ body[data-resizing="true"] * {
 .config-dialog-sections .btn.mini,
 .task-actions-buttons .btn {
   min-height: auto;
-  padding: 0 0 0 calc(10px * var(--ui-scale));
+  padding: 0 0 0 calc(6px * var(--ui-scale));
   border: none;
   border-radius: 0;
   background: transparent;
@@ -12176,10 +12092,6 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   box-shadow: none;
 }
 
-.chat-input::before {
-  display: none;
-}
-
 .chat-compose-row {
   gap: calc(8px * var(--ui-scale));
 }
@@ -12191,21 +12103,18 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 
 .chat-textarea {
   border-radius: var(--radius);
-  border-color: var(--border);
   background: var(--surface-inset);
   box-shadow: none;
   font-size: var(--ui-font-body);
 }
 
 .chat-textarea:focus {
-  border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
-.chat-icon-col {
+.chat-actions-row {
   border-radius: var(--radius);
   background: var(--surface-inset);
-  border-color: var(--border);
   box-shadow: none;
 }
 
@@ -12425,8 +12334,8 @@ body[data-theme="light"] .btn-primary {
    truth and no hacks. */
 
 .chat-compose-row {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: end;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
 }
 
 .chat-textarea-wrap,
@@ -12438,8 +12347,8 @@ body[data-theme="light"] .btn-primary {
   min-height: calc(210px * var(--ui-scale));
 }
 
-.chat-icon-col {
-  align-self: stretch;
+.chat-actions-row {
+  align-self: center;
 }
 
 /* .chat-send / .chat-interrupt now live as the canonical rule near
@@ -12453,12 +12362,11 @@ body[data-theme="light"] .btn-primary {
 
 @media (max-width: 700px) {
   .chat-compose-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  .chat-icon-col {
-    grid-row: 1 / span 2;
-    grid-column: 2;
+  .chat-actions-row {
+    grid-column: 3;
   }
 
   .chat-send {
@@ -12703,7 +12611,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   min-height: calc(62px * var(--ui-scale));
 }
 
-.chat-icon-col {
+.chat-actions-row {
   background: color-mix(in srgb, var(--surface) 52%, transparent);
 }
 
@@ -13103,10 +13011,10 @@ body[data-theme="light"] .workspace-mount {
 body[data-theme="light"] .chat-input {
   margin: calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(12px * var(--ui-scale));
   padding: calc(9px * var(--ui-scale));
-  border: 1px solid rgba(91, 95, 240, 0.28);
-  border-radius: calc(18px * var(--ui-scale));
+  border-color: rgba(91, 95, 240, 0.28);
+  border-radius: var(--panel-radius);
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: none;
+  box-shadow: var(--shadow-float);
 }
 
 body[data-theme="light"] .chat-input:focus-within {
@@ -13117,7 +13025,6 @@ body[data-theme="light"] .chat-input:focus-within {
 
 body[data-theme="light"] .chat-textarea {
   background: rgba(248, 250, 255, 0.92);
-  border-color: rgba(116, 133, 184, 0.14);
   color: var(--text-strong);
 }
 
@@ -13125,9 +13032,8 @@ body[data-theme="light"] .chat-placeholder-float {
   color: var(--text-muted);
 }
 
-body[data-theme="light"] .chat-icon-col {
+body[data-theme="light"] .chat-actions-row {
   background: rgba(248, 250, 255, 0.86);
-  border-color: rgba(116, 133, 184, 0.14);
 }
 
 body[data-theme="light"] .chat-toolbar-btn {
@@ -13376,10 +13282,10 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-mount {
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input {
   margin: calc(10px * var(--ui-scale)) calc(16px * var(--ui-scale)) calc(12px * var(--ui-scale));
   padding: calc(9px * var(--ui-scale));
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
-  border-radius: calc(18px * var(--ui-scale));
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: var(--panel-radius);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
-  box-shadow: none;
+  box-shadow: var(--shadow-float);
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input:focus-within {
@@ -13390,13 +13296,11 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input:focus-withi
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-textarea {
   background: color-mix(in srgb, var(--surface-inset) 90%, transparent);
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
   color: var(--text-strong);
 }
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-icon-col {
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-actions-row {
   background: color-mix(in srgb, var(--surface-inset) 82%, transparent);
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
 }
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-toolbar-btn:hover,
@@ -13527,7 +13431,6 @@ body[data-theme="light"] :is(
   .right-panel-tab,
   .workspace-tab,
   .section-icon-btn,
-  .chat-input,
   .chat-toolbar-btn,
   .chat-cancel-btn,
   .chat-send,
@@ -13560,7 +13463,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .right-panel-tab,
   .workspace-tab,
   .section-icon-btn,
-  .chat-input,
   .chat-toolbar-btn,
   .chat-cancel-btn,
   .chat-send,
@@ -13656,8 +13558,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.task-bar, .sidebar
   padding: 0 calc(6px * var(--ui-scale));
 }
 
-body[data-theme="light"] :is(.sidebar-toolset, .task-dir-shell, .chat-icon-col, .sections-tabs),
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-toolset, .task-dir-shell, .chat-icon-col, .sections-tabs) {
+body[data-theme="light"] :is(.sidebar-toolset, .task-dir-shell, .chat-actions-row, .sections-tabs),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-toolset, .task-dir-shell, .chat-actions-row, .sections-tabs) {
   gap: calc(2px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale));
 }
@@ -13847,7 +13749,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
 
 .task-dir-shell,
 .sidebar-toolset,
-.chat-icon-col,
+.chat-actions-row,
 .sections-tabs {
   gap: calc(2px * var(--ui-scale));
   padding: calc(2px * var(--ui-scale));
