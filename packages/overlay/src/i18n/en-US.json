@@ -122,7 +122,6 @@
   "startup.project_title": "Choose a project to work in",
   "startup.project_body": "OpenCorvus reads, edits, tests, and stores task history inside the selected folder. Pick a recent project or open a folder before starting work.",
   "startup.open_folder": "Open Folder",
-  "startup.create_folder": "New Folder",
   "startup.recent_projects": "Recent Projects",
   "startup.continue_current": "Continue Current Project",
   "task.search_placeholder": "Search tasks…",

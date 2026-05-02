@@ -122,7 +122,6 @@
   "startup.project_title": "选择要工作的项目",
   "startup.project_body": "OpenCorvus 会在所选目录中读写文件、运行测试并保存任务历史。开始前请选择最近项目，或打开一个文件夹。",
   "startup.open_folder": "打开文件夹",
-  "startup.create_folder": "新建文件夹",
   "startup.recent_projects": "最近项目",
   "startup.continue_current": "继续当前项目",
   "task.search_placeholder": "搜索任务…",

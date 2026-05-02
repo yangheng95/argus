@@ -96,7 +96,7 @@ test("titlebar menubar fits documented responsive widths and locales", async () 
           }
         }, locale)
         await page.goto(`http://127.0.0.1:${server.port}/ui/index.html`, { waitUntil: "load" })
-        await page.waitForSelector('[data-menu-trigger="product"]')
+        await page.waitForSelector('[data-menu-trigger="workspace"]')
         await page.waitForFunction((value) => document.documentElement.lang === value, {}, locale)
         await page.evaluate(() => {
           const app = window as typeof window & { state?: { serverPid?: number } }
@@ -146,7 +146,6 @@ test("titlebar menubar fits documented responsive widths and locales", async () 
             .filter((rect) => rect.left < -0.5 || rect.right > window.innerWidth + 0.5)
             .map((rect) => `${rect.label}:${rect.left.toFixed(1)}-${rect.right.toFixed(1)}`)
           const brand = document.querySelector(".titlebar-brand")?.getBoundingClientRect()
-          const product = document.querySelector<HTMLElement>('[data-menu-trigger="product"]')?.getBoundingClientRect()
           const badge = document.querySelector<HTMLElement>("#connBadge")
           const triggers = Array.from(document.querySelectorAll<HTMLElement>("[data-menu-trigger]"))
             .filter((node) => getComputedStyle(node).display !== "none")
@@ -155,7 +154,6 @@ test("titlebar menubar fits documented responsive widths and locales", async () 
             overlaps,
             outOfBounds,
             brandWidth: brand?.width || 0,
-            productLeft: product?.left ?? window.innerWidth,
             badgeText: badge?.textContent || "",
             badgeTitle: badge?.getAttribute("title") || "",
             titlebarHeight: titlebar.getBoundingClientRect().height,
@@ -163,18 +161,18 @@ test("titlebar menubar fits documented responsive widths and locales", async () 
           }
         })
 
-        expect(geometry.triggers).toContain("product")
+        expect(geometry.triggers).not.toContain("product")
+        expect(geometry.triggers).toContain("workspace")
         expect(geometry.triggers).toContain("model")
         expect(geometry.triggers).toContain("tools")
         expect(geometry.outOfBounds).toEqual([])
         expect(geometry.overlaps).toEqual([])
         expect(geometry.brandWidth).toBeGreaterThan(30)
-        expect(geometry.productLeft).toBeLessThan(Math.min(260, width * 0.55))
         expect(geometry.badgeText).not.toContain(`:${server.port}`)
         expect(geometry.badgeTitle).toContain(String(server.port))
         expect(geometry.badgeTitle).toContain("12345")
         expect(geometry.titlebarHeight).toBeGreaterThan(24)
-        for (const menu of ["product", "workspace", "model", "run", "tools", "view", "help"]) {
+        for (const menu of ["workspace", "model", "run", "tools", "view", "help"]) {
           await page.click(`[data-menu-trigger="${menu}"]`)
           await page.waitForSelector(`[data-testid="titlebar-menu-${menu}"]`, { visible: true })
           const panelBounds = await page.$eval(`[data-testid="titlebar-menu-${menu}"]`, (node) => {
@@ -334,15 +332,18 @@ test("startup workspace dialog is the default project picker when no directory i
       const root = document.querySelector<HTMLElement>('[data-testid="startup-workspace-dialog"]')
       const buttons = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="startup-recent-project"]'))
       const browse = document.querySelector<HTMLElement>('[data-testid="startup-open-folder"]')
+      const create = document.querySelector<HTMLElement>('[data-testid="startup-create-folder"]')
       return {
         title: root?.querySelector("h1")?.textContent || "",
         browseText: browse?.textContent || "",
+        hasCreate: !!create,
         recent: buttons.map((node) => node.textContent || ""),
         modal: root?.querySelector("[role='dialog']")?.getAttribute("aria-modal") || "",
       }
     })
     expect(dialog.title).toBe("Choose a project to work in")
     expect(dialog.browseText).toBe("Open Folder")
+    expect(dialog.hasCreate).toBe(false)
     expect(dialog.recent.join("\n")).toContain("opencorvus")
     expect(dialog.recent.join("\n")).toContain("customer-portal")
     expect(dialog.modal).toBe("true")

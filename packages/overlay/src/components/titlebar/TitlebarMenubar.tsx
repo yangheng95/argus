@@ -8,7 +8,7 @@ import { applyOpacity, applyTheme, applyZoom, sanitizeOpacity, sanitizeZoom, tog
 import { browseDirectory, createDirectory, loadRecentDirectories, openDirectory, setDirectory } from "../../services/workspace";
 import { t } from "../../utils/i18n";
 
-type MenuID = "product" | "workspace" | "model" | "run" | "tools" | "view" | "help";
+type MenuID = "workspace" | "model" | "run" | "tools" | "view" | "help";
 
 type MenuDef = {
   id: MenuID;
@@ -20,7 +20,7 @@ type TitlebarMenubarProps = {
   onOpenLog: () => void;
 };
 
-const MENU_IDS: MenuID[] = ["product", "workspace", "model", "run", "tools", "view", "help"];
+const MENU_IDS: MenuID[] = ["workspace", "model", "run", "tools", "view", "help"];
 
 function clampInt(value: unknown, min: number, max: number): number | null {
   const n = Number(value);
@@ -202,7 +202,6 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
   let rootRef: HTMLDivElement | undefined;
 
   const menus = createMemo<MenuDef[]>(() => [
-    { id: "product", label: "OpenCorvus", compact: "OC" },
     { id: "workspace", label: t("titlebar.menu.workspace"), compact: "W" },
     { id: "model", label: t("titlebar.menu.model"), compact: "M" },
     { id: "run", label: t("titlebar.menu.run"), compact: "R" },
@@ -345,14 +344,6 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                 data-menu={menu.id}
                 data-testid={`titlebar-menu-${menu.id}`}
               >
-                <Show when={menu.id === "product"}>
-                  <MenuGroup title="OpenCorvus">
-                    <MenuItem onClick={() => openConfig("general")}>{t("config.title")}</MenuItem>
-                    <MenuItem onClick={() => void reloadProjectScope().finally(closeMenu)}>{t("common.refresh")}</MenuItem>
-                    <MenuItem onClick={() => { toggleDevtools(); closeMenu(); }}>{t("titlebar.devtools")}</MenuItem>
-                  </MenuGroup>
-                </Show>
-
                 <Show when={menu.id === "workspace"}>
                   <MenuGroup title={t("titlebar.menu.workspace")}>
                     <div class="titlebar-menubar-note" title={settingsStore.directory}>
@@ -484,6 +475,9 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
 
                 <Show when={menu.id === "help"}>
                   <MenuGroup title={t("titlebar.menu.help")}>
+                    <MenuItem onClick={() => openConfig("general")}>{t("config.title")}</MenuItem>
+                    <MenuItem onClick={() => void reloadProjectScope().finally(closeMenu)}>{t("common.refresh")}</MenuItem>
+                    <MenuItem onClick={() => { toggleDevtools(); closeMenu(); }}>{t("titlebar.devtools")}</MenuItem>
                     <MenuItem onClick={() => { props.onOpenLog(); closeMenu(); }} testid="titlebar-help-logs">{t("titlebar.logs")}</MenuItem>
                     <MenuItem onClick={() => openConfig("about")}>{t("about.title")}</MenuItem>
                     <MenuItem onClick={() => openConfig("about")} testid="titlebar-connection-diagnostics">
