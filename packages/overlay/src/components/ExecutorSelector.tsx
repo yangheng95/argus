@@ -52,37 +52,34 @@ export function ExecutorSelector() {
   const activeLabel = createMemo(() => executorLabel(activeID()));
   const activeModel = createMemo(() => executorCurrentModel(activeID()));
 
-  // Project default model — drives the MirrorCode side. Always shown in the
-  // chip as long as the project has a default configured. Reads the same
-  // appStore.config.model that AgentModelsPanel writes to (no two-source
-  // drift; SSE config.changed refreshes both).
+  // iter50: user feedback (2026-05-03) "永远同时显示全局 LLM
+  // 和内外部外部执行器的 LLM". Both model segments now ALWAYS
+  // render — no more conditional based on executor type.
+  //
+  // - Global LLM = appStore.config.model (orchestrator-side
+  //   model that drives planning + evaluation regardless of
+  //   which executor edits the files).
+  // - Executor LLM = the active executor's own model. For
+  //   external executors (codex / claude-code) this is
+  //   `executorCurrentModel(id)`. For the internal MirrorCode
+  //   executor, mirrorcode follows the project config so the
+  //   executor LLM == global LLM (same value rendered in both
+  //   slots — visually consistent layout, semantically honest).
   const orchestratorModel = createMemo(projectModelFromConfig)
   const isExternalExecutor = createMemo(() => activeID() !== INTERNAL_EXECUTOR_ID)
-  const externalExecutorModel = createMemo(() =>
-    isExternalExecutor() ? activeModel() : "",
+  const executorModel = createMemo(() =>
+    isExternalExecutor() ? activeModel() : orchestratorModel(),
   )
 
-  // Multi-line tooltip explaining the role of each model. iter41
-  // follow-up: always include the explainer (was previously gated on
-  // the model being non-empty, which collapsed the title down to just
-  // the executor's auth/version line and gave the user no help when
-  // the project default model was unset — exactly when the explainer
-  // is most useful).
+  // Tooltip always names both models. The pair explainer reads
+  // naturally even when the two values are equal (mirrorcode case).
   const chipTitle = createMemo(() => {
     const orch = orchestratorModel() || t("agent_models.option_not_set")
-    if (!isExternalExecutor()) {
-      // Pure MirrorCode mode: executorTitle (auth / version / setup
-      // hints) + the orchestrator-model explainer.
-      return [executorTitle(activeID()), t("executor.model_explainer_internal")]
-        .filter(Boolean)
-        .join("\n")
-    }
-    // External executor: pair explainer with both model values populated.
-    const ext = externalExecutorModel() || t("agent_models.option_not_set")
+    const exec = executorModel() || t("agent_models.option_not_set")
     const pair = t("executor.model_explainer_pair", {
       orchestrator: orch,
       executor: activeLabel(),
-      external: ext,
+      external: exec,
     })
     return [executorTitle(activeID()), pair].filter(Boolean).join("\n")
   })
@@ -141,7 +138,7 @@ export function ExecutorSelector() {
           type="button"
           class="executor-chip"
           data-active="true"
-          data-has-external={isExternalExecutor() ? "true" : "false"}
+          data-has-external="true"
           aria-haspopup="listbox"
           aria-expanded={open() ? "true" : "false"}
           title={chipTitle()}
@@ -151,17 +148,14 @@ export function ExecutorSelector() {
           }}
         >
           <span class="executor-chip-label">{activeLabel()}</span>
-          {/* Orchestrator (MirrorCode) model — ALWAYS rendered.
-              iter41 unwrapped the iter35 conditional that gated this
-              span on a non-empty orchestratorModel value: when the
-              project default was unset the chip collapsed to bare
-              "MirrorCode" and the user couldn't tell iter35 had ever
-              shipped. The empty case now renders the i18n placeholder
-              ("— not set —", same vocabulary AgentModelsPanel uses)
-              plus a `[data-empty="true"]` attribute so CSS + regression
-              tests can pin the empty state without re-introducing a
-              gating wrap. */}
-          <span class="executor-chip-sep" aria-hidden="true">·</span>
+          {/* iter50: BOTH model slots ALWAYS render — global LLM
+              (orchestrator-side, drives planning) + executor LLM
+              (active executor's editing model). MirrorCode active
+              follows project config so executor LLM == global LLM
+              (intentional visual consistency — same layout regardless
+              of which executor is selected). External executors carry
+              their own model that diverges from the global. */}
+          <span class="executor-chip-sep" aria-hidden="true">G</span>
           <span
             class="executor-chip-model"
             data-source="orchestrator"
@@ -170,21 +164,17 @@ export function ExecutorSelector() {
           >
             {orchestratorModel() || t("agent_models.option_not_set")}
           </span>
-          {/* External executor model — only rendered when the active
-              executor is external (codex / claude-code). The arrow
-              communicates the orchestrator → executor handoff. */}
-          <Show when={isExternalExecutor() && externalExecutorModel()}>
-            <span class="executor-chip-arrow" aria-hidden="true">→</span>
-            <span
-              class="executor-chip-model"
-              data-source="external"
-              title={t("executor.model_explainer_external", {
-                executor: activeLabel(),
-              })}
-            >
-              {externalExecutorModel()}
-            </span>
-          </Show>
+          <span class="executor-chip-sep" aria-hidden="true">E</span>
+          <span
+            class="executor-chip-model"
+            data-source="executor"
+            data-empty={executorModel() ? "false" : "true"}
+            title={t("executor.model_explainer_external", {
+              executor: activeLabel(),
+            })}
+          >
+            {executorModel() || t("agent_models.option_not_set")}
+          </span>
           <span class="executor-chip-caret" aria-hidden="true">
             <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
               <path

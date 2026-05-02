@@ -66,12 +66,19 @@ describe("ExecutorSelector chip surfaces orchestrator + external executor models
     )
   })
 
-  test("renders the arrow + external model only when the executor is external", () => {
+  test("renders the executor model slot ALWAYS (iter50: paired with global, no Show wrap)", () => {
+    // iter50 changed the contract: BOTH slots render
+    // unconditionally so the chip always shows global +
+    // executor side-by-side. MirrorCode case fills the
+    // executor slot with the orchestrator model (same value)
+    // so the two-segment layout is visually consistent
+    // regardless of which executor is selected.
+    expect(SRC).toMatch(/data-source="executor"/)
     expect(SRC).toMatch(
-      /<Show when=\{isExternalExecutor\(\) && externalExecutorModel\(\)\}>/,
+      /\{executorModel\(\) \|\| t\("agent_models\.option_not_set"\)\}/,
     )
-    expect(SRC).toMatch(/class="executor-chip-arrow"/)
-    expect(SRC).toMatch(/data-source="external"/)
+    expect(SRC).not.toMatch(/data-source="external"/)
+    expect(SRC).not.toMatch(/<Show when=\{isExternalExecutor\(\) && /)
   })
 
   test("the chip carries a tooltip explaining both models", () => {
