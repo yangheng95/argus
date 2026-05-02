@@ -12508,10 +12508,17 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    remaining 4 siblings (.gwg / .delivery-panel /
    .criteria-group / .eval-error) keep the reset until each
    gets its own single-source pass. */
+/* iter47 dropped `.eval-error` — its canonical at line ~3885
+   declares semantic ERROR-tone chrome (red gradient bg + red
+   border) that the !important neutral reset was overshadowing.
+   The reset's neutral surface-inset bg fought the red error
+   palette and won via specificity, defeating the canonical's
+   semantic intent. Now `.eval-error` keeps its red error
+   palette directly. The remaining 3 siblings stay until each
+   canonical is verified. */
 .gwg,
 .delivery-panel,
-.criteria-group,
-.eval-error {
+.criteria-group {
   background: var(--surface-inset) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
