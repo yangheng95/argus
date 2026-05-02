@@ -853,9 +853,9 @@ if (composerEl) {
         stopping={!!(messageStore.chatRequest as any)?.stopping}
         pendingSuggestion={pendingSuggestion()}
         onSuggestionConsumed={() => setPendingSuggestion("")}
-        onSubmit={(text, attachments, webSearch) => {
-          void panelMessage(text, attachments, webSearch ? { web_search: true } : {});
-        }}
+        onSubmit={(text, attachments, webSearch) =>
+          panelMessage(text, attachments, webSearch ? { web_search: true } : {})
+        }
         onStop={() => {
           // Abort the in-flight send request ONLY — no remote cancel. Task-level
           // interrupt is an explicit action on the task row's CancelButton so a

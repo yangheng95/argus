@@ -9,6 +9,7 @@ import { sanitizeLocale } from "../utils/i18n";
 // ── Types ──
 
 export type ToolPermAction = "allow" | "ask" | "deny";
+export type ExecutorID = "mirrorcode" | "codex" | "claude-code";
 
 export interface ToolPermissions {
   websearch:          ToolPermAction;
@@ -24,7 +25,7 @@ export interface OverlaySettings {
   autoServer: boolean;
   password: string;
   username: string;
-  executor: string;
+  executor: ExecutorID;
   initGit: boolean;
   sidebarCollapsed: boolean;
   sidebarWidth: number | null;
@@ -101,6 +102,12 @@ function sanitizeAutoServer(value: any, serverUrl: string): boolean {
   return defaultAutoServer(serverUrl);
 }
 
+export function sanitizeExecutor(value: any): ExecutorID {
+  const text = String(value || "").trim();
+  if (text === "mirrorcode" || text === "codex" || text === "claude-code") return text;
+  return DEFAULT_SETTINGS.executor;
+}
+
 // ── Default locale ──
 
 const DEFAULT_LOCALE = sanitizeLocale(
@@ -172,9 +179,7 @@ export function applySettings(input: Partial<OverlaySettings>): void {
         ? input.username.trim()
         : DEFAULT_SETTINGS.username,
     executor:
-      typeof input?.executor === "string" && input.executor.trim()
-        ? input.executor.trim()
-        : DEFAULT_SETTINGS.executor,
+      sanitizeExecutor(input?.executor),
     initGit: true,
     sidebarCollapsed: input?.sidebarCollapsed === true,
     sidebarWidth: sanitizePaneWidth(input?.sidebarWidth),
@@ -208,7 +213,7 @@ export function saveSettings(): void {
   localStorage.setItem("oc_auto_server", String(s.autoServer));
   localStorage.setItem("oc_password", s.password);
   localStorage.setItem("oc_username", s.username);
-  localStorage.setItem("oc_executor", s.executor || DEFAULT_SETTINGS.executor);
+  localStorage.setItem("oc_executor", sanitizeExecutor(s.executor));
   localStorage.setItem("oc_sidebar_collapsed", String(s.sidebarCollapsed));
   if (s.sidebarWidth != null) {
     localStorage.setItem("oc_sidebar_width", String(s.sidebarWidth));
@@ -277,7 +282,7 @@ export function loadSettings(): void {
     username:
       localStorage.getItem("oc_username") || DEFAULT_SETTINGS.username,
     executor:
-      localStorage.getItem("oc_executor") || DEFAULT_SETTINGS.executor,
+      sanitizeExecutor(localStorage.getItem("oc_executor")),
     initGit: true,
     sidebarCollapsed:
       localStorage.getItem("oc_sidebar_collapsed") === "true",
@@ -352,7 +357,7 @@ export function bootstrapOverlaySettings(
     autoServer: input.autoServer ?? DEFAULT_SETTINGS.autoServer,
     password: input.password ?? DEFAULT_SETTINGS.password,
     username: input.username ?? DEFAULT_SETTINGS.username,
-    executor: input.executor ?? DEFAULT_SETTINGS.executor,
+    executor: sanitizeExecutor(input.executor),
     initGit: true,
     sidebarCollapsed: input.sidebarCollapsed ?? DEFAULT_SETTINGS.sidebarCollapsed,
     sidebarWidth: input.sidebarWidth || undefined,

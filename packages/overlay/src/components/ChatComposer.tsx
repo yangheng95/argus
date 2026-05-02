@@ -37,7 +37,7 @@ export interface ChatComposerProps {
  */
   stopping?: boolean;
   /** Called when the user submits a message. */
-  onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void;
+  onSubmit: (text: string, attachments: ChatAttachment[], webSearch: boolean) => void | Promise<void>;
   /** Called when the user clicks the stop button while busy. */
   onStop?: () => void;
   /**
@@ -125,6 +125,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const [expanded, setExpanded] = createSignal(false);
   const [focused, setFocused] = createSignal(false);
   const [hintText, setHintText] = createSignal("");
+  const [submitting, setSubmitting] = createSignal(false);
 
   const hasText = createMemo(() => text().trim().length > 0);
   const stopping = () => props.stopping === true;
@@ -281,18 +282,35 @@ export function ChatComposer(props: ChatComposerProps) {
 
  // ── Submit ──
 
-  function handleSubmit(e: SubmitEvent) {
+  function submitErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) return error.message;
+    return String(error);
+  }
+
+  async function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
     if (props.busy) return;
+    if (submitting()) return;
     if (!props.enabled) return;
     const trimmed = text().trim();
     if (!trimmed) return;
     const sentAttachments = [...attachments()];
-    setText("");
-    setAttachments([]);
-    setExpanded(false);
-    if (textareaRef) textareaRef.value = "";
-    props.onSubmit(trimmed, sentAttachments, webSearch());
+    setSubmitting(true);
+    try {
+      await props.onSubmit(trimmed, sentAttachments, webSearch());
+      setText("");
+      setAttachments([]);
+      setExpanded(false);
+      if (textareaRef) textareaRef.value = "";
+    } catch (error) {
+      console.error("[ChatComposer] submit failed", error);
+      void nativeMessage(t("chat.send_failed", { error: submitErrorMessage(error) }), {
+        title: t("chat.send_failed_title"),
+        kind: "error",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
  // ── Keyboard: Enter to send, Shift+Enter for newline ──
@@ -350,7 +368,7 @@ export function ChatComposer(props: ChatComposerProps) {
 
   const sendDisabled = createMemo(() => {
     if (props.busy) return stopping();
-    return !props.enabled || !hasText();
+    return submitting() || !props.enabled || !hasText();
   });
 
   // Surface WHY the send button is disabled in its title — operators

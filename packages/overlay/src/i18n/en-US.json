@@ -235,6 +235,8 @@
   "chat.role.system": "System",
   "chat.role.user": "User",
   "chat.send_label": "Send",
+  "chat.send_failed": "Send failed: {{error}}",
+  "chat.send_failed_title": "Send failed",
   "chat.send_title": "Send message (Enter to send, Shift+Enter for newline)",
   "chat.stop_label": "Stop",
   "chat.stop_title": "Stop generation and halt task execution.",
