@@ -360,8 +360,20 @@ export function replayTaskEventToTree(event: any): void {
 // ── Main router ──
 
 const BOARD_EVENT_DEBOUNCE = 500;
+const CONFIG_EVENT_DEBOUNCE = 50;
 
 let tasksKickTimer: ReturnType<typeof setTimeout> | null = null;
+let configKickTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleConfigReload(): void {
+  if (configKickTimer) clearTimeout(configKickTimer);
+  configKickTimer = setTimeout(() => {
+    configKickTimer = null;
+    void loadConfigInfo().catch((err: unknown) => {
+      console.error("[sse] config.changed refresh failed", err);
+    });
+  }, CONFIG_EVENT_DEBOUNCE);
+}
 
 /**
  * Route a parsed SSE event to the appropriate Solid store or action.
@@ -465,7 +477,7 @@ export function routeSSEEvent(event: any): boolean {
 
   // ── Config changed → refresh appStore.config ──
   if (type === "config.changed") {
-    void loadConfigInfo().catch(() => {});
+    scheduleConfigReload();
     return true;
   }
 
