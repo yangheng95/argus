@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en-US">
+<html lang="en-US" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OpenCorvus</title>
   <link rel="stylesheet" href="styles/tokens/design-language.css">
+  <link rel="stylesheet" href="styles/themes/light.css">
+  <link rel="stylesheet" href="styles/themes/dark.css">
+  <link rel="stylesheet" href="styles/themes/vscode-dark.css">
   <link rel="stylesheet" href="styles/primitives/button.css">
   <link rel="stylesheet" href="styles/primitives/tabs.css">
   <link rel="stylesheet" href="styles/surfaces/titlebar.css">
@@ -12,18 +15,21 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles/card.css">
 </head>
-<body data-page="overlay">
+<body data-page="overlay" data-theme="light">
   <script>
     // Pre-render theme init: keeps `data-theme` synced with saved / OS preference
-    // before the main bundle parses. Without this, light-preference users see a
-    // dark flash during webview cold start.
+    // before the main bundle parses. The root attribute feeds the new
+    // palette-only theme layer; the body attribute keeps legacy God CSS active
+    // until it is fully retired from the runtime path.
     (function () {
       try {
         var saved = localStorage.getItem("oc_theme");
         var preferLight = window.matchMedia("(prefers-color-scheme: light)").matches;
         var effective = !saved ? "light" : (saved === "system" ? (preferLight ? "light" : "dark") : saved);
+        document.documentElement.dataset.theme = effective;
         document.body.dataset.theme = effective;
       } catch {
+        document.documentElement.dataset.theme = "light";
         document.body.dataset.theme = "light";
       }
     })();

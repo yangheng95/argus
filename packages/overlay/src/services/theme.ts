@@ -4,7 +4,7 @@
 // sanitizeOpacity(value) — number clamped to [0.5, 1.0]
 // sanitizeZoom(value) — number clamped to [0.8, 1.6]
 // resolvedTheme() — effective "light" | "dark" after system detection
-// applyTheme(theme) — writes document.body.dataset.theme
+// applyTheme(theme) — writes documentElement/body data-theme
 // applyZoom(zoom) — writes --ui-scale CSS custom property via renderScale
 // applyOpacity(opacity) — writes --ui-window-opacity CSS variable
 
@@ -18,7 +18,7 @@ import { getHostTransport } from "./host-transport";
 
 export { MIN_WINDOW_OPACITY, sanitizeOpacity } from "../store/settings";
 
-// ── Constants (mirror ) ──
+// ── Constants ──
 
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
@@ -72,7 +72,9 @@ export function resolvedTheme(): string {
 }
 
 // ── applyTheme ──
-// Writes the effective (resolved) theme to document.body.dataset.theme.
+// Writes the effective (resolved) theme to both root and body.
+// `documentElement` drives the new palette-only theme layer; `body` keeps
+// legacy God CSS selectors working until that file leaves the runtime path.
 // Does NOT update brand logos; those belong to the respective Solid components.
 
 export function applyTheme(theme: string): void {
@@ -81,6 +83,7 @@ export function applyTheme(theme: string): void {
   const effective = sanitized === "system"
     ? (systemThemeMedia?.matches ? "light" : "dark")
     : sanitized;
+  document.documentElement.dataset.theme = effective;
   document.body.dataset.theme = effective;
 }
 
