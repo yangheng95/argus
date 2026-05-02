@@ -19766,6 +19766,12 @@
                         "data"
                       ]
                     }
+                  },
+                  "resolvedRole": {
+                    "type": "string"
+                  },
+                  "channel": {
+                    "type": "string"
                   }
                 },
                 "required": [

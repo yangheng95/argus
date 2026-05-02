@@ -5662,6 +5662,8 @@ export class Task extends HeyApiClient {
         data: string
         filename?: string
       }>
+      resolvedRole?: string
+      channel?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5676,6 +5678,8 @@ export class Task extends HeyApiClient {
             { in: "body", key: "source" },
             { in: "body", key: "user_id" },
             { in: "body", key: "attachments" },
+            { in: "body", key: "resolvedRole" },
+            { in: "body", key: "channel" },
           ],
         },
       ],

@@ -9552,6 +9552,8 @@ export type TaskMessageData = {
       data: string
       filename?: string
     }>
+    resolvedRole?: string
+    channel?: string
   }
   path: {
     taskID: string
