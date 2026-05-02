@@ -8428,16 +8428,16 @@ body[data-theme="light"] .config-close-btn:hover {
 .config-subsection-head::-webkit-details-marker { display: none; }
 .config-subsection-head::marker { content: ""; }
 
-.config-subsection-head::before {
-  content: "▸";
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  transition: transform 120ms;
-}
-
-.config-subsection[open] > .config-subsection-head::before {
-  transform: rotate(90deg);
-}
+/* iter29: the early `::before { content: "▸"; … }` Unicode-
+   glyph chevron and its `[open]` rotate(90deg) sibling that
+   lived here were fully shadowed by the late-tail
+   CSS-drawn chevron at lines ~8508 / ~8519 (which sets
+   `content: ""` + border-right/border-bottom + rotate(-45)
+   on closed and rotate(45) on open). Editing here was a
+   no-op — `content: ""` from the late block emptied the
+   glyph, and the late `[open]` transform overrode the
+   90deg rotation. Removed; the late-tail pair is now the
+   single source. */
 
 .config-subsection-head:hover {
   background: var(--hover-accent-wash);
