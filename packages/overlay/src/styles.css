@@ -5418,13 +5418,23 @@ code .file-link:hover {
 
 /* .chat-compose-actions removed — send button now lives directly in .chat-compose-row */
 
+/* iter20 follow-up (CRON self-audit): the wrap and the
+   inner textarea historically shared `min-height` via three
+   stacked multi-selector rules whose final value was 62px.
+   iter20 folded the textarea side into its canonical and
+   left the wrap declaring 72px in scaled units, which made
+   the wrap render ~10px taller than before — a silent
+   regression caught by the post-commit grep. Wrap and
+   textarea now match at 62px (the pre-iter20 user-visible
+   value) and the chat-compose-scale multiplier is gone
+   because iter17 already pinned --chat-compose-scale to 1. */
 .chat-textarea-wrap {
   position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
   align-self: stretch;
-  min-height: calc(72px * var(--ui-scale) * var(--chat-compose-scale));
+  min-height: calc(62px * var(--ui-scale));
 }
 .chat-textarea-wrap > .chat-textarea {
   flex: 1;
