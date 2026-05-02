@@ -511,6 +511,39 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     })
     expect(looseControlSpacing).toEqual([])
 
+    const controlsWithBorders = await page.evaluate(() => {
+      const selectors = [
+        ".brand-guide",
+        ".titlebar-menubar-trigger",
+        ".titlebar-btn",
+        ".sidebar-btn-primary",
+        ".sidebar-tool",
+        ".sidebar-toolset",
+        ".task-dir-shell",
+        ".task-cwd-dropdown",
+        ".workspace-toggle",
+        ".btn.mini",
+        ".executor-chip",
+        ".right-panel-tablist",
+        ".right-panel-tab",
+        ".chat-toolbar-btn",
+        ".chat-send",
+        ".conn-banner__action",
+        ".board-intro__cta-action",
+      ]
+      const props = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"] as const
+      return selectors.flatMap((selector) => {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) return []
+        const style = getComputedStyle(node)
+        return props.flatMap((prop) => {
+          const value = Number.parseFloat(style[prop])
+          return Number.isFinite(value) && value === 0 ? [] : [{ selector, prop, value: style[prop] }]
+        })
+      })
+    })
+    expect(controlsWithBorders).toEqual([])
+
     const rightDrag = await page.evaluate(() => {
       const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
       const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
