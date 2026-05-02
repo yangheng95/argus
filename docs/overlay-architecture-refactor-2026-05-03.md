@@ -16,6 +16,11 @@ Progress log:
   stream. Transport errors now close the task-list handle so the
   existing `onClose` reconnect path restarts sidebar refresh instead
   of leaving non-selected task changes stale until manual reload.
+- 2026-05-03: Design-language token contract started with explicit
+  header, radius, and density tokens plus a root-scoped
+  `header.css` surface grammar. Architecture tests now require token
+  files to stay `:root`-only and prove the header/radius/density
+  vocabulary exists before surface migration begins.
 
 Trigger: user feedback (2026-05-03):
 

@@ -1,0 +1,22 @@
+:root {
+  --oc-radius-none: 0;
+  --oc-radius-panel: var(--oc-radius-none);
+  --oc-radius-card: calc(8px * var(--ui-scale, 1));
+  --oc-radius-control: calc(4px * var(--ui-scale, 1));
+  --oc-radius-pill: 999px;
+
+  --oc-density-control-height: calc(24px * var(--ui-scale, 1));
+  --oc-density-icon-button: calc(24px * var(--ui-scale, 1));
+  --oc-density-chip-height: calc(20px * var(--ui-scale, 1));
+
+  --oc-header-height: calc(42px * var(--ui-scale, 1));
+  --oc-header-padding-x: calc(12px * var(--ui-scale, 1));
+  --oc-header-padding-y: 0;
+  --oc-header-gap: calc(8px * var(--ui-scale, 1));
+  --oc-header-title-font: 650 var(--ui-font-title, 12px) var(--font, sans-serif);
+  --oc-header-title-letter-spacing: 0;
+  --oc-header-title-transform: none;
+  --oc-header-bg: var(--surface-strong);
+  --oc-header-border: 1px solid var(--border);
+  --oc-header-shadow: none;
+}
