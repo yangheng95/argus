@@ -4258,17 +4258,30 @@ body[data-resizing="row"] * {
 }
 .workspace-tabs::-webkit-scrollbar { display: none; }
 
+/* iter46: user feedback (2026-05-03) "右侧面板的子 tab
+   alignment 的位置超过了父 tab，喧宾夺主". The parent
+   `.right-panel-tab` (Workflow / Workspace / Preview) has
+   font-size --ui-font-control + weight 650 + min-height 24px
+   + padding 0/10. Pre-iter46 `.workspace-tab` (Diff / File
+   sub-tabs inside the workspace panel body) declared padding
+   6/12 + 2px accent bottom stripe + accent-tinted bg on
+   active — vertically taller than the parent and visually
+   heavier. Now the sub-tab is consistently subordinate:
+   font-size --ui-font-meta (one notch smaller) + weight
+   inherited (~500) + tighter padding (3/10) + 1px bottom
+   stripe + reduced accent bg tint. The parent reads as the
+   primary navigation surface again. */
 .workspace-tab {
   display: inline-flex;
   align-items: center;
   gap: calc(4px * var(--ui-scale));
-  padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
+  padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
   background: transparent;
   border: none;
   border-right: 1px solid var(--border);
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   color: var(--text-muted);
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-meta);
   cursor: pointer;
   white-space: nowrap;
   min-width: 0;
@@ -4282,7 +4295,7 @@ body[data-resizing="row"] * {
 .workspace-tab[data-active="true"] {
   color: var(--text-strong);
   border-bottom-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
 }
 .workspace-tab-label {
   overflow: hidden;
