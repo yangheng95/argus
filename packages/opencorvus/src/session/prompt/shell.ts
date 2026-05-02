@@ -16,6 +16,7 @@ import { PidGuard } from "@/shell/pid-guard"
 import { installRuntimeShims } from "@/runtime/shims"
 import { SessionPromptState } from "./state"
 import { Provider } from "../../provider/provider"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 const { state: promptState, start: startSession, cancel: cancelSession } = SessionPromptState
 
 const log = Log.create({ service: "session.prompt" })
@@ -196,6 +197,7 @@ export async function shell(
       ...process.env,
       ...shellEnv.env,
       TERM: "dumb",
+      ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
       ...guardEnv,
     },
   })

@@ -92,4 +92,69 @@ describe("Worktree.mergeSafely", () => {
     expect(outcome.reason).toContain("worktree is dirty")
     expect(outcome.dirtyPaths).toEqual(["M tracked.txt", "?? new.txt"])
   })
+
+  test("preserves dirty primary worktree changes before publishing goal branch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    await fs.writeFile(path.join(tmp.path, "kept.txt"), "base\n")
+    await fs.writeFile(path.join(tmp.path, "removed.test.ts"), "obsolete\n")
+    await $`git add kept.txt removed.test.ts`.cwd(tmp.path).quiet()
+    await $`git ${gitEnv} commit -m "seed"`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-primary-dirty-${Date.now().toString(36)}` }),
+    })
+    await fs.writeFile(path.join(info.directory, "feature.ts"), "feature\n")
+    await $`git add feature.ts`.cwd(info.directory).quiet()
+    await $`git ${gitEnv} commit -m "goal feature"`.cwd(info.directory).quiet()
+
+    await fs.rm(path.join(tmp.path, "removed.test.ts"))
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("merged")
+    if (outcome.status !== "merged") throw new Error(`unexpected outcome ${outcome.status}`)
+    expect(outcome.primaryRecoveryCommit).toMatch(/^[0-9a-f]{40}$/)
+    expect((await fs.readFile(path.join(tmp.path, "feature.ts"), "utf8")).replace(/\r\n/g, "\n")).toBe("feature\n")
+    await expect(fs.stat(path.join(tmp.path, "removed.test.ts"))).rejects.toThrow()
+    const status = (await $`git status --porcelain`.cwd(tmp.path).text()).trim()
+    expect(status).toBe("")
+    const recoveryMessage = (await $`git log --format=%s -1 ${outcome.primaryRecoveryCommit}`.cwd(tmp.path).text()).trim()
+    expect(recoveryMessage).toBe("chore(opencorvus): preserve primary worktree changes before merge_back")
+  })
+
+  test("blocks host merge when goal worktree git linkage is missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await $`git ${gitEnv} branch -M master`.cwd(tmp.path).quiet()
+
+    await fs.writeFile(path.join(tmp.path, "seed.txt"), "seed\n")
+    await $`git add seed.txt`.cwd(tmp.path).quiet()
+    await $`git ${gitEnv} commit -m "seed"`.cwd(tmp.path).quiet()
+
+    const info = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: `safe-missing-git-${Date.now().toString(36)}` }),
+    })
+    await fs.rm(path.join(info.directory, ".git"), { force: true })
+    await fs.rm(path.join(tmp.path, ".git", "worktrees", path.basename(info.directory)), { recursive: true, force: true })
+    await fs.writeFile(path.join(info.directory, "ignored-by-primary.txt"), "must not affect primary\n")
+
+    const outcome = await Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.mergeSafely({ branch: info.branch, worktreeDir: info.directory }),
+    })
+
+    expect(outcome.status).toBe("blocked")
+    if (outcome.status !== "blocked") throw new Error(`unexpected outcome ${outcome.status}`)
+    expect(outcome.reason).toContain("worktree git linkage is invalid")
+    expect(await fs.stat(path.join(info.directory, "ignored-by-primary.txt"))).toBeTruthy()
+    await expect(fs.stat(path.join(tmp.path, "ignored-by-primary.txt"))).rejects.toThrow()
+    const primaryStatus = (await $`git status --porcelain`.cwd(tmp.path).text()).trim()
+    expect(primaryStatus).toBe("")
+  })
 })

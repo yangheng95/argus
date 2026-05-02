@@ -428,6 +428,7 @@ export namespace BuildAgent {
                       status: "merged" as const,
                       primary_head: outcome.primaryHead,
                       primary_branch: outcome.primaryBranch,
+                      ...(outcome.primaryRecoveryCommit ? { primary_recovery_commit: outcome.primaryRecoveryCommit } : {}),
                     }
                   }
                   if (outcome.status === "conflict") {
@@ -1482,6 +1483,7 @@ async function runWithExternalProviderImpl(args: {
       status: "merged" as const,
       primary_head: outcome.primaryHead,
       primary_branch: outcome.primaryBranch,
+      ...(outcome.primaryRecoveryCommit ? { primary_recovery_commit: outcome.primaryRecoveryCommit } : {}),
     }
     await completeMergePart(output, `merged ${outcome.primaryBranch}@${outcome.primaryHead.slice(0, 12)}`)
   } else if (outcome.status === "conflict") {

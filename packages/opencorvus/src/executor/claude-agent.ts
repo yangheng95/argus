@@ -16,6 +16,7 @@ import { record, text } from "./contract"
 import { ToolAdapterRegistry } from "./protocol"
 import { MCPServe } from "@/mcp/serve"
 import { assertExecutorModel } from "./runtime-env"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 export type ClaudeAgentHandle = {
   stream: AsyncIterable<Record<string, unknown>>
@@ -162,7 +163,10 @@ export namespace ClaudeAgentExecutor {
             allowDangerouslySkipPermissions: mode === "bypassPermissions",
             effort: effort(),
             maxBudgetUsd: maxBudget(),
-            env: claudeSdkEnv(),
+            env: {
+              ...claudeSdkEnv(),
+              ...gitCeilingEnvForWorktree(input.cwd),
+            },
             mcpServers: input.toolMode === "none" ? undefined : opencorvusMcpServers(input.cwd),
             allowedTools: allowed,
             disallowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS),

@@ -13,6 +13,7 @@ import { spawn } from "child_process"
 import { Shell } from "@/shell/shell"
 import { PidGuard } from "@/shell/pid-guard"
 import { SessionPromptState } from "./prompt/state"
+import { gitCeilingEnvForWorktree } from "@/worktree/git-ceiling"
 
 export namespace SessionShell {
   const { log, state, start, cancel } = SessionPromptState
@@ -182,6 +183,7 @@ export namespace SessionShell {
         ...process.env,
         ...shellEnv.env,
         TERM: "dumb",
+        ...gitCeilingEnvForWorktree(cwd, { ...process.env, ...shellEnv.env }),
         ...guardEnv,
       },
     })

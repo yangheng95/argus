@@ -3945,16 +3945,40 @@ export function createOrchestratorTools(input: {
               }
               const valid = await Worktree.isValid(recordedWorkspaceDir)
               if (!valid.valid) {
-                return (
-                  `build: recorded workspace for goal ${attachedGoalID} is invalid: ` +
-                  `${recordedWorkspaceDir} (${valid.reason ?? "unknown reason"}). ` +
-                  `No replacement worktree was created; reset the goal workspace explicitly.`
-                )
+                const recovered = await Worktree.recoverRecorded({
+                  directory: recordedWorkspaceDir,
+                  branch: recordedWorkspaceBranch,
+                })
+                if (recovered.status !== "recovered") {
+                  return (
+                    `build: recorded workspace for goal ${attachedGoalID} is invalid: ` +
+                    `${recordedWorkspaceDir} (${valid.reason ?? "unknown reason"}). ` +
+                    `Automatic reattach failed: ${recovered.reason}. Preserve that directory and fix or reset the goal workspace explicitly.`
+                  )
+                }
+                managedWorktree = {
+                  directory: recovered.directory,
+                  branch: recovered.branch,
+                  baseRef: goal.workspace_base_ref,
+                }
+                updateGoalWorkspace({
+                  goalID: goal.id,
+                  workspaceDir: recovered.directory,
+                  workspaceBranch: recovered.branch,
+                })
+                log.warn("reattached invalid goal workspace before build", {
+                  goalID: goal.id,
+                  reason: valid.reason ?? "unknown reason",
+                  workspaceDir: recovered.directory,
+                  workspaceBranch: recovered.branch,
+                })
               }
-              managedWorktree = {
-                directory: recordedWorkspaceDir,
-                branch: recordedWorkspaceBranch,
-                baseRef: goal.workspace_base_ref,
+              if (!managedWorktree) {
+                managedWorktree = {
+                  directory: recordedWorkspaceDir,
+                  branch: recordedWorkspaceBranch,
+                  baseRef: goal.workspace_base_ref,
+                }
               }
             } else {
               const info = await Worktree.create({
