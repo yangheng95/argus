@@ -5915,6 +5915,24 @@ select.field-input option {
   font-style: italic;
 }
 
+.diff-skip-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.diff-skip-button:hover,
+.diff-skip-button:focus-visible {
+  color: var(--text-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .diff-empty {
   padding: var(--ui-panel-padding-x);
 }

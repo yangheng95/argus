@@ -355,9 +355,9 @@ A token/role -> B IA/layout -> C task status -> D cards -> E composer -> F panel
 - [x] 代码中无 `inspector` / `workflow` UI tab 字面量。
 - [x] TaskStatusHeader 只有一个挂载点，且不在 chat header。
 - [x] 无 `.chat-compose-meta` / `.chat-icon-col`。
-- [ ] ChangesPanel tab 切换不销毁 group chunk。
-- [ ] MemoryPanel / LogViewer 不在本方案中误删。
-- [x] Phase A / Phase B 新增和修改行为有测试。
+- [x] ChangesPanel tab 切换不销毁 group chunk。
+- [x] MemoryPanel / LogViewer 不在本方案中误删。
+- [x] Phase A / Phase B / Phase C / Phase D / Phase E / Phase F 新增和修改行为有测试。
 
 ## 5. 风险与拦截
 

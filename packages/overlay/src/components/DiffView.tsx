@@ -3,7 +3,7 @@
 // ChangesPanel so both the inline file list and the workspace diff preview
 // render the same visuals from a single source.
 
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { t, tc } from "../utils/i18n";
 
 // ── Types ──
@@ -23,6 +23,8 @@ interface DiffOp {
   right?: number | "";
   text?: string;
   count?: number;
+  skipID?: string;
+  hidden?: DiffOp[];
 }
 
 // ── Diff helpers ──
@@ -181,6 +183,7 @@ function buildDiffOps(
 function collapseDiffOps(ops: DiffOp[]): DiffOp[] {
   const next: DiffOp[] = [];
   let index = 0;
+  let skipIndex = 0;
   while (index < ops.length) {
     if (ops[index].kind !== "context") {
       next.push(ops[index]);
@@ -196,7 +199,13 @@ function collapseDiffOps(ops: DiffOp[]): DiffOp[] {
       next.push(...chunk);
     } else {
       next.push(...chunk.slice(0, 3));
-      next.push({ kind: "skip", count: chunk.length - 6 });
+      next.push({
+        kind: "skip",
+        count: chunk.length - 6,
+        skipID: `skip-${skipIndex}`,
+        hidden: chunk.slice(3, -3),
+      });
+      skipIndex += 1;
       next.push(...chunk.slice(-3));
     }
     index = end;
@@ -221,9 +230,27 @@ interface DiffViewProps {
 }
 
 export function DiffView(props: DiffViewProps) {
+  const [expandedSkipIDs, setExpandedSkipIDs] = createSignal<Set<string>>(new Set());
   const ops = createMemo(() =>
     collapseDiffOps(buildDiffOps(props.item.before, props.item.after)),
   );
+  const visibleOps = createMemo(() =>
+    ops().flatMap((op) => {
+      if (op.kind !== "skip") return [op];
+      const id = op.skipID || "";
+      if (!id || !expandedSkipIDs().has(id)) return [op];
+      return op.hidden && op.hidden.length > 0 ? op.hidden : [];
+    }),
+  );
+
+  const expandSkip = (skipID: string | undefined) => {
+    if (!skipID) return;
+    setExpandedSkipIDs((current) => {
+      const next = new Set(current);
+      next.add(skipID);
+      return next;
+    });
+  };
 
   const hasChanges = createMemo(() => {
     if (props.item.before == null && props.item.after == null) return false;
@@ -253,7 +280,7 @@ export function DiffView(props: DiffViewProps) {
       }
     >
       <div class="diff-lines">
-        <For each={ops()}>
+        <For each={visibleOps()}>
           {(line) => (
             <Show
               when={line.kind !== "skip"}
@@ -263,7 +290,13 @@ export function DiffView(props: DiffViewProps) {
                   <div class="diff-num" />
                   <div class="diff-num" />
                   <div class="diff-code">
-                    {tc("diff.unchanged_hidden", line.count ?? 0)}
+                    <button
+                      type="button"
+                      class="diff-skip-button"
+                      onClick={() => expandSkip(line.skipID)}
+                    >
+                      {tc("diff.unchanged_hidden", line.count ?? 0)}
+                    </button>
                   </div>
                 </div>
               }

@@ -13,7 +13,7 @@ import {
   type ChangeGroup,
   type DiffTarget,
 } from "../services/diff";
-import { changeStatusLabel, type FileChange } from "./DiffView";
+import { type FileChange } from "./DiffView";
 import { t, tc } from "../utils/i18n";
 
 // ── ChangesPanel ──
@@ -30,6 +30,8 @@ export interface ChangesPanelProps {
 
 export function ChangesPanel(props: ChangesPanelProps) {
   const [selectedGroupID, setSelectedGroupID] = createSignal("");
+  const scrollByGroup = new Map<string, number>();
+  let listRef: HTMLDivElement | undefined;
 
   const fallbackGroups = createMemo<ChangeGroup[]>(() => {
     if (props.changes === undefined) return currentChangeGroups();
@@ -73,9 +75,31 @@ export function ChangesPanel(props: ChangesPanelProps) {
     const selectedID = selectedGroupID();
     return currentGroups.find((group) => group.id === selectedID) || currentGroups[0] || null;
   });
+  const activeGroupID = createMemo(() => activeGroup()?.id || "");
   const openWorkspaceDiff = (window as any).openWorkspaceDiff as
     | ((target: DiffTarget) => void)
     | undefined;
+
+  const saveActiveGroupScroll = () => {
+    const id = activeGroupID();
+    if (!id || !listRef) return;
+    scrollByGroup.set(id, listRef.scrollTop);
+  };
+
+  const restoreGroupScroll = (groupID: string) => {
+    if (!listRef) return;
+    const nextTop = scrollByGroup.get(groupID) ?? 0;
+    requestAnimationFrame(() => {
+      if (listRef) listRef.scrollTop = nextTop;
+    });
+  };
+
+  const selectGroupID = (groupID: string) => {
+    if (!groupID || groupID === activeGroupID()) return;
+    saveActiveGroupScroll();
+    setSelectedGroupID(groupID);
+    restoreGroupScroll(groupID);
+  };
 
   createEffect(() => {
     const currentGroups = groups();
@@ -84,8 +108,13 @@ export function ChangesPanel(props: ChangesPanelProps) {
       if (selectedID) setSelectedGroupID("");
       return;
     }
-    if (selectedID && currentGroups.some((group) => group.id === selectedID)) return;
-    setSelectedGroupID(currentGroups[0]!.id);
+    if (selectedID && currentGroups.some((group) => group.id === selectedID)) {
+      restoreGroupScroll(selectedID);
+      return;
+    }
+    const nextID = currentGroups[0]!.id;
+    setSelectedGroupID(nextID);
+    restoreGroupScroll(nextID);
   });
 
   // CCE = canonical click-through event from DeliveryPanel. When the
@@ -102,7 +131,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
       if (!requestedRunID) return;
       const candidates = groups();
       const match = candidates.find((group) => group.goalRunID === requestedRunID);
-      if (match) setSelectedGroupID(match.id);
+      if (match) selectGroupID(match.id);
     };
     window.addEventListener("delivery:focus-changes", handler as EventListener);
     onCleanup(() => {
@@ -166,7 +195,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
               else if (e.key === "End") next = list.length - 1
               else return
               e.preventDefault()
-              setSelectedGroupID(list[next]!.id)
+              selectGroupID(list[next]!.id)
             }}
           >
             <For each={groups()}>
@@ -181,7 +210,7 @@ export function ChangesPanel(props: ChangesPanelProps) {
                     data-active={active() ? "true" : "false"}
                     tabindex={active() ? 0 : -1}
                     title={tabTitle(group)}
-                    onClick={() => setSelectedGroupID(group.id)}
+                    onClick={() => selectGroupID(group.id)}
                   >
                     <span class="changes-tab-label">{tabLabel(group)}</span>
                     <span class="changes-tab-count" aria-hidden="true">
@@ -202,7 +231,12 @@ export function ChangesPanel(props: ChangesPanelProps) {
           runs on the row list, so goal-count × file-count stays off the
           critical path of clicking a tab.
         */}
-        <div class="changes-list" data-grouped={hasGoalGrouping() ? "true" : "false"}>
+        <div
+          ref={(el) => (listRef = el)}
+          class="changes-list"
+          data-grouped={hasGoalGrouping() ? "true" : "false"}
+          onScroll={saveActiveGroupScroll}
+        >
           <For each={hasGoalGrouping() ? groups() : [groups()[0]].filter(Boolean) as ChangeGroup[]}>
             {(group) => (
               <div
@@ -225,9 +259,6 @@ export function ChangesPanel(props: ChangesPanelProps) {
                         <span class="change-path">{item.file}</span>
                       </span>
                       <span class="change-meta">
-                        <span class="change-status" data-status={item.status}>
-                          {changeStatusLabel(item.status)}
-                        </span>
                         <span class="diff-dialog-stat" data-tone="add">
                           +{item.additions}
                         </span>

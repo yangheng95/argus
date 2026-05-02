@@ -245,6 +245,7 @@ export function Card(props: { node: CardNode; depth: number }) {
           <Show when={traceOpen() && traceSessionID()}>
             <TracePanel
               sessionID={traceSessionID()!}
+              isVisible={() => traceOpen() && expanded()}
               onClose={() => setTraceOpen(false)}
             />
           </Show>

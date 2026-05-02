@@ -21,9 +21,14 @@
 import { Index, Show, createMemo, createResource, createSignal, onCleanup } from "solid-js";
 import { fetchSessionTrace, fetchTaskTrace, invalidateTraceCache, type TraceEvent, type TraceFetchResult } from "../services/trace";
 
+type TracePanelVisibility = {
+  onClose?: () => void;
+  isVisible?: () => boolean;
+};
+
 type TracePanelProps =
-  | { sessionID: string; taskID?: never; onClose?: () => void }
-  | { taskID: string; sessionID?: never; onClose?: () => void };
+  | ({ sessionID: string; taskID?: never } & TracePanelVisibility)
+  | ({ taskID: string; sessionID?: never } & TracePanelVisibility);
 
 function formatTime(ts: number): string {
   if (!Number.isFinite(ts) || ts <= 0) return "—";
@@ -156,8 +161,17 @@ export function TracePanel(props: TracePanelProps) {
   const cacheKey = createMemo(() => props.sessionID ?? `task:${props.taskID ?? ""}`);
   const [refreshTick, setRefreshTick] = createSignal(0);
 
-  const [data] = createResource<TraceFetchResult, { key: string; tick: number }>(
-    () => ({ key: cacheKey(), tick: refreshTick() }),
+  const hasTarget = createMemo(() =>
+    Boolean(("sessionID" in props && props.sessionID) || ("taskID" in props && props.taskID)),
+  );
+  const componentVisible = createMemo(() => props.isVisible?.() ?? true);
+  const fetchKey = createMemo<{ key: string; tick: number } | null>(() => {
+    if (!hasTarget() || !componentVisible()) return null;
+    return { key: cacheKey(), tick: refreshTick() };
+  });
+
+  const [data] = createResource<TraceFetchResult, { key: string; tick: number } | null>(
+    fetchKey,
     async () => {
       if ("sessionID" in props && props.sessionID) {
         return fetchSessionTrace(props.sessionID, { force: refreshTick() > 0 });
@@ -221,21 +235,19 @@ export function TracePanel(props: TracePanelProps) {
   // the panel anyway, and we don't want to wake the JS event loop on a
   // battery laptop while alt-tabbed away.
   let timer: ReturnType<typeof setInterval> | undefined;
-  const hasTarget = createMemo(() =>
-    Boolean(("sessionID" in props && props.sessionID) || ("taskID" in props && props.taskID)),
-  );
   const startPolling = () => {
     if (timer) clearInterval(timer);
     if (!hasTarget()) return;
     timer = setInterval(() => {
       if (typeof document !== "undefined" && document.hidden) return;
+      if (!componentVisible()) return;
       void refresh();
     }, 4_000);
   };
   startPolling();
   const onVisibility = () => {
     if (typeof document === "undefined") return;
-    if (!document.hidden && hasTarget()) void refresh();
+    if (!document.hidden && hasTarget() && componentVisible()) void refresh();
   };
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onVisibility);
