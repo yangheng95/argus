@@ -47,7 +47,7 @@ const LEGACY_BUTTON_CLASSES = [
   "titlebar-status-icon",
 ]
 const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
-  btn: 43,
+  btn: 38,
   "btn-primary": 8,
   "chat-send": 0,
   "chat-interrupt": 0,
@@ -242,7 +242,7 @@ describe("overlay architecture guards", () => {
     for (const className of LEGACY_BUTTON_CLASSES) {
       expect(counts[className]).toBeLessThanOrEqual(LEGACY_BUTTON_CALLER_LIMITS[className]!)
     }
-    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(54)
+    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(49)
   })
 
   test("new component modules stay below the split threshold", () => {

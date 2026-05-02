@@ -23,6 +23,7 @@
   font: var(--oc-header-title-font);
   letter-spacing: var(--oc-header-title-letter-spacing);
   text-transform: var(--oc-header-title-transform);
+  white-space: nowrap;
   cursor: pointer;
 }
 
