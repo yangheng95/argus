@@ -426,9 +426,24 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     await page.waitForSelector("#rightPaneResizer", { visible: true })
 
     const initial = await page.evaluate(() => {
+      const panelBody = document.querySelector<HTMLElement>("#panelBody")!
+      const workspaceMain = document.querySelector<HTMLElement>("#workspaceMain")!
+      const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
+      const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
+      const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
       const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
       const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
+      const panelStyle = getComputedStyle(panelBody)
+      const workspaceStyle = getComputedStyle(workspaceMain)
       return {
+        panelGap: panelStyle.gap,
+        panelPaddingTop: panelStyle.paddingTop,
+        panelPaddingRight: panelStyle.paddingRight,
+        panelPaddingBottom: panelStyle.paddingBottom,
+        panelPaddingLeft: panelStyle.paddingLeft,
+        workspaceGap: workspaceStyle.gap,
+        leftDivider: chat.left - sidebar.right,
+        rightDivider: sections.left - chat.right,
         leftHandleWidth: left.width,
         rightHandleWidth: right.width,
         leftCenterX: left.left + left.width / 2,
@@ -437,8 +452,17 @@ test("column resizers allow broad widths without wide visual dividers", async ()
         rightCenterY: right.top + right.height / 2,
       }
     })
-    expect(initial.leftHandleWidth).toBeLessThanOrEqual(8)
-    expect(initial.rightHandleWidth).toBeLessThanOrEqual(8)
+    expect(initial.panelGap).toBe("0px")
+    expect(initial.panelPaddingTop).toBe("0px")
+    expect(initial.panelPaddingRight).toBe("0px")
+    expect(initial.panelPaddingBottom).toBe("0px")
+    expect(initial.panelPaddingLeft).toBe("0px")
+    expect(initial.workspaceGap).toBe("0px")
+    expect(initial.leftDivider).toBeLessThanOrEqual(2)
+    expect(initial.rightDivider).toBeLessThanOrEqual(2)
+    expect(Math.abs(initial.leftDivider - initial.rightDivider)).toBeLessThanOrEqual(1)
+    expect(initial.leftHandleWidth).toBeLessThanOrEqual(2)
+    expect(initial.rightHandleWidth).toBeLessThanOrEqual(2)
 
     const controlsWithMargins = await page.evaluate(() => {
       const selectors = [
@@ -668,10 +692,11 @@ test("column resizers allow broad widths without wide visual dividers", async ()
 
     expect(afterRightDrag.sections).toBeGreaterThan(560)
     expect(afterRightDrag.chat).toBeGreaterThan(300)
-    expect(afterRightDrag.leftDivider).toBeLessThanOrEqual(8)
-    expect(afterRightDrag.rightDivider).toBeLessThanOrEqual(8)
-    expect(afterRightDrag.leftHandleWidth).toBeLessThanOrEqual(8)
-    expect(afterRightDrag.rightHandleWidth).toBeLessThanOrEqual(8)
+    expect(afterRightDrag.leftDivider).toBeLessThanOrEqual(2)
+    expect(afterRightDrag.rightDivider).toBeLessThanOrEqual(2)
+    expect(Math.abs(afterRightDrag.leftDivider - afterRightDrag.rightDivider)).toBeLessThanOrEqual(1)
+    expect(afterRightDrag.leftHandleWidth).toBeLessThanOrEqual(2)
+    expect(afterRightDrag.rightHandleWidth).toBeLessThanOrEqual(2)
 
     await page.evaluate(() => {
       localStorage.removeItem("oc_sidebar_width")
@@ -696,19 +721,25 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     const afterLeftDrag = await page.evaluate(() => {
       const sidebar = document.querySelector<HTMLElement>(".sidebar")!.getBoundingClientRect()
       const chat = document.querySelector<HTMLElement>(".chat")!.getBoundingClientRect()
+      const sections = document.querySelector<HTMLElement>(".sections")!.getBoundingClientRect()
       const left = document.querySelector<HTMLElement>("#leftPaneResizer")!.getBoundingClientRect()
       const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
       return {
         sidebar: sidebar.width,
         chat: chat.width,
+        leftDivider: chat.left - sidebar.right,
+        rightDivider: sections.left - chat.right,
         leftHandleWidth: left.width,
         rightHandleWidth: right.width,
       }
     })
     expect(afterLeftDrag.sidebar).toBeGreaterThan(600)
     expect(afterLeftDrag.chat).toBeGreaterThan(300)
-    expect(afterLeftDrag.leftHandleWidth).toBeLessThanOrEqual(8)
-    expect(afterLeftDrag.rightHandleWidth).toBeLessThanOrEqual(8)
+    expect(afterLeftDrag.leftDivider).toBeLessThanOrEqual(2)
+    expect(afterLeftDrag.rightDivider).toBeLessThanOrEqual(2)
+    expect(Math.abs(afterLeftDrag.leftDivider - afterLeftDrag.rightDivider)).toBeLessThanOrEqual(1)
+    expect(afterLeftDrag.leftHandleWidth).toBeLessThanOrEqual(2)
+    expect(afterLeftDrag.rightHandleWidth).toBeLessThanOrEqual(2)
     await page.close()
   } finally {
     await browser.close().catch(() => undefined)
