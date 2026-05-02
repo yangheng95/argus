@@ -6548,15 +6548,28 @@ select.field-input option {
   gap: 6px;
 }
 
+/* Single source after iter30. The canonical here used to
+   declare `background: var(--subtle-1)`, but a late-tail
+   `!important` reset shared with .criteria-group /
+   .eval-error / .channel-doc-card / .detail-card /
+   .config-section forced `--surface-inset` over it — the
+   source said one thing, the browser rendered another (rule-
+   8 active conflict, not just rule-9 redundancy). Updated
+   canonical to declare `--surface-inset` directly so the
+   source matches the rendered visual. Padding switched from
+   hardcoded `8px 10px` to the shared `--ui-card-padding-*`
+   tokens (rule 10) that the multi-selector card-treatment
+   already used. The three reset chains drop `.extension-row`
+   from their lists. */
 .extension-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px;
+  padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  background: var(--subtle-1);
+  background: var(--surface-inset);
 }
 
 .extension-row-main {
@@ -9200,8 +9213,14 @@ body[data-theme="light"] .config-close-btn:hover {
  * file-change rows render as a flat compact list (no per-row border /
  * background / lift). The canonical .change-row rule lives near
  * line 2663 and uses just a row separator + hover wash. */
+/* iter30: `.extension-row` dropped — its canonical at line
+   ~6551 already declares the same border/radius/padding plus
+   the actually-rendered --surface-inset bg (whereas this
+   shared block declares --subtle-1, which the !important
+   reset at ~12327 used to clobber). The other 6 siblings
+   keep the --subtle-1 treatment until they get the same
+   single-source pass. */
 .goal-item,
-.extension-row,
 .channel-doc-card,
 .market-card,
 .knowledge-item,
@@ -9213,8 +9232,13 @@ body[data-theme="light"] .config-close-btn:hover {
   padding: var(--ui-card-padding-y) var(--ui-card-padding-x);
 }
 
+/* iter30: `.extension-row` dropped from this transition
+   helper too — the canonical at line ~6551 doesn't declare
+   a transition, so neither should the canonical's iter
+   contract. (Hover/focus rules still get whatever transition
+   the browser default provides, which matches the calm/flat
+   trajectory.) */
 .goal-item,
-.extension-row,
 .channel-doc-card,
 .market-card,
 .knowledge-item,
@@ -12319,19 +12343,20 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   padding: calc(8px * var(--ui-scale));
 }
 
+/* iter28 dropped `.config-subsection`; iter30 dropped
+   `.extension-row` — both canonicals now declare the same
+   --surface-inset bg / var(--border) border / var(--radius)
+   radius / no shadow this reset block was force-asserting,
+   so the !important defense is no longer needed for them.
+   The remaining siblings (.section, .gwg, .delivery-panel,
+   .criteria-group, .eval-error, .channel-doc-card,
+   .detail-card, .config-section) keep the reset until they
+   get the same single-source pass. */
 .section,
 .gwg,
 .delivery-panel,
 .criteria-group,
 .eval-error,
-.extension-row,
-/* iter28: `.config-subsection` dropped from this multi-selector
-   reset — its canonical block at line ~8379 already declares
-   the same values (--surface-inset bg, var(--section-corner)
-   = var(--radius) radius, 1px var(--border) border, no shadow).
-   The other siblings (.extension-row, .channel-doc-card,
-   .detail-card, .config-section) keep the !important reset
-   until they get the same single-source treatment. */
 .channel-doc-card,
 .detail-card,
 .config-section {
@@ -13020,12 +13045,12 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .delivery-panel,
 .criteria-group,
 .eval-error,
-/* iter28: `.config-subsection` dropped — canonical at ~8379
-   already sets `border: 1px solid var(--border)`, so this
-   border-color !important reset was a redundant copy. The
-   other siblings keep the reset (same reason as the
-   multi-selector block above). */
-.extension-row,
+/* iter28 dropped `.config-subsection` and iter30 dropped
+   `.extension-row` from this border-color reset — both
+   canonicals declare `border: 1px solid var(--border)`
+   directly, so the !important reset was redundant for
+   them. `.channel-doc-card` + `.detail-card` keep the
+   reset until their single-source pass. */
 .channel-doc-card,
 .detail-card {
   border-color: var(--border) !important;
