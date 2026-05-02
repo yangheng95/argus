@@ -388,11 +388,11 @@ function buildUserPrompt(
   pushRequired(
     "# Final Verification Instructions",
     "IMPORTANT: You MUST verify the application works end-to-end.\n" +
-      "1. Find the entry point (e.g., src/app.ts, src/index.ts, main.ts, package.json scripts)\n" +
-      "2. Run build/compile if needed\n" +
-      "3. Start the application with a short timeout to verify it doesn't crash\n" +
-      "4. If it crashes, investigate enough to produce concrete rejection evidence and affected goal attribution\n" +
-      "5. Capture runtime output or screenshots for every user-visible surface\n" +
+      "1. Inspect whether the delivered implementation actually satisfies the task and acceptance specs\n" +
+      "2. Verify the applicable runtime, output, interface, data, or presentation surface requested by the task\n" +
+      "3. If completion is already missing, reject with concrete evidence and skip broad auxiliary commands\n" +
+      "4. Run build/typecheck/lint/test/configured verification only after completion checks have not failed\n" +
+      "5. Attribute every rejection to the responsible goal when identifiable\n" +
       "6. Produce your semantic verdict for the host delivery arbiter without editing project files",
   )
 

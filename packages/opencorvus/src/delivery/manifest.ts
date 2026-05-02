@@ -172,6 +172,7 @@ function normalizeFailureOutput(output: string) {
 
 export function validateDeliveryEvidenceManifest(
   manifest: DeliveryEvidenceManifest,
+  options: { skippedChecksPass?: boolean } = {},
 ): DeliveryGateVerdict {
   const resultById = new Map(manifest.checkResults.map((item) => [item.id, item]))
   const failedCheckIds: string[] = []
@@ -184,6 +185,9 @@ export function validateDeliveryEvidenceManifest(
     }
     if (result.commandDigest !== required.commandDigest) {
       failedCheckIds.push(required.id)
+      continue
+    }
+    if (result.status === "skipped" && options.skippedChecksPass) {
       continue
     }
     if (result.status !== "passed") {

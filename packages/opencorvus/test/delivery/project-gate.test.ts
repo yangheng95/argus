@@ -224,6 +224,44 @@ console.log("lint scope ok", cwd())
     expect(manifest.finalGate.summary).toContain("Functional completion failed")
   })
 
+  test("skips auxiliary programmatic checks when functional completion already failed", async () => {
+    const dir = await packageFixture({
+      lint: "bun -e \"process.exit(1)\"",
+    })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_completion_first",
+        runID: "run_completion_first",
+        deliveryID: "dlv_completion_first",
+        changedFiles: ["src/app.ts"],
+        metadata: { checks: { lint: ["bun run lint"] } },
+        goals: [{
+          id: "gol_missing_acceptance",
+          title: "Missing acceptance specs",
+          priority: "blocking",
+          requirement_ids: [],
+          acceptance_spec_count: 0,
+        }],
+      }),
+    })
+
+    expect(manifest.requiredChecks.map((item) => item.id)).toEqual(["lint#1"])
+    expect(manifest.checkResults).toMatchObject([{
+      id: "lint#1",
+      status: "skipped",
+      outputExcerpt: "Skipped because delivery completion evidence failed before auxiliary programmatic checks.",
+    }])
+    expect(manifest.finalGate.failedCoverageIds).toEqual(["goal:gol_missing_acceptance"])
+    expect(manifest.finalGate.failedCheckIds).toEqual([])
+    expect(manifest.functionalAssessment).toMatchObject({
+      status: "incomplete",
+      primaryFailureIds: ["goal:gol_missing_acceptance"],
+      auxiliaryFailureIds: [],
+    })
+  })
+
   test("detects repeated manifest failure signature sets", () => {
     const previous = manifestWithFailures({
       id: "artifact_previous",
@@ -330,12 +368,12 @@ console.log("lint scope ok", cwd())
     })
 
     expect(manifest.surfaceManifest?.surfaces).toEqual(["frontend", "visual_runtime"])
-    expect(manifest.runtimeFlows).toEqual([{
+    expect(manifest.runtimeFlows).toMatchObject([{
       id: "runtime:web:.",
       name: "Web Runtime Render",
       status: "failed",
-      evidence: ["build check failed; runtime render cannot be trusted until build passes"],
     }])
+    expect(manifest.runtimeFlows[0]?.evidence[0]).toContain("no_build_artifact")
     expect(manifest.finalGate.failedRuntimeFlowIds).toEqual(["runtime:web:."])
   })
 

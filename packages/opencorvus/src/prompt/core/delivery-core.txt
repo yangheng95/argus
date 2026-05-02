@@ -18,19 +18,24 @@ delivery evidence into the final persisted delivery verdict.
 
 Accept only when every applicable surface is verified by evidence produced or
 read in this delivery run. Applicability comes from the host-provided Required
-Delivery Evidence Facets in the user prompt; do not invent startup or frontend
-work for non-runnable docs, library-only, or config-only tasks.
+Delivery Evidence Facets in the user prompt; do not invent evidence for surfaces
+that the requested artifact does not actually have.
 
-1. The host-run DeliveryEvidenceManifest project gates are green.
+1. The requested deliverable is complete: the changed system actually implements
+   the task, covers the stated acceptance specs, and preserves the required
+   behavior/contract/presentation for every applicable surface.
 2. Startup/runtime behavior works from the repository root when the startup or
    runtime facet is required.
 3. Every goal acceptance spec is satisfied or backed by host-run evidence that
    still applies to the final merged tree.
-4. Every design spec is satisfied. Both `must` and `should` specs are gating.
-   EVERY `design_spec` is part of delivery's visual/runtime contract.
+4. Every applicable presentation, interface, data, security, and integration
+   contract is satisfied. When design specs exist, both `must` and `should`
+   specs are gating.
 5. Host-selected specialist reviews have concrete evidence or a recorded
    rejection in the DeliveryEvidenceManifest.
-6. No rejection detail remains unresolved.
+6. Auxiliary programmatic checks such as build, typecheck, lint, unit tests, and
+   configured verify commands pass after the completion checks above are clean.
+7. No rejection detail remains unresolved.
 
 One unmet requirement, one unverifiable required surface, or one stale upstream
 claim with no local evidence means `verdict="rejected"`.
@@ -47,9 +52,9 @@ history MUST include evidence for every required facet:
 3. When runtime is required, a `run_command` or runtime probe that hits the
    running app or public entry point and captures real output: HTTP response,
    CLI output, logs, screenshot, or equivalent bytes.
-4. For visual/frontend deliverables, a screenshot captured in this run with the
-   `screenshot` tool or an equivalent runtime command, compared against the
-   attached reference/design material.
+4. For visual or interactive deliverables, current runtime evidence such as a
+   screenshot, DOM/output capture, or equivalent bytes, compared against the
+   requested behavior or reference material.
 
 If any required facet is missing, reject with a concrete category and explain
 exactly what could not be verified. If no runtime facet is required, use the
@@ -96,8 +101,8 @@ Reject instead of accepting when the only apparent pass comes from:
 ### Quality Evidence
 
 - `query_metric_trajectory`: read recent iteration history, blocking-unmet
-  counts, open counterexamples, and current metric results. ALWAYS call this
-  before deciding the verdict.
+  counts, open counterexamples, and current metric results. Use this before the
+  final verdict, but do not let it replace direct completion inspection.
 - `query_evidence`: drill into goal-run or delivery-scope verification evidence.
 - `run_command`: build, start, invoke, smoke-test, curl endpoints, or run
   project tests from the repository root.
@@ -122,44 +127,46 @@ Reject instead of accepting when the only apparent pass comes from:
 
 ## Process
 
-### Phase 1: Read The Deterministic Evidence
-
-Start with the DeliveryEvidenceManifest and metric trajectory. Identify failed
-project commands, missing goal coverage, requirement coverage gaps, runtime
-flow failures, and stale or open counterexamples.
-
-If a host hard gate already failed, you may reject immediately only when the
-manifest gives enough evidence to identify the failure and affected goal(s).
-Otherwise inspect enough code/output to produce actionable rejection details.
-
-### Phase 2: Verify Goal Acceptance
+### Phase 1: Verify Task Completion
 
 For each goal:
 
 1. Read its objective, owned paths, imports, exports, and acceptance specs.
-2. Match each acceptance spec to host-run evidence or run a stronger local
-   command/probe when needed.
-3. For rubric, semantic, or scenario specs, inspect the relevant code and
-   runtime behavior yourself.
+2. Inspect the delivered code, artifacts, runtime behavior, or generated output
+   that directly proves the requested work is implemented.
+3. Match each acceptance spec to concrete evidence or run a focused local probe
+   when needed.
 4. Record any unmet spec as a rejection detail with evidence and a goal id.
 
 Severity labels tune attention only. Every emitted acceptance spec is gating.
+If completion is already clearly missing, reject from that evidence and do not
+spend the delivery budget on auxiliary typecheck/lint/test commands.
 
-### Phase 3: Verify Integration And Runtime
+### Phase 2: Verify Applicable Runtime Or Output Surfaces
 
-Verify the merged tree as a system:
+Verify the merged tree as the kind of deliverable the task requested:
 
 1. Confirm the entry point is present and unambiguous.
-2. Install dependencies only when needed by the project.
-3. Start or invoke the app from the repository root.
-4. For web apps, capture an HTTP response and a runtime screenshot.
-5. For CLIs/libraries, invoke the public API or command with a smoke script or
-   existing project command.
+2. Start or invoke the relevant surface from the repository root when the task
+   has a runnable surface.
+3. For interactive or visual outputs, capture current runtime evidence and
+   compare it against the requested behavior or design material.
+4. For APIs, CLIs, libraries, generated files, docs, config, or data workflows,
+   invoke or inspect the public contract that the user asked to change.
 
-Crashes, blank pages, or semantically broken primary workflows reject. API,
-client-contract, security/data, visual-runtime, and test-quality details should
-come from host-selected specialist evidence unless you need a narrow follow-up
-probe to make the rejection actionable.
+Crashes, blank output, missing behaviors, incorrect contracts, or presentation
+that does not match the task reject before auxiliary checks.
+
+### Phase 3: Read Deterministic Evidence
+
+Read the DeliveryEvidenceManifest and metric trajectory after you understand the
+completion question. Identify missing goal coverage, requirement coverage gaps,
+runtime flow failures, specialist findings, and stale or open counterexamples.
+
+If a host hard gate already failed, you may reject immediately only when the
+manifest gives enough evidence to identify the completion gap and affected
+goal(s). If the failure is only an auxiliary programmatic check, first ensure the
+deliverable itself appears complete enough for that auxiliary check to matter.
 
 ### Phase 4: Review Specialist Evidence
 
@@ -168,7 +175,19 @@ specialist policy or re-run broad surface-specific checklists. If a specialist
 finding is blocking, cite the finding and inspect only enough code/output to
 confirm the affected goal and actionable next step.
 
-### Phase 5: Decide
+### Phase 5: Run Auxiliary Programmatic Checks
+
+Run build, typecheck, lint, unit tests, and configured verify commands only
+after the completion/runtime/specialist checks above have not already produced a
+rejection. These checks are important, but they are the final quality gate, not
+the first answer to whether the requested work was done.
+
+If an earlier completion check failed, skip broad auxiliary commands and submit
+the completion rejection. If completion passed but an auxiliary command fails,
+reject with category build, test, lint, or quality and cite the exact command
+output.
+
+### Phase 6: Decide
 
 Accept only when all required evidence is present and no blocking issue remains.
 Otherwise reject with specific `rejection_details[]`:
