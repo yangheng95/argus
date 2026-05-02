@@ -14003,3 +14003,200 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
   padding-inline: calc(2px * var(--ui-scale)) !important;
   padding-block: calc(2px * var(--ui-scale)) !important;
 }
+
+body[data-theme="light"] .sections-header,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-header {
+  min-height: calc(30px * var(--ui-scale)) !important;
+  height: calc(30px * var(--ui-scale)) !important;
+  padding: 0 calc(5px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .sections-stack,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-stack {
+  gap: calc(4px * var(--ui-scale)) !important;
+  padding: calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .right-panel-tablist,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .right-panel-tablist {
+  display: flex !important;
+  width: 100%;
+  gap: calc(1px * var(--ui-scale)) !important;
+  padding: calc(1px * var(--ui-scale)) !important;
+  border-radius: calc(5px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .right-panel-tab,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .right-panel-tab {
+  flex: 1 1 0;
+  min-height: calc(22px * var(--ui-scale)) !important;
+  padding: 0 calc(5px * var(--ui-scale)) !important;
+  border-radius: calc(4px * var(--ui-scale)) !important;
+  line-height: 1;
+}
+
+body[data-theme="light"] :is(.section, .gwg, .delivery-panel, .criteria-group),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section, .gwg, .delivery-panel, .criteria-group) {
+  border-radius: calc(5px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(.section-head, .gwg-header, .delivery-panel-header, .criteria-group-head),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section-head, .gwg-header, .delivery-panel-header, .criteria-group-head) {
+  min-height: calc(26px * var(--ui-scale)) !important;
+  gap: calc(4px * var(--ui-scale)) !important;
+  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(.section-body, .gwg-body),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section-body, .gwg-body) {
+  padding: 0 calc(6px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .board-intro,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro {
+  gap: calc(5px * var(--ui-scale)) !important;
+  padding: calc(6px * var(--ui-scale)) !important;
+  line-height: 1.35 !important;
+}
+
+body[data-theme="light"] .board-intro__head,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__head {
+  gap: calc(2px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .board-intro__title,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__title {
+  font-size: var(--ui-font-body) !important;
+  line-height: 1.2 !important;
+}
+
+body[data-theme="light"] .board-intro__tagline,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__tagline {
+  line-height: 1.35 !important;
+}
+
+body[data-theme="light"] .board-intro__section,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__section {
+  gap: calc(3px * var(--ui-scale)) !important;
+  padding: calc(5px * var(--ui-scale)) !important;
+  border: 0 !important;
+  border-radius: calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .board-intro__section-title,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__section-title {
+  font-size: var(--ui-font-meta) !important;
+  line-height: 1.1 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+body[data-theme="light"] :is(.board-intro__modes, .board-intro__agents),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.board-intro__modes, .board-intro__agents) {
+  gap: calc(3px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .board-intro__modes,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__modes {
+  grid-template-columns: repeat(auto-fit, minmax(calc(128px * var(--ui-scale)), 1fr)) !important;
+}
+
+body[data-theme="light"] :is(.board-intro__mode, .board-intro__agent, .board-intro__cta),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.board-intro__mode, .board-intro__agent, .board-intro__cta) {
+  gap: calc(2px * var(--ui-scale)) !important;
+  padding: calc(4px * var(--ui-scale)) calc(5px * var(--ui-scale)) !important;
+  border: 0 !important;
+  border-radius: calc(3px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(.board-intro__mode-label, .board-intro__agent-name, .board-intro__cta-title),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.board-intro__mode-label, .board-intro__agent-name, .board-intro__cta-title) {
+  font-size: var(--ui-font-control) !important;
+  line-height: 1.2 !important;
+}
+
+body[data-theme="light"] :is(.board-intro__mode-desc, .board-intro__agent-desc, .board-intro__cta-text),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.board-intro__mode-desc, .board-intro__agent-desc, .board-intro__cta-text) {
+  line-height: 1.25 !important;
+}
+
+body[data-theme="light"] :is(.board-intro__mode-desc, .board-intro__agent-desc),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.board-intro__mode-desc, .board-intro__agent-desc) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+body[data-theme="light"] .board-intro__foot,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .board-intro__foot {
+  padding-top: calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .delivery-panel,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .delivery-panel {
+  gap: calc(4px * var(--ui-scale)) !important;
+  margin-top: calc(2px * var(--ui-scale)) !important;
+  padding: calc(6px * var(--ui-scale)) !important;
+  border-left-width: calc(2px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .delivery-panel[data-verdict="empty"],
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .delivery-panel[data-verdict="empty"] {
+  border-left-width: 0 !important;
+  background: transparent !important;
+}
+
+body[data-theme="light"] :is(.section-body > .empty-hint, #solidChangesPanel > .empty-hint),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.section-body > .empty-hint, #solidChangesPanel > .empty-hint) {
+  gap: calc(4px * var(--ui-scale)) !important;
+  padding: calc(6px * var(--ui-scale)) !important;
+  border: 0 !important;
+  border-radius: calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .criteria-group,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .criteria-group {
+  gap: calc(3px * var(--ui-scale)) !important;
+  padding: calc(4px * var(--ui-scale)) !important;
+  border-radius: calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(.criteria-group-head, .criteria-group-list),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.criteria-group-head, .criteria-group-list) {
+  gap: calc(4px * var(--ui-scale)) !important;
+  padding: 0 !important;
+}
+
+body[data-theme="light"] .agent-workflow-panel,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(4px * var(--ui-scale));
+  overflow: hidden;
+  background: transparent;
+}
+
+body[data-theme="light"] .agent-workflow-toolbar,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-toolbar {
+  gap: calc(4px * var(--ui-scale)) !important;
+  min-height: calc(26px * var(--ui-scale)) !important;
+  padding: 0 calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .agent-workflow-canvas,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-canvas {
+  gap: calc(4px * var(--ui-scale)) !important;
+  padding: 0 calc(2px * var(--ui-scale)) 0 0 !important;
+}
+
+body[data-theme="light"] .agent-workflow-card,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card {
+  min-height: 0 !important;
+  gap: calc(3px * var(--ui-scale)) !important;
+  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale)) !important;
+  border: 0 !important;
+  border-radius: calc(4px * var(--ui-scale)) !important;
+  box-shadow: none !important;
+}
