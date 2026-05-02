@@ -52,6 +52,12 @@ Progress log:
   The accurate baseline is 78 total TSX callers (`.btn` is 54, not
   63; `.chat-send` is 0 because only child icon/label classes
   remain in TSX; `.executor-chip` is 1, not 7).
+- 2026-05-03: First real Button migration landed for
+  `WindowControls`. The titlebar window buttons now render through
+  `Button`, `styles/tokens/design-language.css` and
+  `styles/primitives/button.css` are on the runtime path, and the
+  `titlebar-btn` TSX caller budget dropped from 3 to 0
+  (aggregate legacy button budget 78 to 75).
 
 Trigger: user feedback (2026-05-03):
 

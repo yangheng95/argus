@@ -37,6 +37,8 @@
 .oc-button[data-size="icon"] {
   --oc-button-height: var(--oc-density-icon-button);
   --oc-button-padding-x: 0;
+  width: var(--oc-density-icon-button);
+  min-width: var(--oc-density-icon-button);
 }
 
 .oc-button[data-variant="solid"] {
@@ -65,6 +67,19 @@
 
 .oc-button[data-tone="danger"] {
   --oc-button-color: var(--bad);
+}
+
+.oc-button[data-tone="danger"]:hover,
+.oc-button[data-tone="danger"]:focus-visible {
+  --oc-button-bg: var(--bad-dim);
+  --oc-button-border: var(--oc-border-width) solid transparent;
+  --oc-button-color: var(--bad);
+}
+
+.oc-button > svg {
+  width: var(--oc-density-chip-height);
+  height: var(--oc-density-chip-height);
+  flex: 0 0 auto;
 }
 
 .oc-button:hover,

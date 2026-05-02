@@ -15,9 +15,13 @@ function sourceArray(source: string, name: string): string[] {
 }
 
 function cssDataValues(css: string, attr: "variant" | "size" | "tone"): string[] {
-  return Array.from(css.matchAll(new RegExp(`\\.oc-button\\[data-${attr}="([^"]+)"\\]`, "g")))
-    .map((match) => match[1]!)
-    .sort();
+  return Array.from(
+    new Set(
+      Array.from(css.matchAll(new RegExp(`\\.oc-button\\[data-${attr}="([^"]+)"\\]`, "g"))).map(
+        (match) => match[1]!,
+      ),
+    ),
+  ).sort();
 }
 
 test("Button primitive exposes the canonical data-attribute contract", () => {

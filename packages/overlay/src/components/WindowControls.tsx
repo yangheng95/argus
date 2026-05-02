@@ -6,6 +6,7 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { nativeMessage } from "../services/app-dialog";
+import { Button } from "./ui/Button";
 
 // ── Constants ──
 
@@ -141,10 +142,12 @@ export function WindowControls() {
     <div class="titlebar-window-controls" data-no-drag="true">
       {/* Minimize */}
       <Show when={tauriWin() !== null}>
-        <button
+        <Button
           type="button"
           id="btnMinimize"
-          class="titlebar-btn"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
           title={t("titlebar.minimize")}
           aria-label={t("titlebar.minimize")}
           onClick={handleMinimize}
@@ -160,15 +163,17 @@ export function WindowControls() {
               stroke-linecap="round"
             />
           </svg>
-        </button>
+        </Button>
       </Show>
 
       {/* Maximize / Restore */}
       <Show when={tauriWin() !== null}>
-        <button
+        <Button
           type="button"
           id="btnMaximize"
-          class="titlebar-btn"
+          variant="ghost"
+          size="icon"
+          tone="neutral"
           data-maximized={isMaximized() ? "true" : "false"}
           title={maxLabel()}
           aria-label={maxLabel()}
@@ -181,10 +186,12 @@ export function WindowControls() {
 
       {/* Close / hide */}
       <Show when={tauriWin() !== null}>
-        <button
+        <Button
           type="button"
           id="btnClose"
-          class="titlebar-btn titlebar-close"
+          variant="ghost"
+          size="icon"
+          tone="danger"
           title={t("titlebar.close")}
           aria-label={t("titlebar.close")}
           onClick={() => void handleClose()}
@@ -209,7 +216,7 @@ export function WindowControls() {
               stroke-linecap="round"
             />
           </svg>
-        </button>
+        </Button>
       </Show>
     </div>
   );
