@@ -17,7 +17,29 @@ describe("overlay default theme", () => {
       path.join(import.meta.dir, "..", "src", "index.html"),
       "utf8",
     );
+    expect(html).toContain('<html lang="en-US" data-theme="light">');
+    expect(html).toContain('<body data-page="overlay" data-theme="light">');
     expect(html).toContain('!saved ? "light"');
+    expect(html).toContain('document.documentElement.dataset.theme = effective');
     expect(html).toContain('document.body.dataset.theme = "light"');
+  });
+
+  test("palette-only theme files are on the runtime path", async () => {
+    const html = await fs.readFile(
+      path.join(import.meta.dir, "..", "src", "index.html"),
+      "utf8",
+    );
+    for (const theme of ["light", "dark", "vscode-dark"]) {
+      expect(html).toContain(`styles/themes/${theme}.css`);
+    }
+  });
+
+  test("applyTheme writes the root palette attribute and legacy body attribute", async () => {
+    const source = await fs.readFile(
+      path.join(import.meta.dir, "..", "src", "services", "theme.ts"),
+      "utf8",
+    );
+    expect(source).toContain("document.documentElement.dataset.theme = effective");
+    expect(source).toContain("document.body.dataset.theme = effective");
   });
 });

@@ -118,6 +118,11 @@ Progress log:
   longer use `.right-panel-tab` classes; tab shape is governed by
   `styles/primitives/tabs.css` and the legacy button-class budget drops
   from 3 to 0.
+- 2026-05-03: Palette-only theme files are now on the runtime path and
+  `applyTheme` writes the effective theme to both `documentElement` and
+  `body`. The root attribute activates the new `:root[data-theme]`
+  palette contract; the body attribute exists only for legacy God CSS
+  until that file is retired from runtime.
 
 Trigger: user feedback (2026-05-03):
 
