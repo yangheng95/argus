@@ -6297,6 +6297,9 @@ select.field-input option {
   gap: var(--ui-gap-md);
 }
 
+/* iter36: canonical bg switched from var(--subtle-1) to
+   var(--surface-inset) so source matches the late-tail
+   !important reset rendering. */
 .detail-card {
   display: flex;
   flex-direction: column;
@@ -6304,7 +6307,7 @@ select.field-input option {
   padding: var(--ui-panel-padding-y) var(--ui-panel-padding-x);
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  background: var(--subtle-1);
+  background: var(--surface-inset);
 }
 
 .detail-pre {
@@ -6787,6 +6790,11 @@ select.field-input option {
   gap: var(--ui-gap-md);
 }
 
+/* iter36: canonical bg switched from var(--subtle-1) to
+   var(--surface-inset) so source matches what the late-tail
+   !important reset at line ~12428 was actually rendering.
+   Same single-source pass iter28 / iter30 / iter33 already
+   shipped for the four other shell sibling selectors. */
 .channel-doc-card {
   display: flex;
   align-items: center;
@@ -6796,7 +6804,7 @@ select.field-input option {
   padding: 8px 10px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  background: var(--subtle-1);
+  background: var(--surface-inset);
 }
 
 .channel-doc-copy {
@@ -12421,13 +12429,20 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    .delivery-panel, .criteria-group, .eval-error,
    .channel-doc-card, .detail-card) keep the reset until
    each gets its own single-source pass. */
+/* iter28/30/33/36 progressively pulled .config-subsection /
+   .extension-row / .config-section / .channel-doc-card /
+   .detail-card out of this !important reset — each canonical
+   now declares the same chrome (--surface-inset bg, 1px
+   var(--border) border, var(--radius) radius, no shadow)
+   directly, so the !important defense is unnecessary for
+   them. The remaining 5 shell-level siblings (.section /
+   .gwg / .delivery-panel / .criteria-group / .eval-error)
+   keep the reset until each gets its own single-source pass. */
 .section,
 .gwg,
 .delivery-panel,
 .criteria-group,
-.eval-error,
-.channel-doc-card,
-.detail-card {
+.eval-error {
   background: var(--surface-inset) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
@@ -13113,16 +13128,12 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .delivery-panel,
 .criteria-group,
 .eval-error,
-/* iter28 dropped `.config-subsection` and iter30 dropped
-   `.extension-row` from this border-color reset — both
-   canonicals declare `border: 1px solid var(--border)`
-   directly, so the !important reset was redundant for
-   them. `.channel-doc-card` + `.detail-card` keep the
-   reset until their single-source pass. */
-.channel-doc-card,
-.detail-card {
-  border-color: var(--border) !important;
-}
+/* iter28/30/36 fully retired this !important border-color
+   reset — every former segment (.config-subsection /
+   .extension-row / .channel-doc-card / .detail-card) now
+   declares `border: 1px solid var(--border)` directly in
+   its canonical block, so the override has no remaining
+   target. Rule deleted. */
 
 /* ── BoardIntro ──
    Right-panel empty state shown when no task is selected. Previously
