@@ -1,0 +1,61 @@
+// Regression for iter9 of the design-language audit.
+//
+// Three settings-panel section headers carried the same tier-3 pill
+// styling (`text-transform: uppercase` + 0.05em wide tracking) even
+// though they read as section subtitles, not status chips:
+//
+//   - .about-section-title         (About panel: "Runtime", "Shortcuts", …)
+//   - .config-panel-group-title    (Settings panels: "Default Model",
+//                                    "Connections", "Channels", …)
+//   - .agent-model-tier-label      (Agent Models tier dividers)
+//
+// After iter4 (`.btn`) and iter7 (`.field-label`) the rest of the
+// settings surface renders Title Case. These three were the
+// remaining tier-2 leaks — sitting in the same panel as a Title
+// Case form label and an underlying Title Case button, but
+// rendering as ALL CAPS themselves. Pin a single contract here so
+// the entire settings surface stays in one typographic voice.
+//
+// Tier-3 status pills (req-type, req-status, gwg-step-status,
+// verdict-pill, …) keep their uppercase styling. The negative
+// control pins that distinction so a future "remove all uppercase"
+// sweep can't quietly strip the legitimate pill styling.
+
+import { describe, expect, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import path from "node:path"
+
+const STYLES = readFileSync(
+  path.resolve(import.meta.dir, "..", "src", "styles.css"),
+  "utf8",
+)
+
+function ruleBody(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const head = new RegExp(`(^|\\n)\\s*${escaped}(?=[\\s,{[])[^{]*\\{`, "m").exec(STYLES)
+  if (!head) throw new Error(`selector ${selector} not found in styles.css`)
+  const open = head.index + head[0].length - 1
+  const close = STYLES.indexOf("}", open)
+  if (close < 0) throw new Error(`malformed block for ${selector}`)
+  return STYLES.slice(open + 1, close)
+}
+
+describe("settings-panel section headers render Title Case", () => {
+  for (const sel of [
+    ".about-section-title",
+    ".config-panel-group-title",
+    ".agent-model-tier-label",
+  ]) {
+    test(`${sel} does not force-uppercase`, () => {
+      expect(ruleBody(sel)).not.toContain("text-transform: uppercase")
+    })
+  }
+})
+
+describe("tier-3 status pills keep uppercase (negative control)", () => {
+  for (const sel of [".verdict-pill", ".req-type", ".req-status", ".gwg-step-status"]) {
+    test(`${sel} stays uppercase`, () => {
+      expect(ruleBody(sel)).toContain("text-transform: uppercase")
+    })
+  }
+})

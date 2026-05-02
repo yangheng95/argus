@@ -8067,12 +8067,14 @@ select.field-input option {
   flex-direction: column;
   gap: calc(10px * var(--ui-scale));
 }
+/* iter9: dropped tier-3 pill styling (uppercase + 0.05em). About
+   panel section titles read as section subtitles, not status
+   chips, and now match `.field-label` / `.config-panel-group-title`
+   / `.agent-model-tier-label`. */
 .about-section-title {
   font-size: var(--ui-font-control);
   font-weight: 600;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin: 0;
 }
 .about-author-card {
@@ -8589,14 +8591,15 @@ body[data-theme="light"] .config-close-btn:hover {
   gap: calc(10px * var(--ui-scale));
 }
 
+/* iter9: settings panels' group titles ("Default Model",
+   "Connections", …) drop tier-3 pill styling so they share the
+   typographic voice of `.field-label` and `.about-section-title`. */
 .config-panel-group-title {
   min-width: 0;
   flex: 1 1 auto;
   font-size: var(--ui-font-control);
   font-weight: 600;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin: 0;
   padding: 0 calc(2px * var(--ui-scale));
 }
@@ -8700,11 +8703,12 @@ body[data-theme="light"] .config-close-btn:hover {
   overflow: hidden;
 }
 
+/* iter9: agent-model panel tier divider — dropped tier-3 pill
+   styling so the label sits in the same typographic register as
+   the surrounding settings labels. */
 .agent-model-tier-label {
   font-size: var(--ui-font-meta);
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale))
     calc(4px * var(--ui-scale));
   background: var(--subtle-2, var(--subtle-1));
