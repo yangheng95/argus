@@ -44,7 +44,7 @@
               <div class="brand-guide-section">
                 <div class="brand-guide-title" data-i18n="brand.guide_positioning_title">What This Panel Is For</div>
                 <p class="brand-guide-copy" data-i18n="brand.guide_positioning_body">
-                  This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.
+                  This workspace is for conversations and delivery evidence: left selects recent chats, center drives execution, right keeps documents, plan, evaluation, and file changes together.
                 </p>
               </div>
               <div class="brand-guide-section">
@@ -53,25 +53,25 @@
                   <div class="brand-guide-step">
                     <span class="brand-guide-step-index" aria-hidden="true">1</span>
                     <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_1">
-                      Set scope first: pick the task on the left, or start a new one, and verify the working directory before you send anything.
+                      Choose the workspace folder and recent chat before sending anything.
                     </span>
                   </div>
                   <div class="brand-guide-step">
                     <span class="brand-guide-step-index" aria-hidden="true">2</span>
                     <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_2">
-                      Then give a real brief: choose an executor and send the goal, constraints, and acceptance bar, not just a vague prompt.
+                      Send a concrete request with constraints and acceptance criteria.
                     </span>
                   </div>
                   <div class="brand-guide-step">
                     <span class="brand-guide-step-index" aria-hidden="true">3</span>
                     <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_3">
-                      Watch the right side while it runs: Spec checks understanding, Plan checks route, Goals and Evaluation catch drift, Files shows what actually changed.
+                      Watch the workspace while it runs: Spec checks understanding, Plan checks route, Goals and Evaluation catch drift, Files shows what changed.
                     </span>
                   </div>
                   <div class="brand-guide-step">
                     <span class="brand-guide-step-index" aria-hidden="true">4</span>
                     <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_4">
-                      The titlebar actions are operational tools: Channels for delivery, Settings and Logs for debugging, pin-to-top for long-running supervision.
+                      Titlebar menus configure workspace, model, tools, view, delivery channels, and diagnostics.
                     </span>
                   </div>
                 </div>
@@ -114,8 +114,8 @@
     <div class="panel-body" id="panelBody">
       <aside class="sidebar" id="sidebar" data-collapsed="false">
         <div class="sidebar-header">
-          <div class="sidebar-title" data-i18n="sidebar.title">Task List</div>
-          <div class="sidebar-header-actions" role="toolbar" aria-label="Task List" data-i18n-aria-label="sidebar.title">
+          <div class="sidebar-title" data-i18n="sidebar.title">Recent Chats</div>
+          <div class="sidebar-header-actions" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
             <div class="sidebar-toolset">
               <button
                 type="button"
@@ -151,15 +151,15 @@
               id="btnCreateTask"
               data-i18n-title="task.new"
               data-i18n-aria-label="task.new"
-              title="New Task"
-              aria-label="New Task"
+              title="New Chat"
+              aria-label="New Chat"
             >
               <span class="sidebar-btn-icon" aria-hidden="true">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
                   <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
                 </svg>
               </span>
-              <span class="sidebar-btn-label" data-i18n="task.new">New Task</span>
+              <span class="sidebar-btn-label" data-i18n="task.new">New Chat</span>
             </button>
           </div>
         </div>
@@ -170,7 +170,7 @@
 
         <footer class="sidebar-footer" aria-label="Author">
           <span class="chat-version">
-            <span class="chat-version-copy">Copyright © OpenCorvus</span>
+            <span class="chat-version-copy">OpenCorvus Workspace</span>
             <span class="chat-version-sep" aria-hidden="true">·</span>
             <a
               class="chat-version-link"
@@ -199,7 +199,7 @@
         ></div>
         <header class="chat-header">
           <div class="chat-header-main">
-            <span class="chat-title" data-i18n="chat.title">任务</span>
+            <span class="chat-title" data-i18n="chat.title">Conversation</span>
           </div>
           <div class="chat-header-status" id="solidTaskStatusMount"></div>
           <div class="chat-header-meta">
@@ -244,24 +244,30 @@
       <!-- Collapsible Sections (right) -->
       <div class="sections" id="sections">
         <header class="sections-header">
-          <span class="sections-title" data-i18n="sections.title">Inspector</span>
+          <span class="sections-title hidden" data-i18n="sections.title">Workspace</span>
+          <div id="solidRightPanelTabs" class="sections-tabs"></div>
         </header>
-        <div class="sections-stack">
+        <div class="sections-tab-body" id="rightPanelInspector" data-panel-tab="inspector" data-active="true">
+          <div class="sections-stack">
 
-        <!-- Board: rendered entirely by Solid Board component -->
-        <div id="solidBoardMount"></div>
-        <div id="solidInteractionMount"></div>
+          <!-- Board: rendered entirely by Solid Board component -->
+          <div id="solidBoardMount"></div>
+          <div id="solidInteractionMount"></div>
 
-        <!-- Delivery (rendered by Solid <DeliveryPanel/>; mounts the DeliveryEvidenceManifest
-             card group — checks (build/test/lint), runtime flows (preview/SSE/golden-path),
-             specialist reviews (per-reviewer LLM judgement). Sits above Files because the
-             verdict is the lead context — the file changelog is a consequence of the verdict. -->
-        <div id="solidDeliveryMount"></div>
+          <!-- Delivery (rendered by Solid <DeliveryPanel/>; mounts the DeliveryEvidenceManifest
+               card group — checks (build/test/lint), runtime flows (preview/SSE/golden-path),
+               specialist reviews (per-reviewer LLM judgement). Sits above Files because the
+               verdict is the lead context — the file changelog is a consequence of the verdict. -->
+          <div id="solidDeliveryMount"></div>
 
-        <!-- Files (rendered by Solid <FilesSection/>; visibility owned by its memo) -->
-        <div id="solidFilesSectionMount"></div>
+          <!-- Files (rendered by Solid <FilesSection/>; visibility owned by its memo) -->
+          <div id="solidFilesSectionMount"></div>
 
-      </div>
+          </div>
+        </div>
+        <div class="sections-tab-body" id="rightPanelPreview" data-panel-tab="preview" data-active="false">
+          <div id="solidFrontendPreviewMount"></div>
+        </div>
 
       </div>
 

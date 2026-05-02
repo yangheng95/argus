@@ -34,6 +34,7 @@ import { ControlRoutes } from "./control"
 import { CodingRoutes } from "./coding"
 import { AttachmentRoutes } from "./attachment"
 import { GatewayRoutes } from "./gateway"
+import { PreviewRoutes } from "./preview"
 import { hasServerShutdownHandler, requestServerShutdown } from "../shutdown"
 import { Env } from "@/runtime/env"
 
@@ -72,6 +73,7 @@ export function AppRoutes(root: Hono) {
     .route("/control", ControlRoutes())
     .route("/coding", CodingRoutes())
     .route("/gateway", GatewayRoutes())
+    .route("/preview", PreviewRoutes())
     .post(
       "/shutdown",
       describeRoute({

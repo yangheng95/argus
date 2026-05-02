@@ -74,6 +74,7 @@ export type DeliveryRuntimeFlowResult = {
   id: string
   name: string
   status: "passed" | "failed" | "skipped"
+  previewUrl?: string
   evidence: string[]
   screenshotPath?: string
   dom?: {

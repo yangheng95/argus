@@ -26,6 +26,14 @@ test("index.html declares the #solidDeliveryMount node so DeliveryPanel has a pl
   expect(html).toContain('id="solidDeliveryMount"');
 });
 
+test("index.html declares the right-panel Preview tab mount beside Inspector", async () => {
+  const html = await readSrc("src/index.html");
+  expect(html).toContain('id="solidRightPanelTabs"');
+  expect(html).toContain('id="rightPanelInspector"');
+  expect(html).toContain('id="rightPanelPreview"');
+  expect(html).toContain('id="solidFrontendPreviewMount"');
+});
+
 test("index.html mounts the delivery panel BEFORE the files panel — verdict is the lead context", async () => {
   const html = await readSrc("src/index.html");
   const deliveryAt = html.indexOf('id="solidDeliveryMount"');

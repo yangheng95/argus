@@ -1176,6 +1176,16 @@ export namespace Config {
           "Default tool permission actions for new tasks. When not set, defaults to 'allow'. " +
           "Set a tool to 'ask' for confirmation, or 'deny' to block it entirely.",
         ),
+      preview: z
+        .object({
+          ports: z
+            .array(z.number().int().min(1).max(65_535))
+            .max(64)
+            .optional()
+            .describe("Loopback ports to probe when resolving the embedded live frontend preview."),
+        })
+        .optional()
+        .describe("Frontend preview configuration."),
       compaction: z
         .object({
           auto: z.boolean().optional().describe("Enable automatic compaction when context is full"),
