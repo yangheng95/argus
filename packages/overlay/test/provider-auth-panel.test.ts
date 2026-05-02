@@ -358,6 +358,28 @@ test("provider settings search filters catalog and custom providers", async () =
       await tab.waitForSelector('[data-testid="provider-custom-row-my-gateway"]')
       await tab.waitForSelector('[data-testid="provider-catalog-row-anthropic"]')
       await tab.waitForSelector('[data-testid="provider-catalog-row-openai"]')
+      const layout = await tab.evaluate(() => {
+        const content = document.querySelector("#configContent")!.getBoundingClientRect()
+        const toolbar = document.querySelector(".provider-toolbar")!.getBoundingClientRect()
+        const title = document.querySelector(".provider-toolbar-title")!.getBoundingClientRect()
+        const search = document.querySelector('[data-testid="provider-search-input"]')!.getBoundingClientRect()
+        const actions = document.querySelector(".provider-head-actions")!.getBoundingClientRect()
+        const save = document.querySelector('[data-testid="provider-api-key-save-anthropic"]')!.getBoundingClientRect()
+        return {
+          actionsRight: actions.right,
+          contentRight: content.right,
+          saveRight: save.right,
+          searchBottom: search.bottom,
+          searchRight: search.right,
+          searchTop: search.top,
+          titleBottom: title.bottom,
+          toolbarRight: toolbar.right,
+        }
+      })
+      expect(layout.actionsRight).toBeLessThanOrEqual(layout.toolbarRight + 1)
+      expect(layout.searchRight).toBeLessThanOrEqual(layout.contentRight + 1)
+      expect(layout.saveRight).toBeLessThanOrEqual(layout.contentRight + 1)
+      expect(layout.searchTop).toBeGreaterThanOrEqual(layout.titleBottom - 1)
 
       await tab.type('[data-testid="provider-search-input"]', "claude")
       await tab.waitForFunction(() =>
