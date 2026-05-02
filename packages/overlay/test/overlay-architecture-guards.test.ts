@@ -175,6 +175,23 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("new primitive style files use data attributes for variants and never use important", () => {
+    const files = walkFiles(join(OVERLAY_ROOT, "src/styles/primitives"), (path) => path.endsWith(".css"))
+    expect(files.length).toBeGreaterThan(0)
+    const primitiveText = files.map(readText).join("\n")
+    const rawValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])-?\d+(?:\.\d+)?px\b/i
+    expect(primitiveText).toContain("[data-variant=")
+    expect(primitiveText).toContain("[data-size=")
+    expect(primitiveText).toContain("[data-tone=")
+
+    for (const file of files) {
+      const css = readText(file)
+      expect(css).not.toMatch(/!important\b/)
+      expect(css).not.toMatch(/body\[|body:is\(|data-theme/)
+      expect(css).not.toMatch(rawValue)
+    }
+  })
+
   test("new component modules stay below the split threshold", () => {
     const files = [
       ...walkFiles(join(OVERLAY_ROOT, "src/components/ui"), (path) => path.endsWith(".tsx")),

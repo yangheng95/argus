@@ -1,0 +1,81 @@
+.oc-button {
+  --oc-button-height: var(--oc-density-control-height);
+  --oc-button-padding-x: var(--oc-header-gap);
+  --oc-button-gap: var(--oc-header-gap);
+  --oc-button-radius: var(--oc-radius-control);
+  --oc-button-bg: transparent;
+  --oc-button-border: var(--oc-border-width) solid transparent;
+  --oc-button-color: var(--text-strong);
+  --oc-button-shadow: none;
+
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--oc-button-height);
+  padding: 0 var(--oc-button-padding-x);
+  gap: var(--oc-button-gap);
+  border: var(--oc-button-border);
+  border-radius: var(--oc-button-radius);
+  background: var(--oc-button-bg);
+  color: var(--oc-button-color);
+  box-shadow: var(--oc-button-shadow);
+  font: var(--oc-header-title-font);
+  letter-spacing: var(--oc-header-title-letter-spacing);
+  text-transform: var(--oc-header-title-transform);
+  cursor: pointer;
+}
+
+.oc-button[data-size="sm"] {
+  --oc-button-height: var(--oc-density-chip-height);
+}
+
+.oc-button[data-size="md"] {
+  --oc-button-height: var(--oc-density-control-height);
+}
+
+.oc-button[data-size="icon"] {
+  --oc-button-height: var(--oc-density-icon-button);
+  --oc-button-padding-x: 0;
+}
+
+.oc-button[data-variant="solid"] {
+  --oc-button-bg: var(--accent);
+  --oc-button-border: var(--oc-border-width) solid var(--accent);
+  --oc-button-color: var(--surface);
+}
+
+.oc-button[data-variant="outline"] {
+  --oc-button-bg: transparent;
+  --oc-button-border: var(--oc-border-width) solid var(--border);
+}
+
+.oc-button[data-variant="ghost"] {
+  --oc-button-bg: transparent;
+  --oc-button-border: var(--oc-border-width) solid transparent;
+}
+
+.oc-button[data-tone="neutral"] {
+  --oc-button-color: var(--text-strong);
+}
+
+.oc-button[data-tone="accent"] {
+  --oc-button-color: var(--accent);
+}
+
+.oc-button[data-tone="danger"] {
+  --oc-button-color: var(--bad);
+}
+
+.oc-button:hover,
+.oc-button:focus-visible {
+  --oc-button-bg: var(--surface-hover);
+  --oc-button-border: var(--oc-border-width) solid var(--border-hover);
+  outline: none;
+}
+
+.oc-button:disabled,
+.oc-button[aria-disabled="true"] {
+  cursor: default;
+  opacity: var(--oc-disabled-opacity);
+}

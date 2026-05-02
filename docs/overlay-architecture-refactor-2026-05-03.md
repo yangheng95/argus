@@ -21,6 +21,12 @@ Progress log:
   `header.css` surface grammar. Architecture tests now require token
   files to stay `:root`-only and prove the header/radius/density
   vocabulary exists before surface migration begins.
+- 2026-05-03: Phase 2 Button primitive contract started with
+  `components/ui/Button.tsx` and `styles/primitives/button.css`.
+  Primitive CSS is guarded against `!important`, raw color/pixel
+  literals, theme selectors, and non-`data-*` variant drift. Overlay
+  tsconfig validation also uncovered and fixed the existing missing
+  `AgentInfo` type import in `AgentModelsPanel`.
 
 Trigger: user feedback (2026-05-03):
 
