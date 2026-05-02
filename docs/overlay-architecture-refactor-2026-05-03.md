@@ -42,6 +42,11 @@ Progress log:
   `BUTTON_TONES`) with types derived from them. Tests compare those
   tuples against `button.css` `[data-variant]`, `[data-size]`, and
   `[data-tone]` selectors so TS API and CSS variants cannot drift.
+- 2026-05-03: Button primitive no longer accepts arbitrary
+  `class` / `classList` passthrough. It always emits `oc-button`;
+  every visual difference must go through `variant`, `size`, and
+  `tone`, preventing legacy button classes from riding through the
+  new wrapper.
 
 Trigger: user feedback (2026-05-03):
 

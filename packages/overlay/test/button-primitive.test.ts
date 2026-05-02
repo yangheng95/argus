@@ -29,13 +29,16 @@ test("Button primitive exposes the canonical data-attribute contract", () => {
   expect(source).toContain("export type ButtonVariant = (typeof BUTTON_VARIANTS)[number]");
   expect(source).toContain("export type ButtonSize = (typeof BUTTON_SIZES)[number]");
   expect(source).toContain("export type ButtonTone = (typeof BUTTON_TONES)[number]");
+  expect(source).toContain('Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class" | "classList">');
   expect(source).toContain('variant: ButtonVariant');
   expect(source).toContain('size: ButtonSize');
   expect(source).toContain('tone: ButtonTone');
-  expect(source).toContain('"oc-button"');
+  expect(source).toContain('class="oc-button"');
   expect(source).toContain("data-variant={local.variant}");
   expect(source).toContain("data-size={local.size}");
   expect(source).toContain("data-tone={local.tone}");
+  expect(source).not.toContain("local.class");
+  expect(source).not.toContain("className");
   expect(source).not.toMatch(/\b(?:btn|chat-send|titlebar-btn|sidebar-btn|right-panel-tab|executor-chip)\b/);
 });
 
