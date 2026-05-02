@@ -14200,3 +14200,99 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card {
   border-radius: calc(4px * var(--ui-scale)) !important;
   box-shadow: none !important;
 }
+
+body[data-theme="light"] .sections,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="light"] :is(
+  .sections-header,
+  .section,
+  .section-head,
+  .gwg,
+  .gwg-header,
+  .delivery-panel,
+  .delivery-panel-header,
+  .criteria-group,
+  .criteria-group-head,
+  .eval-error,
+  .extension-row,
+  .channel-doc-card,
+  .detail-card,
+  .config-section,
+  .config-subsection,
+  .board-intro,
+  .board-intro__section,
+  .board-intro__mode,
+  .board-intro__agent,
+  .board-intro__cta,
+  .chat-empty--task,
+  .agent-workflow-toolbar,
+  .agent-workflow-empty,
+  .agent-workflow-warning,
+  .agent-workflow-refresh,
+  .agent-workflow-report-close
+),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
+  .sections-header,
+  .section,
+  .section-head,
+  .gwg,
+  .gwg-header,
+  .delivery-panel,
+  .delivery-panel-header,
+  .criteria-group,
+  .criteria-group-head,
+  .eval-error,
+  .extension-row,
+  .channel-doc-card,
+  .detail-card,
+  .config-section,
+  .config-subsection,
+  .board-intro,
+  .board-intro__section,
+  .board-intro__mode,
+  .board-intro__agent,
+  .board-intro__cta,
+  .chat-empty--task,
+  .agent-workflow-toolbar,
+  .agent-workflow-empty,
+  .agent-workflow-warning,
+  .agent-workflow-refresh,
+  .agent-workflow-report-close
+) {
+  border: 0 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="light"] :is(
+  .section:last-child,
+  .section[open] > .section-head,
+  .config-section[open] > .config-section-head,
+  .config-subsection[open] > .config-subsection-head,
+  .delivery-panel[data-verdict],
+  .criteria-item,
+  .board-intro__foot,
+  .agent-workflow-report-head,
+  .agent-workflow-report-section
+),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
+  .section:last-child,
+  .section[open] > .section-head,
+  .config-section[open] > .config-section-head,
+  .config-subsection[open] > .config-subsection-head,
+  .delivery-panel[data-verdict],
+  .criteria-item,
+  .board-intro__foot,
+  .agent-workflow-report-head,
+  .agent-workflow-report-section
+) {
+  border: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+}
