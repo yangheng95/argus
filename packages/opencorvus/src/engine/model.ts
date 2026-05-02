@@ -700,8 +700,8 @@ export const TaskBoardGoalStepPayload = z.object({
   /** The build worker session ID (SessionTable kind="build") — the LLM
    *  session that actually wrote code for this goal. Used by the overlay
    *  to surface a "jump to build session" affordance in the sidebar.
-   *  Distinct from EngineExecutorSession.id, which tracks the external
-   *  provider's session (opencode's own session ID for managed executors). */
+   *  Distinct from EngineExecutorSession.id, which tracks the managed
+   *  executor provider session. */
   buildSessionID: z.string().optional(),
   workspaceDir: z.string().optional(),
   changedFiles: z.array(z.string()).optional(),

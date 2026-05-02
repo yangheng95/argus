@@ -930,7 +930,7 @@ function deriveSessionStage(info: any): string {
   // Reading this as a fallback chain (channel → agent → resolvedRole →
   // role) previously routed root-session user messages to stage="build"
   // because `info.agent` on user rows is `Agent.defaultAgent()` (="build"
-  // under opencode config). That cascade turned a user bubble into an
+  // under MirrorCode config). That cascade turned a user bubble into an
   // orange 「构建」 card — a classic rule-1 fallback bug.
   //
   // Channel values:
