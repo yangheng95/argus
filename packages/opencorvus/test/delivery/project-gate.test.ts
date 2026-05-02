@@ -19,7 +19,7 @@ afterEach(async () => {
 })
 
 describe("delivery project evidence gate", () => {
-  test("fails delivery when discovered lint script fails even if build and test pass", async () => {
+  test("fails delivery when explicitly configured lint script fails even if build and test pass", async () => {
     const dir = await packageFixture({
       build: "bun -e \"console.log('build ok')\"",
       test: "bun -e \"console.log('test ok')\"",
@@ -33,6 +33,7 @@ describe("delivery project evidence gate", () => {
         runID: "run_gate",
         deliveryID: "dlv_gate",
         changedFiles: ["src/app.ts"],
+        metadata: { checks: { lint: ["bun run lint"] } },
       }),
     })
 
@@ -51,6 +52,28 @@ describe("delivery project evidence gate", () => {
     expect(manifest.finalGate.summary).toContain("auxiliary quality gate")
   })
 
+  test("skips discovered lint by default because typecheck and tests are the delivery signal", async () => {
+    const dir = await packageFixture({
+      build: "bun -e \"console.log('build ok')\"",
+      test: "bun -e \"console.log('test ok')\"",
+      lint: "bun -e \"process.exit(1)\"",
+    })
+
+    const manifest = await Instance.provide({
+      directory: dir,
+      fn: () => buildDeliveryEvidenceManifest({
+        taskID: "tsk_default_skip_lint",
+        runID: "run_default_skip_lint",
+        deliveryID: "dlv_default_skip_lint",
+        changedFiles: ["src/app.ts"],
+      }),
+    })
+
+    expect(manifest.requiredChecks.map((item) => item.name)).toEqual(["build", "test"])
+    expect(manifest.checkResults.map((item) => item.name)).toEqual(["build", "test"])
+    expect(manifest.finalGate.failedCheckIds).toEqual([])
+  })
+
   test("rejects package scripts that coerce shell failure into success", async () => {
     const dir = await packageFixture({
       lint: "bun -e \"process.exit(1)\" || exit 0",
@@ -63,6 +86,7 @@ describe("delivery project evidence gate", () => {
         runID: "run_forbidden",
         deliveryID: "dlv_forbidden",
         changedFiles: ["src/app.ts"],
+        metadata: { checks: { lint: ["bun run lint"] } },
       }),
     })
 
@@ -100,6 +124,7 @@ console.log("lint scope ok", cwd())
         runID: "run_isolated_check",
         deliveryID: "dlv_isolated_check",
         changedFiles: ["src/app.ts"],
+        metadata: { checks: { lint: ["bun run lint"] } },
       }),
     })
 
