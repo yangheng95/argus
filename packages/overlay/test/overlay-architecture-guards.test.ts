@@ -133,6 +133,40 @@ describe("overlay architecture guards", () => {
     }
   })
 
+  test("new token files stay root-scoped and keep design-language contracts explicit", () => {
+    const files = walkFiles(join(OVERLAY_ROOT, "src/styles/tokens"), (path) => path.endsWith(".css"))
+    expect(files.length).toBeGreaterThan(0)
+    const tokenText = files.map(readText).join("\n")
+
+    for (const file of files) {
+      const css = readText(file).replace(/\/\*[\s\S]*?\*\//g, "")
+      const selectors = Array.from(css.matchAll(/([^{}@]+)\{/g)).map((match) => match[1]!.trim())
+      for (const selector of selectors) {
+        for (const item of selector
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)) {
+          expect(item).toBe(":root")
+        }
+      }
+      expect(css).not.toMatch(/data-theme|body\[|body:is\(/)
+    }
+
+    for (const token of [
+      "--oc-header-height",
+      "--oc-header-padding-x",
+      "--oc-header-gap",
+      "--oc-radius-panel",
+      "--oc-radius-card",
+      "--oc-radius-control",
+      "--oc-radius-pill",
+      "--oc-density-control-height",
+      "--oc-density-icon-button",
+    ]) {
+      expect(tokenText).toContain(token)
+    }
+  })
+
   test("new surface style files do not introduce raw color or pixel literals", () => {
     const files = walkFiles(join(OVERLAY_ROOT, "src/styles/surfaces"), (path) => path.endsWith(".css"))
     const rawValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])-?\d+(?:\.\d+)?px\b/i

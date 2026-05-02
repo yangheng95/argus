@@ -1,0 +1,31 @@
+.oc-surface-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--oc-header-height);
+  padding: var(--oc-header-padding-y) var(--oc-header-padding-x);
+  gap: var(--oc-header-gap);
+  background: var(--oc-header-bg);
+  border-block-end: var(--oc-header-border);
+  border-radius: var(--oc-radius-panel);
+  box-shadow: var(--oc-header-shadow);
+}
+
+.oc-surface-header__main,
+.oc-surface-header__actions {
+  display: flex;
+  align-items: center;
+  min-width: var(--oc-radius-none);
+  gap: var(--oc-header-gap);
+}
+
+.oc-surface-header__title {
+  min-width: var(--oc-radius-none);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--oc-header-title-font);
+  letter-spacing: var(--oc-header-title-letter-spacing);
+  text-transform: var(--oc-header-title-transform);
+  color: var(--text-strong);
+}
