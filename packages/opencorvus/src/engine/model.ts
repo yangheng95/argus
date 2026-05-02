@@ -667,12 +667,19 @@ export const TaskBoardRequirement = z.object({
   description: z.string(),
   type: z.enum(["explicit", "inferred", "system"]),
   priority: z.enum(["blocking", "advisory"]),
+  status: z.enum(["pending", "passed", "failed"]),
 })
 
 export const TaskBoardArchitect = z.object({
   summary: z.string(),
   contractCount: z.number(),
   categories: z.array(z.string()),
+  decisions: z.array(z.object({
+    key: z.string(),
+    value: z.string(),
+    reason: z.string(),
+    goalID: z.string().nullable(),
+  })).optional(),
 })
 
 export const TaskBoardGoalStepPayload = z.object({

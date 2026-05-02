@@ -8732,11 +8732,18 @@ export type TaskConversationResponses = {
         description: string
         type: "explicit" | "inferred" | "system"
         priority: "blocking" | "advisory"
+        status: "pending" | "passed" | "failed"
       }>
       architect?: {
         summary: string
         contractCount: number
         categories: Array<string>
+        decisions?: Array<{
+          key: string
+          value: string
+          reason: string
+          goalID: string | null
+        }>
       }
       goalWorkflows?: Array<{
         goalID: string
@@ -9271,11 +9278,18 @@ export type TaskBoardResponses = {
       description: string
       type: "explicit" | "inferred" | "system"
       priority: "blocking" | "advisory"
+      status: "pending" | "passed" | "failed"
     }>
     architect?: {
       summary: string
       contractCount: number
       categories: Array<string>
+      decisions?: Array<{
+        key: string
+        value: string
+        reason: string
+        goalID: string | null
+      }>
     }
     goalWorkflows?: Array<{
       goalID: string

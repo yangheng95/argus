@@ -184,6 +184,37 @@ test("overlay controls trigger without runtime failures", async () => {
           created: now - 75_000,
         },
       },
+      requirements: [
+        {
+          id: "req_de4c67cdd001PpknO1pkL1fZOS",
+          description: "Support a readable requirements panel without crushing Chinese or English descriptions into a narrow column.",
+          type: "explicit",
+          priority: "blocking",
+          status: "pending",
+        },
+        {
+          id: "req_de4c67cdf002Q7thvTKLWEBIcP",
+          description: "Use IndexedDB for calendar history and attachments.",
+          type: "inferred",
+          priority: "advisory",
+          status: "pending",
+        },
+      ],
+      architect: {
+        summary: "7 architect decisions across 2 categories",
+        contractCount: 7,
+        categories: ["shared_type", "directory_blueprint"],
+        decisions: Array.from({ length: 7 }, (_, index) => ({
+          key: index % 2 === 0 ? "shared_type" : "directory_blueprint",
+          value: index === 6
+            ? "Seventh decision remains visible instead of being hidden behind a truncated architect card."
+            : "Conversation records use one persisted schema for messages, attachments, and streaming cursors.",
+          reason: index === 6
+            ? "Large decision logs still need inspectable value and reason text."
+            : "Keeps resume and export flows from inventing incompatible message shapes.",
+          goalID: index === 0 ? null : `goal-${index}`,
+        })),
+      },
       lanes: [
         {
           id: "goals",
@@ -1002,6 +1033,34 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForSelector(".task-row-main[data-task-id='task-1']")
     await page.click(".task-row-main[data-task-id='task-1']")
     await page.waitForSelector('[data-task-action="retry"]')
+    await page.waitForSelector(".req-item")
+    const workflowPanels = await page.evaluate(() => {
+      const req = document.querySelector<HTMLElement>(".req-item")
+      const reqDesc = document.querySelector<HTMLElement>(".req-desc")
+      const reqID = document.querySelector<HTMLElement>(".req-index")
+      const archDecisionText = Array.from(document.querySelectorAll<HTMLElement>(".arch-decision"))
+        .map((item) => item.textContent || "")
+        .join("\n")
+      const archSummary = document.querySelector<HTMLElement>(".arch-detail")
+      const reqRect = req?.getBoundingClientRect()
+      const descRect = reqDesc?.getBoundingClientRect()
+      return {
+        reqIDText: reqID?.textContent || "",
+        reqIDTitle: reqID?.getAttribute("title") || "",
+        descWidth: descRect?.width || 0,
+        itemWidth: reqRect?.width || 1,
+        archDecisionText,
+        archSummaryText: archSummary?.textContent || "",
+      }
+    })
+    expect(workflowPanels.reqIDText).toBe("REQ 01")
+    expect(workflowPanels.reqIDTitle).toContain("req_de4c67cdd001")
+    expect(workflowPanels.descWidth).toBeGreaterThan(workflowPanels.itemWidth * 0.6)
+    expect(workflowPanels.archDecisionText).toContain("Conversation records use one persisted schema")
+    expect(workflowPanels.archDecisionText).toContain("Keeps resume and export flows")
+    expect(workflowPanels.archDecisionText).toContain("Seventh decision remains visible")
+    expect(workflowPanels.archDecisionText).toContain("Large decision logs still need inspectable")
+    expect(workflowPanels.archSummaryText).not.toContain("architect decisions across")
     await page.waitForSelector(".change-row")
     await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']")
 

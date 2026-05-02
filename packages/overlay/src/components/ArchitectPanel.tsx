@@ -9,10 +9,18 @@ import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { renderMarkdown } from "../utils/markdown";
 
+interface ArchitectDecision {
+  key: string;
+  value: string;
+  reason: string;
+  goalID?: string | null;
+}
+
 interface ArchitectData {
   summary: string;
   contractCount: number;
   categories: string[];
+  decisions?: ArchitectDecision[];
 }
 
 interface ArchitectPanelProps {
@@ -21,7 +29,17 @@ interface ArchitectPanelProps {
   isGenerating?: boolean;
 }
 
+function readableKey(key: string): string {
+  return key.replace(/[_-]+/g, " ").trim() || key;
+}
+
+function hasMeaningfulSummary(summary: string): boolean {
+  return summary.trim().length > 0 && !/^\d+\s+architect decisions across\s+\d+\s+categories$/i.test(summary.trim());
+}
+
 export function ArchitectPanel(props: ArchitectPanelProps) {
+  const decisions = () => props.architect?.decisions ?? [];
+
   return (
     <div class="arch-panel">
       <Show when={props.isGenerating && !props.architect}>
@@ -31,23 +49,48 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
         </div>
       </Show>
       <Show when={props.architect}>
-        <div class="arch-summary">
-          <span class="arch-count">{props.architect!.contractCount}</span>
-          <span class="arch-count-label">{t("workflow.architect_contracts")}</span>
+        <div class="arch-overview">
+          <div class="arch-summary">
+            <span class="arch-count">{props.architect!.contractCount}</span>
+            <span class="arch-count-label">{t("workflow.architect_contracts")}</span>
+          </div>
+          <Show when={props.architect!.categories.length > 0}>
+            <div class="arch-categories">
+              <For each={props.architect!.categories.slice(0, 4)}>
+                {(cat) => (
+                  <span class="arch-cat-badge" title={cat}>
+                    {readableKey(cat)}
+                  </span>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
-        <Show when={props.architect!.categories.length > 0}>
-          <div class="arch-categories">
-            <For each={props.architect!.categories}>
-              {(cat) => (
-                <span class="arch-cat-badge" title={cat}>
-                  {cat.replace(/_/g, " ")}
-                </span>
+        <Show when={decisions().length > 0}>
+          <div class="arch-decisions">
+            <For each={decisions()}>
+              {(decision) => (
+                <article class="arch-decision">
+                  <div class="arch-decision-head">
+                    <span class="arch-decision-key">{readableKey(decision.key)}</span>
+                    <Show when={decision.goalID}>
+                      <span class="arch-decision-goal">{decision.goalID}</span>
+                    </Show>
+                  </div>
+                  <div class="arch-decision-value">{decision.value}</div>
+                  <Show when={decision.reason}>
+                    <div class="arch-decision-reason">{decision.reason}</div>
+                  </Show>
+                </article>
               )}
             </For>
           </div>
         </Show>
-        <Show when={props.architect!.summary}>
+        <Show when={decisions().length === 0 && hasMeaningfulSummary(props.architect!.summary)}>
           <div class="arch-detail md-content" innerHTML={renderMarkdown(props.architect!.summary)} />
+        </Show>
+        <Show when={decisions().length === 0 && !hasMeaningfulSummary(props.architect!.summary)}>
+          <p class="arch-empty">{t("workflow.architect_empty")}</p>
         </Show>
       </Show>
     </div>

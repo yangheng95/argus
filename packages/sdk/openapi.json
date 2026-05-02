@@ -16453,13 +16453,22 @@
                                   "blocking",
                                   "advisory"
                                 ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "passed",
+                                  "failed"
+                                ]
                               }
                             },
                             "required": [
                               "id",
                               "description",
                               "type",
-                              "priority"
+                              "priority",
+                              "status"
                             ]
                           }
                         },
@@ -16476,6 +16485,39 @@
                               "type": "array",
                               "items": {
                                 "type": "string"
+                              }
+                            },
+                            "decisions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "value": {
+                                    "type": "string"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "goalID": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "value",
+                                  "reason",
+                                  "goalID"
+                                ]
                               }
                             }
                           },
@@ -18664,13 +18706,22 @@
                               "blocking",
                               "advisory"
                             ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "passed",
+                              "failed"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "description",
                           "type",
-                          "priority"
+                          "priority",
+                          "status"
                         ]
                       }
                     },
@@ -18687,6 +18738,39 @@
                           "type": "array",
                           "items": {
                             "type": "string"
+                          }
+                        },
+                        "decisions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "goalID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value",
+                              "reason",
+                              "goalID"
+                            ]
                           }
                         }
                       },

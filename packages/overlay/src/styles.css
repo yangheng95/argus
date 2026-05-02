@@ -10480,26 +10480,40 @@ body[data-resizing="true"] * {
 .req-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: calc(6px * var(--ui-scale));
 }
 .req-item {
-  display: flex;
-  align-items: baseline;
-  gap: var(--ui-gap-sm);
-  padding: var(--ui-gap-xs) 0;
+  display: grid;
+  gap: calc(7px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) 0;
   font-size: var(--ui-font-control);
   border-bottom: 1px solid var(--subtle-1);
 }
 .req-item:last-child { border-bottom: none; }
-.req-id {
+.req-item-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: calc(10px * var(--ui-scale));
+  min-width: 0;
+}
+.req-index {
   font-family: var(--mono);
   font-size: var(--ui-font-small);
   font-weight: 700;
   color: var(--accent);
-  flex-shrink: 0;
-  min-width: 48px;
+  line-height: 1.45;
+  white-space: nowrap;
 }
-.req-type {
+.req-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(5px * var(--ui-scale));
+  padding-left: calc(56px * var(--ui-scale));
+}
+.req-type,
+.req-status {
   font-size: var(--ui-font-tiny);
   font-weight: 700;
   text-transform: uppercase;
@@ -10511,11 +10525,14 @@ body[data-resizing="true"] * {
 .req-type--explicit { background: var(--accent-dim); color: var(--accent); }
 .req-type--inferred { background: var(--warn-dim); color: var(--warn); }
 .req-type--system { background: var(--subtle-2); color: var(--text-muted); }
+.req-status--passed { background: var(--good-dim); color: var(--good); }
+.req-status--failed { background: var(--bad-dim); color: var(--bad); }
+.req-status--pending { background: var(--subtle-2); color: var(--text-muted); }
 .req-desc {
-  flex: 1;
   min-width: 0;
   color: var(--text);
-  line-height: 1.4;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .req-priority {
   font-size: var(--ui-font-tiny);
@@ -10814,6 +10831,10 @@ body[data-resizing="true"] * {
   flex-direction: column;
   gap: var(--ui-gap-sm);
 }
+.arch-overview {
+  display: grid;
+  gap: calc(8px * var(--ui-scale));
+}
 .arch-summary {
   display: flex;
   align-items: baseline;
@@ -10846,6 +10867,61 @@ body[data-resizing="true"] * {
   font-size: var(--ui-font-control);
   color: var(--text);
   line-height: 1.5;
+}
+.arch-decisions {
+  display: grid;
+  gap: calc(7px * var(--ui-scale));
+}
+.arch-decision {
+  display: grid;
+  gap: calc(5px * var(--ui-scale));
+  padding: calc(9px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  border: 1px solid var(--subtle-2);
+  border-radius: calc(7px * var(--ui-scale));
+  background: var(--surface-inset);
+}
+.arch-decision-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-gap-sm);
+  min-width: 0;
+}
+.arch-decision-key {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: var(--ui-font-control);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.arch-decision-goal {
+  max-width: 45%;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--ui-font-tiny);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.arch-decision-value {
+  color: var(--text);
+  font-size: var(--ui-font-control);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.arch-decision-reason {
+  color: var(--text-muted);
+  font-size: var(--ui-font-small);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.arch-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--ui-font-control);
+  line-height: 1.45;
 }
 .arch-generating {
   display: flex;
