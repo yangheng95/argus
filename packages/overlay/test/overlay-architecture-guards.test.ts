@@ -138,14 +138,14 @@ describe("overlay architecture guards", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
     const card = readText(join(OVERLAY_ROOT, "src/styles/card.css"))
 
-    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(381)
-    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(262)
+    expect(count(/!important\b/g, styles + "\n" + card)).toBeLessThanOrEqual(373)
+    expect(count(/body\[data-theme/g, styles)).toBeLessThanOrEqual(255)
   })
 
   test("legacy theme selectors cannot keep gaining layout and chrome overrides", () => {
     const styles = readText(join(OVERLAY_ROOT, "src/styles.css"))
 
-    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(278)
+    expect(countThemeLayoutOverrides(styles)).toBeLessThanOrEqual(273)
   })
 
   test("new theme files only write root-scoped tokens", () => {
@@ -217,6 +217,18 @@ describe("overlay architecture guards", () => {
     const rawValue = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|(?<![\w-])-?\d+(?:\.\d+)?px\b/i
     for (const file of files) {
       expect(readText(file)).not.toMatch(rawValue)
+    }
+  })
+
+  test("shared header surface is loaded after legacy styles while God CSS retires", () => {
+    const html = readText(join(OVERLAY_ROOT, "src/index.html"))
+    const legacyAt = html.indexOf('href="styles.css"')
+    const headerAt = html.indexOf('href="styles/surfaces/header.css"')
+    expect(legacyAt).toBeGreaterThan(-1)
+    expect(headerAt).toBeGreaterThan(legacyAt)
+
+    for (const className of ["sidebar-header", "chat-header", "sections-header"]) {
+      expect(html).toContain(`${className} oc-surface-header`)
     }
   })
 

@@ -13368,25 +13368,6 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    (`body[data-theme="..."] .sidebar { … }`) stay legitimate
    per-context tweaks. */
 
-.sidebar-header,
-.chat-header,
-.sections-header {
-  align-items: center;
-  height: var(--ui-panel-header-height);
-  min-height: var(--ui-panel-header-height);
-  max-height: var(--ui-panel-header-height);
-  padding: 0 calc(12px * var(--ui-scale));
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--surface-strong) 96%, transparent),
-    color-mix(in srgb, var(--surface) 92%, transparent)
-  ) !important;
-  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  box-shadow: none !important;
-  overflow: hidden;
-}
-
 /* Cap inner widget chrome to 28px so the unified 42px bar reads as one
    calm strip — pills/buttons keep their round affordance but stop
    dominating the bar height-wise. */
@@ -13394,9 +13375,7 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 .sidebar-header .sidebar-tool,
 .chat-header .chat-task-status,
 .chat-header .workspace-toggle,
-.chat-header-meta #btnChatCopyAll,
-.sections-header .right-panel-tablist,
-.sections-header .right-panel-tab {
+.chat-header-meta #btnChatCopyAll {
   min-height: min(calc(22px * var(--ui-scale)), 24px);
   height: min(calc(22px * var(--ui-scale)), 24px);
   box-shadow: none;
@@ -13404,18 +13383,6 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 
 .sidebar-header .sidebar-btn {
   padding: 0 calc(12px * var(--ui-scale));
-}
-
-.sections-header .right-panel-tab {
-  padding: 0 calc(12px * var(--ui-scale));
-  border-radius: calc(8px * var(--ui-scale));
-}
-
-.sections-header .right-panel-tablist {
-  padding: 0 calc(2px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 70%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: calc(10px * var(--ui-scale));
 }
 
 .sections-stack {
@@ -13946,13 +13913,6 @@ body[data-theme="light"] .btn-primary {
    sections) are baked into each column's canonical block now,
    so the !important overrides that used to live here are gone. */
 
-.sidebar-header,
-.chat-header,
-.sections-header {
-  background: transparent !important;
-  border-bottom-color: var(--border-strong);
-}
-
 .sidebar-title,
 .chat-title,
 .sections-title {
@@ -14444,13 +14404,6 @@ body[data-theme="light"] .sections {
    nothing to override (border-color targets a non-existent
    border, box-shadow:none is already the canonical value). */
 
-body[data-theme="light"] .sidebar-header,
-body[data-theme="light"] .chat-header,
-body[data-theme="light"] .sections-header {
-  background: rgba(255, 255, 255, 0.62) !important;
-  border-bottom-color: rgba(116, 133, 184, 0.14);
-}
-
 body[data-theme="light"] .sidebar-title,
 body[data-theme="light"] .chat-title,
 body[data-theme="light"] .sections-title {
@@ -14724,13 +14677,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
    canonical containers carry no border + no shadow, so this
    override has nothing left to override. */
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-header,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-header,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-header {
-  background: color-mix(in srgb, var(--surface-strong) 62%, transparent) !important;
-  border-bottom-color: color-mix(in srgb, var(--border) 88%, transparent);
-}
-
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sidebar-title,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-title,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-title {
@@ -14931,9 +14877,6 @@ body[data-theme="vscode-dark"] .executor-chip {
   background: #2d2d30 !important;
 }
 
-body[data-theme="vscode-dark"] .sidebar-header,
-body[data-theme="vscode-dark"] .chat-header,
-body[data-theme="vscode-dark"] .sections-header,
 body[data-theme="vscode-dark"] .section-head,
 body[data-theme="vscode-dark"] .config-section-head,
 body[data-theme="vscode-dark"] .config-subsection-head,
@@ -15104,9 +15047,8 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.titlebar-btn, .tit
   padding: 0 !important;
 }
 
-body[data-theme="light"] :is(.task-bar, .sidebar-header, .chat-header, .sections-header),
-body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(.task-bar, .sidebar-header, .chat-header, .sections-header) {
+body[data-theme="light"] .task-bar,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
   gap: calc(4px * var(--ui-scale)) !important;
   padding: 0 calc(6px * var(--ui-scale)) !important;
 }
@@ -15311,13 +15253,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
   padding: calc(2px * var(--ui-scale)) !important;
   padding-inline: calc(2px * var(--ui-scale)) !important;
   padding-block: calc(2px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] .sections-header,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-header {
-  min-height: calc(30px * var(--ui-scale)) !important;
-  height: calc(30px * var(--ui-scale)) !important;
-  padding: 0 calc(5px * var(--ui-scale)) !important;
 }
 
 body[data-theme="light"] .sections-stack,
@@ -15528,7 +15463,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections {
 
 body[data-theme="light"]
   :is(
-    .sections-header,
     .section,
     .section-head,
     .gwg,
@@ -15556,7 +15490,6 @@ body[data-theme="light"]
   ),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
   :is(
-    .sections-header,
     .section,
     .section-head,
     .gwg,

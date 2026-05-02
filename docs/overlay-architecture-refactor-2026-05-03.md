@@ -123,6 +123,14 @@ Progress log:
   `body`. The root attribute activates the new `:root[data-theme]`
   palette contract; the body attribute exists only for legacy God CSS
   until that file is retired from runtime.
+- 2026-05-03: The sidebar, conversation, and right-panel headers now
+  share `oc-surface-header` chrome from `styles/surfaces/header.css`,
+  loaded after legacy `styles.css` so the surface layer owns height,
+  spacing, background, border, radius, and shadow. Header-specific
+  God CSS `!important` and theme override blocks were retired from the
+  runtime stylesheet. This lowers the `!important` guard baseline from
+  381 to 373, `body[data-theme]` selectors from 262 to 255, and theme
+  layout/chrome overrides from 278 to 273.
 
 Trigger: user feedback (2026-05-03):
 
@@ -148,9 +156,9 @@ one theme contract, and no runtime God CSS path left behind.
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
 | `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
-| Total `!important` in stylesheets      | **381** current guard baseline                                                          |
-| `body[data-theme="…"]` theme overrides | **262**                                                                                 |
-| Theme layout/chrome overrides          | **278** current guard baseline                                                          |
+| Total `!important` in stylesheets      | **373** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **255**                                                                                 |
+| Theme layout/chrome overrides          | **273** current guard baseline                                                          |
 | `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
 | Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
 | Total `.tsx` LOC across overlay        | 28,700                                                                                  |
