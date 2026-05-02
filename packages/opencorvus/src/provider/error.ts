@@ -17,6 +17,7 @@ export namespace ProviderError {
     /greater than the context length/i, // LM Studio
     /context window exceeds limit/i, // MiniMax
     /exceeded model token limit/i, // Kimi For Coding, Moonshot
+    /range of input length should be \[\d+,\s*\d+\]/i, // Alibaba Coding Plan
     /context[_ ]length[_ ]exceeded/i, // Generic fallback
   ]
 

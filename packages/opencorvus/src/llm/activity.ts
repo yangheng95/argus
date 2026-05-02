@@ -271,7 +271,7 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
     if (httpStatus >= 400 && httpStatus < 500) {
       // 422 with context-overflow body wording is provider-specific;
       // prefer context_overflow when the body shouts about token limits.
-      if (bodyHead && /context.{0,12}overflow|maximum context|context.{0,8}length|too many tokens|prompt is too long|exceeds.*context/i.test(bodyHead)) {
+      if (bodyHead && /context.{0,12}overflow|maximum context|context.{0,8}length|too many tokens|prompt is too long|exceeds.*context|range of input length should be/i.test(bodyHead)) {
         return "context_overflow"
       }
       return "client_4xx"
@@ -280,7 +280,7 @@ function classify(err: unknown, ctx: ClassifyContext): ErrorClass {
 
   const message = err instanceof Error ? err.message : String(err)
   if (
-    /context.{0,12}overflow|maximum context|context.{0,8}length|too many tokens|prompt is too long|exceeds.*context/i.test(
+    /context.{0,12}overflow|maximum context|context.{0,8}length|too many tokens|prompt is too long|exceeds.*context|range of input length should be/i.test(
       message,
     )
   ) {

@@ -237,6 +237,34 @@ test("context_overflow (status=400 with body wording) does NOT retry", async () 
   expect(term.cls).toBe("context_overflow")
 })
 
+test("Alibaba input length overflow is classified as non-retryable context_overflow", async () => {
+  const { events, sink } = record()
+  let calls = 0
+  await expect(
+    withLLMActivity(
+      CTX,
+      fastPolicy(),
+      new AbortController().signal,
+      async () => {
+        calls++
+        throw new APICallError({
+          message: "Provider alibaba-coding-plan-cn returned HTTP 400: InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]",
+          url: "https://example",
+          requestBodyValues: undefined,
+          statusCode: 400,
+          responseHeaders: {},
+          responseBody: '{"message":"InternalError.Algo.InvalidParameter: Range of input length should be [1, 258048]"}',
+        })
+      },
+      sink,
+    ),
+  ).rejects.toThrow(LLMActivityError)
+  expect(calls).toBe(1)
+  expect(events.filter((e) => e.type === "retry").length).toBe(0)
+  const term = events.find((e) => e.type === "terminal") as Extract<LLMActivityEvent, { type: "terminal" }>
+  expect(term.cls).toBe("context_overflow")
+})
+
 test("request_timeout (HTTP 408) does NOT retry — distinct from idle", async () => {
   const { events, sink } = record()
   await expect(
