@@ -858,6 +858,17 @@ export function Board(props: BoardProps) {
                 : "";
         })()}
       >
+        {/*
+          iter24 baked the section frame INTO `<DeliveryPanel>`
+          itself (it now returns its own `<details class="section">`
+          with title + icon + badge tone). If this `Show when={false}`
+          block is ever re-enabled, REMOVE this outer `<SectionFrame>`
+          wrapping or the rendered DOM will nest two
+          `<details class="section">` and the operator will see two
+          stacked "Delivery" headers. Restoration must mount
+          `<DeliveryPanel delivery={…} />` directly — it carries
+          its own section chrome.
+        */}
         <DeliveryPanel delivery={delivery()} />
       </SectionFrame>
 
