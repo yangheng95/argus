@@ -648,7 +648,7 @@
   "task.status.planning": "规划中",
   "task.status.queued": "排队中",
   "task.status.running": "执行中",
-  "time.duration.hour_minute": "{{hours}} 时 {{minutes}} 分",
+  "time.duration.hour_minute_second": "{{hours}} 时 {{minutes}} 分 {{seconds}} 秒",
   "time.duration.minute_second": "{{minutes}} 分 {{seconds}} 秒",
   "time.duration.second": "{{seconds}} 秒",
   "time.relative.just_now": "刚刚",
