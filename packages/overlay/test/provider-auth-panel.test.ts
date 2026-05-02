@@ -12,6 +12,7 @@ type Calls = {
   authorize: Array<Record<string, unknown>>
   callback: Array<Record<string, unknown>>
   execute: Array<Record<string, unknown>>
+  configPatch: Array<Record<string, unknown>>
 }
 type HarnessData = {
   config: Record<string, unknown>
@@ -76,6 +77,7 @@ async function withOverlay(data: HarnessData, handler: (input: {
     authorize: [],
     callback: [],
     execute: [],
+    configPatch: [],
   }
 
   const server = Bun.serve({
@@ -113,7 +115,9 @@ async function withOverlay(data: HarnessData, handler: (input: {
       if (path === "/config/prompt") return send([])
       if (path === "/config" && req.method === "GET") return send(data.config)
       if (path === "/config" && req.method === "PATCH") {
-        data.config = await req.json()
+        const body = await req.json() as Record<string, unknown>
+        calls.configPatch.push(body)
+        data.config = body
         return send(data.config)
       }
       if (path === "/channel") return send(data.channels)
@@ -599,6 +603,86 @@ test("overlay executes prompt-driven api auth methods without relying on tui", a
           },
         },
       ])
+    },
+  )
+}, { timeout: 60_000 })
+
+test("overlay saves provider API keys for catalog providers without auth plugins", async () => {
+  const data = {
+    config: {
+      model: "anthropic/claude-3-7-sonnet",
+    },
+    provider: {
+      all: [
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          models: {
+            "claude-3-7-sonnet": {},
+          },
+          env: ["ANTHROPIC_API_KEY"],
+        },
+      ],
+      connected: [] as string[],
+      default: {
+        anthropic: "claude-3-7-sonnet",
+      },
+    },
+    providerAuth: {},
+    channels: [],
+    skills: [],
+    mcp: {},
+    memory: [],
+    preference: [],
+    path: {
+      directory: "D:/overlay/workspace/app",
+    },
+    vcs: {
+      branch: "dev",
+      clean: true,
+      dirty: false,
+      staged: 0,
+      modified: 0,
+      untracked: 0,
+      conflicts: 0,
+      ahead: 0,
+      behind: 0,
+    },
+    executors: [
+      {
+        id: "mirrorcode",
+        label: "OpenCorvus",
+        detail: "Bundled",
+        version: "0.0.1-alpha",
+        selectable: true,
+        discovered: true,
+      },
+    ],
+  }
+
+  await withOverlay(
+    data,
+    () => undefined,
+    async (tab, state) => {
+      await openProviderSettings(tab)
+      await tab.waitForSelector('[data-testid="provider-api-key-input-anthropic"]')
+      await tab.type('[data-testid="provider-api-key-input-anthropic"]', "sk-ant-test")
+      await clickVisible(tab, '[data-testid="provider-api-key-save-anthropic"]')
+      await tab.waitForFunction(() =>
+        (document.querySelector('[data-testid="provider-api-key-input-anthropic"]') as HTMLInputElement | null)?.value === "",
+      )
+      await tab.waitForSelector('[data-testid="provider-catalog-row-anthropic"]')
+
+      expect(state.calls.configPatch.at(-1)).toMatchObject({
+        provider: {
+          anthropic: {
+            options: {
+              apiKey: "sk-ant-test",
+            },
+          },
+        },
+      })
+      expect(await tab.$('[data-testid="provider-custom-row-anthropic"]')).toBeNull()
     },
   )
 }, { timeout: 60_000 })

@@ -2853,6 +2853,25 @@ body[data-theme="light"] .section-badge {
 .provider-form-actions {
   margin-top: var(--ui-gap-md);
 }
+.provider-api-key-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: var(--ui-gap-sm);
+  margin-top: var(--ui-gap-sm);
+}
+.provider-api-key-field {
+  margin: 0;
+}
+.provider-catalog-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding-block: var(--ui-gap-sm);
+}
+.provider-catalog-row .provider-api-key-row {
+  flex: 1 1 100%;
+  margin-top: 0;
+}
 .provider-catalog-hint {
   font-size: var(--ui-font-control);
   color: var(--text-muted);

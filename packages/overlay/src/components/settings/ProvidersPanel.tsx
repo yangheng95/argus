@@ -34,6 +34,10 @@ interface CustomProvider {
   name: string;
   api: string;
   env: string[];
+  options?: {
+    apiKey?: string;
+    [key: string]: unknown;
+  };
   models: Record<string, ProviderModel>;
 }
 
@@ -48,6 +52,8 @@ export default function ProvidersPanel() {
   const [testing, setTesting] = createSignal<Set<string>>(new Set());
   const [testResults, setTestResults] = createSignal<Map<string, ProviderTestResult>>(new Map());
   const [authing, setAuthing] = createSignal<Set<string>>(new Set());
+  const [savingKey, setSavingKey] = createSignal<Set<string>>(new Set());
+  const [apiKeyInputs, setApiKeyInputs] = createSignal<Map<string, string>>(new Map());
   // Surface every save / delete / form-validation failure into the UI.
   // Before this signal existed, handleSave/handleDelete only `console.error`d
   // (Tauri WebView users have no devtools), and a silent `return` on missing
@@ -191,13 +197,32 @@ export default function ProvidersPanel() {
   const [formName, setFormName] = createSignal("");
   const [formApi, setFormApi] = createSignal("");
   const [formEnvKey, setFormEnvKey] = createSignal("");
+  const [formApiKey, setFormApiKey] = createSignal("");
   const [formModels, setFormModels] = createSignal("");
 
-  function configProviders(): Record<string, CustomProvider> {
+  function providerConfigs(): Record<string, any> {
     const cfg = appStore.config;
     const p = cfg?.provider;
     if (!p || typeof p !== "object" || Array.isArray(p)) return {};
-    return p as Record<string, CustomProvider>;
+    return p as Record<string, any>;
+  }
+
+  function isCustomProviderConfig(value: any): value is CustomProvider {
+    return (
+      !!value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      (typeof value.api === "string" ||
+        (value.models && typeof value.models === "object" && !Array.isArray(value.models)))
+    );
+  }
+
+  function configProviders(): Record<string, CustomProvider> {
+    const out: Record<string, CustomProvider> = {};
+    for (const [id, value] of Object.entries(providerConfigs())) {
+      if (isCustomProviderConfig(value)) out[id] = value;
+    }
+    return out;
   }
 
   function catalogProviders(): any[] {
@@ -210,6 +235,7 @@ export default function ProvidersPanel() {
     setFormName("");
     setFormApi("");
     setFormEnvKey("");
+    setFormApiKey("");
     setFormModels("");
     setFormError(null);
   }
@@ -227,6 +253,7 @@ export default function ProvidersPanel() {
     setFormName(p.name || "");
     setFormApi(p.api || "");
     setFormEnvKey(p.env?.[0] || "");
+    setFormApiKey("");
     const modelStr = Object.entries(p.models || {})
       .map(([mid, m]) => `${mid}:${m.name || mid}`)
       .join("\n");
@@ -269,8 +296,12 @@ export default function ProvidersPanel() {
         name: formName().trim() || id,
         api: formApi().trim().replace(/\/+$/, ""),
         env: formEnvKey().trim() ? [formEnvKey().trim()] : [],
+        options: providerConfigs()[id]?.options || {},
         models: parseModels(formModels()),
       };
+      const apiKey = formApiKey().trim();
+      if (apiKey) provider.options = { ...(provider.options || {}), apiKey };
+      if (provider.options && Object.keys(provider.options).length === 0) delete provider.options;
 
       await updateConfig((cfg) => {
         cfg.provider = cfg.provider || {};
@@ -290,6 +321,111 @@ export default function ProvidersPanel() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function providerConfig(id: string): any {
+    return providerConfigs()[id];
+  }
+
+  function providerHasSavedApiKey(id: string): boolean {
+    return typeof providerConfig(id)?.options?.apiKey === "string" && providerConfig(id).options.apiKey.trim() !== "";
+  }
+
+  function apiKeyInput(id: string): string {
+    return apiKeyInputs().get(id) ?? "";
+  }
+
+  function setApiKeyInput(id: string, value: string): void {
+    setApiKeyInputs((prev) => {
+      const next = new Map(prev);
+      next.set(id, value);
+      return next;
+    });
+  }
+
+  function clearApiKeyInput(id: string): void {
+    setApiKeyInputs((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  async function handleSaveApiKey(providerId: string) {
+    const value = apiKeyInput(providerId).trim();
+    if (!value || savingKey().has(providerId)) return;
+    setFormError(null);
+    setSavingKey((prev) => new Set(prev).add(providerId));
+    try {
+      await updateConfig((cfg) => {
+        cfg.provider = cfg.provider || {};
+        const existing =
+          cfg.provider[providerId] && typeof cfg.provider[providerId] === "object"
+            ? cfg.provider[providerId]
+            : {};
+        const existingOptions =
+          existing.options && typeof existing.options === "object" && !Array.isArray(existing.options)
+            ? existing.options
+            : {};
+        cfg.provider[providerId] = {
+          ...existing,
+          options: {
+            ...existingOptions,
+            apiKey: value,
+          },
+        };
+      });
+      const [newCfg, catalog] = await Promise.all([
+        apiJson("config"),
+        apiJson("provider"),
+      ]);
+      setAppStore({
+        config: newCfg,
+        providerCatalog: catalog ?? null,
+      });
+      clearApiKeyInput(providerId);
+    } catch (e) {
+      setFormError(t("provider.api_key.save_failed", { reason: describeFailure(e) }));
+    } finally {
+      setSavingKey((prev) => {
+        const next = new Set(prev);
+        next.delete(providerId);
+        return next;
+      });
+    }
+  }
+
+  function ApiKeyEditor(props: { providerId: string }) {
+    const id = () => props.providerId;
+    return (
+      <div class="provider-api-key-row">
+        <label class="field provider-api-key-field">
+          <span class="field-label">{t("provider.api_key.label")}</span>
+          <input
+            class="field-input"
+            type="password"
+            autocomplete="off"
+            placeholder={
+              providerHasSavedApiKey(id())
+                ? t("provider.api_key.placeholder_configured")
+                : t("provider.api_key.placeholder_empty")
+            }
+            value={apiKeyInput(id())}
+            onInput={(e) => setApiKeyInput(id(), e.currentTarget.value)}
+            data-testid={`provider-api-key-input-${id()}`}
+          />
+        </label>
+        <button
+          type="button"
+          class="btn mini"
+          onClick={() => void handleSaveApiKey(id())}
+          disabled={savingKey().has(id()) || !apiKeyInput(id()).trim()}
+          data-testid={`provider-api-key-save-${id()}`}
+        >
+          {savingKey().has(id()) ? t("common.loading") : t("provider.api_key.save")}
+        </button>
+      </div>
+    );
   }
 
   async function handleDelete(id: string) {
@@ -385,7 +521,7 @@ export default function ProvidersPanel() {
 
         <For each={providerEntries()}>
           {([id, provider]) => (
-            <div class="config-panel-card provider-card-row">
+            <div class="config-panel-card provider-card-row" data-testid={`provider-custom-row-${id}`}>
               <div class="config-panel-card-head">
                 <strong class="config-panel-card-title">{provider.name || id}</strong>
                 <div class="config-panel-card-actions">
@@ -464,6 +600,7 @@ export default function ProvidersPanel() {
                   {t("provider.label.env")}: {provider.env.join(", ")}
                 </div>
               </Show>
+              <ApiKeyEditor providerId={id} />
               <div class="provider-card-meta provider-card-meta--last">
                 {t("provider.label.models")}: {Object.keys(provider.models || {}).join(", ") || t("provider.label.no_models")}
               </div>
@@ -535,6 +672,22 @@ export default function ProvidersPanel() {
             </label>
 
             <label class="field">
+              <span class="field-label">{t("provider.api_key.label")}</span>
+              <input
+                class="field-input"
+                type="password"
+                autocomplete="off"
+                placeholder={
+                  editing() && providerHasSavedApiKey(editing()!)
+                    ? t("provider.api_key.placeholder_configured")
+                    : t("provider.api_key.placeholder_empty")
+                }
+                value={formApiKey()}
+                onInput={(e) => setFormApiKey(e.currentTarget.value)}
+              />
+            </label>
+
+            <label class="field">
               <span class="field-label">Models (one per line: id:display_name)</span>
               <textarea
                 class="field-input provider-models-textarea"
@@ -581,7 +734,7 @@ export default function ProvidersPanel() {
             <div class="config-panel-list">
               <For each={catalogEntries()}>
                 {(p) => (
-                  <div class="config-panel-list-row">
+                  <div class="config-panel-list-row provider-catalog-row" data-testid={`provider-catalog-row-${p.id}`}>
                     <span class="config-panel-list-main">{p.name}</span>
                     <span class="config-panel-list-meta">{p.status.label}</span>
                     <Show when={p.authMethods > 0}>
@@ -596,6 +749,7 @@ export default function ProvidersPanel() {
                         {authing().has(p.id) ? t("common.loading") : t("llm.auth_connect")}
                       </button>
                     </Show>
+                    <ApiKeyEditor providerId={p.id} />
                     <span class="config-panel-list-meta">{p.modelCount} models</span>
                   </div>
                 )}
