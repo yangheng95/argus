@@ -1,6 +1,6 @@
 # Overlay Architecture Refactor — 3-Layer Primitives + Surface Modularization
 
-Status: proposal awaiting user direction selection.
+Status: active. Phase 1 guardrails started on 2026-05-03.
 
 Trigger: user feedback (2026-05-03):
 
@@ -13,15 +13,16 @@ review the full plan before iter56+ starts moving code.
 
 ## Quantified current state
 
-| Dimension | Value |
-| --- | --- |
-| `packages/overlay/src/styles.css` | **15,212 lines / 2,070 top-level rules / 490 nested rules** |
-| `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules |
-| Total `!important` in stylesheets | **380** (331 in styles + 49 in card) |
-| `body[data-theme="…"]` theme overrides | **262** |
-| `packages/overlay/src/main.tsx` | **1,621 lines + 18 independent Solid mount points** |
-| Largest 5 components | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
-| Total `.tsx` LOC across overlay | 28,700 |
+| Dimension                              | Value                                                                                   |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `packages/overlay/src/styles.css`      | **15,212 lines / 2,070 top-level rules / 490 nested rules**                             |
+| `packages/overlay/src/styles/card.css` | 2,022 lines / 336 top-level rules                                                       |
+| Total `!important` in stylesheets      | **381** current guard baseline                                                          |
+| `body[data-theme="…"]` theme overrides | **262**                                                                                 |
+| Theme layout/chrome overrides          | **278** current guard baseline                                                          |
+| `packages/overlay/src/main.tsx`        | **1,621 lines + 18 independent Solid mount points**                                     |
+| Largest 5 components                   | TaskList 696 / LogViewer 579 / CardHeader 544 / MemoryPanel 444 / GoalWorkflowGroup 206 |
+| Total `.tsx` LOC across overlay        | 28,700                                                                                  |
 
 53 single-source iters (iter5 / iter8 / iter14 / iter15 /
 iter16 / iter17 / iter20 / iter22 / iter23 / iter25 / iter26 /
@@ -135,39 +136,43 @@ packages/overlay/src/components/
 
 ## Hard rules enforced by tests + lint
 
-| Rule | Enforcement |
-| --- | --- |
-| Surface CSS files declare NO raw `px` / `#hex` / `rgba()` values — only `var(--token)` | Regex test walks `styles/surfaces/*.css`, fails on raw values |
-| Theme CSS files contain ONLY `:root` selector — no other selector allowed | Regex test walks `styles/themes/*.css` |
-| Repo-wide `!important` count is monotonically non-increasing | Pre-push hook: `grep -c '!important' styles/**/*.css` ≤ `HEAD~1`'s count |
-| Component files > 300 lines must split into a subdirectory | `wc -l` lint walking `components/**/*.tsx` |
-| Primitive selectors use `data-*` attributes for variants, NOT `!important` | Regex test on `styles/primitives/*.css` |
+| Rule                                                                                   | Enforcement                                                                                                                   |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Surface CSS files declare NO raw `px` / `#hex` / `rgba()` values — only `var(--token)` | Regex test walks `styles/surfaces/*.css`, fails on raw values                                                                 |
+| Theme CSS files contain ONLY `:root` selector — no other selector allowed              | Regex test walks `styles/themes/*.css`                                                                                        |
+| Legacy theme selectors cannot gain layout/chrome overrides                             | Regex test counts `body[data-theme]` and `body:is([data-theme])` blocks touching layout, border, radius, or shadow properties |
+| Repo-wide `!important` count is monotonically non-increasing                           | Pre-push hook: `grep -c '!important' styles/**/*.css` ≤ `HEAD~1`'s count                                                      |
+| Component files > 300 lines must split into a subdirectory                             | `wc -l` lint walking `components/**/*.tsx`                                                                                    |
+| Primitive selectors use `data-*` attributes for variants, NOT `!important`             | Regex test on `styles/primitives/*.css`                                                                                       |
 
 ## Migration phases
 
-| Phase | Scope | Estimated iters |
-| --- | --- | --- |
-| **1** | Land empty directory tree, the 5 lint rules, and an empty `App.tsx` shell. Existing code untouched. | 1 iter |
-| **2** | Button primitive ships first. Migrate 8+ existing button-like impls one at a time, each its own commit. | 8–12 |
-| **3** | Pill / Tab / Card / Menu / Input / EmptyHint primitives ship. Existing surfaces consume them progressively. | 30+ |
-| **4** | Surface migration — Titlebar → Sidebar → Conversation → Inspector → Composer → Settings, each surface one PR. | 50+ |
-| **5** | Delete legacy `styles.css` residue. Collapse `main.tsx` 18 mounts into single `App.tsx`. Remove `index.html` placeholder divs. | 5–10 |
+| Phase | Scope                                                                                                                          | Estimated iters |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------ | --------------- |
+| **1** | Land empty directory tree, the 5 lint rules, and an empty `App.tsx` shell. Existing code untouched.                            | 1 iter          |
+| **2** | Button primitive ships first. Migrate 8+ existing button-like impls one at a time, each its own commit.                        | 8–12            |
+| **3** | Pill / Tab / Card / Menu / Input / EmptyHint primitives ship. Existing surfaces consume them progressively.                    | 30+             |
+| **4** | Surface migration — Titlebar → Sidebar → Conversation → Inspector → Composer → Settings, each surface one PR.                  | 50+             |
+| **5** | Delete legacy `styles.css` residue. Collapse `main.tsx` 18 mounts into single `App.tsx`. Remove `index.html` placeholder divs. | 5–10            |
 
 Total: **100–120 iters** within the 1000-iter target.
 
-## Compatibility strategy
+## Replacement strategy
 
-Phases 2–4 keep the legacy `styles.css` rules alongside the new
-primitives. Per CLAUDE.md rule 8 (禁止双源), this is a
-temporary violation. To bound it:
+Phases 2–4 must not leave parallel runtime sources. Each primitive
+migration replaces one caller group in the same commit that removes
+the matching legacy CSS selectors. The temporary coexistence is only
+file-level scaffolding: empty directories and unused primitives may
+exist before a surface consumes them, but once a runtime caller moves,
+its old selector path is deleted with a regression test proving the
+old class is no longer referenced.
 
-- Each new primitive ships with a regression test that asserts
-  the matching legacy rules in `styles.css` no longer have any
-  callers (consumed by zero JSX classes).
-- Phase 5 deletes the legacy rules in one commit per surface,
-  driven by the regression assertions.
-- Pre-push hook tracks "lines of legacy `styles.css` not yet
-  migrated" — must decrease iter-over-iter.
+- Each primitive ships with a regression test that asserts the
+  matching legacy classes have zero JSX callers.
+- The same commit that switches a caller to the primitive deletes
+  the legacy selectors for that caller group.
+- Pre-push checks track legacy `styles.css` debt so the count cannot
+  increase between iterations.
 
 ## What this is NOT
 
@@ -183,30 +188,27 @@ temporary violation. To bound it:
 
 ## Risks + mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| 17K line CSS rewrite blast radius | Per-selector / per-primitive iters; never bulk rewrite |
-| Visual regression during phase migration | Each iter runs `agent-models-panel` puppeteer e2e + adds visual snapshot tests for the touched surface |
-| Temporary rule-8 violation (legacy + new co-existing) | Bounded by Phase 5 deletion + per-iter regression tests asserting legacy callers reach zero |
-| `index.html` 18-mount → single `App.tsx` breaking `dom.ts` consumers | Phase 5 only; `dom.ts` accessors stay live through Phase 4 |
-| 100+ iters of refactor competing with user feature requests | User feature feedback preempts refactor iter; refactor runs as background autonomous-loop work |
+| Risk                                                                 | Mitigation                                                                                             |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 17K line CSS rewrite blast radius                                    | Per-selector / per-primitive iters; never bulk rewrite                                                 |
+| Visual regression during phase migration                             | Each iter runs `agent-models-panel` puppeteer e2e + adds visual snapshot tests for the touched surface |
+| Temporary rule-8 violation (legacy + new co-existing)                | Bounded by Phase 5 deletion + per-iter regression tests asserting legacy callers reach zero            |
+| `index.html` 18-mount → single `App.tsx` breaking `dom.ts` consumers | Phase 5 only; `dom.ts` accessors stay live through Phase 4                                             |
+| 100+ iters of refactor competing with user feature requests          | User feature feedback preempts refactor iter; refactor runs as background autonomous-loop work         |
 
 ## Recommendation
 
-Approve this spec → iter56 starts Phase 1 (land the directory
-tree + lint rules + empty App.tsx). Phase 1 alone is 1 iter
-with zero runtime impact — pure scaffolding.
-
-If a different shape is preferred (Tailwind atomic, css-in-js
-with vanilla-extract, or stay-with-current-structure but break
-`styles.css` into per-selector files), say which direction.
+Phase 1 starts by landing the directory tree, architecture guard
+tests, and empty `App.tsx` shell. Runtime mount consolidation waits
+until Phase 5 so the existing panel stays stable while selector debt
+is removed one caller group at a time.
 
 ## Reference iters this builds on
 
 - iter3 — `.empty-hint--card` shared primitive
 - iter4 — `.btn` typography unification
 - iter13 — `docs/overlay-design-language-tier-hierarchy-2026-
-  05-02.md` (typography hierarchy spec)
+05-02.md` (typography hierarchy spec)
 - iter21 — 5-prefix grep checklist (folding discipline)
 - iter32 — `docs/overlay-message-card-redesign-2026-05-03.md`
   (card visual spec)

@@ -3,7 +3,7 @@ import { launchBrowser } from "./launch"
 import { ensureOverlayDist, overlayStaticResponse } from "./overlay-dist"
 
 const { default: puppeteer } = await import(
-  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
+  new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href
 )
 
 await ensureOverlayDist()
@@ -53,7 +53,9 @@ test("closed titlebar menus do not block inspector interactions", async () => {
       await tab.$eval(".sections-header", (node) => {
         const rect = node.getBoundingClientRect()
         const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-        return target instanceof Element ? `${target.tagName}.${target.className}` : ""
+        if (!(target instanceof Element)) return ""
+        const insideHeader = !!target.closest(".sections-header")
+        return insideHeader ? "sections-header-descendant" : `${target.tagName}.${target.className}`
       }),
     ).toContain("sections-header")
   } finally {

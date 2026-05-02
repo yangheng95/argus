@@ -1,5 +1,15 @@
-import { describe, expect, test } from "bun:test"
-import { performSseReconnect, type SseReconnectDeps } from "../src/services/sse"
+import { afterEach, describe, expect, test } from "bun:test"
+import { createRoot } from "solid-js"
+import { performSseReconnect, startSSE, stopSSE, type SseReconnectDeps } from "../src/services/sse"
+import {
+  __setHostTransportForTest,
+  type HostTransport,
+  type StreamHandlers,
+  type StreamOpenRequest,
+  type TransportRequest,
+} from "../src/services/host-transport"
+import { setBoardStore } from "../src/store/board"
+import { messageStore } from "../src/store/messages"
 
 /**
  * audit-2026-04-29 W2-V10 — regression for two latent P1s in the
@@ -48,7 +58,9 @@ function makeDeps(opts: {
       spy.hydrateCalls.push(id)
       return opts.hydrate(id)
     },
-    restart: (id, after) => { spy.restartCalls.push([id, after]) },
+    restart: (id, after) => {
+      spy.restartCalls.push([id, after])
+    },
     scheduleRetry: (fn, _ms) => {
       spy.retryCalls++
       // Fire immediately so the test can observe what the retry
@@ -78,13 +90,17 @@ describe("performSseReconnect (audit W2-V10)", () => {
   test("hydrate throw is caught and a retry is scheduled (no unhandled rejection)", async () => {
     const errs: unknown[][] = []
     const orig = console.error
-    console.error = (...a: unknown[]) => { errs.push(a) }
+    console.error = (...a: unknown[]) => {
+      errs.push(a)
+    }
     try {
       const { deps, spy } = makeDeps({
         taskID: "tsk_b",
         after: 100,
         currentTaskID: () => "tsk_b",
-        hydrate: async () => { throw new Error("network down") },
+        hydrate: async () => {
+          throw new Error("network down")
+        },
       })
       await expect(performSseReconnect(deps)).resolves.toBeUndefined()
       // Hydrate ran once and threw.
@@ -148,7 +164,9 @@ describe("performSseReconnect (audit W2-V10)", () => {
     let currentTask = "tsk_f"
     const errs: unknown[][] = []
     const orig = console.error
-    console.error = (...a: unknown[]) => { errs.push(a) }
+    console.error = (...a: unknown[]) => {
+      errs.push(a)
+    }
     try {
       const { deps, spy } = makeDeps({
         taskID: "tsk_f",
@@ -169,5 +187,50 @@ describe("performSseReconnect (audit W2-V10)", () => {
     } finally {
       console.error = orig
     }
+  })
+})
+
+describe("startSSE stream error handling", () => {
+  afterEach(() => {
+    stopSSE()
+    __setHostTransportForTest(undefined)
+    setBoardStore("selectedTaskID", "")
+  })
+
+  test("stream error closes the handle so hydrate-and-resume reconnect can run from onClose", () => {
+    createRoot((dispose) => {
+      let handlers: StreamHandlers | undefined
+      let closeCalls = 0
+      const transport = {
+        kind: "tauri",
+        request: async <T>(_input: TransportRequest) => ({ status: 200, ok: true, headers: {}, body: null as T }),
+        openStream: (_input: StreamOpenRequest, h: StreamHandlers) => {
+          handlers = h
+          return {
+            close: () => {
+              closeCalls++
+              h.onClose?.("test-error-close")
+            },
+          }
+        },
+        native: async () => null,
+        subscribeUiCommand: () => ({ unsubscribe() {} }),
+      } satisfies HostTransport
+
+      __setHostTransportForTest(transport)
+      setBoardStore("selectedTaskID", "tsk_error")
+
+      startSSE("tsk_error")
+      handlers!.onOpen?.()
+      expect(messageStore.sseConnected).toBe(true)
+
+      handlers!.onError?.(new Error("network interrupted"))
+
+      expect(messageStore.sseConnected).toBe(false)
+      expect(closeCalls).toBe(1)
+
+      stopSSE()
+      dispose()
+    })
   })
 })
