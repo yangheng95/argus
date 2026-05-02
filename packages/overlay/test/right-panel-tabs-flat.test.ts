@@ -2,11 +2,10 @@
 //
 // User feedback (2026-05-02 22:57): "右侧面板也有个圆角" — the
 // right panel also has a rounded corner. Following iter15 which
-// made the `.sections` shell flat, the inner tab-list pill
-// (`.right-panel-tablist`, 8px radius) and individual tab pills
-// (`.right-panel-tab`, 6px radius) still rendered as rounded
-// chips. With the flat shell around them the rounded chips read
-// as a bolted-on island, not as part of the same surface.
+// made the `.sections` shell flat, the inner tab-list pill and
+// individual tab pills still rendered as rounded chips. With the
+// flat shell around them the rounded chips read as a bolted-on
+// island, not as part of the same surface.
 //
 // Drop both radii so the tablist sits flush with its container
 // and the tabs read as plain text affordances. The active tab
@@ -18,7 +17,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 const STYLES = readFileSync(
-  path.resolve(import.meta.dir, "..", "src", "styles.css"),
+  path.resolve(import.meta.dir, "..", "src", "styles", "primitives", "tabs.css"),
   "utf8",
 )
 
@@ -33,14 +32,14 @@ function ruleBody(selector: string): string {
 }
 
 describe("right-panel tabs are flat (no rounded corners)", () => {
-  test(".right-panel-tablist drops border-radius", () => {
-    const body = ruleBody(".right-panel-tablist")
+  test(".oc-tabs drops border-radius", () => {
+    const body = ruleBody(".oc-tabs")
     // Either explicit border-radius: 0 or no border-radius at all.
     expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
   })
 
-  test(".right-panel-tab drops border-radius", () => {
-    const body = ruleBody(".right-panel-tab")
-    expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
+  test(".oc-tab explicitly stays square", () => {
+    const body = ruleBody(".oc-tab")
+    expect(body).toMatch(/border-radius:\s*0\b/)
   })
 })
