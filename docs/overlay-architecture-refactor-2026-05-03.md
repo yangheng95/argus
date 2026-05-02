@@ -47,6 +47,11 @@ Progress log:
   every visual difference must go through `variant`, `size`, and
   `tone`, preventing legacy button classes from riding through the
   new wrapper.
+- 2026-05-03: Legacy button caller budget counting was corrected to
+  match complete class tokens instead of substring word boundaries.
+  The accurate baseline is 78 total TSX callers (`.btn` is 54, not
+  63; `.chat-send` is 0 because only child icon/label classes
+  remain in TSX; `.executor-chip` is 1, not 7).
 
 Trigger: user feedback (2026-05-03):
 

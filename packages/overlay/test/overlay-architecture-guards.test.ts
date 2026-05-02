@@ -47,16 +47,16 @@ const LEGACY_BUTTON_CLASSES = [
   "titlebar-status-icon",
 ]
 const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
-  btn: 63,
+  btn: 54,
   "btn-primary": 12,
-  "chat-send": 2,
+  "chat-send": 0,
   "chat-interrupt": 0,
   "titlebar-btn": 3,
   "sidebar-btn": 0,
   "sidebar-tool": 0,
   "workspace-toggle": 0,
   "right-panel-tab": 3,
-  "executor-chip": 7,
+  "executor-chip": 1,
   "chat-toolbar-btn": 3,
   "titlebar-menubar-trigger": 1,
   "titlebar-status-icon": 1,
@@ -76,21 +76,16 @@ function countThemeLayoutOverrides(css: string): number {
   return total
 }
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
-
 function countLegacyButtonClassCallers(): Record<string, number> {
   const counts = Object.fromEntries(LEGACY_BUTTON_CLASSES.map((className) => [className, 0]))
   const files = walkFiles(join(OVERLAY_ROOT, "src"), (path) => path.endsWith(".tsx"))
   for (const file of files) {
     const text = readText(file)
-    for (const className of LEGACY_BUTTON_CLASSES) {
-      const pattern = new RegExp(
-        `(?:class|className)=\\{?["']([^"']*\\b${escapeRegExp(className)}\\b[^"']*)["']`,
-        "g",
-      )
-      counts[className] += Array.from(text.matchAll(pattern)).length
+    for (const match of text.matchAll(/(?:class|className)=\{?["']([^"']+)["']/g)) {
+      const tokens = new Set(match[1]!.split(/\s+/).filter(Boolean))
+      for (const className of LEGACY_BUTTON_CLASSES) {
+        if (tokens.has(className)) counts[className] += 1
+      }
     }
   }
   return counts
@@ -247,7 +242,7 @@ describe("overlay architecture guards", () => {
     for (const className of LEGACY_BUTTON_CLASSES) {
       expect(counts[className]).toBeLessThanOrEqual(LEGACY_BUTTON_CALLER_LIMITS[className]!)
     }
-    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(95)
+    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(78)
   })
 
   test("new component modules stay below the split threshold", () => {
