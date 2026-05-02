@@ -16,9 +16,13 @@ build/
 .svelte-kit/
 .env
 .env.*
+*.db
 *.db-shm
 *.db-wal
 *.tsbuildinfo
+
+# Per-run session benchmark logs (script/benchmark/runs/_session-*.out)
+script/benchmark/runs/_session-*.out
 coverage/
 .cache/
 .turbo/
