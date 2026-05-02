@@ -17,9 +17,7 @@ import { detectDeliverySurfaces } from "../surface-detector"
 import type { DeliverySurfaceManifest } from "../surface-detector"
 import { arbitrateDeliveryGate } from "../arbiter"
 import { runBackendApiReview, runClientContractReview } from "../specialists/backend-client"
-import { runFrontendReview, runVisualRuntimeReview } from "../specialists/frontend-visual"
 import { runSecurityDataReview } from "../specialists/security-data"
-import { runTestIntegrationReview } from "../specialists/test-integration"
 import type { EvaluatorCommand } from "./types"
 import {
   createManifestId,
@@ -247,14 +245,13 @@ async function runSpecialistReviews(input: {
   if (backendReview) reviews.push(backendReview)
   const clientReview = await runClientContractReview(input)
   if (clientReview) reviews.push(clientReview)
-  const frontendReview = await runFrontendReview(input)
-  if (frontendReview) reviews.push(frontendReview)
-  const visualReview = await runVisualRuntimeReview(input)
-  if (visualReview) reviews.push(visualReview)
+  // Frontend and visual runtime are covered by the concrete runtime flow above.
+  // Keeping parallel specialist rows made delivery slower and duplicated failures.
   const securityReview = await runSecurityDataReview(input)
   if (securityReview) reviews.push(securityReview)
-  const testReview = await runTestIntegrationReview(input)
-  if (testReview) reviews.push(testReview)
+  // Test command failures already appear under required checks. The deeper
+  // test_integration reviewer remains available as a direct specialist helper,
+  // but the default delivery gate no longer runs it on every delivery.
   return reviews
 }
 

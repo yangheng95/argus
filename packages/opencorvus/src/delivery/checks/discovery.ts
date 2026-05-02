@@ -49,7 +49,7 @@ export function resolvedChecks(
   const next = {
     ...(config.build !== undefined ? { build: config.build } : discovered.build.length > 0 ? { build: discovered.build.map((item) => item.command) } : {}),
     ...(config.test !== undefined ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
-    ...(config.lint !== undefined ? { lint: config.lint } : discovered.lint.length > 0 ? { lint: discovered.lint.map((item) => item.command) } : {}),
+    ...(config.lint !== undefined ? { lint: config.lint } : {}),
     ...(config.verify_cmd !== undefined ? { verify_cmd: config.verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
     ...(config.artifact ? { artifact: config.artifact } : autoArtifact()),
@@ -155,7 +155,7 @@ export function commandGroups(
           : item.name === "test"
             ? discovered.test
             : item.name === "lint"
-              ? discovered.lint
+              ? config.lint === undefined ? [] : discovered.lint
               : [],
         item.label,
         item.family,

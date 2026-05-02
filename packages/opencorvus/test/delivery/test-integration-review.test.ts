@@ -3,23 +3,14 @@ import fs from "node:fs/promises"
 import { mkdtemp } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { EngineTaskTable } from "../../src/engine/engine.sql"
-import { ProjectTable } from "../../src/project/project.sql"
 import { buildDeliveryEvidenceManifest } from "../../src/delivery/checks/project-gate"
-import {
-  findDeliverySpecialistReviews,
-} from "../../src/delivery/specialist-review"
-import { persistDeliveryEvidenceManifest } from "../../src/delivery/manifest"
-import { Database, eq } from "../../src/storage/db"
+import { runTestIntegrationReview } from "../../src/delivery/specialists/test-integration"
 import { Instance } from "../../src/project/instance"
+import type { DeliverySurfaceManifest } from "../../src/delivery/surface-detector"
 
 const tempDirs: string[] = []
-const projectIds: string[] = []
 
 afterEach(async () => {
-  for (const projectId of projectIds.splice(0)) {
-    Database.use((db) => db.delete(ProjectTable).where(eq(ProjectTable.id, projectId)).run())
-  }
   await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
@@ -30,21 +21,13 @@ describe("delivery test integration specialist review", () => {
       files: { "src/app.ts": "export const ok = true\n" },
     })
 
-    const manifest = await Instance.provide({
+    const review = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_fake_tests",
-        runID: "run_fake_tests",
-        deliveryID: "dlv_fake_tests",
-        changedFiles: ["src/app.ts"],
-        goals: [blockingGoal("gol_fake_tests", "REQ-tests")],
-      }),
+      fn: () => runReview(dir, [blockingGoal("gol_fake_tests", "REQ-tests")]),
     })
 
-    expect(manifest.specialistReviews?.[0]?.reviewer).toBe("test_integration")
-    expect(manifest.specialistReviews?.[0]?.findings[0]?.claim).toContain("no-op success signal")
-    expect(manifest.finalGate.status).toBe("failed")
-    expect(manifest.finalGate.failedReviewIds).toEqual(["specialist:test_integration"])
+    expect(review?.reviewer).toBe("test_integration")
+    expect(review?.findings[0]?.claim).toContain("no-op success signal")
   })
 
   test("rejects empty test files even when the test command is green", async () => {
@@ -55,21 +38,14 @@ describe("delivery test integration specialist review", () => {
       },
     })
 
-    const manifest = await Instance.provide({
+    const review = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_empty_tests",
-        runID: "run_empty_tests",
-        deliveryID: "dlv_empty_tests",
-        changedFiles: ["tests/app.test.ts"],
-        goals: [blockingGoal("gol_empty_tests", "REQ-tests")],
-      }),
+      fn: () => runReview(dir, [blockingGoal("gol_empty_tests", "REQ-tests")]),
     })
 
-    const claims = manifest.specialistReviews?.[0]?.findings.map((finding) => finding.claim).join("\n")
+    const claims = review?.findings.map((finding) => finding.claim).join("\n")
     expect(claims).toContain("no-op success signal")
     expect(claims).toContain("is empty")
-    expect(manifest.finalGate.failedReviewIds).toEqual(["specialist:test_integration"])
   })
 
   test("rejects snapshot-only test shells", async () => {
@@ -86,20 +62,13 @@ describe("delivery test integration specialist review", () => {
       },
     })
 
-    const manifest = await Instance.provide({
+    const review = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_snapshot_tests",
-        runID: "run_snapshot_tests",
-        deliveryID: "dlv_snapshot_tests",
-        changedFiles: ["tests/view.test.ts"],
-        goals: [blockingGoal("gol_snapshot_tests", "REQ-view")],
-      }),
+      fn: () => runReview(dir, [blockingGoal("gol_snapshot_tests", "REQ-view")]),
     })
 
-    const claims = manifest.specialistReviews?.[0]?.findings.map((finding) => finding.claim).join("\n")
+    const claims = review?.findings.map((finding) => finding.claim).join("\n")
     expect(claims).toContain("only checks snapshots")
-    expect(manifest.finalGate.failedReviewIds).toEqual(["specialist:test_integration"])
   })
 
   test("passes meaningful tests that cite covered requirements", async () => {
@@ -117,27 +86,15 @@ describe("delivery test integration specialist review", () => {
       },
     })
 
-    const manifest = await Instance.provide({
+    const review = await Instance.provide({
       directory: dir,
-      fn: () => buildDeliveryEvidenceManifest({
-        taskID: "tsk_meaningful_tests",
-        runID: "run_meaningful_tests",
-        deliveryID: "dlv_meaningful_tests",
-        changedFiles: ["src/app.ts"],
-        goals: [blockingGoal("gol_meaningful_tests", "REQ-chat")],
-      }),
+      fn: () => runReview(dir, [blockingGoal("gol_meaningful_tests", "REQ-chat")]),
     })
 
-    expect(manifest.specialistReviews?.[0]?.findings).toEqual([])
-    expect(manifest.reviewEvidence.find((item) => item.id === "specialist:test_integration")?.status).toBe("passed")
-    expect(manifest.finalGate.status).toBe("passed")
+    expect(review?.findings).toEqual([])
   })
 
-  test("manifest persistence writes specialist review artifacts", async () => {
-    const now = Date.now()
-    const projectId = `project_test_review_${now.toString(16)}`
-    const taskId = `tsk_test_review_${now.toString(16)}`
-    seedTask({ projectId, taskId, now })
+  test("default delivery gate omits the expensive test integration specialist", async () => {
     const dir = await packageFixture({
       scripts: { test: "bun test" },
       files: {
@@ -149,23 +106,20 @@ describe("delivery test integration specialist review", () => {
         ].join("\n"),
       },
     })
-    const deliveryID = `dlv_test_review_${now.toString(16)}`
+
     const manifest = await Instance.provide({
       directory: dir,
       fn: () => buildDeliveryEvidenceManifest({
-        taskID: taskId,
-        runID: `run_test_review_${now.toString(16)}`,
-        deliveryID,
+        taskID: "tsk_default_omits_test_review",
+        runID: "run_default_omits_test_review",
+        deliveryID: "dlv_default_omits_test_review",
         changedFiles: ["src/app.ts"],
         goals: [blockingGoal("gol_test_review", "REQ-chat")],
       }),
     })
 
-    persistDeliveryEvidenceManifest({ manifest })
-
-    const reviews = findDeliverySpecialistReviews({ deliveryID })
-    expect(reviews).toHaveLength(1)
-    expect(reviews[0]?.reviewer).toBe("test_integration")
+    expect(manifest.specialistReviews?.map((item) => item.reviewer)).not.toContain("test_integration")
+    expect(manifest.reviewEvidence.map((item) => item.id)).not.toContain("specialist:test_integration")
   })
 })
 
@@ -197,30 +151,32 @@ function blockingGoal(id: string, requirementID: string) {
   }
 }
 
-function seedTask(input: {
-  projectId: string
-  taskId: string
-  now: number
-}) {
-  projectIds.push(input.projectId)
-  Database.use((db) => {
-    db.insert(ProjectTable).values({
-      id: input.projectId,
-      worktree: process.cwd(),
-      name: "Test integration review project",
-      sandboxes: "[]",
-      time_created: input.now,
-      time_updated: input.now,
-    }).run()
-    db.insert(EngineTaskTable).values({
-      id: input.taskId,
-      project_id: input.projectId,
-      source: "test",
-      title: "Test integration review task",
-      request: "Verify test specialist artifact persistence",
-      priority: "normal",
-      time_created: input.now,
-      time_updated: input.now,
-    }).run()
+function testSurfaceManifest(projectRoot: string): DeliverySurfaceManifest {
+  return {
+    id: "artifact_test_integration_surface",
+    projectRoot,
+    surfaces: ["test_integration"],
+    evidence: [{
+      surface: "test_integration",
+      reason: "test specialist unit test",
+      refs: [{ kind: "command", ref: "package.json#scripts.test" }],
+    }],
+    timeCreated: Date.now(),
+  }
+}
+
+async function runReview(
+  projectRoot: string,
+  goals: Array<ReturnType<typeof blockingGoal>>,
+) {
+  return await runTestIntegrationReview({
+    taskID: "tsk_test_review",
+    runID: "run_test_review",
+    deliveryID: "dlv_test_review",
+    projectRoot,
+    surfaceManifest: testSurfaceManifest(projectRoot),
+    requiredChecks: [],
+    checkResults: [],
+    goals,
   })
 }
