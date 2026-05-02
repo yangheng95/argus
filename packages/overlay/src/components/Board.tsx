@@ -286,7 +286,7 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
               {verdictPillLabel("empty")}
             </span>
           </header>
-          <p class="delivery-empty-hint">{t("delivery.empty.hint")}</p>
+          <p class="empty-hint empty-hint--card">{t("delivery.empty.hint")}</p>
         </section>
       }
     >

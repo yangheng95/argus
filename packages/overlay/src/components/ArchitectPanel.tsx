@@ -90,7 +90,7 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
           <div class="arch-detail md-content" innerHTML={renderMarkdown(props.architect!.summary)} />
         </Show>
         <Show when={decisions().length === 0 && !hasMeaningfulSummary(props.architect!.summary)}>
-          <p class="arch-empty">{t("workflow.architect_empty")}</p>
+          <p class="empty-hint empty-hint--card">{t("workflow.architect_empty")}</p>
         </Show>
       </Show>
     </div>

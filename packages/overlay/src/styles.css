@@ -2441,13 +2441,21 @@ body[data-theme="light"] .section-badge {
   padding: calc(2px * var(--ui-scale)) 0;
 }
 
-/* Shared empty-state shells for the primary overlay work surfaces. */
+/* Shared empty-state shells for the primary overlay work surfaces.
+   The `.empty-hint--card` modifier opts panels OUT of having to nest
+   their empty hint under `.section-body` / `.sidebar-list-cluster` etc
+   in order to inherit the bordered-card chrome. Any panel that wants a
+   right-panel-style empty state now writes
+   `<p class="empty-hint empty-hint--card">…</p>` directly. Single
+   source — replaces the per-panel `.arch-empty` / `.req-empty` /
+   `.agent-workflow-empty` / `.integrity__empty` / `.delivery-empty-hint`
+   rules that used to drift independently (rule 8). */
 .sidebar-list-cluster > .empty-hint,
 .section-body > .empty-hint,
 #solidChangesPanel > .empty-hint,
 .diff-preview-empty .empty-hint,
 .file-view-empty .empty-hint,
-.sidebar-list-cluster > .empty-hint {
+.empty-hint--card {
   position: relative;
   display: grid;
   gap: calc(8px * var(--ui-scale));
@@ -2464,7 +2472,8 @@ body[data-theme="light"] .section-badge {
 .section-body > .empty-hint::before,
 #solidChangesPanel > .empty-hint::before,
 .diff-preview-empty .empty-hint::before,
-.file-view-empty .empty-hint::before {
+.file-view-empty .empty-hint::before,
+.empty-hint--card::before {
   content: "";
   width: calc(7px * var(--ui-scale));
   height: calc(7px * var(--ui-scale));
@@ -2474,7 +2483,8 @@ body[data-theme="light"] .section-badge {
 
 .section-body > .empty-hint,
 #solidChangesPanel > .empty-hint,
-.sidebar-list-cluster > .empty-hint {
+.sidebar-list-cluster > .empty-hint,
+.empty-hint--card {
   max-width: calc(420px * var(--ui-scale));
 }
 
@@ -6856,7 +6866,11 @@ select.field-input option {
   color: var(--text-strong);
 }
 
-.agent-workflow-empty,
+/* `.agent-workflow-warning` keeps its own bordered card because it
+   surfaces a non-empty diagnostic ("trace disabled — turn it on to see
+   data"). The empty-state was migrated to `.empty-hint--card` so the
+   "no data yet" treatment matches every other right-panel empty.
+   Margin still wraps the warning so it sits inside the panel padding. */
 .agent-workflow-warning {
   margin: calc(12px * var(--ui-scale));
   padding: calc(12px * var(--ui-scale));
@@ -7106,12 +7120,6 @@ select.field-input option {
   font-size: var(--ui-font-tiny);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-.delivery-empty-hint {
-  margin: 0;
-  font-size: var(--ui-font-control);
-  color: var(--text-soft);
 }
 
 .delivery-summary {
@@ -11072,12 +11080,6 @@ body[data-resizing="true"] * {
   color: var(--warn);
   flex-shrink: 0;
 }
-.req-empty {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  font-style: italic;
-  padding: var(--ui-gap-md) 0;
-}
 .req-streaming {
   display: flex;
   flex-direction: column;
@@ -11196,12 +11198,6 @@ body[data-resizing="true"] * {
   font-size: var(--ui-font-control);
   color: var(--text);
   line-height: 1.5;
-}
-.integrity__empty {
-  font-size: var(--ui-font-control);
-  color: var(--text-muted);
-  font-style: italic;
-  margin: 0;
 }
 .integrity__section {
   display: flex;
@@ -11444,12 +11440,6 @@ body[data-resizing="true"] * {
   font-size: var(--ui-font-small);
   line-height: 1.45;
   overflow-wrap: anywhere;
-}
-.arch-empty {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--ui-font-control);
-  line-height: 1.45;
 }
 .arch-generating {
   display: flex;
@@ -14397,7 +14387,6 @@ body[data-theme="light"] :is(
   .board-intro__cta,
   .chat-empty--task,
   .agent-workflow-toolbar,
-  .agent-workflow-empty,
   .agent-workflow-warning,
   .agent-workflow-refresh,
   .agent-workflow-report-close
@@ -14425,7 +14414,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   .board-intro__cta,
   .chat-empty--task,
   .agent-workflow-toolbar,
-  .agent-workflow-empty,
   .agent-workflow-warning,
   .agent-workflow-refresh,
   .agent-workflow-report-close

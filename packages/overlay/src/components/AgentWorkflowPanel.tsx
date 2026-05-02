@@ -108,7 +108,7 @@ export function AgentWorkflowPanel() {
       </header>
 
       <Show when={trace.loading && records().length === 0}>
-        <div class="agent-workflow-empty">{t("agent_workflow.loading")}</div>
+        <div class="empty-hint empty-hint--card">{t("agent_workflow.loading")}</div>
       </Show>
 
       <Show when={!traceEnabled()}>
@@ -116,7 +116,7 @@ export function AgentWorkflowPanel() {
       </Show>
 
       <Show when={!trace.loading && records().length === 0}>
-        <div class="agent-workflow-empty">{t("agent_workflow.empty")}</div>
+        <div class="empty-hint empty-hint--card">{t("agent_workflow.empty")}</div>
       </Show>
 
       <div class="agent-workflow-canvas" role="list">
