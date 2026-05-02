@@ -32,6 +32,11 @@ Progress log:
   `.titlebar-btn`, `.right-panel-tab`, `.executor-chip`, etc.) are
   capped at the measured baseline of 95 and must move downward as
   each caller group migrates to the `Button` primitive.
+- 2026-05-03: The legacy button budget is now per-class, not just
+  aggregate. Individual old families such as `.btn`, `.btn-primary`,
+  `.chat-send`, `.executor-chip`, and `.right-panel-tab` cannot rise
+  even if another family falls, and the `Button` primitive test rejects
+  legacy class leakage into the new wrapper.
 
 Trigger: user feedback (2026-05-03):
 

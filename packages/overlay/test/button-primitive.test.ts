@@ -17,4 +17,5 @@ test("Button primitive exposes the canonical data-attribute contract", () => {
   expect(source).toContain("data-variant={local.variant}");
   expect(source).toContain("data-size={local.size}");
   expect(source).toContain("data-tone={local.tone}");
+  expect(source).not.toMatch(/\b(?:btn|chat-send|titlebar-btn|sidebar-btn|right-panel-tab|executor-chip)\b/);
 });

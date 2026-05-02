@@ -46,6 +46,21 @@ const LEGACY_BUTTON_CLASSES = [
   "titlebar-menubar-trigger",
   "titlebar-status-icon",
 ]
+const LEGACY_BUTTON_CALLER_LIMITS: Record<string, number> = {
+  btn: 63,
+  "btn-primary": 12,
+  "chat-send": 2,
+  "chat-interrupt": 0,
+  "titlebar-btn": 3,
+  "sidebar-btn": 0,
+  "sidebar-tool": 0,
+  "workspace-toggle": 0,
+  "right-panel-tab": 3,
+  "executor-chip": 7,
+  "chat-toolbar-btn": 3,
+  "titlebar-menubar-trigger": 1,
+  "titlebar-status-icon": 1,
+}
 
 function countThemeLayoutOverrides(css: string): number {
   let total = 0
@@ -65,8 +80,8 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
-function countLegacyButtonClassCallers(): number {
-  let total = 0
+function countLegacyButtonClassCallers(): Record<string, number> {
+  const counts = Object.fromEntries(LEGACY_BUTTON_CLASSES.map((className) => [className, 0]))
   const files = walkFiles(join(OVERLAY_ROOT, "src"), (path) => path.endsWith(".tsx"))
   for (const file of files) {
     const text = readText(file)
@@ -75,10 +90,10 @@ function countLegacyButtonClassCallers(): number {
         `(?:class|className)=\\{?["']([^"']*\\b${escapeRegExp(className)}\\b[^"']*)["']`,
         "g",
       )
-      total += Array.from(text.matchAll(pattern)).length
+      counts[className] += Array.from(text.matchAll(pattern)).length
     }
   }
-  return total
+  return counts
 }
 
 describe("overlay architecture guards", () => {
@@ -228,7 +243,11 @@ describe("overlay architecture guards", () => {
   })
 
   test("legacy button class callers cannot increase during primitive migration", () => {
-    expect(countLegacyButtonClassCallers()).toBeLessThanOrEqual(95)
+    const counts = countLegacyButtonClassCallers()
+    for (const className of LEGACY_BUTTON_CLASSES) {
+      expect(counts[className]).toBeLessThanOrEqual(LEGACY_BUTTON_CALLER_LIMITS[className]!)
+    }
+    expect(Object.values(counts).reduce((total, value) => total + value, 0)).toBeLessThanOrEqual(95)
   })
 
   test("new component modules stay below the split threshold", () => {
