@@ -15,6 +15,7 @@ import { WindowControls } from "./components/WindowControls";
 import { TitlebarMenubar, TitlebarStatusCluster } from "./components/titlebar/TitlebarMenubar";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { FilesSection } from "./components/FilesSection";
+import { FrontendPreviewPanel } from "./components/FrontendPreviewPanel";
 import { DeliveryPanel, deliveryPanelDelivery } from "./components/Board";
 import { LogViewer } from "./components/LogViewer";
 import {
@@ -66,10 +67,8 @@ import GeneralPanel from "./components/settings/GeneralPanel";
 import AgentModelsPanel from "./components/settings/AgentModelsPanel";
 import { PermissionsPanel } from "./components/settings/PermissionsPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
-import { WelcomeToast } from "./components/WelcomeToast";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
-import { StartupWorkspaceDialog } from "./components/StartupWorkspaceDialog";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
@@ -92,6 +91,13 @@ import {
 import { openConfigDialog, switchConfigTab, setupDialogBackdropClose, renderAboutVersion } from "./services/dialog";
 import { loadConversation } from "./store/messages";
 import { cardTreeStore } from "./store/card-tree";
+import {
+  nextTabForPreviewResolution,
+  previewRequestKey,
+  resolveFrontendPreviewFromBoard,
+  type FrontendPreviewResolution,
+  type RightPanelTab,
+} from "./services/frontend-preview";
 
 // ── Module teardown ──
 // Centralised cleanup for top-level document/window listeners and Solid roots.
@@ -113,6 +119,13 @@ const listenerOpts = { signal: moduleTeardown.signal } as const;
 // ── Application-level signals (shared across mount points) ──
 
 const [logOpen, setLogOpen] = createSignal(false);
+const [rightPanelTab, setRightPanelTab] = createSignal<RightPanelTab>("inspector");
+const [rightPanelManualKey, setRightPanelManualKey] = createSignal("");
+const [frontendPreviewResolution, setFrontendPreviewResolution] =
+  createSignal<FrontendPreviewResolution | null>(null);
+const [frontendPreviewLoading, setFrontendPreviewLoading] = createSignal(false);
+const [frontendPreviewError, setFrontendPreviewError] = createSignal("");
+let frontendPreviewRequest = 0;
 
 // ── Workspace (secondary panel, stacked above composer) state ──
 // workspaceOpen drives layout visibility; workspaceView is remembered across
@@ -122,6 +135,46 @@ const [workspaceView, setWorkspaceView] = createSignal<WorkspaceView>({
   kind: "diff",
   target: { filePath: "" },
 });
+
+function currentPreviewKey(): string {
+  return previewRequestKey(boardStore.selectedTaskID || boardStore.board?.task?.id, boardStore.snapshotVersion);
+}
+
+function selectRightPanelTab(tab: RightPanelTab): void {
+  setRightPanelManualKey(currentPreviewKey());
+  setRightPanelTab(tab);
+}
+
+function refreshFrontendPreview(options: { manual?: boolean } = {}): void {
+  const key = currentPreviewKey();
+  const board = boardStore.board;
+  const request = ++frontendPreviewRequest;
+  if (options.manual) setRightPanelManualKey(key);
+  setFrontendPreviewLoading(true);
+  setFrontendPreviewError("");
+  void resolveFrontendPreviewFromBoard(board)
+    .then((resolution) => {
+      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return;
+      setFrontendPreviewResolution(resolution);
+      setRightPanelTab((tab) =>
+        nextTabForPreviewResolution({
+          activeTab: tab,
+          manualKey: rightPanelManualKey(),
+          requestKey: key,
+          resolution,
+        }),
+      );
+    })
+    .catch((err) => {
+      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return;
+      setFrontendPreviewError(err instanceof Error ? err.message : String(err));
+      setFrontendPreviewResolution(null);
+    })
+    .finally(() => {
+      if (request !== frontendPreviewRequest || key !== currentPreviewKey()) return;
+      setFrontendPreviewLoading(false);
+    });
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -863,13 +916,6 @@ if (connBadgeEl) {
   render(() => <ConnectionBadge />, connBadgeEl);
 }
 
-// ── Mount: StartupWorkspaceDialog ──
-
-const startupWorkspaceHost = document.createElement("div");
-startupWorkspaceHost.id = "startupWorkspaceHost";
-document.body.appendChild(startupWorkspaceHost);
-render(() => <StartupWorkspaceDialog />, startupWorkspaceHost);
-
 // ── Mount: TaskDirContent + TaskWorkspaceLine ──
 // Reactive replacement for services/meta.ts renderMeta() — both spans now
 // derive from settingsStore.directory + boardStore.path through Solid memos.
@@ -893,6 +939,79 @@ const taskStatusMountEl = document.getElementById("solidTaskStatusMount");
 if (taskStatusMountEl) {
   render(() => <TaskStatusHeader />, taskStatusMountEl);
 }
+
+// ── Mount: Right panel Inspector / Preview tabs ──
+
+const rightPanelTabsEl = document.getElementById("solidRightPanelTabs");
+if (rightPanelTabsEl) {
+  render(
+    () => (
+      <div class="right-panel-tablist" role="tablist" aria-label={t("right_panel.tabs")}>
+        <button
+          type="button"
+          class="right-panel-tab"
+          role="tab"
+          aria-selected={rightPanelTab() === "inspector"}
+          data-active={rightPanelTab() === "inspector" ? "true" : "false"}
+          onClick={() => selectRightPanelTab("inspector")}
+        >
+          {t("right_panel.inspector")}
+        </button>
+        <button
+          type="button"
+          class="right-panel-tab"
+          role="tab"
+          aria-selected={rightPanelTab() === "preview"}
+          data-active={rightPanelTab() === "preview" ? "true" : "false"}
+          onClick={() => selectRightPanelTab("preview")}
+        >
+          {t("right_panel.preview")}
+        </button>
+      </div>
+    ),
+    rightPanelTabsEl,
+  );
+}
+
+const frontendPreviewMountEl = document.getElementById("solidFrontendPreviewMount");
+if (frontendPreviewMountEl) {
+  render(
+    () => (
+      <FrontendPreviewPanel
+        resolution={frontendPreviewResolution()}
+        loading={frontendPreviewLoading()}
+        error={frontendPreviewError()}
+        onRefresh={() => refreshFrontendPreview({ manual: true })}
+      />
+    ),
+    frontendPreviewMountEl,
+  );
+}
+
+createEffect(() => {
+  const active = rightPanelTab();
+  const inspector = document.getElementById("rightPanelInspector");
+  const preview = document.getElementById("rightPanelPreview");
+  inspector?.setAttribute("data-active", active === "inspector" ? "true" : "false");
+  preview?.setAttribute("data-active", active === "preview" ? "true" : "false");
+});
+
+let lastFrontendPreviewKey = "";
+createEffect(() => {
+  const taskID = boardStore.selectedTaskID || boardStore.board?.task?.id || "";
+  const snapshot = boardStore.snapshotVersion || "";
+  const key = previewRequestKey(taskID, snapshot);
+  if (!taskID) {
+    lastFrontendPreviewKey = key;
+    setFrontendPreviewResolution(null);
+    setFrontendPreviewError("");
+    setFrontendPreviewLoading(false);
+    return;
+  }
+  if (key === lastFrontendPreviewKey) return;
+  lastFrontendPreviewKey = key;
+  refreshFrontendPreview();
+});
 
 // ── Mount: ChangesPanel ──
 
@@ -1467,10 +1586,6 @@ void (async () => {
       render(() => <AgentModelsPanel />, agentModelsBody);
     }
     renderAboutVersion();
-    const welcomeHost = document.createElement("div");
-    welcomeHost.id = "welcomeHost";
-    document.body.appendChild(welcomeHost);
-    render(() => <WelcomeToast />, welcomeHost);
     const connBannerHost = document.createElement("div");
     connBannerHost.id = "connectionBannerHost";
     document.body.appendChild(connBannerHost);
