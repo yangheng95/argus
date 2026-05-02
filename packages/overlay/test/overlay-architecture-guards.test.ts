@@ -233,6 +233,10 @@ describe("overlay architecture guards", () => {
 
     const skillMarket = readText(join(OVERLAY_ROOT, "src/components/settings/SkillMarketPanel.tsx"))
     expect(count(/<SurfaceHeader/g, skillMarket)).toBe(3)
+
+    const generalPanel = readText(join(OVERLAY_ROOT, "src/components/settings/GeneralPanel.tsx"))
+    expect(count(/<SurfaceHeader/g, generalPanel)).toBe(2)
+    expect(generalPanel).not.toContain("config-panel-group-title")
   })
 
   test("new primitive style files use data attributes for variants and never use important", () => {
