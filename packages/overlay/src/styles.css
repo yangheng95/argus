@@ -9663,13 +9663,19 @@ body[data-resizing="true"] * {
   gap: calc(8px * var(--ui-scale));
 }
 
+/* Group label above each chat cluster in the sidebar — "Today",
+   "Yesterday", "Last 7 days", "Older". Was uppercase + 0.1em
+   tracking until iter8; a late `.project-group-heading,
+   .sidebar-list-heading` rule then flipped it back to Title Case
+   with !specificity. The dual definition was misleading — anyone
+   tweaking the canonical rule would silently lose to the late
+   override. Folded together: Title Case, slightly muted, sits
+   one notch below the chat row labels. */
 .sidebar-list-heading {
   display: block;
-  padding: calc(2px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) calc(8px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale)) 0 calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
   font-size: calc(var(--ui-font-meta) * 0.88);
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -12325,11 +12331,13 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   padding-top: calc(8px * var(--ui-scale));
 }
 
-.project-group-heading,
-.sidebar-list-heading {
+/* iter8 folded `.sidebar-list-heading` back to Title Case at its
+   canonical rule. `.project-group-heading` keeps its own padding
+   override here — it inherits Title Case from its canonical rule
+   already, but the 6px padding-left is a tweak the merged source
+   block doesn't otherwise carry. */
+.project-group-heading {
   padding-left: calc(6px * var(--ui-scale));
-  letter-spacing: 0;
-  text-transform: none;
 }
 
 .task-row-mini {
