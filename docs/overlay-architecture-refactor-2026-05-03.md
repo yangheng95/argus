@@ -163,6 +163,12 @@ Progress log:
   `.right-panel-tab` rules and theme overrides from runtime CSS. The right
   panel tab chrome is now owned only by the `Tabs` primitive and
   `styles/primitives/tabs.css`.
+- 2026-05-03: Moved `.sections-tabs` layout chrome out of God CSS/theme
+  resets and into `styles/surfaces/header.css`, backed by the
+  `--oc-header-actions-padding` design-language token.
+- 2026-05-03: Removed `.chat-icon-col` from the late shared
+  gap/padding reset chain so its existing canonical rule remains the single
+  source for composer icon-column layout.
 
 Trigger: user feedback (2026-05-03):
 

@@ -21,4 +21,6 @@ test("SurfaceHeader variants have surface CSS hooks", () => {
   const css = readFileSync(HEADER_CSS, "utf8");
 
   expect(css).toContain('.oc-surface-header[data-surface="settings-group"]');
+  expect(css).toContain(".sections-tabs.oc-surface-header__actions");
+  expect(css).toContain("var(--oc-header-actions-padding)");
 });

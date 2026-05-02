@@ -2267,11 +2267,6 @@ body[data-theme="light"] .section-badge {
   height: 0;
 }
 
-.sections-tabs {
-  min-width: 0;
-  width: 100%;
-}
-
 .sections-tab-body {
   flex: 1 1 0;
   min-height: 0;
@@ -14978,9 +14973,9 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-bar {
   padding: 0 calc(6px * var(--ui-scale)) !important;
 }
 
-body[data-theme="light"] :is(.sidebar-toolset, .task-dir-shell, .chat-icon-col, .sections-tabs),
+body[data-theme="light"] :is(.sidebar-toolset, .task-dir-shell),
 body:is([data-theme="dark"], [data-theme="vscode-dark"])
-  :is(.sidebar-toolset, .task-dir-shell, .chat-icon-col, .sections-tabs) {
+  :is(.sidebar-toolset, .task-dir-shell) {
   gap: calc(2px * var(--ui-scale)) !important;
   padding: calc(2px * var(--ui-scale)) !important;
 }
@@ -15163,9 +15158,7 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
 }
 
 .task-dir-shell,
-.sidebar-toolset,
-.chat-icon-col,
-.sections-tabs {
+.sidebar-toolset {
   gap: calc(2px * var(--ui-scale)) !important;
   padding: calc(2px * var(--ui-scale)) !important;
   padding-inline: calc(2px * var(--ui-scale)) !important;

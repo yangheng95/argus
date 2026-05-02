@@ -30,9 +30,8 @@
 //   2. Pseudo: 0
 //   3. Theme: line ~13400 (light) and line ~13673 (dark) —
 //      only set background + border-color, NO border-radius.
-//   4. Multi-selector partner: line ~14113 with
-//      `.task-dir-shell, .sidebar-toolset, .sections-tabs`
-//      sets gap/padding !important; legit shared treatment.
+//   4. Multi-selector partner: removed; the canonical owns
+//      gap/padding so late `!important` reset chains cannot drift.
 //   5. @media: line ~12746 inside @media (max-width: 760px) —
 //      sets grid-row / grid-column for narrow-width layout,
 //      legit responsive.
@@ -83,5 +82,11 @@ describe(".chat-icon-col is a single flat source", () => {
       const body = STYLES.slice(open + 1, close)
       expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
     }
+  })
+
+  test("no theme override resets .chat-icon-col spacing", () => {
+    expect(STYLES).not.toMatch(
+      /body[^{]*\.chat-icon-col(?![-\w])[^{}]*\{[^}]*\b(?:gap|padding(?:-\w+)?)\s*:/,
+    )
   })
 })
