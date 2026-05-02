@@ -178,6 +178,8 @@ type CardRole = "user" | "system" | "execution" | "review";
 
 ### Phase C - TaskStatusHeader 与顶部信息归位
 
+状态：已实施。代码提交范围包括把 `#solidTaskStatusMount` 从 `.chat-header` 迁入 `.titlebar-utility`、`TaskStatusHeader` 改用 titlebar chip 样式、删除 chat 专用状态样式，并在 `layout-shell.test.ts` 中锁定唯一挂载点。
+
 文件：
 
 - `packages/overlay/src/index.html`
@@ -349,7 +351,7 @@ A token/role -> B IA/layout -> C task status -> D cards -> E composer -> F panel
 - [x] `solidWorkspaceMount` 不在 `chatSection` 内。
 - [x] `RightPanelTab` 只包含 `plan / evaluation / changes / preview`。
 - [x] 代码中无 `inspector` / `workflow` UI tab 字面量。
-- [ ] TaskStatusHeader 只有一个挂载点，且不在 chat header。
+- [x] TaskStatusHeader 只有一个挂载点，且不在 chat header。
 - [ ] 无 `.chat-compose-meta` / `.chat-icon-col`。
 - [ ] ChangesPanel tab 切换不销毁 group chunk。
 - [ ] MemoryPanel / LogViewer 不在本方案中误删。

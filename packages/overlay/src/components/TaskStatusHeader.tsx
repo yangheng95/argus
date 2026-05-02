@@ -55,7 +55,7 @@ export function TaskStatusHeader() {
 
   return (
     <Show when={visible()}>
-      <div class="task-status chat-task-status" id="taskStatus">
+      <div class="task-status titlebar-task-status" id="taskStatus">
         <span
           class="status-icon"
           id="statusIcon"

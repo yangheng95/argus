@@ -72,6 +72,22 @@ test("right pane resizing is anchored to the three-column panel body", async () 
   expect(pane).toContain("rect.width - sidebar - leftHandle - rightHandle - chatMin");
 });
 
+test("TaskStatusHeader is mounted once in the titlebar utility", async () => {
+  const html = await readSrc("src/index.html");
+  const main = await readSrc("src/main.tsx");
+  const component = await readSrc("src/components/TaskStatusHeader.tsx");
+
+  const chatHeader = html.match(/<header class="chat-header">[\s\S]*?<\/header>/)?.[0] ?? "";
+  const titlebarUtility = html.match(/<div class="titlebar-utility">[\s\S]*?<\/div>\s*<\/div>/)?.[0] ?? "";
+  const mounts = [...main.matchAll(/render\(\(\) => <TaskStatusHeader \/>/g)];
+
+  expect(chatHeader).not.toContain("solidTaskStatusMount");
+  expect(titlebarUtility).toContain('id="solidTaskStatusMount"');
+  expect(mounts).toHaveLength(1);
+  expect(component).toContain('class="task-status titlebar-task-status"');
+  expect(component).not.toContain("chat-task-status");
+});
+
 function cssNoWorkspaceHidden(css: string): boolean {
   return !/\.workspace-mount\[hidden\]/.test(css);
 }

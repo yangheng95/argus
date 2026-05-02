@@ -3748,49 +3748,11 @@ details.goal-item[open] > .goal-item-head > .goal-item-chevron {
 }
 
 
-.chat-header-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  justify-self: center;
-  min-width: 0;
-}
 
-.chat-task-status {
-  min-width: 0;
-  max-width: min(100%, calc(280px * var(--ui-scale)));
-  justify-content: center;
-  align-items: center;
-  gap: calc(5px * var(--ui-scale));
-  margin-inline: auto;
-  padding: calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
-}
 
-.chat-task-status .status-icon {
-  width: calc(12px * var(--ui-scale));
-  height: calc(12px * var(--ui-scale));
-}
 
-.chat-task-status .status-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: calc(1px * var(--ui-scale));
-  line-height: 1.05;
-}
 
-.chat-task-status .status-label {
-  font-size: var(--ui-font-meta);
-  text-transform: none;
-  letter-spacing: 0.01em;
-}
 
-.chat-task-status .elapsed {
-  font-size: var(--ui-font-meta);
-  line-height: 1;
-}
 
 .btn-terminate {
   color: var(--status-error, #e55);
@@ -12422,11 +12384,6 @@ body[data-theme="light"] .btn-primary {
   .chat-header {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-
-  .chat-header-status {
-    display: none;
-  }
-
   .chat-scroll > .card,
   .chat-scroll > .interaction-card,
   .chat-scroll > .card[data-kind="message"][data-role="user"],
