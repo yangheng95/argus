@@ -359,6 +359,16 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
       .where(eq(EngineGoalTable.task_id, task.id))
       .get(),
   )
+  const requirements = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${EngineRequirementTable.time_updated}), 0)`,
+      })
+      .from(EngineRequirementTable)
+      .where(eq(EngineRequirementTable.task_id, task.id))
+      .get(),
+  )
   // goalRuns: include goal_run status transitions in the tag. Goal-scoped state
   // changes (queued → running → completed/failed) happen on goal_run rows BEFORE
   // the parent goalStatusByID(goal.id) is updated, so we need both tables in the tag or the
@@ -482,6 +492,8 @@ function boardTagForTask(task: typeof EngineTaskTable.$inferSelect) {
     noteStats?.updated ?? 0,
     interactions?.count ?? 0,
     interactions?.updated ?? 0,
+    requirements?.count ?? 0,
+    requirements?.updated ?? 0,
     deliveries?.count ?? 0,
     deliveries?.updated ?? 0,
     evaluations?.count ?? 0,
@@ -899,7 +911,7 @@ function buildWorkflowFields(
   })
 
   const requirements = findActiveSpecForTask(task.id)
-    ? buildRequirements(task.id)
+    ? buildRequirements(task.id, goals)
     : []
 
   const architect = buildArchitectSummary(task.id)
@@ -990,7 +1002,10 @@ function deriveGoalScopeStatusFromProjection(
 }
 
 /** Build structured requirements array from DB */
-function buildRequirements(taskID: string) {
+function buildRequirements(
+  taskID: string,
+  goals: Array<typeof EngineGoalTable.$inferSelect>,
+) {
   const rows = Database.use((db) =>
     db.select().from(EngineRequirementTable)
       .where(eq(EngineRequirementTable.task_id, taskID))
@@ -998,13 +1013,38 @@ function buildRequirements(taskID: string) {
       .all(),
   )
   if (rows.length === 0) return undefined
+  const goalsByRequirement = new Map<string, Array<typeof EngineGoalTable.$inferSelect>>()
+  for (const goal of goals) {
+    for (const requirementID of goal.requirement_ids ?? []) {
+      const list = goalsByRequirement.get(requirementID) ?? []
+      list.push(goal)
+      goalsByRequirement.set(requirementID, list)
+    }
+  }
   return rows.map((r) => ({
     id: r.id,
     description: r.description,
     type: r.priority === "blocking" ? "explicit" as const : "inferred" as const,
     priority: r.priority as "blocking" | "advisory",
-    status: r.status,
+    status: requirementStatus(r, goalsByRequirement),
   }))
+}
+
+function requirementStatus(
+  requirement: typeof EngineRequirementTable.$inferSelect,
+  goalsByRequirement: Map<string, Array<typeof EngineGoalTable.$inferSelect>>,
+): "pending" | "passed" | "failed" {
+  const metadata = requirement.metadata as { source_requirement_id?: unknown } | null
+  const sourceRequirementID =
+    typeof metadata?.source_requirement_id === "string" && metadata.source_requirement_id.trim()
+      ? metadata.source_requirement_id.trim()
+      : requirement.id
+  const linkedGoals = goalsByRequirement.get(sourceRequirementID) ?? []
+  if (linkedGoals.length === 0) return requirement.status
+  const statuses = linkedGoals.map((goal) => goalStatusByID(goal.id))
+  if (statuses.some((status) => status === "failed")) return "failed"
+  if (statuses.every((status) => status === "passed")) return "passed"
+  return "pending"
 }
 
 /** Authoritative goal_run for a goal: the current supersede-chain tip. */

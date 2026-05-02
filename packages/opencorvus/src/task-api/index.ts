@@ -74,6 +74,8 @@ import {
 } from "@/engine/task-status"
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
 import { Orchestrator } from "@/orchestrator/agent"
+import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
+import { sessionRole, taskIDForSession } from "@/orchestrator/task-event"
 import {
   activeRunBySession,
   findArtifacts,
@@ -132,6 +134,116 @@ import { Identifier } from "@/id/id"
 import { AttachmentStore } from "@/storage/attachment-store"
 
 const log = Log.create({ service: "assistant" })
+
+async function resolveDirectReplyTarget(taskID: string, sessionID: string) {
+  const owningTask = taskIDForSession(sessionID)
+  if (owningTask !== taskID) {
+    throw new NotFoundError({ message: `Session ${sessionID} does not belong to task ${taskID}` })
+  }
+  const kind = sessionRole(sessionID)
+  if (!kind) {
+    throw new NotFoundError({ message: `Session ${sessionID} has no task agent kind` })
+  }
+  if (!DIRECT_REPLY_AGENT_KINDS.has(kind)) {
+    throw new Error(`Session ${sessionID} has kind "${kind}" and cannot receive direct agent replies`)
+  }
+  const session = await Session.get(sessionID)
+  const messages = await Session.messages({ sessionID })
+  const latest = messages
+    .map((message) => message.info)
+    .filter((info) => info.role === "user" || info.role === "assistant")
+    .sort((left, right) => (right.time?.created ?? 0) - (left.time?.created ?? 0))[0]
+
+  if (!latest) {
+    throw new Error(`Session ${sessionID} has no prior model identity to continue`)
+  }
+
+  if (latest.role === "user") {
+    return {
+      session,
+      agent: latest.agent,
+      model: latest.model,
+      variant: latest.variant,
+    }
+  }
+
+  return {
+    session,
+    agent: latest.agent,
+    model: {
+      providerID: latest.providerID,
+      modelID: latest.modelID,
+    },
+    variant: latest.variant,
+  }
+}
+
+async function appendDirectAgentSessionReply(input: {
+  taskID: string
+  sessionID: string
+  message: string
+  attachments?: Array<{ mime: string; url: string; filename?: string }>
+}) {
+  const text = input.message.trim()
+  if (!text) throw new Error("message is required")
+  const target = await resolveDirectReplyTarget(input.taskID, input.sessionID)
+  const messageID = Identifier.ascending("message")
+  const message: Message.User = {
+    id: messageID,
+    sessionID: target.session.id,
+    role: "user",
+    time: { created: Date.now() },
+    agent: target.agent,
+    model: target.model,
+    ...(target.variant ? { variant: target.variant } : {}),
+    extra: {
+      overlay_direct_reply: true,
+      source: "overlay_direct_reply",
+      taskID: input.taskID,
+      targetSessionID: target.session.id,
+    },
+  }
+  await Session.updateMessage(message)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    messageID,
+    sessionID: target.session.id,
+    type: "text",
+    text,
+    kind: "user_content",
+    source: "user",
+    metadata: {
+      overlay_direct_reply: true,
+      source: "overlay_direct_reply",
+      taskID: input.taskID,
+      targetSessionID: target.session.id,
+    },
+  })
+  for (const attachment of input.attachments ?? []) {
+    await Session.updatePart({
+      id: Identifier.ascending("part"),
+      messageID,
+      sessionID: target.session.id,
+      type: "file",
+      mime: attachment.mime,
+      url: attachment.url,
+      ...(attachment.filename ? { filename: attachment.filename } : {}),
+    })
+  }
+  await Session.touch(target.session.id)
+  void SessionPrompt.loop({ sessionID: target.session.id }).catch((error) => {
+    log.error("direct agent session reply loop failed", {
+      sessionID: target.session.id,
+      taskID: input.taskID,
+      error,
+    })
+  })
+  return {
+    task_id: input.taskID,
+    session_id: target.session.id,
+    message_id: messageID,
+  }
+}
 
 async function continueTaskMessage(
   taskID: string,
@@ -1039,6 +1151,22 @@ function recoverTaskByChannelBinding(
 }
 
 export namespace EngineService {
+  export async function replyAgentSession(
+    taskID: string,
+    sessionID: string,
+    input: {
+      message: string
+      attachments?: Array<{ mime: string; url: string; filename?: string }>
+    },
+  ) {
+    return appendDirectAgentSessionReply({
+      taskID,
+      sessionID,
+      message: input.message,
+      attachments: input.attachments,
+    })
+  }
+
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
     const input = ReplyInteractionInput.parse(raw)
     const row = requireInteraction(interactionID)
