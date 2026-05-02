@@ -7,6 +7,7 @@ import {
   __resetVsCodeTransportForTest,
   createVsCodeTransport,
 } from "../src/services/vscode-transport"
+import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS } from "../src/services/host-transport"
 
 /**
  * Regression for audit-2026-04-29 transport F3 / overlay F1.
@@ -166,9 +167,12 @@ describe("vscode-transport response error envelope (audit transport F3 / overlay
 
 describe("vscode-transport request abort uses request.abort envelope (audit overlay F2)", () => {
   let fakeCleanup: (() => void) | undefined
+  const originalAbortSignalTimeout = AbortSignal.timeout
   afterEach(() => {
     fakeCleanup?.()
     fakeCleanup = undefined
+    AbortSignal.timeout = originalAbortSignalTimeout
+    try { __resetVsCodeTransportForTest() } catch {}
   })
 
   test("aborting an in-flight request posts request.abort, not stream.close", async () => {
@@ -200,6 +204,39 @@ describe("vscode-transport request abort uses request.abort envelope (audit over
     const abortMsg = fake.fake.posted
       .slice(1)
       .find((m: any) => m && m.id === sentRequest.id)
+    expect((abortMsg as any)?.type).toBe("request.abort")
+
+    const verdict = await reqPromise
+    expect((verdict as any).rejected).toBe("AbortError")
+  })
+
+  test("default request timeout aborts hung bridge requests", async () => {
+    const fake = installFakeWindow()
+    fakeCleanup = fake.cleanup
+    const timeoutController = new AbortController()
+    let timeoutMilliseconds = 0
+    AbortSignal.timeout = ((milliseconds: number) => {
+      timeoutMilliseconds = milliseconds
+      return timeoutController.signal
+    }) as typeof AbortSignal.timeout
+    try { __resetVsCodeTransportForTest() } catch {}
+    const transport = createVsCodeTransport()
+
+    const reqPromise = transport
+      .request({ path: "task/abc/board" })
+      .then(() => "resolved" as const)
+      .catch((e) => ({ rejected: e instanceof Error ? e.name : String(e) }))
+    await new Promise((r) => setTimeout(r, 0))
+    const sentRequest = fake.fake.posted.find((m: any) => m?.type === "request") as { id: string }
+
+    expect(timeoutMilliseconds).toBe(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
+
+    timeoutController.abort()
+    await new Promise((r) => setTimeout(r, 0))
+
+    const abortMsg = fake.fake.posted.find(
+      (m: any) => m?.type === "request.abort" && m.id === sentRequest.id,
+    )
     expect((abortMsg as any)?.type).toBe("request.abort")
 
     const verdict = await reqPromise

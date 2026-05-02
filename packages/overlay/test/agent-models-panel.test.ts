@@ -154,12 +154,27 @@ test("agent model selects patch independent per-agent overrides", async () => {
     await page.waitForSelector('[data-testid="agent-model-select-build"]')
     await page.waitForSelector('[data-testid="agent-model-select-delivery"]')
 
+    const initialOptionCount = await page.$$eval(".agent-model-select option", (nodes) => nodes.length)
+    expect(initialOptionCount).toBeLessThanOrEqual(6)
+
+    await page.focus('[data-testid="agent-model-select-build"]')
+    await page.waitForFunction(() =>
+      !!(document.querySelector(
+        '[data-testid="agent-model-select-build"] option[value="anthropic/claude-sonnet-4-6"]',
+      ) as HTMLOptionElement | null),
+    )
     await page.select('[data-testid="agent-model-select-build"]', "anthropic/claude-sonnet-4-6")
     await page.waitForFunction(() =>
       (document.querySelector('[data-testid="agent-model-select-build"]') as HTMLSelectElement | null)?.value ===
         "anthropic/claude-sonnet-4-6",
     )
 
+    await page.focus('[data-testid="agent-model-select-delivery"]')
+    await page.waitForFunction(() =>
+      !!(document.querySelector(
+        '[data-testid="agent-model-select-delivery"] option[value="openai/gpt-4.1"]',
+      ) as HTMLOptionElement | null),
+    )
     await page.select('[data-testid="agent-model-select-delivery"]', "openai/gpt-4.1")
     await page.waitForFunction(() =>
       (document.querySelector('[data-testid="agent-model-select-delivery"]') as HTMLSelectElement | null)?.value ===

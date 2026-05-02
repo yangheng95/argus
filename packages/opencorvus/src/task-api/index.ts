@@ -75,6 +75,7 @@ import {
 import { persistQueuedTask, abortTaskPipeline, awaitPipelineSettled } from "@/engine/pipeline"
 import { Orchestrator } from "@/orchestrator/agent"
 import { DIRECT_REPLY_AGENT_KINDS } from "@/orchestrator/direct-reply"
+import { overlayMeta } from "@/orchestrator/protocol/message-bridge"
 import { sessionRole, taskIDForSession } from "@/orchestrator/task-event"
 import {
   activeRunBySession,
@@ -339,6 +340,11 @@ async function appendTaskSessionMessage(
     agent: ctx.agent,
     model: ctx.model,
   } satisfies Message.User)) as Message.User
+  const meta = overlayMeta(task.session_id, task.session_id, info)
+  const enrichedInfo = {
+    ...info,
+    ...meta,
+  }
   const parts: Message.Part[] = []
   if (text.length > 0) {
     const textPart: Message.TextPart = {
@@ -348,6 +354,7 @@ async function appendTaskSessionMessage(
       type: "text",
       text,
       kind: "user_content",
+      ...meta,
     }
     await Session.updatePart(textPart)
     parts.push(textPart)
@@ -361,12 +368,13 @@ async function appendTaskSessionMessage(
       mime: ref.mime,
       url: ref.url,
       filename: ref.filename,
+      ...meta,
     }
     await Session.updatePart(filePart)
     parts.push(filePart)
   }
   await Session.touch(task.session_id)
-  return { info, parts }
+  return { info: enrichedInfo, parts }
 }
 
 async function messageContext(_sessionID: string) {

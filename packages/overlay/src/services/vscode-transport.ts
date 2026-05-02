@@ -36,7 +36,7 @@ import type {
   TransportRequest,
   TransportResponse,
 } from "./host-transport"
-import { nativeUnsupported } from "./host-transport"
+import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, nativeUnsupported } from "./host-transport"
 
 // ── VS Code API singleton ──
 
@@ -360,11 +360,12 @@ export function createVsCodeTransport(): HostTransport {
       const id = newId()
       const method: RequestMethod = (input.method ?? "GET") as RequestMethod
       const responseKind = input.responseKind ?? "json"
+      const signal = input.signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
 
       return new Promise<TransportResponse<T>>((resolve, reject) => {
         let abortListener: (() => void) | undefined
-        if (input.signal) {
-          if (input.signal.aborted) {
+        if (signal) {
+          if (signal.aborted) {
             reject(new DOMException("Aborted", "AbortError"))
             return
           }
@@ -386,13 +387,13 @@ export function createVsCodeTransport(): HostTransport {
               })
             } catch {}
           }
-          input.signal.addEventListener("abort", abortListener, { once: true })
+          signal.addEventListener("abort", abortListener, { once: true })
         }
         pending.set(id, {
           resolve: resolve as (r: TransportResponse) => void,
           reject,
           responseKind,
-          signal: input.signal ?? undefined,
+          signal,
           abortListener,
         })
         const msg: WebviewMessage = {
@@ -410,7 +411,7 @@ export function createVsCodeTransport(): HostTransport {
           vscode.postMessage(msg)
         } catch (err) {
           pending.delete(id)
-          cleanupAbort(input.signal, abortListener)
+          cleanupAbort(signal, abortListener)
           reject(err instanceof Error ? err : new Error(String(err)))
         }
       })

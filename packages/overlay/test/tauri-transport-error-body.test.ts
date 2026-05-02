@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS } from "../src/services/host-transport";
 import { createTauriTransport } from "../src/services/tauri-transport";
 
 const originalFetch = globalThis.fetch;
+const originalAbortSignalTimeout = AbortSignal.timeout;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  AbortSignal.timeout = originalAbortSignalTimeout;
 });
 
 describe("tauri transport error body", () => {
@@ -33,5 +36,59 @@ describe("tauri transport error body", () => {
         message: "Project-scoped route /tasks requires ?directory=",
       },
     });
+  });
+
+  test("aborts stalled requests with the transport default timeout", async () => {
+    const timeoutController = new AbortController();
+    let timeoutMilliseconds = 0;
+    let capturedSignal: AbortSignal | undefined;
+    AbortSignal.timeout = ((milliseconds: number) => {
+      timeoutMilliseconds = milliseconds;
+      return timeoutController.signal;
+    }) as typeof AbortSignal.timeout;
+    globalThis.fetch = async (_url, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        capturedSignal = init?.signal ?? undefined;
+        capturedSignal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true },
+        );
+      });
+
+    const request = createTauriTransport()
+      .request({ path: "tasks" })
+      .catch((error) => error);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(timeoutMilliseconds).toBe(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS);
+    expect(capturedSignal).toBe(timeoutController.signal);
+
+    timeoutController.abort();
+    const error = await request;
+    expect(error).toBeInstanceOf(DOMException);
+    expect((error as DOMException).name).toBe("AbortError");
+  });
+
+  test("preserves caller-owned abort signals", async () => {
+    const callerController = new AbortController();
+    AbortSignal.timeout = (() => {
+      throw new Error("default timeout should not replace caller signal");
+    }) as typeof AbortSignal.timeout;
+    globalThis.fetch = async (_url, init) => {
+      expect(init?.signal).toBe(callerController.signal);
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+
+    const res = await createTauriTransport().request({
+      path: "tasks",
+      signal: callerController.signal,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.body).toEqual({ ok: true });
   });
 });

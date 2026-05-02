@@ -55,6 +55,7 @@ export default function AgentModelsPanel() {
   const [refreshMsg, setRefreshMsg] = createSignal<string>("");
   const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set());
   const [savingDefault, setSavingDefault] = createSignal(false);
+  const [activeSelect, setActiveSelect] = createSignal<string>("");
 
   // Agents + providers change rarely and are fetched via createResource with a
   // refreshToken knob. The project default `model` is deliberately NOT fetched
@@ -205,6 +206,62 @@ export default function AgentModelsPanel() {
     return byTier;
   }
 
+  function optionLabel(value: string, groups: ProviderGroup[]): string {
+    for (const group of groups) {
+      const found = group.models.find((model) => model.value === value);
+      if (found) return found.label;
+    }
+    return value;
+  }
+
+  function ModelSelect(props: {
+    id: string;
+    testid: string;
+    value: string;
+    groups: ProviderGroup[];
+    unavailable: boolean;
+    disabled: boolean;
+    emptyLabel: string;
+    unavailableLabel: string;
+    onSelect: (value: string) => void;
+  }) {
+    const expanded = () => activeSelect() === props.id;
+    const selected = () => props.value;
+    const selectedAvailable = () =>
+      !!selected() && props.groups.some((group) => group.models.some((model) => model.value === selected()));
+    return (
+      <select
+        class="field-input agent-model-select"
+        data-testid={props.testid}
+        value={selected()}
+        disabled={props.disabled}
+        onFocus={() => setActiveSelect(props.id)}
+        onPointerDown={() => setActiveSelect(props.id)}
+        onChange={(e) => props.onSelect((e.currentTarget as HTMLSelectElement).value)}
+      >
+        <option value="">{props.emptyLabel}</option>
+        <Show when={!!selected() && (!expanded() || props.unavailable || !selectedAvailable())}>
+          <option value={selected()}>
+            {props.unavailable ? props.unavailableLabel : optionLabel(selected(), props.groups)}
+          </option>
+        </Show>
+        <Show when={expanded()}>
+          <For each={props.groups}>
+            {(g) => (
+              <optgroup label={g.name}>
+                <For each={g.models}>
+                  {(opt) => (
+                    <option value={opt.value}>{opt.label}</option>
+                  )}
+                </For>
+              </optgroup>
+            )}
+          </For>
+        </Show>
+      </select>
+    );
+  }
+
   return (
     <div class="general-panel">
       <div class="config-panel-group">
@@ -270,35 +327,17 @@ export default function AgentModelsPanel() {
                 <div class="agent-model-project-default">
                   <div class="agent-model-row" title={t("agent_models.project_default_title")}>
                     <span class="agent-model-name">{t("agent_models.project_default")}</span>
-                    <select
-                      class="field-input agent-model-select"
-                      data-testid="agent-model-select-project"
+                    <ModelSelect
+                      id="project"
+                      testid="agent-model-select-project"
                       value={currentProjectModel()}
                       disabled={savingDefault()}
-                      onChange={(e) =>
-                        onSelectProjectDefault(
-                          (e.currentTarget as HTMLSelectElement).value,
-                        )
-                      }
-                    >
-                      <option value="">{t("agent_models.option_not_set")}</option>
-                      <Show when={projectModelUnavailable()}>
-                        <option value={currentProjectModel()}>
-                          {t("agent_models.option_unavailable", { model: currentProjectModel() })}
-                        </option>
-                      </Show>
-                      <For each={groups}>
-                        {(g) => (
-                          <optgroup label={g.name}>
-                            <For each={g.models}>
-                              {(opt) => (
-                                <option value={opt.value}>{opt.label}</option>
-                              )}
-                            </For>
-                          </optgroup>
-                        )}
-                      </For>
-                    </select>
+                      groups={groups}
+                      unavailable={projectModelUnavailable()}
+                      emptyLabel={t("agent_models.option_not_set")}
+                      unavailableLabel={t("agent_models.option_unavailable", { model: currentProjectModel() })}
+                      onSelect={onSelectProjectDefault}
+                    />
                     <span class="agent-model-status">
                       <Show when={savingDefault()}>{t("agent_models.saving")}</Show>
                     </span>
@@ -326,34 +365,17 @@ export default function AgentModelsPanel() {
                             return (
                               <div class="agent-model-row" title={agent.description || ""}>
                                 <span class="agent-model-name">{agent.name}</span>
-                                <select
-                                  class="field-input agent-model-select"
-                                  data-testid={`agent-model-select-${agent.name}`}
+                                <ModelSelect
+                                  id={`agent:${agent.name}`}
+                                  testid={`agent-model-select-${agent.name}`}
                                   value={current()}
                                   disabled={savingAgents().has(agent.name)}
-                                  onChange={(e) =>
-                                    onSelect(
-                                      agent.name,
-                                      (e.currentTarget as HTMLSelectElement).value,
-                                    )
-                                  }
-                                >
-                                  <option value="">— inherit project default —</option>
-                                  <Show when={missing()}>
-                                    <option value={current()}>{current()} (unavailable)</option>
-                                  </Show>
-                                  <For each={groups}>
-                                    {(g) => (
-                                      <optgroup label={g.name}>
-                                        <For each={g.models}>
-                                          {(opt) => (
-                                            <option value={opt.value}>{opt.label}</option>
-                                          )}
-                                        </For>
-                                      </optgroup>
-                                    )}
-                                  </For>
-                                </select>
+                                  groups={groups}
+                                  unavailable={missing()}
+                                  emptyLabel="— inherit project default —"
+                                  unavailableLabel={`${current()} (unavailable)`}
+                                  onSelect={(value) => onSelect(agent.name, value)}
+                                />
                                 <span class="agent-model-status">
                                   <Show when={savingAgents().has(agent.name)}>saving…</Show>
                                 </span>

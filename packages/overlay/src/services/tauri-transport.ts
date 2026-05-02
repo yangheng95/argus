@@ -26,7 +26,7 @@ import type {
   TransportRequest,
   TransportResponse,
 } from "./host-transport"
-import { nativeUnsupported } from "./host-transport"
+import { DEFAULT_REQUEST_TIMEOUT_MILLISECONDS, nativeUnsupported } from "./host-transport"
 
 /**
  * Tauri window-handle accessor — the ONE place in the overlay that
@@ -299,11 +299,12 @@ export function createTauriTransport(): HostTransport {
     kind: "tauri",
     async request<T = unknown>(input: TransportRequest): Promise<TransportResponse<T>> {
       const url = buildUrl(input.path, input.query)
+      const signal = input.signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MILLISECONDS)
       const init: RequestInit = applyBody(
         {
           method: input.method ?? "GET",
           headers: { ...apiHeadersFromState(), ...(input.headers ?? {}) },
-          signal: input.signal,
+          signal,
         },
         input.body,
       )
