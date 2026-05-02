@@ -255,8 +255,8 @@ Claude Code 的答案：重启 = 新会话。opencorvus 采用相同语义：
 - [x] **交付校验**：`rg "OrchestratorTrigger|batch_complete|delivery_rejected" packages/opencorvus/src/orchestrator` = 0；`rg "TaskLoopTrigger" packages/opencorvus/src` = 0；queue.test.ts 断言“advanceQueue 不再合成 event”
 - [x] 全量 engine 测试（85 pass / 0 fail）确认无退化
 
-**阶段 2 遗留项（不阻塞交付，phase 5 自然退化）**：
-- orchestrator 子 session 仍按每次唤醒 `Session.createNext`（并非真正的“长跑 session 追加”）；待 phase 5 build-as-tool 后可转换为持久 session
+**阶段 2 后续收口**：
+- [x] orchestrator 子 session 已改为每个 task root 下唯一持久 session；每次唤醒向同一 `kind="orchestrator"` session 追加真实 user message，避免异常恢复时产生 0ms 重试 session。
 - `ORCHESTRATOR_INSTRUCTIONS` 中仍有少量 “batch” / “rejection” 描述性语言（不再是 trigger 枚举名），作为行为说明保留
 
 ### 阶段 3（AgentRuntime 合并到 SessionLoop）

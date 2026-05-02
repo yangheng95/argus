@@ -202,7 +202,7 @@ interface AgentExecutionPlan {
 | `summary` | `AgentSpec + episodic + derived-state + pre-run-reduction` |
 
 注意：这里的“derived-state”不是说它们完全不写 session，而是说**LLM 的输入真源**不是 session transcript。
-现状里 orchestrator 已明确如此：child session 仅用于 UI/audit persistence，真正 prompt 每次从 DB state 重建。
+现状里 orchestrator 已明确如此：每个 task root 下只有一个持久 orchestrator child session 承载真实 wake 消息与 UI/audit persistence，真正 prompt 每次仍从 DB state 重建。
 
 ---
 
