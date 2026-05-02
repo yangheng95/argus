@@ -2286,16 +2286,22 @@ body[data-theme="light"] .section-badge {
   color: var(--bad);
 }
 
-/* ── Section (details/summary) ── */
+/* ── Section (details/summary) ──
+   Single source after iter40. The canonical here used to
+   declare rich chrome (gradient + --surface tinted bg, 14px
+   radius, drop shadow + inset highlight) that the !important
+   reset chain at line ~12449 forced to flat (`--surface-inset`
+   bg, `var(--radius)` ≈10px, no shadow). Canonical lied —
+   same iter28/30/33/36 active rule-8 conflict. Updated to
+   declare the actually-rendered flat values directly so
+   source matches rendered. `.section` drops out of the
+   !important reset chain, leaving only 4 remaining shells
+   in that chain (.gwg / .delivery-panel / .criteria-group /
+   .eval-error) for future single-source passes. */
 .section {
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: calc(14px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0) 74%),
-    color-mix(in srgb, var(--surface) 90%, var(--surface-inset) 10%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.025),
-    0 8px 18px rgba(6, 10, 16, 0.08);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -12446,7 +12452,13 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    them. The remaining 5 shell-level siblings (.section /
    .gwg / .delivery-panel / .criteria-group / .eval-error)
    keep the reset until each gets its own single-source pass. */
-.section,
+/* iter28/30/33/36/40 progressively pulled .config-subsection /
+   .extension-row / .config-section / .channel-doc-card /
+   .detail-card / .section out of this !important reset —
+   each canonical now declares the same chrome directly. The
+   remaining 4 siblings (.gwg / .delivery-panel /
+   .criteria-group / .eval-error) keep the reset until each
+   gets its own single-source pass. */
 .gwg,
 .delivery-panel,
 .criteria-group,
