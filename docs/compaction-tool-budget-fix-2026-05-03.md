@@ -43,9 +43,9 @@ adding roughly 1.316 MB in one step. Ordinary file reads in the same request
 were small by comparison: the largest two `read_file` results were 14.6 KB and
 12.8 KB.
 
-## Decision
+## Implemented Fix
 
-Use two explicit input boundaries:
+The root-cause fix uses the following explicit input boundaries:
 
 1. Delivery screenshot tools return structured text only: path, sha, viewport,
    byte count, dimensions, and pixel variance. Image bytes are loaded only by
@@ -56,13 +56,19 @@ Use two explicit input boundaries:
    This is a browser viewport limit, not a host display resolution change.
 4. Predictive compaction logs the largest model-message parts before compacting,
    so future context growth points to the responsible tool or file part.
-5. `SessionCompaction` must preflight the exact compaction request payload
+
+## Remaining Guardrails
+
+These are still required for complete hardening, but they were not the direct
+root cause of the r36 1.316 MB jump:
+
+1. `SessionCompaction` must preflight the exact compaction request payload
    before creating a provider call. If the request already exceeds the model
    input character limit, it records a real error message and stops.
-6. The session processor may turn context overflow into compaction only for
+2. The session processor may turn context overflow into compaction only for
    normal agents. Context overflow inside the compaction agent is terminal for
    that compaction attempt.
-7. Codebase exploration tool results are capped at the tool boundary. Common
+3. Codebase exploration tool results are capped at the tool boundary. Common
    generated artifact directories are omitted from discovery by default because
    they are not source context and can contain large framework reports.
 
