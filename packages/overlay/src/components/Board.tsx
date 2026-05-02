@@ -218,6 +218,36 @@ interface DeliveryPanelProps {
   delivery: any;
 }
 
+const LIVE_RUN_STATUSES = new Set(["queued", "accepted", "running", "blocked"]);
+const DELIVERY_PHASES = new Set(["deliver", "refine"]);
+
+export function hasActiveDeliveryRun(board: any): boolean {
+  const run = board?.run;
+  const workflowSteps = Array.isArray(board?.workflow?.steps) ? board.workflow.steps : [];
+  const workflowDeliveryRunning = workflowSteps.some((step: any) =>
+    DELIVERY_PHASES.has(String(step?.id || "")) && step?.status === "running",
+  );
+  const runDeliveryActive =
+    DELIVERY_PHASES.has(String(run?.phase || "")) &&
+    LIVE_RUN_STATUSES.has(String(run?.status || ""));
+  return workflowDeliveryRunning || runDeliveryActive;
+}
+
+export function deliveryPanelDelivery(board: any): any {
+  return (
+    board?.candidateDelivery ||
+    board?.acceptedDelivery ||
+    board?.delivery ||
+    (hasActiveDeliveryRun(board)
+      ? {
+          pending: true,
+          status: "publishing",
+          verdict: "inconclusive",
+        }
+      : null)
+  );
+}
+
 const DEFAULT_SUMMARY_LINES = 10;
 
 export function DeliveryPanel(props: DeliveryPanelProps) {
@@ -227,6 +257,7 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
   const summaryText = createMemo(() => {
     const d = props.delivery;
     if (!d) return "";
+    if (d.pending === true) return t("delivery.inflight.hint");
     return d.verdict === "rejected"
       ? d.verdictSummary || d.summary || d.result?.summary || ""
       : d.summary || d.result?.summary || "";
@@ -465,7 +496,7 @@ export function Board(props: BoardProps) {
   const board = () => boardStore.board;
 
   const spec = () => board()?.spec;
-  const delivery = () => board()?.delivery;
+  const delivery = () => deliveryPanelDelivery(board());
   const interactions = () => board()?.interactions || [];
   const overview = () => board()?.overview;
   // Task-level criteria rollup. Backend (workbench/board.ts) folds the
@@ -528,6 +559,7 @@ export function Board(props: BoardProps) {
     if (!wf || !Array.isArray(wf.steps)) return "";
     const running = wf.steps.find((s: any) => s.status === "running");
     if (running) return STEP_TO_SECTION[running.id] ?? "";
+    if (hasActiveDeliveryRun(board())) return "delivery";
     let lastDone: any = null;
     for (const s of wf.steps) {
       if (s.status === "completed" || s.status === "failed") lastDone = s;
