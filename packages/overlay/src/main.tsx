@@ -69,6 +69,7 @@ import { MemoryPanel } from "./components/MemoryPanel";
 import { WelcomeToast } from "./components/WelcomeToast";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { CommandPalette } from "./components/CommandPalette";
+import { StartupWorkspaceDialog } from "./components/StartupWorkspaceDialog";
 import { waitForLogDrain, AppLog } from "./utils/log";
 import { teardownApp } from "./services/init";
 import { stopTimers } from "./services/sync";
@@ -859,6 +860,13 @@ const connBadgeEl = document.getElementById("solidConnBadge");
 if (connBadgeEl) {
   render(() => <ConnectionBadge />, connBadgeEl);
 }
+
+// ── Mount: StartupWorkspaceDialog ──
+
+const startupWorkspaceHost = document.createElement("div");
+startupWorkspaceHost.id = "startupWorkspaceHost";
+document.body.appendChild(startupWorkspaceHost);
+render(() => <StartupWorkspaceDialog />, startupWorkspaceHost);
 
 // ── Mount: TaskDirContent + TaskWorkspaceLine ──
 // Reactive replacement for services/meta.ts renderMeta() — both spans now

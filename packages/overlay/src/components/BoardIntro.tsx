@@ -16,6 +16,7 @@
 import { For, Show } from "solid-js";
 import { t } from "../utils/i18n";
 import { settingsStore } from "../store/settings";
+import { browseDirectory } from "../services/workspace";
 
 const MODES = ["workflow", "build"] as const;
 
@@ -58,6 +59,14 @@ export function BoardIntro() {
           <span class="board-intro__cta-body">
             <strong class="board-intro__cta-title">{t("intro.directory_required_title")}</strong>
             <span class="board-intro__cta-text">{t("intro.directory_required_body")}</span>
+            <button
+              type="button"
+              class="board-intro__cta-action"
+              onClick={() => void browseDirectory()}
+              data-testid="board-intro-open-folder"
+            >
+              {t("startup.open_folder")}
+            </button>
           </span>
         </div>
       </Show>

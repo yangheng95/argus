@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "c580b54b9b918e28"
+    "panel_revision": "f17b99860d1c5a9c"
   },
   "about.author_name": "杨恒",
   "about.go_version": "Go 版本",
@@ -15,6 +15,7 @@
   "about.rt_disconnected": "未连接",
   "about.rt_executor": "执行器",
   "about.rt_overlay": "Overlay",
+  "about.rt_pid": "服务 PID",
   "about.rt_server": "服务地址",
   "about.rt_tasks": "任务数",
   "about.rt_unavailable": "不可用",
@@ -116,7 +117,14 @@
   "agent_models.warning_no_default_suffix": "—— 必须在此处选择默认模型，或在下方为每个 Agent 单独覆盖。",
   "common.retrying": "重试中…",
   "intro.directory_required_title": "请先选择工作目录",
-  "intro.directory_required_body": "点击上方标题栏的文件夹图标，选择一个项目目录 — OpenCorvus 将在该目录中读写文件。设置工作目录后输入区会自动激活。",
+  "intro.directory_required_body": "使用启动项目选择器，或从「工作区 > 打开文件夹」选择 OpenCorvus 读写文件的目录。设置后输入区会自动激活。",
+  "startup.project_kicker": "项目入口",
+  "startup.project_title": "选择要工作的项目",
+  "startup.project_body": "OpenCorvus 会在所选目录中读写文件、运行测试并保存任务历史。开始前请选择最近项目，或打开一个文件夹。",
+  "startup.open_folder": "打开文件夹",
+  "startup.create_folder": "新建文件夹",
+  "startup.recent_projects": "最近项目",
+  "startup.continue_current": "继续当前项目",
   "task.search_placeholder": "搜索任务…",
   "task.search_empty": "未找到匹配 \"{{query}}\" 的任务",
   "cmdk.placeholder": "输入命令 — 任务、设置、主题、语言…",
@@ -623,6 +631,8 @@
   "titlebar.connection_diagnostics": "连接诊断",
   "titlebar.connection.offline": "离线",
   "titlebar.connection.online": "在线",
+  "titlebar.connection.pid": "PID",
+  "titlebar.connection.port": "端口",
   "titlebar.devtools": "开发者工具",
   "titlebar.logs": "日志",
   "titlebar.maximize": "最大化",

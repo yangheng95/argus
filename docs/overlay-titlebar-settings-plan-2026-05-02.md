@@ -24,6 +24,18 @@ Status as of 2026-05-02: implemented and pushed on `codex/opencode-upstream-infr
 - Browser tests now run against the Vite `dist-vite` bundle through `packages/overlay/test/overlay-dist.ts`, so runtime import and hydration errors surface in the harness.
 - Residual sweep on 2026-05-02 removed dead `dom.ts` refs for deleted settings, Skill/MCP, and channel dialogs, and added regression coverage that Tools opens the real Skills/MCP tab.
 
+## 2026-05-02 Follow-Up: Left Titlebar Gateway
+
+Status: implemented in this session.
+
+- The titlebar menu mount moved from the right action cluster into the left product cluster, next to the OpenCorvus mark. Window controls remain the only persistent right-edge controls.
+- The brand remains the left anchor; narrow viewports collapse the visible brand text while keeping the logo, connection status dot, setup CTA, menu triggers, and window controls inside bounds.
+- Connection port and PID are no longer rendered as visible titlebar copy. They remain in the connection badge `title` and `aria-label`, so the chrome stays quiet while hover/accessibility text still carries runtime diagnostics.
+- Help > Connection Diagnostics routes to the About runtime grid, where the server URL and PID are visible without adding persistent titlebar text.
+- Cold start now uses a single startup project picker backed by `settingsStore.directory` and the existing `services/workspace.ts` directory switching path. The picker offers recent projects, open folder, and new folder without creating a second project state source.
+- The old BoardIntro directory warning now points to the same workspace selection flow and exposes an open-folder action that calls `browseDirectory()`.
+- Browser coverage now asserts left-side menu geometry, no visible port text, hover runtime text, compact setup CTA bounds, and the no-directory startup picker.
+
 ## Target
 
 Move scattered configuration into a PyCharm / VS Code style titlebar command area, with the top-left titlebar as the only configuration entry point.

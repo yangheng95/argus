@@ -114,6 +114,7 @@ export interface AppState {
 const DEFAULT_APP_STATE: AppState = {
   connectionStatus: "offline",
   connected: false,
+  serverPid: undefined,
   theme: "dark",
   locale: "en-US",
   zoom: 1,

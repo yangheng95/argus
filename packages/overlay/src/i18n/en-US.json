@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "c580b54b9b918e28"
+    "panel_revision": "f17b99860d1c5a9c"
   },
   "about.author_name": "Yang, Heng",
   "about.go_version": "Go Version",
@@ -15,6 +15,7 @@
   "about.rt_disconnected": "Disconnected",
   "about.rt_executor": "Executor",
   "about.rt_overlay": "Overlay",
+  "about.rt_pid": "Server PID",
   "about.rt_server": "Server",
   "about.rt_tasks": "Tasks",
   "about.rt_unavailable": "Unavailable",
@@ -116,7 +117,14 @@
   "agent_models.warning_no_default_suffix": "on dispatch until a model is chosen here (or each agent is individually overridden below).",
   "common.retrying": "Retrying…",
   "intro.directory_required_title": "Choose a working directory to begin",
-  "intro.directory_required_body": "Click the folder icon in the title bar above to pick a project — that's where OpenCorvus will read and write files. The composer activates once a directory is set.",
+  "intro.directory_required_body": "Use the startup project picker or Workspace > Open Folder to choose where OpenCorvus will read and write files. The composer activates once a directory is set.",
+  "startup.project_kicker": "Project gateway",
+  "startup.project_title": "Choose a project to work in",
+  "startup.project_body": "OpenCorvus reads, edits, tests, and stores task history inside the selected folder. Pick a recent project or open a folder before starting work.",
+  "startup.open_folder": "Open Folder",
+  "startup.create_folder": "New Folder",
+  "startup.recent_projects": "Recent Projects",
+  "startup.continue_current": "Continue Current Project",
   "task.search_placeholder": "Search tasks…",
   "task.search_empty": "No tasks match \"{{query}}\"",
   "cmdk.placeholder": "Type a command — task, settings, theme, locale…",
@@ -623,6 +631,8 @@
   "titlebar.connection_diagnostics": "Connection Diagnostics",
   "titlebar.connection.offline": "Offline",
   "titlebar.connection.online": "Online",
+  "titlebar.connection.pid": "PID",
+  "titlebar.connection.port": "Port",
   "titlebar.devtools": "DevTools",
   "titlebar.logs": "Logs",
   "titlebar.maximize": "Maximize",

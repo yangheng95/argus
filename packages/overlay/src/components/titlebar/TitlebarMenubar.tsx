@@ -109,6 +109,10 @@ function MenuRange(props: {
   testid?: string;
   onChange: (value: number) => void | Promise<void>;
 }) {
+  function commit(event: Event) {
+    void props.onChange(Number((event.target as HTMLInputElement).value));
+  }
+
   return (
     <label class="titlebar-menubar-range">
       <span class="titlebar-menubar-range-copy">
@@ -126,7 +130,8 @@ function MenuRange(props: {
         disabled={props.disabled}
         aria-label={props.label}
         data-testid={props.testid}
-        onChange={(event) => void props.onChange(Number((event.currentTarget as HTMLInputElement).value))}
+        onInput={commit}
+        onChange={commit}
       />
     </label>
   );
@@ -481,7 +486,9 @@ export function TitlebarMenubar(props: TitlebarMenubarProps) {
                   <MenuGroup title={t("titlebar.menu.help")}>
                     <MenuItem onClick={() => { props.onOpenLog(); closeMenu(); }} testid="titlebar-help-logs">{t("titlebar.logs")}</MenuItem>
                     <MenuItem onClick={() => openConfig("about")}>{t("about.title")}</MenuItem>
-                    <MenuItem onClick={() => openConfig("general")}>{t("titlebar.connection_diagnostics")}</MenuItem>
+                    <MenuItem onClick={() => openConfig("about")} testid="titlebar-connection-diagnostics">
+                      {t("titlebar.connection_diagnostics")}
+                    </MenuItem>
                   </MenuGroup>
                 </Show>
               </div>
