@@ -77,9 +77,9 @@ export function ArchitectPanel(props: ArchitectPanelProps) {
                       <span class="arch-decision-goal">{decision.goalID}</span>
                     </Show>
                   </div>
-                  <div class="arch-decision-value">{decision.value}</div>
+                  <div class="arch-decision-value md-content" innerHTML={renderMarkdown(decision.value)} />
                   <Show when={decision.reason}>
-                    <div class="arch-decision-reason">{decision.reason}</div>
+                    <div class="arch-decision-reason md-content" innerHTML={renderMarkdown(decision.reason)} />
                   </Show>
                 </article>
               )}

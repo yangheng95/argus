@@ -208,9 +208,13 @@ test("overlay controls trigger without runtime failures", async () => {
           key: index % 2 === 0 ? "shared_type" : "directory_blueprint",
           value: index === 6
             ? "Seventh decision remains visible instead of being hidden behind a truncated architect card."
+            : index === 0
+              ? "Conversation records use **one persisted schema** for messages, attachments, and `streaming cursors`."
             : "Conversation records use one persisted schema for messages, attachments, and streaming cursors.",
           reason: index === 6
             ? "Large decision logs still need inspectable value and reason text."
+            : index === 0
+              ? "- Keeps resume and export flows from inventing incompatible message shapes."
             : "Keeps resume and export flows from inventing incompatible message shapes.",
           goalID: index === 0 ? null : `goal-${index}`,
         })),
@@ -603,6 +607,9 @@ test("overlay controls trigger without runtime failures", async () => {
       }
       if (path === "/global/tasks") return send(data.tasks)
       if (path === "/executor") return send(data.executors)
+      if (path === "/preview/frontend") {
+        return send({ url: null, source: null, port: null, checkedPorts: [], reason: "not_detected" })
+      }
       if (path === "/path") return send({ ...data.path, directory: projectDir(url) })
       if (path === "/vcs") return send(data.vcs)
       if (path === "/provider") return send(data.provider)
@@ -874,6 +881,9 @@ test("overlay controls trigger without runtime failures", async () => {
     if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
     errors.push(`requestfailed: ${request.url()}`)
   })
+  page.on("response", (response) => {
+    if (response.status() === 404) errors.push(`response404: ${response.url()}`)
+  })
   page.on("console", (msg) => {
     if (msg.type() === "error") errors.push(`console: ${msg.text()}`)
   })
@@ -1042,6 +1052,7 @@ test("overlay controls trigger without runtime failures", async () => {
         .map((item) => item.textContent || "")
         .join("\n")
       const archSummary = document.querySelector<HTMLElement>(".arch-detail")
+      const firstDecision = document.querySelector<HTMLElement>(".arch-decision")
       const reqRect = req?.getBoundingClientRect()
       const descRect = reqDesc?.getBoundingClientRect()
       return {
@@ -1050,6 +1061,9 @@ test("overlay controls trigger without runtime failures", async () => {
         descWidth: descRect?.width || 0,
         itemWidth: reqRect?.width || 1,
         archDecisionText,
+        archDecisionStrong: firstDecision?.querySelector(".arch-decision-value strong")?.textContent || "",
+        archDecisionCode: firstDecision?.querySelector(".arch-decision-value code")?.textContent || "",
+        archDecisionReasonList: firstDecision?.querySelector(".arch-decision-reason ul li")?.textContent || "",
         archSummaryText: archSummary?.textContent || "",
       }
     })
@@ -1060,6 +1074,9 @@ test("overlay controls trigger without runtime failures", async () => {
     expect(workflowPanels.archDecisionText).toContain("Keeps resume and export flows")
     expect(workflowPanels.archDecisionText).toContain("Seventh decision remains visible")
     expect(workflowPanels.archDecisionText).toContain("Large decision logs still need inspectable")
+    expect(workflowPanels.archDecisionStrong).toBe("one persisted schema")
+    expect(workflowPanels.archDecisionCode).toBe("streaming cursors")
+    expect(workflowPanels.archDecisionReasonList).toContain("Keeps resume and export flows")
     expect(workflowPanels.archSummaryText).not.toContain("architect decisions across")
     await page.waitForSelector(".change-row")
     await page.waitForSelector(".interaction-card[data-id='interaction-1'] [data-action='once']")
