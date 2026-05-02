@@ -9797,19 +9797,42 @@ body[data-resizing="true"] * {
   min-width: 0;
 }
 
+/* Single source after iter25. Was three solo top-level rules
+   — a chromed canonical here (10px radius, align-items
+   center, gap 4px, padding 4/6) plus two later overrides at
+   ~12388 (align-items stretch, gap 6px, padding 4px,
+   var(--radius) ≈ 10px, 1px transparent border,
+   `background: transparent !important`) and ~12822
+   (position relative redundant, min-height 54px, padding
+   5/6/5/9). The canonical lied about padding (4/6 in source,
+   5/6/5/9 rendered) and gap (4px in source, 6px rendered).
+
+   After iter15 / iter16 made the surrounding `.sidebar`
+   shell flat (border-radius: 0), the task rows still
+   rendered with 10px rounded corners — pill-on-flat.
+   Border-radius drops to 0 so the row reads as a flush
+   slice of the flat sidebar.
+
+   Pseudo-state rules (`:hover`, `:focus-within`, drag
+   states, `[data-active="true"]`) and theme overrides are
+   untouched in this iter — those carry distinct visual
+   states; their own dual-source duplicates (e.g. two
+   `:hover` rules at lines ~10134 and ~12397) are scoped
+   to a follow-up. */
 .task-row-mini {
   display: flex;
-  align-items: center;
-  gap: calc(4px * var(--ui-scale));
+  align-items: stretch;
+  gap: calc(6px * var(--ui-scale));
   flex: 0 0 auto;
-  padding: calc(4px * var(--ui-scale)) calc(6px * var(--ui-scale));
-  border: none;
-  border-radius: calc(10px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale));
+  border: 1px solid transparent;
+  border-radius: 0;
   position: relative;
   transition: background 120ms;
   overflow: hidden;
   background: transparent;
   box-shadow: none;
+  min-height: calc(48px * var(--ui-scale));
 }
 
 .task-row-mini[data-draggable="true"] {
@@ -12385,14 +12408,9 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   padding-left: calc(6px * var(--ui-scale));
 }
 
-.task-row-mini {
-  align-items: stretch;
-  gap: calc(6px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale));
-  border-radius: var(--radius);
-  border: 1px solid transparent;
-  background: transparent !important;
-}
+/* iter25: `.task-row-mini` base override here was folded into
+   the canonical near line ~9800 (flat border-radius: 0,
+   align-items stretch, gap 6px, transparent border + bg). */
 
 .task-row-mini:hover,
 .task-row-mini:focus-within {
@@ -12819,11 +12837,9 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-inset)) !important;
 }
 
-.task-row-mini {
-  position: relative;
-  min-height: calc(54px * var(--ui-scale));
-  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(5px * var(--ui-scale)) calc(9px * var(--ui-scale));
-}
+/* iter25: `.task-row-mini` late override (min-height + the
+   final padding values) folded into the canonical near line
+   ~9800. */
 
 .task-row-mini::before {
   content: "";
@@ -13332,10 +13348,14 @@ body[data-theme="light"] .executor-chip {
   color: var(--text-soft);
 }
 
-body[data-theme="light"] .task-row-mini {
-  min-height: calc(48px * var(--ui-scale));
-  border-radius: calc(10px * var(--ui-scale));
-}
+/* iter25: light-theme override used to set min-height + 10px
+   border-radius — both belonged in the canonical (sizing
+   doesn't change between themes; radius should stay 0 for the
+   flat sidebar). Folded into the canonical near line ~9800
+   (min-height now 48px matching the user-visible value, radius
+   0 matching the flat shell). The light-theme override is
+   gone entirely — none of its declarations were
+   theme-specific. */
 
 body[data-theme="light"] .task-row-mini:hover,
 body[data-theme="light"] .task-row-mini:focus-within {
@@ -13617,10 +13637,9 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .executor-chip {
   color: var(--text-soft);
 }
 
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-mini {
-  min-height: calc(48px * var(--ui-scale));
-  border-radius: calc(10px * var(--ui-scale));
-}
+/* iter25: dark/vscode-dark override mirror — folded into
+   canonical for the same reason as the light override
+   above. */
 
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-mini:hover,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .task-row-mini:focus-within {
