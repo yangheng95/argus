@@ -7,6 +7,7 @@ import {
   announcedLocalUrlFromOutput,
   cleanupIsolatedRenderWorkspace,
   createIsolatedRenderWorkspace,
+  renderWorkspaceCommandFailureMessage,
   resolveProjectLaunchScript,
 } from "../../src/delivery/checks/visual"
 
@@ -106,6 +107,22 @@ test("announcedLocalUrlFromOutput refuses localhost URLs without an explicit por
 test("announcedLocalUrlFromOutput only normalizes wildcard host", () => {
   expect(announcedLocalUrlFromOutput("Local: http://0.0.0.0:4180/")).toBe("http://127.0.0.1:4180")
   expect(announcedLocalUrlFromOutput("Local: http://127.0.0.1:4180/")).toBe("http://127.0.0.1:4180")
+})
+
+test("render install timeout message preserves stderr tail", () => {
+  const stderr = `${"x".repeat(2_200)}\nerror: package registry timeout while resolving puppeteer-core\n`
+  const message = renderWorkspaceCommandFailureMessage({
+    command: "bun install",
+    projectRoot: "C:/tmp/app",
+    error: new Error("ETIMEDOUT"),
+    stdout: "installing dependencies\n",
+    stderr,
+  })
+
+  expect(message).toContain("ETIMEDOUT")
+  expect(message).toContain("stderr:")
+  expect(message).toContain("package registry timeout while resolving puppeteer-core")
+  expect(message.length).toBeLessThan(2_300)
 })
 
 test("isolated render cleanup kills Windows processes referencing the workspace", async () => {

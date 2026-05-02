@@ -157,13 +157,6 @@ export async function detectDeliverySurfaces(input: {
   if (clientFiles.length > 0) {
     addEvidence(evidence, surfaces, "client_contract", "client/API contract files detected", ...fileRefs(clientFiles))
   }
-  if ((input.goals ?? []).some((goal) => (goal.imports?.length ?? 0) > 0 || (goal.exports?.length ?? 0) > 0)) {
-    addEvidence(evidence, surfaces, "client_contract", "goal import/export contracts detected", {
-      kind: "runtime_probe",
-      ref: "goal contracts contain imports or exports",
-    })
-  }
-
   const testFiles = allFileRefs.filter((file) =>
     /(^|\/)(test|tests|e2e|integration|regression)\//.test(file)
     || /\.(spec|test|e2e)\.[cm]?[jt]sx?$/.test(file)

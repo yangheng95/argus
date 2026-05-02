@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { arbitrateDeliveryGate, arbitrateDeliveryVerdict } from "../../src/delivery/arbiter"
-import { formatDeliveryManifestFailureDetails, type DeliveryEvidenceManifest } from "../../src/delivery/manifest"
+import {
+  formatDeliveryManifestFailureDetails,
+  repeatedDeliveryFailureSignatures,
+  type DeliveryEvidenceManifest,
+} from "../../src/delivery/manifest"
 import { affectedGoalIDs, type DeliveryVerdictType } from "../../src/delivery/verdict"
 
 describe("delivery arbiter", () => {
@@ -153,6 +157,21 @@ describe("delivery arbiter", () => {
     expect(formatDeliveryManifestFailureDetails(manifestWithFailedBuildCheck())).toEqual([
       "[check] check:build Build status=failed exit=1 command=bun run build: tsc exited with code 1",
     ])
+  })
+
+  test("detects repeated specialist failure signatures", () => {
+    const current = manifestWithSpecialistClientContractFailure(20)
+    const previous = manifestWithSpecialistClientContractFailure(10)
+
+    const result = repeatedDeliveryFailureSignatures({
+      current,
+      history: [previous],
+    })
+
+    expect(result.repeated).toBe(true)
+    expect(result.signatures).toContain(
+      "specialist:client_contract:evidence_quality:Client contract surface was selected without client file or endpoint evidence.",
+    )
   })
 
   test("final arbiter appends manifest review evidence without changing accepted verdict artifact shape", () => {
@@ -397,6 +416,50 @@ function manifestWithFailedBuildCheck(): DeliveryEvidenceManifest {
       failedCoverageIds: [],
       failedRuntimeFlowIds: [],
       failedReviewIds: [],
+    },
+  }
+}
+
+function manifestWithSpecialistClientContractFailure(timeCreated: number): DeliveryEvidenceManifest {
+  return {
+    ...baseManifest(),
+    timeCreated,
+    reviewEvidence: [{
+      id: "specialist:client_contract",
+      name: "Specialist Review: client_contract",
+      status: "failed",
+      evidence: ["blocking:evidence_quality: Client contract surface was selected without client file or endpoint evidence."],
+    }],
+    specialistReviews: [{
+      id: `artifact_client_contract_${timeCreated}`,
+      taskId: "tsk_arbiter",
+      runId: "run_arbiter",
+      deliveryId: "dlv_arbiter",
+      reviewer: "client_contract",
+      executionStatus: "completed",
+      summary: "Client contract review found 1 issue(s).",
+      findings: [{
+        proposedSeverity: "blocking",
+        category: "evidence_quality",
+        claim: "Client contract surface was selected without client file or endpoint evidence.",
+        evidence: [{
+          kind: "log",
+          ref: "artifact_surface",
+          excerpt: "client_contract selected but client inventory is empty",
+        }],
+        affectedRequirementIDs: [],
+      }],
+      evidenceRefs: ["surface:artifact_surface"],
+      reviewedSurfaces: ["client_contract"],
+      timeCreated,
+    }],
+    finalGate: {
+      status: "failed",
+      summary: "Delivery evidence gate failed 0 required check(s), 0 coverage item(s), 0 runtime flow(s), and 1 review item(s).",
+      failedCheckIds: [],
+      failedCoverageIds: [],
+      failedRuntimeFlowIds: [],
+      failedReviewIds: ["specialist:client_contract"],
     },
   }
 }
