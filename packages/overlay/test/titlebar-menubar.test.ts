@@ -544,6 +544,35 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     })
     expect(controlsWithBorders).toEqual([])
 
+    const looseRightPanelSpacing = await page.evaluate(() => {
+      const checks = [
+        { selector: ".sections-header", props: ["height", "paddingLeft", "paddingRight"], max: 32 },
+        { selector: ".sections-stack", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 5 },
+        { selector: ".right-panel-tablist", props: ["columnGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 3 },
+        { selector: ".right-panel-tab", props: ["height", "paddingLeft", "paddingRight"], max: 24 },
+        { selector: ".board-intro", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 7 },
+        { selector: ".board-intro__head", props: ["rowGap"], max: 3 },
+        { selector: ".board-intro__section", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 7 },
+        { selector: ".board-intro__mode", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 7 },
+        { selector: ".board-intro__agent", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 7 },
+        { selector: ".delivery-panel", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 7 },
+        { selector: ".section-body > .empty-hint", props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"], max: 7 },
+      ]
+      return checks.flatMap(({ selector, props, max }) => {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) return []
+        const style = getComputedStyle(node)
+        return props.flatMap((prop) => {
+          const valueText = style[prop as keyof CSSStyleDeclaration] as string
+          const value = Number.parseFloat(valueText)
+          return Number.isFinite(value) && value <= max
+            ? []
+            : [{ selector, prop, value: valueText, max }]
+        })
+      })
+    })
+    expect(looseRightPanelSpacing).toEqual([])
+
     const rightDrag = await page.evaluate(() => {
       const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
       const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
