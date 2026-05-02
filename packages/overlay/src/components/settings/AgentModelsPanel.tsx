@@ -27,6 +27,7 @@ import {
   type AgentInfo,
   type ProvidersPayload,
 } from "./agent-models-data";
+import { Button } from "../ui/Button";
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
@@ -268,14 +269,16 @@ export default function AgentModelsPanel() {
       <div class="config-panel-group">
         <div class="config-panel-group-head">
           <h4 class="config-panel-group-title">Agent Models</h4>
-          <button
+          <Button
             type="button"
-            class="btn btn-ghost mini"
+            variant="ghost"
+            size="sm"
+            tone="neutral"
             onClick={handleRefreshHexin}
             disabled={refreshing()}
           >
             {refreshing() ? t("agent_models.refreshing") : t("agent_models.refresh_hexin")}
-          </button>
+          </Button>
         </div>
         <p class="agent-models-info">
           {t("agent_models.intro")}
@@ -298,14 +301,16 @@ export default function AgentModelsPanel() {
             <div class="agent-models-error-msg">
               {t("agent_models.load_failed", { error: String((data.error as any)?.message ?? data.error) })}
             </div>
-            <button
+            <Button
               type="button"
-              class="btn btn-ghost mini"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
               onClick={() => setRefreshToken((x) => x + 1)}
               disabled={data.loading}
             >
               {data.loading ? t("common.retrying") : t("common.retry")}
-            </button>
+            </Button>
           </div>
         </Show>
 
