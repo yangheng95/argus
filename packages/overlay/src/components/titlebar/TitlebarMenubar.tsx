@@ -55,17 +55,13 @@ function providerLabel(): string {
   return model;
 }
 
-function configuredChannelCount(): number {
-  return Array.isArray(appStore.channels)
-    ? appStore.channels.filter((channel: any) => channel?.status === "configured").length
-    : 0;
-}
-
-function hasProviderAuthSetup(): boolean {
-  const auth = appStore.providerAuth;
-  if (!auth || typeof auth !== "object" || Array.isArray(auth)) return false;
-  return Object.values(auth).some((methods) => Array.isArray(methods) && methods.length > 0);
-}
+/* iter42 dropped `configuredChannelCount()` and
+   `hasProviderAuthSetup()` — both were only consumed by the
+   removed Channels status chip + the Setup CTA in
+   TitlebarStatusCluster. After the chips are gone (per user
+   feedback), the helpers have no remaining consumers. Both
+   states are still surfaced inside the settings dialog
+   (Channels panel + Providers panel) where they belong. */
 
 function activeTaskLabel(): string {
   const task = (boardStore.board as any)?.task;
@@ -146,48 +142,16 @@ function MenuRange(props: {
 }
 
 export function TitlebarStatusCluster(props: { onOpenLog: () => void }) {
-  const needsSetup = createMemo(() => appStore.connectionStatus !== "online" || !projectModel());
-  const setupTarget = createMemo(() => {
-    if (appStore.connectionStatus !== "online") return "general";
-    if (hasProviderAuthSetup() && !Array.isArray(appStore.providerCatalog?.connected)) return "providers";
-    if (hasProviderAuthSetup() && appStore.providerCatalog.connected.length === 0) return "providers";
-    return "agent-models";
-  });
+  // iter42: user feedback (2026-05-03) "标题栏的 model 和 channel
+  // 不要再显示了". The Model + Channels chips and the conditional
+  // Setup CTA they fed are removed. Model status now lives ONLY in
+  // the composer chip (iter35/iter41) where it's contextual to the
+  // outgoing message. Channel status lives ONLY inside the Tools /
+  // Channels menu and the settings dialog. The cluster keeps the
+  // Logs icon button — that's a peripheral utility, not a status
+  // indicator, and it has no other entry point on the titlebar.
   return (
     <div class="titlebar-status-cluster" data-no-drag="true">
-      <button
-        type="button"
-        class="titlebar-status-chip"
-        title={providerLabel()}
-        onClick={() => openConfigDialog("agent-models")}
-        data-testid="titlebar-model-status"
-      >
-        <span class="titlebar-status-label">{t("titlebar.model")}</span>
-        <span class="titlebar-status-value">{providerLabel()}</span>
-      </button>
-      <button
-        type="button"
-        class="titlebar-status-chip"
-        onClick={() => openConfigDialog("channel")}
-        data-testid="titlebar-channel-status"
-      >
-        <span class="titlebar-status-label">{t("channel.channels")}</span>
-        <span class="titlebar-status-value">
-          {configuredChannelCount() > 0
-            ? t("channel.configured_count", { count: configuredChannelCount() })
-            : t("channel.setup_needed")}
-        </span>
-      </button>
-      <Show when={needsSetup()}>
-        <button
-          type="button"
-          class="titlebar-setup-cta"
-          onClick={() => openConfigDialog(setupTarget())}
-          data-testid="titlebar-setup-cta"
-        >
-          {t("titlebar.setup")}
-        </button>
-      </Show>
       <button
         type="button"
         class="titlebar-status-icon"
