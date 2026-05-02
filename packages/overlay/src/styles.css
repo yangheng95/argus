@@ -14296,3 +14296,398 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   border-top: 0 !important;
   border-bottom: 0 !important;
 }
+
+/* Animated workflow stage */
+body[data-theme="light"] .agent-workflow-panel,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel {
+  isolation: isolate;
+  gap: 0;
+  padding: 0;
+  background:
+    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--accent) 16%, transparent) 0 18%, transparent 35%),
+    radial-gradient(circle at 86% 22%, color-mix(in srgb, var(--good) 12%, transparent) 0 14%, transparent 32%),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-inset) 94%, transparent), color-mix(in srgb, var(--surface) 88%, transparent));
+}
+
+body[data-theme="light"] .agent-workflow-panel::before,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.42;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--border) 42%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--border) 34%, transparent) 1px, transparent 1px);
+  background-size: calc(26px * var(--ui-scale)) calc(26px * var(--ui-scale));
+  mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 88%, transparent);
+}
+
+body[data-theme="light"] .agent-workflow-toolbar,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-toolbar {
+  min-height: calc(46px * var(--ui-scale)) !important;
+  padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale)) !important;
+  border: 0 !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface-strong) 90%, transparent), color-mix(in srgb, var(--surface) 68%, transparent)),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 28%, transparent), color-mix(in srgb, var(--good) 20%, transparent));
+  box-shadow: 0 calc(10px * var(--ui-scale)) calc(28px * var(--ui-scale)) rgba(0, 0, 0, 0.12) !important;
+}
+
+body[data-theme="light"] .agent-workflow-heading,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-heading {
+  gap: calc(3px * var(--ui-scale));
+}
+
+body[data-theme="light"] .agent-workflow-title,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-title {
+  font-size: var(--ui-font-body);
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+body[data-theme="light"] .agent-workflow-count,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-count {
+  color: var(--text-soft);
+}
+
+body[data-theme="light"] .agent-workflow-refresh,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh {
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)) !important;
+  border-radius: calc(999px * var(--ui-scale)) !important;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong)) !important;
+  box-shadow: 0 calc(5px * var(--ui-scale)) calc(14px * var(--ui-scale)) color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  color: var(--text-strong);
+}
+
+body[data-theme="light"] .agent-workflow-refresh:hover,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-refresh:hover {
+  transform: translateY(calc(-1px * var(--ui-scale)));
+}
+
+body[data-theme="light"] .agent-workflow-canvas,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-canvas {
+  display: block;
+  padding: calc(18px * var(--ui-scale)) calc(14px * var(--ui-scale)) calc(38px * var(--ui-scale)) calc(10px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .agent-workflow-row,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-row {
+  --lane-shift: calc(var(--workflow-depth, 0) * 20px * var(--ui-scale));
+  grid-template-columns: calc(34px * var(--ui-scale)) minmax(0, 1fr);
+  gap: calc(10px * var(--ui-scale));
+  min-height: calc(104px * var(--ui-scale));
+  margin-left: var(--lane-shift);
+  margin-bottom: calc(14px * var(--ui-scale));
+  padding-left: 0;
+  animation: workflow-rise 420ms ease both;
+}
+
+body[data-theme="light"] .agent-workflow-rail,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-rail {
+  position: relative;
+  display: grid;
+  place-items: start center;
+  width: auto;
+  min-height: calc(104px * var(--ui-scale));
+  background: transparent;
+}
+
+.agent-workflow-orb {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: calc(30px * var(--ui-scale));
+  height: calc(30px * var(--ui-scale));
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--surface-strong) 86%, white), color-mix(in srgb, var(--accent) 20%, var(--surface)) 62%),
+    var(--surface);
+  color: var(--text-strong);
+  font-size: var(--ui-font-meta);
+  font-weight: 760;
+  box-shadow:
+    0 0 0 calc(5px * var(--ui-scale)) color-mix(in srgb, var(--accent) 9%, transparent),
+    0 calc(8px * var(--ui-scale)) calc(22px * var(--ui-scale)) rgba(0, 0, 0, 0.18);
+}
+
+.agent-workflow-orb::after {
+  content: "";
+  position: absolute;
+  inset: calc(-6px * var(--ui-scale));
+  border-radius: inherit;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
+  animation: workflow-pulse 2.4s ease-out infinite;
+}
+
+.agent-workflow-beam {
+  position: absolute;
+  top: calc(18px * var(--ui-scale));
+  width: calc(28px * var(--ui-scale));
+  height: calc(108px * var(--ui-scale));
+  overflow: visible;
+}
+
+.agent-workflow-beam path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 2.4;
+}
+
+.agent-workflow-beam-base {
+  stroke: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.agent-workflow-beam-flow {
+  stroke: color-mix(in srgb, var(--accent) 72%, var(--good));
+  stroke-dasharray: 9 14;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 42%, transparent));
+  animation: workflow-flow 1.65s linear infinite;
+}
+
+body[data-theme="light"] .agent-workflow-stack,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-stack {
+  position: relative;
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  padding-bottom: calc(var(--stack-pad, 0) + 8px);
+  perspective: calc(700px * var(--ui-scale));
+}
+
+body[data-theme="light"] .agent-workflow-card,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card {
+  --workflow-tone: var(--accent);
+  position: relative;
+  min-height: calc(94px * var(--ui-scale)) !important;
+  width: calc(100% - var(--stack-offset, 0));
+  gap: calc(7px * var(--ui-scale)) !important;
+  padding: calc(11px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(10px * var(--ui-scale)) !important;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--workflow-tone) 28%, var(--border)) !important;
+  border-radius: calc(10px * var(--ui-scale)) !important;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--workflow-tone) 17%, transparent), transparent 42%),
+    linear-gradient(160deg, color-mix(in srgb, var(--surface-strong) 92%, transparent), color-mix(in srgb, var(--surface) 78%, transparent));
+  box-shadow:
+    calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 18%, transparent),
+    0 calc(12px * var(--ui-scale)) calc(28px * var(--ui-scale)) rgba(0, 0, 0, 0.16) !important;
+  transform: translate(var(--stack-offset, 0), var(--stack-offset, 0)) rotateX(calc(var(--stack-index, 0) * -1deg));
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, filter 180ms ease;
+}
+
+body[data-theme="light"] .agent-workflow-card[data-status="completed"],
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="completed"] {
+  --workflow-tone: var(--good);
+}
+
+body[data-theme="light"] .agent-workflow-card[data-status="error"],
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="error"] {
+  --workflow-tone: var(--bad);
+}
+
+body[data-theme="light"] .agent-workflow-card[data-status="idle"],
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="idle"] {
+  --workflow-tone: var(--warn);
+}
+
+body[data-theme="light"] .agent-workflow-card[data-status="running"],
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card[data-status="running"] {
+  animation: workflow-running 2.6s ease-in-out infinite;
+}
+
+body[data-theme="light"] .agent-workflow-card::before,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 0 24%, color-mix(in srgb, var(--workflow-tone) 24%, transparent) 40%, transparent 58% 100%);
+  transform: translateX(-110%);
+  animation: workflow-sheen 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.agent-workflow-card-aura {
+  position: absolute;
+  inset: auto calc(-24px * var(--ui-scale)) calc(-34px * var(--ui-scale)) auto;
+  width: calc(92px * var(--ui-scale));
+  height: calc(92px * var(--ui-scale));
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--workflow-tone) 28%, transparent), transparent 68%);
+  filter: blur(calc(8px * var(--ui-scale)));
+  pointer-events: none;
+}
+
+body[data-theme="light"] .agent-workflow-card:hover,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card:hover,
+body[data-theme="light"] .agent-workflow-card:focus-visible,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card:focus-visible {
+  border-color: color-mix(in srgb, var(--workflow-tone) 58%, var(--border)) !important;
+  box-shadow:
+    0 0 0 calc(1px * var(--ui-scale)) color-mix(in srgb, var(--workflow-tone) 24%, transparent),
+    0 calc(18px * var(--ui-scale)) calc(34px * var(--ui-scale)) rgba(0, 0, 0, 0.22) !important;
+  filter: saturate(1.08);
+  transform: translate(calc(var(--stack-offset, 0) + 2px), calc(var(--stack-offset, 0) - 3px)) rotateX(0deg);
+}
+
+.agent-workflow-agent-wrap {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: calc(8px * var(--ui-scale));
+}
+
+.agent-workflow-status-dot {
+  display: inline-grid;
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--workflow-tone) 18%, var(--surface-strong));
+  color: var(--workflow-tone);
+  font-size: var(--ui-font-meta);
+  font-weight: 780;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--workflow-tone) 42%, transparent);
+}
+
+body[data-theme="light"] .agent-workflow-agent,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-agent {
+  font-size: var(--ui-font-small);
+  font-weight: 780;
+}
+
+body[data-theme="light"] .agent-workflow-card-body,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-card-body {
+  min-height: calc(34px * var(--ui-scale));
+  color: var(--text-base);
+  font-size: var(--ui-font-control);
+  line-height: 1.4;
+}
+
+.agent-workflow-session {
+  font-family: var(--mono);
+  color: color-mix(in srgb, var(--workflow-tone) 72%, var(--text-muted));
+}
+
+body[data-theme="light"] .agent-workflow-attempt,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-attempt {
+  border: 1px solid color-mix(in srgb, var(--workflow-tone) 38%, transparent);
+  background: color-mix(in srgb, var(--workflow-tone) 13%, transparent);
+  color: color-mix(in srgb, var(--workflow-tone) 82%, var(--text-strong));
+}
+
+body[data-theme="light"] .agent-workflow-report-popover,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-report-popover {
+  align-items: flex-end;
+  padding: calc(14px * var(--ui-scale));
+  backdrop-filter: blur(calc(10px * var(--ui-scale)));
+  background: color-mix(in srgb, var(--dialog-backdrop) 62%, transparent);
+  animation: workflow-fade 160ms ease both;
+}
+
+body[data-theme="light"] .agent-workflow-report,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-report {
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-radius: calc(14px * var(--ui-scale));
+  background:
+    radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 34%),
+    var(--dialog-bg);
+  box-shadow: 0 calc(24px * var(--ui-scale)) calc(56px * var(--ui-scale)) rgba(0, 0, 0, 0.34);
+  animation: workflow-sheet 220ms cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+body[data-theme="light"] .agent-workflow-report-head,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-report-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border)) !important;
+}
+
+body[data-theme="light"] .agent-workflow-report-section,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-report-section {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent) !important;
+}
+
+@keyframes workflow-flow {
+  to {
+    stroke-dashoffset: -46;
+  }
+}
+
+@keyframes workflow-pulse {
+  0% {
+    transform: scale(0.78);
+    opacity: 0.72;
+  }
+  100% {
+    transform: scale(1.22);
+    opacity: 0;
+  }
+}
+
+@keyframes workflow-rise {
+  from {
+    transform: translateY(calc(10px * var(--ui-scale)));
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes workflow-running {
+  0%, 100% {
+    box-shadow:
+      calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 18%, transparent),
+      0 calc(12px * var(--ui-scale)) calc(28px * var(--ui-scale)) rgba(0, 0, 0, 0.16);
+  }
+  50% {
+    box-shadow:
+      calc(-2px * var(--ui-scale)) calc(2px * var(--ui-scale)) 0 color-mix(in srgb, var(--workflow-tone) 22%, transparent),
+      0 calc(14px * var(--ui-scale)) calc(34px * var(--ui-scale)) color-mix(in srgb, var(--workflow-tone) 22%, rgba(0, 0, 0, 0.16));
+  }
+}
+
+@keyframes workflow-sheen {
+  0%, 46% {
+    transform: translateX(-115%);
+  }
+  68%, 100% {
+    transform: translateX(115%);
+  }
+}
+
+@keyframes workflow-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes workflow-sheet {
+  from {
+    transform: translateY(calc(18px * var(--ui-scale))) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-workflow-row,
+  .agent-workflow-orb::after,
+  .agent-workflow-beam-flow,
+  .agent-workflow-card,
+  .agent-workflow-card::before,
+  .agent-workflow-report-popover,
+  .agent-workflow-report {
+    animation: none !important;
+  }
+}

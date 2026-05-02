@@ -39,6 +39,14 @@ function recordSummary(record: AgentWorkflowRecord): string {
   return record.report?.summary || t("agent_workflow.no_report");
 }
 
+function statusGlyph(status: AgentWorkflowRecord["status"]): string {
+  if (status === "completed") return "ok";
+  if (status === "error") return "!";
+  if (status === "running") return "..";
+  if (status === "skipped") return "-";
+  return "*";
+}
+
 export function AgentWorkflowPanel() {
   const taskID = createMemo(() => boardStore.selectedTaskID || boardStore.board?.task?.id || "");
   const [refreshTick, setRefreshTick] = createSignal(0);
@@ -113,14 +121,22 @@ export function AgentWorkflowPanel() {
 
       <div class="agent-workflow-canvas" role="list">
         <For each={stacks()}>
-          {(stack) => (
+          {(stack, stackIndex) => (
             <div
               class="agent-workflow-row"
               role="listitem"
               style={{ "--workflow-depth": String(Math.min(stack.depth, 6)) }}
               data-stacked={stack.records.length > 1 ? "true" : "false"}
             >
-              <div class="agent-workflow-rail" aria-hidden="true" />
+              <div class="agent-workflow-rail" aria-hidden="true">
+                <span class="agent-workflow-orb">
+                  {String(stackIndex() + 1).padStart(2, "0")}
+                </span>
+                <svg class="agent-workflow-beam" viewBox="0 0 28 104" preserveAspectRatio="none">
+                  <path class="agent-workflow-beam-base" d="M14 0 C14 28 4 30 4 52 C4 74 14 76 14 104" />
+                  <path class="agent-workflow-beam-flow" d="M14 0 C14 28 4 30 4 52 C4 74 14 76 14 104" />
+                </svg>
+              </div>
               <div
                 class="agent-workflow-stack"
                 style={{
@@ -141,15 +157,21 @@ export function AgentWorkflowPanel() {
                       }}
                       onClick={() => setSelected(record)}
                     >
+                      <span class="agent-workflow-card-aura" aria-hidden="true" />
                       <span class="agent-workflow-card-head">
-                        <span class="agent-workflow-agent">{agentStageLabel(record.agentName)}</span>
+                        <span class="agent-workflow-agent-wrap">
+                          <span class="agent-workflow-status-dot" aria-hidden="true">
+                            {statusGlyph(record.status)}
+                          </span>
+                          <span class="agent-workflow-agent">{agentStageLabel(record.agentName)}</span>
+                        </span>
                         <span class="agent-workflow-time">{formatClock(record.startedAt)}</span>
                       </span>
                       <span class="agent-workflow-card-body">
                         {recordSummary(record)}
                       </span>
                       <span class="agent-workflow-card-foot">
-                        <span>{compactSessionID(record.sessionID)}</span>
+                        <span class="agent-workflow-session">{compactSessionID(record.sessionID)}</span>
                         <Show when={record.attempts > 1 || stack.records.length > 1}>
                           <span class="agent-workflow-attempt">
                             {t("agent_workflow.attempt", {

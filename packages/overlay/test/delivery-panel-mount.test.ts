@@ -62,6 +62,18 @@ test("main.tsx mounts AgentWorkflowPanel as a root right-panel tab", async () =>
   expect(main).toContain("<AgentWorkflowPanel");
 });
 
+test("AgentWorkflowPanel renders animated workflow stage primitives, not a flat card list", async () => {
+  const component = await readSrc("src/components/AgentWorkflowPanel.tsx");
+  const css = await readSrc("src/styles.css");
+  expect(component).toContain('class="agent-workflow-orb"');
+  expect(component).toContain('class="agent-workflow-beam"');
+  expect(component).toContain('class="agent-workflow-card-aura"');
+  expect(css).toContain("@keyframes workflow-flow");
+  expect(css).toContain("@keyframes workflow-pulse");
+  expect(css).toContain("@keyframes workflow-sheen");
+  expect(css).toContain("prefers-reduced-motion");
+});
+
 test("DeliveryPanel and DeliveryEvidenceGroup are exported from components/Board.tsx", async () => {
   const board = await readSrc("src/components/Board.tsx");
   expect(board).toMatch(/export\s+function\s+DeliveryPanel/);
