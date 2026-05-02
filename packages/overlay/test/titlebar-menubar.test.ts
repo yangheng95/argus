@@ -518,7 +518,7 @@ test(
           ".btn.mini",
           ".executor-chip",
           ".chat-input",
-          ".chat-toolbar-btn",
+          '[data-ui="chat-toolbar-button"]',
           ".chat-send",
           ".board-intro__cta-action",
         ]
@@ -592,7 +592,7 @@ test(
           ".executor-chip",
           ".right-panel-tablist",
           ".right-panel-tab",
-          ".chat-toolbar-btn",
+          '[data-ui="chat-toolbar-button"]',
           ".chat-send",
           ".conn-banner__action",
           ".board-intro__cta-action",
@@ -712,7 +712,7 @@ test(
           ".executor-chip",
           ".right-panel-tablist",
           ".right-panel-tab",
-          ".chat-toolbar-btn",
+          '[data-ui="chat-toolbar-button"]',
           ".conn-banner__action",
         ]
         const transparent = (value: string) =>

@@ -63,6 +63,11 @@ Progress log:
   the titlebar-specific compact/status behavior. This removes the
   final `titlebar-menubar-trigger` and `titlebar-status-icon` TSX
   callers and drops the aggregate legacy button budget from 75 to 73.
+- 2026-05-03: Chat composer toolbar icons (attach, web search,
+  expand/collapse) now render through `Button`, with
+  `styles/surfaces/composer.css` owning only composer-specific icon
+  sizing and active state. This removes all `chat-toolbar-btn` TSX
+  callers and drops the aggregate legacy button budget from 73 to 70.
 
 Trigger: user feedback (2026-05-03):
 
