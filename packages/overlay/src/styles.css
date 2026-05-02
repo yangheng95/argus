@@ -13386,6 +13386,122 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   margin: 0 !important;
 }
 
+body[data-theme="light"] .titlebar,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .titlebar {
+  gap: calc(2px * var(--ui-scale)) !important;
+  padding: calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(
+  .titlebar-left,
+  .titlebar-brand,
+  .titlebar-nav,
+  .titlebar-nav-group,
+  .titlebar-utility,
+  .titlebar-actions,
+  .titlebar-status-cluster,
+  .titlebar-window-controls,
+  .sidebar-header-actions
+),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
+  .titlebar-left,
+  .titlebar-brand,
+  .titlebar-nav,
+  .titlebar-nav-group,
+  .titlebar-utility,
+  .titlebar-actions,
+  .titlebar-status-cluster,
+  .titlebar-window-controls,
+  .sidebar-header-actions
+) {
+  gap: calc(2px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(
+  .brand-guide,
+  .titlebar-menubar-trigger,
+  .titlebar-status-chip,
+  .titlebar-setup-cta,
+  .sidebar-btn,
+  .sidebar-btn-primary,
+  .sidebar-tool,
+  .task-status,
+  .task-cwd-dropdown,
+  .workspace-toggle,
+  .btn,
+  .btn.mini,
+  .btn-primary,
+  .btn-ghost,
+  .btn-terminate,
+  .executor-chip,
+  .engine-chip,
+  .chat-send,
+  .board-intro__cta-action
+),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
+  .brand-guide,
+  .titlebar-menubar-trigger,
+  .titlebar-status-chip,
+  .titlebar-setup-cta,
+  .sidebar-btn,
+  .sidebar-btn-primary,
+  .sidebar-tool,
+  .task-status,
+  .task-cwd-dropdown,
+  .workspace-toggle,
+  .btn,
+  .btn.mini,
+  .btn-primary,
+  .btn-ghost,
+  .btn-terminate,
+  .executor-chip,
+  .engine-chip,
+  .chat-send,
+  .board-intro__cta-action
+) {
+  gap: calc(2px * var(--ui-scale)) !important;
+  padding-inline: calc(6px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(.titlebar-btn, .titlebar-status-icon, .chat-toolbar-btn),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.titlebar-btn, .titlebar-status-icon, .chat-toolbar-btn) {
+  padding: 0 !important;
+}
+
+body[data-theme="light"] :is(.task-bar, .sidebar-header, .chat-header, .sections-header),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.task-bar, .sidebar-header, .chat-header, .sections-header) {
+  gap: calc(4px * var(--ui-scale)) !important;
+  padding: 0 calc(6px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] :is(.sidebar-toolset, .task-dir-shell, .chat-icon-col, .sections-tabs),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-toolset, .task-dir-shell, .chat-icon-col, .sections-tabs) {
+  gap: calc(2px * var(--ui-scale)) !important;
+  padding: calc(2px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .chat-input,
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) .chat-input {
+  gap: calc(2px * var(--ui-scale)) !important;
+  padding: calc(4px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .task-dir-shell,
+body[data-theme="dark"] .task-dir-shell,
+body[data-theme="vscode-dark"] .task-dir-shell {
+  gap: calc(2px * var(--ui-scale)) !important;
+  padding: calc(2px * var(--ui-scale)) !important;
+  padding-inline: calc(2px * var(--ui-scale)) !important;
+  padding-block: calc(2px * var(--ui-scale)) !important;
+}
+
+body[data-theme="light"] .task-dir-shell.task-cwd-dropdown,
+body[data-theme="dark"] .task-dir-shell.task-cwd-dropdown,
+body[data-theme="vscode-dark"] .task-dir-shell.task-cwd-dropdown {
+  padding-inline: calc(2px * var(--ui-scale)) !important;
+  padding-block: calc(2px * var(--ui-scale)) !important;
+}
+
 body[data-theme="light"] .panel-body,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .panel-body,
 body[data-theme="light"] .workspace-main,
@@ -13417,4 +13533,14 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) .workspace-main {
     border-right: 0;
     border-radius: 0;
   }
+}
+
+.task-dir-shell,
+.sidebar-toolset,
+.chat-icon-col,
+.sections-tabs {
+  gap: calc(2px * var(--ui-scale)) !important;
+  padding: calc(2px * var(--ui-scale)) !important;
+  padding-inline: calc(2px * var(--ui-scale)) !important;
+  padding-block: calc(2px * var(--ui-scale)) !important;
 }
