@@ -66,7 +66,7 @@ function sanitizeTheme(value: any): string {
     text === "vscode-dark" ||
     text === "system"
     ? text
-    : "dark";
+    : "light";
 }
 
 export const MIN_WINDOW_OPACITY = 0.5;
@@ -113,7 +113,7 @@ const DEFAULT_LOCALE = sanitizeLocale(
 
 // ── Defaults ──
 
-export const DEFAULT_THEME = "vscode-dark";
+export const DEFAULT_THEME = "light";
 
 export const DEFAULT_SETTINGS: OverlaySettings = {
   serverUrl: DEFAULT_SERVER,
