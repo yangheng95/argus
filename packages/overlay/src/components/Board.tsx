@@ -276,7 +276,35 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
     () => Number(props.delivery?.evidenceManifest?.iteration ?? 0),
   );
 
+  // iter24: wrap the panel body in `<details class="section">` so
+  // the delivery surface sits under a proper section header
+  // ("Delivery" + verdict-pill badge) and the operator can
+  // collapse it like every other right-panel section. Before
+  // iter24 the panel was a bare `<section>` — no title, no
+  // collapse — directly mounted by main.tsx into
+  // #solidDeliveryMount, which the user reported as
+  // "这个 tab 没有标题且无法折叠" (no title, can't collapse).
   return (
+    <details class="section" data-phase-state={props.delivery ? "active" : undefined} open>
+      <summary class="section-head">
+        <span class="section-icon" aria-hidden="true" innerHTML={SECTION_ICONS.delivery} />
+        <span class="section-title">{t("section.delivery")}</span>
+        <span
+          class="section-badge"
+          data-tone={
+            props.delivery?.verdict === "accepted"
+              ? "good"
+              : props.delivery?.verdict === "rejected"
+                ? "bad"
+                : props.delivery
+                  ? "accent"
+                  : ""
+          }
+        >
+          {props.delivery ? verdictPillLabel(tone()) : ""}
+        </span>
+      </summary>
+    <div class="section-body">
     <Show
       when={props.delivery}
       fallback={
@@ -346,6 +374,8 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
         </Show>
       </section>
     </Show>
+    </div>
+    </details>
   );
 }
 
