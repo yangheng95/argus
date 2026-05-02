@@ -545,6 +545,13 @@ export const TaskMessageInput = z.object({
   source: z.string().optional(),
   user_id: z.string().optional(),
   attachments: TaskAttachmentInput.array().optional(),
+  /** Overlay bridge envelope fields. They identify how a rendered message was
+   *  displayed, not what the operator asked. The task service accepts them so
+   *  replay/resume clients can reuse bridge-stamped message objects, but task
+   *  semantics still come only from `text`, `source`, `user_id`, and
+   *  `attachments`. */
+  resolvedRole: z.string().optional(),
+  channel: z.string().optional(),
 })
 
 export const InjectMessageInput = z.object({

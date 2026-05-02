@@ -28,3 +28,10 @@ User messages are real conversation events. On any task row, the system must:
 4. Dispatch the same task loop with the operator message event.
 
 No code path may require manual retry before accepting a follow-up message.
+
+## Request Envelope
+
+Resume clients may hold bridge-stamped message objects that include
+`resolvedRole` and `channel`. These fields are accepted by the task message
+request schema as envelope metadata only. They are not task instructions and do
+not replace the semantic fields used by the service.

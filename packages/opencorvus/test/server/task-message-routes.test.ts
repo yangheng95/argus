@@ -152,6 +152,61 @@ describe("task message routes", () => {
     })
   })
 
+  test("POST /task/:taskID/message accepts bridge envelope fields from resume clients", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const dispatchTaskLoop = spyOn(Queue, "dispatchTaskLoop").mockResolvedValue(undefined)
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(EngineTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            source: "panel",
+            title: "resume envelope",
+            request: "resume envelope",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+            time_started: now,
+            time_completed: now + 1,
+            error: "task cancelled",
+            metadata: { cancelled: true, decision_log: ["keep-me"] },
+          }).run(),
+        )
+
+        const response = await app.request(`/task/${taskID}/message`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            text: "继续这个任务。",
+            source: "panel",
+            resolvedRole: "user",
+            channel: "main",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(dispatchTaskLoop).toHaveBeenCalledTimes(1)
+
+        const row = Database.use((db) =>
+          db.select().from(EngineTaskTable).where(eq(EngineTaskTable.id, taskID)).get(),
+        )
+        expect(row ? deriveTaskStatus(row) : undefined).toBe("active")
+        expect((row?.metadata as { decision_log?: string[] } | null)?.decision_log).toEqual(["keep-me"])
+      },
+    })
+  })
+
   test("POST /task/:taskID/message opens a cancelled task without retry gate", async () => {
     await using tmp = await tmpdir({ git: true })
 
