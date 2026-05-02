@@ -28,6 +28,19 @@ import {
 } from "../services/executor";
 import { t } from "../utils/i18n";
 
+// MirrorCode is the internal/orchestrator executor — its "model" is the
+// project default LLM (appStore.config.model) which drives planning +
+// evaluation. External executors (codex / claude-code) carry their own
+// model that does the actual editing. iter35 surfaces both in the chip
+// when an external executor is active so the operator can see at a glance
+// what's planning and what's editing.
+function projectModelFromConfig(): string {
+  const cfg = appStore.config as { model?: unknown } | null | undefined
+  return typeof cfg?.model === "string" ? cfg.model : ""
+}
+
+const INTERNAL_EXECUTOR_ID = "mirrorcode"
+
 export function ExecutorSelector() {
   const [open, setOpen] = createSignal(false);
 
@@ -38,6 +51,38 @@ export function ExecutorSelector() {
   const executors = createMemo(() => appStore.executors as ExecutorDescriptor[]);
   const activeLabel = createMemo(() => executorLabel(activeID()));
   const activeModel = createMemo(() => executorCurrentModel(activeID()));
+
+  // Project default model — drives the MirrorCode side. Always shown in the
+  // chip as long as the project has a default configured. Reads the same
+  // appStore.config.model that AgentModelsPanel writes to (no two-source
+  // drift; SSE config.changed refreshes both).
+  const orchestratorModel = createMemo(projectModelFromConfig)
+  const isExternalExecutor = createMemo(() => activeID() !== INTERNAL_EXECUTOR_ID)
+  const externalExecutorModel = createMemo(() =>
+    isExternalExecutor() ? activeModel() : "",
+  )
+
+  // Multi-line tooltip explaining the role of each model. Single line when
+  // the active executor is internal; two lines when external so the user
+  // can see "MirrorCode does planning, this thing does editing".
+  const chipTitle = createMemo(() => {
+    const orch = orchestratorModel()
+    if (!isExternalExecutor()) {
+      // Pure MirrorCode mode: keep the existing executorTitle (auth /
+      // version / setup hints) plus the model explainer.
+      const lines = [executorTitle(activeID())]
+      if (orch) lines.push(t("executor.model_explainer_internal"))
+      return lines.filter(Boolean).join("\n")
+    }
+    // External executor: pair explainer with both model values populated.
+    const ext = externalExecutorModel()
+    const pair = t("executor.model_explainer_pair", {
+      orchestrator: orch || "—",
+      executor: activeLabel(),
+      external: ext || "—",
+    })
+    return [executorTitle(activeID()), pair].filter(Boolean).join("\n")
+  })
 
   let rootRef: HTMLDivElement | undefined;
 
@@ -93,18 +138,44 @@ export function ExecutorSelector() {
           type="button"
           class="executor-chip"
           data-active="true"
+          data-has-external={isExternalExecutor() ? "true" : "false"}
           aria-haspopup="listbox"
           aria-expanded={open() ? "true" : "false"}
-          title={executorTitle(activeID())}
+          title={chipTitle()}
           onClick={(event) => {
             event.stopPropagation();
             setOpen((value) => !value);
           }}
         >
           <span class="executor-chip-label">{activeLabel()}</span>
-          <Show when={activeModel()}>
+          {/* Orchestrator (MirrorCode) model — always rendered when the
+              project has a default model. Shown for both internal and
+              external executor selection because the orchestrator-side
+              model drives planning regardless. */}
+          <Show when={orchestratorModel()}>
             <span class="executor-chip-sep" aria-hidden="true">·</span>
-            <span class="executor-chip-model">{activeModel()}</span>
+            <span
+              class="executor-chip-model"
+              data-source="orchestrator"
+              title={t("executor.model_explainer_internal")}
+            >
+              {orchestratorModel()}
+            </span>
+          </Show>
+          {/* External executor model — only rendered when the active
+              executor is external (codex / claude-code). The arrow
+              communicates the orchestrator → executor handoff. */}
+          <Show when={isExternalExecutor() && externalExecutorModel()}>
+            <span class="executor-chip-arrow" aria-hidden="true">→</span>
+            <span
+              class="executor-chip-model"
+              data-source="external"
+              title={t("executor.model_explainer_external", {
+                executor: activeLabel(),
+              })}
+            >
+              {externalExecutorModel()}
+            </span>
           </Show>
           <span class="executor-chip-caret" aria-hidden="true">
             <svg width="8" height="8" viewBox="0 0 10 10" fill="none">

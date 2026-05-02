@@ -1794,12 +1794,43 @@ a { color: inherit; text-decoration: none; }
   opacity: 0.7;
 }
 
+/* iter35: arrow between MirrorCode/orchestrator model and external
+   executor model — communicates the planning → execution handoff. Only
+   rendered when the active executor is external. */
+.executor-chip-arrow {
+  color: var(--text-muted);
+  opacity: 0.55;
+  font-size: calc(var(--ui-font-meta) * 0.9);
+  padding: 0 calc(1px * var(--ui-scale));
+}
+
 .executor-chip-model {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   max-width: calc(180px * var(--ui-scale));
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* iter35: when the chip carries both an orchestrator model and an
+   external executor model, the per-model max-width tightens so the
+   pair fits in the bottom-left composer slot without wrapping. */
+.executor-chip[data-has-external="true"] .executor-chip-model {
+  max-width: calc(120px * var(--ui-scale));
+}
+
+/* iter35: subtle visual differentiation — external executor model gets
+   a 2px accent dot prefix to mark it as the "execution" model. */
+.executor-chip-model[data-source="external"]::before {
+  content: "";
+  display: inline-block;
+  width: calc(4px * var(--ui-scale));
+  height: calc(4px * var(--ui-scale));
+  margin-right: calc(4px * var(--ui-scale));
+  border-radius: 999px;
+  background: var(--accent);
+  vertical-align: middle;
+  opacity: 0.6;
 }
 
 .executor-chip-caret {
