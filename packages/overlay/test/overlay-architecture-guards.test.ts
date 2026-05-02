@@ -3,6 +3,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 const OVERLAY_ROOT = join(import.meta.dir, "..")
+const REPO_ROOT = join(OVERLAY_ROOT, "..", "..")
+const GOD_CSS_ARCHIVE_DIR = join(REPO_ROOT, "docs/archive/overlay-god-css")
+const THIS_FILE = join(import.meta.dir, "overlay-architecture-guards.test.ts")
 
 function readText(path: string): string {
   return readFileSync(path, "utf8")
@@ -54,6 +57,34 @@ describe("overlay architecture guards", () => {
       expect(existsSync(join(OVERLAY_ROOT, dir))).toBe(true)
     }
     expect(existsSync(join(OVERLAY_ROOT, "src/components/App.tsx"))).toBe(true)
+  })
+
+  test("God CSS archive is reference-only and isolated from the runtime graph", () => {
+    expect(existsSync(GOD_CSS_ARCHIVE_DIR)).toBe(true)
+
+    const runtimeFiles = [
+      ...walkFiles(join(OVERLAY_ROOT, "src"), (path) => /\.(?:css|ts|tsx|js|jsx|mjs|cjs)$/.test(path)),
+      ...walkFiles(join(OVERLAY_ROOT, "test"), (path) => {
+        if (path === THIS_FILE) return false
+        return /\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(path)
+      }),
+      ...["index.html", "vite.config.ts", "package.json"]
+        .map((file) => join(OVERLAY_ROOT, file))
+        .filter((path) => existsSync(path)),
+    ]
+    const archiveReference = /docs[\\/]+archive[\\/]+overlay-god-css|overlay-god-css|god-css-archive/i
+    const cssImport = /(?:@import\s+|import\s+(?:"[^"]+\.css"|'[^']+\.css')|import\s+[^'"]+from\s+["'][^"']+\.css["'])/
+
+    for (const file of runtimeFiles) {
+      const text = readText(file)
+      expect(text).not.toMatch(archiveReference)
+      expect(text).not.toMatch(new RegExp(`${cssImport.source}[\\s\\S]*${archiveReference.source}`, "i"))
+    }
+
+    const archivedCssUnderSource = walkFiles(join(OVERLAY_ROOT, "src"), (path) =>
+      /(?:archive|legacy|god).*\.css$/i.test(path),
+    )
+    expect(archivedCssUnderSource).toEqual([])
   })
 
   test("legacy style debt cannot increase while migration is in progress", () => {
