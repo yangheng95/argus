@@ -131,6 +131,10 @@ Progress log:
   runtime stylesheet. This lowers the `!important` guard baseline from
   381 to 373, `body[data-theme]` selectors from 262 to 255, and theme
   layout/chrome overrides from 278 to 273.
+- 2026-05-03: `SkillMarketPanel` group headers now share
+  `oc-surface-header` / `oc-surface-header__title` /
+  `oc-surface-header__actions` instead of keeping separate
+  `.ext-group-head*` typography and action-cluster CSS in God CSS.
 
 Trigger: user feedback (2026-05-03):
 
