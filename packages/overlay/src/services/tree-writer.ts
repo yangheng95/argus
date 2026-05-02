@@ -1290,15 +1290,8 @@ function ensureBoundaryPart(sessionID: string, messageID: string, role: string, 
     roleLabel: roleLabel(role),
     time: time > 0 ? time : undefined,
   };
-  setCardTreeStore(
-    "cards",
-    session.cardID,
-    "parts",
-    produce((parts: any[]) => {
-      parts.push(part);
-    }),
-  );
-  session.partIndex.set(boundaryKey, cardTreeStore.cards[session.cardID].parts.length - 1);
+  const newIdx = appendSessionPart(session.cardID, part);
+  session.partIndex.set(boundaryKey, newIdx);
 }
 
 function upsertPart(sessionID: string, partID: string, part: any): void {
@@ -1313,16 +1306,18 @@ function upsertPart(sessionID: string, partID: string, part: any): void {
     setCardTreeStore("cards", session.cardID, "parts", existingIdx, normalizedPart);
     return;
   }
-  setCardTreeStore(
-    "cards",
-    session.cardID,
-    "parts",
-    produce((parts: any[]) => {
-      parts.push(normalizedPart);
-    }),
-  );
-  const newIdx = cardTreeStore.cards[session.cardID].parts.length - 1;
+  const newIdx = appendSessionPart(session.cardID, normalizedPart);
   session.partIndex.set(partID, newIdx);
+}
+
+function appendSessionPart(cardID: string, part: any): number {
+  const current = cardTreeStore.cards[cardID]?.parts;
+  if (!Array.isArray(current)) {
+    throw new Error(`appendSessionPart: card ${cardID} missing parts array`);
+  }
+  const next = [...current, part];
+  setCardTreeStore("cards", cardID, "parts", next);
+  return next.length - 1;
 }
 
 // ── Board-derived projections (task request, goal groups, interactions) ──
