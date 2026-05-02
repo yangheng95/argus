@@ -14297,6 +14297,164 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
   border-bottom: 0 !important;
 }
 
+body[data-theme="light"] :is(
+  .brand-guide,
+  .titlebar-menubar-trigger,
+  .titlebar-status-chip,
+  .titlebar-setup-cta,
+  .titlebar-status-icon,
+  .titlebar-btn,
+  .sidebar-btn,
+  .sidebar-tool,
+  .sidebar-toolset,
+  .task-status,
+  .task-dir-shell,
+  .task-cwd-dropdown,
+  .workspace-toggle,
+  .btn,
+  .btn.mini,
+  .btn-ghost,
+  .btn-terminate,
+  .executor-chip,
+  .engine-chip,
+  .engine-chip-caret,
+  .right-panel-tablist,
+  .right-panel-tab,
+  .workspace-tab,
+  .section-icon-btn,
+  .chat-toolbar-btn,
+  .chat-cancel-btn,
+  .conn-banner__action,
+  .agent-workflow-refresh,
+  .agent-workflow-report-close
+),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
+  .brand-guide,
+  .titlebar-menubar-trigger,
+  .titlebar-status-chip,
+  .titlebar-setup-cta,
+  .titlebar-status-icon,
+  .titlebar-btn,
+  .sidebar-btn,
+  .sidebar-tool,
+  .sidebar-toolset,
+  .task-status,
+  .task-dir-shell,
+  .task-cwd-dropdown,
+  .workspace-toggle,
+  .btn,
+  .btn.mini,
+  .btn-ghost,
+  .btn-terminate,
+  .executor-chip,
+  .engine-chip,
+  .engine-chip-caret,
+  .right-panel-tablist,
+  .right-panel-tab,
+  .workspace-tab,
+  .section-icon-btn,
+  .chat-toolbar-btn,
+  .chat-cancel-btn,
+  .conn-banner__action,
+  .agent-workflow-refresh,
+  .agent-workflow-report-close
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+body[data-theme="light"] :is(
+  .brand-guide:hover,
+  .titlebar-menubar-trigger:hover,
+  .titlebar-menubar-trigger:focus-visible,
+  .titlebar-menubar-trigger[data-active="true"],
+  .titlebar-status-chip:hover,
+  .titlebar-setup-cta:hover,
+  .titlebar-status-icon:hover,
+  .titlebar-btn:hover,
+  .sidebar-btn:hover,
+  .sidebar-btn[data-active="true"],
+  .sidebar-tool:hover,
+  .task-cwd-dropdown:hover,
+  .task-cwd-dropdown:focus-visible,
+  .task-cwd-dropdown[data-open="true"],
+  .workspace-toggle:hover,
+  .workspace-toggle[aria-pressed="true"],
+  .btn:hover,
+  .btn-ghost:hover,
+  .btn-terminate:hover,
+  .executor-chip:hover,
+  .executor-selector[data-open="true"] .executor-chip,
+  .engine-chip:hover,
+  .engine-chip[data-active="true"],
+  .right-panel-tab:hover,
+  .right-panel-tab[data-active="true"],
+  .workspace-tab:hover,
+  .workspace-tab[data-active="true"],
+  .section-icon-btn:hover,
+  .section-icon-btn:focus-visible,
+  .chat-toolbar-btn:hover,
+  .chat-toolbar-btn[data-active],
+  .chat-cancel-btn:hover:not(:disabled),
+  .conn-banner__action:hover,
+  .agent-workflow-refresh:hover,
+  .agent-workflow-report-close:hover
+),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(
+  .brand-guide:hover,
+  .titlebar-menubar-trigger:hover,
+  .titlebar-menubar-trigger:focus-visible,
+  .titlebar-menubar-trigger[data-active="true"],
+  .titlebar-status-chip:hover,
+  .titlebar-setup-cta:hover,
+  .titlebar-status-icon:hover,
+  .titlebar-btn:hover,
+  .sidebar-btn:hover,
+  .sidebar-btn[data-active="true"],
+  .sidebar-tool:hover,
+  .task-cwd-dropdown:hover,
+  .task-cwd-dropdown:focus-visible,
+  .task-cwd-dropdown[data-open="true"],
+  .workspace-toggle:hover,
+  .workspace-toggle[aria-pressed="true"],
+  .btn:hover,
+  .btn-ghost:hover,
+  .btn-terminate:hover,
+  .executor-chip:hover,
+  .executor-selector[data-open="true"] .executor-chip,
+  .engine-chip:hover,
+  .engine-chip[data-active="true"],
+  .right-panel-tab:hover,
+  .right-panel-tab[data-active="true"],
+  .workspace-tab:hover,
+  .workspace-tab[data-active="true"],
+  .section-icon-btn:hover,
+  .section-icon-btn:focus-visible,
+  .chat-toolbar-btn:hover,
+  .chat-toolbar-btn[data-active],
+  .chat-cancel-btn:hover:not(:disabled),
+  .conn-banner__action:hover,
+  .agent-workflow-refresh:hover,
+  .agent-workflow-report-close:hover
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+body[data-theme="light"] :is(.sidebar-btn-primary, .chat-send, .btn-primary, .board-intro__cta-action),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-btn-primary, .chat-send, .btn-primary, .board-intro__cta-action) {
+  background: var(--accent-gradient) !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="light"] :is(.sidebar-btn-primary:hover, .chat-send:hover, .btn-primary:hover, .board-intro__cta-action:hover),
+body:is([data-theme="dark"], [data-theme="vscode-dark"]) :is(.sidebar-btn-primary:hover, .chat-send:hover, .btn-primary:hover, .board-intro__cta-action:hover) {
+  background: var(--accent-gradient-hover) !important;
+  color: #ffffff !important;
+}
+
 /* Animated workflow stage */
 body[data-theme="light"] .agent-workflow-panel,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .agent-workflow-panel {

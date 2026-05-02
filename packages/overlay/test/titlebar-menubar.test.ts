@@ -602,6 +602,39 @@ test("column resizers allow broad widths without wide visual dividers", async ()
     })
     expect(rightPanelDecorativeBorders).toEqual([])
 
+    const nonPrimaryControlsWithBackgrounds = await page.evaluate(() => {
+      const selectors = [
+        ".brand-guide",
+        ".titlebar-menubar-trigger",
+        ".titlebar-btn",
+        ".sidebar-tool",
+        ".sidebar-toolset",
+        ".task-dir-shell",
+        ".task-cwd-dropdown",
+        ".workspace-toggle",
+        ".btn.mini",
+        ".executor-chip",
+        ".right-panel-tablist",
+        ".right-panel-tab",
+        ".chat-toolbar-btn",
+        ".conn-banner__action",
+      ]
+      const transparent = (value: string) =>
+        value === "transparent" ||
+        value === "rgba(0, 0, 0, 0)" ||
+        value === "rgb(0 0 0 / 0)" ||
+        value.endsWith("/ 0)")
+      return selectors.flatMap((selector) => {
+        const node = document.querySelector<HTMLElement>(selector)
+        if (!node) return []
+        const style = getComputedStyle(node)
+        return transparent(style.backgroundColor) && style.backgroundImage === "none"
+          ? []
+          : [{ selector, backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage }]
+      })
+    })
+    expect(nonPrimaryControlsWithBackgrounds).toEqual([])
+
     const rightDrag = await page.evaluate(() => {
       const right = document.querySelector<HTMLElement>("#rightPaneResizer")!.getBoundingClientRect()
       const workspace = document.querySelector<HTMLElement>("#workspaceMain")!.getBoundingClientRect()
