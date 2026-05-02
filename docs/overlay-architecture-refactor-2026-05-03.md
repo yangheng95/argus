@@ -80,6 +80,10 @@ Progress log:
   `Button` (`ghost` reset, `solid` save) instead of `.btn` variants.
   This drops `.btn` callers from 53 to 51, `.btn-primary` callers from
   11 to 10, and the aggregate legacy button budget from 67 to 64.
+- 2026-05-03: `AgentModelsPanel` refresh/retry actions now render
+  through `Button` (`ghost`, small) instead of `.btn.btn-ghost.mini`.
+  This drops `.btn` callers from 51 to 49 and the aggregate legacy
+  button budget from 64 to 62.
 
 Trigger: user feedback (2026-05-03):
 
