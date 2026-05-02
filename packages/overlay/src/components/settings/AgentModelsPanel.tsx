@@ -18,7 +18,7 @@
 
 import { createSignal, createMemo, createResource, For, Show } from "solid-js";
 import { apiJson } from "../../services/api";
-import { patchConfig, updateConfig } from "../../services/config";
+import { patchConfig } from "../../services/config";
 import { appStore } from "../../store/app";
 import { t } from "../../utils/i18n";
 
@@ -73,7 +73,7 @@ const TIER_LABEL: Record<string, string> = {
 export default function AgentModelsPanel() {
   const [refreshing, setRefreshing] = createSignal(false);
   const [refreshMsg, setRefreshMsg] = createSignal<string>("");
-  const [savingAgent, setSavingAgent] = createSignal<string>("");
+  const [savingAgents, setSavingAgents] = createSignal<Set<string>>(new Set());
   const [savingDefault, setSavingDefault] = createSignal(false);
 
   // Agents + providers change rarely and are fetched via createResource with a
@@ -121,42 +121,51 @@ export default function AgentModelsPanel() {
     }
   }
 
-  function modelKey(m: { providerID: string; modelID: string } | undefined): string {
-    return m ? `${m.providerID}/${m.modelID}` : "";
+  function configAgentEntry(agentName: string): Record<string, any> | null {
+    const agents = (appStore.config as { agent?: unknown } | null | undefined)?.agent;
+    if (!agents || typeof agents !== "object" || Array.isArray(agents)) return null;
+    const entry = (agents as Record<string, unknown>)[agentName];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+    return entry as Record<string, any>;
+  }
+
+  function configAgentModel(agentName: string): string {
+    const model = configAgentEntry(agentName)?.model;
+    return typeof model === "string" ? model : "";
+  }
+
+  function configAgentHasNonModelFields(agentName: string): boolean {
+    const entry = configAgentEntry(agentName);
+    if (!entry) return false;
+    return Object.keys(entry).some((key) => key !== "model");
+  }
+
+  function setAgentSaving(agentName: string, saving: boolean): void {
+    setSavingAgents((prev) => {
+      const next = new Set(prev);
+      if (saving) next.add(agentName);
+      else next.delete(agentName);
+      return next;
+    });
   }
 
   async function onSelect(agentName: string, value: string) {
-    setSavingAgent(agentName);
+    setAgentSaving(agentName, true);
     try {
-      await updateConfig((cfg) => {
-        cfg.agent = cfg.agent || {};
-        const existing = cfg.agent[agentName];
-        const existingKeys =
-          existing && typeof existing === "object" && !Array.isArray(existing)
-            ? Object.keys(existing).filter((k) => k !== "model")
-            : [];
-        if (!value) {
-          // Clear override — use null sentinel (RFC 7396) so the server truly
-          // removes the field from the config file instead of leaving a stub.
-          if (existingKeys.length > 0) {
-            // Agent has other overrides (prompt/permission/etc) — only delete .model.
-            cfg.agent[agentName] = { ...existing, model: null };
-          } else {
-            // Entry exists only because of .model — drop the whole agent key.
-            cfg.agent[agentName] = null;
-          }
-        } else {
-          cfg.agent[agentName] = {
-            ...(existing && typeof existing === "object" ? existing : {}),
-            model: value,
-          };
-        }
+      await patchConfig({
+        agent: {
+          [agentName]: value
+            ? { model: value }
+            : configAgentHasNonModelFields(agentName)
+              ? { model: null }
+              : null,
+        },
       });
       setRefreshToken((x) => x + 1);
     } catch (e) {
       console.error("[agent-models] save failed", e);
     } finally {
-      setSavingAgent("");
+      setAgentSaving(agentName, false);
     }
   }
 
@@ -286,6 +295,7 @@ export default function AgentModelsPanel() {
                     <span class="agent-model-name">{t("agent_models.project_default")}</span>
                     <select
                       class="field-input agent-model-select"
+                      data-testid="agent-model-select-project"
                       value={currentModel}
                       disabled={savingDefault()}
                       onChange={(e) =>
@@ -329,15 +339,16 @@ export default function AgentModelsPanel() {
                         <div class="agent-model-tier-label">{TIER_LABEL[tier]}</div>
                         <For each={grouped[tier]}>
                           {(agent) => {
-                            const current = modelKey(agent.model);
+                            const current = configAgentModel(agent.name);
                             const missing = current !== "" && !available.has(current);
                             return (
                               <div class="agent-model-row" title={agent.description || ""}>
                                 <span class="agent-model-name">{agent.name}</span>
                                 <select
                                   class="field-input agent-model-select"
+                                  data-testid={`agent-model-select-${agent.name}`}
                                   value={current}
-                                  disabled={savingAgent() === agent.name}
+                                  disabled={savingAgents().has(agent.name)}
                                   onChange={(e) =>
                                     onSelect(
                                       agent.name,
@@ -362,7 +373,7 @@ export default function AgentModelsPanel() {
                                   </For>
                                 </select>
                                 <span class="agent-model-status">
-                                  <Show when={savingAgent() === agent.name}>saving…</Show>
+                                  <Show when={savingAgents().has(agent.name)}>saving…</Show>
                                 </span>
                               </div>
                             );
