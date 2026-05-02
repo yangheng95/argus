@@ -48,6 +48,13 @@ and a prominent composer anchored at the bottom of the main canvas.
    workspace intro and the deleted startup dialog cannot reappear.
 9. Apply the same rounded translucent workbench treatment to `dark` and
    `vscode-dark` using theme tokens, while preserving their dark color schemes.
+10. Keep `vscode-dark` visually aligned with Visual Studio Code: neutral dark
+    greys, Visual Studio Code blue accents, and flat chrome instead of
+    purple-tinted surfaces.
+11. Relax the sidebar and workspace pane width clamps so the three columns can
+    be resized broadly, and keep the resizer hit areas visually narrow.
+12. Remove stacked shadows, heavy hover elevation, and wide inter-pane gutters so
+    the final shell reads as a flat reference-style workbench.
 
 ## Validation
 
