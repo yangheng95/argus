@@ -18,6 +18,7 @@ import { Database, and, desc, eq, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { EngineTaskTable } from "./engine.sql"
 import { findTask, type TaskRow } from "./store"
+import { openTaskForOperatorMessage } from "./task-message-open"
 import { isTaskActive, isTaskQueued } from "./task-status"
 import type { OrchestratorEvent } from "@/orchestrator/agent"
 
@@ -345,12 +346,15 @@ export async function dispatchTaskLoop(input: {
   event?: OrchestratorEvent
   interrupt?: boolean
 }): Promise<void> {
-  const task = findTask(input.taskID)
+  let task = findTask(input.taskID)
   if (!task) return
   const cwd = taskCwd(task.id)
   if (!cwd) {
     log.warn("dispatchTaskLoop: task has no cwd", { taskID: task.id, note: input.event?.note })
     return
+  }
+  if (input.event) {
+    task = await openTaskForOperatorMessage(task)
   }
 
   if (isTaskQueued(task)) {
