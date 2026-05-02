@@ -3,7 +3,7 @@
 // Allows adding, editing, and removing OpenAI-compatible providers
 // via the opencorvus config system (PATCH /config → provider field).
 
-import { createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { t } from "../../utils/i18n";
 import { appStore, setAppStore } from "../../store/app";
 import { updateConfig } from "../../services/config";
@@ -70,6 +70,7 @@ export default function ProvidersPanel() {
   // signal honest about what the running process saw.
   const [refreshing, setRefreshing] = createSignal(false);
   const [lastRefreshedAt, setLastRefreshedAt] = createSignal<number | null>(null);
+  const [providerSearch, setProviderSearch] = createSignal("");
 
   function formatRelative(ms: number): string {
     const diff = Date.now() - ms;
@@ -228,6 +229,21 @@ export default function ProvidersPanel() {
   function catalogProviders(): any[] {
     const cat = appStore.providerCatalog as any;
     return Array.isArray(cat?.all) ? cat.all : [];
+  }
+
+  function normalizeSearch(value: unknown): string {
+    return String(value ?? "").trim().toLowerCase();
+  }
+
+  function providerModelIds(models: Record<string, unknown> | undefined): string[] {
+    if (!models || typeof models !== "object" || Array.isArray(models)) return [];
+    return Object.keys(models);
+  }
+
+  function providerMatchesSearch(parts: Array<unknown>): boolean {
+    const q = normalizeSearch(providerSearch());
+    if (!q) return true;
+    return parts.some((part) => normalizeSearch(part).includes(q));
   }
 
   function resetForm() {
@@ -455,8 +471,18 @@ export default function ProvidersPanel() {
     setEditing(null);
   }
 
-  const providerEntries = () => Object.entries(configProviders());
-  const catalogEntries = () => {
+  const providerEntries = createMemo(() =>
+    Object.entries(configProviders()).filter(([id, provider]) =>
+      providerMatchesSearch([
+        id,
+        provider.name,
+        provider.api,
+        provider.env?.join(" "),
+        providerModelIds(provider.models).join(" "),
+      ]),
+    ),
+  );
+  const catalogEntries = createMemo(() => {
     const custom = new Set(Object.keys(configProviders()));
     return catalogProviders()
       .filter((p: any) => p && typeof p.id === "string" && !custom.has(p.id))
@@ -464,18 +490,60 @@ export default function ProvidersPanel() {
         id: p.id,
         name: p.name || p.id,
         source: p.source || "auto",
-        modelCount: Object.keys(p.models || {}).length,
+        modelIds: providerModelIds(p.models),
+        modelCount: providerModelIds(p.models).length,
         authMethods: providerAuthMethods(p.id).length,
         status: providerState(p.id),
-      }));
-  };
+      }))
+      .filter((p) =>
+        providerMatchesSearch([
+          p.id,
+          p.name,
+          p.source,
+          p.status.label,
+          p.status.detail,
+          p.modelIds.join(" "),
+        ]),
+      );
+  });
+  const totalProviderCount = createMemo(() => Object.keys(configProviders()).length + catalogProviders().length);
+  const visibleProviderCount = createMemo(() => providerEntries().length + catalogEntries().length);
+  const hasProviderSearch = createMemo(() => providerSearch().trim().length > 0);
 
   return (
     <div class="general-panel">
-      {/* ── Custom Providers ── */}
-      <div class="config-panel-group">
-        <div class="config-panel-group-head">
-          <h4 class="config-panel-group-title">Custom Providers</h4>
+      <div class="config-panel-group provider-settings-flat">
+        <div class="provider-toolbar">
+          <div class="provider-toolbar-title">
+            <h4 class="config-panel-group-title">{t("provider.title")}</h4>
+            <span class="provider-toolbar-count">
+              {t("provider.search.count", { shown: visibleProviderCount(), total: totalProviderCount() })}
+            </span>
+          </div>
+          <label class="provider-search-field">
+            <span class="provider-search-icon" aria-hidden="true">⌕</span>
+            <input
+              class="field-input provider-search-input"
+              type="search"
+              value={providerSearch()}
+              placeholder={t("provider.search.placeholder")}
+              aria-label={t("provider.search.label")}
+              onInput={(e) => setProviderSearch(e.currentTarget.value)}
+              data-testid="provider-search-input"
+            />
+            <Show when={hasProviderSearch()}>
+              <button
+                type="button"
+                class="provider-search-clear"
+                onClick={() => setProviderSearch("")}
+                title={t("common.clear")}
+                aria-label={t("common.clear")}
+                data-testid="provider-search-clear"
+              >
+                ×
+              </button>
+            </Show>
+          </label>
           <div class="provider-head-actions">
             <Show when={lastRefreshedAt()}>
               {(ts) => (
@@ -505,9 +573,11 @@ export default function ProvidersPanel() {
           </div>
         </div>
 
-        <Show when={providerEntries().length === 0 && !showAdd()}>
-          <div class="config-panel-card provider-empty">
-            {t("provider.empty_message")}
+        <Show when={providerEntries().length === 0 && catalogEntries().length === 0 && !showAdd()}>
+          <div class="provider-empty">
+            {hasProviderSearch()
+              ? t("provider.search.no_results", { query: providerSearch().trim() })
+              : t("provider.empty_message")}
           </div>
         </Show>
 
@@ -519,94 +589,105 @@ export default function ProvidersPanel() {
           )}
         </Show>
 
-        <For each={providerEntries()}>
-          {([id, provider]) => (
-            <div class="config-panel-card provider-card-row" data-testid={`provider-custom-row-${id}`}>
-              <div class="config-panel-card-head">
-                <strong class="config-panel-card-title">{provider.name || id}</strong>
-                <div class="config-panel-card-actions">
-                  <Show when={providerAuthMethods(id).length > 0}>
-                    <button
-                      type="button"
-                      class="btn mini"
-                      onClick={() => void handleAuth(id)}
-                      disabled={authing().has(id)}
-                      title={t("llm.auth_connect_title")}
-                      data-testid={`provider-auth-${id}`}
-                    >
-                      {authing().has(id) ? t("common.loading") : t("llm.auth_connect")}
-                    </button>
-                  </Show>
-                  <button
-                    type="button"
-                    class="btn mini"
-                    onClick={() => void handleTest(id, provider.models || {})}
-                    disabled={testing().has(id)}
-                    title={t("provider.test.button_title")}
-                  >
-                    {testing().has(id) ? t("provider.test.testing") : t("provider.test.button")}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn mini"
-                    onClick={() => startEdit(id)}
-                  >
-                    {t("common.edit")}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn mini danger"
-                    onClick={() => handleDelete(id)}
-                    disabled={saving()}
-                  >
-                    {t("common.delete")}
-                  </button>
-                </div>
-              </div>
-              <Show when={testResults().get(id)}>
-                {(result) => (
-                  <div
-                    class="provider-test-result"
-                    data-ok={result().ok ? "true" : "false"}
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <span class="provider-test-result-icon" aria-hidden="true">
-                      {result().ok ? "✓" : "✗"}
-                    </span>
-                    <span class="provider-test-result-msg">
-                      {result().ok
-                        ? (result().message || t("provider.test.success"))
-                        : (result().message || t("provider.test.failed"))}
-                    </span>
+        <Show when={providerEntries().length > 0}>
+          <div class="provider-flat-section">
+            <div class="provider-section-label">{t("provider.section.custom")}</div>
+            <div class="provider-flat-list">
+              <For each={providerEntries()}>
+                {([id, provider]) => (
+                  <div class="provider-flat-row" data-testid={`provider-custom-row-${id}`}>
+                    <div class="provider-row-main">
+                      <div class="provider-row-title-line">
+                        <strong class="provider-row-title">{provider.name || id}</strong>
+                        <span class="provider-row-id">{id}</span>
+                      </div>
+                      <div class="provider-row-meta">
+                        <span>{t("provider.label.api")}: {provider.api}</span>
+                        <Show when={provider.env?.length}>
+                          <span>{t("provider.label.env")}: {provider.env.join(", ")}</span>
+                        </Show>
+                        <span>{t("provider.label.models")}: {Object.keys(provider.models || {}).length}</span>
+                      </div>
+                      {providerAuthMethods(id).length > 0
+                        ? (() => {
+                          const status = providerState(id, undefined);
+                          return (
+                            <div class="provider-row-status" data-tone={status.tone}>
+                              {status.label}: {status.detail}
+                            </div>
+                          );
+                        })()
+                        : null}
+                    </div>
+                    <div class="provider-row-actions">
+                      <Show when={providerAuthMethods(id).length > 0}>
+                        <button
+                          type="button"
+                          class="btn mini"
+                          onClick={() => void handleAuth(id)}
+                          disabled={authing().has(id)}
+                          title={t("llm.auth_connect_title")}
+                          data-testid={`provider-auth-${id}`}
+                        >
+                          {authing().has(id) ? t("common.loading") : t("llm.auth_connect")}
+                        </button>
+                      </Show>
+                      <button
+                        type="button"
+                        class="btn mini"
+                        onClick={() => void handleTest(id, provider.models || {})}
+                        disabled={testing().has(id)}
+                        title={t("provider.test.button_title")}
+                      >
+                        {testing().has(id) ? t("provider.test.testing") : t("provider.test.button")}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn mini"
+                        onClick={() => startEdit(id)}
+                      >
+                        {t("common.edit")}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn mini danger"
+                        onClick={() => handleDelete(id)}
+                        disabled={saving()}
+                      >
+                        {t("common.delete")}
+                      </button>
+                    </div>
+                    <div class="provider-row-key">
+                      <ApiKeyEditor providerId={id} />
+                    </div>
+                    <Show when={testResults().get(id)}>
+                      {(result) => (
+                        <div
+                          class="provider-test-result"
+                          data-ok={result().ok ? "true" : "false"}
+                          role="status"
+                          aria-live="polite"
+                        >
+                          <span class="provider-test-result-icon" aria-hidden="true">
+                            {result().ok ? "✓" : "✗"}
+                          </span>
+                          <span class="provider-test-result-msg">
+                            {result().ok
+                              ? (result().message || t("provider.test.success"))
+                              : (result().message || t("provider.test.failed"))}
+                          </span>
+                        </div>
+                      )}
+                    </Show>
+                    <div class="provider-row-models">
+                      {Object.keys(provider.models || {}).join(", ") || t("provider.label.no_models")}
+                    </div>
                   </div>
                 )}
-              </Show>
-              <div class="provider-card-meta">
-                {t("provider.label.api")}: {provider.api}
-              </div>
-              {providerAuthMethods(id).length > 0
-                ? (() => {
-                  const status = providerState(id, undefined);
-                  return (
-                    <div class="provider-card-meta" data-tone={status.tone}>
-                      {status.label}: {status.detail}
-                    </div>
-                  );
-                })()
-                : null}
-              <Show when={provider.env?.length}>
-                <div class="provider-card-meta">
-                  {t("provider.label.env")}: {provider.env.join(", ")}
-                </div>
-              </Show>
-              <ApiKeyEditor providerId={id} />
-              <div class="provider-card-meta provider-card-meta--last">
-                {t("provider.label.models")}: {Object.keys(provider.models || {}).join(", ") || t("provider.label.no_models")}
-              </div>
+              </For>
             </div>
-          )}
-        </For>
+          </div>
+        </Show>
 
         {/* ── Add / Edit Form ── */}
         <Show when={showAdd()}>
@@ -721,43 +802,53 @@ export default function ProvidersPanel() {
             </div>
           </div>
         </Show>
-      </div>
-
-      {/* ── Connected Providers (read-only) ── */}
-      <Show when={catalogEntries().length > 0}>
-        <div class="config-panel-group">
-          <h4 class="config-panel-group-title">Connected Providers</h4>
-          <div class="config-panel-card">
+        <Show when={catalogEntries().length > 0}>
+          <div class="provider-flat-section">
+            <div class="provider-section-label">{t("provider.section.catalog")}</div>
             <div class="provider-catalog-hint">
-              Auto-detected providers from models.dev, env vars, and auth.
+              {t("provider.catalog.hint")}
             </div>
-            <div class="config-panel-list">
+            <div class="provider-flat-list">
               <For each={catalogEntries()}>
                 {(p) => (
-                  <div class="config-panel-list-row provider-catalog-row" data-testid={`provider-catalog-row-${p.id}`}>
-                    <span class="config-panel-list-main">{p.name}</span>
-                    <span class="config-panel-list-meta">{p.status.label}</span>
-                    <Show when={p.authMethods > 0}>
-                      <button
-                        type="button"
-                        class="btn mini"
-                        onClick={() => void handleAuth(p.id)}
-                        disabled={authing().has(p.id)}
-                        title={t("llm.auth_connect_title")}
-                        data-testid={`provider-auth-${p.id}`}
-                      >
-                        {authing().has(p.id) ? t("common.loading") : t("llm.auth_connect")}
-                      </button>
-                    </Show>
-                    <ApiKeyEditor providerId={p.id} />
-                    <span class="config-panel-list-meta">{p.modelCount} models</span>
+                  <div class="provider-flat-row provider-catalog-row" data-testid={`provider-catalog-row-${p.id}`}>
+                    <div class="provider-row-main">
+                      <div class="provider-row-title-line">
+                        <strong class="provider-row-title">{p.name}</strong>
+                        <span class="provider-row-id">{p.id}</span>
+                      </div>
+                      <div class="provider-row-meta">
+                        <span>{p.source}</span>
+                        <span>{p.modelCount} {t("provider.label.models").toLowerCase()}</span>
+                      </div>
+                      <div class="provider-row-status" data-tone={p.status.tone}>
+                        {p.status.label}: {p.status.detail}
+                      </div>
+                    </div>
+                    <div class="provider-row-actions">
+                      <Show when={p.authMethods > 0}>
+                        <button
+                          type="button"
+                          class="btn mini"
+                          onClick={() => void handleAuth(p.id)}
+                          disabled={authing().has(p.id)}
+                          title={t("llm.auth_connect_title")}
+                          data-testid={`provider-auth-${p.id}`}
+                        >
+                          {authing().has(p.id) ? t("common.loading") : t("llm.auth_connect")}
+                        </button>
+                      </Show>
+                    </div>
+                    <div class="provider-row-key">
+                      <ApiKeyEditor providerId={p.id} />
+                    </div>
                   </div>
                 )}
               </For>
             </div>
           </div>
-        </div>
-      </Show>
+        </Show>
+      </div>
     </div>
   );
 }

@@ -277,6 +277,104 @@ async function submitDialogSelect(tab: Page, value: string) {
   }, {}, before)
 }
 
+test("provider settings search filters catalog and custom providers", async () => {
+  const data = {
+    config: {
+      model: "my-gateway/custom-fast",
+      provider: {
+        "my-gateway": {
+          name: "My Gateway",
+          api: "https://gateway.example.com/v1",
+          env: ["MY_GATEWAY_KEY"],
+          models: {
+            "custom-fast": { name: "Custom Fast", tool_call: true },
+          },
+        },
+      },
+    },
+    provider: {
+      all: [
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          models: {
+            "claude-3-7-sonnet": {},
+          },
+          env: ["ANTHROPIC_API_KEY"],
+        },
+        {
+          id: "openai",
+          name: "OpenAI",
+          models: {
+            "gpt-4o-mini": {},
+          },
+          env: ["OPENAI_API_KEY"],
+        },
+      ],
+      connected: [] as string[],
+      default: {
+        anthropic: "claude-3-7-sonnet",
+        openai: "gpt-4o-mini",
+      },
+    },
+    providerAuth: {},
+    channels: [],
+    skills: [],
+    mcp: {},
+    memory: [],
+    preference: [],
+    path: {
+      directory: "D:/overlay/workspace/app",
+    },
+    vcs: {
+      branch: "dev",
+      clean: true,
+      dirty: false,
+      staged: 0,
+      modified: 0,
+      untracked: 0,
+      conflicts: 0,
+      ahead: 0,
+      behind: 0,
+    },
+    executors: [
+      {
+        id: "mirrorcode",
+        label: "OpenCorvus",
+        detail: "Bundled",
+        version: "0.0.1-alpha",
+        selectable: true,
+        discovered: true,
+      },
+    ],
+  }
+
+  await withOverlay(
+    data,
+    () => undefined,
+    async (tab) => {
+      await openProviderSettings(tab)
+      await tab.waitForSelector('[data-testid="provider-search-input"]')
+      await tab.waitForSelector('[data-testid="provider-custom-row-my-gateway"]')
+      await tab.waitForSelector('[data-testid="provider-catalog-row-anthropic"]')
+      await tab.waitForSelector('[data-testid="provider-catalog-row-openai"]')
+
+      await tab.type('[data-testid="provider-search-input"]', "claude")
+      await tab.waitForFunction(() =>
+        !!document.querySelector('[data-testid="provider-catalog-row-anthropic"]') &&
+        !document.querySelector('[data-testid="provider-catalog-row-openai"]') &&
+        !document.querySelector('[data-testid="provider-custom-row-my-gateway"]'),
+      )
+
+      await tab.click('[data-testid="provider-search-clear"]')
+      await tab.waitForFunction(() =>
+        !!document.querySelector('[data-testid="provider-catalog-row-openai"]') &&
+        !!document.querySelector('[data-testid="provider-custom-row-my-gateway"]'),
+      )
+    },
+  )
+}, { timeout: 60_000 })
+
 test("overlay oauth auth handles prompt-driven authorize flow and pasted redirect urls", async () => {
   const data = {
     config: {
