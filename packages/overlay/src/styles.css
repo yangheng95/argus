@@ -8284,11 +8284,22 @@ body[data-theme="light"] .config-close-btn:hover {
   padding-right: 2px;
 }
 
+/* Single source after iter33. The canonical here used to
+   declare `background: var(--subtle-1)` while the late-tail
+   `!important` reset shared with .section / .gwg /
+   .delivery-panel / .criteria-group / .eval-error /
+   .channel-doc-card / .detail-card forced
+   `var(--surface-inset)` over it — the source said one
+   thing, the browser rendered another. Same rule-8 active
+   conflict iter28 cleaned for .config-subsection and iter30
+   for .extension-row. Updated canonical to declare
+   --surface-inset directly so source matches rendered.
+   Hover transition kept; the [open] / :hover / :focus-within
+   pseudo-state rules below still drive the hover wash. */
 .config-section {
   border: 1px solid var(--border);
   border-radius: var(--section-corner);
-  background:
-    var(--subtle-1);
+  background: var(--surface-inset);
   overflow: hidden;
   box-shadow: none;
   transition: border-color 120ms, background 120ms, box-shadow 120ms, transform 120ms;
@@ -12352,14 +12363,21 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
    .criteria-group, .eval-error, .channel-doc-card,
    .detail-card, .config-section) keep the reset until they
    get the same single-source pass. */
+/* iter28 dropped `.config-subsection`; iter30 dropped
+   `.extension-row`; iter33 dropped `.config-section` —
+   their canonicals all declare the same --surface-inset bg
+   / var(--border) border / var(--radius) radius / no shadow
+   directly. The remaining siblings (.section, .gwg,
+   .delivery-panel, .criteria-group, .eval-error,
+   .channel-doc-card, .detail-card) keep the reset until
+   each gets its own single-source pass. */
 .section,
 .gwg,
 .delivery-panel,
 .criteria-group,
 .eval-error,
 .channel-doc-card,
-.detail-card,
-.config-section {
+.detail-card {
   background: var(--surface-inset) !important;
   border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important;
