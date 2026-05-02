@@ -98,10 +98,8 @@ export default function ProvidersPanel() {
         return;
       }
       setLastRefreshedAt(result.fetchedAt ?? Date.now());
-      // Server has reset Provider/Agent caches; reload the local config
-      // mirror so the catalog list visible below reflects the new data.
-      const newCfg = await apiJson("config");
-      setAppStore("config", newCfg);
+      const catalog = await apiJson("provider");
+      setAppStore("providerCatalog", catalog ?? null);
     } catch (e) {
       setFormError(t("provider.refresh.failed", { reason: describeFailure(e) }));
     } finally {
@@ -326,10 +324,6 @@ export default function ProvidersPanel() {
         cfg.provider[id] = provider;
       });
 
-      // Reload config
-      const newCfg = await apiJson("config");
-      setAppStore("config", newCfg);
-
       setShowAdd(false);
       resetForm();
       setEditing(null);
@@ -393,12 +387,8 @@ export default function ProvidersPanel() {
           },
         };
       });
-      const [newCfg, catalog] = await Promise.all([
-        apiJson("config"),
-        apiJson("provider"),
-      ]);
+      const catalog = await apiJson("provider");
       setAppStore({
-        config: newCfg,
         providerCatalog: catalog ?? null,
       });
       clearApiKeyInput(providerId);
@@ -458,9 +448,6 @@ export default function ProvidersPanel() {
           if (Object.keys(cfg.provider).length === 0) delete cfg.provider;
         }
       });
-
-      const newCfg = await apiJson("config");
-      setAppStore("config", newCfg);
     } catch (e) {
       console.error("[providers] delete failed", e);
       setFormError(t("provider.form.error.delete_failed", { id, reason: describeFailure(e) }));

@@ -149,6 +149,10 @@ Progress log:
   `SurfaceHeader`. Provider count remains part of the title content, while
   refresh/add controls now use the shared header action slot and the search
   field stays below the canonical header row.
+- 2026-05-03: Fixed a config refresh split that affected SSE freshness:
+  `updateConfig` now writes the PATCH response into `appStore.config`, so
+  Provider/Channel settings no longer issue a second manual `GET /config`
+  after local writes. `config.changed` remains the cross-client refresh path.
 
 Trigger: user feedback (2026-05-03):
 

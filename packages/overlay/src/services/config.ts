@@ -146,11 +146,13 @@ export async function updateConfig(mutator: (config: Record<string, any>) => voi
   const current = await apiJson("config");
   const next = structuredClone(current || {});
   mutator(next);
-  return apiJson("config", {
+  const saved = await apiJson("config", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(next),
   });
+  setAppStore("config", saved);
+  return saved;
 }
 
 // ── Project Config Scaffold ──
