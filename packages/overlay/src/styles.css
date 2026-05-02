@@ -758,13 +758,13 @@ a { color: inherit; text-decoration: none; }
   border-top: 1px solid var(--divider-soft);
 }
 
+/* iter11: titlebar dropdown group title (e.g. "Theme", "Locale").
+   Plain group subheader inside a menu list — no pill chrome. */
 .titlebar-menubar-group-title {
   padding: calc(3px * var(--ui-scale)) calc(7px * var(--ui-scale));
   color: var(--text-muted);
   font-size: var(--ui-font-tiny);
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .titlebar-menubar-item,
@@ -2609,11 +2609,12 @@ body[data-theme="light"] .section-badge {
   background: var(--accent-dim);
   color: var(--text-strong);
 }
+/* iter11: command-palette group label. Plain subheader, not a
+   pill — Title Case fits the i18n strings ("task", "settings",
+   "appearance", "tools"). */
 .cmdk-item-group {
   flex: none;
   font-size: var(--ui-font-meta);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-muted);
   min-width: 64px;
 }
@@ -2891,12 +2892,12 @@ body[data-theme="light"] .section-badge {
   flex-direction: column;
   gap: var(--ui-gap-sm);
 }
+/* iter11: provider-catalog section label ("Custom Providers",
+   "Available"). Subtitle inside the list, not a pill. */
 .provider-section-label {
   color: var(--text-muted);
   font-size: var(--ui-font-meta);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .provider-flat-list {
   display: flex;
