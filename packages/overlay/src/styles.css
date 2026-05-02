@@ -10702,16 +10702,25 @@ body[data-resizing="true"] * {
   gap: calc(10px * var(--ui-scale));
 }
 
-/* ── Goal card shell ─────────────────────────────────────── */
+/* ── Goal card shell ─────────────────────────────────────────
+   Single source after iter54. Pre-iter54 canonical declared
+   rich chrome (gradient + surface 92% bg, 16px radius, color-
+   mixed border) that the !important reset chain at line ~12674
+   forced to flat (--surface-inset bg, var(--radius) ≈10px,
+   plain var(--border) border). Same iter28-30-33-36-40-47-52
+   active rule-8 conflict — canonical lied. Updated canonical
+   to declare the rendered values directly so source matches.
+   `.gwg` drops out of the reset chain — chain is now empty
+   (last shell sibling consumed). The ::before left-rail
+   decoration below is independent of border-left and renders
+   regardless. */
 .gwg {
   position: relative;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: calc(16px * var(--ui-scale));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 68%),
-    color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
   overflow: hidden;
-  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease;
 }
 .gwg::before {
   content: "";
@@ -12666,17 +12675,14 @@ body[data-theme="light"] .engine-chip[data-active="true"] {
 /* iter52 dropped `.criteria-group`. Reset chain now down to 2
    shell-level siblings (.gwg / .delivery-panel) for future
    single-source passes. */
-/* iter53 dropped `.delivery-panel` — the reset's `border: 1px
-   solid !important` shorthand was inadvertently overwriting
-   the verdict-accent border-left rail declared on the
-   canonical. With .delivery-panel out, the rail renders
-   again. Reset chain now down to .gwg only. */
-.gwg {
-  background: var(--surface-inset) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: none !important;
-}
+/* iter28-54 fully retired this !important shell-reset chain.
+   Every former segment (.config-subsection / .extension-row /
+   .config-section / .channel-doc-card / .detail-card /
+   .section / .eval-error / .criteria-group / .delivery-panel
+   / .gwg) now declares its chrome directly in its canonical
+   block — no defensive !important left to clobber. The chain
+   block is gone. Theme-scoped overrides in styles.css tail
+   continue to handle per-theme palette without !important. */
 
 .section-head,
 .config-section-head,
