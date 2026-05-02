@@ -1,0 +1,21 @@
+:root[data-theme="light"] {
+  --oc-color-canvas: #f2f2f2;
+  --oc-color-surface: #ffffff;
+  --oc-color-surface-hover: #f0f0f0;
+  --oc-color-surface-inset: #ebebeb;
+  --oc-color-surface-strong: #f8f8f8;
+  --oc-color-chrome: #e8e8e8;
+  --oc-color-border: rgba(0, 0, 0, 0.12);
+  --oc-color-border-hover: rgba(36, 112, 179, 0.35);
+  --oc-color-border-strong: rgba(0, 0, 0, 0.18);
+  --oc-color-text: #3c3f41;
+  --oc-color-text-strong: #1a1a1a;
+  --oc-color-text-soft: #6e6e6e;
+  --oc-color-text-muted: #999999;
+  --oc-color-accent: #2470b3;
+  --oc-color-accent-dim: rgba(36, 112, 179, 0.12);
+  --oc-color-accent-hover: #1a5e9a;
+  --oc-color-good: #499c54;
+  --oc-color-warn: #c48a15;
+  --oc-color-bad: #e03c3c;
+}

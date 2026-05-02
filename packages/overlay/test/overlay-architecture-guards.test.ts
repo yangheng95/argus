@@ -29,6 +29,8 @@ function count(pattern: RegExp, text: string): number {
 
 const THEME_LAYOUT_PROPERTIES =
   /^(?:display|position|inset|top|right|bottom|left|z-index|overflow|box-sizing|grid(?:-.+)?|flex(?:-.+)?|align-.+|justify-.+|place-.+|gap|row-gap|column-gap|margin(?:-.+)?|padding(?:-.+)?|width|height|min-width|min-height|max-width|max-height|border(?:-.+)?|border-radius|box-shadow|transform|translate|scale)$/
+const THEME_CHROME_TOKEN =
+  /^--(?:oc-)?(?:radius|space|spacing|size|height|width|shadow|border|layout|motion|duration|easing|font|type|z|gap|inset|padding|margin)(?:-|$)/
 
 function countThemeLayoutOverrides(css: string): number {
   let total = 0
@@ -113,6 +115,20 @@ describe("overlay architecture guards", () => {
           .filter(Boolean)) {
           expect(item).toMatch(/^:root(?:\[[^\]]+\])?$/)
         }
+      }
+    }
+  })
+
+  test("new theme files are palette-only and never define chrome tokens", () => {
+    const files = walkFiles(join(OVERLAY_ROOT, "src/styles/themes"), (path) => path.endsWith(".css"))
+    for (const file of files) {
+      const css = readText(file).replace(/\/\*[\s\S]*?\*\//g, "")
+      for (const declaration of css.split(/;|\n/)) {
+        const match = declaration.match(/^\s*(--[a-zA-Z0-9-]+)\s*:/)
+        if (!match) continue
+        const prop = match[1]!
+        expect(prop).toMatch(/^--oc-color-/)
+        expect(prop).not.toMatch(THEME_CHROME_TOKEN)
       }
     }
   })
