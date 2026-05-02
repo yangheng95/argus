@@ -733,6 +733,14 @@ a { color: inherit; text-decoration: none; }
   display: flex;
 }
 
+/* iter43: user feedback (2026-05-03) "标题栏的菜单字体小了，
+   应该改成黑体". Bumped from var(--ui-font-control) (≈11px at
+   ui-scale 1) up to var(--ui-font-body) (≈12px) and weight
+   600 ("黑体" = bold/heavier weight) so the menubar reads
+   as a primary navigation surface, not a secondary control.
+   color stays --text-soft for resting state — only weight
+   + size change. The :hover / [data-active] state still
+   lifts color to --text-strong. */
 .titlebar-menubar-trigger {
   height: var(--ui-titlebar-btn-height);
   padding: 0 calc(9px * var(--ui-scale));
@@ -740,7 +748,8 @@ a { color: inherit; text-decoration: none; }
   border-radius: calc(4px * var(--ui-scale));
   background: transparent;
   color: var(--text-soft);
-  font-size: var(--ui-font-control);
+  font-size: var(--ui-font-body);
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
