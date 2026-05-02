@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="styles/surfaces/titlebar.css">
   <link rel="stylesheet" href="styles/surfaces/composer.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles/surfaces/header.css">
   <link rel="stylesheet" href="styles/card.css">
 </head>
 <body data-page="overlay" data-theme="light">
@@ -121,9 +122,9 @@
     <!-- Horizontal body: chat left, sections right -->
     <div class="panel-body" id="panelBody">
       <aside class="sidebar" id="sidebar" data-collapsed="false">
-        <div class="sidebar-header">
-          <div class="sidebar-title" data-i18n="sidebar.title">Recent Chats</div>
-          <div class="sidebar-header-actions" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
+        <div class="sidebar-header oc-surface-header">
+          <div class="sidebar-title oc-surface-header__title" data-i18n="sidebar.title">Recent Chats</div>
+          <div class="sidebar-header-actions oc-surface-header__actions" role="toolbar" aria-label="Recent Chats" data-i18n-aria-label="sidebar.title">
             <div class="sidebar-toolset">
               <button
                 type="button"
@@ -205,12 +206,12 @@
           aria-busy="false"
           data-active="false"
         ></div>
-        <header class="chat-header">
-          <div class="chat-header-main">
-            <span class="chat-title" data-i18n="chat.title">Conversation</span>
+        <header class="chat-header oc-surface-header">
+          <div class="chat-header-main oc-surface-header__main">
+            <span class="chat-title oc-surface-header__title" data-i18n="chat.title">Conversation</span>
           </div>
           <div class="chat-header-status" id="solidTaskStatusMount"></div>
-          <div class="chat-header-meta">
+          <div class="chat-header-meta oc-surface-header__actions">
             <span class="chat-count" id="chatCount"></span>
             <button
               type="button"
@@ -251,9 +252,9 @@
 
       <!-- Collapsible Sections (right) -->
       <div class="sections" id="sections">
-        <header class="sections-header">
-          <span class="sections-title hidden" data-i18n="sections.title">Workspace</span>
-          <div id="solidRightPanelTabs" class="sections-tabs"></div>
+        <header class="sections-header oc-surface-header">
+          <span class="sections-title oc-surface-header__title hidden" data-i18n="sections.title">Workspace</span>
+          <div id="solidRightPanelTabs" class="sections-tabs oc-surface-header__actions"></div>
         </header>
         <div class="sections-tab-body" id="rightPanelWorkflow" data-panel-tab="workflow" data-active="false">
           <div id="solidAgentWorkflowMount"></div>

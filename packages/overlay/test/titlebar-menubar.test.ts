@@ -612,7 +612,7 @@ test(
 
       const looseRightPanelSpacing = await page.evaluate(() => {
         const checks = [
-          { selector: ".sections-header", props: ["height", "paddingLeft", "paddingRight"], max: 32 },
+          { selector: ".sections-header", props: ["height", "paddingLeft", "paddingRight"], max: 42 },
           {
             selector: ".sections-stack",
             props: ["rowGap", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],

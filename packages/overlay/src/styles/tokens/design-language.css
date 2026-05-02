@@ -11,14 +11,14 @@
   --oc-border-width: 1px;
   --oc-disabled-opacity: 0.55;
 
-  --oc-header-height: calc(42px * var(--ui-scale, 1));
-  --oc-header-padding-x: calc(12px * var(--ui-scale, 1));
+  --oc-header-height: calc(40px * var(--ui-scale, 1));
+  --oc-header-padding-x: calc(7px * var(--ui-scale, 1));
   --oc-header-padding-y: 0;
-  --oc-header-gap: calc(8px * var(--ui-scale, 1));
+  --oc-header-gap: calc(7px * var(--ui-scale, 1));
   --oc-header-title-font: 650 var(--ui-font-title, 12px) var(--font, sans-serif);
   --oc-header-title-letter-spacing: 0;
   --oc-header-title-transform: none;
   --oc-header-bg: var(--surface-strong);
-  --oc-header-border: var(--oc-border-width) solid var(--border);
+  --oc-header-border: 0 solid transparent;
   --oc-header-shadow: none;
 }

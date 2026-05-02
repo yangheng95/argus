@@ -1,14 +1,26 @@
-.oc-surface-header {
+.oc-surface-header,
+.sidebar-header.oc-surface-header,
+.chat-header.oc-surface-header,
+.sections-header.oc-surface-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: var(--oc-header-height);
   min-height: var(--oc-header-height);
+  max-height: var(--oc-header-height);
   padding: var(--oc-header-padding-y) var(--oc-header-padding-x);
   gap: var(--oc-header-gap);
   background: var(--oc-header-bg);
   border-block-end: var(--oc-header-border);
   border-radius: var(--oc-radius-panel);
   box-shadow: var(--oc-header-shadow);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.chat-header.oc-surface-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
 }
 
 .oc-surface-header__main,
