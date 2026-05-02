@@ -626,14 +626,29 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
 }
 
+/* Single source after iter23. The pre-iter14 flex-era block
+   here declared `margin-left: auto` so it pushed to the right
+   of a flex-parent .titlebar; the iter14 grid layout switcher
+   block at line ~11657 then overrode `margin-left: 0` because
+   iter14 made the parent .titlebar a grid (grid-column: 3
+   handles placement). The split made it look like the utility
+   cluster did two things with two different layout
+   assumptions. Folded into one block — grid placement +
+   flex container live together. The flex container layout
+   is harmless when the parent is grid (the row-level icons
+   still flow flex-end inside the grid cell), and inside the
+   narrow-width @media the parent flips back to flex where
+   the flex container layout is the actual behavior. */
 .titlebar-utility {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: calc(10px * var(--ui-scale));
   flex: none;
-  margin-left: auto;
   min-width: 0;
+  grid-column: 3;
+  justify-self: end;
+  margin-left: 0;
   -webkit-app-region: no-drag;
 }
 
@@ -11654,11 +11669,9 @@ body[data-resizing="true"] * {
   grid-column: 2;
 }
 
-.titlebar-utility {
-  grid-column: 3;
-  justify-self: end;
-  margin-left: 0;
-}
+/* iter23: `.titlebar-utility` grid placement folded into the
+   canonical block near line ~629 (which now carries
+   grid-column / justify-self / margin-left: 0). */
 
 @media (max-width: 760px) {
   /* `.titlebar` narrow-width tweaks live in the consolidated
