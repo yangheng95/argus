@@ -142,6 +142,9 @@ Progress log:
 - 2026-05-03: Migrated `GeneralPanel` section headings to
   `SurfaceHeader`, removing two remaining `.config-panel-group-title`
   call sites from the runtime component tree.
+- 2026-05-03: Migrated `AgentModelsPanel` to `SurfaceHeader` with an
+  action slot for the Hexin refresh button, retiring its local
+  `.config-panel-group-head` / `.config-panel-group-title` header markup.
 
 Trigger: user feedback (2026-05-03):
 

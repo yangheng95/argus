@@ -28,6 +28,7 @@ import {
   type ProvidersPayload,
 } from "./agent-models-data";
 import { Button } from "../ui/Button";
+import { SurfaceHeader } from "../ui/SurfaceHeader";
 
 // Tier groupings are display-only: they organize the UI list but no longer
 // affect default model resolution (all agents inherit the project default).
@@ -267,19 +268,22 @@ export default function AgentModelsPanel() {
   return (
     <div class="general-panel">
       <div class="config-panel-group">
-        <div class="config-panel-group-head">
-          <h4 class="config-panel-group-title">Agent Models</h4>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            tone="neutral"
-            onClick={handleRefreshHexin}
-            disabled={refreshing()}
-          >
-            {refreshing() ? t("agent_models.refreshing") : t("agent_models.refresh_hexin")}
-          </Button>
-        </div>
+        <SurfaceHeader
+          variant="settings-group"
+          title="Agent Models"
+          actions={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              tone="neutral"
+              onClick={handleRefreshHexin}
+              disabled={refreshing()}
+            >
+              {refreshing() ? t("agent_models.refreshing") : t("agent_models.refresh_hexin")}
+            </Button>
+          }
+        />
         <p class="agent-models-info">
           {t("agent_models.intro")}
         </p>
