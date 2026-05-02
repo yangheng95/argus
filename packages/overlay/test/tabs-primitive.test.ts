@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const TABS_SOURCE = join(import.meta.dir, "../src/components/ui/Tabs.tsx");
 const TABS_CSS = join(import.meta.dir, "../src/styles/primitives/tabs.css");
+const LEGACY_STYLES = join(import.meta.dir, "../src/styles.css");
 
 function sourceArray(source: string, name: string): string[] {
   const match = source.match(new RegExp(`export const ${name} = \\[([^\\]]+)\\] as const`));
@@ -45,4 +46,10 @@ test("Tabs primitive TypeScript API and CSS data variants stay in lockstep", () 
 
   expect(cssDataValues(css, "size")).toEqual(sourceArray(source, "TABS_SIZES").sort());
   expect(cssDataValues(css, "tone")).toEqual(sourceArray(source, "TABS_TONES").sort());
+});
+
+test("Tabs primitive is the only right-panel tab chrome owner", () => {
+  const legacy = readFileSync(LEGACY_STYLES, "utf8");
+
+  expect(legacy).not.toMatch(/\.right-panel-tab(?:list)?\b/);
 });

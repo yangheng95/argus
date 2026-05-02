@@ -2272,38 +2272,6 @@ body[data-theme="light"] .section-badge {
   width: 100%;
 }
 
-/* iter18: right-panel tab cluster — user feedback flagged
-   the rounded pill chrome on the tablist + tabs as
-   inconsistent with the now-flat `.sections` shell around
-   them. Drop the radii (and the tablist border) so the row
-   reads as a plain segmented row inside the flat right
-   column. The active tab keeps its accent fill so the
-   active state is still visible. */
-.right-panel-tablist {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(3px * var(--ui-scale));
-  padding: calc(2px * var(--ui-scale));
-  background: color-mix(in srgb, var(--surface-inset) 72%, transparent);
-}
-
-.right-panel-tab {
-  min-height: calc(24px * var(--ui-scale));
-  padding: 0 calc(10px * var(--ui-scale));
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-soft);
-  font-size: var(--ui-font-control);
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.right-panel-tab[data-active="true"] {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
-  color: var(--text-strong);
-}
-
 .sections-tab-body {
   flex: 1 1 0;
   min-height: 0;
@@ -4627,9 +4595,8 @@ body[data-resizing="row"] * {
 
 /* iter46: user feedback (2026-05-03) "右侧面板的子 tab
    alignment 的位置超过了父 tab，喧宾夺主". The parent
-   `.right-panel-tab` (Workflow / Workspace / Preview) has
-   font-size --ui-font-control + weight 650 + min-height 24px
-   + padding 0/10. Pre-iter46 `.workspace-tab` (Diff / File
+   `Tabs` primitive (Workflow / Workspace / Preview) is the parent
+   navigation row. Pre-iter46 `.workspace-tab` (Diff / File
    sub-tabs inside the workspace panel body) declared padding
    6/12 + 2px accent bottom stripe + accent-tinted bg on
    active — vertically taller than the parent and visually
@@ -14885,8 +14852,6 @@ body[data-theme="light"]
     .executor-chip,
     .engine-chip,
     .engine-chip-caret,
-    .right-panel-tablist,
-    .right-panel-tab,
     .workspace-tab,
     .section-icon-btn,
     .chat-input,
@@ -14917,8 +14882,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .executor-chip,
     .engine-chip,
     .engine-chip-caret,
-    .right-panel-tablist,
-    .right-panel-tab,
     .workspace-tab,
     .section-icon-btn,
     .chat-input,
@@ -15065,8 +15028,6 @@ body[data-theme="light"]
     .executor-chip,
     .engine-chip,
     .engine-chip-caret,
-    .right-panel-tablist,
-    .right-panel-tab,
     .workspace-tab,
     .section-icon-btn,
     .chat-toolbar-btn,
@@ -15096,8 +15057,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .executor-chip,
     .engine-chip,
     .engine-chip-caret,
-    .right-panel-tablist,
-    .right-panel-tab,
     .workspace-tab,
     .section-icon-btn,
     .chat-toolbar-btn,
@@ -15126,8 +15085,6 @@ body[data-theme="light"]
     .workspace-toggle[aria-pressed="true"],
     .executor-chip:hover,
     .engine-chip:hover,
-    .right-panel-tab:hover,
-    .right-panel-tab[data-active="true"],
     .workspace-tab:hover,
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
@@ -15155,8 +15112,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .workspace-toggle[aria-pressed="true"],
     .executor-chip:hover,
     .engine-chip:hover,
-    .right-panel-tab:hover,
-    .right-panel-tab[data-active="true"],
     .workspace-tab:hover,
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
@@ -15221,24 +15176,6 @@ body[data-theme="light"] .sections-stack,
 body:is([data-theme="dark"], [data-theme="vscode-dark"]) .sections-stack {
   gap: calc(4px * var(--ui-scale)) !important;
   padding: calc(4px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] .right-panel-tablist,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .right-panel-tablist {
-  display: flex !important;
-  width: 100%;
-  gap: calc(1px * var(--ui-scale)) !important;
-  padding: calc(1px * var(--ui-scale)) !important;
-  border-radius: calc(5px * var(--ui-scale)) !important;
-}
-
-body[data-theme="light"] .right-panel-tab,
-body:is([data-theme="dark"], [data-theme="vscode-dark"]) .right-panel-tab {
-  flex: 1 1 0;
-  min-height: calc(22px * var(--ui-scale)) !important;
-  padding: 0 calc(5px * var(--ui-scale)) !important;
-  border-radius: calc(4px * var(--ui-scale)) !important;
-  line-height: 1;
 }
 
 body[data-theme="light"] :is(.section, .gwg, .delivery-panel, .criteria-group),
@@ -15532,8 +15469,6 @@ body[data-theme="light"]
     .executor-chip,
     .engine-chip,
     .engine-chip-caret,
-    .right-panel-tablist,
-    .right-panel-tab,
     .workspace-tab,
     .section-icon-btn,
     .chat-toolbar-btn,
@@ -15561,8 +15496,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .executor-chip,
     .engine-chip,
     .engine-chip-caret,
-    .right-panel-tablist,
-    .right-panel-tab,
     .workspace-tab,
     .section-icon-btn,
     .chat-toolbar-btn,
@@ -15599,8 +15532,6 @@ body[data-theme="light"]
     .executor-selector[data-open="true"] .executor-chip,
     .engine-chip:hover,
     .engine-chip[data-active="true"],
-    .right-panel-tab:hover,
-    .right-panel-tab[data-active="true"],
     .workspace-tab:hover,
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
@@ -15635,8 +15566,6 @@ body:is([data-theme="dark"], [data-theme="vscode-dark"])
     .executor-selector[data-open="true"] .executor-chip,
     .engine-chip:hover,
     .engine-chip[data-active="true"],
-    .right-panel-tab:hover,
-    .right-panel-tab[data-active="true"],
     .workspace-tab:hover,
     .workspace-tab[data-active="true"],
     .section-icon-btn:hover,
