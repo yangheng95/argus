@@ -2,6 +2,17 @@
 
 Status: active. Phase 1 guardrails started on 2026-05-03.
 
+Progress log:
+
+- 2026-05-03: Phase 1 directory tree, single-root `App.tsx`
+  shell, SSE reconnect guard, legacy debt baselines, and God CSS
+  archive isolation guard landed.
+- 2026-05-03: New theme layer now has palette-only stubs
+  (`dark.css`, `light.css`, `vscode-dark.css`) using
+  `--oc-color-*` tokens only. Architecture tests reject chrome
+  tokens such as radius, spacing, shadow, border, size, and motion
+  inside new theme files.
+
 Trigger: user feedback (2026-05-03):
 
 > 现在的 css 和面板源码太臃肿了，形成了 god module，极其难以维护，
