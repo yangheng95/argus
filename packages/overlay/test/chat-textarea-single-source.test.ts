@@ -82,4 +82,16 @@ describe(".chat-textarea is a single flat source", () => {
       expect(body).not.toMatch(/border-radius:\s*(?!0)\S/)
     }
   })
+
+  test(".chat-textarea-wrap min-height matches the textarea so the wrap doesn't render taller than its child", () => {
+    // CRON self-audit on iter20: collapsing the shared
+    // `.chat-textarea-wrap, .chat-textarea { min-height: ... }`
+    // chain only updated the textarea side. The wrap's
+    // canonical kept declaring 72px and rendered ~10px
+    // taller than its inner textarea — a silent layout
+    // regression. Pin both at 62px so the wrap is flush
+    // with the textarea like it was pre-iter20.
+    const wrapBody = soloRuleBody(".chat-textarea-wrap")
+    expect(wrapBody).toMatch(/min-height:\s*calc\(62px\s*\*\s*var\(--ui-scale\)\)/)
+  })
 })
