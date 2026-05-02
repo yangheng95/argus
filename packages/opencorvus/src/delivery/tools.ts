@@ -427,7 +427,7 @@ export function createDeliveryTools(input?: DeliveryToolContext) {
     run_command: tool({
       description:
         "Run a shell command in the project directory and capture stdout/stderr/exit code. " +
-        "Use to build the project, start servers, run smoke tests, or verify frontend rendering. " +
+        "Use to build the project, start servers, run smoke tests, or verify the requested runtime/output surface. " +
         "For server startup verification, use a short timeout (e.g., 10-15 seconds) to check if " +
         "the server starts without crashing — do NOT keep servers running indefinitely.\n\n" +
         "If you background a process (`cmd &`) and it keeps the port alive past this call's " +

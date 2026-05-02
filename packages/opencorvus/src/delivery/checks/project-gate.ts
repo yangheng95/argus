@@ -85,20 +85,19 @@ export async function buildDeliveryEvidenceManifest(input: {
   const resolved = resolvedChecks(config, discovered)
   const groups = commandGroups(resolved, discovered)
   const requiredChecks = await requiredChecksFromGroups(groups)
-  const checkResults: DeliveryCheckResult[] = []
-
-  for (const check of requiredChecks) {
-    checkResults.push(await runRequiredCheck(check))
-  }
   const coverage = buildCoverage(input.goals ?? [])
+  const failedCoverageIds = validateDeliveryCoverage(coverage)
   const runtimeFlows = await runRuntimeFlows({
     taskID: input.taskID,
     iteration: input.iteration ?? 0,
     surfaceManifest,
     requiredChecks,
-    checkResults,
+    checkResults: [],
     goals: input.goals,
   })
+  const failedRuntimeFlowIds = runtimeFlows
+    .filter((item) => item.status === "failed")
+    .map((item) => item.id)
   const specialistReviews = await runSpecialistReviews({
     taskID: input.taskID,
     runID: input.runID,
@@ -106,7 +105,7 @@ export async function buildDeliveryEvidenceManifest(input: {
     projectRoot,
     surfaceManifest,
     requiredChecks,
-    checkResults,
+    checkResults: [],
     runtimeFlows,
     goals: input.goals ?? [],
   })
@@ -118,6 +117,22 @@ export async function buildDeliveryEvidenceManifest(input: {
     }),
     ...specialistReviews.map(specialistReviewEvidence),
   ]
+  const failedReviewIds = reviewEvidence
+    .filter((item) => item.status === "failed")
+    .map((item) => item.id)
+  const completionAssessment = assessFunctionalCompletion({
+    failedCheckIds: [],
+    failedCoverageIds,
+    failedRuntimeFlowIds,
+    failedReviewIds,
+    specialistReviews,
+  })
+  const checkResults = completionAssessment.status === "complete"
+    ? await runRequiredChecks(requiredChecks)
+    : requiredChecks.map((check) => skipRequiredCheck(
+        check,
+        "Skipped because delivery completion evidence failed before auxiliary programmatic checks.",
+      ))
 
   const manifest: DeliveryEvidenceManifest = {
     id: createManifestId(),
@@ -145,14 +160,9 @@ export async function buildDeliveryEvidenceManifest(input: {
     },
     timeCreated: Date.now(),
   }
-  const checks = validateDeliveryEvidenceManifest(manifest)
-  const failedCoverageIds = validateDeliveryCoverage(coverage)
-  const failedRuntimeFlowIds = runtimeFlows
-    .filter((item) => item.status === "failed")
-    .map((item) => item.id)
-  const failedReviewIds = reviewEvidence
-    .filter((item) => item.status === "failed")
-    .map((item) => item.id)
+  const checks = validateDeliveryEvidenceManifest(manifest, {
+    skippedChecksPass: completionAssessment.status === "incomplete",
+  })
   const functionalAssessment = assessFunctionalCompletion({
     failedCheckIds: checks.failedCheckIds,
     failedCoverageIds,
@@ -169,6 +179,14 @@ export async function buildDeliveryEvidenceManifest(input: {
     functionalAssessment,
   })
   return manifest
+}
+
+async function runRequiredChecks(requiredChecks: DeliveryRequiredCheck[]) {
+  const checkResults: DeliveryCheckResult[] = []
+  for (const check of requiredChecks) {
+    checkResults.push(await runRequiredCheck(check))
+  }
+  return checkResults
 }
 
 function assessFunctionalCompletion(input: {
@@ -546,6 +564,17 @@ async function runRequiredCheck(check: DeliveryRequiredCheck): Promise<DeliveryC
           affectedFiles: [],
         })
       : undefined,
+  }
+}
+
+function skipRequiredCheck(check: DeliveryRequiredCheck, reason: string): DeliveryCheckResult {
+  const now = Date.now()
+  return {
+    ...check,
+    status: "skipped",
+    outputExcerpt: reason,
+    startedAt: now,
+    completedAt: now,
   }
 }
 
