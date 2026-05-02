@@ -5801,12 +5801,15 @@ body[data-theme="light"] .chat-send { color: #ffffff; }
   margin: 0;
 }
 
+/* iter10: modal-dialog subtitle. Was force-uppercased even though
+   it has no pill chrome (no background, no radius, no accent
+   color), so the all-caps rendering fought the Title Case dialog
+   header sitting right above it. Title Case + the existing weight/
+   color now reads as a clean section subtitle. */
 .dialog-subtitle {
   font-size: var(--ui-font-meta);
   font-weight: 700;
   color: var(--text-strong);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin-top: var(--ui-gap-xs);
 }
 
