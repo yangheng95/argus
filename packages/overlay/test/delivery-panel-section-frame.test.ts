@@ -48,7 +48,7 @@ describe("DeliveryPanel renders inside a collapsible section frame", () => {
     const returnIdx = BOARD.indexOf("return (", fnStart)
     expect(returnIdx).toBeGreaterThan(-1)
     const slice = BOARD.slice(returnIdx, returnIdx + 1200)
-    expect(slice).toMatch(/return\s*\([^<]*<details\s+class="section"/)
+    expect(slice).toMatch(/return\s*\([^<]*<details\s+(?:id="deliverySection"\s+)?class="section"/)
   })
 
   test("the section-head carries an icon + title + badge", () => {
@@ -66,5 +66,32 @@ describe("DeliveryPanel renders inside a collapsible section frame", () => {
     const fnStart = BOARD.indexOf("export function DeliveryPanel")
     const slice = BOARD.slice(fnStart, fnStart + 4000)
     expect(slice).toMatch(/data-tone=\{[\s\S]*"accepted"[\s\S]*"good"[\s\S]*"rejected"[\s\S]*"bad"[\s\S]*\}/)
+  })
+
+  test("the rendered <details> carries id=deliverySection and the body id=deliveryBody (so dom.ts accessors resolve)", () => {
+    // iter31 functional fix: dom.ts queries `#deliverySection`
+    // and `#deliveryBody` to attach data-phase-state for
+    // section phase highlighting. Pre-iter31 the iter24 self-
+    // wrap rendered a bare `<details class="section">` with
+    // no IDs — `syncSectionPhases({delivery: "active"})`
+    // silently no-op'd. Pin the IDs so the highlight
+    // pipeline reaches the real nodes.
+    const fnStart = BOARD.indexOf("export function DeliveryPanel")
+    const slice = BOARD.slice(fnStart, fnStart + 4000)
+    expect(slice).toMatch(/<details\s+id="deliverySection"\s+class="section"/)
+    expect(slice).toMatch(/<div\s+id="deliveryBody"\s+class="section-body"/)
+  })
+
+  test("the <details> does NOT hardcode data-phase-state (owned by syncSectionPhases)", () => {
+    // iter31: removed the iter24 hardcoded
+    // `data-phase-state={props.delivery ? "active" :
+    // undefined}` — that attribute belongs to
+    // `syncSectionPhases` which computes it from the live
+    // conversation phase + board state. Hardcoding it
+    // here pinned the section to "active" forever whenever
+    // delivery data existed.
+    const fnStart = BOARD.indexOf("export function DeliveryPanel")
+    const slice = BOARD.slice(fnStart, fnStart + 4000)
+    expect(slice).not.toMatch(/data-phase-state=\{props\.delivery/)
   })
 })

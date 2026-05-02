@@ -284,8 +284,23 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
   // collapse — directly mounted by main.tsx into
   // #solidDeliveryMount, which the user reported as
   // "这个 tab 没有标题且无法折叠" (no title, can't collapse).
+  // iter31 fix: the `<details>` carries `id="deliverySection"`
+  // and the body `id="deliveryBody"` so `dom.ts` accessors
+  // `deliverySection` / `deliveryBody` resolve to the actual
+  // rendered nodes. Without this, `syncSectionPhases()` in
+  // utils/section.ts called `markSectionPhase("delivery",
+  // "active")` against a null node and silently no-op'd —
+  // the user never saw the delivery phase highlight when
+  // the orchestrator transitioned into delivery. The
+  // hardcoded `data-phase-state="active"` from iter24 was
+  // also dropped — that attribute is owned by
+  // `syncSectionPhases` (which derives it from the live
+  // conversation phase + board state); hardcoding it here
+  // pinned the section to "active" forever as long as
+  // delivery data existed, overriding the proper
+  // related/inactive states for other phases.
   return (
-    <details class="section" data-phase-state={props.delivery ? "active" : undefined} open>
+    <details id="deliverySection" class="section" open>
       <summary class="section-head">
         <span class="section-icon" aria-hidden="true" innerHTML={SECTION_ICONS.delivery} />
         <span class="section-title">{t("section.delivery")}</span>
@@ -304,7 +319,7 @@ export function DeliveryPanel(props: DeliveryPanelProps) {
           {props.delivery ? verdictPillLabel(tone()) : ""}
         </span>
       </summary>
-    <div class="section-body">
+    <div id="deliveryBody" class="section-body">
     <Show
       when={props.delivery}
       fallback={
