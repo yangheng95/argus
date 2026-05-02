@@ -399,8 +399,6 @@
   "goal.context.list": "**目标**（共 {{total}} 项）",
   "goal.context.origin": "   来源：{{value}}",
   "goal.context.results": "**目标结果**（{{passed}}/{{total}} 通过，{{failed}} 失败，{{pending}} 待定）",
-  "goal.delete_button_title": "双击移除该目标（会级联重建依赖链并可能废弃已完成的下游目标）。",
-  "goal.edit_button_title": "编辑目标标题和详情。",
   "goal.field.acceptance": "验收标准",
   "goal.field.acceptance_placeholder": "明确该目标在什么条件下视为完成",
   "goal.field.objective": "目标说明",

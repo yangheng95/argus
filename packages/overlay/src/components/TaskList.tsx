@@ -354,22 +354,33 @@ function TaskRow(props: {
           >
             <span class="task-row-badge-text">{badgeLabel()}</span>
           </span>
-          <small
-            class="task-row-stamp"
-            title={fullStampWithRelative(taskUpdated(props.item))}
-          >{taskListMeta(props.item)}</small>
         </div>
       </button>
-      <Show when={hasActions()}>
-        <div class="task-row-actions">
-          <Show when={canCancel()}>
-            <CancelButton id={id()} onCancel={props.onCancelTask!} />
-          </Show>
-          <Show when={canDelete()}>
-            <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
-          </Show>
-        </div>
-      </Show>
+      {/* iter45: stamp + cancel/delete actions live in a right
+          column (vertical stack), both anchored to the row's
+          right edge. Pre-iter45 the stamp lived inline inside
+          .task-row-meta (left-aligned next to the status badge)
+          and the actions were a separate right-side cluster. The
+          two split treatments meant the stamp and the actions
+          for the SAME row were in different visual axes — the
+          user requested they share the right column with stamp
+          on top and actions below. */}
+      <div class="task-row-right">
+        <small
+          class="task-row-stamp"
+          title={fullStampWithRelative(taskUpdated(props.item))}
+        >{taskListMeta(props.item)}</small>
+        <Show when={hasActions()}>
+          <div class="task-row-actions">
+            <Show when={canCancel()}>
+              <CancelButton id={id()} onCancel={props.onCancelTask!} />
+            </Show>
+            <Show when={canDelete()}>
+              <DeleteButton id={id()} onDelete={props.onDeleteTask!} />
+            </Show>
+          </div>
+        </Show>
+      </div>
     </div>
   );
 }

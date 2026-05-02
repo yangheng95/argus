@@ -146,40 +146,15 @@ export function GoalWorkflowGroup(props: GoalWorkflowGroupProps) {
             <span class="gwg-priority-badge">advisory</span>
           </Show>
         </div>
+        {/* iter44: edit + delete buttons removed per user feedback
+            (2026-05-03) \u2014 goal authoring lives elsewhere (the
+            requirements/architect flow owns goal definition; manual
+            edit/delete from the conversation surface was confusing
+            and rarely the right action). The chevron stays as the
+            collapse affordance. The `onEditGoal` / `onDeleteGoal`
+            props remain on the component so callers don't break;
+            they're just no-ops on this surface now. */}
         <div class="gwg-header-actions">
-          <Show when={props.onEditGoal}>
-            <button
-              type="button"
-              class="gwg-action-btn gwg-action-edit"
-              title={t("goal.edit_button_title")}
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onEditGoal!(
-                  props.goal.goalID,
-                  props.goal.goalTitle,
-                  previewAcceptance(props.goal.acceptanceSpecs),
-                );
-              }}
-            >
-              {"\u270E"}
-            </button>
-          </Show>
-          <Show when={props.onDeleteGoal}>
-            <button
-              type="button"
-              class="gwg-action-btn gwg-action-delete"
-              title={t("goal.delete_button_title")}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-              onDblClick={(e) => {
-                e.stopPropagation();
-                props.onDeleteGoal!(props.goal.goalID);
-              }}
-            >
-              {"\u2715"}
-            </button>
-          </Show>
           <span class="gwg-chevron" aria-hidden="true">{"\u25BC"}</span>
         </div>
       </div>
